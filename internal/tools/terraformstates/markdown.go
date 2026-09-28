@@ -12,9 +12,13 @@ import (
 // sends no Terraform lock-info body and GitLab rejects the call with 400.
 // Saying so where the lock is mentioned is the point; pointing at the tool
 // instead sent a reader to a call that always fails.
+//
+// Each is one literal rather than two joined with a plus: a package-level
+// declaration carries no coverage counter, so a mutation run files the
+// arithmetic mutant on that plus as not covered, and no test can kill it,
+// since subtracting one string from another does not compile.
 const (
-	hintLockNeedsCLI = "Locking a state needs the terraform CLI against the GitLab HTTP backend: " +
-		"`admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
+	hintLockNeedsCLI    = "Locking a state needs the terraform CLI against the GitLab HTTP backend: `admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
 	hintUnlockStaleLock = "Use `admin.terraform_state_unlock` to clear a stale lock"
 )
 
@@ -28,11 +32,14 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, "Terraform States", len(out.States), toolutil.PaginationOutput{})
-	sb.WriteString(toolutil.MarkdownTableHeader("Name", "Latest Serial"))
+	sb.WriteString(toolutil.MarkdownTableHeader("Name", "Latest Serial", "Updated", "Locked Since", "Deleted"))
 	for _, s := range out.States {
 		sb.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(s.Name),
 			serialCell(s.LatestSerial),
+			toolutil.FormatTime(s.UpdatedAt),
+			lockedCell(s.LockedAt),
+			deletedCell(s.DeletedAt),
 		))
 	}
 	// The table carries no link, so the footer carries no instruction to keep
@@ -52,10 +59,32 @@ func serialCell(serial uint64) string {
 	return strconv.FormatUint(serial, 10)
 }
 
+// lockedCell renders when a state was locked, and says "unlocked" for a state
+// GitLab sent no lock time for, since a blank cell in a column about locks
+// reads as a value nobody knows.
+func lockedCell(lockedAt string) string {
+	if lockedAt == "" {
+		return "unlocked"
+	}
+	return toolutil.FormatTime(lockedAt)
+}
+
+// deletedCell renders when a state was deleted, and says "no" for a state
+// GitLab sent no deletion time for. GitLab deletes a state in the background
+// and keeps it readable until the worker removes it, for a grace period when
+// delayed deletion is on, so a list can hold a deleted state, and without this
+// column it would read as live.
+func deletedCell(deletedAt string) string {
+	if deletedAt == "" {
+		return "no"
+	}
+	return toolutil.FormatTime(deletedAt)
+}
+
 // FormatStateMarkdown formats a single Terraform state as the card of one
 // object. A state nothing has written to yet carries neither a serial nor a
 // download path, and says so once instead of showing two labels with nothing
-// after them.
+// after them. A lock and a pending deletion are written only while they hold.
 func FormatStateMarkdown(s StateItem) string {
 	var b strings.Builder
 	// The state's name is chosen by whoever ran terraform against it, and the
@@ -70,8 +99,17 @@ func FormatStateMarkdown(s StateItem) string {
 		c.Field("Latest Serial", strconv.FormatUint(s.LatestSerial, 10))
 	}
 	c.Code("Download Path", s.DownloadPath)
+	c.Time("Created", s.CreatedAt)
+	c.Time("Updated", s.UpdatedAt)
+	c.Time("Locked", s.LockedAt)
+	c.Time("Deleted", s.DeletedAt)
 	if s.LatestSerial == 0 && strings.TrimSpace(s.DownloadPath) == "" {
 		c.Note("GitLab has recorded no versions of this state.")
+	}
+	// GitLab deletes a state in the background: the delete marks it, and a
+	// worker removes it later, so a read in between still answers.
+	if s.DeletedAt != "" {
+		c.Note("GitLab has deleted this state and removes it in the background; until then it can still be read.")
 	}
 	c.End(
 		hintLockNeedsCLI,

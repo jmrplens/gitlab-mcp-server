@@ -8,10 +8,15 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -72,15 +77,21 @@ func TestList_Error(t *testing.T) {
 
 // TestList_ReadsEveryFieldOfEveryState verifies that every field of every
 // state arrives where it belongs. The whole slice is compared against states
-// no two values of which agree, because the converter assigns three fields in
-// a row and two of them are strings: with a fixture that omits the download
-// path, or a test that spot-checks the name alone, the name and the download
-// path could trade places and nothing here would fail.
+// no two values of which agree, because the converter assigns seven fields in
+// a row and four of them are times: with a fixture that omits one, or a test
+// that spot-checks the name alone, two of them could trade places and nothing
+// here would fail. The second state is unlocked and live, which GitLab sends
+// as a null lockedAt and deletedAt, and those two are left out of its item
+// rather than written as the zero time client-go decodes a null into.
 func TestList_ReadsEveryFieldOfEveryState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"project":{"terraformStates":{"nodes":[
-			{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"}},
-			{"name":"staging","latestVersion":{"serial":22,"downloadPath":"/dl/two"}}
+			{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"},
+			 "createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-02-03T04:05:06Z",
+			 "lockedAt":"2026-03-04T05:06:07Z","deletedAt":"2026-04-05T06:07:08Z"},
+			{"name":"staging","latestVersion":{"serial":22,"downloadPath":"/dl/two"},
+			 "createdAt":"2025-05-06T07:08:09Z","updatedAt":"2025-06-07T08:09:10Z",
+			 "lockedAt":null,"deletedAt":null}
 		]}}}}`)
 	}))
 	out, err := List(t.Context(), client, ListInput{ProjectPath: "group/project"})
@@ -88,11 +99,165 @@ func TestList_ReadsEveryFieldOfEveryState(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	want := []StateItem{
-		{Name: "production", LatestSerial: 11, DownloadPath: "/dl/one"},
-		{Name: "staging", LatestSerial: 22, DownloadPath: "/dl/two"},
+		{
+			Name: "production", LatestSerial: 11, DownloadPath: "/dl/one",
+			CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
+			LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
+		},
+		{
+			Name: "staging", LatestSerial: 22, DownloadPath: "/dl/two",
+			CreatedAt: "2025-05-06T07:08:09Z", UpdatedAt: "2025-06-07T08:09:10Z",
+		},
 	}
 	if !reflect.DeepEqual(out.States, want) {
 		t.Errorf("List() states = %+v, want %+v", out.States, want)
+	}
+}
+
+// stateItemSchemaFields maps each field StateItem publishes to the field of
+// the pinned schema it carries, as object and field name.
+var stateItemSchemaFields = map[string][2]string{
+	"name":          {"TerraformState", "name"},
+	"latest_serial": {"TerraformStateVersion", "serial"},
+	"download_path": {"TerraformStateVersion", "downloadPath"},
+	"created_at":    {"TerraformState", "createdAt"},
+	"updated_at":    {"TerraformState", "updatedAt"},
+	"locked_at":     {"TerraformState", "lockedAt"},
+	"deleted_at":    {"TerraformState", "deletedAt"},
+}
+
+// stateSelection is what one client-go document selects of a Terraform
+// state: the fields it asks for on the state itself and on its latest
+// version, by the schema object each belongs to.
+type stateSelection map[string][]string
+
+// selectedFields reads a client-go document and returns the fields it selects
+// directly on the state found by following path from the operation's root,
+// and directly on that state's latestVersion. Only direct selections count,
+// so a createdAt asked of the latest version is not taken for the state's,
+// and a name that is an argument of the field is not taken for a selection.
+func selectedFields(t *testing.T, document string, path ...string) stateSelection {
+	t.Helper()
+	parsed, err := parser.ParseQuery(&ast.Source{Input: document})
+	if err != nil {
+		t.Fatalf("parse client-go's document: %v\n%s", err, document)
+	}
+	if len(parsed.Operations) != 1 {
+		t.Fatalf("client-go's document holds %d operations, want one:\n%s", len(parsed.Operations), document)
+	}
+	selections := parsed.Operations[0].SelectionSet
+	for _, name := range path {
+		field := childField(selections, name)
+		if field == nil {
+			t.Fatalf("client-go's document selects no %s along %v:\n%s", name, path, document)
+		}
+		selections = field.SelectionSet
+	}
+	selected := stateSelection{"TerraformState": fieldNames(selections)}
+	if version := childField(selections, "latestVersion"); version != nil {
+		selected["TerraformStateVersion"] = fieldNames(version.SelectionSet)
+	}
+	return selected
+}
+
+// childField returns the field selected by name directly in a selection set,
+// or nil.
+func childField(selections ast.SelectionSet, name string) *ast.Field {
+	for _, selection := range selections {
+		if field, ok := selection.(*ast.Field); ok && field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
+// fieldNames lists the fields selected directly in a selection set.
+func fieldNames(selections ast.SelectionSet) []string {
+	var names []string
+	for _, selection := range selections {
+		if field, ok := selection.(*ast.Field); ok {
+			names = append(names, field.Name)
+		}
+	}
+	return names
+}
+
+// TestStateItem_FieldsHeldToThePinnedSchema holds every field StateItem
+// publishes to the field of the pinned schema it carries, in three ways: the
+// schema has the field, a field the schema types non-null is always written
+// and a nullable one is left out when GitLab sent null, and both of
+// client-go's documents, the list's and the get's, select it on the object it
+// belongs to. The documents are written inside client-go, and a field one of
+// them stops selecting would arrive empty on that path with every other test
+// green, since a mock answers with whatever its fixture holds. The map above
+// must name every published field, so a field added to StateItem without a
+// row fails here too.
+func TestStateItem_FieldsHeldToThePinnedSchema(t *testing.T) {
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("graphqlschema.Schema() error: %v", err)
+	}
+	var getDocument, listDocument string
+	getClient := testutil.NewTestClient(t, recordGraphQL(t, &getDocument,
+		`{"data":{"project":{"terraformState":{"name":"production","createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-01-02T03:04:05Z"}}}}`))
+	if _, err = Get(t.Context(), getClient, GetInput{ProjectPath: "group/project", Name: "production"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	listClient := testutil.NewTestClient(t, recordGraphQL(t, &listDocument,
+		`{"data":{"project":{"terraformStates":{"nodes":[]}}}}`))
+	if _, err = List(t.Context(), listClient, ListInput{ProjectPath: "group/project"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	documents := map[string]stateSelection{
+		"get":  selectedFields(t, getDocument, "project", "terraformState"),
+		"list": selectedFields(t, listDocument, "project", "terraformStates", "nodes"),
+	}
+
+	for field := range reflect.TypeFor[StateItem]().Fields() {
+		if field.Anonymous {
+			continue
+		}
+		jsonName, options, _ := strings.Cut(field.Tag.Get("json"), ",")
+		t.Run(jsonName, func(t *testing.T) {
+			target, ok := stateItemSchemaFields[jsonName]
+			if !ok {
+				t.Fatalf("StateItem publishes %q, which no row of stateItemSchemaFields ties to the schema", jsonName)
+			}
+			object, name := target[0], target[1]
+			definition := schema.Types[object].Fields.ForName(name)
+			if definition == nil {
+				t.Fatalf("the pinned schema has no %s.%s", object, name)
+			}
+			if omitted := strings.Contains(options, "omitempty"); omitted == definition.Type.NonNull {
+				t.Errorf("%s omitempty = %v, want %v for %s.%s typed %s", jsonName, omitted, !definition.Type.NonNull, object, name, definition.Type)
+			}
+			for document, selected := range documents {
+				t.Run(document, func(t *testing.T) {
+					if !slices.Contains(selected[object], name) {
+						t.Errorf("client-go's %s document selects no %s on %s (it selects %v), so %s would arrive empty", document, name, object, selected[object], jsonName)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestSelectedFields_ReadsDirectSelectionsOnly verifies the reading the test
+// above relies on, on a document written to trip a substring match: the
+// state's createdAt is not selected and its latest version's is, and the
+// state's name appears only as an argument. Neither may count as selected on
+// the state.
+func TestSelectedFields_ReadsDirectSelectionsOnly(t *testing.T) {
+	document := `query { project(fullPath: "g/p") { terraformState(name: "name") { lockedAt latestVersion { createdAt serial } } } }`
+
+	selected := selectedFields(t, document, "project", "terraformState")
+
+	want := stateSelection{"TerraformState": {"lockedAt", "latestVersion"}, "TerraformStateVersion": {"createdAt", "serial"}}
+	if !reflect.DeepEqual(selected, want) {
+		t.Errorf("selectedFields() = %v, want %v", selected, want)
+	}
+	if bare := selectedFields(t, `query { project { terraformState { name } } }`, "project", "terraformState"); !reflect.DeepEqual(bare, stateSelection{"TerraformState": {"name"}}) {
+		t.Errorf("selectedFields() without a latest version = %v, want the state's name alone", bare)
 	}
 }
 
@@ -116,20 +281,25 @@ func TestList_EmptyProject_YieldsAnEmptySliceRatherThanNil(t *testing.T) {
 }
 
 // TestGet_ReadsEveryFieldOfTheState verifies the single-state converter the
-// way the list one is verified, and for the same reason: the fixture gives the
-// name, the serial and the download path three values none of which is another,
-// and the whole item is compared, so no two of the three assignments can be
-// exchanged without this failing.
+// way the list one is verified, and for the same reason: the fixture gives
+// each of the seven fields a value none of which is another, and the whole
+// item is compared, so no two assignments can be exchanged without this
+// failing.
 func TestGet_ReadsEveryFieldOfTheState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"data":{"project":{"terraformState":{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"}}}}}`)
+			`{"data":{"project":{"terraformState":{"name":"production","latestVersion":{"serial":11,"downloadPath":"/dl/one"},`+
+				`"createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-02-03T04:05:06Z","lockedAt":"2026-03-04T05:06:07Z","deletedAt":"2026-04-05T06:07:08Z"}}}}`)
 	}))
 	out, err := Get(t.Context(), client, GetInput{ProjectPath: "group/project", Name: "production"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	want := StateItem{Name: "production", LatestSerial: 11, DownloadPath: "/dl/one"}
+	want := StateItem{
+		Name: "production", LatestSerial: 11, DownloadPath: "/dl/one",
+		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
+		LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
+	}
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("Get() = %+v, want %+v", out, want)
 	}
@@ -417,18 +587,21 @@ const listHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use `admin.terraform_state_get` to view details of a specific state\n"
 
 // TestFormatListMarkdown verifies FormatListMarkdown renders the whole table:
-// a heading counting the states, one row each, and a state nothing has
-// written to yet saying so rather than showing a serial of zero.
+// a heading counting the states, one row each, a state nothing has written to
+// yet saying so rather than showing a serial of zero, a state no lock is held
+// on saying "unlocked" rather than leaving the lock column blank, and a state
+// GitLab has deleted but not yet removed saying when, where a live one says
+// "no", so a deleted state in the list does not read as live.
 func TestFormatListMarkdown(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{States: []StateItem{
-		{Name: "state1", LatestSerial: 3},
-		{Name: "fresh"},
+		{Name: "state1", LatestSerial: 3, UpdatedAt: "2026-02-03T04:05:06Z", LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z"},
+		{Name: "fresh", UpdatedAt: "2026-01-02T03:04:05Z"},
 	}})
 	want := "## Terraform States (2)\n\n" +
-		"| Name | Latest Serial |\n" +
-		"| --- | --- |\n" +
-		"| state1 | 3 |\n" +
-		"| fresh | no versions |\n" +
+		"| Name | Latest Serial | Updated | Locked Since | Deleted |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| state1 | 3 | 3 Feb 2026 04:05 UTC | 4 Mar 2026 05:06 UTC | 5 Apr 2026 06:07 UTC |\n" +
+		"| fresh | no versions | 2 Jan 2026 03:04 UTC | unlocked | no |\n" +
 		listHints
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -504,6 +677,31 @@ func TestFormatStateMarkdown_Coverage(t *testing.T) {
 	want := "## Terraform State: prod-state\n\n" +
 		"- **Latest Serial**: 42\n" +
 		"- **Download Path**: `/dl/path`\n" +
+		stateHints
+	if got != want {
+		t.Errorf("FormatStateMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatStateMarkdown_Times verifies the card writes the four times each
+// under its own label, which is what tells them apart: they share a layout, so
+// two of them traded would read as plausible dates. A state locked and
+// deleted says both, and the deletion carries the sentence that explains why
+// a deleted state is still there to read.
+func TestFormatStateMarkdown_Times(t *testing.T) {
+	got := FormatStateMarkdown(StateItem{
+		Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path",
+		CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-02-03T04:05:06Z",
+		LockedAt: "2026-03-04T05:06:07Z", DeletedAt: "2026-04-05T06:07:08Z",
+	})
+	want := "## Terraform State: prod-state\n\n" +
+		"- **Latest Serial**: 42\n" +
+		"- **Download Path**: `/dl/path`\n" +
+		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
+		"- **Updated**: 3 Feb 2026 04:05 UTC\n" +
+		"- **Locked**: 4 Mar 2026 05:06 UTC\n" +
+		"- **Deleted**: 5 Apr 2026 06:07 UTC\n" +
+		"\nGitLab has deleted this state and removes it in the background; until then it can still be read.\n" +
 		stateHints
 	if got != want {
 		t.Errorf("FormatStateMarkdown() =\n%q\nwant:\n%q", got, want)

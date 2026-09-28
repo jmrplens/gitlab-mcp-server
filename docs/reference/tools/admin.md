@@ -520,6 +520,8 @@ Get details of a Terraform state.
 | Annotation | **Read** |
 | ---------- | -------- |
 
+The list and the get answer each state with its `name`, the latest version's `latest_serial` and `download_path`, and four times: `created_at` and `updated_at`, always written, and `locked_at` and `deleted_at`, written only while the state is locked or waiting to be removed. GitLab deletes a state in the background, so a state read between the delete and its removal carries `deleted_at`, and the list's table shows it in a Deleted column where a live state reads "no". A state nothing has written yet has no serial and no download path.
+
 ### `gitlab_delete_terraform_state`
 
 Delete a Terraform state.
