@@ -241,8 +241,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
-  or the existence of its traffic; the one-bit disclosure of `credential_evicted` is the
-  accepted exception (ADR-0020).
+  or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
+  `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
+  (`HLD-002`, `HLD-004`, `RTC-007`), which tells a caller that has not reached its own
+  bound that the process has reached its one, and so that others are holding or spending
+  it (issue 951, ADR-0023 NEG-007). Neither carries a count of what others hold or an
+  identity, and neither says more than a caller could infer from its own count: the
+  stream ceilings name the scope that refused, which a caller counting its own streams
+  knows already, and `RTC-007` answers in `RTC-003`'s words, so only the log line says
+  which bucket refused.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,

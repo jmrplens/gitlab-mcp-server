@@ -606,9 +606,12 @@ GitLab with the caller's credential; `tools/list` draws on its own, refilled at
 a tenth of that one's rate, since what it spends is the shared processor rather
 than the upstream, and before that on the bucket the whole process shares. That
 one refuses in the same words: the next action is the same, and a sentence
-naming the process would tell a caller that other callers are listing. Its log
-line is where the two are told apart, with `scope` set to `process` and its
-figures named for what they count:
+naming the process would tell a caller that other callers are listing. A caller
+that had not spent its own bucket can still infer that much from being refused,
+as it can from the process-wide stream and watcher ceilings, and the
+specification accepts that one bit and nothing more (`INV-019`). Its log line is
+where the two are told apart, with `scope` set to `process` and its figures
+named for what they count:
 
 ```json
 {"level":"WARN","msg":"listing refused: rate limit exceeded across the process","method":"tools/list","reason":"rate_limited","scope":"process","limit_tools_per_second":3000,"burst_tools":48000,"also_refused_since_last_report":0}

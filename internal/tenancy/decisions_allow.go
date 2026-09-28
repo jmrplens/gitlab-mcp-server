@@ -211,8 +211,11 @@ func allowDecisions() []Decision {
 			//
 			// Its refusal is RTC-003's, word for word: the next action is the
 			// same, and a sentence naming the process would tell a caller that
-			// others are listing (INV-019). The log line it writes is where an
-			// operator tells the two apart.
+			// others are listing. A caller whose own bucket still held tools
+			// can infer that much from being refused at all, which is the one
+			// bit INV-019 accepts for a bound keyed on the process; the wording
+			// adds nothing to it. The log line it writes is where an operator
+			// tells the two apart.
 			ID: "RTC-007", Question: Allow, Kind: Rate, Class: ClassP, Disposition: Valued,
 			Resource: "tools/list across every credential, counted in the tools listed",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -277,6 +280,10 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// It refuses with HLD-001's refusal, naming its scope: a caller
+			// counting its own streams learns that the process is at this
+			// ceiling whatever the words say, and that one bit is what INV-019
+			// accepts for a bound keyed on the process (issue 951).
 			ID: "HLD-002", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "open subscriptions/listen streams across every credential",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -325,6 +332,10 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// It refuses with HLD-003's refusal, word for word, so a caller
+			// under its own ceiling learns only that the process is at this
+			// one, the one bit INV-019 accepts for a bound keyed on the process
+			// (issue 951).
 			ID: "HLD-004", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "resource watchers across every credential",
 			Key:      KeyProcess, StdioKey: KeyProcess,

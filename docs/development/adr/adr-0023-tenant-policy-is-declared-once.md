@@ -169,6 +169,20 @@ twice), and the gate holds the pinned literal equal to the register's.
   through an interface that takes the subscription manager's lock, exactly when the code
   it replaced did, only when no stream is open. Each is proved by its oracle and fuzz
   target rather than by the binary.
+- **NEG-007**: A bound keyed on the process discloses one bit across tenants, and that is
+  accepted (`INV-019`, decided in issue 951). A caller refused by `HLD-002`, `HLD-004` or
+  `RTC-007` before it has reached its own ceiling or budget learns that the process has
+  reached its bound, and so that other callers are holding streams or watchers or are
+  listing, since at the defaults no single credential can reach a process bound alone. No
+  wording closes it: the caller's own count supplies the bit whatever the refusal says,
+  exactly as its own busyness does for `credential_evicted`. It is the price of bounding
+  what every tenant shares, and the alternatives are worse: a share of the bound per
+  tenant is a share on a key a caller can mint (`INV-003`), and no bound lets one tenant
+  take the process from the rest. What is kept from it is everything beyond the bit: no
+  count of what others hold, no identity, and nothing the caller's own count does not
+  already tell it (the stream ceilings name their scope, which a caller counting its own
+  streams knows; `RTC-007` answers `tools/list` in the words `RTC-003` uses), with the log
+  line as the one place that says which bound refused.
 
 ### Neutral
 
