@@ -30,6 +30,19 @@ import (
 // taking per_page is a route whose answer is one page of something longer, and
 // that is a far stronger statement than a guess from an endpoint's name.
 //
+// The converse does not hold, and the rule cannot see where it fails. A route
+// declaring neither param is still paged when its handler calls paginate(...),
+// because GitLab's paginator reads page and per_page from every parameter the
+// request carried rather than from the declared ones. Such a route never marks
+// its package as calling a paginated endpoint, so an action reading it is
+// either not asked about or asked about only through a sibling, which is how
+// four declarations came to excuse real findings (issue 1024). A
+// declaration's reason therefore has to cite the handler as well as the
+// params, and that is its author's obligation: nothing here reads GitLab's
+// source, so the rule holds a declaration to the record alone and cannot tell
+// a reason that read the handler from one that did not; see
+// [paginationDeclaration].
+//
 // # What counts as reading a collection
 //
 // An action reads a collection when its output type publishes exactly one

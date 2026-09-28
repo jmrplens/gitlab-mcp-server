@@ -301,7 +301,7 @@ func FormatPipelinesMarkdown(out PipelinesOutput) string {
 		return toolutil.EmptyMessage("pipelines")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Pipelines", len(out.Pipelines), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Pipelines", len(out.Pipelines), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Status", "Source", "Ref"))
 	for _, p := range out.Pipelines {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -311,7 +311,7 @@ func FormatPipelinesMarkdown(out PipelinesOutput) string {
 			toolutil.EscapeMdTableCell(p.Ref),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(pipelineGetAction, "view one pipeline's details"),
 		toolutil.HintAction(actionJobList, "see its job statuses"),
 	)
@@ -353,7 +353,7 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 		return toolutil.EmptyMessage("participants")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Participants", len(out.Participants), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Participants", len(out.Participants), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State", "Locked"))
 	for _, p := range out.Participants {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -364,7 +364,7 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 			toolutil.BoolEmoji(p.Locked),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionMRGet, "view the merge request"),
 		toolutil.HintAction(actionNoteCreate, "notify these participants"),
 	)
@@ -378,7 +378,7 @@ func FormatReviewersMarkdown(out ReviewersOutput) string {
 		return toolutil.EmptyMessage("reviewers")
 	}
 	var b strings.Builder
-	toolutil.WriteListHeading(&b, "MR Reviewers", len(out.Reviewers), toolutil.PaginationOutput{})
+	toolutil.WriteListHeading(&b, "MR Reviewers", len(out.Reviewers), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Review State", "Assigned At"))
 	for _, r := range out.Reviewers {
 		b.WriteString(toolutil.MarkdownTableRow(
@@ -389,7 +389,7 @@ func FormatReviewersMarkdown(out ReviewersOutput) string {
 			toolutil.FormatTime(r.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionMRUpdate, "add or change reviewers"),
 		toolutil.HintAction(actionMRApprove, "approve the merge request"),
 	)

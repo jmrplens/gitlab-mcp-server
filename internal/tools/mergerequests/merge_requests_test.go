@@ -1044,6 +1044,115 @@ func TestReviewers_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
 	}
 }
 
+// mrSubList is one of the three lists under a merge request whose client-go
+// method takes no options struct, and which GitLab pages although its route
+// declares neither page nor per_page: the participants, the reviewers and the
+// pipelines. read calls the action with a page and reports how many rows it
+// published and the pagination block beside them.
+type mrSubList struct {
+	name   string
+	suffix string
+	row    string
+	read   func(context.Context, *gitlabclient.Client, toolutil.PaginationInput) (int, toolutil.PaginationOutput, error)
+}
+
+// mrSubLists returns the three lists [mrSubList] describes.
+func mrSubLists() []mrSubList {
+	return []mrSubList{
+		{
+			name: "participants", suffix: "/participants",
+			row: `[{"id":2,"username":"bob","locked":false,"public_email":""}]`,
+			read: func(ctx context.Context, c *gitlabclient.Client, page toolutil.PaginationInput) (int, toolutil.PaginationOutput, error) {
+				out, err := Participants(ctx, c, ParticipantsInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: page})
+				return len(out.Participants), out.Pagination, err
+			},
+		},
+		{
+			name: "reviewers", suffix: "/reviewers",
+			row: `[{"user":{"id":2,"username":"bob","locked":false,"public_email":""},"state":"unreviewed"}]`,
+			read: func(ctx context.Context, c *gitlabclient.Client, page toolutil.PaginationInput) (int, toolutil.PaginationOutput, error) {
+				out, err := Reviewers(ctx, c, ParticipantsInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: page})
+				return len(out.Reviewers), out.Pagination, err
+			},
+		},
+		{
+			name: "pipelines", suffix: "/pipelines",
+			row: `[{"id":20,"iid":20,"project_id":42,"status":"success","ref":"feature","sha":"abc123"}]`,
+			read: func(ctx context.Context, c *gitlabclient.Client, page toolutil.PaginationInput) (int, toolutil.PaginationOutput, error) {
+				out, err := Pipelines(ctx, c, PipelinesInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: page})
+				return len(out.Pipelines), out.Pagination, err
+			},
+		},
+	}
+}
+
+// TestMergeRequestSubLists_PageAndPerPage_ReachTheRequest holds that the page
+// a caller asks for is the page GitLab is asked for. GitLab pages each of the
+// three lists, twenty rows unless asked otherwise, and until the input carried
+// page and per_page these actions could only ever read the first page.
+func TestMergeRequestSubLists_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	for _, list := range mrSubLists() {
+		t.Run(list.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathMR1+list.suffix)
+				testutil.AssertQueryParam(t, r, "page", "2")
+				testutil.AssertQueryParam(t, r, "per_page", "1")
+				testutil.RespondJSON(w, http.StatusOK, list.row)
+			}))
+
+			rows, _, err := list.read(context.Background(), client, toolutil.PaginationInput{Page: 2, PerPage: 1})
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", list.name, err)
+			}
+			if rows != 1 {
+				t.Errorf("%s: rows = %d, want the one of page 2", list.name, rows)
+			}
+		})
+	}
+}
+
+// TestMergeRequestSubLists_NoPageAsked_SendsNeither holds that a caller who
+// asks for no page leaves the choice to GitLab rather than sending a zero.
+func TestMergeRequestSubLists_NoPageAsked_SendsNeither(t *testing.T) {
+	for _, list := range mrSubLists() {
+		t.Run(list.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Has("page") || r.URL.Query().Has("per_page") {
+					t.Errorf("%s: query = %q, want neither page nor per_page", list.name, r.URL.RawQuery)
+				}
+				testutil.RespondJSON(w, http.StatusOK, list.row)
+			}))
+
+			if _, _, err := list.read(context.Background(), client, toolutil.PaginationInput{}); err != nil {
+				t.Fatalf("%s: unexpected error: %v", list.name, err)
+			}
+		})
+	}
+}
+
+// TestMergeRequestSubLists_NextPageHeader_PublishesThePaginationBlock holds
+// that the page GitLab answers is published as a page, so a caller holding
+// the first twenty rows can tell more exist and which page to ask for.
+func TestMergeRequestSubLists_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	for _, list := range mrSubLists() {
+		t.Run(list.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathMR1+list.suffix)
+				testutil.RespondJSONWithPagination(w, http.StatusOK, list.row,
+					testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+			}))
+
+			_, got, err := list.read(context.Background(), client, toolutil.PaginationInput{})
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", list.name, err)
+			}
+			if got != firstOfTwoPages {
+				t.Errorf("%s: pagination = %+v, want %+v", list.name, got, firstOfTwoPages)
+			}
+		})
+	}
+}
+
 // TestMRParticipants_MissingProject verifies MRParticipants when missing project.
 func TestMRParticipants_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -2414,6 +2523,33 @@ func TestFormatPipelinesMarkdown_Populated(t *testing.T) {
 	}
 }
 
+// firstOfTwoPages is the pagination block of the first page of a two-row list
+// read one row at a time, which is what a page that is not the whole list
+// looks like to a formatter.
+var firstOfTwoPages = toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+
+// TestFormatPipelinesMarkdown_APageOfALongerList verifies that a page which is
+// not the whole list says so: the total in the heading, the page between the
+// heading and the table, and the pagination line before the next steps.
+func TestFormatPipelinesMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatPipelinesMarkdown(PipelinesOutput{
+		Pipelines:  []pipelines.Output{{ID: 10, Status: "success", Source: "push", Ref: testBranchMain}},
+		Pagination: firstOfTwoPages,
+	})
+	want := "## MR Pipelines (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Status | Source | Ref |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| #10 | ✅ success | push | main |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'pipeline.get' to view one pipeline's details\n" +
+		"- Use action 'job.list' to see its job statuses\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
 // TestFormatPipelinesMarkdown_Empty verifies the empty-pipelines message.
 func TestFormatPipelinesMarkdown_Empty(t *testing.T) {
 	want := "No pipelines found.\n"
@@ -2471,6 +2607,28 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	}
 }
 
+// TestFormatParticipantsMarkdown_APageOfALongerList verifies that a page of
+// participants which is not the whole list says so, in the heading, above the
+// table and before the next steps.
+func TestFormatParticipantsMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatParticipantsMarkdown(ParticipantsOutput{
+		Participants: []ParticipantOutput{{ID: 1, Username: testAuthorAlice, Name: "Alice A", State: testStateActive}},
+		Pagination:   firstOfTwoPages,
+	})
+	want := "## MR Participants (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | @alice | Alice A | active | ❌ |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.get' to view the merge request\n" +
+		"- Use action 'mr_review.note_create' to notify these participants\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
 // TestFormatParticipantsMarkdown_Empty verifies the empty-participants message.
 func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 	want := "No participants found.\n"
@@ -2491,6 +2649,30 @@ func TestFormatReviewersMarkdown_Populated(t *testing.T) {
 		"| ID | Username | Name | Review State | Assigned At |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
 		"| 10 | @carol | Carol C | reviewed | 1 Mar 2026 10:00 UTC |\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.update' to add or change reviewers\n" +
+		"- Use action 'merge_request.approve' to approve the merge request\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatReviewersMarkdown_APageOfALongerList verifies that a page of
+// reviewers which is not the whole list says so, in the heading, above the
+// table and before the next steps.
+func TestFormatReviewersMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatReviewersMarkdown(ReviewersOutput{
+		Reviewers: []ReviewerOutput{
+			{ID: 10, Username: testAuthorCarol, Name: "Carol C", State: testStateActive, Review: "reviewed", CreatedAt: "2026-03-01T10:00:00Z"},
+		},
+		Pagination: firstOfTwoPages,
+	})
+	want := "## MR Reviewers (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| ID | Username | Name | Review State | Assigned At |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | @carol | Carol C | reviewed | 1 Mar 2026 10:00 UTC |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
 		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
 		"- Use action 'merge_request.update' to add or change reviewers\n" +
 		"- Use action 'merge_request.approve' to approve the merge request\n"

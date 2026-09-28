@@ -288,6 +288,18 @@
 // its declaration table gates, since a claim that has stopped being true is not
 // a candidate. See [PaginationCheck].
 //
+// The params are what a route declares, which is not always what its handler
+// does, and that difference is invisible to this rule. GitLab's paginator reads
+// page and per_page from the request whether or not the route declares them,
+// so a handler that ends in paginate(...) answers one page of a longer list
+// from a route the record shows taking neither. Four of the ten declarations
+// were that case (an issue's participants, a merge request's participants,
+// reviewers and pipelines), and so was a fifth list the rule never asked about
+// because its package records no route declaring per_page (a merge request's
+// context commits). All five page now, and a declaration in the
+// endpoint-declares-no-page category is held to the handler's source as well
+// as to the record (issue 1024).
+//
 // # Is a param sent that the caller never asked to send
 //
 // The first of the two checks that read values rather than names, and the

@@ -325,16 +325,16 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Rebase a merge request's source branch onto its target. Returns: whether a rebase is now in progress (poll merge_request.get to track completion). See also: gitlab_mr_get, gitlab_mr_merge.",
 		},
 		"participants": {
-			usage:       "List every user participating in a merge request (author, assignees, reviewers, commenters).",
+			usage:       "List the users participating in a merge request (author, assignees, reviewers, commenters), one page at a time with page and per_page.",
 			aliases:     []string{"list merge request participants", "list mr participants", "who is involved in mr"},
 			related:     []string{"merge_request.reviewers", actionMRGet},
-			description: "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.",
+			description: "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email, with pagination metadata. See also: gitlab_mr_reviewers, gitlab_mr_get.",
 		},
 		"reviewers": {
-			usage:       "List the assigned reviewers of a merge request along with each reviewer's review state.",
+			usage:       "List the assigned reviewers of a merge request along with each reviewer's review state, one page at a time with page and per_page.",
 			aliases:     []string{"list merge request reviewers", "list mr reviewers", "show reviewers"},
 			related:     []string{actionMRParticipants, actionMRUpdate, actionMRApprove},
-			description: "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.",
+			description: "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time, with pagination metadata. See also: gitlab_mr_participants, gitlab_mr_update.",
 		},
 		"issues_closed": {
 			usage:       "List issues that will be closed when this merge request is merged (issues referenced via 'Closes #N' in the MR description or commits).",
@@ -487,10 +487,10 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 			{PropertyPath: "auto_merge", Values: map[string]any{"description": "Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge."}},
 		}
 	case "pipelines":
-		options.Usage = "Lists pipelines attached to a merge request. Use " + pipelineWaitAction + " with the returned pipeline_id only when the task asks to wait for CI completion."
+		options.Usage = "Lists pipelines attached to a merge request, one page at a time with page and per_page. Use " + pipelineWaitAction + " with the returned pipeline_id only when the task asks to wait for CI completion."
 		options.Aliases = []string{"list merge request pipelines", "list mr pipelines", "show mr pipelines"}
 		options.RelatedActions = []string{pipelineWaitAction, pipelineGetAction, actionMRMerge, "merge_request.create_pipeline"}
-		options.IndividualTool.Description = "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get."
+		options.IndividualTool.Description = "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get."
 	case "create_pipeline":
 		options.Usage = "Creates a new pipeline for a merge request. Use " + pipelineWaitAction + " after receiving pipeline_id if the task asks to wait for completion."
 		options.Aliases = []string{"create merge request pipeline", "trigger mr pipeline", "run pipeline for mr"}
