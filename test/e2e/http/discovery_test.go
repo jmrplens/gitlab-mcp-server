@@ -3,10 +3,162 @@
 package httpe2e
 
 import (
+	"encoding/json"
+	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
+
+// TestServerCard_TheURLItAdvertisesServesTheCard follows the card the way a
+// client that found it does: read `remotes[0].url`, append the suffix the
+// server-card extension reserves, and fetch that.
+//
+// The extension puts the card at `<streamable-http-url>/server-card`, so the
+// endpoint a card advertises implies where the card itself lives. Before the
+// card was mounted after /mcp as well, a deployment published as
+// https://host/mcp advertised that URL and answered 404 at
+// https://host/mcp/server-card, because a public URL whose path is /mcp names
+// no prefix and the card was at /server-card alone. The public deployment
+// answered 404 at https://mcp.jmrp.io/gitlab/mcp/server-card for the same
+// reason, which is the card URL of its endpoint's /mcp form, and that
+// deployment runs in oauth mode, so its row is repeated there: the bearer guard
+// wraps the endpoint the card sits after, and must not reach the card. A path
+// that only ends in /mcp is a prefix like any other, which the /gitlab/mcp row
+// holds. Each row starts a real binary with that --public-url and sends the
+// request with the advertised host in Host, since that is what arrives through
+// the proxy the URL implies.
+func TestServerCard_TheURLItAdvertisesServesTheCard(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+
+	tests := []struct {
+		name      string
+		publicURL string
+		authMode  string
+		// endpointForms are the other paths the MCP endpoint answers at under
+		// this URL, each of which has a card of its own by the same rule.
+		endpointForms []string
+	}{
+		{name: "an origin", publicURL: "https://mcp.example.invalid", endpointForms: []string{"/mcp"}},
+		{name: "the endpoint at /mcp", publicURL: "https://mcp.example.invalid/mcp"},
+		{name: "a prefix", publicURL: "https://mcp.example.invalid/gitlab", endpointForms: []string{"/gitlab/mcp"}},
+		{name: "a prefix ending in /mcp", publicURL: "https://mcp.example.invalid/gitlab/mcp", endpointForms: []string{"/gitlab/mcp/mcp"}},
+		{
+			name:          "a prefix in oauth mode",
+			publicURL:     "https://mcp.example.invalid/gitlab",
+			authMode:      "oauth",
+			endpointForms: []string{"/gitlab/mcp"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := []string{"--gitlab-url=" + gitlab.url, "--public-url=" + tt.publicURL}
+			if tt.authMode != "" {
+				flags = append(flags, "--auth-mode="+tt.authMode)
+			}
+			srv := startServer(t, nil, flags...)
+
+			root := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+			if root.status != http.StatusOK {
+				t.Fatalf("GET /server-card = %d, want 200: %s", root.status, root.body)
+			}
+			advertised := advertisedRemote(t, root.body)
+			if advertised.String() != tt.publicURL {
+				t.Errorf("remotes[0].url = %q, want the --public-url %q", advertised, tt.publicURL)
+			}
+
+			for _, endpoint := range append([]string{advertised.Path}, tt.endpointForms...) {
+				t.Run(endpoint+"/server-card", func(t *testing.T) {
+					assertCardServedAt(t, srv, advertised.Host, endpoint+"/server-card", root.body)
+				})
+			}
+
+			if tt.authMode == "oauth" {
+				// The guard is on the endpoint the card sits after, which is
+				// what makes the cards answering above worth anything.
+				got := srv.do(t, request{
+					method:  http.MethodPost,
+					path:    advertised.Path,
+					body:    toolsListBody,
+					headers: map[string]string{"Host": advertised.Host},
+				})
+				if got.status != http.StatusUnauthorized || !strings.HasPrefix(got.header.Get("WWW-Authenticate"), "Bearer") {
+					t.Errorf("POST %s without a token = %d with WWW-Authenticate %q, want 401 and a Bearer challenge",
+						advertised.Path, got.status, got.header.Get("WWW-Authenticate"))
+				}
+			}
+		})
+	}
+}
+
+// advertisedRemote reads `remotes[0].url` out of a card, failing the test when
+// the card carries none: a deployment started with --public-url must say where
+// it is reached.
+func advertisedRemote(t *testing.T, card string) *url.URL {
+	t.Helper()
+
+	var parsed struct {
+		Remotes []struct {
+			URL string `json:"url"`
+		} `json:"remotes"`
+	}
+	if err := json.Unmarshal([]byte(card), &parsed); err != nil {
+		t.Fatalf("the card is not JSON: %v\n%s", err, card)
+	}
+	if len(parsed.Remotes) == 0 {
+		t.Fatalf("a deployment with --public-url published no remotes: %s", card)
+	}
+	advertised, err := url.Parse(parsed.Remotes[0].URL)
+	if err != nil {
+		t.Fatalf("remotes[0].url %q: %v", parsed.Remotes[0].URL, err)
+	}
+	return advertised
+}
+
+// assertCardServedAt fetches a card URL the way a client that followed the card
+// would, with the advertised host in Host and the card's media type in Accept,
+// and holds the answer to the card the root path serves and to what the
+// extension asks of any card response: readable from any origin, its validator
+// exposed to a script, cacheable, and no challenge.
+func assertCardServedAt(t *testing.T, srv *server, host, path, want string) {
+	t.Helper()
+
+	got := srv.do(t, request{
+		method:  http.MethodGet,
+		path:    path,
+		headers: map[string]string{"Host": host, "Accept": "application/mcp-server-card+json"},
+	})
+	if got.status != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200: the endpoint answers there and its card does not: %s", path, got.status, got.body)
+	}
+	mediaType, _, err := mime.ParseMediaType(got.header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("Content-Type %q: %v", got.header.Get("Content-Type"), err)
+	}
+	if mediaType != "application/mcp-server-card+json" {
+		t.Errorf("Content-Type = %q, want the card's own media type", mediaType)
+	}
+	if got.body != want {
+		t.Errorf("the card at %s differs from the one at /server-card", path)
+	}
+	if value := got.header.Get("Access-Control-Allow-Origin"); value != "*" {
+		t.Errorf("GET %s Access-Control-Allow-Origin = %q, want *", path, value)
+	}
+	if value := got.header.Get("Access-Control-Expose-Headers"); value != "ETag" {
+		t.Errorf("GET %s Access-Control-Expose-Headers = %q, want ETag", path, value)
+	}
+	if value := got.header.Get("Cache-Control"); value != "public, max-age=3600" {
+		t.Errorf("GET %s Cache-Control = %q, want public, max-age=3600", path, value)
+	}
+	if value := got.header.Get("WWW-Authenticate"); value != "" {
+		t.Errorf("GET %s WWW-Authenticate = %q, want none: the card is public", path, value)
+	}
+	if got.header.Get("ETag") == "" {
+		t.Errorf("GET %s carries no ETag", path)
+	}
+}
 
 // TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument pins the rules that
 // apply to the discovery document because it is a document, not because it is

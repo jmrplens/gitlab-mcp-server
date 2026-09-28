@@ -224,7 +224,7 @@ func TestCrossOrigin_UntrustedPreflightGetsNoPermission(t *testing.T) {
 func TestCrossOrigin_SafeMethodsStayReachable(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
 
-	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
+	for _, path := range []string{"/health", "/server-card", "/mcp/server-card", "/.well-known/mcp/server-card.json"} {
 		t.Run(path, func(t *testing.T) {
 			got := srv.do(t, request{
 				method:  http.MethodGet,

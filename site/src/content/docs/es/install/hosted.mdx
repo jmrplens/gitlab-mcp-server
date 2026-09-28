@@ -67,16 +67,18 @@ cuando solo quieres leer.
 
 ## Qué es el endpoint
 
-| Propiedad                  | Valor                                                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| URL                        | `https://mcp.jmrp.io/gitlab`                                                                                                                                                         |
-| Transporte                 | Streamable HTTP sin estado. `POST` es el transporte; un `GET` o `DELETE` autenticado responde `405` por diseño.                                                                      |
-| Superficie de herramientas | La superficie `dynamic` por defecto: `gitlab_find_action` y `gitlab_execute_action`, que alcanzan cualquier acción del catálogo por su id canónico.                                  |
-| Autenticación              | Modo OAuth. `Authorization: Bearer` en cada petición, verificado contra GitLab.com, nunca guardado en el servidor.                                                                   |
-| Salud                      | `GET https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",...}`.                                                                           |
-| Ficha del servidor         | [`https://mcp.jmrp.io/es/servers/gitlab/`](https://mcp.jmrp.io/es/servers/gitlab/): el catálogo completo y la configuración por cliente, sin autenticación.                          |
-| Ficha MCP del servidor     | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación.                                                                                                                     |
-| Directorio                 | [mcp.jmrp.io](https://mcp.jmrp.io/) lista los servidores MCP que mantiene el autor; [`servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos. |
+| Propiedad                  | Valor                                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| URL                        | `https://mcp.jmrp.io/gitlab`                                                                                                                                                            |
+| Transporte                 | Streamable HTTP sin estado. `POST` es el transporte; un `GET` o `DELETE` autenticado responde `405` por diseño.                                                                         |
+| Superficie de herramientas | La superficie `dynamic` por defecto: `gitlab_find_action` y `gitlab_execute_action`, que alcanzan cualquier acción del catálogo por su id canónico.                                     |
+| Autenticación              | Modo OAuth. `Authorization: Bearer` en cada petición, verificado contra GitLab.com, nunca guardado en el servidor.                                                                      |
+| Salud                      | `GET https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",...}`.                                                                              |
+| Ficha del servidor         | [`https://mcp.jmrp.io/es/servers/gitlab/`](https://mcp.jmrp.io/es/servers/gitlab/): el catálogo completo y la configuración por cliente, sin autenticación.                             |
+| Ficha MCP del servidor     | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación: la ficha SEP-2127, identidad y conexión, sin herramientas. Es el `url` de su entrada en un AI Catalog.                 |
+| Ficha SEP-1649             | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json`, sin autenticación: el documento enumerante anterior, con cada herramienta, prompt y recurso.                         |
+| AI Catalog                 | `GET https://mcp.jmrp.io/.well-known/ai-catalog.json`, servido por el host y no por el servidor: lista este servidor como `urn:air:jmrp.io:mcp:gitlab`, apuntando a la ficha de arriba. |
+| Directorio                 | [mcp.jmrp.io](https://mcp.jmrp.io/) lista los servidores MCP que mantiene el autor; [`servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.    |
 
 Un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando.
 La URL de salud es la que debes sondear cuando quieras un `200`.

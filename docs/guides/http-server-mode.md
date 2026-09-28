@@ -808,7 +808,7 @@ It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer
 | Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                            |
 | Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                   |
 | MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated: the SEP-2127 card, identity and how to connect, no primitives               |
-| MCP catalog     | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json` → `200 application/json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource |
+| SEP-1649 card   | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json` → `200 application/json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource |
 
 Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
 
@@ -1099,8 +1099,8 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ### Server Card
 
-Two documents, at two paths, and neither needs a credential. They are not the
-same document, and which one you want depends on the question you are asking.
+Two documents, and neither needs a credential. They are not the same document,
+and which one you want depends on the question you are asking.
 
 `GET /server-card` answers the **SEP-2127 Server Card**: who this server is and
 how to connect to it. Identity (`name`, `version`, `description`, `title`,
@@ -1113,34 +1113,59 @@ document cannot answer it and the extension says as much.
 
 ```bash
 curl -s http://localhost:8080/server-card
+curl -s http://localhost:8080/mcp/server-card
 ```
 
 The response carries `Content-Type: application/mcp-server-card+json`.
+
+The extension reserves `<streamable-http-url>/server-card`: the suffix goes on
+the endpoint's URL, not on the host. The MCP endpoint answers at the root and
+at `/mcp`, so the card answers at `/server-card` and at `/mcp/server-card`, and
+a client configured with `https://mcp.example.com/mcp` finds it at
+`https://mcp.example.com/mcp/server-card` without being told. Whatever path
+`--public-url` names, `<--public-url>/server-card` is one of those paths, which
+is the URL a client derives from the card's own `remotes[0].url`. A
+`--public-url` carrying a query string is the exception, because appending the
+suffix extends the query rather than the path; publish the endpoint without
+one, as RFC 8707 advises for a resource identifier.
 
 `GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649
 document**, which does enumerate: every tool, resource, resource template and
 prompt this deployment registers, with its schemas, plus the capabilities it
 advertises and blocks describing authentication, subscriptions and telemetry.
-It is served as `application/json`, and it is what to fetch when you want the
-catalog without a credential.
+It is served as `application/json`, and it is what to fetch when you want that
+list without a credential.
 
 ```bash
 curl -s http://localhost:8080/.well-known/mcp/server-card.json
 ```
 
-That second URL is the sanctioned way to publish the catalog to something
-holding no credential: a directory, a scanner, a documentation build.
-`tools/list` stays authenticated, because the MCP authorization specification
-requires a server that requires authorization to validate the token before
-processing a request; see
+That second document is the sanctioned way to tell something holding no
+credential what the server can do: a directory, a scanner, a documentation
+build. `tools/list` stays authenticated, because the MCP authorization
+specification requires a server that requires authorization to validate the
+token before processing a request; see
 [ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md).
 
-Both paths are mounted under `--public-url`'s path prefix as well, for a proxy
-that forwards its prefix rather than stripping it. Before 3.1.0 both answered
-the enumerating document and differed only in `Content-Type`, which left the
-older shape at the location SEP-2127 reserves; a deployment that wanted to be
+Every one of these paths is mounted under `--public-url`'s path prefix as well,
+for a proxy that forwards its prefix rather than stripping it: started with
+`--public-url=https://mcp.example.com/gitlab`, the SEP-2127 card answers at
+`/server-card`, `/gitlab/server-card`, `/mcp/server-card` and
+`/gitlab/mcp/server-card`, and the SEP-1649 document at
+`/gitlab/.well-known/mcp/server-card.json` beside its root path, as the health
+check is at `/gitlab/health`. A `--public-url` whose path is exactly `/mcp`
+names the endpoint rather than a prefix, so nothing is mounted under it: the
+card answers at `/mcp/server-card` because the endpoint answers at `/mcp`, while
+`/health` and `/.well-known/mcp/server-card.json` stay at the root only, and a
+proxy that publishes nothing but `/mcp` has to route those two to the server's
+root paths if it exposes them. A path that only ends in `/mcp`, such as
+`/gitlab/mcp`, is a prefix like any other. Before 3.1.0 both paths answered the
+enumerating document and differed only in `Content-Type`, which left the older
+shape at the location SEP-2127 reserves; a deployment that wanted to be
 conformant had to shadow `/server-card` with a static file in its proxy, and
-that workaround can now be removed.
+that workaround can now be removed. The card was also mounted at `/server-card`
+alone, so an endpoint published as `https://mcp.example.com/mcp` answered `404`
+at the one card URL a client would derive from it.
 
 ### Caching the cards
 
@@ -1177,10 +1202,90 @@ it first is still told 304. Nothing has to be configured for that to hold, and
 nothing should be added in front that replaces the tag with a per-instance
 value.
 
-A CDN in front of the deployment can cache all three routes on the strength of
-those headers. It must not cache `/mcp` itself, which is a credentialed
+A CDN in front of the deployment can cache the cards and the RFC 9728 document
+on the strength of those headers. It must not cache `/mcp` itself, which is a credentialed
 `POST` and carries `Cache-Control: no-store`, nor `/health`, whose body changes
 on every probe.
+
+### Publishing an AI Catalog
+
+A client doing domain-level discovery starts at
+`https://<host>/.well-known/ai-catalog.json`, an
+[AI Catalog](https://github.com/Agent-Card/ai-catalog) listing what the host
+publishes, and follows the entries whose `type` is
+`application/mcp-server-card+json` to their server cards. This is the discovery
+mechanism the
+[server-card extension](https://github.com/modelcontextprotocol/experimental-ext-server-card/blob/main/docs/discovery.md)
+describes.
+
+**The binary does not serve a catalog, and that is deliberate.**
+`GET /.well-known/ai-catalog.json` answers the same unauthenticated `404` as any
+other path the server does not serve. A catalog describes everything a host
+publishes, which only whoever runs the host knows: this server is often one
+entry among several, behind a prefix, on a host that serves other things too.
+The catalog belongs to the deployment, and the proxy in front of the server is
+the natural place to serve it from.
+
+The entry for this server is three members:
+
+```json
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:air:example.com:mcp:gitlab",
+      "type": "application/mcp-server-card+json",
+      "url": "https://mcp.example.com/gitlab/server-card"
+    }
+  ]
+}
+```
+
+- **`url` is `<--public-url>/server-card`.** With
+  `--public-url=https://mcp.example.com/gitlab` that is
+  `https://mcp.example.com/gitlab/server-card`, the same URL a client derives from
+  the card's own `remotes[0].url`, and the server answers it with the card's own
+  media type.
+- **`identifier`** follows the `urn:air:{publisher}:{namespace}:{name}` form the
+  catalog specification requires for open systems, where `{publisher}` is "the
+  domain name of the organization publishing the artifact". The artifact this
+  entry lists is your deployment's card at its URL, which you publish, so
+  `{publisher}` is your domain rather than this project's. The server-card
+  extension's own example derives the publisher from the card's `name` instead
+  (`com.example/weather` becomes `urn:air:example.com:mcp:weather`); for this
+  card that would name the project, which publishes the software and not your
+  deployment of it, and two deployments following it would list the same
+  identifier for two different endpoints.
+- **No `displayName` and no `description`.** The card carries `title` and
+  `description` itself, and the catalog specification says an entry pointing at an
+  artifact that names itself should omit both: a copy in the catalog is a second
+  value that drifts out of step with the card the next time the server is
+  upgraded, and when present it wins over the card's.
+
+Serve the file from the proxy under its own media type. With nginx that needs
+`types { }` as well as `default_type`: nginx picks the type from the file's
+extension first, and `mime.types` maps `.json` to `application/json`, so
+`default_type` alone is never reached and the catalog goes out as plain JSON.
+Clearing the extension map for this one location is what lets `default_type`
+apply:
+
+```nginx
+location = /.well-known/ai-catalog.json {
+    alias /etc/nginx/ai-catalog.json;
+    types { }
+    default_type application/ai-catalog+json;
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Cache-Control "public, max-age=3600" always;
+}
+```
+
+This is the one location where the proxy answers CORS itself, because it is the
+one document the proxy serves rather than forwards; every path it forwards gets
+its CORS headers from the server, and must not get a second set from the
+proxy (see [Behind a reverse proxy](remote-deployment.md#behind-a-reverse-proxy)).
+The catalog may also live on another domain entirely: an entry's `url` can name a
+card on any host, so an organization can list this server from the catalog on
+its main site.
 
 ## Security Considerations
 

@@ -458,12 +458,21 @@ segment between host and path. Started with
 | ----------------------------------------------------- | ------ |
 | `/gitlab/health`, `/health`                           | `200`  |
 | `/gitlab/server-card`, `/server-card`                 | `200`  |
+| `/gitlab/mcp/server-card`, `/mcp/server-card`         | `200`  |
 | `/.well-known/oauth-protected-resource`               | `404`  |
 | `/.well-known/oauth-protected-resource/gitlab`        | `200`  |
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`  |
+| `/.well-known/ai-catalog.json`                        | `404`  |
 
 `/health` and the server card are mounted under the prefix as well as at the
-root; the OAuth metadata is served at exactly one path, the derived one, and
+root. The card is mounted after the endpoint's `/mcp` form too, because the
+server-card extension appends its `/server-card` suffix to the endpoint's URL
+rather than to the host, so a client configured with `.../gitlab/mcp` finds the
+card at `.../gitlab/mcp/server-card`. The AI Catalog at
+`/.well-known/ai-catalog.json` is not the server's to answer: it lists what the
+whole host publishes, and a deployment that wants one serves it from the proxy
+(see [Publishing an AI Catalog](http-server-mode.md#publishing-an-ai-catalog)).
+The OAuth metadata is served at exactly one path, the derived one, and
 the `401` challenge points at that host-root form. The path-less document
 belongs to a resource that is the origin itself, so a server under a prefix
 neither serves it nor should have it routed. A proxy that routes only `/gitlab`
@@ -477,7 +486,10 @@ documented under [OAuth Mode](http-server-mode.md#oauth-mode).
 A proxy that also emits `Access-Control-Allow-Origin` produces two of them.
 Browsers reject that outright while `curl` reports a cheerful `200`, so it is a
 failure visible only in the one client that matters. `test/e2e/http` pins it
-with a real nginx; the remedy is in [Security](../concepts/security.md).
+with a real nginx; the remedy is in [Security](../concepts/security.md). The one
+exception is a document the proxy serves itself rather than forwards: the AI
+Catalog below never reaches the server, so the proxy is the only thing that can
+send its CORS header.
 
 **Anything the proxy does not route is a `404`, not a `401`.** The MCP endpoint
 is mounted on specific patterns rather than as a catch-all, so a misrouted path
@@ -504,6 +516,17 @@ server {
     location /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+    }
+
+    # AI Catalog: the host's own document, served here and never forwarded.
+    # `types { }` clears the extension map, without which mime.types sends
+    # the file as application/json and default_type is never reached.
+    location = /.well-known/ai-catalog.json {
+        alias /etc/nginx/ai-catalog.json;
+        types { }
+        default_type application/ai-catalog+json;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "public, max-age=3600" always;
     }
 
     location / {

@@ -854,7 +854,9 @@ func writeSelfSignedCertInto(t *testing.T, dir string, serial int64, stamp time.
 // Both paths used to answer `application/json`, which the documentation
 // contradicted. The public deployment looked correct only because a reverse
 // proxy in front of it rewrote the header — and this server is meant to be
-// correct on its own, without one.
+// correct on its own, without one. `/mcp/server-card` is the recommended
+// location again, appended to the endpoint's other form, and gets the same
+// type.
 func TestServerCard_MediaTypeMatchesThePath(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
@@ -864,6 +866,7 @@ func TestServerCard_MediaTypeMatchesThePath(t *testing.T) {
 		want string
 	}{
 		{path: "/server-card", want: "application/mcp-server-card+json"},
+		{path: "/mcp/server-card", want: "application/mcp-server-card+json"},
 		{path: "/.well-known/mcp/server-card.json", want: "application/json"},
 	}
 
@@ -899,7 +902,7 @@ func TestServerCard_ConditionalFetchIsAnsweredNotModified(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
-	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
+	for _, path := range []string{"/server-card", "/mcp/server-card", "/.well-known/mcp/server-card.json"} {
 		t.Run(path, func(t *testing.T) {
 			first := srv.do(t, request{method: http.MethodGet, path: path})
 			if first.status != http.StatusOK {
@@ -1074,7 +1077,7 @@ func TestServerCard_TwoReplicasPublishTheSameValidator(t *testing.T) {
 	first := startServer(t, nil, "--gitlab-url="+gitlab.url)
 	second := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
-	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
+	for _, path := range []string{"/server-card", "/mcp/server-card", "/.well-known/mcp/server-card.json"} {
 		t.Run(path, func(t *testing.T) {
 			one := first.do(t, request{method: http.MethodGet, path: path})
 			two := second.do(t, request{method: http.MethodGet, path: path})
