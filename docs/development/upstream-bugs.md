@@ -308,12 +308,12 @@ pull request carries the two sites it had left out and the promised comment
 rewrite, and is behind `main` again; row 68's pull request took our review
 change as a commit; row 53's merge request had its first backend review and our
 first round of changes; row 46's is approved and waits on routes `master` does
-not have yet. Two of them now wait on us, each for the maintainer's go-ahead
-before anything is written on gitlab.com: row 34's
-`gitlab-org/api/client-go!3048`, where the maintainer review left one
-suggestion and "otherwise LGTM", and row 39's `gitlab-org/gitlab!254699`, whose
-merge train pipeline failed on a clash from `master` and whose reviewer asked
-to be pinged for another. Both upstream indexes that had fallen behind, the
+not have yet. Two of them had waited on us, and both were answered that
+evening with the maintainer's go-ahead: row 34's
+`gitlab-org/api/client-go!3048`, where the maintainer review's one suggestion
+is applied and the test updated, and row 39's `gitlab-org/gitlab!254699`, whose
+new pipeline had run on the branch's stale base rather than on the merged
+result, which the reply explains. Both upstream indexes that had fallen behind, the
 client-go umbrella and the go-sdk index, were rewritten on the evening of the
 27th. No other row moved: go-sdk v1.8.0, client-go v3.14.0 and GitLab 19.4.1
 are still each project's newest release, so every merge recorded here as
@@ -556,14 +556,21 @@ example needs to stay reachable for callers still using it.
   not on this one, and the Danger warning about the commit body's 72 columns
   stays, as the maintainer decided on 2026-09-15. On 2026-09-28 @hustewart
   started a pipeline and set the merge train again (14:04 UTC), and it failed
-  on the same job for a different clash: `generate-apollo-graphql-schema`
+  exactly as the fork pipeline of 2026-09-22 had: `generate-apollo-graphql-schema`
   stopped on "Field `ArtifactRegistryManifestDetails.referrers` already exists
-  in the schema. It cannot also be defined in this type extension", which is
-  not in the change, and `master`'s own pipelines passed that job from 15:20
-  on. At 16:44 @hustewart asked for the failure to be addressed and for a ping
-  to start another pipeline, so the next step is ours: a reply saying the failure came
-  from `master` and asking for one more pipeline, which waits on the
-  maintainer's go-ahead like every write on gitlab.com.
+  in the schema. It cannot also be defined in this type extension", the one
+  failure among 321 jobs that ran. The reason is where it ran: pipeline
+  2889824200 is a detached pipeline on `refs/merge-requests/254699/head`, the
+  branch itself, whose base is still `e52599d0` of the 2026-09-22 rebase, which
+  carries the client typedef and not its removal in
+  [gitlab-org/gitlab!256904](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256904);
+  the pipelines of 2026-09-15 and 16 had been merged-results pipelines instead.
+  At 16:44 @hustewart asked for the failure to be addressed and for a ping to
+  start another pipeline. Our reply in that thread (17:28 UTC) set that out and
+  offered two ways through: a pipeline on the merged result, whose ref was
+  regenerated at 17:17 UTC on a `master` that carries !256904, or a rebase onto
+  current `master`, held back because the push would reset the two approvals.
+  It waits on @hustewart's choice.
 - **Merged**: no. Its milestone still says 19.4, which was released without
   it, so 19.5 is the earliest release that can carry it.
 - **Blocking**: no. Our output type is already the right shape; only the audit
@@ -1430,9 +1437,14 @@ of change whose test is one assertion on the built URL.
   `CustomHeaders` on the `Hook` response struct should be
   `[]HookCustomHeader` rather than a slice of pointers, since a nil slice
   already stands for no headers and a slice of nil elements means nothing. It
-  comes with a suggestion block on `system_hooks.go:108`, so the next step is
-  ours: apply it, with the test that decodes the field if the change reaches
-  it, and answer the thread, once the maintainer of this repository says go.
+  came with a suggestion block on `system_hooks.go:108`, which was applied
+  through GitLab the same evening as `552678c6`; `2d031b04` followed, updating
+  the expected `Hook` in `TestSystemHooksService_GetHook` and realigning the
+  struct's tags with `gofmt`, since the suggestion alone left both, and
+  `go test -run SystemHook` and `go vet` pass on it. The thread was answered
+  and resolved, as was the answered handover thread, so no discussion is open
+  and the merge request waits on @PatrickRice's approval, which the new
+  commits require.
   The rest of this entry, the gaps held back below, went out on 2026-09-27 in
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
   described further down, which does not touch `system_hooks.go` and so does
