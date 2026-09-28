@@ -1297,13 +1297,13 @@ jobs:
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # An exact SDK version rather than 10.0.x: dnx's behaviour is an SDK
-      # property (10.0.400 installs without asking when stdin is not a
+      # property (10.0.401 installs without asking when stdin is not a
       # terminal and accepts --yes without needing it, which the docs rely
       # on), and the digest `make validate-nuget` pins is the container image
       # of this same SDK. Bump the two together.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: "10.0.400"
+          dotnet-version: "10.0.401"
 
       # A pointer package plus six runtime-identifier packages, each carrying
       # the native binary as the tool's entry point (the .NET 10 tool layout).

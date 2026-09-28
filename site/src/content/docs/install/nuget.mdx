@@ -66,8 +66,8 @@ Two things about `dnx` that are easy to trip over:
 - **It asks nothing when its standard input is not a terminal.** Microsoft's
   documentation shows `dnx <package> --yes` to skip the "download this
   tool?" prompt; an MCP client connects pipes, so the prompt never appears
-  and the flag is unnecessary (the .NET 10.0.400 SDK accepts it all the
-  same, so a client template that adds it does no harm). In a terminal, the
+  and the flag is unnecessary (the .NET 10.0.400 and 10.0.401 SDKs accept
+  it all the same, so a client template that adds it does no harm). In a terminal, the
   first run asks once.
 
 </TabItem>
