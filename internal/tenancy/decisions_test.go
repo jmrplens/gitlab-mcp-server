@@ -18,7 +18,7 @@ var specRequirementIDs = []string{
 	"IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006", "IDN-007",
 	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
-	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013",
+	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-005", "HLD-006", "HLD-007",
@@ -85,7 +85,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 
 // TestDecisions_DispositionCounts pins how many rows the register holds of
 // each disposition in this layer: RTC-004 is promoted to MeterFor, and POL-003
-// to Busy.
+// to Busy. ADM-014, the verification ceiling issue 950 added, is the
+// twenty-ninth valued row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -96,7 +97,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 28},
+		{"valued", Valued, 29},
 		{"ruled", Ruled, 35},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -203,6 +204,60 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 	}
 }
 
+// TestDecisions_OAuthVerification_IsBoundedByIssue950 pins what issue 950
+// decided for the two things on the OAuth admission path that grew with what
+// callers send. The identity cache (ADM-005) has a constant capacity and takes
+// the least recently used identity to hold a new one, which crosses keys and so
+// records the decision; the verification's round trips (ADM-014) run under a
+// ceiling keyed on the process that no operator can change, with slots of its
+// own rather than the pool's probe slots (POL-006), and a request that waited
+// in vain is told to retry and is charged nothing. No row carries F-29 or F-30
+// any longer, and both stay filed as issue 950's.
+func TestDecisions_OAuthVerification_IsBoundedByIssue950(t *testing.T) {
+	cache, _ := Lookup("ADM-005")
+	if !slices.Contains(cache.Values, "OAuthCacheCapacity") || cache.AtCapacity != EvictAcrossKeys ||
+		!slices.Contains(cache.Decided, "issue 950") {
+		t.Errorf("ADM-005: values %v, at capacity %d, decided %v; want OAuthCacheCapacity evicting across keys by issue 950",
+			cache.Values, cache.AtCapacity, cache.Decided)
+	}
+
+	slots, _ := Lookup("ADM-014")
+	if slots.Key != KeyProcess || slots.Source != Constant || !slots.ProtectsProcess || slots.AtCapacity != WaitThenRefuse ||
+		!slices.Contains(slots.Decided, "issue 950") {
+		t.Errorf("ADM-014: key %s, source %d, protects the process %v, at capacity %d, decided %v; "+
+			"want a constant on the process that waits then refuses, by issue 950",
+			slots.Key, slots.Source, slots.ProtectsProcess, slots.AtCapacity, slots.Decided)
+	}
+	for _, r := range slots.Refusals {
+		if r.Answer != RetryLater || len(r.Charged) != 0 {
+			t.Errorf("ADM-014 refuses with %s charging %v; want retry later, charging nothing", r.Answer, r.Charged)
+		}
+	}
+
+	probes, _ := Lookup("POL-006")
+	for _, value := range slots.Values {
+		if slices.Contains(probes.Values, value) {
+			t.Errorf("ADM-014 and POL-006 share %s; the verifier's slots are its own", value)
+		}
+	}
+
+	for _, id := range []string{"ADM-002", "ADM-005", "ADM-014", "POL-006"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Carries("F-29") || d.Carries("F-30") {
+				t.Errorf("%s still carries %v", id, d.Findings)
+			}
+		})
+	}
+	for _, finding := range []string{"F-29", "F-30"} {
+		t.Run(finding, func(t *testing.T) {
+			if FindingIssue(finding) != 950 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 950's", finding, FindingIssue(finding))
+			}
+		})
+	}
+}
+
 // findingsOfNoRow are the findings that record no row's departure, so no row
 // has carried them since the register landed: F-18 is a budget GitLab.com
 // keeps that nothing in the process accounts for, F-24 a message the SDK
@@ -219,7 +274,8 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // records the issue that decided and not the finding it answered, so a finding
 // whose issue answered another one elsewhere (F-31, whose issue 951 answered
 // F-03 on RTC-007) would pass its subtest if it were dropped; the next finding
-// answered joins that list in the change that answers it.
+// answered joins that list in the change that answers it, as F-29 and F-30 did
+// when issue 950 bounded the OAuth identity cache and verification.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -247,7 +303,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-19,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-19,F-29,F-30,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -451,6 +507,12 @@ func rowPins() map[string]rowPin {
 			{
 				methods: "http", channel: Gate, code: -40300, status: 403,
 				prefix: "Request refused: the Host header names a host", answer: AskOperator,
+			},
+		}},
+		"ADM-014": {Admit, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyProcess, []refusalPin{
+			{
+				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
+				prefix: "This token could not be verified right now.", answer: RetryLater,
 			},
 		}},
 		"AUB-001": {Admit, Budget, ClassA, Valued, KeyAddress, KeyNone, KeyNone, KeyNone, pinBlockedAt()},

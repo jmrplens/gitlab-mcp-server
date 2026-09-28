@@ -15,7 +15,7 @@ func TestFailures_ValidateFailuresIsNil(t *testing.T) {
 }
 
 // TestFailures_ListEveryRefusalOfTheThreeFunctions pins the table to the
-// twenty-one refusal returns of the gate's resolve and the bearer guard's
+// twenty-two refusal returns of the gate's resolve and the bearer guard's
 // check and classify, of which two, two and one are charged.
 func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 	type tally struct{ returns, charged int }
@@ -35,7 +35,7 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 	}{
 		{"mcpServerGate.resolve", 8, 2},
 		{"bearerGuard.check", 7, 2},
-		{"bearerGuard.classify", 6, 1},
+		{"bearerGuard.classify", 7, 1},
 	} {
 		t.Run(tc.fn, func(t *testing.T) {
 			if got[tc.fn] != (tally{tc.returns, tc.charged}) {
@@ -44,9 +44,25 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 			}
 		})
 	}
-	if len(got) != 3 || len(Failures()) != 21 {
-		t.Errorf("%d functions and %d failures, want 3 and 21", len(got), len(Failures()))
+	if len(got) != 3 || len(Failures()) != 22 {
+		t.Errorf("%d functions and %d failures, want 3 and 22", len(got), len(Failures()))
 	}
+}
+
+// TestFailures_SaturatedVerificationIsUncharged holds the refusal issue 950
+// added to classify: a request that waited in vain for a verification slot
+// sent its token nowhere, so nothing was judged and nothing is charged
+// (INV-007), whoever sent it.
+func TestFailures_SaturatedVerificationIsUncharged(t *testing.T) {
+	for _, f := range Failures() {
+		if f.At.Name == "bearerGuard.classify" && f.Kind == "verification-saturated" {
+			if f.Charged || f.Attributable || f.Status != 503 || f.Decision != "ADM-014" {
+				t.Errorf("classify's saturated verification: %+v", f)
+			}
+			return
+		}
+	}
+	t.Error("classify's saturated verification is missing from the table")
 }
 
 // TestFailures_ChargedAreExactlyTheCallersOwn names the five charged failures:

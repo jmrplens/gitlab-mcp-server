@@ -172,7 +172,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --pub
 1. The server exposes `/.well-known/oauth-protected-resource` with metadata pointing to your GitLab instance as the authorization server
 2. MCP clients (VS Code, Claude Code) discover this endpoint and initiate the OAuth 2.1 PKCE flow
 3. Users authorize in the browser — no token copying required
-4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes)
+4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes). The cache holds at most 10,000 identities and drops the one used least recently when full, and at most 16 new tokens are verified at once across the process: a new token that finds no slot free within five seconds is answered `503` with `Retry-After`, without being judged or charged. Neither bound is configurable, and a token already cached never waits
 
 :::caution[--public-url is required]
 `--public-url` declares the externally reachable origin and **is the RFC 9728 resource identifier**; the server refuses to start in OAuth mode without a valid one. The metadata URL is derived from it by inserting the well-known segment between host and path, so `--public-url=https://mcp.example.com/gitlab` publishes metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` — a path at the **root of the host**, which a reverse proxy must route without rewriting.

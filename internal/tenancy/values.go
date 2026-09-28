@@ -114,7 +114,8 @@ const (
 	CredentialProbeWait = 5 * time.Second
 )
 
-// Admission (ADM-002, ADM-005, ADM-006, ADM-008 to ADM-010, IDN-011, END-005).
+// Admission (ADM-002, ADM-005, ADM-006, ADM-008 to ADM-010, ADM-014, IDN-011,
+// END-005).
 const (
 	// UpstreamRetryAfter is the Retry-After a gate refusal advertises when
 	// GitLab failed the verification without saying when to come back
@@ -133,6 +134,15 @@ const (
 	OAuthCacheSweepDivisor = 4
 	// OAuthCacheSweepFloor is the floor under that cadence (ADM-005).
 	OAuthCacheSweepFloor = 30 * time.Second
+	// OAuthCacheCapacity is how many verified OAuth identities the cache
+	// holds before the least recently used one makes room (ADM-005).
+	OAuthCacheCapacity = 10000
+	// OAuthVerifications is how many OAuth token verifications the process
+	// runs at once (ADM-014).
+	OAuthVerifications = 16
+	// OAuthVerificationWait is how long a verification waits for one of those
+	// slots before it is refused (ADM-014).
+	OAuthVerificationWait = 5 * time.Second
 	// RejectedTokenTTL is how long a rejected token is remembered (ADM-006).
 	RejectedTokenTTL = 5 * time.Minute
 	// RejectedTokenCapacity is how many rejected tokens are remembered

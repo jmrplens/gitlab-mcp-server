@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // decodeInstanceJSON reads the one JSON document an instance answered with
@@ -377,6 +379,71 @@ func newVerificationClient(skipTLS bool) *http.Client {
 	}
 }
 
+// verificationSlots is how many verifications of tokens the cache does not
+// hold a verifier runs at once, counting work rather than callers.
+//
+// A verification is GET /api/v4/user and up to two introspection requests, all
+// sent before the request reaches the pool, and a stream of invented bearer
+// tokens is nothing but verifications: each costs its sender a string and the
+// deployment up to three requests to GitLab. The authentication budgets bound
+// one address at a time, so enough addresses each staying under them produce
+// no blocked request and any number of verifications, and on GitLab.com those
+// land on the deployment's own standing with the instance. The pool's probe
+// ceiling (sixteen, POL-006) cannot cover this: it counts the pool's own
+// GET /user, which runs after these requests have already been sent.
+//
+// These slots are the verifier's own, not the pool's, so neither kind of work
+// can take the other's: a flood of invented tokens held in verification does
+// not stop the pool admitting the tokens that passed it, and a burst of pool
+// builds does not stop verification. A slot's requests run one after another,
+// so sixteen slots put at most sixteen verification requests in flight against
+// the instance at any moment, beside the pool's sixteen; at fifty milliseconds
+// a round trip that still verifies a hundred new tokens a second.
+//
+// It is not configurable, because an operator who could raise it could undo
+// what it bounds (INV-004).
+const verificationSlots = tenancy.OAuthVerifications // register row ADM-014
+
+// verificationWait is how long a verification waits for one of the
+// [verificationSlots] before it is refused.
+//
+// A bounded wait rather than an immediate refusal, as the pool's probe queue
+// does: a token that is waiting is a new credential to be served, so a
+// legitimate burst should be served late rather than refused, and five seconds
+// is well inside any client's timeout. A refusal after the wait is a 503 with
+// Retry-After, never a verdict on the token.
+const verificationWait = tenancy.OAuthVerificationWait // register row ADM-014
+
+// ErrVerificationBusy reports that no verification slot came free while the
+// request waited for one, or that the request ended while it waited.
+//
+// Like [UpstreamError] it says nothing about the credential: the token was
+// never sent anywhere. So it must be answered as "retry later", never cached as
+// a rejection and never charged to an authentication budget, or a flood of
+// invented tokens would lock out the valid ones arriving beside it.
+var ErrVerificationBusy = errors.New("token verification is saturated, retry shortly")
+
+// verificationGate is the set of slots one verifier's round trips run under.
+type verificationGate struct {
+	slots chan struct{}
+	wait  time.Duration
+}
+
+// acquire takes a slot, waiting at most g.wait and no longer than ctx lives,
+// and returns the function that gives it back.
+func (g *verificationGate) acquire(ctx context.Context) (func(), error) {
+	timer := time.NewTimer(g.wait)
+	defer timer.Stop()
+	select {
+	case g.slots <- struct{}{}:
+		return func() { <-g.slots }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%w: the request ended while it waited for a slot: %w", ErrVerificationBusy, context.Cause(ctx))
+	case <-timer.C:
+		return nil, ErrVerificationBusy
+	}
+}
+
 // NewGitLabVerifier returns an [auth.TokenVerifier] that validates Bearer
 // tokens by calling the GitLab /api/v4/user endpoint. Verified identities
 // are cached in cache (if non-nil) to avoid redundant API calls.
@@ -422,72 +489,45 @@ type InstanceResolver func(*http.Request) (string, error)
 // deployment admits — see [acceptedRecipient]. It is a set rather than a scalar
 // because --gitlab-url is repeatable and each published instance has its own
 // OAuth application with its own uid.
+//
+// One verifier is one set of [verificationSlots]: a token the cache does not
+// hold is verified only while one of them is free, and waits at most
+// [verificationWait] for one before it is refused with [ErrVerificationBusy].
+// The server builds a single verifier, so the slots are the process's.
 func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.Duration, cache *TokenCache, clientUIDs ...string) auth.TokenVerifier {
-	client := newVerificationClient(skipTLS)
+	slots := &verificationGate{slots: make(chan struct{}, verificationSlots), wait: verificationWait}
+	return newGitLabVerifier(resolve, newVerificationClient(skipTLS), cacheTTL, cache, slots, clientUIDs)
+}
 
+// newGitLabVerifier is [NewGitLabVerifierFor] with its client and its slots
+// handed in, so a test can give it slots small enough to fill.
+func newGitLabVerifier(resolve InstanceResolver, client *http.Client, cacheTTL time.Duration, cache *TokenCache, slots *verificationGate, clientUIDs []string) auth.TokenVerifier {
 	return func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
 		gitlabURL, err := resolve(r)
 		if err != nil {
 			return nil, err
 		}
 
+		// A cached identity is answered before a slot is asked for, so a
+		// credential this deployment already serves never waits behind a
+		// flood of tokens it has not seen.
 		if cache != nil {
 			if info, cached := cache.Get(gitlabURL, token); cached {
 				return info, nil
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, gitlabURL+"/api/v4/user", http.NoBody)
+		release, err := slots.acquire(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("create verification request: %w", err)
+			return nil, err
 		}
-		req.Header.Set("Authorization", "Bearer "+token)
+		// Held through introspection too: every request the verification
+		// sends GitLab is counted, not only the first.
+		defer release()
 
-		resp, err := client.Do(req)
+		user, err := askIdentity(ctx, client, gitlabURL, token)
 		if err != nil {
-			return nil, &UpstreamError{Err: fmt.Errorf("token verification request failed: %w", err)}
-		}
-		defer resp.Body.Close()
-
-		switch resp.StatusCode {
-		case http.StatusOK:
-			// success — parse below
-		case http.StatusUnauthorized:
-			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
-		case http.StatusForbidden:
-			if isInsufficientScope(resp) {
-				return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, ErrInsufficientScope)
-			}
-			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
-		case http.StatusTooManyRequests:
-			// Not an invalid token: GitLab declined to answer the question.
-			return nil, &UpstreamError{
-				Status:     resp.StatusCode,
-				RetryAfter: retryAfter(resp),
-				Err:        errors.New("rate limit exceeded"),
-			}
-		default:
-			// Only 401 and 403 are GitLab judging the credential. Anything
-			// else (a 5xx, a 404 from a misrouted proxy, a 408, whatever an
-			// intermediary invents) is a question that never got answered,
-			// and calling it invalid_token would cache a valid token as
-			// rejected and charge the caller's failure budget for someone
-			// else's routing mistake. The reason is what tells these apart
-			// in the log: a 5xx is the server failing, anything else a
-			// response GitLab does not give to this question.
-			reason := "unexpected response"
-			if resp.StatusCode >= http.StatusInternalServerError {
-				reason = "server error"
-			}
-			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New(reason)}
-		}
-
-		var user gitlabUserResponse
-		if decErr := decodeInstanceJSON(io.LimitReader(resp.Body, verificationBodyLimit), &user); decErr != nil {
-			return nil, fmt.Errorf("decode GitLab user response: %w", decErr)
-		}
-		if user.ID == 0 {
-			return nil, fmt.Errorf("GitLab returned invalid user: %w", auth.ErrInvalidToken)
+			return nil, err
 		}
 
 		// The token's REAL scopes, introspected rather than assumed: a
@@ -509,6 +549,65 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 		return admitToken(cache, gitlabURL, token, cacheTTL, user, result), nil
 	}
+}
+
+// askIdentity sends GET /api/v4/user with the token and reads the identity
+// GitLab answers with, telling GitLab's verdict on the credential apart from a
+// question that never got answered.
+func askIdentity(ctx context.Context, client *http.Client, gitlabURL, token string) (gitlabUserResponse, error) {
+	var user gitlabUserResponse
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, gitlabURL+"/api/v4/user", http.NoBody)
+	if err != nil {
+		return user, fmt.Errorf("create verification request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return user, &UpstreamError{Err: fmt.Errorf("token verification request failed: %w", err)}
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Success, read below.
+	case http.StatusUnauthorized:
+		return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
+	case http.StatusForbidden:
+		if isInsufficientScope(resp) {
+			return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, ErrInsufficientScope)
+		}
+		return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
+	case http.StatusTooManyRequests:
+		// Not an invalid token: GitLab declined to answer the question.
+		return user, &UpstreamError{
+			Status:     resp.StatusCode,
+			RetryAfter: retryAfter(resp),
+			Err:        errors.New("rate limit exceeded"),
+		}
+	default:
+		// Only 401 and 403 are GitLab judging the credential. Anything
+		// else (a 5xx, a 404 from a misrouted proxy, a 408, whatever an
+		// intermediary invents) is a question that never got answered,
+		// and calling it invalid_token would cache a valid token as
+		// rejected and charge the caller's failure budget for someone
+		// else's routing mistake. The reason is what tells these apart
+		// in the log: a 5xx is the server failing, anything else a
+		// response GitLab does not give to this question.
+		reason := "unexpected response"
+		if resp.StatusCode >= http.StatusInternalServerError {
+			reason = "server error"
+		}
+		return user, &UpstreamError{Status: resp.StatusCode, Err: errors.New(reason)}
+	}
+
+	if decErr := decodeInstanceJSON(io.LimitReader(resp.Body, verificationBodyLimit), &user); decErr != nil {
+		return user, fmt.Errorf("decode GitLab user response: %w", decErr)
+	}
+	if user.ID == 0 {
+		return user, fmt.Errorf("GitLab returned invalid user: %w", auth.ErrInvalidToken)
+	}
+	return user, nil
 }
 
 // admitToken builds the admission record and caches it for as long as the

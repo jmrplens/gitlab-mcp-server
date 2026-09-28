@@ -22,12 +22,22 @@
 //	    +--> TokenCache hit ---> verified identity
 //	    |
 //	    v
+//	verification slot --- none free in time ---> ErrVerificationBusy
+//	    |
+//	    v
 //	GitLab /user (identity) and scope introspection
 //
 // [NewGitLabVerifier] validates Bearer tokens with GitLab and stores verified
 // identity metadata in [TokenCache]. A definitive rejection is remembered by
 // [RejectedTokens]; an [UpstreamError] never is, because it says nothing
-// about the credential.
+// about the credential, and neither is [ErrVerificationBusy].
+//
+// Both things on this path that grew with what callers send are bounded. The
+// identity cache holds a fixed number of identities and makes room by dropping
+// the one used least recently; the verifier sends GitLab its round trips under
+// a fixed number of slots, counting work rather than callers, so a token the
+// cache does not hold waits for one briefly and is refused when none frees. A
+// token the cache holds is answered before a slot is asked for.
 //
 // [NewProtectedResourceHandler] serves OAuth Protected Resource Metadata so MCP
 // clients can discover the GitLab authorization servers this deployment

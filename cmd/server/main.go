@@ -3416,8 +3416,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
 	// A token that never returns is never read, so lazy eviction never reaches
-	// it. Sweeping on a fraction of the TTL keeps the cache bounded by time
-	// rather than by how many distinct credentials have ever arrived.
+	// it. The cache's capacity bounds how many such entries there can be;
+	// sweeping on a fraction of the TTL is what gives their memory back once
+	// the traffic that stored them has stopped.
 	go tokenCache.RunCleanup(ctx, tokenCacheSweepInterval(cacheTTL))
 	// The token is verified against the instance the request selected, not
 	// against a single instance fixed at startup: a token is only ever valid

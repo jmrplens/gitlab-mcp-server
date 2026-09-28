@@ -618,6 +618,52 @@ func TestBearerGuard_UpstreamFailure_IsNotBlamedOnTheToken(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_SaturatedVerification_IsARetryThatCostsNothing pins the
+// refusal of a request that waited in vain for a verification slot (ADM-014):
+// 503 with Retry-After, no challenge sending the client back through
+// authorization, no entry in the rejection cache, nothing charged to the
+// address however often it happens, and a text that says the token could not
+// be verified without saying that other callers are the reason, since that
+// would tell one caller about another's traffic (INV-019). The request that
+// ended while it waited is answered the same way.
+func TestBearerGuard_SaturatedVerification_IsARetryThatCostsNothing(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "the wait ran out", err: oauth.ErrVerificationBusy},
+		{name: "the request ended while it waited", err: fmt.Errorf("%w: %w", oauth.ErrVerificationBusy, context.Canceled)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, tc.err
+			})
+			failure := g.check(guardRequest(t, "gloas-waiting"))
+			if failure == nil || failure.status != http.StatusServiceUnavailable || failure.code != errCodeUpstreamUnavailable {
+				t.Fatalf("want 503 with %d, got %+v", errCodeUpstreamUnavailable, failure)
+			}
+			if challenge := failure.header.Get(headerWWWAuthenticate); challenge != "" {
+				t.Errorf("a saturated verifier must not challenge the client to reauthorize, got %q", challenge)
+			}
+			for _, unwanted := range []string{"other", "busy", "saturated"} {
+				t.Run(unwanted, func(t *testing.T) {
+					if strings.Contains(strings.ToLower(failure.message), unwanted) {
+						t.Errorf("message %q says %q, telling the caller about other callers' traffic", failure.message, unwanted)
+					}
+				})
+			}
+			if g.rejected.Len() != 0 {
+				t.Errorf("rejection cache holds %d entries; a token nobody judged must not be remembered as refused", g.rejected.Len())
+			}
+			assertSpendsNoBudget(t, g)
+		})
+	}
+}
+
 // TestBearerGuard_UpstreamFailureWithoutHint_UsesItsOwnDelay verifies that a
 // 503 always carries a Retry-After, even when GitLab did not say when to
 // return.
@@ -1614,6 +1660,15 @@ func TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge(t *testing.
 			guard: func() *bearerGuard { return newTestGuard(failing(errors.New("decode: unexpected EOF"))) },
 			token: "gloas-good",
 			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault, says: []string{"has not been rejected"}},
+		},
+		{
+			name:  "every verification slot busy",
+			guard: func() *bearerGuard { return newTestGuard(failing(oauth.ErrVerificationBusy)) },
+			token: "gloas-good",
+			want: guardRefusal{
+				status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault,
+				says: []string{"This token could not be verified right now.", "has not been rejected"},
+			},
 		},
 	}
 

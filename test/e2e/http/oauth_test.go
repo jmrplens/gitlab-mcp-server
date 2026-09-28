@@ -12,8 +12,10 @@
 package httpe2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const publicURL = "https://mcp.example.com"
@@ -1041,6 +1045,207 @@ func TestOAuth_BlockedAddressStillServesATokenAlreadyVerified(t *testing.T) {
 	}
 	if served.status != http.StatusOK {
 		t.Fatalf("the neighbor's request during the block = %d, want %d: %s", served.status, http.StatusOK, truncate(served.body))
+	}
+}
+
+// floodTokenPrefix marks the bearer tokens startHoldingFakeGitLab holds.
+const floodTokenPrefix = "gloas-flood-"
+
+// startHoldingFakeGitLab serves a GitLab that answers every token as a valid
+// api credential and holds the identity request of each token carrying
+// floodTokenPrefix until the test calls release. calls counts those held
+// requests, which while the hold lasts are exactly the ones in flight: none of
+// them can finish before the release.
+func startHoldingFakeGitLab(t *testing.T) (gitlab *fakeGitLab, release func()) {
+	t.Helper()
+
+	var held atomic.Int64
+	gate := make(chan struct{})
+	var once sync.Once
+	release = func() { once.Do(func() { close(gate) }) }
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), floodTokenPrefix) {
+			held.Add(1)
+			select {
+			case <-gate:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"username":"flooded"}`))
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"scopes":["api"],"active":true}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	// Registered after the close, so it runs first: a request still held when
+	// the test ends is let go before the server waits for it.
+	t.Cleanup(srv.Close)
+	t.Cleanup(release)
+
+	return &fakeGitLab{url: srv.URL, calls: func() int { return int(held.Load()) }}, release
+}
+
+// postBearer is one tools/list carrying token, for a goroutine: it never
+// touches a *testing.T, and a failure to make the call at all is its error.
+func postBearer(ctx context.Context, srv *server, token string) (response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.baseURL+"/mcp", strings.NewReader(toolsListBody))
+	if err != nil {
+		return response{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", "tools/list")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := srv.httpClient().Do(req)
+	if err != nil {
+		return response{}, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	return response{status: resp.StatusCode, header: resp.Header, body: string(raw)}, err
+}
+
+// floodAnswer is what one flood request met, or why it could not be made.
+type floodAnswer struct {
+	resp response
+	err  error
+}
+
+// floodVerifications sends n tools/list requests at once, each carrying a
+// distinct token startHoldingFakeGitLab holds, and returns where their answers
+// arrive. The goroutines touch no *testing.T.
+func floodVerifications(t *testing.T, srv *server, n int) <-chan floodAnswer {
+	t.Helper()
+	answers := make(chan floodAnswer, n)
+	for i := range n {
+		go func() {
+			resp, err := postBearer(t.Context(), srv, floodTokenPrefix+strconv.Itoa(i))
+			answers <- floodAnswer{resp, err}
+		}()
+	}
+	return answers
+}
+
+// nextFloodAnswer is the next answer of the flood, failing the test when the
+// request could not be made or when nothing answers within a minute.
+func nextFloodAnswer(t *testing.T, answers <-chan floodAnswer) response {
+	t.Helper()
+	select {
+	case got := <-answers:
+		if got.err != nil {
+			t.Fatalf("a flood request could not be made: %v", got.err)
+		}
+		return got.resp
+	case <-time.After(time.Minute):
+		t.Fatal("no answer from the flood within a minute")
+		return response{}
+	}
+}
+
+// assertVerificationSaturated checks the refusal of a request that waited in
+// vain for a verification slot: 503 -50300 with the fixed Retry-After, no
+// challenge, and a text that says the token could not be verified.
+func assertVerificationSaturated(t *testing.T, got response) {
+	t.Helper()
+	if got.status != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503: %s", got.status, truncate(got.body))
+	}
+	if retry := got.header.Get("Retry-After"); retry != "30" {
+		t.Errorf("Retry-After = %q, want 30", retry)
+	}
+	if challenge := got.header.Get("WWW-Authenticate"); challenge != "" {
+		t.Errorf("a refusal nobody judged challenged the client to reauthorize: %q", challenge)
+	}
+	for _, want := range []string{"-50300", "This token could not be verified right now.", "has not been rejected"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got.body, want) {
+				t.Errorf("body lacks %q: %s", want, truncate(got.body))
+			}
+		})
+	}
+}
+
+// TestOAuth_VerificationFlood_IsBoundedAndChargesNothing pins issue 950's
+// verification ceiling (register row ADM-014) against the binary.
+//
+// Twenty distinct tokens arrive at once against an instance that holds each
+// identity request. Sixteen reach GitLab, which is the ceiling, and no more
+// arrive while they are held. The other four wait out their five seconds and
+// are answered 503 -50300 with Retry-After, in words that say the token could
+// not be verified and not why, so no caller learns about another's traffic.
+// None of that is charged: the deployment blocks an address after one charged
+// failure, and a new token from the same address is still served afterwards.
+// The operator reads the cause in one throttled log line that names no token.
+//
+// A credential the deployment already holds is served while every slot is
+// taken, because the identity cache is read before a slot is asked for.
+// Before the ceiling every token reached GitLab at once, up to three requests
+// each, however many arrived.
+func TestOAuth_VerificationFlood_IsBoundedAndChargesNothing(t *testing.T) {
+	const slots, excess = 16, 4
+	gitlab, release := startHoldingFakeGitLab(t)
+	srv := oauthServer(t, gitlab.url, "--auth-failure-limit=1")
+
+	if warm := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer gloas-in-service"})); warm.status != http.StatusOK {
+		t.Fatalf("the credential in service = %d before the flood, want 200: %s", warm.status, truncate(warm.body))
+	}
+
+	answers := floodVerifications(t, srv, slots+excess)
+
+	// Nothing held can answer before the release, so the first answers are
+	// the refused excess.
+	refused := make([]response, 0, excess)
+	for range excess {
+		refused = append(refused, nextFloodAnswer(t, answers))
+	}
+	if got := gitlab.calls(); got != slots {
+		t.Errorf("%d identity requests reached GitLab while every slot was held, want the ceiling, %d", got, slots)
+	}
+
+	inService := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer gloas-in-service"}))
+	if inService.status != http.StatusOK {
+		t.Errorf("the credential in service = %d while every slot was held, want 200 from the cache: %s",
+			inService.status, truncate(inService.body))
+	}
+
+	release()
+	for range slots {
+		if got := nextFloodAnswer(t, answers); got.status != http.StatusOK {
+			t.Errorf("a held token = %d once released, want 200: %s", got.status, truncate(got.body))
+		}
+	}
+
+	for i, got := range refused {
+		t.Run("refused "+strconv.Itoa(i), func(t *testing.T) {
+			assertVerificationSaturated(t, got)
+		})
+	}
+
+	if after := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer gloas-after-the-flood"})); after.status != http.StatusOK {
+		t.Errorf("a new token after the flood = %d, want 200: a refusal nobody judged was charged to the address: %s",
+			after.status, truncate(after.body))
+	}
+
+	logs := srv.logs()
+	if lines := strings.Count(logs, "token verification refused: every verification slot stayed busy"); lines != 1 {
+		t.Errorf("%d saturation lines logged for %d refusals, want one: the line is throttled", lines, excess)
+	}
+	if strings.Contains(logs, floodTokenPrefix) {
+		t.Error("the log names a flood token; the saturation line carries the cause and nothing about the caller")
 	}
 }
 

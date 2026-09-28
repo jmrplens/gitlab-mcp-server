@@ -84,8 +84,10 @@ the code; the layers keep enforcing.**
   row that does not say it protects one (`INV-004`); a valued row that does not say what
   zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
   configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
-  recorded decision: a holding taken across keys (`INV-005`), and a process partner
-  switched off with the per-key row it stands beside (`INV-015`), where the decision is
+  recorded decision: a holding taken across keys (`INV-005`), which is how the pool
+  (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room,
+  and a process partner switched off with the per-key row it stands beside
+  (`INV-015`), where the decision is
   the one the row's `OffWithBy` names, which is how `RTC-007` follows `RTC-003` (issue
   951). Only through a finding recorded for the invariant: a per-caller number protecting
   a process resource with no partner, a structure keyed on a mintable value with no

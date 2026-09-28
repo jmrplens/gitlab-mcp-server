@@ -439,8 +439,9 @@ Every request that cannot be served is classified before it reaches the MCP hand
 | `GITLAB-URL` header is not a parseable URL             | `400`  | `-32600`      | —                  |
 | More than 10 auth failures from one IP within a minute | `429`  | `-42900`      | `Retry-After`      |
 | GitLab session could not be built for the token        | `503`  | `-50300`      | —                  |
+| `--auth-mode=oauth`: no verification slot came free    | `503`  | `-50300`      | `Retry-After`      |
 
-The `429` row is about the credential, not only about the address. A request carrying one this deployment is **already serving** is answered normally while the address is blocked: in legacy mode that means a credential the session pool holds an entry for, in `--auth-mode=oauth` one the verified-identity cache holds. Recognizing either is a map read that reaches no GitLab, so the budget still bounds what it exists to bound, and one client behind a shared address (a NAT, a campus, a carrier, or a proxy running without `--trusted-proxy-header`) relaying invented tokens no longer cuts off the neighbours who authenticated before it started. Every credential the deployment does not already hold stays refused for the rest of the window.
+The `429` row is about the credential, not only about the address. A request carrying one this deployment is **already serving** is answered normally while the address is blocked: in legacy mode that means a credential the session pool holds an entry for, in `--auth-mode=oauth` one the verified-identity cache holds. Recognizing either is a map read that reaches no GitLab, so the budget still bounds what it exists to bound, and one client behind a shared address (a NAT, a campus, a carrier, or a proxy running without `--trusted-proxy-header`) relaying invented tokens no longer cuts off the neighbours who authenticated before it started. Every credential the deployment does not already hold stays refused for the rest of the window. The verified-identity cache is bounded (see the token caching notes under [OAuth Mode](#oauth-mode)), so in `--auth-mode=oauth` a credential whose identity was dropped from a full cache loses the exemption until it is verified again.
 
 All of them return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
 
@@ -617,6 +618,16 @@ curl http://localhost:8080/.well-known/oauth-protected-resource/gitlab
 - Default TTL: 15 minutes (configurable via `--oauth-cache-ttl`)
 - Bounds: minimum 1 minute, maximum 2 hours
 - Expired entries are evicted on the next lookup, and a background sweep at a quarter of `--oauth-cache-ttl` (30-second floor) removes the ones that are never looked up again
+- Capacity: at most 10,000 identities, the largest pool `--max-http-clients` allows, which is about 7 MB. When a newly verified token finds the cache full, the identity used least recently is dropped to make room. It is not configurable. Every request reads its token's entry, so a credential in steady use is the last to go.
+- What a dropped identity costs: its token is verified against GitLab again the next time it is presented, and while its address is blocked by an authentication budget it loses the exemption a cached identity gives it, so it is refused `429` until the block ends. Pushing out a credential in steady use takes more than 10,000 other valid credentials verified between two of its requests, and verification runs at most 16 at a time.
+
+**Verification concurrency:**
+
+A token the cache does not hold costs up to three requests to GitLab before the request reaches the pool: `GET /api/v4/user`, then `GET /api/v4/personal_access_tokens/self` and `GET /oauth/token/info` to read its scopes. The server runs at most **16 of these verifications at once** across the whole process, whoever sends them, so a flood of invented tokens from many addresses cannot relay more than 16 requests at a time to GitLab. The ceiling counts work, not callers, and is not configurable: an operator who could raise it could undo what it bounds.
+
+- A token the cache holds never waits for a slot, so a credential already in service is answered while verification is saturated.
+- A new token waits up to 5 seconds for a slot. When none frees, it is refused with `503`, JSON-RPC code `-50300` and `Retry-After: 30`, with the message `This token could not be verified right now. Retry shortly. The token itself has not been rejected.` The refusal is not cached and is charged to no authentication budget, since nothing was learned about the token. It does not say that other callers are the cause; the operator finds that in the log line `token verification refused: every verification slot stayed busy`, written at most once a minute and naming no token and no address.
+- These slots are separate from the pool's own 16 credential probes, so neither kind of work can starve the other.
 
 ## Client Configuration Examples
 

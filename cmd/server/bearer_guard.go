@@ -13,11 +13,15 @@
 // The guard runs first and answers those cases itself. A request it lets
 // through reaches the SDK middleware, whose own verification is a hit on the
 // cache this guard just populated, so the upstream cost is one call either
-// way.
+// way. The cache is bounded and drops the identity used least recently, and the
+// one just stored is the most recent, so pushing it out between the guard and
+// the middleware would take the cache's whole capacity of other verifications
+// in that moment, which the verifier's slots do not allow.
 
 package main
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -248,7 +252,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 	info, err := g.verify(r.Context(), token, r)
 	if err != nil {
-		return g.classify(err, ip, source, instance, token)
+		return g.classify(r.Context(), err, ip, source, instance, token)
 	}
 
 	if !oauth.SatisfiesMinimum(info.Scopes, g.minimumScope) {
@@ -282,7 +286,28 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 // classify turns a verification error into the response it deserves, keeping
 // "your credential is bad" and "GitLab could not tell us" apart.
-func (g *bearerGuard) classify(err error, ip, source, instance, token string) *gateFailure {
+func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, instance, token string) *gateFailure {
+	// Every verification slot stayed busy for as long as this request waited,
+	// so the token was never sent anywhere. Answered like an upstream failure
+	// and for the same reasons: 503 with Retry-After, not cached, and not
+	// charged, since charging a refusal nobody judged would let a flood of
+	// invented tokens lock out the valid ones arriving from the same address.
+	//
+	// The text says the token could not be verified and nothing about why.
+	// The cause is other callers' traffic, and a refusal telling one caller
+	// that others are verifying would disclose it (INV-019); the operator reads
+	// the cause in the throttled log line, which names neither the caller nor
+	// the token.
+	if errors.Is(err, oauth.ErrVerificationBusy) {
+		refusalLog.log(ctx, slog.LevelWarn, "token verification refused: every verification slot stayed busy", "error", err)
+		return &gateFailure{
+			status:  http.StatusServiceUnavailable,
+			code:    errCodeUpstreamUnavailable,
+			message: "This token could not be verified right now. Retry shortly. The token itself has not been rejected.",
+			header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
+		}
+	}
+
 	if upstream, ok := errors.AsType[*oauth.UpstreamError](err); ok {
 		// Deliberately not charged to the limiter and never cached: the
 		// token was never judged, so counting this would let a GitLab
@@ -547,11 +572,14 @@ func (g *bearerGuard) missingScopeDescription() string {
 // that has every reason to believe they granted the right thing, and a message
 // naming only api and read_api leaves them to work out what went wrong.
 func describeScopeShortfall(granted []string, minimum, advertised string) string {
+	// Two plain conditions rather than a tagless switch: a case expression
+	// carries no statement counter of its own, so a mutation tool reads its
+	// mutants as uncovered however thoroughly the tests below drive them.
 	held := "no GitLab API scope"
-	switch {
-	case len(granted) == 1:
+	if len(granted) == 1 {
 		held = "the " + granted[0] + " scope"
-	case len(granted) > 1:
+	}
+	if len(granted) > 1 {
 		held = "the " + strings.Join(granted, ", ") + " scopes"
 	}
 
