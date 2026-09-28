@@ -18,8 +18,9 @@ const (
 	// ProfileDefault leaves responses untouched.
 	ProfileDefault Profile = iota
 	// ProfileCodex rounds the float priority on content and resource
-	// annotations to 0 or 1 (the bundled rmcp parser rejects non-integer
-	// priorities).
+	// annotations to 0 or 1, because Codex's build decodes a fractional
+	// number into a float field through serde_json's arbitrary_precision
+	// and fails the result (see the package comment).
 	// Everything else — audience, structuredContent, outputSchema, icons,
 	// and the tool annotations Codex's approval policy depends on — is
 	// preserved.
@@ -43,7 +44,8 @@ func Enabled() bool {
 	return !strings.EqualFold(config.Getenv(envDisable), "off")
 }
 
-// profileFromClientInfo maps the initialize clientInfo to a Profile. Codex
+// profileFromClientInfo maps the clientInfo a session reported, in initialize
+// or, at protocol 2026-07-28, in its first request's _meta, to a Profile. Codex
 // has identified itself as name "codex-mcp-client" / title "Codex" since
 // v0.20, so a case-insensitive "codex" substring over both fields is stable
 // and future-proof.

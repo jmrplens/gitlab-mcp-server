@@ -9,7 +9,9 @@ package clientcompat_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -19,7 +21,7 @@ import (
 
 // contentAnnotations mirrors the annotations the production formatters attach
 // to markdown content blocks: an assistant audience with a float priority —
-// the exact shape that breaks Codex's bundled rmcp parser.
+// the exact shape the Codex builds bundled with ChatGPT.app fail to decode.
 var contentAnnotations = &mcp.Annotations{
 	Audience: []mcp.Role{"assistant"},
 	Priority: 0.6,
@@ -165,9 +167,9 @@ func textContent(t *testing.T, res *mcp.CallToolResult) *mcp.TextContent {
 }
 
 // TestCallTool_CodexClient_RoundsPriorityKeepsEverythingElse verifies the
-// Codex workaround is minimal: the float priority (which breaks Codex's
-// bundled rmcp parser) is rounded to an integer, while audience, the
-// markdown text, and structuredContent all survive.
+// Codex workaround is minimal: the float priority (which the Codex builds
+// bundled with ChatGPT.app fail to decode) is rounded to an integer, while
+// audience, the markdown text, and structuredContent all survive.
 func TestCallTool_CodexClient_RoundsPriorityKeepsEverythingElse(t *testing.T) {
 	res := callEcho(t, connect(t, codexImpl))
 	tc := textContent(t, res)
@@ -598,6 +600,34 @@ func TestRoundPriority_Branches(t *testing.T) {
 	}
 	if frac.Priority != 0.6 {
 		t.Errorf("roundPriority mutated its input: %v", frac.Priority)
+	}
+}
+
+// TestSanitizeForCodex_WritesTheRoundedPriorityAsAnInteger pins the wire form
+// the workaround depends on, which a test of the Go value cannot see. Codex
+// accepts a priority written as 1 or 0 and refuses one written as 1.0 as
+// firmly as 0.6, because its build decodes any number with a decimal point
+// through serde_json's private number map. Rounding therefore helps only
+// because encoding/json writes an integral float64 without one; and a rounded
+// 0 is left out altogether, since the field is omitempty.
+func TestSanitizeForCodex_WritesTheRoundedPriorityAsAnInteger(t *testing.T) {
+	res := &mcp.CallToolResult{Content: []mcp.Content{
+		&mcp.TextContent{Text: "high", Annotations: contentAnnotations},
+		&mcp.TextContent{Text: "low", Annotations: &mcp.Annotations{Audience: []mcp.Role{"assistant"}, Priority: 0.4}},
+	}}
+	wire, err := json.Marshal(clientcompat.SanitizeForCodexForTest(res))
+	if err != nil {
+		t.Fatalf("marshal the sanitized result: %v", err)
+	}
+	got := string(wire)
+	if !strings.Contains(got, `"annotations":{"audience":["assistant"],"priority":1}`) {
+		t.Errorf("0.6 is not written as the integer 1: %s", got)
+	}
+	if !strings.Contains(got, `"annotations":{"audience":["assistant"]}`) {
+		t.Errorf("0.4 rounded to 0 is not left out of its annotations: %s", got)
+	}
+	if strings.Count(got, `"priority"`) != 1 {
+		t.Errorf("want exactly one priority on the wire, the 1; got %s", got)
 	}
 }
 
