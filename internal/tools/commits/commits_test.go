@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -350,7 +351,7 @@ func TestCommitGet_Success(t *testing.T) {
 				"project_id":42,
 				"status":"success",
 				"trailers":{"Signed-off-by":"x"},
-				"extended_trailers":{"Signed-off-by":"x"},
+				"extended_trailers":{"Signed-off-by":["x"]},
 				"last_pipeline":{"id":9,"iid":2,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc","name":"p","web_url":"u"},
 				"stats":{"additions":10,"deletions":2,"total":12}
 			}`)
@@ -385,7 +386,7 @@ func TestCommitGet_Success(t *testing.T) {
 	if out.Status != "success" {
 		t.Errorf("out.Status = %q, want success", out.Status)
 	}
-	if out.Trailers["Signed-off-by"] != "x" || out.ExtendedTrailers["Signed-off-by"] != "x" {
+	if out.Trailers["Signed-off-by"] != "x" || !reflect.DeepEqual(out.ExtendedTrailers, map[string][]string{"Signed-off-by": {"x"}}) {
 		t.Errorf("trailers not mapped: %v %v", out.Trailers, out.ExtendedTrailers)
 	}
 	if out.LastPipeline == nil || out.LastPipeline.ID != 9 || out.LastPipeline.IID != 2 || out.LastPipeline.Source != "push" {
@@ -1656,7 +1657,7 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 		testutil.AssertQueryParam(t, r, "page_token", "tok1")
 		testutil.AssertQueryParam(t, r, "page", "2")
 		testutil.AssertQueryParam(t, r, "per_page", "25")
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a","short_id":"a","title":"t","committed_date":"2026-01-01T00:00:00Z","web_url":"u","stats":{"additions":5,"deletions":2,"total":7},"trailers":{"Signed-off-by":"a"},"extended_trailers":{"Signed-off-by":"a"},"last_pipeline":{"id":7,"status":"success","ref":"main","web_url":"p","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a","short_id":"a","title":"t","committed_date":"2026-01-01T00:00:00Z","web_url":"u","stats":{"additions":5,"deletions":2,"total":7},"trailers":{"Signed-off-by":"a"},"extended_trailers":{"Signed-off-by":["a"]},"last_pipeline":{"id":7,"status":"success","ref":"main","web_url":"p","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}}]`)
 	}
 }
 
@@ -1697,8 +1698,8 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 	if c.Trailers["Signed-off-by"] != "a" {
 		t.Errorf("Trailers = %v, want Signed-off-by=a", c.Trailers)
 	}
-	if c.ExtendedTrailers["Signed-off-by"] != "a" {
-		t.Errorf("ExtendedTrailers = %v, want Signed-off-by=a", c.ExtendedTrailers)
+	if !reflect.DeepEqual(c.ExtendedTrailers, map[string][]string{"Signed-off-by": {"a"}}) {
+		t.Errorf("ExtendedTrailers = %v, want Signed-off-by=[a]", c.ExtendedTrailers)
 	}
 	if c.LastPipeline == nil || c.LastPipeline.ID != 7 || c.LastPipeline.Status != "success" {
 		t.Errorf("LastPipeline = %+v, want ID 7 status success", c.LastPipeline)
@@ -2213,6 +2214,80 @@ func TestFormatListMarkdown(t *testing.T) {
 
 	if got != want {
 		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Trailers_ColumnOnlyOnAPageThatCarriesThem pins the
+// listing of a page asked for with trailers: a Trailers column holding every
+// value of each trailer, trailers in key order, a commit without any left
+// with an empty cell, and a pipe a commit message put in a trailer escaped so
+// it cannot split the row. A page on which GitLab parsed no trailer keeps the
+// five columns TestFormatListMarkdown pins.
+func TestFormatListMarkdown_Trailers_ColumnOnlyOnAPageThatCarriesThem(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Commits: []Output{
+			{
+				ShortID: "a1", Title: "feat: x", AuthorName: "A", CommittedDate: "2026-01-01",
+				ExtendedTrailers: map[string][]string{
+					"Signed-off-by": {"Carol"},
+					"Reviewed-by":   {"Alice", "Bob | Co"},
+				},
+			},
+			{ShortID: "b2", Title: "fix: y", AuthorName: "B", CommittedDate: "2026-01-02"},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+
+	want := "## Commits (2)\n\n" +
+		"| Short ID | Title | Author | Date | Pipeline | Trailers |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| a1 | feat: x | A | 1 Jan 2026 |  | Reviewed-by: Alice, Bob &#124; Co / Signed-off-by: Carol |\n" +
+		"| b2 | fix: y | B | 2 Jan 2026 |  |  |\n" +
+		"\n2 items total\n" +
+		commitListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestCommitCards_Trailers_RowOnlyWhenGitLabParsedSome verifies both commit
+// cards, the short one and the detail one, write a Trailers row holding every
+// value of each trailer when the commit carries any, and no row at all when
+// it carries none, which is every answer but a listing asked for with
+// trailers today.
+func TestCommitCards_Trailers_RowOnlyWhenGitLabParsedSome(t *testing.T) {
+	trailers := map[string][]string{"Signed-off-by": {"Alice", "Bob"}}
+	const row = "- **Trailers**: Signed-off-by: Alice, Bob\n"
+	tests := []struct {
+		name    string
+		render  func(map[string][]string) string
+		wantRow bool
+		given   map[string][]string
+	}{
+		{"short card with trailers", func(m map[string][]string) string {
+			return FormatOutputMarkdown(Output{ID: "abc", ShortID: "abc", ExtendedTrailers: m})
+		}, true, trailers},
+		{"short card without trailers", func(m map[string][]string) string {
+			return FormatOutputMarkdown(Output{ID: "abc", ShortID: "abc", ExtendedTrailers: m})
+		}, false, map[string][]string{}},
+		{"detail card with trailers", func(m map[string][]string) string {
+			return FormatDetailMarkdown(DetailOutput{ID: "abc", ShortID: "abc", ExtendedTrailers: m})
+		}, true, trailers},
+		{"detail card without trailers", func(m map[string][]string) string {
+			return FormatDetailMarkdown(DetailOutput{ID: "abc", ShortID: "abc", ExtendedTrailers: m})
+		}, false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.render(tt.given)
+			if strings.Contains(got, row) != tt.wantRow {
+				t.Errorf("card carries %q = %v, want %v:\n%s", row, !tt.wantRow, tt.wantRow, got)
+			}
+			if !tt.wantRow && strings.Contains(got, "Trailers") {
+				t.Errorf("card without trailers names them:\n%s", got)
+			}
+		})
 	}
 }
 
@@ -3752,5 +3827,232 @@ func TestCommitOptionsForAction_UnknownAction_KeepsTheSharedDefaults(t *testing.
 	}
 	if options.IndividualTool.Name != "gitlab_commit_future" {
 		t.Errorf("IndividualTool.Name = %q, want %q", options.IndividualTool.Name, "gitlab_commit_future")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// extended_trailers, read off the captured response
+// ---------------------------------------------------------------------------.
+
+// trailedCommitJSON is a commit as GitLab answers it once its trailers were
+// parsed: trailers keeps the last value of each trailer, and
+// extended_trailers maps each trailer to the list of all of its values, which
+// is the shape client-go's Commit cannot decode.
+const trailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
+	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
+	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
+
+// wantExtendedTrailers is what [trailedCommitJSON] carries in
+// extended_trailers.
+var wantExtendedTrailers = map[string][]string{
+	"Signed-off-by": {"Alice <alice@example.com>", "Bob <bob@example.com>"},
+	"Reviewed-by":   {"Carol <carol@example.com>"},
+}
+
+// TestCommitList_TrailersOnAPage_ReadsEveryValueOfEachTrailer is the case of
+// issue 1026: with trailers set, GitLab sends extended_trailers as lists, and
+// client-go failed the whole page on the first commit that carried one
+// ("cannot unmarshal array into Go struct field
+// Commit.extended_trailers.Signed-off-by of type string"). The page is read
+// off the captured response, so the commit keeps both of its Signed-off-by
+// values, the commit beside it keeps its empty map, and the pagination headers
+// of the answer client-go failed to decode still reach the output.
+func TestCommitList_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathRepoCommits {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.AssertQueryParam(t, r, "trailers", "true")
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[`+trailedCommitJSON+`,{"id":"d4e5f6","short_id":"d4e5f6","title":"chore: plain","web_url":"u","trailers":{},"extended_trailers":{}}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "2", NextPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", Trailers: true})
+	if err != nil {
+		t.Fatalf(fmtCommitListErr, err)
+	}
+	if len(out.Commits) != 2 {
+		t.Fatalf("len(Commits) = %d, want 2", len(out.Commits))
+	}
+	trailed, plain := out.Commits[0], out.Commits[1]
+	if trailed.ID != "a1b2c3" || trailed.Title != "feat: signed twice" {
+		t.Errorf("first commit = %+v, want a1b2c3 titled feat: signed twice", trailed)
+	}
+	if !reflect.DeepEqual(trailed.ExtendedTrailers, wantExtendedTrailers) {
+		t.Errorf("ExtendedTrailers = %v, want %v", trailed.ExtendedTrailers, wantExtendedTrailers)
+	}
+	if trailed.Trailers["Signed-off-by"] != "Bob <bob@example.com>" {
+		t.Errorf("Trailers = %v, want the last Signed-off-by value", trailed.Trailers)
+	}
+	if plain.ID != "d4e5f6" || len(plain.ExtendedTrailers) != 0 {
+		t.Errorf("second commit = %+v, want d4e5f6 with no trailers", plain)
+	}
+	if out.Pagination.NextPage != 2 || out.Pagination.PerPage != 2 {
+		t.Errorf("Pagination = %+v, want the headers of the answer", out.Pagination)
+	}
+}
+
+// TestCommitHandlers_CommitWithTrailers_PublishTheListsGitLabSent holds every
+// other handler of this package that answers with a commit to the same
+// reading: the route's answer carries extended_trailers as lists, client-go
+// fails to decode it, and the handler still returns the commit with every
+// value of each trailer. None of these routes parses trailers today, which is
+// why nothing failed yet; the failure moves with Gitaly, not with this server.
+func TestCommitHandlers_CommitWithTrailers_PublishTheListsGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathRepoCommits+"/a1b2c3":
+			testutil.RespondJSON(w, http.StatusOK, trailedCommitJSON)
+		case r.Method == http.MethodPost && (r.URL.Path == pathRepoCommits ||
+			r.URL.Path == pathRepoCommits+"/a1b2c3/cherry_pick" ||
+			r.URL.Path == pathRepoCommits+"/a1b2c3/revert"):
+			testutil.RespondJSON(w, http.StatusCreated, trailedCommitJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name string
+		call func() (string, map[string][]string, error)
+	}{
+		{name: "create", call: func() (string, map[string][]string, error) {
+			out, err := Create(ctx, client, CreateInput{
+				ProjectID: "42", Branch: "main", CommitMessage: "feat: signed twice",
+				Actions: []Action{{Action: actionCreate, FilePath: testFileMainGo, Content: "package main"}},
+			})
+			return out.ID, out.ExtendedTrailers, err
+		}},
+		{name: "get", call: func() (string, map[string][]string, error) {
+			out, err := Get(ctx, client, GetInput{ProjectID: "42", SHA: "a1b2c3"})
+			return out.ID, out.ExtendedTrailers, err
+		}},
+		{name: "cherry-pick", call: func() (string, map[string][]string, error) {
+			out, err := CherryPick(ctx, client, CherryPickInput{ProjectID: "42", SHA: "a1b2c3", Branch: "main"})
+			return out.ID, out.ExtendedTrailers, err
+		}},
+		{name: "revert", call: func() (string, map[string][]string, error) {
+			out, err := Revert(ctx, client, RevertInput{ProjectID: "42", SHA: "a1b2c3", Branch: "main"})
+			return out.ID, out.ExtendedTrailers, err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, trailers, err := tc.call()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if id != "a1b2c3" {
+				t.Errorf("ID = %q, want a1b2c3", id)
+			}
+			if !reflect.DeepEqual(trailers, wantExtendedTrailers) {
+				t.Errorf("ExtendedTrailers = %v, want %v", trailers, wantExtendedTrailers)
+			}
+		})
+	}
+}
+
+// TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure pins the
+// other side of passing over client-go's decode failure: an answer that fits
+// neither client-go's Commit nor this server's type (an id that is a number)
+// is not published as an empty commit. Decoding the capture fails as well,
+// and every handler reports that failure rather than a success.
+func TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathRepoCommits:
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":5}]`)
+		case r.Method == http.MethodGet:
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5}`)
+		default:
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":5}`)
+		}
+	}))
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "create", call: func() error {
+			_, err := Create(ctx, client, CreateInput{
+				ProjectID: "42", Branch: "main", CommitMessage: "m",
+				Actions: []Action{{Action: actionCreate, FilePath: testFileMainGo, Content: "x"}},
+			})
+			return err
+		}},
+		{name: "list", call: func() error {
+			_, err := List(ctx, client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := Get(ctx, client, GetInput{ProjectID: "42", SHA: "a1b2c3"})
+			return err
+		}},
+		{name: "cherry-pick", call: func() error {
+			_, err := CherryPick(ctx, client, CherryPickInput{ProjectID: "42", SHA: "a1b2c3", Branch: "main"})
+			return err
+		}},
+		{name: "revert", call: func() error {
+			_, err := Revert(ctx, client, RevertInput{ProjectID: "42", SHA: "a1b2c3", Branch: "main"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("expected the decode failure, got nil")
+			}
+			if !strings.Contains(err.Error(), "decode the captured response") {
+				t.Errorf("error = %v, want the capture's decode failure", err)
+			}
+		})
+	}
+}
+
+// TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError holds the
+// predicate the handlers pass client-go's error through: only a JSON type
+// mismatch, bare or wrapped, is client-go failing to read an answer GitLab
+// gave; a nil error, a transport failure and an API refusal are not.
+func TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError(t *testing.T) {
+	decodeErr := json.Unmarshal([]byte(`{"a":["x"]}`), &map[string]string{})
+	if _, ok := errors.AsType[*json.UnmarshalTypeError](decodeErr); !ok {
+		t.Fatalf("fixture error %v is not a type mismatch", decodeErr)
+	}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "other error", err: errors.New("connection reset"), want: false},
+		{name: "api refusal", err: &gl.ErrorResponse{StatusCode: http.StatusNotFound, Message: "404 Commit Not Found"}, want: false},
+		{name: "type mismatch", err: decodeErr, want: true},
+		{name: "wrapped type mismatch", err: fmt.Errorf("decoding: %w", decodeErr), want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MisreadByClientGo(tc.err); got != tc.want {
+				t.Errorf("MisreadByClientGo(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCapturedOutputs_UnreadableCapture_ReportsTheDecodeFailure covers the
+// page reader on its own, as the handlers of other packages call it: a body
+// that is not a list of commits is an error, never an empty page.
+func TestCapturedOutputs_UnreadableCapture_ReportsTheDecodeFailure(t *testing.T) {
+	if _, err := CapturedOutputs(gitlabclient.CapturedBody([]byte(`{"id":"a"}`))); err == nil {
+		t.Fatal("expected a decode failure for an object where a list belongs, got nil")
+	}
+	out, err := CapturedOutputs(gitlabclient.CapturedBody([]byte(`[` + trailedCommitJSON + `]`)))
+	if err != nil {
+		t.Fatalf("CapturedOutputs() unexpected error: %v", err)
+	}
+	if len(out) != 1 || !reflect.DeepEqual(out[0].ExtendedTrailers, wantExtendedTrailers) {
+		t.Errorf("CapturedOutputs() = %+v, want the one commit with its trailers", out)
 	}
 }

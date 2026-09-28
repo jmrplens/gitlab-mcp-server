@@ -307,11 +307,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.BranchName == "" {
 		return Output{}, toolutil.ErrRequiredString("branchCreate", "branch_name")
 	}
-	b, _, err := client.GL().Branches.CreateBranch(string(input.ProjectID), &gl.CreateBranchOptions{
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, _, err := client.GL().Branches.CreateBranch(string(input.ProjectID), &gl.CreateBranchOptions{
 		Branch: new(input.BranchName),
 		Ref:    new(input.Ref),
 	}, gl.WithContext(ctx))
-	if err != nil {
+	if err != nil && !misreadByClientGo(err) {
 		if toolutil.ContainsAny(err, "invalid reference", "not found", "does not exist") {
 			return Output{}, fmt.Errorf("branchCreate: ref '%s' not found. Use branch.list to see available branches or check the project's default branch: %w", input.Ref, err)
 		}
@@ -322,7 +323,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("branchCreate", err, http.StatusBadRequest,
 			"the ref must be an existing branch name, tag name, or commit SHA; creating branches requires Developer role or higher")
 	}
-	return ToOutput(b), nil
+	out, err := capturedOutput(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("branchCreate", err)
+	}
+	return out, nil
 }
 
 // List retrieves a paginated list of branches for the specified GitLab
@@ -348,14 +353,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	branches, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil && !misreadByClientGo(err) {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("branchList", err, http.StatusNotFound,
 			"verify project_id with project.get")
 	}
-	out := make([]Output, len(branches))
-	for i, b := range branches {
-		out[i] = ToOutput(b)
+	var rows []capturedBranch
+	if err = captured.Decode(&rows); err != nil {
+		return ListOutput{}, toolutil.WrapErr("branchList", err)
+	}
+	out := make([]Output, len(rows))
+	for i := range rows {
+		out[i] = outputFromCaptured(&rows[i])
 	}
 	return ListOutput{Branches: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -378,12 +388,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrRequiredString("branchGet", "branch_name")
 	}
 
-	b, _, err := client.GL().Branches.GetBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
-	if err != nil {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, _, err := client.GL().Branches.GetBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
+	if err != nil && !misreadByClientGo(err) {
 		return Output{}, toolutil.WrapErrWithStatusHint("branchGet", err, http.StatusNotFound,
 			"verify branch_name with branch.list; branch names are case-sensitive")
 	}
-	return ToOutput(b), nil
+	out, err := capturedOutput(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("branchGet", err)
+	}
+	return out, nil
 }
 
 // DeleteInput defines parameters for deleting a branch.

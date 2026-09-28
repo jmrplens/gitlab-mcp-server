@@ -2181,6 +2181,95 @@ func TestRepositoryMergeBase_RefsReachTheRequest(t *testing.T) {
 	}
 }
 
+// trailedCommitJSON is a commit as GitLab answers it once its trailers were
+// parsed: extended_trailers maps each trailer to the list of all of its
+// values, the shape client-go's Commit cannot decode.
+const trailedCommitJSON = `{"id":"abc123","short_id":"abc123d","title":"feat: signed twice",` +
+	`"trailers":{"Signed-off-by":"Bob"},"extended_trailers":{"Signed-off-by":["Ada","Bob"]}}`
+
+// TestRepositoryCompareAndMergeBase_CommitsWithTrailers_PublishTheListsGitLabSent
+// holds the two repository actions that publish commits.Output to the
+// reading issue 1026 asked for: a comparison's commits and a merge base carry
+// extended_trailers as lists, client-go fails to decode the whole answer, and
+// the action still returns every commit with every value of each trailer, the
+// comparison its diffs and flags too.
+func TestRepositoryCompareAndMergeBase_CommitsWithTrailers_PublishTheListsGitLabSent(t *testing.T) {
+	want := map[string][]string{"Signed-off-by": {"Ada", "Bob"}}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathRepoCompare:
+			testutil.RespondJSON(w, http.StatusOK, `{"commit":`+trailedCommitJSON+`,"commits":[`+trailedCommitJSON+`],`+
+				`"diffs":[{"old_path":"README.md","new_path":"README.md","diff":"@@ -1 +1 @@\n-a\n+b"}],`+
+				`"compare_timeout":false,"compare_same_ref":true,"web_url":"https://gitlab.example.com/-/compare/a...b"}`)
+		case "/api/v4/projects/42/repository/merge_base":
+			testutil.RespondJSON(w, http.StatusOK, trailedCommitJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	cmp, err := Compare(context.Background(), client, CompareInput{ProjectID: "42", From: "a", To: "b"})
+	if err != nil {
+		t.Fatalf("Compare() unexpected error: %v", err)
+	}
+	if cmp.Commit == nil || cmp.Commit.ID != "abc123" || !reflect.DeepEqual(cmp.Commit.ExtendedTrailers, want) {
+		t.Errorf("Compare() base commit = %+v, want abc123 with %v", cmp.Commit, want)
+	}
+	if len(cmp.Commits) != 1 || !reflect.DeepEqual(cmp.Commits[0].ExtendedTrailers, want) {
+		t.Errorf("Compare() commits = %+v, want one commit with %v", cmp.Commits, want)
+	}
+	if len(cmp.Diffs) != 1 || cmp.Diffs[0].NewPath != testReadmeName || !cmp.CompareSameRef || cmp.WebURL == "" {
+		t.Errorf("Compare() = %+v, want the diff, the same-ref flag and the web URL of the answer", cmp)
+	}
+
+	base, err := MergeBase(context.Background(), client, MergeBaseInput{ProjectID: "42", Refs: []string{"a", "b"}})
+	if err != nil {
+		t.Fatalf("MergeBase() unexpected error: %v", err)
+	}
+	if base.ID != "abc123" || !reflect.DeepEqual(base.ExtendedTrailers, want) {
+		t.Errorf("MergeBase() = %+v, want abc123 with %v", base, want)
+	}
+}
+
+// TestRepositoryCompareAndMergeBase_AnswerNoTypeHolds_ReportTheDecodeFailure
+// pins the other side of passing over client-go's decode failure: an answer
+// that fits neither client-go's struct nor this server's (a commit id that is
+// a number) is not published as an empty comparison or commit; both actions
+// report the decode failure of the capture instead.
+func TestRepositoryCompareAndMergeBase_AnswerNoTypeHolds_ReportTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathRepoCompare {
+			testutil.RespondJSON(w, http.StatusOK, `{"commits":[{"id":5}]}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":5}`)
+	}))
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "compare", call: func() error {
+			_, err := Compare(context.Background(), client, CompareInput{ProjectID: "42", From: "a", To: "b"})
+			return err
+		}},
+		{name: "merge base", call: func() error {
+			_, err := MergeBase(context.Background(), client, MergeBaseInput{ProjectID: "42", Refs: []string{"a", "b"}})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("expected the decode failure, got nil")
+			}
+			if !strings.Contains(err.Error(), "decode the captured response") {
+				t.Errorf("error = %v, want the capture's decode failure", err)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_RelatedActionsAreCanonicalIDs holds every related-action this
 // package publishes to the one constant block markdown.go declares, and pins
 // each constant's literal spelling. Nothing in the repository compares such an

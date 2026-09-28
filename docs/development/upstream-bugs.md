@@ -141,7 +141,7 @@ readable without opening the tracker:
 | 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No, but it breaks a MUST | None taken |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
-| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
+| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes, except `merge_request.commits`, `search.commits` and the readers of an embedded commit, resources, prompts and completions included |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), open | No | Yes | Yes |
@@ -3342,23 +3342,45 @@ options or documented as answering an object.
 - **Reported**: no.
 - **In review**: no.
 - **Merged**: no.
-- **Blocking**: yes, for `repository.commit_list` with `trailers` set: a page
-  holding one commit with a trailer fails as a whole.
-- **Workaround**: partial. The handlers that read a commit this server decodes
-  itself type the key as GitLab sends it: `repository.tree` with
-  `with_last_commit` (`repository.treeCommit`), the submodule update
-  (`repositorysubmodules.submoduleCommitExtra`), and both context commit
-  actions, which read the whole page from the captured response
-  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  into `mrcontextcommits.capturedCommit` and pass over client-go's own decode
-  failure (`mrcontextcommits.misreadByClientGo`). Every handler that takes the
-  commit from client-go (`repository.commit_list`, `repository.commit_get`,
-  `repository.commit_create`, `repository.commit_cherry_pick` and
-  `repository.commit_revert` in `internal/tools/commits`, `repository.compare`
-  and `repository.merge_base`, a branch's commit in `internal/tools/branches`,
-  and a merge request's commits in `internal/tools/mrchanges`) still publishes
-  `extended_trailers` as a map of strings, and `repository.commit_list` with
-  `trailers` still fails; neither retires until the struct carries the lists.
+- **Blocking**: was yes, for `repository.commit_list` with `trailers` set: a
+  page holding one commit with a trailer failed as a whole, with client-go's
+  decode error in place of the page. It returns the page since
+  [issue 1026](https://github.com/jmrplens/gitlab-mcp-server/issues/1026).
+- **Workaround**: yes, except for two actions. Every handler that publishes
+  `extended_trailers` types it as GitLab sends it, a map of lists, and reads
+  the commit from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  passing over client-go's own decode failure when a commit carries a trailer:
+  `repository.tree` with `with_last_commit` (`repository.treeCommit`), the
+  submodule update (`repositorysubmodules.submoduleCommitExtra`), both context
+  commit actions (`mrcontextcommits.capturedCommit`,
+  `mrcontextcommits.misreadByClientGo`), and since issue 1026 the commit
+  actions of `internal/tools/commits` (`repository.commit_list`,
+  `repository.commit_get`, `repository.commit_create`,
+  `repository.commit_cherry_pick`, `repository.commit_revert`, through
+  `commits.Captured` and `commits.MisreadByClientGo`), `repository.compare`
+  and `repository.merge_base` (`repository.capturedCompare` and
+  `commits.CapturedOutput`), the branch actions that answer with a branch
+  (`branch.get`, `branch.list`, `branch.create`, through
+  `branches.capturedBranch`), and the single merge request diff version
+  (`mr_review.diff_version_get`, through `mrchanges.capturedDiffVersion`).
+  Two actions publish `commits.Output` through `commits.ToOutput` from a commit
+  client-go decoded, `merge_request.commits` (`internal/tools/mergerequests`)
+  and `search.commits` (`internal/tools/search`): they carry
+  `extended_trailers` in the right shape, empty, because a commit client-go
+  decodes can have none, and their page still fails as a whole the day their
+  route parses trailers. The handlers that decode a `Commit` inside an answer
+  and publish no trailers (the commit of a tag, a release, a group release or a
+  job, and the deployable commit of a deployment or an environment) fail the
+  same way that day, and so do the readers outside the tools that take a
+  commit from client-go: the commit, branch and tag resources
+  (`internal/resources`, through `Commits.GetCommit`, `Branches.ListBranches`,
+  `Branches.GetBranch`, `Tags.ListTags` and `Tags.GetTag`), the prompts that
+  compare two refs or list branches (`internal/prompts`, through
+  `Repositories.Compare` and `Branches.ListBranches`), and the branch, tag and
+  commit completions (`internal/completions`, through `Branches.ListBranches`,
+  `Tags.ListTags` and `Commits.ListCommits`). All of these retire when the
+  struct carries the lists.
 
 **What**: `lib/api/entities/commit.rb` at 19.4.1-ee exposes `extended_trailers`
 with no condition, documented as a hash of each trailer to the list of its

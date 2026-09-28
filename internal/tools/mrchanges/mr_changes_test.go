@@ -6,9 +6,15 @@ package mrchanges
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -884,7 +890,7 @@ func TestGetDiffVersion_FullCommitFields(t *testing.T) {
          "authored_date":"2026-01-16T08:00:00Z","committer_name":"Comm","committer_email":"comm@example.com",
          "committed_date":"2026-01-16T08:30:00Z","created_at":"2026-01-16T09:00:00Z","message":"Fix bug\n",
          "parent_ids":["p1","p2"],"status":"success","project_id":42,"web_url":"https://gitlab.example.com/c/jkl012abc",
-         "trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":"Dev"},
+         "trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":["Ops","Dev"]},
          "stats":{"additions":10,"deletions":2,"total":12}}
       ],
       "diffs":[]
@@ -929,8 +935,82 @@ func TestGetDiffVersion_FullCommitFields(t *testing.T) {
 	if c.Trailers["Signed-off-by"] != "Dev" {
 		t.Errorf("Trailers = %v", c.Trailers)
 	}
+	// GitLab sends every value of a trailer as a list, which client-go's
+	// Commit cannot decode: the version is read off the captured response,
+	// and both values survive.
+	if len(c.ExtendedTrailers) != 1 || !slices.Equal(c.ExtendedTrailers["Signed-off-by"], []string{"Ops", "Dev"}) {
+		t.Errorf("ExtendedTrailers = %v, want Signed-off-by from Ops and from Dev", c.ExtendedTrailers)
+	}
 	if c.Stats == nil || c.Stats.Additions != 10 || c.Stats.Deletions != 2 || c.Stats.Total != 12 {
 		t.Errorf("Stats = %+v", c.Stats)
+	}
+}
+
+// TestShortSHA_KeepsEightCharactersAndLeavesAShorterOneAlone pins the
+// abbreviation the version list shows: a full SHA is cut to GitLab's eight
+// characters, and one of eight or fewer is printed as it came.
+func TestShortSHA_KeepsEightCharactersAndLeavesAShorterOneAlone(t *testing.T) {
+	for _, tc := range []struct {
+		name, sha, want string
+	}{
+		{name: "full sha", sha: "0123456789abcdef", want: "01234567"},
+		{name: "exactly eight", sha: "01234567", want: "01234567"},
+		{name: "shorter", sha: "abc", want: "abc"},
+		{name: "empty", sha: "", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shortSHA(tc.sha); got != tc.want {
+				t.Errorf("shortSHA(%q) = %q, want %q", tc.sha, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetDiffVersion_AnswerNoVersionTypeHolds_ReportsTheDecodeFailure pins
+// the other side of passing over client-go's decode failure: an answer that
+// fits neither client-go's version nor this server's type (a commit id that
+// is a number) is not published as an empty version; the handler reports the
+// decode failure of the capture instead.
+func TestGetDiffVersion_AnswerNoVersionTypeHolds_ReportsTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":2,"commits":[{"id":5}]}`)
+	}))
+
+	_, err := GetDiffVersion(context.Background(), client, DiffVersionGetInput{ProjectID: "42", MRIID: 1, VersionID: 2})
+	if err == nil {
+		t.Fatal("expected the decode failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError holds the
+// predicate the diff version handler passes client-go's error through: only
+// a JSON type mismatch, bare or wrapped, is client-go failing to read an
+// answer GitLab gave.
+func TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError(t *testing.T) {
+	decodeErr := json.Unmarshal([]byte(`{"a":["x"]}`), &map[string]string{})
+	if decodeErr == nil {
+		t.Fatal("the fixture decoded, want a type mismatch")
+	}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "other error", err: errors.New("connection reset"), want: false},
+		{name: "api refusal", err: &gl.ErrorResponse{StatusCode: http.StatusNotFound, Message: "404 Not found"}, want: false},
+		{name: "type mismatch", err: decodeErr, want: true},
+		{name: "wrapped type mismatch", err: fmt.Errorf("decoding: %w", decodeErr), want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := misreadByClientGo(tc.err); got != tc.want {
+				t.Errorf("misreadByClientGo(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
