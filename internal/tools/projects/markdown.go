@@ -28,6 +28,46 @@ func formatProjectNotFound(out projectNotFoundOutput) *mcp.CallToolResult {
 func FormatMarkdown(p Output) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Project: "+p.Name)
+	writeProjectRows(c, p)
+	c.End(
+		toolutil.HintAction("branch.list", "see this project's branches"),
+		toolutil.HintAction("merge_request.list", "see its open merge requests"),
+		toolutil.HintAction("issue.list", "see its open issues"),
+		toolutil.HintAction("pipeline.list", "see its CI/CD pipelines"),
+		toolutil.HintAction(actionProjectUpdate, "change this project's settings"),
+	)
+	return b.String()
+}
+
+// transferQueuedNote is what the card of a transfer the wait did not see land
+// says under the project's rows, which describe where it still is. It is one
+// literal rather than a concatenation, whose operators a mutation run reports
+// as not covered, a constant carrying no statement.
+const transferQueuedNote = "GitLab accepted this transfer and moves the project in the background, and the move had been neither applied nor reported failed when this server stopped waiting for it: the rows above show where the project still is. Do not send the transfer again: GitLab runs a second transfer as well while the first is queued, and refuses it while the first runs. A move that fails is reported only as a pending to-do item of action transfer_failed for the user who asked for it, and GitLab adds none while an item from an earlier failure of this project is still pending, so a pending item may be this failure."
+
+// FormatTransferMarkdown renders what a project transfer answered. A move
+// that landed is the project's own card, in its new namespace; one the wait
+// did not see land says so in its heading and a note, since its rows are the
+// namespace the project is leaving, and its hints are the reads that settle
+// where it ends up.
+func FormatTransferMarkdown(out TransferOutput) string {
+	if !out.TransferQueued {
+		return FormatMarkdown(out.Output)
+	}
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Project transfer queued: "+out.Name)
+	writeProjectRows(c, out.Output)
+	c.Note(transferQueuedNote)
+	c.End(
+		toolutil.HintAction(actionProjectGet, "read the project back and see which namespace it is in"),
+		toolutil.HintAction("user.todo_list", "see the to-do item GitLab leaves if the move fails"),
+	)
+	return b.String()
+}
+
+// writeProjectRows writes the rows of a project's card, between the heading
+// and the hints its formatter chooses.
+func writeProjectRows(c *toolutil.Card, p Output) {
 	c.Int("ID", p.ID)
 	c.Field("Path", p.PathWithNamespace)
 	c.Field("Visibility", p.Visibility)
@@ -62,14 +102,6 @@ func FormatMarkdown(p Output) string {
 		c.Field("MR Title Regex Description", p.MergeRequestTitleRegexDescription)
 	}
 	c.BoolPtr("Protected MR Pipelines", p.ProtectMergeRequestPipelines)
-	c.End(
-		toolutil.HintAction("branch.list", "see this project's branches"),
-		toolutil.HintAction("merge_request.list", "see its open merge requests"),
-		toolutil.HintAction("issue.list", "see its open issues"),
-		toolutil.HintAction("pipeline.list", "see its CI/CD pipelines"),
-		toolutil.HintAction(actionProjectUpdate, "change this project's settings"),
-	)
-	return b.String()
 }
 
 // markedForDeletion is the deletion date GitLab sent, whichever of the two keys
@@ -607,6 +639,7 @@ func FormatTargetBranchRuleMarkdown(out TargetBranchRuleOutput) string {
 func init() {
 	toolutil.RegisterMarkdownResult(formatProjectNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
+	toolutil.RegisterMarkdown(FormatTransferMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatDeleteMarkdown)
 	toolutil.RegisterMarkdown(FormatListForksMarkdown)

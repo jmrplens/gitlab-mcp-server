@@ -64,7 +64,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		projectMutationSpec("unstar", toolutil.RouteAction(client, Unstar), "gitlab_project_unstar"),
 		projectMutationSpec("archive", toolutil.RouteAction(client, Archive), "gitlab_project_archive"),
 		projectMutationSpec("unarchive", toolutil.RouteAction(client, Unarchive), "gitlab_project_unarchive"),
-		projectDestructiveUpdateSpec("transfer", toolutil.RouteAction(client, Transfer), "gitlab_project_transfer"),
+		projectDestructiveUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, Transfer), "gitlab_project_transfer"),
 		projectReadSpec("list_forks", toolutil.RouteAction(client, ListForks), "gitlab_project_list_forks"),
 		projectReadSpec("languages", toolutil.RouteAction(client, GetLanguages), "gitlab_project_languages"),
 		projectReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_project_hook_list", tagWebhook),
@@ -337,6 +337,11 @@ type projectActionMetaEntry struct {
 // rich metadata (get, list) are absent from the map and left untouched. For
 // actions that already carry a tailored Usage (push rules, delete) only the
 // missing aliases/related/description are filled, preserving the existing Usage.
+//
+// Usage is the one field an entry may leave empty. The other three are copied
+// unconditionally: every entry fills them, which
+// TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions holds, and a
+// guard for an empty one was a branch no entry could take.
 func decorateProjectMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	meta, ok := projectActionMeta[individualTool]
 	if !ok {
@@ -345,15 +350,9 @@ func decorateProjectMeta(options *toolutil.ActionSpecOptions, individualTool str
 	if meta.usage != "" {
 		options.Usage = meta.usage
 	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string(nil), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
-	}
+	options.Aliases = append([]string(nil), meta.aliases...)
+	options.RelatedActions = append([]string(nil), meta.related...)
+	options.IndividualTool.Description = meta.description
 }
 
 // projectActionMeta maps each individual project tool to its discovery metadata.
@@ -418,10 +417,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Unarchive a project. Returns: the project with archived set to false. See also: gitlab_project_archive, gitlab_project_get.",
 	},
 	"gitlab_project_transfer": {
-		usage:       "Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target.",
+		usage:       "Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target. GitLab 19.4 and later move the project in the background, and check there that the name and path are free in the target namespace, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed. If it has neither landed nor failed by then the answer carries transfer_queued and shows the project where it still is: read it back with project.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs.",
 		aliases:     []string{"transfer project", "move project to another namespace", "change project group"},
 		related:     []string{actionProjectGet, actionProjectUpdate, actionGroupGet},
-		description: "Transfer a project to another namespace. Returns: the project in its new namespace. See also: gitlab_project_get, gitlab_group_get.",
+		description: "Transfer a project to another namespace, waiting up to 45 seconds for GitLab to apply the move. Returns: the project in its new namespace, or with transfer_queued set and its current namespace when GitLab has not applied the move yet, or an error when GitLab reports the move failed. See also: gitlab_project_get, gitlab_group_get.",
 	},
 	"gitlab_project_list_forks": {
 		usage:       "List the forks of a project with the same filters as the project list endpoint (visibility, owned, search, order_by, archived, and more). Send project_id.",

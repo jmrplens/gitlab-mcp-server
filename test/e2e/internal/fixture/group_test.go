@@ -94,6 +94,28 @@ func TestDeleteGroup_RefusalUnderAnotherStatus_IsAnError(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_TransferUnderWay_WaitsThroughTheRefusedMark checks that a
+// group GitLab 19.4 is still moving under a parent, which is what the
+// subgroup transfer scenario leaves behind, is deleted once the transfer lets
+// go of it rather than left to the exit sweep.
+func TestDeleteGroup_TransferUnderWay_WaitsThroughTheRefusedMark(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addGroup(5, "e2e-child", "e2e-child")
+	stub.configure(func() { stub.groups[5].transferMarkRefusals = 1 })
+
+	if err := DeleteGroup(context.Background(), client, 5, "e2e-child"); err != nil {
+		t.Fatalf("DeleteGroup() error = %v, want nil once the transfer lets go", err)
+	}
+	want := []string{
+		"group 5 ",
+		"group 5 ",
+		"group 5 full_path=e2e-child-deletion_scheduled-5&permanently_remove=true",
+	}
+	if got := stub.recordedDeletes(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("deletes = %q, want the refused mark, the mark and the removal %q", got, want)
+	}
+}
+
 // TestDeleteGroup_Gone_IsNotAnError checks that a group nothing can find
 // counts as deleted.
 func TestDeleteGroup_Gone_IsNotAnError(t *testing.T) {

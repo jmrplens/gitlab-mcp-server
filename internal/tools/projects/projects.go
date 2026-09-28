@@ -1947,50 +1947,6 @@ func Unarchive(ctx context.Context, client *gitlabclient.Client, input Unarchive
 }
 
 // ---------------------------------------------------------------------------
-// Transfer
-// ---------------------------------------------------------------------------.
-
-// TransferInput defines parameters for transferring a project to another namespace.
-type TransferInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Namespace string               `json:"namespace" jsonschema:"Target namespace ID or path,required"`
-}
-
-// Transfer moves a project to a different namespace.
-func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("projectTransfer: project_id is required. Use project.list to find the ID, then pass it as project_id")
-	}
-	if input.Namespace == "" {
-		return Output{}, errors.New("projectTransfer: namespace is required. Provide the target namespace ID or path (e.g. 'my-group' or '42')")
-	}
-	opts := &gl.TransferProjectOptions{
-		Namespace: input.Namespace,
-	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	p, _, err := client.GL().Projects.TransferProject(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		switch {
-		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"transferring a project requires Owner role on the source AND permission to create projects in the target namespace")
-		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"verify the target namespace exists. Use group.list or user.get; namespace must be a numeric ID or full path")
-		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
-			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"target namespace may already contain a project with this name/path; consider renaming the project before transferring")
-		default:
-			return Output{}, toolutil.WrapErrWithMessage("projectTransfer", err)
-		}
-	}
-	return projectOutput("projectTransfer", p, captured)
-}
-
-// ---------------------------------------------------------------------------
 // List Forks
 // ---------------------------------------------------------------------------.
 
@@ -2862,9 +2818,10 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.SharedVisibleOnly != nil {
 		opts.SharedVisibleOnly = input.SharedVisibleOnly
 	}
-	if len(input.SkipGroups) > 0 {
-		opts.SkipGroups = new(input.SkipGroups)
-	}
+	// Unguarded because an empty list sends nothing either way: go-querystring
+	// skips an empty slice, so a length check here was a branch no request
+	// could tell apart, and a mutation run left its boundary alive.
+	opts.SkipGroups = new(input.SkipGroups)
 	if input.SharedMinAccessLevel > 0 {
 		opts.SharedMinAccessLevel = new(gl.AccessLevelValue(input.SharedMinAccessLevel))
 	}
@@ -3087,9 +3044,9 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.MinAccessLevel > 0 {
 		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
 	}
-	if len(input.Relation) > 0 {
-		opts.Relation = &input.Relation
-	}
+	// Unguarded for the reason SkipGroups is in ListProjectGroups: an empty
+	// list is skipped by the query encoder and sends nothing either way.
+	opts.Relation = &input.Relation
 	if input.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
@@ -3328,9 +3285,10 @@ func applyUserProjectFilterPtrs(opts *gl.ListProjectsOptions, f userProjectFilte
 	if f.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = f.WithCustomAttributes
 	}
-	if len(f.CustomAttributes) > 0 {
-		opts.CustomAttributes = gl.CustomAttributesFilter(f.CustomAttributes)
-	}
+	// Unguarded because an empty filter sends nothing either way:
+	// CustomAttributesFilter encodes one key per entry, so a length check here
+	// was a branch no request could tell apart.
+	opts.CustomAttributes = gl.CustomAttributesFilter(f.CustomAttributes)
 }
 
 // ---------------------------------------------------------------------------

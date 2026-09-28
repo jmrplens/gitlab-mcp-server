@@ -99,21 +99,36 @@ func decorateTodoMeta(options *toolutil.ActionSpecOptions, individualTool string
 	if len(meta.aliases) > 0 {
 		options.Aliases = append([]string(nil), meta.aliases...)
 	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
+	// Copied without a guard: userTodoOptions starts every spec with no
+	// related actions, so an entry that names none leaves the field as it
+	// was either way, and a guard here was a branch no answer could tell
+	// apart from its absence.
+	options.RelatedActions = append([]string(nil), meta.related...)
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
 	if individualTool == "gitlab_todo_list" {
-		// Fixed filter vocabularies from https://docs.gitlab.com/api/todos/
-		// (GET /todos). The docs list more actions and target types than
-		// client-go's TodoAction/TodoTargetType constants, and the handler
-		// forwards the strings verbatim, so the documented set is the enum.
+		// Fixed filter vocabularies of GET /todos, which declares its action
+		// values as Todo.action_names and its types as TodosFinder.todo_types
+		// (lib/api/todos.rb), each the CE set merged with the EE one
+		// (app/models/todo.rb, ee/app/models/ee/todo.rb and the two finders).
+		// Both hold more than client-go's TodoAction and TodoTargetType
+		// constants, and the handler forwards the strings verbatim, so
+		// GitLab's own set is the enum. transfer_failed is the item a
+		// background transfer leaves when it fails, which project.transfer and
+		// group.transfer send a model here to find.
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaEnumOverride("action", "assigned", "mentioned", "build_failed", "marked", "approval_required", "unmergeable", "directly_addressed", "merge_train_removed", "member_access_requested"),
+			toolutil.SchemaEnumOverride("action",
+				"assigned", "review_requested", "mentioned", "build_failed", "marked", "approval_required",
+				"unmergeable", "directly_addressed", "member_access_requested", "review_submitted",
+				"ssh_key_expired", "ssh_key_expiring_soon", "transfer_failed",
+				"merge_train_removed", "okr_checkin_requested", "added_approver", "duo_pro_access_granted",
+				"duo_enterprise_access_granted", "duo_core_access_granted", "duo_workflow_input_required"),
 			toolutil.SchemaEnumOverride("state", "pending", "done"),
-			toolutil.SchemaEnumOverride("type", "Issue", "MergeRequest", "Commit", "Epic", "DesignManagement::Design", "AlertManagement::Alert", "Project", "Namespace", "Vulnerability", "WikiPage::Meta"),
+			toolutil.SchemaEnumOverride("type",
+				"Commit", "Issue", "WorkItem", "MergeRequest", "DesignManagement::Design", "AlertManagement::Alert",
+				"Namespace", "Project", "Key", "WikiPage::Meta",
+				"Epic", "Vulnerability", "User", "ComplianceManagement::Projects::ComplianceViolation", "Ai::DuoWorkflows::Workflow"),
 		}
 	}
 }

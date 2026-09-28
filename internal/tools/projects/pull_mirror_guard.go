@@ -84,12 +84,16 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	confirmed, err := flow.Confirm(ctx, pullMirrorOverwriteConfirmID, message)
-	switch {
-	case errors.Is(err, elicitation.ErrInputPending):
+	// A chain of ifs rather than a switch: a switch case carries no statement
+	// counter, so a mutation run reported the error check as not covered
+	// whatever the tests did.
+	if errors.Is(err, elicitation.ErrInputPending) {
 		return flow.PendingError()
-	case err != nil:
+	}
+	if err != nil {
 		return fmt.Errorf("projectConfigurePullMirror: confirmation failed: %w", err)
-	case !confirmed:
+	}
+	if !confirmed {
 		return errors.New("projectConfigurePullMirror: the user declined overwriting the project's diverged branches; send mirror_overwrites_diverged_branches=false to mirror without replacing them")
 	}
 	return nil

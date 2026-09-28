@@ -12,6 +12,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -109,7 +110,21 @@ func TestProjectRestore_AfterDelete_ReturnsTheProject(t *testing.T) {
 
 // TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace transfers a
 // personal project of each surface's own into a group of its own and back
-// into the run user's namespace, reading the path off each answer.
+// into the run user's namespace.
+//
+// GitLab 19.4 applies a transfer in the background and the action waits for
+// it, so each answer must show the move landed: a queued answer means the
+// handler never saw a move GitLab applied, which is the defect this scenario
+// exists to catch, and a test that accepted it would stay green against a
+// handler that waits out its whole bound on every call. That holds only when
+// the move can land inside the action's 45 seconds. An empty project moves in
+// seconds once its worker runs, but a busy instance makes the worker wait its
+// turn first (99 seconds for a group on the licensed run of 19.4.1), so
+// Sidekiq's queues are drained before each transfer and the failure says
+// whether they drained. The project is then read back with project.get,
+// independently of the action's own read, until GitLab holds it under the
+// destination. On 19.3 and older the answer comes after the move and both hold
+// at once.
 //
 // Replaces: TestMeta_ProjectTransfer
 func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
@@ -119,20 +134,39 @@ func TestProjectTransfer_ToAGroupAndBack_MovesTheNamespace(t *testing.T) {
 		s := e.On(surface)
 		project := fixture.NewProject(e, fixture.WithNamePrefix("moving"))
 		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("destination"))
-		params := map[string]any{"project_id": project.IDParam()}
-		username := e.Runtime().Username
 
-		moved := harness.Do[projects.Output](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": group.Path}))
-		if moved.ID != project.ID || !strings.HasPrefix(moved.PathWithNamespace, group.Path+"/") {
-			e.T.Errorf("transfer answered %+v, want project %d under %q", moved, project.ID, group.Path)
-		}
-
-		back := harness.Do[projects.Output](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": username}))
-		if back.ID != project.ID || !strings.HasPrefix(back.PathWithNamespace, username+"/") {
-			e.T.Errorf("the transfer back answered %+v, want project %d under %q", back, project.ID, username)
-		}
+		transferProjectAndWait(e, s, project, group.Path)
+		transferProjectAndWait(e, s, project, e.Runtime().Username)
 	})
 }
+
+// transferProjectAndWait transfers a project into a namespace, holds the
+// answer to a move that landed, and reads the project back until GitLab holds
+// it there.
+func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.Project, namespace string) {
+	e.T.Helper()
+	params := map[string]any{"project_id": project.IDParam()}
+	under := namespace + "/"
+
+	drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), transferDrainWait)
+	moved := harness.Do[projects.TransferOutput](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": namespace}))
+	if moved.ID != project.ID || moved.TransferQueued || !strings.HasPrefix(moved.PathWithNamespace, under) {
+		e.T.Errorf("the transfer to %q answered %+v, want project %d applied under %q (Sidekiq drained before it: %t)", namespace, moved, project.ID, under, drained)
+	}
+
+	stored := harness.Eventually[projects.Output](s, actionProjectGet, params, 2*time.Second, 90*time.Second,
+		func(out projects.Output) bool { return strings.HasPrefix(out.PathWithNamespace, under) })
+	if stored.ID != project.ID {
+		e.T.Errorf("project.get after the transfer to %q answered project %d, want %d", namespace, stored.ID, project.ID)
+	}
+}
+
+// transferDrainWait bounds the drain before each transfer of the project and
+// group scenarios: long enough for a licensed instance to work off what the
+// scenarios before it queued, which took more than a minute and a half on
+// 19.4.1, and short enough that a queue that never empties fails the scenario
+// rather than holding the package until its timeout.
+const transferDrainWait = 3 * time.Minute
 
 // TestProjectCreateForUser_Admin_PlacesItInTheUsersNamespace creates a
 // project on behalf of a disposable user, on every surface, and reads the

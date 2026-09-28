@@ -276,32 +276,47 @@ type deletionSteps struct {
 	remove func(ctx context.Context, path string) error
 }
 
+// The wait a deletion gives a transfer still being applied to the object it
+// deletes. An empty project or group moves in seconds, and the cleanup
+// context around the whole deletion bounds it as well.
+const (
+	transitionWait         = 45 * time.Second
+	transitionPollInterval = time.Second
+)
+
 // deletePermanently is the two-step dance both projects and groups go
 // through, written once: mark, tolerating an object already marked; re-read
 // the path; remove permanently under it. An object that is gone at any step
 // is a success, because gone is what was asked for.
+//
+// GitLab 19.4 applies a transfer in the background, and an object a test
+// moved can still be moving when its cleanup runs. Two refusals come from
+// that. Marking an object whose transfer is under way is refused with 400
+// "State cannot transition via ...", which [markForDeletion] waits through.
+// A move that lands after the mark leaves the object unmarked, and the
+// permanent removal is then refused with 400 "... must be marked for deletion
+// first", which is answered by marking it and reading its path once more.
 func deletePermanently(ctx context.Context, kind string, id int64, path string, steps deletionSteps) error {
 	ctx, cancel := withCleanupTimeout(ctx)
 	defer cancel()
 
-	if err := steps.mark(ctx); err != nil {
-		if IsStatus(err, http.StatusNotFound) {
-			return nil
-		}
-		if !toolutil.ContainsAny(err, "already being deleted", "marked for deletion") {
-			return fmt.Errorf("marking %s %d (%s) for deletion: %w", kind, id, path, err)
-		}
+	current, gone, err := markAndReread(ctx, kind, id, path, steps)
+	if gone || err != nil {
+		return err
 	}
+	path = current
 
-	current, err := steps.currentPath(ctx)
-	switch {
-	case err == nil:
+	removeErr := steps.remove(ctx, path)
+	if IsStatus(removeErr, http.StatusBadRequest) && toolutil.ContainsAny(removeErr, "must be marked for deletion first") {
+		current, gone, err = markAndReread(ctx, kind, id, path, steps)
+		if gone || err != nil {
+			return err
+		}
 		path = current
-	case IsStatus(err, http.StatusNotFound):
-		return nil
+		removeErr = steps.remove(ctx, path)
 	}
 
-	if removeErr := steps.remove(ctx, path); removeErr != nil && !IsStatus(removeErr, http.StatusNotFound) {
+	if removeErr != nil && !IsStatus(removeErr, http.StatusNotFound) {
 		if IsStatus(removeErr, http.StatusBadRequest) && toolutil.ContainsAny(removeErr, "only available for subgroups") {
 			// A top-level group on an instance with delayed deletion cannot be
 			// permanently removed through the API, only marked; the mark step
@@ -317,6 +332,57 @@ func deletePermanently(ctx context.Context, kind string, id int64, path string, 
 		return fmt.Errorf("permanently deleting %s %d (%s): %w", kind, id, path, removeErr)
 	}
 	return nil
+}
+
+// markAndReread marks the object and reads back the path GitLab renamed it
+// to, answering the path it knew when the read fails for another reason than
+// the object being gone. gone reports that GitLab no longer has the object.
+func markAndReread(ctx context.Context, kind string, id int64, path string, steps deletionSteps) (current string, gone bool, err error) {
+	gone, err = markForDeletion(ctx, kind, id, path, steps)
+	if gone || err != nil {
+		return path, gone, err
+	}
+	read, readErr := steps.currentPath(ctx)
+	switch {
+	case readErr == nil:
+		return read, false, nil
+	case IsStatus(readErr, http.StatusNotFound):
+		return path, true, nil
+	default:
+		return path, false, nil
+	}
+}
+
+// markForDeletion sends the plain DELETE, tolerating an object already
+// marked, and waits through a transfer still being applied to the object:
+// GitLab refuses the mark with 400 "State cannot transition via ..." until
+// the transfer's state machine lets go of it. gone reports that GitLab no
+// longer has the object. The transfer refusal is matched on its status as
+// well as its words, since the same words under another status are an answer
+// this code has not seen. The tolerance of an object already marked is older
+// than this function and matches on its words alone, as it did before: no
+// run has recorded the status GitLab answers it with.
+func markForDeletion(ctx context.Context, kind string, id int64, path string, steps deletionSteps) (gone bool, err error) {
+	err = harness.Poll(ctx, transitionPollInterval, transitionWait, func() (bool, string, error) {
+		markErr := steps.mark(ctx)
+		switch {
+		case markErr == nil:
+			return true, "", nil
+		case IsStatus(markErr, http.StatusNotFound):
+			gone = true
+			return true, "", nil
+		case toolutil.ContainsAny(markErr, "already being deleted", "marked for deletion"):
+			return true, "", nil
+		case IsStatus(markErr, http.StatusBadRequest) && toolutil.ContainsAny(markErr, "State cannot transition"):
+			return false, fmt.Sprintf("%s %d (%s) is in a transfer: %v", kind, id, path, markErr), nil
+		default:
+			return false, "", markErr
+		}
+	})
+	if err != nil {
+		return false, fmt.Errorf("marking %s %d (%s) for deletion: %w", kind, id, path, err)
+	}
+	return gone, nil
 }
 
 // UnprotectBranch removes the protection rule from a branch and waits until
@@ -383,17 +449,33 @@ const (
 // it. It is best effort: the metrics API needs an administrator, and a token
 // that cannot read it simply returns at once.
 func DrainSidekiq(ctx context.Context, client *gitlabclient.Client) {
-	deadline := time.Now().Add(sidekiqDrainWait)
+	if !DrainSidekiqWithin(ctx, client, sidekiqDrainWait) && ctx.Err() == nil {
+		log.Printf("e2e: Sidekiq still had jobs enqueued after %s; continuing", sidekiqDrainWait)
+	}
+}
+
+// DrainSidekiqWithin is DrainSidekiq with the bound named by the caller, for
+// a scenario that needs the queues empty rather than merely quieter: it
+// reports whether they were seen empty before the bound or the context ran
+// out. A token that cannot read the metrics API counts as drained, as it
+// always has for DrainSidekiq, since nothing is known to be waiting; a read
+// that failed because the context ended does not, since the queues were
+// never seen.
+func DrainSidekiqWithin(ctx context.Context, client *gitlabclient.Client, wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		stats, _, err := client.GL().Sidekiq.GetJobStats(gl.WithContext(ctx))
-		if err != nil || stats == nil || stats.Jobs.Enqueued == 0 {
-			return
+		if err != nil {
+			return ctx.Err() == nil
+		}
+		if stats == nil || stats.Jobs.Enqueued == 0 {
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(sidekiqDrainInterval):
 		}
 	}
-	log.Printf("e2e: Sidekiq still had jobs enqueued after %s; continuing", sidekiqDrainWait)
+	return false
 }

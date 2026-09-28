@@ -34,7 +34,13 @@ func FormatOutputMarkdown(g Output) string {
 // [FormatDetailOutputMarkdown] can add the rows only a single-group route
 // carries before [toolutil.Card.End] closes the card rather than after them.
 func writeGroupCard(b *strings.Builder, g Output) *toolutil.Card {
-	c := toolutil.NewCard(b, "Group: "+g.Name)
+	return writeGroupCardHeaded(b, "Group: "+g.Name, g)
+}
+
+// writeGroupCardHeaded is [writeGroupCard] under a heading the caller
+// composes, for a card whose heading has more to say than the group's name.
+func writeGroupCardHeaded(b *strings.Builder, heading string, g Output) *toolutil.Card {
+	c := toolutil.NewCard(b, heading)
 	c.Int("ID", g.ID)
 	c.Field("Path", g.FullPath)
 	// A full name is the group names of the ancestry joined, and a group name
@@ -291,8 +297,8 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 // FormatDetailOutputMarkdown renders a group as a route that answers with one
 // group returns it. The registry keys a formatter by its Go type, so
 // [DetailOutput] needs its own even though it embeds [Output]: without it the
-// group get, create, update, restore and transfer tools would fall through to
-// no formatter at all.
+// group get, create, update, restore and transfer_project tools would fall
+// through to no formatter at all.
 //
 // runners_token is deliberately absent. It is a live credential, and this
 // package renders into a conversation transcript; the JSON keeps it for a
@@ -301,15 +307,45 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 func FormatDetailOutputMarkdown(g DetailOutput) string {
 	var b strings.Builder
 	c := writeGroupCard(&b, g.Output)
-	// Only what a single-group route adds, and only when GitLab sent it: each
-	// of these is behind a condition of its own, so an absent key is an answer
-	// rather than a gap.
+	writeGroupDetailRows(c, g)
+	c.End(groupCardHints()...)
+	return b.String()
+}
+
+// writeGroupDetailRows writes the rows only a single-group route adds, and
+// only when GitLab sent them: each of these is behind a condition of its own,
+// so an absent key is an answer rather than a gap.
+func writeGroupDetailRows(c *toolutil.Card, g DetailOutput) {
 	c.Field("Git Access Protocol", g.EnabledGitAccessProtocol)
 	c.Field("Step-up Auth Provider", g.StepUpAuthRequiredOAuthProvider)
 	c.Count("Shared With Groups", int64(len(g.SharedWithGroups)))
 	c.Count("Projects", int64(len(g.Projects)))
 	c.BoolPtr("Auto-ban on Excessive Downloads", g.AutoBanUserOnExcessiveProjectsDownload)
-	c.End(groupCardHints()...)
+}
+
+// subGroupTransferQueuedNote is what the card of a group transfer the wait
+// did not see land says under the group's rows, which describe where it still
+// is. It is one literal rather than a concatenation, whose operators a
+// mutation run reports as not covered, a constant carrying no statement.
+const subGroupTransferQueuedNote = "GitLab accepted this transfer and moves the group in the background, and the move had been neither applied nor reported failed when this server stopped waiting for it: the rows above show where the group still is. Do not send the transfer again: GitLab runs a second transfer as well while the first is queued, and refuses it while the first runs. A move that fails is reported only as a pending to-do item of action transfer_failed for the user who asked for it, and GitLab adds none while an item from an earlier failure of this group is still pending, so a pending item may be this failure."
+
+// FormatTransferSubGroupMarkdown renders what a group transfer answered. A
+// move that landed is the group's own card, under its new parent; one the wait
+// did not see land says so in its heading and a note, since its rows are the
+// place the group is leaving, and its hints are the reads that settle where it
+// ends up.
+func FormatTransferSubGroupMarkdown(out TransferSubGroupOutput) string {
+	if !out.TransferQueued {
+		return FormatDetailOutputMarkdown(out.DetailOutput)
+	}
+	var b strings.Builder
+	c := writeGroupCardHeaded(&b, "Group transfer queued: "+out.Name, out.Output)
+	writeGroupDetailRows(c, out.DetailOutput)
+	c.Note(subGroupTransferQueuedNote)
+	c.End(
+		toolutil.HintAction(actionGroupGet, "read the group back and see its parent"),
+		toolutil.HintAction("user.todo_list", "see the to-do item GitLab leaves if the move fails"),
+	)
 	return b.String()
 }
 
@@ -317,6 +353,7 @@ func init() {
 	toolutil.RegisterMarkdownResult(formatGroupNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailOutputMarkdown)
+	toolutil.RegisterMarkdown(FormatTransferSubGroupMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatMemberListMarkdown)
 	toolutil.RegisterMarkdown(FormatListProjectsMarkdown)
