@@ -668,6 +668,56 @@ named for what they count:
 the server answers from its own catalog are **not** gated: they are small, and
 metering something cheap buys nothing and costs a concept.
 
+### Requests held open at once
+
+A rate bounds how often a caller asks, not how long what it asked for keeps
+running. A `tools/call` holds its `POST` for as long as the call runs, up to an
+hour for a pipeline wait and for as long as GitLab keeps it waiting otherwise,
+and at the HTTP defaults one credential can open thousands of calls in the time
+one of them is held. Measured through `cmd/bench_resources`' held mode against a
+stand-in GitLab that holds every read, each held call costs the process two file
+descriptors, six goroutines, about 51 KiB of live heap and about 190 KiB of
+resident set, linearly: 4000 held calls took 8010 descriptors and 873 MiB, and a
+process started with a descriptor limit of 1024 held 503 of them and then stopped
+accepting connections at all, `/health` among them, while every call past the
+limit failed at its dial to GitLab.
+
+So the process holds at most **192 requests at once across every credential**
+(register row `HLD-011`). A request takes its slot in the transport gate once
+its credential is admitted, before the MCP handler or anything keyed on the
+credential runs, and gives it back when its `POST` ends; one past the ceiling is
+answered there with `503`, JSON-RPC `-50300` and `Retry-After`, costs its
+credential no rate-limit token and is charged to no budget. A
+`subscriptions/listen` stream does not take a slot, since the stream ceilings
+count it, and the gate knows one without reading the body only on protocol
+2026-07-28, where the SDK holds the `Mcp-Method` header to the body. The figure
+is sized so that this ceiling and the stream ceiling together fit under a
+descriptor limit of 1024: 512 streams at one descriptor, 192 held requests at
+two, and an eighth of the limit spare for the idle process, `/health` and the
+connections being refused. Measured with that limit and 4000 calls offered at
+once, the process held 192 in 402 descriptors, refused the other 3808 and
+answered `/health` in a millisecond.
+
+It is keyed on the process and not configurable for the reason the stream and
+watcher ceilings are: a per-caller number would multiply by however many
+credentials a caller mints, and a number an operator could raise could be raised
+past what the process can hold. It promises no caller a share, so one credential
+that fills it has the next request from anybody refused until a held call ends,
+and a deployment that needs more calls in flight at once runs more replicas.
+Having no per-caller ceiling beside it, any refusal of it tells its caller that
+the process is full, the one bit `INV-019` accepts for a bound keyed on the
+process, and its words say nothing more; the log line names the scope and the
+figure:
+
+```json
+{"level":"WARN","msg":"request refused: too many requests held across the process","scope":"process","limit_held_requests":192}
+```
+
+It bounds requests, not connections: a client that keeps idle connections open
+holds a descriptor for each whatever this counts, and `--http-idle-timeout` is
+what closes those. Stateful sessions are not bounded yet either; that is the part
+of issue 951 still open.
+
 ### Defense-in-depth
 
 The local limiter complements but does not replace:

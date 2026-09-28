@@ -383,12 +383,14 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
-			// A decision by absence, recorded like RTC-004: nothing bounds the
-			// requests one credential or the process holds open, nor the
-			// stateful sessions, while the reason the listen ceilings give
-			// applies to every held connection (F-31, issue 951).
+			// A decision by absence, recorded like RTC-004: nothing bounds how
+			// many stateful sessions exist, while the reason the listen
+			// ceilings give applies to every held connection (F-31, issue
+			// 951). The requests the process holds open were the other half
+			// of this row until HLD-011 bounded them; the sessions are the
+			// half F-31 still records.
 			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Ruled,
-			Resource: "held requests and stateful sessions",
+			Resource: "stateful sessions",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Source:   SourceNone,
@@ -396,6 +398,54 @@ func allowDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgServer, "streamableHTTPOptions"),
 				enforce(pkgServer, "sessionOwners.record"),
+			},
+		},
+		{
+			// The ceiling on the requests the process holds open, across
+			// every credential (issue 951, answering F-31 for them; the
+			// stateful sessions stay on HLD-010). It stands alone, keyed on
+			// the process with no per-caller number beside it: a per-caller
+			// one would multiply by however many credentials a caller mints,
+			// and would bound nothing INV-018 asks of this row.
+			//
+			// Its slot is taken in the gate once the credential is admitted,
+			// before the SDK or anything keyed on the credential runs, so its
+			// refusal spends none of a credential's rate, and a refusal of the
+			// credential's own gives the slot back as its POST ends (PAT-003).
+			// A listen stream, which HLD-001 and HLD-002 count, is left out
+			// rather than counted twice.
+			//
+			// It refuses in the gate, a 503 with the register's fixed
+			// Retry-After (PAT-004), in words that say only that the process
+			// is full: with no per-caller ceiling beside it that is what any
+			// refusal of it tells its caller, the one bit INV-019 accepts for
+			// a bound keyed on the process. Whether a held call makes an entry
+			// busy is POL-003's answer and did not change: it does not.
+			ID: "HLD-011", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+			Resource: "requests the process holds open across every credential",
+			Key:      KeyProcess, StdioKey: KeyNone,
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Reason:   "only a ceiling keyed on the process bounds the process",
+			ReasonAt: reasonAt(pkgServer, "maxHeldRequestsPerProcess"),
+			Values:   []string{"HeldRequestsPerProcess"}, Source: Constant, Zero: ZeroNotApplicable,
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"issue 951"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnavailable, Status: 503,
+					RetryAfter: RetryAfterFixed, Prefix: "This server is holding as many requests as it serves at once.",
+					Answer: RetryLater, At: refuse(pkgServer, "heldRequestsFailure"),
+				},
+			},
+			Sites: []Site{
+				alias(pkgServer, "maxHeldRequestsPerProcess", "HeldRequestsPerProcess"),
+				enforce(pkgServer, "processHeldRequests"),
+				enforce(pkgServer, "heldRequests.acquire"),
+				enforce(pkgServer, "holdsRequest"),
+				enforce(pkgServer, "mcpServerGate.middleware"),
+				enforce(pkgServer, "registerOAuthMCPHandlers"),
+				enforce(pkgServer, "registerLegacyMCPHandlers"),
+				refuse(pkgServer, "heldRequestsFailure"),
 			},
 		},
 		{

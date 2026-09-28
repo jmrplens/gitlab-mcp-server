@@ -165,12 +165,19 @@ de GitLab contra un token, que ningún número de instancias eleva.
 | `--http-idle-timeout`                     | `0`         | Déjalo desactivado. Un valor positivo corta los flujos de larga duración                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `--drain-delay`                           | `0`         | Ponlo al menos en un intervalo de detección del balanceador                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
-Otros tres límites no son configurables: diez watchers de recursos por
-credencial y 512 en todo el proceso, y diez autenticaciones fallidas por minuto
-y dirección de cliente antes de que esa dirección reciba `429` durante un
-minuto. Los techos de watchers rechazan en lugar de desalojar: una credencial se
-acuña con una llamada a la API, así que un número por credencial se multiplica
-por cuantas tenga quien llame y solo el del proceso acota el proceso.
+Otros cuatro límites no son configurables: diez watchers de recursos por
+credencial y 512 en todo el proceso, 192 peticiones retenidas a la vez en todo
+el proceso, y diez autenticaciones fallidas por minuto y dirección de cliente
+antes de que esa dirección reciba `429` durante un minuto. Los techos de
+watchers rechazan en lugar de desalojar: una credencial se acuña con una llamada
+a la API, así que un número por credencial se multiplica por cuantas tenga quien
+llame y solo el del proceso acota el proceso. El techo de peticiones retenidas
+sale de la misma medición: cada petición que espera a GitLab le cuesta al
+proceso dos descriptores de fichero (la conexión del cliente y la saliente), así
+que 192 de ellas, junto a 512 streams de listen a un descriptor cada uno y un
+octavo del límite libre, caben en un límite de 1024 descriptores, el límite
+blando por defecto en la mayoría de hosts Linux. Una petición por encima recibe
+`503` con un `Retry-After` de 30 segundos, y `/health` sigue respondiendo.
 
 ## Lo que no crece con el número de credenciales
 

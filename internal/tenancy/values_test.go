@@ -28,6 +28,7 @@ type frozenValue struct {
 // change that adds it.
 func frozenValues() []frozenValue {
 	return []frozenValue{
+		{"HeldRequestsPerProcess", HeldRequestsPerProcess, 192},
 		{"ListenStreamsPerCredential", ListenStreamsPerCredential, 64},
 		{"ListenStreamsPerProcess", ListenStreamsPerProcess, 512},
 		{"WatchersPerCredential", WatchersPerCredential, 10},

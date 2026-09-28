@@ -275,7 +275,7 @@ func main() {
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface")
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
-	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
+	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or the requests they hold, which the process bounds on its own")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL credential entry after this long unused, except one with a live subscription (0 to disable)")
@@ -554,7 +554,8 @@ FLAGS
   -resource-tos-uri string  https URL published as RFC 9728 resource_tos_uri (default: omitted)
 
  Limits and pooling (HTTP mode)
-  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
+  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries, not sessions (default %d). The
+                            requests held open at once are bounded across the process at %d, not configurable
   -pool-idle-timeout dur    Reclaim a pooled credential entry after this long unused, except one with a live subscription (default %s, 0 to disable)
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
@@ -726,7 +727,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
-		config.DefaultMaxHTTPClients, config.DefaultPoolIdleTimeout,
+		config.DefaultMaxHTTPClients, maxHeldRequestsPerProcess, config.DefaultPoolIdleTimeout,
 		tenancy.CatalogProcessRate, tenancy.CatalogProcessBurst,
 		config.DefaultRateLimitBurst,
 		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
@@ -2686,6 +2687,10 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
+		// Announced beside the pool's bound because the flag help says the
+		// pool bounds entries and not what they hold: this is the figure that
+		// bounds that, and no flag moves it (HLD-011).
+		"held_requests_per_process", maxHeldRequestsPerProcess,
 		"session_timeout", cfg.SessionTimeout,
 		"stateless", cfg.Stateless,
 		"json_response", cfg.JSONResponse,
@@ -3409,6 +3414,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
 		bearerOnly: true,
 		oauthMode:  true,
+		held:       processHeldRequests,
 		stateless:  cfg.Stateless,
 	}
 
@@ -3566,6 +3572,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		sessions:           binding.sessions,
 		credentials:        binding.credentials,
 		challenge:          legacyAuthChallenge,
+		held:               processHeldRequests,
 		stateless:          cfg.Stateless,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))

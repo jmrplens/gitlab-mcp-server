@@ -157,7 +157,11 @@ twice), and the gate holds the pinned literal equal to the register's.
   a reason, and a wrong category is caught only by review.
 - **NEG-004**: The fairness benchmark can drive two bounds, the tool-call and the catalog
   buckets, so every other decision's proof that a migration changed nothing is by
-  construction: code identity for a value, a verbatim oracle and fuzzing for a rule.
+  construction: code identity for a value, a verbatim oracle and fuzzing for a rule. The
+  benchmark's held mode measures what the process pays per request it holds and what it
+  does past a descriptor limit, which is what `HLD-011` was sized from, but it compares
+  no two populations, and a switch that would let it cannot exist for a bound no operator
+  can turn off.
 - **NEG-005**: The carried-channel matrix follows go-sdk; an SDK upgrade that changes what
   is carried edits it in the same change.
 - **NEG-006**: A promoted rule is a call where the code used to be written in place, and it
@@ -177,7 +181,10 @@ twice), and the gate holds the pinned literal equal to the register's.
   listing, since at the defaults no single credential can reach a process bound alone.
   `ADM-014` (issue 950) is the same case with a wait in place of a count: a caller that
   presents one new token to an instance it knows to be healthy and is refused after the
-  five-second slot wait learns that other callers are verifying. No wording closes it:
+  five-second slot wait learns that other callers are verifying. `HLD-011` (issue 951),
+  the ceiling on the requests the process holds open, has no per-caller ceiling beside it,
+  so any refusal of it tells its caller that the process is full, which is the same bit
+  and no more: it names no count and no caller. No wording closes it:
   the caller's own count or its own wait supplies the bit whatever the refusal says,
   exactly as its own busyness does for `credential_evicted`. It is the price of bounding
   what every tenant shares, and the alternatives are worse: a share of the bound per

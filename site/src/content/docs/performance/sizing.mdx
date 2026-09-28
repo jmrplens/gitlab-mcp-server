@@ -160,12 +160,18 @@ number of instances raises.
 | `--http-idle-timeout`                     | `0`         | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                                                                                                                                                                                                                                                             |
 | `--drain-delay`                           | `0`         | Set it to at least one balancer detection interval                                                                                                                                                                                                                                                                                                                                                                                      |
 
-Three further limits are not configurable: ten resource watchers per credential
-and 512 across the process, and ten failed authentications a minute per client
-address before that address is answered `429` for a minute. The watcher ceilings
-refuse rather than evicting: a credential is one API call to mint, so a
-per-credential number multiplies by however many a caller holds and only the
-process-wide one bounds the process.
+Four further limits are not configurable: ten resource watchers per credential
+and 512 across the process, 192 requests held open at once across the process,
+and ten failed authentications a minute per client address before that address
+is answered `429` for a minute. The watcher ceilings refuse rather than
+evicting: a credential is one API call to mint, so a per-credential number
+multiplies by however many a caller holds and only the process-wide one bounds
+the process. The held-request ceiling is sized from the same measurement: each
+request waiting on GitLab costs the process two file descriptors (the client's
+connection and the outbound one), so 192 of them, beside 512 listen streams at
+one descriptor each and an eighth of the limit spare, fit a descriptor limit of
+1024, the default soft limit on most Linux hosts. A request past it is answered
+`503` with a `Retry-After` of 30 seconds, and `/health` keeps answering.
 
 ## What does not scale with the credential count
 

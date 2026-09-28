@@ -186,6 +186,18 @@ WARN, once per refusal, and there is no number to raise in answer. The
 authentication limit has a trap behind a proxy, described in
 [Operations at scale](#what-to-monitor).
 
+A fourth caps what an instance can have in flight: 192 requests held open at
+once across every credential, a `subscriptions/listen` stream aside, since the
+stream ceilings count it. A held call costs two file descriptors, six goroutines
+and about 190 KiB, and the figure is what fits beside the 512 streams under a
+descriptor limit of 1024. The next request is refused `503` with `Retry-After`
+before the MCP handler reads it, and the log says `request refused: too many
+requests held across the process`. Size the fleet for it: callers that wait on
+pipelines hold their slot for as long as they wait, so an instance serving many
+of them at once needs replicas beside it rather than a larger number, which
+there is none of to raise. See
+[Requests held open at once](http-server-mode.md#requests-held-open-at-once).
+
 ### What does not scale with the credential count
 
 - **The registered catalog**, now paid once per shape.

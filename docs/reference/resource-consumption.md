@@ -98,6 +98,19 @@ Under the default stateless transport a session lasts exactly one POST, so there
 
 The point scenarios read the count off a traceback signal with every credential attached; the concurrency series makes the shape plain, because it holds four requests in flight per credential: 4,015 goroutines at a thousand credentials on `dynamic` and `meta`, and 2,015 on `individual`, where the driver holds two. Goroutines track the requests in flight, not the pool.
 
+### Requests Held Open
+
+A request that waits on GitLab holds its POST, and with it the caller's connection and one outbound connection, for as long as GitLab keeps it waiting. Measured with `go run ./cmd/bench_resources -held <counts>` against a stand-in GitLab that holds every project read, one credential, linear across the ladder:
+
+| Per held `tools/call` | Cost     |
+| --------------------- | -------- |
+| File descriptors      | 2        |
+| Goroutines            | 6        |
+| Live heap             | ~51 KiB  |
+| Resident set          | ~190 KiB |
+
+Four thousand held calls took 8,010 descriptors and 873 MiB of resident set when nothing bounded them, and a process started with a descriptor limit of 1024 held 503 of them and then stopped accepting connections, `/health` included. The process therefore bounds them at **192 across every credential** (register row `HLD-011`, not configurable): 192 held requests at two descriptors, 512 listen streams at one, and an eighth of 1024 spare. With the same limit of 1024 and 4,000 calls offered, the process held 192, refused 3,808 with `503` and a `Retry-After`, failed none, and answered `/health` in a millisecond at 402 descriptors. A `subscriptions/listen` carrying its method header is counted by the 512 listen ceilings instead. See [Requests held open at once](../guides/http-server-mode.md#requests-held-open-at-once).
+
 ### Resource Subscription Watchers
 
 On `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default), a session that subscribes to a

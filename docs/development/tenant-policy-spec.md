@@ -247,15 +247,16 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
   or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
   `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
-  (`HLD-002`, `HLD-004`, `RTC-007`, `ADM-014`), which tells a caller that has not
-  reached its own bound, or that knows the upstream to be healthy, that the process has
-  reached its one, and so that others are holding, spending or verifying against it
+  (`HLD-002`, `HLD-004`, `HLD-011`, `RTC-007`, `ADM-014`), which tells a caller that has
+  not reached its own bound, or that knows the upstream to be healthy, that the process
+  has reached its one, and so that others are holding, spending or verifying against it
   (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of what others hold or
   an identity, and neither says more than a caller could infer from its own count or its
   own wait: the stream ceilings name the scope that refused, which a caller counting its
   own streams knows already, `RTC-007` answers in `RTC-003`'s words and `ADM-014` in the
   words `ADM-002` uses for a verification with no verdict, so only the log line says
-  which bound refused.
+  which bound refused. `HLD-011` has no per-caller ceiling beside it, so any refusal of it
+  says the process is full; it says that and names no figure and no caller.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -373,15 +374,15 @@ Every refusal names one class of next action (`tenancy.Answer`). The table gives
 every channel a row of the register declares with it; `tenancy.Decisions()` is the list
 itself, and a row that adds a channel adds it here.
 
-| Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed or no verification slot came free; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
-| Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                                                             |
-| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                                                     |
-| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                             |
-| Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                                                                 |
-| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                                                              |
-| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                                                    |
+| Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed, no verification slot came free or the process holds as many requests as it serves at once; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
+| Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                                                                                                                      |
+| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                                                                                                              |
+| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                                                                                      |
+| Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                                                                                                                          |
+| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                                                                                                                       |
+| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                                                                                                             |
 
 ## The five questions
 
@@ -511,7 +512,20 @@ Five findings are answered, and stay in the list with their issues. F-03, the li
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
-longer. Issue 951 stays open for F-31. F-19 and F-33 are answered by issue 959's decision
+longer. The second of those changes answers half of F-31: `HLD-011` bounds the requests
+the process holds open, at 192 across every credential, not configurable, a
+`subscriptions/listen` aside since `HLD-001` and `HLD-002` count it. A request takes its
+slot in the gate once its credential is admitted and gives it back when its POST ends,
+and one past the ceiling is refused there, a 503 `-50300` with `Retry-After`, charged to
+nothing. Measured through `cmd/bench_resources`' held mode against a stand-in GitLab
+that holds every read, a held call costs the process two descriptors, six goroutines,
+about 51 KiB of live heap and about 190 KiB of resident set, linearly to 4000 calls
+(8010 descriptors, 873 MiB); started with a descriptor limit of 1024, the process held
+503 and stopped accepting connections, `/health` among them. The ceiling is sized so
+that it and the listen ceiling fit together under that limit: 512 streams at one
+descriptor, 192 held requests at two, and an eighth of the limit spare. The stateful
+sessions are the half it does not answer, so F-31 stays on `HLD-010` and `IDN-010` for
+them and issue 951 stays open. F-19 and F-33 are answered by issue 959's decision
 that what they recorded is the server's position, stated in
 [Two MCP clauses the server meets in part](#two-mcp-clauses-the-server-meets-in-part):
 `RTC-001` and `IDN-013` record that decision and carry neither any longer. F-29 and F-30

@@ -287,6 +287,10 @@ type mcpServerGate struct {
 	// identity — never as an unverified PRIVATE-TOKEN a request might also
 	// carry, which ExtractToken would otherwise prefer.
 	bearerOnly bool
+	// held is the count of requests the process holds open, shared by every
+	// gate of the process (HLD-011). A gate built without one, which only the
+	// tests build, holds requests without counting them.
+	held *heldRequests
 	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
 	// may skip authentication.
 	//
@@ -363,6 +367,20 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 		if sessionFailure := g.checkSessionOwnership(r, entry); sessionFailure != nil {
 			sessionFailure.write(w, r)
 			return
+		}
+		// The slot is taken once the credential is admitted and before the
+		// SDK or anything keyed on the credential runs: a request refused
+		// here has spent none of its credential's rate, and one the
+		// credential's own bounds refuse gives the slot back as its POST
+		// ends. Taking it after admission rather than before keeps a caller
+		// with no credential from holding slots while it waits to be
+		// refused; admission has process bounds of its own (POL-006, ADM-014).
+		if holdsRequest(r) {
+			if !g.held.acquire() {
+				refuseHeldRequest(w, r)
+				return
+			}
+			defer g.held.release()
 		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
 		// The credential travels on the HTTP request context, which the carrier

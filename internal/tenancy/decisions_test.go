@@ -22,7 +22,7 @@ var specRequirementIDs = []string{
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-005", "HLD-006", "HLD-007",
-	"HLD-008", "HLD-009", "HLD-010",
+	"HLD-008", "HLD-009", "HLD-010", "HLD-011",
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
 	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006",
@@ -86,7 +86,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // TestDecisions_DispositionCounts pins how many rows the register holds of
 // each disposition in this layer: RTC-004 is promoted to MeterFor, and POL-003
 // to Busy. ADM-014, the verification ceiling issue 950 added, is the
-// twenty-ninth valued row.
+// twenty-ninth valued row, and HLD-011, the held-request ceiling issue 951
+// added, the thirtieth.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -97,7 +98,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 29},
+		{"valued", Valued, 30},
 		{"ruled", Ruled, 35},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -168,6 +169,42 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 	}
 	if FindingIssue("F-03") != 951 {
 		t.Errorf("F-03 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-03"))
+	}
+}
+
+// TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951 pins what issue
+// 951 decided for the requests the process holds open: a ceiling keyed on the
+// process that no operator can change and that stands alone, refusing the
+// newcomer in the gate with a 503 that says to retry later and charges nothing,
+// and that exists only over HTTP. The stateful sessions are the half of F-31 it
+// does not answer, so HLD-010 keeps the finding for them, names only them now,
+// and the finding stays filed as issue 951's.
+func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
+	held, _ := Lookup("HLD-011")
+	if held.Key != KeyProcess || held.StdioKey != KeyNone || held.Source != Constant || !held.ProtectsProcess ||
+		held.Partner != "" || held.AtCapacity != RefuseNewcomer || !slices.Contains(held.Decided, "issue 951") ||
+		len(held.Findings) != 0 {
+		t.Errorf("HLD-011: key %s, stdio %s, source %d, protects the process %v, partner %q, at capacity %d, "+
+			"decided %v, findings %v; want a constant on the process alone, over HTTP only, refusing the "+
+			"newcomer, decided by issue 951 and carrying no finding",
+			held.Key, held.StdioKey, held.Source, held.ProtectsProcess, held.Partner, held.AtCapacity,
+			held.Decided, held.Findings)
+	}
+	if len(held.Refusals) != 1 {
+		t.Fatalf("HLD-011 declares %d refusals, want one", len(held.Refusals))
+	}
+	if r := held.Refusals[0]; r.Channel != Gate || r.Status != 503 || r.Code != CodeUnavailable ||
+		r.RetryAfter != RetryAfterFixed || r.Answer != RetryLater || len(r.Charged) != 0 {
+		t.Errorf("HLD-011 refuses with %+v; want a gate 503 with the fixed Retry-After, retry later, charging nothing", r)
+	}
+
+	sessions, _ := Lookup("HLD-010")
+	if sessions.Resource != "stateful sessions" || !sessions.Carries("F-31") || sessions.Source != SourceNone {
+		t.Errorf("HLD-010: resource %q, findings %v, source %d; want the stateful sessions alone, nothing bounding "+
+			"them, and F-31 carried for them", sessions.Resource, sessions.Findings, sessions.Source)
+	}
+	if FindingIssue("F-31") != 951 {
+		t.Errorf("F-31 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-31"))
 	}
 }
 
@@ -642,6 +679,12 @@ func rowPins() map[string]rowPin {
 			pinListenEnd("lifetime_reached", StartOver),
 		}},
 		"HLD-010": {Allow, Ceiling, ClassP, Ruled, KeyProcess, KeyNone, KeyNone, KeyProcess, nil},
+		"HLD-011": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyProcess, KeyProcess, []refusalPin{
+			{
+				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
+				prefix: "This server is holding as many requests as it serves at once.", answer: RetryLater,
+			},
+		}},
 		"POL-001": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyNone, nil},
 		"POL-002": {Allow, Rule, ClassR, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_evicted", StartOver),
