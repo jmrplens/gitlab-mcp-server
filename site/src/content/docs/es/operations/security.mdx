@@ -256,6 +256,40 @@ Si un proxy inverso delante ya anuncia CORS en nombre del servidor —la forma c
 
 Permitir el origen es solo la mitad de lo que necesita un navegador. Antes de enviar un `POST` cross-origin con `Authorization`, envía un preflight `OPTIONS` sin credenciales — que el modo OAuth rechazaba con `401`, así que la petición real nunca llegaba a salir. Un preflight desde un origen de confianza se responde ahora con `204` y las cabeceras CORS, y la respuesta expone `Mcp-Session-Id` y `Mcp-Protocol-Version` para que un navegador pueda leerlas. El origen se devuelve tal cual en lugar de responder `*`, porque un navegador rechaza el comodín en una petición con credenciales.
 
+## Dos cláusulas de MCP que el servidor cumple en parte
+
+La especificación de MCP (revisión 2026-07-28) tiene un único límite obligatorio y una nota sobre `clientInfo` que este servidor cumple solo en parte. Dónde se sitúa en cada una se decidió en el [issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959).
+
+### Limitar la frecuencia de invocación de herramientas
+
+Los servidores "MUST [...] Rate limit tool invocations" ([server/tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools), consideraciones de seguridad). La cláusula no fija unidad, valor ni forma de rechazo, así que esta es la posición:
+
+| Transporte | Por defecto                                     | Unidad                                                                | Por qué                                                                                                                                                               |
+| ---------- | ----------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP       | Activo: 10 peticiones por segundo, 40 de margen | Un token bucket por entrada del pool, un par de token y URL de GitLab | El despliegue es compartido, así que el volumen de un cliente en bucle recae sobre la instancia y sobre todos los demás clientes                                      |
+| stdio      | Desactivado (`GITLAB_MCP_RATE_LIMIT_RPS=0`)     | Un token bucket para el proceso, que es una persona y un token        | No hay otro inquilino al que proteger, un limitador solo añade latencia, y los límites por usuario de GitLab siguen aplicándose a cada llamada que el proceso reenvía |
+
+El bucket cuenta peticiones y lo consumen `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` y `prompts/get`. Una llamada a herramienta rechazada vuelve como un resultado de herramienta marcado con `isError` que empieza por `rate limit exceeded for <herramienta>`; los demás métodos se rechazan dentro del protocolo con el código JSON-RPC `-42900`.
+
+Para limitar también la invocación de herramientas en stdio, fija la variable en el bloque `env` del cliente. `--rate-limit-rps` es un flag del modo HTTP y nada más, así que en stdio las variables son el único interruptor:
+
+```json
+"env": {
+  "GITLAB_URL": "https://gitlab.example.com",
+  "GITLAB_TOKEN": "glpat-...",
+  "GITLAB_MCP_RATE_LIMIT_RPS": "5",
+  "GITLAB_MCP_RATE_LIMIT_BURST": "20"
+}
+```
+
+### Comportamiento elegido a partir de `clientInfo`
+
+La especificación dice que el `clientInfo` que envía un cliente lo declara el propio cliente, y que las implementaciones "SHOULD NOT use them to change the behavior of the client or server, and SHOULD NOT rely on them for security decisions" ([basic](https://modelcontextprotocol.io/specification/2026-07-28/basic)). El servidor cumple la segunda mitad. Se aparta de la primera a propósito y en un único sitio: el [perfil de Codex](/gitlab-mcp-server/es/compatibility/), que escribe las prioridades de las anotaciones como 0 o 1 para una sesión cuyo `clientInfo` nombra Codex, porque las builds de Codex incluidas en ChatGPT.app fallan con cualquier resultado que lleve una prioridad fraccionaria.
+
+- Cambia cómo se escribe un número y nada de lo que lee un modelo, y nunca decide quién es un cliente ni qué puede hacer: la identidad sale de la credencial de cada petición.
+- `GITLAB_MCP_CLIENT_COMPAT=off` lo desactiva, y entonces todos los clientes reciben la misma respuesta.
+- Se retira cuando esté ampliamente desplegada una versión de Codex construida sobre una release de `rmcp` que lleve el arreglo, no solo cuando se publique; el [registro de fallos upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call) sigue cada paso.
+
 ## Verificación de la integridad del release
 
 Cada GitHub Release incluye tres artefactos de integridad:

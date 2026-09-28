@@ -401,6 +401,10 @@ El resto de métodos regulados devuelven un error JSON-RPC con código `-42900` 
 
 El limitador nunca devuelve HTTP 429, en ninguna de las dos formas, porque el límite se aplica **después** del enrutado JSON-RPC, dentro de la capa MCP.
 
+### La cláusula de MCP a la que responde
+
+El único límite obligatorio de la especificación MCP es "Rate limit tool invocations" ([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)), sin unidad, valor ni forma de rechazo. El modo HTTP lo cumple de serie con el bucket descrito arriba: contado en peticiones, uno por entrada del pool, 10 por segundo con 40 de margen. stdio deja ese mismo limitador desactivado por defecto, porque un proceso que sirve a una sola persona no tiene otro inquilino al que proteger, y se activa con `GITLAB_MCP_RATE_LIMIT_RPS`, ya que el flag es solo del modo HTTP. [Seguridad](/gitlab-mcp-server/es/operations/security/#dos-cláusulas-de-mcp-que-el-servidor-cumple-en-parte) recoge las dos mitades de esa posición ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)).
+
 ### Guía de dimensionado
 
 - **Despliegue de un solo usuario** (dev local típico): `--rate-limit-rps=0` es una desactivación razonable; stdio ya viene así por defecto

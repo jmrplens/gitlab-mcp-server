@@ -4175,7 +4175,11 @@ three paths that was not kept.
   spec-legal and parseable by both. `GITLAB_MCP_CLIENT_COMPAT=off` disables it. Retire it
   only once a Codex built on an rmcp carrying the fix is widely deployed, not
   merely released: the affected build ships inside ChatGPT.app, so users do not
-  choose their version.
+  choose their version. Choosing a response from `clientInfo` departs from MCP
+  2026-07-28, which says it SHOULD NOT change behavior; that departure is kept
+  on purpose and stated in the security concepts and client compatibility
+  pages ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959),
+  register row `IDN-013`).
 
 **What**: the Codex builds bundled with ChatGPT.app reject any MCP result whose
 `annotations.priority` is a non-integer float. `0.6` fails; `1` or an

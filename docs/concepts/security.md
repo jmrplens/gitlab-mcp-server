@@ -534,6 +534,46 @@ volume lands on every other tenant. **Stdio leaves it off** (`GITLAB_MCP_RATE_LI
 a single-user local process has no co-tenant to protect, and a limiter there only
 costs latency. Setting `0` explicitly is the opt-out in either mode.
 
+### Where the server stands on the MCP clause
+
+The MCP specification's one mandatory limit is a line of the tool page's security
+considerations: servers "MUST [...] Rate limit tool invocations"
+([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)).
+It names no unit, no value and no refusal shape, so this is what the server claims, as
+[issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) decided it:
+
+- **Unit.** A token bucket counted in requests and refilled each second, drawn on by
+  `tools/call` and by the four other methods that reach GitLab with the caller's
+  credential. Its key is the credential's pool entry (one token and GitLab URL pair) in
+  HTTP mode, and the process on stdio, where the process, the credential and the user
+  are one.
+- **HTTP mode: met by default.** On at 10 a second with 40 in hand, because the
+  deployment is shared and one looping client's volume lands on the instance and on
+  every other caller behind the deployment's address.
+- **stdio: off by default, and switchable.** A stdio process serves one person with
+  their own token on their own machine, so there is no co-tenant to protect and a
+  limiter only adds latency, while GitLab's own per-user limits still apply to every
+  call it forwards. Turning a limiter on for every local user would be a change of
+  behavior with nothing to show for it.
+- **How to switch it on for stdio.** Set `GITLAB_MCP_RATE_LIMIT_RPS` above zero in the
+  client's `env` block, and `GITLAB_MCP_RATE_LIMIT_BURST` if 40 in hand is not what you
+  want. `--rate-limit-rps` and `--rate-limit-burst` are flags of HTTP mode only, so on
+  stdio the variables are the whole switch. The bucket then belongs to the process and
+  refuses in the shapes described under [Behavior on excess](#behavior-on-excess).
+
+```json
+"env": {
+  "GITLAB_URL": "https://gitlab.example.com",
+  "GITLAB_TOKEN": "glpat-...",
+  "GITLAB_MCP_RATE_LIMIT_RPS": "5"
+}
+```
+
+`test/e2e/stdio/rate_limit_test.go` holds both halves against the binary: with the
+variable set a tool call beyond the bucket is refused and a resource read on the same
+bucket is refused in-band, and with it unset fifty calls are served and no limiter is
+attached.
+
 ### Configuration
 
 | Setting         | Env var                       | Flag (HTTP mode)     | Default (stdio) | Default (HTTP) |
@@ -632,6 +672,36 @@ The local limiter complements but does not replace:
 Disable it by setting the value to `0` explicitly — `GITLAB_MCP_RATE_LIMIT_RPS=0` in stdio,
 `--rate-limit-rps=0` in HTTP mode. Omitting the flag no longer disables it in
 HTTP mode, where `10` is the default. No state is persisted between restarts.
+
+## Behavior chosen from `clientInfo` (documented deviation)
+
+MCP 2026-07-28 says of the `clientInfo` a client reports that implementations "SHOULD
+NOT use them to change the behavior of the client or server, and SHOULD NOT rely on
+them for security decisions"
+([basic](https://modelcontextprotocol.io/specification/2026-07-28/basic)). The server
+meets the second half and departs from the first on purpose, in one place, as
+[issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) decided:
+
+- **What it does.** A session whose `clientInfo` name or title contains `codex` gets
+  the `priority` of its content and resource annotations written as 0 or 1 instead of
+  the fraction the server set. It applies in both protocol eras, since at 2026-07-28 the
+  SDK reads the client's identity from the first request's `_meta`.
+- **Why it stays.** The Codex builds bundled with ChatGPT.app fail every result that
+  carries a fractional priority, which made every tool call fail. The defect is
+  recorded, with its upstream fix, as
+  [row 17 of the upstream register](../development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call).
+- **What it never does.** It changes how one number is written and nothing a model
+  reads. It never decides who a caller is or what it may do: identity comes from the
+  credential on each request and from nothing a client reports about itself (INV-001 of
+  the [tenant policy specification](../development/tenant-policy-spec.md#invariants-any-limit-must-satisfy)).
+- **How to turn it off.** `GITLAB_MCP_CLIENT_COMPAT=off`, or `--client-compat=off`; every
+  client then receives the same response.
+- **When it goes.** Once a Codex built on an rmcp release carrying the fix is widely
+  deployed, not merely released: the affected build ships inside ChatGPT.app, so users
+  do not choose their version.
+
+The detail, and what the profile preserves, is in
+[Client Compatibility](../guides/client-compatibility.md#the-codex-profile).
 
 ---
 
