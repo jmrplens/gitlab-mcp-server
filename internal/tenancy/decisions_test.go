@@ -169,6 +169,39 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 	}
 }
 
+// TestDecisions_TwoMCPClauses_AreDecidedByIssue959 pins what issue 959
+// decided about the two clauses of MCP the server meets in part: the tool-call
+// bucket stays off by default on stdio, and the response profile chosen from
+// clientInfo stays as a deliberate deviation. Both are recorded as decisions
+// on the rows they concern, which therefore no longer carry F-19 and F-33;
+// the findings themselves stay in the register's list, filed as issue 959's,
+// because a decision answers a finding rather than removing it from the
+// specification. The two defaults the stdio position rests on are pinned with
+// every other value, in TestValues_HoldTheirPins.
+func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
+	for _, tc := range []struct {
+		id      string
+		finding string
+	}{
+		{"RTC-001", "F-19"},
+		{"IDN-013", "F-33"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, ok := Lookup(tc.id)
+			if !ok {
+				t.Fatalf("%s names no row", tc.id)
+			}
+			if !slices.Contains(d.Decided, "issue 959") || d.Carries(tc.finding) {
+				t.Errorf("%s: decided %v, carries %s %v; want issue 959's decision recorded and %s no longer carried",
+					tc.id, d.Decided, tc.finding, d.Carries(tc.finding), tc.finding)
+			}
+			if FindingIssue(tc.finding) != 959 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 959's", tc.finding, FindingIssue(tc.finding))
+			}
+		})
+	}
+}
+
 // TestLookup_FindsARowAndRefusesAnUnknownID reads one row back and asks for one
 // that does not exist.
 func TestLookup_FindsARowAndRefusesAnUnknownID(t *testing.T) {

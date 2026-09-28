@@ -177,7 +177,15 @@ func authorizeDecisions() []Decision {
 			Key:      KeySession, StdioKey: KeyProcess,
 			Source: Configurable, Flags: []string{"--client-compat"}, Envs: []string{"GITLAB_MCP_CLIENT_COMPAT"},
 			Malformed: AcceptsAny,
-			Findings:  []string{"F-33"},
+			// Choosing a response from the self-reported clientInfo goes
+			// against MCP 2026-07-28, which says implementations SHOULD NOT
+			// use it "to change the behavior of the client or server" (F-33).
+			// Issue 959 keeps it as a deliberate deviation: it changes only
+			// how a priority is written, never who a caller is or what it may
+			// do (INV-001), GITLAB_MCP_CLIENT_COMPAT=off removes it, and it
+			// retires with the Codex defect it works around (row 17 of
+			// docs/development/upstream-bugs.md).
+			Decided: []string{"issue 959"},
 			Sites: []Site{
 				enforce(pkgClientCompat, "profileFromClientInfo"),
 				enforce(pkgClientCompat, "profileForRequest"),
