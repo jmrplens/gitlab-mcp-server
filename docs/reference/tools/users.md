@@ -500,7 +500,7 @@ List all namespaces visible to the authenticated user. Supports filtering by sea
 
 ### `gitlab_namespace_get`
 
-Get details of a single namespace by ID or path.
+Get details of a single namespace by ID or path. An empty or blank `id` is refused before anything is sent, since GitLab reads the path it would build as the namespace listing.
 
 | Annotation | **Read** |
 | ---------- | -------- |

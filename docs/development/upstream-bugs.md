@@ -77,7 +77,7 @@ readable without opening the tracker:
 | 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
 | 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, v3.0.0** | No | Retired |
-| 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No, not reproduced | No | No | No | Yes |
+| 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No, not reproduced | No | No | No | Retired |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | Yes, theirs, [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), merged; ours, [modelcontextprotocol/go-sdk#1293](https://github.com/modelcontextprotocol/go-sdk/pull/1293), open | Partly, by [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232), not ours, unreleased | No | Yes |
@@ -732,30 +732,37 @@ successful response. The project-level equivalent already returned
 
 ### GetNamespace cannot decode a path-based lookup
 
-- **Reported**: no, and it will not be as it stands: the check this entry asked
-  for was made on 2026-09-27 and found nothing to report (below).
+- **Reported**: no, and it will not be: the check this entry asked for was made
+  on 2026-09-27 and found nothing to report (below).
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
   leaves it out and says why.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes, and no current GitLab reaches it.
-  `internal/tools/namespaces.Get` calls `GetNamespace` and, only when that
-  fails with `cannot unmarshal array`, asks again through `getFromArray` and
-  answers with the first element of the array. Read from the routes rather
-  than measured: against GitLab 19.4 and 19.5 one request alone can reach that
-  branch, an empty `id`, which the schema's `required` does not refuse and
-  which turns the path into `namespaces/`, the listing route, so the element it
-  would answer with is the first namespace of the caller's list rather than
-  one anybody asked for. It is therefore no longer needed, and removing it,
-  with an empty `id` refused before the call, is a change to that package
-  rather than to this register.
+- **Workaround**: retired, by
+  [issue 1021](https://github.com/jmrplens/gitlab-mcp-server/issues/1021).
+  `internal/tools/namespaces.Get` used to call `GetNamespace` and, only when
+  that failed with `cannot unmarshal array`, ask again through `getFromArray`
+  and answer with the first element of the array. No current GitLab reached
+  it for the reason it was written for. Read from the routes rather than
+  measured, one request alone could reach it against GitLab 19.4 and 19.5: an
+  empty `id`, which the schema's `required` does not refuse and which turns
+  the path into `namespaces/`, the listing route, so the element it answered
+  with was the first namespace of the caller's list rather than one anybody
+  asked for. `Get` now refuses an empty or blank `id` with the
+  required-parameter error before any request, and an answer that does not
+  decode as one namespace is reported as the error it is; the fallback, the
+  second request and the seam that built it are gone.
 
-**What**: `GetNamespace` expects a single JSON object, but some GitLab versions
-answer a path-based lookup with an array.
+**What**: recorded as `GetNamespace` expecting a single JSON object while
+some GitLab versions answered a path-based lookup with an array. That was
+never a defect of the SDK: no version has been found that answers a path
+lookup with an array, and the one array the handler ever met came from the
+listing route an empty `id` reaches.
 
-**Before reporting**: establish which GitLab versions return the array, so the
-report names a reproduction rather than a symptom.
+**Before reporting** asked which GitLab versions return the array, so that a
+report would name a reproduction rather than a symptom. The check was made on
+2026-09-27 and named none.
 
 **Not reproduced.** `lib/api/namespaces.rb` mounts `get ':id'` with
 `NAMESPACE_OR_PROJECT_REQUIREMENTS`, so a full path reaches it as well as a

@@ -21,7 +21,10 @@ const userNamespaceKind = "user"
 // namespaces on every surface, and finds the run user's personal namespace
 // through each: the listing narrowed to its name holds it, the search finds
 // it, the existence check reports its path taken, and the read by path
-// answers with a user namespace of that path.
+// answers with a user namespace of that path. A read with an empty id is
+// refused rather than answered: GitLab reads the path it would build as the
+// namespace listing, and the read used to answer with the first namespace of
+// that list as though it had been asked for.
 //
 // Replaces: TestMeta_UserNamespacesNotifications
 func TestNamespaces_Reads_FindTheRunUsersOwn(t *testing.T) {
@@ -50,6 +53,8 @@ func TestNamespaces_Reads_FindTheRunUsersOwn(t *testing.T) {
 		if got.ID == 0 || got.Path != rt.Username || got.Kind != userNamespaceKind {
 			e.T.Errorf("namespace_get(%q) answered id %d path %q kind %q, want the user namespace of that path", rt.Username, got.ID, got.Path, got.Kind)
 		}
+
+		harness.ExpectToolError(s, actionUserNamespaceGet, map[string]any{"id": ""}, "id is required")
 	})
 }
 

@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -694,27 +694,65 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestGet_ArrayFallback verifies that Get handles the GitLab array response
-// fallback when the standard endpoint returns "cannot unmarshal array".
-func TestGet_ArrayFallback(t *testing.T) {
-	calls := 0
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if calls == 1 {
-			// First call: return array (triggers unmarshal error in client-go).
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"root","path":"root","kind":"user","full_path":"root","web_url":"https://example.com/root"}]`)
-			return
-		}
-		// Second call via raw Do(): return the same array.
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"root","path":"root","kind":"user","full_path":"root","web_url":"https://example.com/root"}]`)
+// TestGet_BlankID_IsRefusedBeforeAnyRequest verifies Get refuses an id that
+// is empty or only whitespace with the required-parameter error, and sends
+// GitLab nothing. The schema's required does not refuse an empty string, and
+// an empty id turns the request path into namespaces/, which GitLab answers
+// with the caller's list of namespaces: the lookup this refusal replaced read
+// that list and answered with its first element as though it had been asked
+// for.
+func TestGet_BlankID_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		id   string
+	}{
+		{name: "empty", id: ""},
+		{name: "spaces", id: "   "},
+		{name: "tab and newline", id: "\t\n"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
+			}))
+
+			out, err := Get(t.Context(), client, GetInput{ID: testCase.id})
+			if err == nil || err.Error() != "id is required" {
+				t.Fatalf("Get(%q) error = %v, want %q", testCase.id, err, "id is required")
+			}
+			if !reflect.DeepEqual(out, Output{}) {
+				t.Errorf("Get(%q) answered %+v, want no namespace", testCase.id, out)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("Get(%q) sent %d requests, want none", testCase.id, got)
+			}
+		})
+	}
+}
+
+// TestGet_ArrayAnswer_IsAnErrorNotItsFirstElement verifies that an answer
+// holding a list of namespaces is reported rather than read. GitLab answers
+// GET /namespaces/:id with one Namespace entity for a numeric id and a full
+// path alike, so a list reaching this handler is not the namespace asked for,
+// and the one request it takes is the only one sent: nothing asks again to
+// read the list and pick an element out of it.
+func TestGet_ArrayAnswer_IsAnErrorNotItsFirstElement(t *testing.T) {
+	var requests atomic.Int32
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
 	}))
 
-	out, err := Get(context.Background(), client, GetInput{ID: "root"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	out, err := Get(t.Context(), client, GetInput{ID: "acme"})
+	if err == nil || !strings.Contains(err.Error(), "namespace_get") {
+		t.Fatalf("Get() error = %v, want the undecodable answer reported under namespace_get", err)
 	}
-	if out.Name != "root" {
-		t.Errorf("Name = %q, want %q", out.Name, "root")
+	if !reflect.DeepEqual(out, Output{}) {
+		t.Errorf("Get() answered %+v, want no namespace", out)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Errorf("requests = %d, want the one lookup", got)
 	}
 }
 
@@ -726,66 +764,6 @@ func TestGet_APIError(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{ID: "nonexistent"})
 	if err == nil {
 		t.Fatal("expected error for 404")
-	}
-}
-
-// TestGet_ArrayFallback_EmptyArray verifies that Get returns an error when
-// the array fallback returns an empty list.
-func TestGet_ArrayFallback_EmptyArray(t *testing.T) {
-	calls := 0
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
-		if calls == 1 {
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1},{"id":2}]`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
-	_, err := Get(context.Background(), client, GetInput{ID: "missing"})
-	if err == nil {
-		t.Fatal("expected error for empty fallback array")
-	}
-}
-
-// TestGet_ArrayFallback_DoError verifies raw fallback request errors are wrapped.
-func TestGet_ArrayFallback_DoError(t *testing.T) {
-	calls := 0
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
-		if calls == 1 {
-			testutil.RespondJSON(w, http.StatusOK, `[{}]`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
-	}))
-	_, err := Get(context.Background(), client, GetInput{ID: "missing"})
-	if err == nil {
-		t.Fatal("expected error for fallback request")
-	}
-	if !strings.Contains(err.Error(), "namespace_get") {
-		t.Fatalf("error = %v, want namespace_get context", err)
-	}
-}
-
-// TestGet_ArrayFallback_RequestError verifies the fallback lookup reports a
-// request it could not build rather than sending nothing and answering
-// empty. client-go's NewRequest has no input it refuses for the fixed GET and
-// an escaped path, so the refusal is planted through the seam, and the first
-// answer is an array so Get reaches the fallback at all.
-func TestGet_ArrayFallback_RequestError(t *testing.T) {
-	original := newRequest
-	t.Cleanup(func() { newRequest = original })
-	refused := errors.New("request refused")
-	newRequest = func(*gl.Client, string, string, any, []gl.RequestOptionFunc) (*retryablehttp.Request, error) {
-		return nil, refused
-	}
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1}]`)
-	}))
-
-	_, err := Get(context.Background(), client, GetInput{ID: "group1"})
-	if !errors.Is(err, refused) || !strings.Contains(err.Error(), "namespace_get") {
-		t.Fatalf("Get() error = %v, want the refused request under namespace_get", err)
 	}
 }
 
@@ -896,9 +874,7 @@ func namespaceClient(t *testing.T, body string) *gitlabclient.Client {
 	}))
 }
 
-// namespaceCalls are the handlers that answer with a namespace, including the
-// get handler's fallback for an instance that answers a path lookup with an
-// array rather than an object.
+// namespaceCalls are the handlers that answer with a namespace.
 var namespaceCalls = []struct {
 	name string
 	list bool
@@ -927,16 +903,12 @@ var namespaceCalls = []struct {
 	{name: "get", call: func(client *gitlabclient.Client) (Output, error) {
 		return Get(context.Background(), client, GetInput{ID: "group1"})
 	}},
-	{name: "get through the array fallback", list: true, call: func(client *gitlabclient.Client) (Output, error) {
-		return Get(context.Background(), client, GetInput{ID: "group1"})
-	}},
 }
 
 // errNoNamespace reports a list handler that answered with no namespace.
 var errNoNamespace = errors.New("the handler published no namespace")
 
-// namespaceBodyFor wraps the object body in an array for a list endpoint, and
-// for the get handler's array fallback.
+// namespaceBodyFor wraps the object body in an array for a list endpoint.
 func namespaceBodyFor(list bool, body string) string {
 	if list {
 		return "[" + body + "]"
@@ -1211,34 +1183,28 @@ func TestSearch_SendsTheQueryAsTheSearchParameter(t *testing.T) {
 	}
 }
 
-// TestGet_ArrayFallback_EscapesTheIdIntoThePath verifies the array fallback
-// escapes the identifier before it becomes a request path, so an id carrying a
-// percent sign reaches GitLab as one segment rather than failing to build.
-//
-// That escaping is also why the fallback's request-construction error is
-// unreachable: url.PathUnescape is the only way NewRequest fails for a GET,
-// and gl.PathEscape leaves no escape sequence for it to reject. Drop the
-// escaping and this test reports the error the guard would return.
-func TestGet_ArrayFallback_EscapesTheIdIntoThePath(t *testing.T) {
-	const hostileID = "acme/%zz sub"
+// TestGet_FullPath_ReachesGitLabAsOneSegment verifies a full path is looked up
+// through the one route GitLab answers a numeric id and a path alike on,
+// GET /namespaces/:id, with the path escaped into a single segment: the slash
+// between the group and its subgroup, a percent sign and a space all arrive
+// encoded, and the object GitLab answers with is the namespace published.
+func TestGet_FullPath_ReachesGitLabAsOneSegment(t *testing.T) {
+	const fullPath = "acme/%zz sub"
 	var paths []string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.EscapedPath())
-		testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
+		testutil.RespondJSON(w, http.StatusOK, namespaceDistinctJSON)
 	}))
 
-	out, err := Get(t.Context(), client, GetInput{ID: hostileID})
+	out, err := Get(t.Context(), client, GetInput{ID: fullPath})
 	if err != nil {
-		t.Fatalf("Get(%q) through the array fallback: %v", hostileID, err)
+		t.Fatalf("Get(%q): %v", fullPath, err)
 	}
-	if out.ID != 77 {
-		t.Errorf("ID = %d, want the namespace the fallback read", out.ID)
+	if out.ID != 77 || out.FullPath != "acme/platform" {
+		t.Errorf("Get(%q) = id %d full_path %q, want the namespace GitLab answered with", fullPath, out.ID, out.FullPath)
 	}
-	if len(paths) != 2 {
-		t.Fatalf("requests = %v, want the get and its array fallback", paths)
-	}
-	const wantPath = "/api/v4/namespaces/acme%2F%25zz%20sub"
-	if paths[1] != wantPath {
-		t.Errorf("fallback path = %q, want %q", paths[1], wantPath)
+	wantPaths := []string{"/api/v4/namespaces/acme%2F%25zz%20sub"}
+	if !reflect.DeepEqual(paths, wantPaths) {
+		t.Errorf("requests = %v, want %v", paths, wantPaths)
 	}
 }
