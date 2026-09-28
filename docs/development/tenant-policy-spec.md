@@ -139,9 +139,12 @@ The class is computed rather than asserted: `Decision.Disagrees()` compares the 
 what a row's reason cites with the unit of its key, only for allowances (a ceiling, a
 rate, a budget or a share) on a requester key, and a reason about the process is met by a
 process partner beside it. `Validate` holds the declared class to that answer. The class
-D decisions are `RTC-001` on HTTP, `RTC-003`, `RTC-005` and `HLD-003`: each is keyed
-finer than the tenant, so a tenant with several credentials holds several units of it,
-and moving any of them to the tenant would still leave it dividable by bots.
+D decisions are `RTC-001` on HTTP, `RTC-005` and `HLD-003`: each is keyed finer than the
+tenant, so a tenant with several credentials holds several units of it, and moving any
+of them to the tenant would still leave it dividable by bots. `RTC-003`, the listing
+bucket, was the fourth until `RTC-007` gave it a process partner (issue 951): its reason
+is still the processor, and a partner keyed on the process is what meets it, so it is
+class R, as `HLD-001` is.
 
 A row carries two units for its reason: the unit the quoted reason names in its own
 words, and the unit of what it cites. They differ for `RTC-001` alone, whose comment
@@ -164,7 +167,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   valued row that does not say what zero means (`INV-015`); and a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
   policy (`INV-017`).
-- **With a recorded decision**: a holding taken across keys (`INV-005`).
+- **With a recorded decision**: a holding taken across keys (`INV-005`); and a process
+  partner switched off with the per-key limit it stands beside (`INV-015`), which is the
+  one zero another row decides that passes without a finding (`RTC-007`, issue 951). The
+  decision is the one the row's `OffWithBy` names, among those it records: a row whose
+  decisions are about something else does not pass that way.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
   (`INV-010`); a code in the legacy `-32000` range (`INV-011`); a second in-band code for
@@ -186,8 +193,9 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-004 A process partner for every per-key ceiling on a process resource.** A
   per-key ceiling that protects a process-wide resource has a process-wide ceiling beside
   it, and that partner is not configurable, because an operator who can raise the shared
-  number can undo the bound (`HLD-001` with `HLD-002`, `HLD-003` with `HLD-004`). The pool
-  size (`POL-001`) is not such a partner: it bounds memory the operator provisions.
+  number can undo the bound (`HLD-001` with `HLD-002`, `HLD-003` with `HLD-004`, `RTC-003`
+  with `RTC-007`). The pool size (`POL-001`) is not such a partner: it bounds memory the
+  operator provisions.
 - **INV-005 Across keys, refuse; never take.** A holding that belongs to one key is not
   evicted to admit another key. The pool entry is the one thing taken across keys, the
   quiet one first, never growing past the bound, and the newcomer is never refused
@@ -219,7 +227,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-014 Only the pool decides who chose the destination** (ADR-0022).
 - **INV-015 Zero means off.** A limit of zero means no limit and never refuses
   everything; switching a ceiling off keeps any count another decision depends on; and
-  switching one limit off does not switch off another.
+  switching one limit off does not switch off another, unless a recorded decision makes
+  a process partner follow the per-key limit it stands beside: the listing bucket's
+  partner (`RTC-007`) is off wherever `RTC-003` is, which is when `--rate-limit-rps` is
+  `0`, so a deployment that turned rate limiting off has turned all of it off (issue 951).
+  The listen and watcher partners keep counting when their per-key ceilings are off.
 - **INV-016 Every limit states its key, mint cost and reason, and the units agree.** The
   reason's unit matches the key, or the mismatch is recorded as a finding before the limit
   merges, and the reason states its own unit correctly.
@@ -229,8 +241,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
-  or the existence of its traffic; the one-bit disclosure of `credential_evicted` is the
-  accepted exception (ADR-0020).
+  or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
+  `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
+  (`HLD-002`, `HLD-004`, `RTC-007`), which tells a caller that has not reached its own
+  bound that the process has reached its one, and so that others are holding or spending
+  it (issue 951, ADR-0023 NEG-007). Neither carries a count of what others hold or an
+  identity, and neither says more than a caller could infer from its own count: the
+  stream ceilings name the scope that refused, which a caller counting its own streams
+  knows already, and `RTC-007` answers in `RTC-003`'s words, so only the log line says
+  which bucket refused.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -436,3 +455,9 @@ since a source the full failure table never tracks is never blocked (`AUB-002`),
 departure from `INV-010`. The map was first recorded under F-29, whose issue (950) is
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
+
+One finding is answered, and stays in the list with its issue. F-03, the listing bucket
+with no process partner, is answered by `RTC-007`, the first of issue 951's three
+changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
+carries, which `RTC-003` names as its partner and which no row carries F-03 for any
+longer. Issue 951 stays open for F-31.

@@ -29,6 +29,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -200,7 +201,8 @@ func estimateRSS(steps []SeriesStep, next int) (estimate float64, ok bool) {
 
 // admit connects credentials have through want-1, each warmed with one cold
 // tools/list so the pool holds a built entry for it before the step is
-// measured, at most warmParallel at a time.
+// measured, at most warmParallel at a time; a listing a rate bound refuses is
+// asked for again (see [coldList]).
 //
 // Every connection made is returned, whether or not its warm-up succeeded,
 // so the caller can close them all; the first failure is returned beside
@@ -222,7 +224,7 @@ func (r *runner) admit(ctx context.Context, tgt target, have, want int) ([]*clie
 			conn, _, err := tgt.addClient(ctx, index)
 			if err == nil {
 				listCtx, cancel := context.WithTimeout(ctx, callTimeout)
-				_, err = conn.rpc.call(listCtx, methodToolsList, nil)
+				err = coldList(listCtx, conn.rpc)
 				cancel()
 				if err != nil {
 					err = fmt.Errorf("cold tools/list for %s: %w", conn.label, err)
@@ -245,6 +247,36 @@ func (r *runner) admit(ctx context.Context, tgt target, have, want int) ([]*clie
 	}
 	r.progress("    %d credentials admitted", want)
 	return conns, firstErr
+}
+
+// coldListBackoff is how long admission waits before asking again for a
+// listing a rate bound refused.
+const coldListBackoff = 500 * time.Millisecond
+
+// coldList asks for the listing that warms a credential's pool entry, and asks
+// again for as long as a rate bound refuses it.
+//
+// The listing bucket the whole process shares (register row RTC-007) holds
+// one burst for every credential together, some fifty-five listings on the
+// individual surface, so a hundred credentials admitted at once meet its
+// refusal past that, and the refusal says to retry after a short backoff.
+// That is the bound working rather than a credential that cannot be admitted,
+// and a client retries it, so admission does too: failing on it would leave
+// the fairness scenario unable to put more credentials against the bound than
+// it lets list at once. Any other answer stands, and ctx bounds the asking.
+func coldList(ctx context.Context, rpc rpcClient) error {
+	for {
+		_, err := rpc.call(ctx, methodToolsList, nil)
+		var refused rpcError
+		if !errors.As(err, &refused) || refused.Code != rateLimitCode {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(coldListBackoff):
+		}
+	}
 }
 
 // stepInput is what one step measures with.

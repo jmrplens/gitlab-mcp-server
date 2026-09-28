@@ -7,11 +7,13 @@ package tenancy
 // the telemetry identity policy and the lifetime of multi-round-trip request
 // state.
 //
-// Four of them are class D: keyed on the entry while their own reason is about
-// a GitLab user or the process, so one tenant holding N credentials holds N
-// units (RTC-001, RTC-003, RTC-005, HLD-003). Each carries the finding that
-// records it; moving any of them to the tenant would be a change of policy,
-// and would still leave it dividable by bots (spec: Two axes).
+// Three of them are class D: keyed on the entry while their own reason is
+// about a GitLab user, so one tenant holding N credentials holds N units
+// (RTC-001, RTC-005, HLD-003). Each carries the finding that records it;
+// moving any of them to the tenant would be a change of policy, and would
+// still leave it dividable by bots (spec: Two axes). RTC-003 was the fourth,
+// its reason about the process, until RTC-007 gave it a process partner
+// (issue 951).
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func allowDecisions() []Decision {
@@ -70,7 +72,7 @@ func allowDecisions() []Decision {
 				arg(pkgConfig, "loadOverlayAuthAndRate", "parseFloatNonNegative", 1, 1, "ToolCallRateEnvDefault"),
 				alias(pkgToolutil, "rateLimitedErrorCode", "CodeTooManyRequests"),
 				enforce(pkgToolutil, "NewRateLimiter"),
-				enforce(pkgToolutil, "AttachRateLimitFunc"),
+				enforce(pkgToolutil, "attachRateLimitFunc"),
 				enforce(pkgToolutil, "ValidateRateLimit"),
 				enforce(pkgConfig, "Config.validateDurationsAndRates"),
 				enforce(pkgServer, "serverShell.newCredentialState"),
@@ -91,7 +93,7 @@ func allowDecisions() []Decision {
 			Refusals: []Refusal{
 				{
 					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
-					At: refuse(pkgToolutil, "AttachRateLimitFunc"),
+					At: refuse(pkgToolutil, "attachRateLimitFunc"),
 				},
 			},
 			// The middleware enforces it as well as writing its refusal: it is
@@ -99,22 +101,23 @@ func allowDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgToolutil, "completionBurstFactor", "CompletionFactor"),
 				enforce(pkgToolutil, "RateLimiter.scaled"),
-				enforce(pkgToolutil, "AttachRateLimitFunc"),
-				refuse(pkgToolutil, "AttachRateLimitFunc"),
+				enforce(pkgToolutil, "attachRateLimitFunc"),
+				refuse(pkgToolutil, "attachRateLimitFunc"),
 			},
 		},
 		{
-			ID: "RTC-003", Question: Allow, Kind: Rate, Class: ClassD, Disposition: Valued,
+			ID: "RTC-003", Question: Allow, Kind: Rate, Class: ClassR, Disposition: Valued,
 			Resource: "tools/list",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			// The reason is the processor every tenant shares, and there is no
-			// process partner beside the per-entry bucket (F-03, issue 951).
-			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			// The reason is the processor every tenant shares, which RTC-007
+			// bounds on the process beside this bucket (F-03, answered by
+			// issue 951): what is left keyed on the entry is a ceiling on what
+			// one credential lists, so the row is class R, as HLD-001 is.
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true, Partner: "RTC-007",
 			Reason:   "spends instead the processor every tenant of this process is waiting for",
 			ReasonAt: reasonAt(pkgToolutil, "methodToolsList"),
 			Values:   []string{"CatalogDivisor"}, Source: Derived, Zero: ZeroNotApplicable,
 			Functions: []string{"MeterFor"},
-			Findings:  []string{"F-03"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/list"}, Channel: RPC, Code: CodeTooManyRequests,
@@ -122,11 +125,14 @@ func allowDecisions() []Decision {
 				},
 			},
 			// The middleware is where MeterFor sends tools/list to this bucket,
-			// and where the server's own listings are exempted from it.
+			// and where the server's own listings are exempted from it; the
+			// listing's own charge is where the bucket is spent, after the
+			// process's.
 			Sites: []Site{
 				alias(pkgToolutil, "catalogDivisor", "CatalogDivisor"),
 				enforce(pkgToolutil, "RateLimiter.slowed"),
-				enforce(pkgToolutil, "AttachRateLimitFunc"),
+				enforce(pkgToolutil, "attachRateLimitFunc"),
+				enforce(pkgToolutil, "catalogListing.serve"),
 				rateLimitedError,
 			},
 		},
@@ -138,7 +144,7 @@ func allowDecisions() []Decision {
 			Resource: "initialize, resources/list, prompts/list and every other unmetered method",
 			Key:      KeyRequest, StdioKey: KeyRequest,
 			Functions: []string{"MeterFor"},
-			Sites:     []Site{enforce(pkgToolutil, "AttachRateLimitFunc")},
+			Sites:     []Site{enforce(pkgToolutil, "attachRateLimitFunc")},
 		},
 		{
 			ID: "RTC-005", Question: Allow, Kind: Rate, Class: ClassD, Disposition: Valued,
@@ -189,6 +195,64 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// RTC-003's process partner (F-03, issue 951): a tools/list bucket
+			// keyed on the process, counted in the tools a listing carries, so
+			// the processor listings spend is bounded however many credentials
+			// list. It is charged first, and hands its tools back when the
+			// entry's own bucket refuses the listing, so either refusal costs
+			// the other nothing (PAT-003).
+			//
+			// It follows the row it partners: consulted only where an entry's
+			// listing bucket charges a request, and RTC-003's bucket is derived
+			// from RTC-001's, so it is off when RTC-001's rate is zero. That is
+			// switching one limit off with another (INV-015), and issue 951
+			// decided it for a process partner, which is why the row records a
+			// decision where a departure would record a finding.
+			//
+			// Its refusal is RTC-003's, word for word: the next action is the
+			// same, and a sentence naming the process would tell a caller that
+			// others are listing. A caller whose own bucket still held tools
+			// can infer that much from being refused at all, which is the one
+			// bit INV-019 accepts for a bound keyed on the process; the wording
+			// adds nothing to it. The log line it writes is where an operator
+			// tells the two apart.
+			ID: "RTC-007", Question: Allow, Kind: Rate, Class: ClassP, Disposition: Valued,
+			Resource: "tools/list across every credential, counted in the tools listed",
+			Key:      KeyProcess, StdioKey: KeyProcess,
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Reason:   "only a bucket keyed on the process bounds the processor they share",
+			ReasonAt: reasonAt(pkgToolutil, "processCatalog"),
+			Values:   []string{"CatalogProcessRate", "CatalogProcessBurst"},
+			// Which method draws on it is MeterFor's answer, as for RTC-003.
+			Functions: []string{"MeterFor"},
+			Source:    Constant, Zero: ZeroNotApplicable, OffWith: "RTC-003", OffWithBy: "issue 951",
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"issue 951"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{"tools/list"}, Channel: RPC, Code: CodeTooManyRequests,
+					Prefix: "rate limit exceeded for ", Answer: RetryLater, At: rateLimitedError,
+				},
+			},
+			// AttachRateLimitFunc hands the process's bucket to the middleware;
+			// the server's own listings teach it what a listing costs, and the
+			// listing's charge, refund and settlement are where it is counted.
+			Sites: []Site{
+				alias(pkgToolutil, "catalogProcessRate", "CatalogProcessRate"),
+				alias(pkgToolutil, "catalogProcessBurst", "CatalogProcessBurst"),
+				enforce(pkgToolutil, "processCatalog"),
+				enforce(pkgToolutil, "newProcessCatalog"),
+				enforce(pkgToolutil, "AttachRateLimitFunc"),
+				enforce(pkgToolutil, "attachRateLimitFunc"),
+				enforce(pkgToolutil, "catalogListing.learn"),
+				enforce(pkgToolutil, "catalogListing.serve"),
+				enforce(pkgToolutil, "RateLimiter.take"),
+				enforce(pkgToolutil, "RateLimiter.debit"),
+				enforce(pkgToolutil, "catalogCharge.refund"),
+				rateLimitedError,
+			},
+		},
+		{
 			ID: "HLD-001", Question: Allow, Kind: Ceiling, Class: ClassR, Disposition: Valued,
 			Resource: "open subscriptions/listen streams",
 			Key:      KeyEntry, StdioKey: KeyProcess,
@@ -216,6 +280,10 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// It refuses with HLD-001's refusal, naming its scope: a caller
+			// counting its own streams learns that the process is at this
+			// ceiling whatever the words say, and that one bit is what INV-019
+			// accepts for a bound keyed on the process (issue 951).
 			ID: "HLD-002", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "open subscriptions/listen streams across every credential",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -264,6 +332,10 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// It refuses with HLD-003's refusal, word for word, so a caller
+			// under its own ceiling learns only that the process is at this
+			// one, the one bit INV-019 accepts for a bound keyed on the process
+			// (issue 951).
 			ID: "HLD-004", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "resource watchers across every credential",
 			Key:      KeyProcess, StdioKey: KeyProcess,

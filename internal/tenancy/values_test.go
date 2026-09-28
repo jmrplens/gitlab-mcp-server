@@ -47,6 +47,8 @@ func frozenValues() []frozenValue {
 		{"ToolCallBurstMax", ToolCallBurstMax, 10000},
 		{"CompletionFactor", CompletionFactor, 10},
 		{"CatalogDivisor", CatalogDivisor, 10},
+		{"CatalogProcessRate", CatalogProcessRate, 3000},
+		{"CatalogProcessBurst", CatalogProcessBurst, 48000},
 		{"UpstreamRetries", UpstreamRetries, 2},
 		{"UpstreamRetryWaitMax", UpstreamRetryWaitMax, 5 * time.Second},
 		{"UpstreamRetryStep", UpstreamRetryStep, 700 * time.Millisecond},

@@ -1,7 +1,8 @@
 package tenancy
 
 // Meter is the bucket an MCP method is charged to, which also decides how its
-// refusal is carried (register rows RTC-001 to RTC-004).
+// refusal is carried (register rows RTC-001 to RTC-004, and RTC-007 beside
+// RTC-003).
 //
 // The rate-limit middleware of internal/toolutil switches on it. The buckets
 // themselves, their rates and bursts, the derivation of the completion and
@@ -32,7 +33,9 @@ const (
 	MeterToolRPC
 	// MeterCatalog is tools/list, charged to the catalog bucket derived from
 	// the tool-call one and refused with [CodeTooManyRequests]; the server's
-	// own in-memory listings are exempt (RTC-003).
+	// own in-memory listings are exempt (RTC-003). It is charged first to the
+	// bucket the whole process shares, in the tools it lists, which refuses
+	// with the same code (RTC-007).
 	MeterCatalog
 	// MeterCompletion is completion/complete, charged to the completion
 	// bucket derived from the tool-call one and refused with an empty

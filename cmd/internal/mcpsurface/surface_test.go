@@ -1,24 +1,32 @@
 // surface_test.go covers the shared MCP introspection helpers the generator
 // commands build on: the per-surface listings and the memo behind them, the
 // pinned dynamic two-tool contract, resource and prompt discovery over a real
-// in-memory round-trip, and project-root resolution.
+// in-memory round-trip, and project-root resolution; and it benchmarks what a
+// served listing costs the processor, per tool, on every surface.
 package mcpsurface
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // newStubClientForTest builds the offline GitLab client the surface helpers run
@@ -673,4 +681,151 @@ func TestNewStubClientWithToken_ClientFailurePanics(t *testing.T) {
 	}()
 
 	NewStubClientWithToken("probe-token")
+}
+
+// listingSurface is one served tool surface whose listing
+// [BenchmarkServedListing_OverStreamableHTTP_ProcessorPerTool] weighs, with the
+// meta parameter-schema mode it is served under.
+type listingSurface struct {
+	name       string
+	schemaMode string
+	setup      func(*mcp.Server)
+}
+
+// listingSurfaces are the surfaces a listing can be served from at Free and
+// at Ultimate, each registered as [DynamicTools], [MetaTools] and
+// [IndividualTools] register it: dynamic, meta under each of its three
+// parameter-schema modes, and individual. The meta modes are here because they
+// are the served configurations whose listing grows most per tool, which is
+// what the process's listing bucket assumes does not change a tool's cost
+// much.
+func listingSurfaces(client *gitlabclient.Client) []listingSurface {
+	var out []listingSurface
+	for _, tier := range []edition.Tier{edition.Free, edition.Ultimate} {
+		dynamic := DynamicCatalog(client, tier.IsEnterprise())
+		out = append(out, listingSurface{
+			name: "dynamic/" + tier.String(), schemaMode: config.MetaParamSchemaOpaque,
+			setup: func(s *mcp.Server) { dynamictools.RegisterCatalogFindExecuteTools(s, dynamic) },
+		})
+		for _, mode := range []string{config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull} {
+			out = append(out, listingSurface{
+				name: "meta-" + mode + "/" + tier.String(), schemaMode: mode,
+				setup: func(s *mcp.Server) {
+					catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true}))
+					tools.RegisterMetaCatalog(s, catalog)
+					tools.RegisterMetaStandaloneTools(s, client)
+				},
+			})
+		}
+		out = append(out, listingSurface{
+			name: "individual/" + tier.String(), schemaMode: config.MetaParamSchemaOpaque,
+			setup: func(s *mcp.Server) {
+				catalog, _, err := tools.SharedIndividualCatalog(client, &config.ServerConfig{Tier: tier})
+				cmdutil.MustDo(err)
+				tools.RegisterIndividualCatalogTools(s, catalog, tools.IndividualCatalogRegisterOptions{
+					IncludeStandaloneUtilities: true,
+					SchemaCacheKey:             tools.IndividualSchemaCacheKey(tier),
+				})
+				tools.RegisterMetaStandaloneTools(s, client)
+			},
+		})
+	}
+	return out
+}
+
+// listingRequest is one tools/list as a 2026-07-28 client sends it.
+const listingRequest = `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{` +
+	`"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+
+// servedOverHTTP serves what setup registers the way cmd/server serves it by
+// default: the go-sdk streamable HTTP handler, stateless and answering with an
+// event stream, behind the served-schema chain [Session] applies, with the
+// whole catalog in one page.
+func servedOverHTTP(setup func(*mcp.Server)) http.Handler {
+	server := mcp.NewServer(&mcp.Implementation{Name: "mcpsurface", Version: "0.0.1"},
+		&mcp.ServerOptions{PageSize: listPageSize, Capabilities: &mcp.ServerCapabilities{}})
+	setup(server)
+	toolutil.LockdownInputSchemas(server)
+	toolutil.EnrichPaginationConstraints(server)
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true})
+}
+
+// postListing asks handler for one listing and returns what it answered.
+func postListing(b *testing.B, handler http.Handler) *httptest.ResponseRecorder {
+	b.Helper()
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodPost, "/mcp", strings.NewReader(listingRequest))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", "2026-07-28")
+	req.Header.Set("Mcp-Method", "tools/list")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		b.Fatalf("tools/list answered %d: %.300s", rec.Code, rec.Body.String())
+	}
+	return rec
+}
+
+// listedToolCount reads how many tools the event stream of one listing
+// carries.
+func listedToolCount(b *testing.B, body string) int {
+	b.Helper()
+	for line := range strings.SplitSeq(body, "\n") {
+		data, isData := strings.CutPrefix(line, "data: ")
+		if !isData {
+			continue
+		}
+		var message struct {
+			Result struct {
+				Tools []json.RawMessage `json:"tools"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal([]byte(data), &message); err != nil {
+			b.Fatalf("decoding the listing: %v", err)
+		}
+		return len(message.Result.Tools)
+	}
+	b.Fatalf("the listing carried no data line: %.300s", body)
+	return 0
+}
+
+// BenchmarkServedListing_OverStreamableHTTP_ProcessorPerTool weighs one
+// tools/list in processor time, per listing and per tool listed, on every
+// surface and meta parameter-schema mode at Free and at Ultimate.
+//
+// It is the measurement the process's listing bucket (register row RTC-007,
+// tenancy.CatalogProcessRate and CatalogProcessBurst) is sized from: the
+// bucket counts tools because a listing's cost follows the tools it carries,
+// and this is what says whether it still does. Run it with
+//
+//	go test -run '^$' -bench BenchmarkServedListing -benchtime 20x ./cmd/internal/mcpsurface/
+//
+// and read ns/tool. The first listing of each surface is answered before the
+// clock starts, since it is the one that applies the schema middlewares. The
+// processor is held to one core while it runs, so the collector's work lands
+// on the same core as the listing and the wall time it reports is the
+// processor time the listing costs, which is what a bucket refilling in tools
+// a second spends.
+func BenchmarkServedListing_OverStreamableHTTP_ProcessorPerTool(b *testing.B) {
+	client, cleanup := NewStubClient()
+	b.Cleanup(cleanup)
+	for _, surface := range listingSurfaces(client) {
+		b.Run(surface.name, func(b *testing.B) {
+			restore := tools.SetMetaParamSchemaScoped(surface.schemaMode)
+			defer restore()
+			handler := servedOverHTTP(surface.setup)
+			warm := postListing(b, handler)
+			listed := listedToolCount(b, warm.Body.String())
+			defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+			for b.Loop() {
+				postListing(b, handler)
+			}
+			perListing := float64(b.Elapsed().Nanoseconds()) / float64(b.N)
+			b.ReportMetric(float64(listed), "tools")
+			b.ReportMetric(float64(warm.Body.Len()), "bytes")
+			b.ReportMetric(perListing/1e6, "ms/listing")
+			b.ReportMetric(perListing/float64(listed), "ns/tool")
+		})
+	}
 }

@@ -10,10 +10,11 @@ import (
 // TestDecision_Disagrees_IsExactlyTheClassDSet holds the two declared facts a
 // row carries, the unit of what its reason cites and its key, to reproducing
 // the specification's class D set exactly: the tool-call bucket on HTTP, the
-// catalog listing bucket, the watcher pause on a GitLab 429 and the watcher
-// cap. HLD-001 is class R, with HLD-002 as its partner: its stated unit is the
-// entry's own, and its word "fairness" is a vocabulary departure the gate
-// holds, not a unit mismatch.
+// watcher pause on a GitLab 429 and the watcher cap. HLD-001 is class R, with
+// HLD-002 as its partner: its stated unit is the entry's own, and its word
+// "fairness" is a vocabulary departure the gate holds, not a unit mismatch.
+// RTC-003 left the set when RTC-007 gave it a process partner: its reason is
+// still the processor, and the partner is what now meets it.
 func TestDecision_Disagrees_IsExactlyTheClassDSet(t *testing.T) {
 	var disagree []string
 	for _, d := range Decisions() {
@@ -22,13 +23,17 @@ func TestDecision_Disagrees_IsExactlyTheClassDSet(t *testing.T) {
 		}
 	}
 	slices.Sort(disagree)
-	if got, want := strings.Join(disagree, ","), "HLD-003,RTC-001,RTC-003,RTC-005"; got != want {
+	if got, want := strings.Join(disagree, ","), "HLD-003,RTC-001,RTC-005"; got != want {
 		t.Errorf("rows that disagree = %s, want %s", got, want)
 	}
-	hld001, _ := Lookup("HLD-001")
-	if hld001.Class != ClassR || hld001.Partner != "HLD-002" || hld001.Disagrees() {
-		t.Errorf("HLD-001: class %d, partner %q, disagrees %v; want class R, partner HLD-002, agreeing",
-			hld001.Class, hld001.Partner, hld001.Disagrees())
+	for _, tc := range []struct{ id, partner string }{{"HLD-001", "HLD-002"}, {"RTC-003", "RTC-007"}} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.Class != ClassR || d.Partner != tc.partner || d.Disagrees() {
+				t.Errorf("%s: class %d, partner %q, disagrees %v; want class R, partner %s, agreeing",
+					tc.id, d.Class, d.Partner, d.Disagrees(), tc.partner)
+			}
+		})
 	}
 }
 

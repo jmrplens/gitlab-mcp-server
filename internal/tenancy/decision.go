@@ -468,9 +468,22 @@ type Decision struct {
 	Malformed Malformed
 	// Zero is what a value of zero means.
 	Zero Zero
-	// OffWith is the ID of another row whose zero also switches this one off
-	// (AUB-003's step is AUB-001's window, F-34, issue 958).
+	// OffWith is the ID of another row which, switched off, switches this one
+	// off too: AUB-003's step is AUB-001's window (F-34, issue 958), and
+	// RTC-007 follows the row it is the process partner of (issue 951).
+	//
+	// It names the row the code consults, which need not be the row an
+	// operator sets to zero: RTC-007 is consulted where RTC-003's bucket
+	// exists, and RTC-003's is derived from RTC-001's, which is the one a zero
+	// switches off. The register does not record what a derived row is derived
+	// from, so that second step is stated on the rows rather than followed.
 	OffWith string
+	// OffWithBy is the record that decided this row follows OffWith, when it
+	// is a process partner following the per-key row it stands beside, which
+	// is the one zero another row decides that passes without a finding
+	// (INV-015). It is one of Decided; a row that records decisions about
+	// anything else does not pass that way.
+	OffWithBy string
 	// AtCapacity is what happens when it is full.
 	AtCapacity Capacity
 	// Refusals are how it declines or ends, per method and era.

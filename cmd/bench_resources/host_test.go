@@ -216,6 +216,19 @@ func TestHostFacts_OtherPlatforms(t *testing.T) {
 		}
 	})
 
+	t.Run("linux with a cpuinfo naming no processor", func(t *testing.T) {
+		runtimeGOOS = "linux"
+		previousPath := cpuinfoPath
+		t.Cleanup(func() { cpuinfoPath = previousPath })
+		cpuinfoPath = filepath.Join(t.TempDir(), "cpuinfo")
+		if err := os.WriteFile(cpuinfoPath, []byte("processor\t: 0\nBogoMIPS\t: 50.00\n"), 0o600); err != nil {
+			t.Fatalf("write cpuinfo: %v", err)
+		}
+		if got := cpuModel(); got != "unknown" {
+			t.Errorf("cpuModel = %q from a cpuinfo naming no model, want unknown", got)
+		}
+	})
+
 	t.Run("linux reads available memory", func(t *testing.T) {
 		runtimeGOOS = "linux"
 		got := availableMemoryMiB()

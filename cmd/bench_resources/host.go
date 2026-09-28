@@ -41,11 +41,16 @@ func hostInfo() HostInfo {
 	return info
 }
 
+// cpuinfoPath is where Linux describes its processors. A variable so a test
+// can hand cpuModel a file that names none, which is what an arm64 host
+// reporting no model looks like.
+var cpuinfoPath = "/proc/cpuinfo"
+
 // cpuModel reads the processor name, from /proc on Linux and from sysctl on
 // macOS.
 func cpuModel() string {
 	if runtimeGOOS == "linux" {
-		if model := parseCPUModel(readFileString("/proc/cpuinfo")); model != "" {
+		if model := parseCPUModel(readFileString(cpuinfoPath)); model != "" {
 			return model
 		}
 	}

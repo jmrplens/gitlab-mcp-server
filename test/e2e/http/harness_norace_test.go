@@ -7,6 +7,9 @@ package httpe2e
 
 import "time"
 
+// raceDetector reports that the server under test is an ordinary build.
+const raceDetector = false
+
 // serverBuildArgs returns the `go build` arguments for the server under test.
 func serverBuildArgs(out string) []string {
 	return []string{"build", "-o", out, "./cmd/server"}

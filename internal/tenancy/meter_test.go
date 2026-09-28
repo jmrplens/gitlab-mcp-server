@@ -127,13 +127,15 @@ type meteredRefusal struct {
 	want    Meter
 }
 
-// meteredRefusals are the refusals of RTC-001 to RTC-003, one per bucket.
+// meteredRefusals are the refusals of RTC-001 to RTC-003 and of RTC-007, one
+// per bucket.
 func meteredRefusals() []meteredRefusal {
 	return []meteredRefusal{
 		{"tool calls, refused as a result", "RTC-001", ToolError, MeterToolResult},
 		{"the other doors to GitLab, refused in-band", "RTC-001", RPC, MeterToolRPC},
 		{"completions, refused empty", "RTC-002", EmptyCompletion, MeterCompletion},
 		{"catalog listings, refused in-band", "RTC-003", RPC, MeterCatalog},
+		{"catalog listings across the process, refused in-band", "RTC-007", RPC, MeterCatalog},
 	}
 }
 
@@ -162,8 +164,8 @@ func refusedMethods(t *testing.T, m meteredRefusal) []string {
 }
 
 // TestMeterFor_ChargesWhatTheRowsRefuse ties the function to the rows that
-// name it: each method a refusal of RTC-001 to RTC-003 names is charged to the
-// bucket whose refusal that is. A method moved from one bucket to another in
+// name it: each method a refusal of RTC-001 to RTC-003 or RTC-007 names is
+// charged to the bucket whose refusal that is. A method moved from one bucket to another in
 // MeterFor without its row, or the other way round, fails here.
 func TestMeterFor_ChargesWhatTheRowsRefuse(t *testing.T) {
 	for _, m := range meteredRefusals() {
@@ -179,8 +181,8 @@ func TestMeterFor_ChargesWhatTheRowsRefuse(t *testing.T) {
 
 // TestMeterFor_LeavesEveryMethodNoRowRefusesUnmetered is RTC-004 from the
 // other side: every method of either revision that no refusal of RTC-001 to
-// RTC-003 names is charged to no bucket, and RTC-004 is the promoted row that
-// says so.
+// RTC-003 or RTC-007 names is charged to no bucket, and RTC-004 is the
+// promoted row that says so.
 func TestMeterFor_LeavesEveryMethodNoRowRefusesUnmetered(t *testing.T) {
 	if d, ok := Lookup("RTC-004"); !ok || d.Disposition != Promoted || !has(d.Functions, "MeterFor") {
 		t.Fatalf("RTC-004 = %+v, want a promoted row naming MeterFor", d)

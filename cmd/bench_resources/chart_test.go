@@ -150,6 +150,13 @@ func TestLinearXTicks_ThinnedToWhatTheWidthCarries(t *testing.T) {
 		// though it ran from zero would thin to its two ends.
 		{name: "a short ramp far from zero keeps every point", extent: lineExtent{minX: 100, maxX: 110}, wantSome: []float64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110}},
 		{name: "one point", extent: lineExtent{minX: 3, maxX: 3}, wantSome: []float64{3}},
+		// A label needs its width and the gap beside it, and exactly that
+		// much is room enough. These two extents put a candidate tick at
+		// exactly that distance from the first point and from the last, in
+		// floating point and not only on paper: 201 counts at 794/3970
+		// pixels a count is the 40.2 pixels a four-digit label needs.
+		{name: "a tick one label from the first point is kept", extent: lineExtent{minX: 299, maxX: 4269}, wantSome: []float64{299, 500, 4269}},
+		{name: "a tick one label from the last point is kept", extent: lineExtent{minX: 231, maxX: 4201}, wantSome: []float64{231, 4000, 4201}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

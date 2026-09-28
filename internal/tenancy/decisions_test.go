@@ -1,6 +1,7 @@
 package tenancy
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,7 @@ var specRequirementIDs = []string{
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005",
-	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006",
+	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
 	"HLD-001", "HLD-002", "HLD-003", "HLD-004", "HLD-005", "HLD-006", "HLD-007",
 	"HLD-008", "HLD-009", "HLD-010",
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
@@ -94,7 +95,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 27},
+		{"valued", Valued, 28},
 		{"ruled", Ruled, 35},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -109,7 +110,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 }
 
 // TestDecisions_FunctionsNameThePromotedRules pins which rows name a register
-// function: the four rows of the method meter name MeterFor, POL-003 names
+// function: the five rows of the method meter name MeterFor, POL-003 names
 // Busy, the three authentication budgets name the switch that says whether
 // each is on, and every other row names none.
 func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
@@ -118,6 +119,7 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 		"RTC-002": "MeterFor",
 		"RTC-003": "MeterFor",
 		"RTC-004": "MeterFor",
+		"RTC-007": "MeterFor",
 		"POL-003": "Busy",
 		"AUB-001": "BudgetOn",
 		"AUB-002": "TransportSourceBudgetOn",
@@ -129,6 +131,41 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 				t.Errorf("%s names functions %q, want %q", d.ID, got, want[d.ID])
 			}
 		})
+	}
+}
+
+// TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt pins what issue
+// 951 decided for tools/list: the per-entry bucket has a partner keyed on the
+// process that no operator can change, the partner follows the row it
+// partners, so it is off where that row is, by the decision that says so, and
+// it refuses with that row's own refusal, so no caller is told that other
+// callers are listing (INV-019). Neither row carries F-03 any longer, since
+// the departure it recorded is answered. The finding itself stays in the
+// register's list, where issue 951 still holds F-31.
+func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
+	entry, _ := Lookup("RTC-003")
+	process, _ := Lookup("RTC-007")
+	if entry.Partner != "RTC-007" || entry.Carries("F-03") {
+		t.Errorf("RTC-003: partner %q, carries F-03 %v; want partner RTC-007 and no F-03", entry.Partner, entry.Carries("F-03"))
+	}
+	if process.Key != KeyProcess || process.Source != Constant || !process.ProtectsProcess {
+		t.Errorf("RTC-007: key %s, source %d, protects the process %v; want a constant on the process",
+			process.Key, process.Source, process.ProtectsProcess)
+	}
+	if process.OffWith != "RTC-003" || process.OffWithBy != "issue 951" || !slices.Contains(process.Decided, "issue 951") ||
+		process.Carries("F-03") {
+		t.Errorf("RTC-007: off with %q by %q, decided %v, carries F-03 %v; want it off with RTC-003 by issue 951's decision",
+			process.OffWith, process.OffWithBy, process.Decided, process.Carries("F-03"))
+	}
+	if refusal := process.Refusals[0]; refusal.At != entry.Refusals[0].At {
+		t.Errorf("RTC-007 refuses at %v, RTC-003 at %v; want the same refusal, so a caller is not told others are listing",
+			refusal.At, entry.Refusals[0].At)
+	}
+	if process.AtCapacity != RefuseNewcomer {
+		t.Errorf("RTC-007 at capacity: %d, want it to refuse the newcomer and take nothing across keys", process.AtCapacity)
+	}
+	if FindingIssue("F-03") != 951 {
+		t.Errorf("F-03 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-03"))
 	}
 }
 
@@ -408,7 +445,7 @@ func rowPins() map[string]rowPin {
 		"RTC-002": {Allow, Rate, ClassU, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{methods: "completion/complete", channel: EmptyCompletion, answer: RetryLater},
 		}},
-		"RTC-003": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
+		"RTC-003": {Allow, Rate, ClassR, Valued, KeyEntry, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
 			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
 		}},
 		"RTC-004": {Allow, Rule, ClassP, Promoted, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
@@ -417,6 +454,9 @@ func rowPins() map[string]rowPin {
 			{methods: "notifications/resources/updated", channel: Silent, answer: NoAnswer},
 		}},
 		"RTC-006": {Allow, Bound, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
+		"RTC-007": {Allow, Rate, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
+			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
+		}},
 		"HLD-001": {Allow, Ceiling, ClassR, Valued, KeyEntry, KeyProcess, KeyEntry, KeyEntry, []refusalPin{
 			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -32000, prefix: pinListen, answer: RetryLater},
 		}},

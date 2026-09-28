@@ -8,6 +8,12 @@ package httpe2e
 
 import "time"
 
+// raceDetector reports that this run builds and drives an instrumented server.
+// A test whose property is how fast the server can go, rather than what it
+// does, reads it to skip: the instrumented server runs several times more
+// slowly, so such a test would measure the detector.
+const raceDetector = true
+
 // serverBuildArgs returns the `go build` arguments for the server under test,
 // with the detector on.
 //

@@ -58,7 +58,11 @@ attributed to that one user in GitLab's audit log, and `--rate-limit-rps`
 becomes a limit for the entire deployment rather than per caller. Discovery is
 part of that budget, on a bucket of its own refilled a tenth as fast and holding
 the same burst, so size `--rate-limit-burst` for the number of clients that
-reconnect together: each of them lists once as it connects.
+reconnect together: each of them lists once as it connects. Every listing is
+also charged to one bucket the whole process shares, 3000 tools a second with
+48000 in hand, which holds forty listings of the largest surface at once, so the
+default burst fits in it; what it bounds is every credential of the process
+together.
 
 If the deployment publishes several instances with repeated `--gitlab-url`, the
 gateway must also forward `GITLAB-URL`, and a request without it is refused

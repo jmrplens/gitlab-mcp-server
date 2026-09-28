@@ -504,6 +504,29 @@ call because no model is in that loop to read the message and retry. The
 listings the server makes against itself while it starts, to count its tools and
 build the `gitlab://tools` manifest, are not charged to it.
 
+That bucket is a credential's, and a caller can mint credentials while the
+processor stays one, so a listing is charged first to a bucket the whole process
+shares. It counts tools rather than requests, because a listing costs what it
+carries: measured on the streamable HTTP handler, between 0.16 and 0.5 ms of
+processor per tool listed on every surface and meta parameter-schema mode, the
+full meta schema the dearest, while a listing's own cost varies six hundredfold
+from dynamic to individual (`BenchmarkServedListing_OverStreamableHTTP_ProcessorPerTool`
+in `cmd/internal/mcpsurface` measures it). Its refill of 3000 tools a second is
+therefore between half a core and a core and a half of listing, some three
+listings a second on individual and fifteen hundred on dynamic, and its 48000 in
+hand hold one credential's whole default listing burst on the largest surface. It is not configurable, since an
+operator who can raise a shared number can undo it, and it is off with the rest
+of the limiter when the rate is `0`. A listing it refuses never reaches the
+credential's bucket, and one the credential's bucket refuses gets its tools
+back, so neither refusal costs the other anything. What it protects is the
+processor, and with it every other request the process answers, not anybody's
+listings: it promises no caller a share of what it allows, so while one tenant
+keeps it spent another tenant's listings are refused too, at once and with the
+advice to retry. With a hundred credentials listing on the individual surface,
+eight quiet credentials' tool calls went from every one timing out to every one
+served in single milliseconds, and their listings from timing out to being
+refused.
+
 Whether it is on out of the box depends on the transport. **HTTP mode enables it
 by default** (`--rate-limit-rps=10`), because that deployment is shared — every
 call it forwards is charged to its own egress address, so one looping client's
@@ -581,7 +604,20 @@ rate limit exceeded for resources/read; retry after a short backoff
 The first four draw on the same bucket as `tools/call`, since each reaches
 GitLab with the caller's credential; `tools/list` draws on its own, refilled at
 a tenth of that one's rate, since what it spends is the shared processor rather
-than the upstream. `resources/list`, `prompts/list`, `initialize` and the other methods
+than the upstream, and before that on the bucket the whole process shares. That
+one refuses in the same words: the next action is the same, and a sentence
+naming the process would tell a caller that other callers are listing. A caller
+that had not spent its own bucket can still infer that much from being refused,
+as it can from the process-wide stream and watcher ceilings, and the
+specification accepts that one bit and nothing more (`INV-019`). Its log line is
+where the two are told apart, with `scope` set to `process` and its figures
+named for what they count:
+
+```json
+{"level":"WARN","msg":"listing refused: rate limit exceeded across the process","method":"tools/list","reason":"rate_limited","scope":"process","limit_tools_per_second":3000,"burst_tools":48000,"also_refused_since_last_report":0}
+```
+
+`resources/list`, `prompts/list`, `initialize` and the other methods
 the server answers from its own catalog are **not** gated: they are small, and
 metering something cheap buys nothing and costs a concept.
 

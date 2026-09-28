@@ -71,7 +71,8 @@ the code; the layers keep enforcing.**
   any mintable key, a per-caller number protecting a process resource with no constant
   process partner, a holding taken across keys without a recorded decision, a refusal on
   a channel its method cannot carry, a second in-band code for one class of next action,
-  a zero that does not mean off, a reason whose unit differs from its key, a structure
+  a zero that does not mean off (a process partner following its per-key row by a
+  recorded decision apart), a reason whose unit differs from its key, a structure
   keyed on a mintable value with no capacity, a configurable value that bypasses the
   configuration package, and a charged failure the caller did not cause. They refuse in
   three ways, which the specification lists rule by rule. With no exception: a share on a
@@ -83,12 +84,15 @@ the code; the layers keep enforcing.**
   row that does not say it protects one (`INV-004`); a valued row that does not say what
   zero means (`INV-015`); and a variable without the `GITLAB_MCP_` prefix, or a
   configurable value with no flag, variable or malformed-value policy (`INV-017`). With a
-  recorded decision: a holding taken across keys (`INV-005`). Only through a finding
-  recorded for the invariant: a per-caller number protecting a process resource with no
-  partner, a structure keyed on a mintable value with no capacity, a code in the legacy
-  `-32000` range, a second in-band code for one class of next action, a zero that does not
-  mean off, a reason whose unit differs from its key or misstates its own, a value only an
-  environment variable or a Go option reaches, and a ceiling nothing bounds.
+  recorded decision: a holding taken across keys (`INV-005`), and a process partner
+  switched off with the per-key row it stands beside (`INV-015`), where the decision is
+  the one the row's `OffWithBy` names, which is how `RTC-007` follows `RTC-003` (issue
+  951). Only through a finding recorded for the invariant: a per-caller number protecting
+  a process resource with no partner, a structure keyed on a mintable value with no
+  capacity, a code in the legacy `-32000` range, a second in-band code for one class of
+  next action, any other zero that does not mean off, a reason whose unit differs from its
+  key or misstates its own, a value only an environment variable or a Go option reaches,
+  and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
@@ -165,6 +169,20 @@ twice), and the gate holds the pinned literal equal to the register's.
   through an interface that takes the subscription manager's lock, exactly when the code
   it replaced did, only when no stream is open. Each is proved by its oracle and fuzz
   target rather than by the binary.
+- **NEG-007**: A bound keyed on the process discloses one bit across tenants, and that is
+  accepted (`INV-019`, decided in issue 951). A caller refused by `HLD-002`, `HLD-004` or
+  `RTC-007` before it has reached its own ceiling or budget learns that the process has
+  reached its bound, and so that other callers are holding streams or watchers or are
+  listing, since at the defaults no single credential can reach a process bound alone. No
+  wording closes it: the caller's own count supplies the bit whatever the refusal says,
+  exactly as its own busyness does for `credential_evicted`. It is the price of bounding
+  what every tenant shares, and the alternatives are worse: a share of the bound per
+  tenant is a share on a key a caller can mint (`INV-003`), and no bound lets one tenant
+  take the process from the rest. What is kept from it is everything beyond the bit: no
+  count of what others hold, no identity, and nothing the caller's own count does not
+  already tell it (the stream ceilings name their scope, which a caller counting its own
+  streams knows; `RTC-007` answers `tools/list` in the words `RTC-003` uses), with the log
+  line as the one place that says which bound refused.
 
 ### Neutral
 

@@ -47,7 +47,7 @@ const (
 	WatchRateLimitJitter = 0.2
 )
 
-// Rates (RTC-001 to RTC-003, RTC-006).
+// Rates (RTC-001 to RTC-003, RTC-006, RTC-007).
 const (
 	// ToolCallRateHTTP is the tool-call bucket's refill, in requests a second,
 	// an HTTP deployment gets unless it says otherwise (RTC-001).
@@ -72,6 +72,12 @@ const (
 	// CatalogDivisor is how much slower the tools/list bucket refills than the
 	// tool-call one (RTC-003).
 	CatalogDivisor = 10
+	// CatalogProcessRate is how many tools the process lists a second across
+	// every credential, the refill of the tools/list bucket keyed on the
+	// process beside each entry's (RTC-007).
+	CatalogProcessRate = 3000
+	// CatalogProcessBurst is how many tools that bucket holds (RTC-007).
+	CatalogProcessBurst = 48000
 	// UpstreamRetries is how many times a failed GitLab request is re-sent
 	// (RTC-006).
 	UpstreamRetries = 2

@@ -79,6 +79,10 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("boundByID: %v", err)
 	}
+	processListing, err := boundByID("tools-list-process")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
 
 	cases := []struct {
 		name     string
@@ -112,6 +116,26 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
 			}),
 			refusals: listing.Refusals, want: outcomeRefused,
+		},
+		{
+			// The bucket the whole process shares refuses in the credential's
+			// own words and code, so a caller is not told others are listing;
+			// its arm keeps every credential's bucket out of reach, which is
+			// what makes a listing refused there the process's.
+			name: "the process's listing refusal is its bound's", method: methodToolsList,
+			err: fmt.Errorf("tools/list: %w", rpcError{
+				Code: -42900, Message: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
+			}),
+			refusals: processListing.Refusals, want: outcomeRefused,
+		},
+		{
+			// It meters listings and nothing else, so a refused tool call in
+			// its arm is a failure of the run rather than its bound refusing.
+			name: "a refused tool call is not the process's listing bound's", method: methodToolsCall,
+			err: fmt.Errorf("tools/call: %w", &toolResultError{
+				Text: toolutil.RateLimitRefusalPrefix + "gitlab_find_action; retry after a short backoff",
+			}),
+			refusals: processListing.Refusals, want: outcomeFailed,
 		},
 		{
 			// cmd/server's codeServerBusy, which the listen ceiling refuses

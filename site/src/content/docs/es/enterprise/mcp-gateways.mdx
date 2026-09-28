@@ -61,7 +61,11 @@ en el registro de auditoría de GitLab, y `--rate-limit-rps` pasa a ser un lími
 para todo el despliegue en lugar de por cliente. La exploración forma parte de
 ese presupuesto, en un bucket propio que se rellena diez veces más despacio y
 conserva el mismo burst, así que dimensiona `--rate-limit-burst` por el número
-de clientes que se reconectan a la vez: cada uno lista una vez al conectar.
+de clientes que se reconectan a la vez: cada uno lista una vez al conectar. Cada
+listado se cobra además a un bucket que comparte todo el proceso, 3000
+herramientas por segundo con 48000 disponibles, en el que caben cuarenta
+listados de la superficie más grande a la vez, así que el burst por defecto cabe
+en él; lo que acota es todas las credenciales del proceso juntas.
 
 Si el despliegue publica varias instancias con `--gitlab-url` repetido, la
 pasarela también debe reenviar `GITLAB-URL`, y una petición sin esa cabecera se

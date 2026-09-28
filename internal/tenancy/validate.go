@@ -47,9 +47,10 @@ type setRule struct {
 // with no process partner is refused, and so is a refusal on a channel the
 // method cannot carry. A rule that can be excused passes a row breaking its
 // invariant only through a finding recorded for it (see
-// [Finding.Invariants]); some rules cannot be excused at all, and
-// checkAcrossKeys is excused by a recorded decision instead. The
-// specification's section on invariants says which is which.
+// [Finding.Invariants]); some rules cannot be excused at all, and two are
+// excused by a recorded decision instead: checkAcrossKeys, and the half of
+// checkZeroStated that lets a process partner follow the row it stands
+// beside. The specification's section on invariants says which is which.
 func Validate(ds []Decision) error {
 	rows := make(map[string]Decision, len(ds))
 	for _, d := range ds {
@@ -240,12 +241,21 @@ func inLegacyRange(code int) bool {
 
 // checkZeroStated holds a valued decision to saying what zero means, and a
 // zero that is not "off" to a finding.
-func checkZeroStated(d Decision, _ map[string]Decision) []string {
+//
+// One zero decided by another row passes without a finding: a process partner
+// switched off with the row it stands beside, when a recorded decision says
+// so. It is still switching one limit off with another, but the other is the
+// per-key limit the partner exists for, and following it is a policy choice
+// the register records rather than a defect it carries (RTC-007, issue 951).
+// The decision is the one OffWithBy names, and it must be among the row's
+// Decided: a row carrying a decision about something else does not pass.
+func checkZeroStated(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if d.Disposition == Valued && d.Zero == ZeroUnset {
 		out = append(out, "a valued decision that does not say what zero means")
 	}
-	departs := d.Zero == ZeroRefused || d.Zero == ZeroSelectsDefault || d.OffWith != ""
+	followsPartnered := rows[d.OffWith].Partner == d.ID && has(d.Decided, d.OffWithBy)
+	departs := d.Zero == ZeroRefused || d.Zero == ZeroSelectsDefault || (d.OffWith != "" && !followsPartnered)
 	if departs && !d.RecordsDeparture("INV-015") {
 		out = append(out, "a zero that does not mean off, with no finding")
 	}
