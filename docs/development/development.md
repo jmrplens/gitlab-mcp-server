@@ -9,7 +9,7 @@
 ## Prerequisites
 
 - **Go 1.27+** ([download](https://go.dev/dl/))
-- **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.25.0` (the `packageManager` field in `site/package.json` is authoritative); keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
+- **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@12.4.2` (the `packageManager` field in `site/package.json` is authoritative); keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
 - **GitLab instance** with Personal Access Token (`api` scope)
 - **Git** for version control
 - **Make** for build automation (optional but recommended)

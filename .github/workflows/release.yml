@@ -97,8 +97,8 @@ env:
   # Pinned exactly, not by range: goreleaser-action and sbom-action download
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
-  GORELEASER_VERSION: "v2.18.0"
-  SYFT_VERSION: "v1.51.1"
+  GORELEASER_VERSION: "v2.18.2"
+  SYFT_VERSION: "v1.52.0"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -277,10 +277,10 @@ jobs:
           echo "build date ${date}, from the commit rather than the clock"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # Build each platform on its own and RUN it before anything is pushed.
       # The published linux/arm64 image of 2.7.5 could not exec at all — the
@@ -291,7 +291,7 @@ jobs:
       # support is not a tested artefact. `load: true` needs one platform per
       # build; the push below reuses the same layers from the gha cache.
       - name: Build linux/amd64 for smoke test
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           load: true
@@ -305,7 +305,7 @@ jobs:
             BUILD_DATE=${{ steps.build-date.outputs.date }}
 
       - name: Build linux/arm64 for smoke test
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           load: true
@@ -328,7 +328,7 @@ jobs:
       # instead of pushed: the image index that would have gone to the
       # registry exists, so its digest is real and the stamping jobs pin it,
       # and nothing has left the machine.
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         id: docker-push
         with:
           context: .
@@ -439,7 +439,7 @@ jobs:
       # after the image was already pushed.
       - name: Install syft
         env:
-          SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
+          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1014,7 +1014,7 @@ jobs:
       # from main rather than from the tag, and the asset is base64-wrapped.
       - name: Install syft
         env:
-          SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
+          SYFT_SHA256: "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1200,7 +1200,7 @@ jobs:
       - name: Publish to npm
         run: |
           set -euo pipefail
-          npm install -g npm@11.5.1
+          npm install -g npm@11.19.1
           if [ "$REHEARSAL" = "true" ]; then
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs
@@ -1297,13 +1297,13 @@ jobs:
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # An exact SDK version rather than 10.0.x: dnx's behaviour is an SDK
-      # property (10.0.400 installs without asking when stdin is not a
+      # property (10.0.401 installs without asking when stdin is not a
       # terminal and accepts --yes without needing it, which the docs rely
       # on), and the digest `make validate-nuget` pins is the container image
       # of this same SDK. Bump the two together.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: "10.0.400"
+          dotnet-version: "10.0.401"
 
       # A pointer package plus six runtime-identifier packages, each carrying
       # the native binary as the tool's entry point (the .NET 10 tool layout).

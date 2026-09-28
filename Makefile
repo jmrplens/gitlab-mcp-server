@@ -299,7 +299,7 @@ GOTESTSUM = $(or $(shell command -v gotestsum 2>/dev/null),$(GOTESTSUM_INSTALL_D
 ensure-gotestsum:
 	@command -v gotestsum >/dev/null 2>&1 || test -x "$(GOTESTSUM_INSTALL_DIR)/gotestsum" || { \
 		echo "gotestsum not found; installing with go install..."; \
-		go install gotest.tools/gotestsum@latest; \
+		go install gotest.tools/gotestsum; \
 	}
 
 ## test-e2e-harness: run the e2e harness library's own tests (no GitLab needed).
@@ -1083,9 +1083,9 @@ analyze-report:
 ## install-tools: install all Go static analysis tools to $GOBIN
 install-tools:
 	@echo Installing static analysis tools...
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install gotest.tools/gotestsum@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	go install golang.org/x/vuln/cmd/govulncheck
+	go install gotest.tools/gotestsum
 	@echo All tools installed.
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
@@ -1288,7 +1288,7 @@ MCPB_CLI_VERSION := 2.1.2
 ## tree would land in go.sum for every job that runs `go mod download`. Keep it
 ## equal to what developers run locally, so `make golangci-lint` means the same
 ## on both sides of a push.
-GOLANGCI_LINT_VERSION := v2.13.1
+GOLANGCI_LINT_VERSION := v2.13.2
 
 ## check-mcpb: validate the Claude Desktop extension manifest (mcpb/manifest.json).
 check-mcpb:
@@ -1416,10 +1416,10 @@ gen-nuget:
 ## token, binary magic and executable bit for all six, plus a real
 ## `dotnet tool install`, a `dnx` run and an MCP initialize handshake for the
 ## container's native platform. The image is pinned by digest because dnx's
-## behaviour is an SDK property (10.0.400 is what was verified); bump the
+## behaviour is an SDK property (10.0.401 is what was verified); bump the
 ## digest deliberately.
 ##   make validate-nuget NUGET_BINARIES=dist
-NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0@sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c
+NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.401@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29
 validate-nuget:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
