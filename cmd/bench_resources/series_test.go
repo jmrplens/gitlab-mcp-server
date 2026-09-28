@@ -804,20 +804,53 @@ func TestRunStep_SettledReading_IsAFractionOfThePeakUnderLoad(t *testing.T) {
 	}
 }
 
-// The delays patternConn answers with. Each is a floor on the figure it
-// produces, since a sleep never returns early, and the two tails are far enough
-// apart that no scheduling delay on a loaded host carries a call past a listing.
+// The delays patternConn answers with, on the step clock the test installs.
+// They were real sleeps once, spaced so that no scheduling delay was expected
+// to carry a call past a listing, and a loaded runner stalled one call long
+// enough to do exactly that (a call's tail at 85 ms over a listing's at 81).
 const (
 	patternCallTail  = 20 * time.Millisecond
 	patternListDelay = 10 * time.Millisecond
 	patternListTail  = 80 * time.Millisecond
 )
 
+// fakeStepClock stands in for stepClock: it moves only when a request says
+// how long it took, so every sample the step records is the delay the
+// connection chose and nothing the scheduler added.
+type fakeStepClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *fakeStepClock) read() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeStepClock) advance(d time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(d)
+	c.mu.Unlock()
+}
+
+// withFakeStepClock installs a fake step clock for the rest of the test. The
+// test that calls it must not be parallel, since stepClock is the package's.
+func withFakeStepClock(t *testing.T) *fakeStepClock {
+	t.Helper()
+	clock := &fakeStepClock{now: time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)}
+	previous := stepClock
+	stepClock = clock.read
+	t.Cleanup(func() { stepClock = previous })
+	return clock
+}
+
 // patternConn answers tools/call at once but for every tenth call, which takes
 // patternCallTail, and tools/list in patternListDelay but for every tenth,
 // which takes patternListTail, and refuses every third tools/list; it counts
-// what it answered.
+// what it answered. Each delay is spent on clock rather than slept.
 type patternConn struct {
+	clock                  *fakeStepClock
 	mu                     sync.Mutex
 	calls, lists, answered int
 }
@@ -844,7 +877,7 @@ func (c *patternConn) call(_ context.Context, method string, _ map[string]any) (
 	case n%10 == 0:
 		delay = patternCallTail
 	}
-	time.Sleep(delay)
+	c.clock.advance(delay)
 	c.mu.Lock()
 	c.answered++
 	c.mu.Unlock()
@@ -871,12 +904,13 @@ func (c *patternConn) answeredCount() int {
 // the two tails apart, since a listing's median sits under a call's tail as
 // well as under its own, so each figure is also held to the floor only its own
 // method's delays give it: a call's tail read from the listings, or a
-// listing's from the calls, falls under one of them.
+// listing's from the calls, falls under one of them. The step runs on a fake
+// clock the connection advances, so the figures are the delays themselves.
 func TestRunStep_EachPercentileFromItsOwnMethod(t *testing.T) {
 	r := &runner{progress: progressFunc(false)}
 	f := newSeriesFixture(t, []int{1}, 0)
 	f.plan.StepDuration = 600 * time.Millisecond
-	conn := &patternConn{}
+	conn := &patternConn{clock: withFakeStepClock(t)}
 
 	step := r.runStep(t.Context(), stepInput{
 		plan: f.plan, call: f.call, conns: []*clientConn{{rpc: conn}},

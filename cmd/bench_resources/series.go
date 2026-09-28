@@ -428,9 +428,16 @@ type phaseBound func(turn int) bool
 // latency degrades, which is exactly the region the series exists to reach.
 // The per-call figures divide by the calls that were actually made.
 func untilDeadline(duration time.Duration) phaseBound {
-	deadline := time.Now().Add(duration)
-	return func(int) bool { return time.Now().Before(deadline) }
+	deadline := stepClock().Add(duration)
+	return func(int) bool { return stepClock().Before(deadline) }
 }
+
+// stepClock is the clock a steady phase is bounded and timed by. A variable
+// for the reason settleDelay is one: the test that holds each percentile to
+// its own method's samples gives every request a latency of its own choosing,
+// and on the real clock whatever the scheduler stalls is added on top, which
+// on a loaded runner lifted a call's tail over a listing's.
+var stepClock = time.Now
 
 // steadyLoad keeps clients x parallel workers calling until the bound ends
 // the phase, each alternating tools/call and tools/list, and times every call.
@@ -495,9 +502,9 @@ func steadyWorker(ctx context.Context, c *clientConn, bound phaseBound, call too
 			params = map[string]any{"name": call.Name, "arguments": call.Args}
 		}
 		callCtx, cancel := context.WithTimeout(ctx, callTimeout)
-		started := time.Now()
+		started := stepClock()
 		_, err := c.rpc.call(callCtx, method, params)
-		elapsed := time.Since(started)
+		elapsed := stepClock().Sub(started)
 		cancel()
 		tally.record(method, elapsed, err)
 	}
