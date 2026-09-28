@@ -185,10 +185,15 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.Content)), nil
 	})
 
+	// GitLab sends the llm grammar as a JSON string; the handler publishes
+	// the text inside it, so a leading quote means the decode was lost.
 	summarize(t, "DSL_llm", func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "llm"})
 		if err != nil {
 			return nil, err
+		}
+		if out.Content == "" || strings.HasPrefix(out.Content, `"`) {
+			return nil, fmt.Errorf("llm grammar = %.60q, want the grammar's text rather than the JSON string it arrives in", out.Content)
 		}
 		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.Content)), nil
 	})
@@ -519,7 +524,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	})
 
 	// Schema with the default response format (handler omits the
-	// response_format parameter so the API applies its own default of "json").
+	// response_format parameter so the API applies its own default, raw).
 	summarize(t, "Schema_default_format", func(ctx context.Context) (any, error) {
 		out, err := orbit.Schema(ctx, client, orbit.SchemaInput{})
 		if err != nil {
@@ -528,6 +533,48 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 		return fmt.Sprintf("schema_version=%s domains=%d nodes=%d edges=%d",
 			out.SchemaVersion, len(out.Domains), len(out.Nodes), len(out.Edges)), nil
 	})
+
+	// Schema with each format named explicitly, under each input name. The
+	// format must reach GitLab as response_format: sent as format, which
+	// Grape reserves, it was answered 406 whatever its value.
+	summarize(t, "Schema_raw_via_format", func(ctx context.Context) (any, error) {
+		return liveRawSchema(ctx, client, orbit.SchemaInput{Format: "raw"})
+	})
+	summarize(t, "Schema_raw_via_response_format", func(ctx context.Context) (any, error) {
+		return liveRawSchema(ctx, client, orbit.SchemaInput{ResponseFormat: "raw"})
+	})
+	summarize(t, "Schema_llm_via_format", func(ctx context.Context) (any, error) {
+		return liveLLMSchema(ctx, client, orbit.SchemaInput{Format: "llm"})
+	})
+	summarize(t, "Schema_llm_via_response_format", func(ctx context.Context) (any, error) {
+		return liveLLMSchema(ctx, client, orbit.SchemaInput{ResponseFormat: "llm"})
+	})
+}
+
+// liveRawSchema asks for the structured ontology and fails unless it came
+// back structured.
+func liveRawSchema(ctx context.Context, client *gitlabclient.Client, input orbit.SchemaInput) (any, error) {
+	out, err := orbit.Schema(ctx, client, input)
+	if err != nil {
+		return nil, err
+	}
+	if out.SchemaVersion == "" || len(out.Domains) == 0 {
+		return nil, fmt.Errorf("raw schema = %+v, want the structured ontology", out)
+	}
+	return fmt.Sprintf("schema_version=%s domains=%d", out.SchemaVersion, len(out.Domains)), nil
+}
+
+// liveLLMSchema asks for the compact text ontology and fails unless it came
+// back as text.
+func liveLLMSchema(ctx context.Context, client *gitlabclient.Client, input orbit.SchemaInput) (any, error) {
+	out, err := orbit.Schema(ctx, client, input)
+	if err != nil {
+		return nil, err
+	}
+	if out.FormattedText == "" {
+		return nil, fmt.Errorf("llm schema = %+v, want its compact text in formatted_text", out)
+	}
+	return fmt.Sprintf("formatted_text bytes=%d", len(out.FormattedText)), nil
 }
 
 // TestOrbitLiveGitLabCom_Fixtures exercises the four query_type variants

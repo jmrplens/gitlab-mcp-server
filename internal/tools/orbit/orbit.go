@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -18,23 +19,22 @@ import (
 // ResponseFormatInput is the shared response_format selector used by
 // the status, dsl, and query Orbit endpoints.
 type ResponseFormatInput struct {
-	// ResponseFormat selects the Orbit response shape. Allowed values:
-	//   - "raw"  — structured JSON (or TOON JSON, depending on endpoint)
-	//   - "llm"  — compact text optimized for LLM consumption
-	//   - "json" — explicit JSON request (accepted by /orbit/status, /orbit/schema,
-	//              /orbit/tools, and /orbit/query as an alias of "raw")
+	// ResponseFormat selects the Orbit response shape. GitLab declares
+	// two values on every route that takes it (ee/lib/api/orbit/data.rb,
+	// `values: %w[raw llm]`):
+	//   - "raw": structured JSON
+	//   - "llm": compact text optimized for LLM consumption
 	//
-	// When empty, status / schema / tools / dsl fall back to the GitLab API
-	// server-side default (currently "raw" for /orbit/dsl, "json" for
-	// /orbit/status, /orbit/schema, and /orbit/tools). [Query] is the
-	// exception: when the field is omitted, [Query] forces "raw" rather
-	// than letting the server apply its "llm" default, because structured
-	// JSON is strictly more useful for an MCP tool (the LLM can iterate
-	// over result nodes directly, the SDK decodes row_count, and the
-	// downstream markdown formatter pretty-prints the envelope). Callers
-	// who want the compact TOON text can pass response_format="llm"
-	// explicitly.
-	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: orbit.query forces raw when this field is empty."`
+	// "json" is accepted here as a synonym of "raw" and sent as "raw":
+	// GitLab answers 400 "response_format does not have a valid value"
+	// to it on every route, and it was offered here as a value of its
+	// own until that was measured.
+	//
+	// When empty the parameter is not sent and GitLab applies its own
+	// default, which is "raw" on every route. [Query] sends "raw"
+	// explicitly when the field is omitted, so the structured envelope
+	// it decodes does not depend on that default staying what it is.
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies."`
 }
 
 // StatusInput holds parameters for retrieving Orbit cluster status.
@@ -47,12 +47,14 @@ type SchemaInput struct {
 	// Expand lists node names whose full properties and relationships
 	// should be hydrated in the response.
 	Expand []string `json:"expand,omitempty" jsonschema:"Node names to expand with full properties and relationships."`
-	// Format selects the schema response shape. Allowed values: "raw",
-	// "llm", "json". Empty uses the API server-side default ("json").
-	Format string `json:"format,omitempty" jsonschema:"Schema response format: raw, llm, or json. When omitted, the API server-side default is used (json)."`
-	// ResponseFormat is an alias for Format, accepted for compatibility
-	// with the public Orbit API documentation. Must match Format when
-	// both are set; Format wins when only one is set.
+	// Format selects the schema response shape: "raw" or "llm", with
+	// "json" read as "raw" for the reason [ResponseFormatInput] gives.
+	// Empty leaves GitLab's default ("raw"). Whichever of the two
+	// input names carries it, it reaches GitLab as response_format,
+	// which is the only name the route declares.
+	Format string `json:"format,omitempty" jsonschema:"Schema response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies."`
+	// ResponseFormat is an alias for Format, under the name GitLab
+	// declares for the parameter. Must match Format when both are set.
 	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Alias for format. Must match format when both are set."`
 }
 
@@ -72,8 +74,9 @@ type DSLOutput struct {
 	// ResponseFormat echoes the response_format that produced Content
 	// ("raw" for the JSON Schema body, "llm" for the text grammar).
 	ResponseFormat string `json:"response_format,omitempty"`
-	// Content is the DSL body verbatim, encoded as JSON or text
-	// depending on ResponseFormat.
+	// Content is the DSL: for raw, the JSON Schema document as GitLab
+	// sent it; for llm, the grammar text, decoded from the JSON string
+	// GitLab sends it in.
 	Content string `json:"content,omitempty"`
 }
 
@@ -276,6 +279,11 @@ type SchemaEdgeVariant struct {
 // SchemaOutput is the Orbit graph ontology response.
 type SchemaOutput struct {
 	toolutil.HintableOutput
+	// FormattedText is the ontology as compact text, which is the whole
+	// of GitLab's answer when the caller selected the "llm" response
+	// format. client-go's OrbitSchema does not model the key, so it is
+	// read from the captured response.
+	FormattedText string `json:"formatted_text,omitempty"`
 	// SchemaVersion is the Orbit ontology version string.
 	SchemaVersion string `json:"schema_version,omitempty"`
 	// Domains are the logical groupings of node types.
@@ -312,7 +320,7 @@ type QueryOutput struct {
 	// server when the caller selected the "llm" response format.
 	FormattedText string `json:"formatted_text,omitempty"`
 	// Result is the decoded result envelope returned for the
-	// "raw" or "json" response format. Its shape depends on the
+	// "raw" response format. Its shape depends on the
 	// query_type: traversal returns a list of row objects,
 	// aggregation returns aggregation rows, neighbors returns the
 	// neighbor expansion, and path_finding returns the matching paths.
@@ -410,30 +418,62 @@ func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput)
 // types) from GitLab.com.
 //
 // Endpoint: GET /api/v4/orbit/schema. The expand parameter hydrates the
-// named node types with full properties; format selects raw, llm, or
-// json response shapes.
+// named node types with full properties; the response format selects
+// the structured ontology (raw) or the compact text one (llm).
+//
+// The format is sent as response_format through [responseFormatQuery]
+// rather than through client-go's GetOrbitSchemaOptions.Format, which
+// encodes it as `format`. Grape reserves that name for the
+// representation it renders, so GitLab answered 406 "The requested
+// format 'llm' is not supported." to either value and the response
+// format never reached the route. The option struct is left without a
+// format for that reason, and the compact text GitLab then answers
+// with is read from the captured response, since OrbitSchema models no
+// formatted_text.
 func Schema(ctx context.Context, client *gitlabclient.Client, input SchemaInput) (SchemaOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SchemaOutput{}, err
 	}
-	format, hasFormat, err := schemaResponseFormat(input)
+	format, err := schemaResponseFormat(input)
 	if err != nil {
 		return SchemaOutput{}, err
 	}
-	opts := &gl.GetOrbitSchemaOptions{}
-	if hasFormat {
-		opts.Format = format
-	}
-	if len(input.Expand) > 0 {
-		expand := input.Expand
-		opts.Expand = &expand
-	}
+	// An empty expand is left to the encoder, which writes no parameter for
+	// an empty slice behind the pointer; testing its length here would be a
+	// condition with no observable outcome.
+	expand := input.Expand
+	opts := &gl.GetOrbitSchemaOptions{Expand: &expand}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 
-	schema, _, err := client.GL().Orbit.GetSchema(opts, gl.WithContext(ctx))
+	schema, _, err := client.GL().Orbit.GetSchema(opts, gl.WithContext(ctx), responseFormatQuery(format))
 	if err != nil {
 		return SchemaOutput{}, wrapOrbitErr("orbit_schema", err)
 	}
-	return convertSchema(schema), nil
+	var text struct {
+		FormattedText string `json:"formatted_text"`
+	}
+	if err = captured.Decode(&text); err != nil {
+		return SchemaOutput{}, toolutil.WrapErr("orbit_schema", err)
+	}
+	out := convertSchema(schema)
+	out.FormattedText = text.FormattedText
+	return out, nil
+}
+
+// responseFormatQuery sets response_format on the request's query string,
+// replacing any value already there, or leaves the request as it is when
+// no format was chosen. It is how [Schema] sends the one parameter
+// client-go spells under a name GitLab does not read.
+func responseFormatQuery(format *gl.OrbitResponseFormatValue) gl.RequestOptionFunc {
+	return func(req *retryablehttp.Request) error {
+		if format == nil {
+			return nil
+		}
+		query := req.URL.Query()
+		query.Set("response_format", string(*format))
+		req.URL.RawQuery = query.Encode()
+		return nil
+	}
 }
 
 // Tools retrieves the Orbit MCP tool manifest and parameter schemas.
@@ -453,12 +493,14 @@ func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (Tool
 	return convertTools(tools), nil
 }
 
-// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema
-// verbatim from GitLab.com.
+// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema from
+// GitLab.com.
 //
 // Endpoint: GET /api/v4/orbit/schema/dsl. With response_format="raw"
-// the body is a JSON Schema document; with response_format="llm" it
-// is a compact text grammar suitable for inclusion in an LLM prompt.
+// the body is a JSON Schema document, published as it came; with
+// response_format="llm" it is a compact text grammar suitable for
+// inclusion in an LLM prompt, which GitLab sends as a JSON string and
+// [llmGrammar] reads the text out of.
 func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DSLOutput{}, err
@@ -476,7 +518,28 @@ func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLO
 	if err != nil {
 		return DSLOutput{}, wrapOrbitErr("orbit_dsl", err)
 	}
+	if hasFormat && *format == gl.OrbitResponseFormatLLM {
+		content = llmGrammar(content)
+	}
 	return DSLOutput{ResponseFormat: responseFormatName(format), Content: content}, nil
+}
+
+// llmGrammar reads the llm grammar out of the body GitLab answers it in.
+//
+// get_query_dsl (ee/lib/analytics/knowledge_graph/grpc_client.rb) returns
+// the grammar as a Ruby String and ee/lib/api/orbit/data.rb presents it,
+// which Grape renders as a JSON string under application/json: the grammar
+// in quotes, every newline escaped (docs/development/orbit-responses.json
+// records orbit.dsl (llm) as a string at the root). client-go's GetDsl
+// hands that body over as it came, so publishing it whole gave a model one
+// quoted line of escapes. A body that is not a JSON string is kept as it
+// came, which is what a route answering the grammar as text would send.
+func llmGrammar(body string) string {
+	var grammar string
+	if err := json.Unmarshal([]byte(body), &grammar); err != nil {
+		return body
+	}
+	return grammar
 }
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.
@@ -492,13 +555,13 @@ func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLO
 //   - neighbors    — one-hop or two-hop expansion from a single node.
 //   - path_finding — shortest path between two top-level nodes (depth 1..3).
 //
-// When response_format is omitted, the handler defaults to "raw"
-// (structured JSON) rather than the API server-side default of "llm"
-// (compact TOON text). Structured JSON is strictly more useful for an
-// MCP tool: the LLM can iterate over result nodes directly, the SDK
-// decodes row_count, and downstream markdown formatters pretty-print
-// the envelope. Callers who want the compact TOON text can pass
-// response_format="llm" explicitly.
+// When response_format is omitted, the handler sends "raw" (structured
+// JSON) explicitly rather than leaving the choice to GitLab's default,
+// which is "raw" today (ee/lib/api/orbit/data.rb) and was not always.
+// Structured JSON is strictly more useful for an MCP tool: the LLM can
+// iterate over result nodes directly, the SDK decodes row_count, and
+// downstream markdown formatters pretty-print the envelope. Callers who
+// want the compact TOON text can pass response_format="llm" explicitly.
 func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (QueryOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return QueryOutput{}, err
@@ -563,43 +626,58 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 }
 
 // schemaResponseFormat normalizes the SchemaInput format fields. The
-// input accepts both Format (primary) and ResponseFormat (alias) for
-// public-API compatibility; both must agree when set, and Format wins
-// when only one is set.
-func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, bool, error) {
-	format := strings.TrimSpace(input.Format)
-	responseFormatAlias := strings.TrimSpace(input.ResponseFormat)
-	if format != "" && responseFormatAlias != "" && !strings.EqualFold(format, responseFormatAlias) {
-		return nil, false, errors.New("format and response_format must match when both are set")
+// input accepts both Format and ResponseFormat, the name GitLab declares;
+// each is normalized on its own, so "json" and "raw" agree, and the two
+// must then name the same format when both are set. Nil means neither
+// was set.
+func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, error) {
+	format, _, err := responseFormat(input.Format, "format")
+	if err != nil {
+		return nil, err
 	}
-	if format != "" {
-		return responseFormat(format, "format")
+	alias, _, err := responseFormat(input.ResponseFormat, "response_format")
+	if err != nil {
+		return nil, err
 	}
-	return responseFormat(responseFormatAlias, "response_format")
+	if format == nil {
+		return alias, nil
+	}
+	if alias != nil && *alias != *format {
+		return nil, errors.New("format and response_format must match when both are set")
+	}
+	return format, nil
 }
 
-// responseFormat normalizes a user-supplied format string to the SDK value
-// the GitLab Orbit API understands. Returns (nil, false, nil) when the input
-// is empty so the API applies its own server-side default (which differs per
-// endpoint: "json" for status/schema/tools, "raw" for dsl/query). Pass an
-// explicit value to force a specific format.
+// responseFormat normalizes a user-supplied format string to the value
+// GitLab accepts. Returns (nil, false, nil) when the input is empty, so
+// the parameter is not sent and GitLab applies its default ("raw" on
+// every Orbit route).
 //
-// Allowed values are "raw", "llm", and "json" (the latter is accepted as an
-// explicit JSON request alias). The SDK's [gl.OrbitResponseFormatValue] is a
-// plain string type, so unknown server-side values are rejected.
+// GitLab declares "raw" and "llm" and nothing else, and refuses any
+// other value with 400. "json" is read as "raw" rather than refused,
+// because it was offered here as a value until that refusal was
+// measured and a caller may still send it; anything else is refused
+// here, before a request is made.
 func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, bool, error) {
 	normalized := strings.ToLower(strings.TrimSpace(format))
 	if normalized == "" {
 		return nil, false, nil
 	}
 	switch normalized {
-	case string(gl.OrbitResponseFormatRaw), string(gl.OrbitResponseFormatLLM), "json":
+	case string(gl.OrbitResponseFormatRaw), string(gl.OrbitResponseFormatLLM):
 		value := gl.OrbitResponseFormatValue(normalized)
 		return &value, true, nil
+	case jsonFormatSynonym:
+		value := gl.OrbitResponseFormatRaw
+		return &value, true, nil
 	default:
-		return nil, false, errors.New("invalid " + field + ": use raw, llm, or json")
+		return nil, false, errors.New("invalid " + field + ": use raw or llm")
 	}
 }
+
+// jsonFormatSynonym is the one response format this server accepts that
+// GitLab does not, read as raw by [responseFormat].
+const jsonFormatSynonym = "json"
 
 // responseFormatName returns the string form of a format pointer, or
 // "" when the pointer is nil or the value is empty. The empty result

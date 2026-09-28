@@ -45,7 +45,10 @@ func validateQuery(query map[string]any) (json.RawMessage, error) {
 		if err := requireNeighborsShape(query); err != nil {
 			return nil, err
 		}
-	case "path_finding":
+	default:
+		// path_finding: the enum check above leaves it the only value this
+		// switch has not named, so naming it would be a condition that can
+		// never be false.
 		if err := requireAtLeastTwoNodes(query); err != nil {
 			return nil, err
 		}
@@ -73,13 +76,9 @@ func requireScopedNodes(query map[string]any, queryType string) error {
 	// Detect the common "id_range too wide" case specifically so the
 	// error message tells the user the exact issue, not just "no scope".
 	for _, n := range nodes {
-		if r, ok := n["id_range"].(map[string]any); ok {
-			start, hasStart := toInt64(r["start"])
-			end, hasEnd := toInt64(r["end"])
-			if hasStart && hasEnd && (end-start) > 100000 {
-				return fmt.Errorf("query.node.id_range span (%d) exceeds the 100,000 limit; narrow the range or add a filter; example: "+
-					`{"id":"p","entity":"Project","id_range":{"start":1,"end":50000},"columns":["id"]}`, end-start)
-			}
+		if kind, span := classifyIDRange(n); kind == idRangeTooWide {
+			return fmt.Errorf("query.node.id_range span (%d) exceeds the 100,000 limit; narrow the range or add a filter; example: "+
+				`{"id":"p","entity":"Project","id_range":{"start":1,"end":50000},"columns":["id"]}`, span)
 		}
 	}
 	return fmt.Errorf("%s queries require at least one node with node_ids, filters, or id_range (span <= 100,000) to avoid a full edge table scan; example: "+
@@ -136,14 +135,52 @@ func nodeHasScope(n map[string]any) bool {
 	// <= 100,000. The live API rejects wider ranges with a confusing
 	// "require node_ids or filters" error, so we mirror the check
 	// here to surface a precise actionable error.
-	if r, ok := n["id_range"].(map[string]any); ok {
-		start, hasStart := toInt64(r["start"])
-		end, hasEnd := toInt64(r["end"])
-		if hasStart && hasEnd && (end-start) <= 100000 && (end-start) >= 0 {
-			return true
-		}
+	kind, _ := classifyIDRange(n)
+	return kind == idRangeScoped
+}
+
+// maxIDRangeSpan is the widest id_range the Orbit API accepts as a
+// node's scope.
+const maxIDRangeSpan = 100000
+
+// idRangeKind is what a node's id_range amounts to as a scope.
+type idRangeKind int
+
+const (
+	// idRangeNone is a node with no id_range, one missing an end, or
+	// one whose end precedes its start: nothing the span rule can judge.
+	idRangeNone idRangeKind = iota
+	// idRangeScoped is a range of at most maxIDRangeSpan, a scope.
+	idRangeScoped
+	// idRangeTooWide is a well-ordered range wider than the API accepts,
+	// the one case [requireScopedNodes] names in its refusal.
+	idRangeTooWide
+)
+
+// classifyIDRange decides what a node's id_range amounts to, once, and
+// returns its span beside the verdict. The decision is made here alone so
+// that [nodeHasScope] and the refusal in [requireScopedNodes] cannot
+// disagree about where the limit falls.
+func classifyIDRange(n map[string]any) (kind idRangeKind, span int64) {
+	r, ok := n["id_range"].(map[string]any)
+	if !ok {
+		return idRangeNone, 0
 	}
-	return false
+	start, hasStart := toInt64(r["start"])
+	end, hasEnd := toInt64(r["end"])
+	if !hasStart || !hasEnd {
+		return idRangeNone, 0
+	}
+	// An if chain rather than a switch: gremlins maps a case expression to
+	// no coverage block and reports its mutants as not covered.
+	span = end - start
+	if span < 0 {
+		return idRangeNone, span
+	}
+	if span <= maxIDRangeSpan {
+		return idRangeScoped, span
+	}
+	return idRangeTooWide, span
 }
 
 // toInt64 coerces common numeric Go/JSON shapes (int, int64, float32,

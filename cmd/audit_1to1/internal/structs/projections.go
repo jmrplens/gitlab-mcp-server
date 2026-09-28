@@ -1,8 +1,10 @@
 package structs
 
 import (
+	"cmp"
 	"go/ast"
 	"go/types"
+	"slices"
 	"sort"
 	"strings"
 
@@ -125,11 +127,8 @@ func CollectProjections(pkg *packages.Package) []ProjectionPairing {
 		sort.Strings(pairing.Methods)
 		out = append(out, *pairing)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].MCPType != out[j].MCPType {
-			return out[i].MCPType < out[j].MCPType
-		}
-		return out[i].SDKType < out[j].SDKType
+	slices.SortFunc(out, func(a, b ProjectionPairing) int {
+		return cmp.Or(strings.Compare(a.MCPType, b.MCPType), strings.Compare(a.SDKType, b.SDKType))
 	})
 	return out
 }

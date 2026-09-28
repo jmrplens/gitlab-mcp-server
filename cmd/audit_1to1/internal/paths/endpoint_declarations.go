@@ -57,8 +57,9 @@ const (
 	// writing down because it named a replacement.
 	categoryDeprecatedRoute = "deprecated-route"
 
-	// categoryUndocumentedAPI is an endpoint GitLab publishes no reference
-	// page for at all, which today is the experimental Knowledge Graph.
+	// categoryUndocumentedAPI is an endpoint no page under doc/api spells as a
+	// line, which today is the Knowledge Graph: its page defers to a generated
+	// reference instead.
 	categoryUndocumentedAPI = "undocumented-api"
 
 	// categoryClientDefect is a path we send that GitLab does not have, and
@@ -167,8 +168,12 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 	{
 		Shape:    "/orbit/...",
 		Category: categoryUndocumentedAPI,
-		Reason: "the Knowledge Graph API is experimental, GitLab.com only, and has no reference page; the six " +
-			"gitlab_orbit_* tools are covered by the orbitlive suite against the real endpoints instead.",
+		Reason: "the Knowledge Graph API is beta and GitLab.com only. doc/api/orbit.md exists since 2026-09-16 " +
+			"(gitlab-org/gitlab@79abefeb) and points at the generated reference at api.gitlab.com instead of listing " +
+			"the routes: its plaintext blocks name only /orbit/skills and its subpaths, which this server does not call, " +
+			"and that reference (doc/api/openapi/openapi_v3.yaml) gives query, schema, status and tools no response " +
+			"schema while schema/dsl and graph_status are hidden routes. What the six routes answer is held instead to " +
+			"docs/development/orbit-responses.json, which cmd/gen_orbit_record records from GitLab.com.",
 	},
 	{
 		Shape:    "//sidekiq/...",
@@ -224,7 +229,7 @@ func (d endpointDeclaration) covers(endpoint Endpoint) bool {
 
 // matchesDeclaredShape compares a declared shape with a recorded path segment
 // by segment, where "*" stands for one segment and a trailing "..." for the
-// rest.
+// rest, none included.
 func matchesDeclaredShape(shape, recorded []string) bool {
 	for i, want := range shape {
 		if want == declaredRest {

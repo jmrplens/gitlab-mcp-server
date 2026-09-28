@@ -71,6 +71,10 @@ type ShapeCheck struct {
 	// endpoints return that the package does not publish, each with what the
 	// conditions record says about when GitLab sends it.
 	Sent SentCheck `json:"sent"`
+	// Orbit is both questions asked of the Orbit output types, whose routes
+	// neither record above describes, against a recording of what GitLab.com
+	// answered their handlers. See [OrbitCheck].
+	Orbit OrbitCheck `json:"orbit"`
 }
 
 // JoinQuality is how much of the inventory could be compared at all.

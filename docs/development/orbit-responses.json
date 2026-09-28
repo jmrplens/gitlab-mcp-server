@@ -1,0 +1,960 @@
+{
+  "schema_version": 1,
+  "note": "What GitLab.com's Orbit routes answered the requests this server's handlers build, as a key tree with no values: written by cmd/gen_orbit_record, judged offline by its -check, and compared with the Orbit output types by cmd/audit_1to1 -scope=paths. A verbatim key is recorded as its root only, because its keys are data.",
+  "source": {
+    "instance": "https://gitlab.com",
+    "orbit_version": "0.130.0",
+    "namespace": "plens1",
+    "retrieved_at": "2026-09-27"
+  },
+  "calls": [
+    {
+      "action": "orbit.dsl",
+      "variant": "llm",
+      "output": "internal/tools/orbit.DSLOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/schema/dsl",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.dsl",
+      "variant": "raw",
+      "output": "internal/tools/orbit.DSLOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/schema/dsl",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ],
+            "verbatim": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.graph_status",
+      "variant": "llm",
+      "output": "internal/tools/orbit.GraphStatusOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/graph_status",
+        "query": [
+          "full_path",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "formatted_text",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.graph_status",
+      "variant": "raw",
+      "output": "internal/tools/orbit.GraphStatusOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/graph_status",
+        "query": [
+          "full_path",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains[].items",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[].items[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains[].items[].count",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "domains[].items[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "domains[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "indexing",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "indexing.last_completed_at",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "indexing.last_duration_ms",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "indexing.last_error",
+            "kinds": [
+              "null"
+            ]
+          },
+          {
+            "path": "indexing.last_started_at",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "indexing.state",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "projects",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "projects.indexed",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "projects.total_known",
+            "kinds": [
+              "number"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.query",
+      "variant": "llm",
+      "output": "internal/tools/orbit.QueryOutput",
+      "request": {
+        "method": "POST",
+        "path": "/orbit/query",
+        "body": [
+          "query",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "text/plain",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "text"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.query",
+      "variant": "raw",
+      "output": "internal/tools/orbit.QueryOutput",
+      "request": {
+        "method": "POST",
+        "path": "/orbit/query",
+        "body": [
+          "query",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "query_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "result",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "result.edges",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "result.format_version",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "result.nodes",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "result.nodes[]",
+            "kinds": [
+              "object"
+            ],
+            "verbatim": true
+          },
+          {
+            "path": "result.pagination",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "result.pagination.has_more",
+            "kinds": [
+              "boolean"
+            ]
+          },
+          {
+            "path": "result.pagination.truncated",
+            "kinds": [
+              "boolean"
+            ]
+          },
+          {
+            "path": "result.query_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "row_count",
+            "kinds": [
+              "number"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.schema",
+      "variant": "expand",
+      "output": "internal/tools/orbit.SchemaOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/schema",
+        "query": [
+          "expand",
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "domains[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "domains[].node_names",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[].node_names[]",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "edges[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "edges[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].variants",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "edges[].variants[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "edges[].variants[].source_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].variants[].target_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "nodes[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].domain",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].incoming_edges",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[].incoming_edges[]",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].label_field",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].outgoing_edges",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[].outgoing_edges[]",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].primary_key",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].properties",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[].properties[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "nodes[].properties[].data_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].properties[].enum_values",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[].properties[].enum_values[]",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].properties[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].properties[].nullable",
+            "kinds": [
+              "boolean"
+            ]
+          },
+          {
+            "path": "nodes[].style",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "nodes[].style.color",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].style.size",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "schema_version",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.schema",
+      "variant": "llm",
+      "output": "internal/tools/orbit.SchemaOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/schema",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "formatted_text",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.schema",
+      "variant": "raw",
+      "output": "internal/tools/orbit.SchemaOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/schema",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "domains[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "domains[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "domains[].node_names",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "domains[].node_names[]",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "edges[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "edges[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].variants",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "edges[].variants[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "edges[].variants[].source_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "edges[].variants[].target_type",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "nodes[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "nodes[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].domain",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].label_field",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "nodes[].primary_key",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "schema_version",
+            "kinds": [
+              "string"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.status",
+      "variant": "llm",
+      "output": "internal/tools/orbit.StatusOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/status",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system.formatted_text",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "user",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "user.available",
+            "kinds": [
+              "boolean"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.status",
+      "variant": "raw",
+      "output": "internal/tools/orbit.StatusOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/status",
+        "query": [
+          "response_format"
+        ]
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system.components",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "system.components[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system.components[].metrics",
+            "kinds": [
+              "object"
+            ],
+            "verbatim": true
+          },
+          {
+            "path": "system.components[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "system.components[].replicas",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "system.components[].replicas.desired",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "system.components[].replicas.ready",
+            "kinds": [
+              "number"
+            ]
+          },
+          {
+            "path": "system.components[].status",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "system.status",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "system.timestamp",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "system.version",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "user",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "user.available",
+            "kinds": [
+              "boolean"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "action": "orbit.tools",
+      "variant": "default",
+      "output": "internal/tools/orbit.ToolsOutput",
+      "request": {
+        "method": "GET",
+        "path": "/orbit/tools"
+      },
+      "response": {
+        "status": 200,
+        "content_type": "application/json",
+        "keys": [
+          {
+            "path": "$",
+            "kinds": [
+              "array"
+            ]
+          },
+          {
+            "path": "[]",
+            "kinds": [
+              "object"
+            ]
+          },
+          {
+            "path": "[].description",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "[].name",
+            "kinds": [
+              "string"
+            ]
+          },
+          {
+            "path": "[].parameters",
+            "kinds": [
+              "object"
+            ],
+            "verbatim": true
+          }
+        ]
+      }
+    }
+  ]
+}

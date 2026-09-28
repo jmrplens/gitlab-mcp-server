@@ -201,6 +201,13 @@ jobs:
       # reason the boot lives in a generator.
       - name: Check the pinned live GitLab record
         run: make check-api-live
+      # The Orbit twin of the record above: what GitLab.com's Orbit routes
+      # answered the requests the handlers build, as a key tree. No
+      # self-managed GitLab serves Orbit, so no boot could answer it, and the
+      # recording is a generator run against GitLab.com with a token. The gate
+      # reads the committed record and needs neither.
+      - name: Check the recorded Orbit answers
+        run: make check-orbit-record
       # A meta-tool's description is checked against the parameters its routes
       # take, which is the third party the golden snapshot never was (issue 574).
       - name: Check every meta-tool description against its routes

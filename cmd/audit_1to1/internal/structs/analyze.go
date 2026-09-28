@@ -143,6 +143,9 @@ const (
 	// entity is the oracle for those four.
 	docPlanLimits = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history " +
 		"with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
+	docOrbitSchemaText = "orbit.md, which defers to the generated reference, and that gives GET /orbit/schema no response " +
+		"schema; get_graph_schema in ee/lib/analytics/knowledge_graph/grpc_client.rb answers the llm format with " +
+		"`{ formatted_text: response.formatted_text }`, recorded in docs/development/orbit-responses.json as orbit.schema (llm)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -857,6 +860,12 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"planlimits.PlanLimitItem.web_hook_calls_low":                    docPlanLimits,
 	"planlimits.PlanLimitItem.web_hook_calls_mid":                    docPlanLimits,
 	"planlimits.PlanLimitItem.limits_history":                        docPlanLimits,
+
+	// orbit: the compact text GitLab answers the schema route with for the llm
+	// response format, a key client-go's OrbitSchema does not model, read from
+	// the captured response (ADR-0021, orbit.Schema). Recorded in
+	// docs/development/upstream-bugs.md.
+	"orbit.SchemaOutput.formatted_text": docOrbitSchemaText,
 }}
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we
@@ -887,7 +896,7 @@ var acceptedExtraOutputs = &declarationTable{name: "acceptedExtraOutputs", entri
 	// model, they are additive and intentional.
 	"events.ContributionEventOutput.target_url": "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
 	"events.ProjectEventOutput.target_url":      "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
-	"orbit.QueryOutput.formatted_text":          "server-formatted convenience rendering of the Orbit query result; not an API field",
+	"orbit.QueryOutput.formatted_text":          "the text/plain body GitLab answers POST /orbit/query with for the llm format (writeLLMResultResponse in workhorse/internal/orbit/sendquery.go), read through QueryRaw and published under the name the other Orbit llm answers use; a body with no keys has no struct field to pair with",
 
 	// SDK-sourced field the SDK leaves json-untagged: gl.Feature.Gates exists and is
 	// the documented feature-flag `gates` array; the SDK struct field carries no json
@@ -1176,7 +1185,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		}
 		reports = append(reports, pr)
 	}
-	sort.Slice(reports, func(i, j int) bool { return reports[i].Package < reports[j].Package })
+	slices.SortFunc(reports, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	// Judged after the loop and over every package, including the clean ones
 	// -gaps-only is about to drop from the report: a declaration that answers a
 	// candidate in a package with no finding left is doing its job.
@@ -1318,7 +1327,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 	for _, grp := range byName {
 		out = append(out, *grp)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].mcpName < out[j].mcpName })
+	slices.SortFunc(out, func(a, b outputGroup) int { return strings.Compare(a.mcpName, b.mcpName) })
 	return out
 }
 
@@ -1428,11 +1437,8 @@ func sortedPairs(pairs map[[2]string]structPair) []structPair {
 	for _, pair := range pairs {
 		out = append(out, pair)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].mcpName != out[j].mcpName {
-			return out[i].mcpName < out[j].mcpName
-		}
-		return out[i].sdkName < out[j].sdkName
+	slices.SortFunc(out, func(a, b structPair) int {
+		return cmp.Or(strings.Compare(a.mcpName, b.mcpName), strings.Compare(a.sdkName, b.sdkName))
 	})
 	return out
 }

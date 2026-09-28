@@ -135,6 +135,35 @@ type TypedShapeCheck struct {
 	// the payload was. Listing it here would call judged a response nobody
 	// compared.
 	Envelopes []string `json:"envelopes,omitempty"`
+	// OrbitRecord names, as "package.Type", sorted, the types this grain could
+	// not judge and the Orbit response record did (see [OrbitCheck]): the
+	// Orbit outputs whose routes GitLab's document gives no schema, the one
+	// no converter pairs, and the manifest row no service method answers
+	// with. They are taken out of the three skip lists rather than counted
+	// twice, since a skip reads as a response nobody compared.
+	OrbitRecord []string `json:"compared_against_orbit_record,omitempty"`
+}
+
+// judgedAgainstOrbit returns the check with the types the Orbit record judged
+// moved out of the skip lists they fell into here, and the three counters
+// reset to what is left.
+func (c TypedShapeCheck) judgedAgainstOrbit(judged map[string]bool) TypedShapeCheck {
+	var moved []string
+	for _, bucket := range []*[]string{&c.Skipped.NoPairing, &c.Skipped.NoRoute, &c.Skipped.NoSchema} {
+		var kept []string
+		for _, name := range *bucket {
+			if judged[name] {
+				moved = append(moved, name)
+				continue
+			}
+			kept = append(kept, name)
+		}
+		*bucket = kept
+	}
+	c.SkippedNoPairing, c.SkippedNoRoute, c.SkippedNoSchema = len(c.Skipped.NoPairing), len(c.Skipped.NoRoute), len(c.Skipped.NoSchema)
+	sort.Strings(moved)
+	c.OrbitRecord = moved
+	return c
 }
 
 // SkippedTypes names the output types each skip bucket holds.

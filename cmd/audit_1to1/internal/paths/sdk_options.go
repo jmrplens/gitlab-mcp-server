@@ -191,7 +191,9 @@ func optionTypeName(name string) string {
 // A field with no json tag at all is written under its Go name and always: that
 // is what encoding/json does, and naming it that way produces a param GitLab's
 // record will not know, which costs a comparison that could not have been made
-// rather than a finding that is wrong.
+// rather than a finding that is wrong. A tag of "-" alone hides the field,
+// while "-," names the key "-", which is encoding/json's own distinction: the
+// comma, not what follows it, is what makes the dash a name.
 func jsonField(tag *ast.BasicLit, goName string) (key string, always, published bool) {
 	if tag == nil {
 		return goName, true, true

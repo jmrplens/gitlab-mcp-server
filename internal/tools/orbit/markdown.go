@@ -169,10 +169,20 @@ func replicaCell(replicas *StatusReplicas) string {
 
 // FormatSchemaMarkdown renders the Knowledge Graph ontology as the card of one
 // object: the version and the three type counts, then the domains as a nested
-// collection.
+// collection. The compact text GitLab answers the llm format with is the whole
+// response, so it is rendered as the card's body instead.
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Schema")
+	hints := []string{
+		toolutil.HintAction(actionTools, "inspect the live query and tool manifest"),
+		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the manifest"),
+	}
+	if out.FormattedText != "" {
+		c.Fence("", "text", out.FormattedText)
+		c.End(hints...)
+		return b.String()
+	}
 	c.Field("Schema version", out.SchemaVersion)
 	c.Int("Domains", int64(len(out.Domains)))
 	c.Int("Nodes", int64(len(out.Nodes)))
@@ -187,10 +197,7 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 			)
 		}
 	}
-	c.End(
-		toolutil.HintAction(actionTools, "inspect the live query and tool manifest"),
-		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the manifest"),
-	)
+	c.End(hints...)
 	return b.String()
 }
 

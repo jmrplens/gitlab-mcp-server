@@ -240,6 +240,18 @@
 //     response of this package (label_details on the deployment merge
 //     request list).
 //
+// The Orbit output types are asked both questions against another oracle,
+// because this record says nothing about them: no self-managed GitLab serves
+// Orbit, so its routes carry no response entity, and the type grain skipped
+// all six. [OrbitCheck] reads docs/development/orbit-responses.json, a
+// recording cmd/gen_orbit_record makes through the handlers against
+// GitLab.com, whose every call names the output type its handler returned, and
+// walks that type to every depth against the recorded key tree. Its findings
+// are answered in orbit_declarations.go, keyed by the path under the output,
+// under three categories of their own: a key GitLab never sends where
+// client-go puts it, a key sent only under a condition the recording did not
+// meet, and a body carried whole.
+//
 // # Does a list say where it ends
 //
 // R-PAGE, and the reason it is a rule of this package rather than a scope of its

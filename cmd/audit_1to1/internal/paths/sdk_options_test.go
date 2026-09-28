@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +133,80 @@ func TestWalkOptionParams_NestedStructs_AreNamedTheWayGrapeDeclaresThem(t *testi
 	want := []string{"sudo", "note", "position", "position[position_type]", "actions", "actions[][action]", "actions[][self]"}
 	if !reflect.DeepEqual(params, want) {
 		t.Errorf("params = %v, want %v", params, want)
+	}
+}
+
+// TestWalkOptionParams_AChainDeeperThanTheBound_NamesTheDeepestParam verifies
+// what the depth bound leaves the caller, with no type repeated for the
+// ancestor check to catch: a chain of nested option structs longer than
+// client-go's deepest is walked to the bound, the last param named with one
+// bracket per level, and an embed chain promotes its fields from the deepest
+// level the bound reaches.
+func TestWalkOptionParams_AChainDeeperThanTheBound_NamesTheDeepestParam(t *testing.T) {
+	types := map[string]sdkOptionType{}
+	for level := range optionDepth + 3 {
+		types[fmt.Sprintf("Level%dOptions", level)] = sdkOptionType{Fields: []sdkOptionField{
+			{GoName: "Next", Name: "next", Nested: fmt.Sprintf("Level%dOptions", level+1)},
+		}}
+	}
+
+	var params []string
+	walkOptionParams(types, "Level0Options", "", nil, 0, func(found optionParam) {
+		params = append(params, found.Param)
+	})
+
+	if len(params) != optionDepth+1 {
+		t.Fatalf("visited %d params %v, want the %d levels the bound allows", len(params), params, optionDepth+1)
+	}
+	if want := "next" + strings.Repeat("[next]", optionDepth); params[optionDepth] != want {
+		t.Errorf("deepest param = %q, want %q", params[optionDepth], want)
+	}
+
+	// An embed is a level too, though it adds nothing to the param's name.
+	embeds := map[string]sdkOptionType{}
+	for level := range optionDepth + 3 {
+		embeds[fmt.Sprintf("Embed%dOptions", level)] = sdkOptionType{
+			Embedded: []string{fmt.Sprintf("Embed%dOptions", level+1)},
+			Fields:   []sdkOptionField{{GoName: "Own", Name: fmt.Sprintf("own%d", level)}},
+		}
+	}
+	var promoted []string
+	walkOptionParams(embeds, "Embed0Options", "", nil, 0, func(found optionParam) {
+		promoted = append(promoted, found.Param)
+	})
+	if len(promoted) != optionDepth+1 || promoted[0] != fmt.Sprintf("own%d", optionDepth) {
+		t.Errorf("promoted = %v, want own%d down to own0, the %d levels the bound allows", promoted, optionDepth, optionDepth+1)
+	}
+}
+
+// TestSDKOptionReaders_EmbedsTagsAndParameters verifies three readings the
+// client-go source exercises and the fixture above does not: an embedded type
+// that is not an option struct contributes nothing, a json key spelled "-,"
+// is the key "-" rather than a hidden field, and a method taking one option
+// struct twice, or a variadic one, names it once and the variadic never.
+func TestSDKOptionReaders_EmbedsTagsAndParameters(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", `package gitlab
+
+type WithBaseOptions struct {
+	Base
+	ListOptions
+}
+
+func (s *Service) Twice(a *FooOptions, b *FooOptions, name string, options ...TransportOptions) {}
+`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	structType := file.Decls[0].(*ast.GenDecl).Specs[0].(*ast.TypeSpec).Type.(*ast.StructType)
+	if got := optionFields(structType); !reflect.DeepEqual(got.Embedded, []string{"ListOptions"}) {
+		t.Errorf("embedded = %v, want only the option struct", got.Embedded)
+	}
+	key, always, published := jsonField(&ast.BasicLit{Kind: token.STRING, Value: "`json:\"-,\"`"}, "Dash")
+	if key != "-" || !always || !published {
+		t.Errorf("jsonField(-,) = %q, %t, %t; want the key \"-\", always, published", key, always, published)
+	}
+	if got := optionParameters(file.Decls[1].(*ast.FuncDecl)); !reflect.DeepEqual(got, []string{"FooOptions"}) {
+		t.Errorf("optionParameters() = %v, want [FooOptions]", got)
 	}
 }
 

@@ -2,7 +2,7 @@
 	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	validate-http-stateless validate-http-stateless-docker \
-	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
+	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token gen-orbit-record check-orbit-record \
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
@@ -536,9 +536,11 @@ e2e-clean-orphans:
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,
 ## provisions the kg-fixtures and security-fixtures projects in
 ## $(ORBIT_FIXTURES_NAMESPACE) (default: plens1), polls the indexer
-## until it has caught up, and runs the orbitlive-tagged live tests.
-## Idempotent: the setup script skips already-existing resources, so
-## re-running is safe.
+## until it has caught up, runs the orbitlive-tagged live tests, and
+## re-records what the six Orbit routes answer (gen-orbit-record), which
+## fails every run while the recorded key tree differs from the one
+## committed at HEAD. Idempotent: the setup script skips already-existing
+## resources, so re-running is safe.
 ##
 ## Overridable variables (command line or .env):
 ##   ORBIT_FIXTURES_NAMESPACE      default: plens1
@@ -552,7 +554,7 @@ e2e-clean-orphans:
 ##   make test-e2e-gitlab-com                                # default plens1
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
-test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests check-graphql-documents-live
+test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests gen-orbit-record check-graphql-documents-live
 	@echo ""
 	@echo "=== test-e2e-gitlab-com complete ==="
 	@echo "Reports and timings printed above. To re-run later without"
@@ -655,6 +657,36 @@ orbit-run-live-tests: orbit-ensure-token
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
+
+## gen-orbit-record: record what GitLab.com's six Orbit routes answer the
+## requests the handlers build, and write the key tree of every answer, never
+## a value, to docs/development/orbit-responses.json. Reads only, through a
+## proxy on the loopback interface, with GITLAB_COM_TOKEN from .env and the
+## fixture namespace $(ORBIT_FIXTURES_NAMESPACE), and refuses to record over a
+## namespace the indexer has not reached. It prints every key added, dropped
+## or changed against the record committed at HEAD (read through git, not
+## from the file it has just rewritten) and exits 1 when the tree differs,
+## after writing it, so every run fails until the record is committed;
+## `make audit-1to1-paths` then says what the change means for the Orbit
+## output types (cmd/audit_1to1, shapes.orbit).
+gen-orbit-record: orbit-ensure-token
+	@. ./.env && { \
+		echo ""; \
+		echo "=== Recording the Orbit answers from GitLab.com ==="; \
+		export GITLAB_COM_TOKEN \
+			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
+		go run ./cmd/gen_orbit_record/; \
+	}
+
+## check-orbit-record: fail when the committed Orbit response record is not one
+## this build can read, was taken from anywhere but GitLab.com, names no Orbit
+## version or fixture namespace, lacks an expected call or holds one twice or
+## refused, carries a key tree that does not hang together or a path that is
+## not made of key names, is past the shared staleness window
+## (cmd/internal/provenance), or is not in the form the generator writes. No
+## token and no network, so it is a gate.
+check-orbit-record:
+	go run ./cmd/gen_orbit_record/ -check
 
 # A prompt that hands a case its own answer is refused by the unit suite now
 # rather than by a target nobody remembers to run: TestContract_NoStimulusNamesItsOwnAnswer
@@ -937,29 +969,30 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/23] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/23] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/23] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/23] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/23] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/23] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/23] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/23] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/23] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/23] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/23] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/23] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/23] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/23] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/23] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/23] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/23] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/23] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/23] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/23] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/23] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/23] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/23] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[1/24] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/24] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/24] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/24] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/24] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/24] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/24] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/24] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/24] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/24] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/24] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/24] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/24] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/24] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/24] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/24] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/24] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/24] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/24] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/24] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/24] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/24] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/24] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/24] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
