@@ -36,10 +36,12 @@ import (
 // enabled, which a fresh instance leaves off.
 const projectImportSource = "gitlab_project"
 
-// The bounds of the waits this file makes: for a scheduled export to be
+// The bounds of the waits this file makes: for Sidekiq's queues to empty
+// before an export the round trip waits for, for a scheduled export to be
 // picked up, for one to finish under the load of a whole suite, and for a
 // settings change to reach GitLab's cache.
 const (
+	exportDrainWait     = 3 * time.Minute
 	exportPollInterval  = 3 * time.Second
 	exportStartedWait   = 90 * time.Second
 	exportWait          = 5 * time.Minute
@@ -134,6 +136,14 @@ func TestProjectImport_FromFile_RefusedWhileTheSourceIsDisabled(t *testing.T) {
 // archive and imports it back as a new project, with the gitlab_project
 // import source enabled for the length of the test.
 //
+// An export is some seventy relation jobs and a worker that waits on them,
+// all queued behind whatever the scenarios before it left: on the licensed
+// run of 19.4.1 the parallel export worker waited 139 seconds for its turn and
+// the relation jobs up to 100 each, which put two of three surfaces past the
+// five minutes the export is given. Sidekiq's queues are therefore drained
+// before each export is scheduled, so the wait measures the export and not the
+// queue, and the failure says whether they drained.
+//
 // Replaces: TestMeta_ProjectExportDownloadImport
 func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin), harness.Locks(harness.LockInstanceGlobal))
@@ -144,6 +154,7 @@ func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("roundtrip"))
 		params := map[string]any{"project_id": project.IDParam()}
 
+		drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), exportDrainWait)
 		scheduled := harness.Do[projectimportexport.ScheduleExportOutput](s, actionProjectExportSchedule, params)
 		if !strings.Contains(strings.ToLower(scheduled.Message), "scheduled") {
 			e.T.Errorf("export_schedule answered %+v, want a message saying the export was scheduled", scheduled)
@@ -151,7 +162,7 @@ func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 		finished := harness.Eventually(s, actionProjectExportStatus, params, exportPollInterval, exportWait,
 			func(status projectimportexport.ExportStatusOutput) bool { return status.ExportStatus == "finished" })
 		if finished.ID != project.ID {
-			e.T.Errorf("export_status answered %+v, want project %d", finished, project.ID)
+			e.T.Errorf("export_status answered %+v, want project %d (Sidekiq drained before it: %t)", finished, project.ID, drained)
 		}
 
 		archive := harness.Do[projectimportexport.ExportDownloadOutput](s, actionProjectExportDownload, params)
