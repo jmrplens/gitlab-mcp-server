@@ -412,9 +412,9 @@ meets it with a token bucket counted in requests and refilled each second, drawn
 credential; it refuses a tool call as a tool error and the other four in-band with
 `-42900`, and it exists to bound a client in a loop, whose volume an HTTP deployment
 would otherwise pass on to the instance and to every other caller sharing its address.
-Its key is the pool entry in HTTP mode, one token and GitLab URL pair, where
-it is on by default at 10 a second with 40 in hand; on stdio it is the process, and it
-is off by default there. A stdio process serves one person with their own token on their
+Its key is the pool entry in HTTP mode, one token and GitLab URL pair, where it is on by
+default at 10 a second with 40 in hand; on stdio it is the process, and it is off by
+default there. A stdio process serves one person with their own token on their
 own machine, so there is no co-tenant to protect and a limiter only costs latency, while
 GitLab's own per-user limits still apply to every call it forwards. The same bucket is
 switched on for stdio by setting `GITLAB_MCP_RATE_LIMIT_RPS` above zero, with
