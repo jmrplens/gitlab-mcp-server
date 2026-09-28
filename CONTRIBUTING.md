@@ -30,7 +30,7 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ### Prerequisites
 
 - **Go 1.27+** — [Download](https://go.dev/dl/)
-- **Node.js 22+ with Corepack** — required for the documentation site and MCP Inspector. The site declares `pnpm@11.8.0`; pnpm settings live in `site/pnpm-workspace.yaml`.
+- **Node.js 24.18+ with Corepack**, required for the documentation site and MCP Inspector. The `packageManager` field in `site/package.json` names the pnpm version (`pnpm@12.4.2` today) and is authoritative; pnpm settings live in `site/pnpm-workspace.yaml`.
 - **Git** — configured with push access
 - **GitLab instance** — with a Personal Access Token (`api` scope)
 
