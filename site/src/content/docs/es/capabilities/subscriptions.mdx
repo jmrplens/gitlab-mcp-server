@@ -112,7 +112,7 @@ Un final que causas **tú** no lleva motivo, precisamente porque lo causaste tú
 
 - **stdio**: funciona tal cual en ambas generaciones del protocolo.
 - **HTTP, modo stateless (el predeterminado)**: la petición legada `resources/subscribe` se rechaza con un error explicativo — cada POST stateless recibe su propia sesión que se cierra con la respuesta, así que una suscripción aceptada nunca podría notificarse. Los clientes con protocolo 2026-07-28 no se ven afectados: `subscriptions/listen` mantiene la petición abierta, y eso el modo stateless sí lo soporta. Los suscriptores legados necesitan `--stateless=false`.
-- **Particularidades de clientes**: VS Code se suscribe a cada recurso que lee y encamina las actualizaciones a su pipeline de cambios de archivo; Cursor envía `resources/subscribe` incluso a servidores que anuncian `subscribe: false`; el cliente del SDK de Go dispara `subscriptions/listen` sin esperar la respuesta, así que un rechazo puede no aflorar nunca en el cliente.
+- **Particularidades de clientes**: VS Code se suscribe a cada recurso que lee y encamina las actualizaciones a su pipeline de cambios de archivo; Cursor envía `resources/subscribe` incluso a servidores que anuncian `subscribe: false`; el cliente del SDK de Go (v1.8.0) dispara `subscriptions/listen` sin esperar la respuesta, así que nunca ve un rechazo, que cualquier otro cliente lee como el error JSON-RPC que responde al listen, ni el resultado que termina una suscripción.
 
 ## Códigos de error
 
@@ -126,5 +126,7 @@ Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado
 | Vigilantes por proceso en 512                                                              | `-32000`, con `server-wide` en el mensaje                                             |
 | Fallo transitorio de GitLab en la primera lectura                                          | `-32603` (error interno)                                                              |
 | `resources/subscribe` en HTTP sin estado                                                   | `-32600` — use `subscriptions/listen` en su lugar                                     |
+
+En el protocolo 2026-07-28 un `subscriptions/listen` rechazado lleva los mismos códigos, como el error JSON-RPC que responde al propio listen, enviado antes de cualquier confirmación; la última fila nunca se le aplica, porque HTTP sin estado sí sirve un listen. Un listen tiene además rechazos propios: los topes de streams de listen abiertos, `GITLAB_MCP_MAX_LISTEN_STREAMS` por credencial (64 por defecto) y 512 por proceso, cada uno respondido con `-32000`. El límite de peticiones por credencial de este propio servidor (`--rate-limit-rps` en modo HTTP, `GITLAB_MCP_RATE_LIMIT_RPS` en stdio), que no es el límite de GitLab al que se refiere la tabla, rechaza ambos métodos antes aún, con `-42900`. El cliente del SDK de Go (v1.8.0) no ve ninguno de ellos en un listen, y un segundo `Subscribe` suyo a una URI rechazada no envía nada hasta `Unsubscribe`.
 
 <FAQ />

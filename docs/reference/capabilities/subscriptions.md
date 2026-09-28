@@ -77,10 +77,16 @@ to any issue in the project — most of them nothing the subscriber asked
 about — and cost a full page read on every poll. A subscription to a
 top-level collection is refused.
 
-A refused subscription starts no watcher and costs no API call. On protocol
-2026-07-28 the refusal may not reach the client: the Go SDK's client fires
-`subscriptions/listen` without awaiting its response, so a server-side error
-is discarded client-side. The refusal still takes effect.
+A refused subscription starts no watcher. One refused for its kind, like this
+one, costs no API call; one refused because the resource could not be read has
+spent that one authorization read. On protocol
+2026-07-28 the refusal is the JSON-RPC error that answers the
+`subscriptions/listen` request itself, sent before any acknowledgment, so a
+client that reads the listen's response sees it. The Go SDK's client (v1.8.0)
+never does: it fires `subscriptions/listen` without awaiting the response, so
+its `Subscribe` returns nil whatever the server answered
+([upstream entry](../../development/upstream-bugs.md#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal)).
+The refusal still takes effect.
 
 ## Polling cadence
 
@@ -222,10 +228,22 @@ error would marshal as:
 
 The message beside the code preserves the upstream failure detail
 verbatim; the retry behavior is defined by the code, per the table. On
-protocol 2026-07-28 a `subscriptions/listen` refusal is delivered by the
-stream closing instead; the SDK's client discards the response of the
-listen call it fires, so the codes above are observable on the legacy
-method and in server logs.
+protocol 2026-07-28 a `subscriptions/listen` is refused with the same codes,
+as the JSON-RPC error that answers the listen itself, before any
+acknowledgment, except the last row: stateless HTTP serves a listen. A listen
+also has two refusals of its own, which a legacy `resources/subscribe` never
+meets: the ceilings on open listen streams, `GITLAB_MCP_MAX_LISTEN_STREAMS` per
+credential (64 by default) and 512 per process, each answered `-32000` and
+transient. This server's own per-credential rate limit
+(`--rate-limit-rps`, or `GITLAB_MCP_RATE_LIMIT_RPS` on stdio), which is not
+the GitLab rate limit the table means, refuses either method earlier still,
+with `-42900`, before a watcher is asked. Any client that reads the listen's
+response sees every one of these. The Go SDK's client (v1.8.0) does not: it
+discards the response of the listen it fires, so its `Subscribe` returns nil
+for each refusal above, and since it has already recorded the URI as
+subscribed, a second `Subscribe` to it sends nothing until `Unsubscribe`. For
+that client the codes are observable only on the legacy method and in server
+logs.
 
 ## Notification `_meta`
 
@@ -354,12 +372,12 @@ accepted and then silently never firing.
 
 ## Client behavior
 
-| Client               | Protocol     | Notes                                                                                              |
-| -------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
-| VS Code              | `2025-11-25` | Subscribes to every resource it reads; routes updates into its file-change pipeline, not into chat |
-| Cursor               | `2025-11-25` | Sends `resources/subscribe` even to servers advertising `subscribe: false`                         |
-| Go SDK client        | `2026-07-28` | Discards the response to `subscriptions/listen`, so it never sees a refusal or a graceful close    |
-| Your own integration | any          | The `_meta` above is there for you; the notification alone is enough without it                    |
+| Client               | Protocol     | Notes                                                                                                                       |
+| -------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| VS Code              | `2025-11-25` | Subscribes to every resource it reads; routes updates into its file-change pipeline, not into chat                          |
+| Cursor               | `2025-11-25` | Sends `resources/subscribe` even to servers advertising `subscribe: false`                                                  |
+| Go SDK client        | `2026-07-28` | Discards the response to `subscriptions/listen` (v1.8.0), so it never sees a refusal or the result that ends a subscription |
+| Your own integration | any          | The `_meta` above is there for you; the notification alone is enough without it                                             |
 
 ## See also
 

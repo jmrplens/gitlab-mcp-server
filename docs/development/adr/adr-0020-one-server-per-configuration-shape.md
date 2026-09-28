@@ -231,8 +231,11 @@ nothing reached `listenStreams.stoppedFor` and the client's open
 `subscriptions/listen` was left neither closed nor completed, which is the
 outcome this decision calls the worse one. The eviction therefore closes that
 credential's own streams as well, by owner, which is what makes the SDK write
-the completion result the specification asks for; the next request
-re-initializes.
+the completion result the specification asks for; the client's next request
+builds a new entry. Where a terminated session is involved, re-initializing is
+the client's to do, and a client that follows the 2025-11-25 transport does;
+the Go SDK client (v1.8.0) does not, and fails its connection or stays on the
+dead session instead (row 68 of `docs/development/upstream-bugs.md`).
 
 That reaches everything a 2026-07-28 subscriber holds, because there the
 subscription **is** an open request. A session-era `resources/subscribe` holds
@@ -461,8 +464,11 @@ writing.
   the pool's bound.
 - NEG-005: The owner token is process-local and is minted per entry, so a
   rebuilt entry for the same credential is a different owner. A client whose
-  entry is rebuilt mid-session is refused on its session id and re-initializes.
-  That was already true when the session tag was per server.
+  entry is rebuilt mid-session is refused on its session id with a 404, and
+  re-initializes if it follows the 2025-11-25 transport; the Go SDK client
+  (v1.8.0) does not (row 68 of `docs/development/upstream-bugs.md`), so its
+  application has to reconnect. That was already true when the session tag was
+  per server.
 
 ### Neutral
 

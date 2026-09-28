@@ -841,7 +841,7 @@ If a client is idle for longer than `--session-timeout` (default: 30 minutes):
 
 1. The MCP SDK closes the idle session (HTTP transport level)
 2. The pool entry **remains** in the pool
-3. Next request from the same `(token, url)` pair creates a new MCP session on the shape's server, bound to the same entry
+3. The next request carrying the old session ID is answered `404`, and a client that follows the 2025-11-25 transport then sends `initialize` without one, which creates a new MCP session on the shape's server, bound to the same entry. The Go SDK client (v1.8.0) does not start one: it fails its connection with `ErrSessionMissing` once its standalone stream reconnects, or, with that stream disabled, keeps the dead session and is refused on every call, so its application has to reconnect ([upstream entry](../development/upstream-bugs.md#the-go-sdk-client-starts-no-new-session-after-a-404))
 
 ### Timeout model: HTTP layer vs MCP session
 
@@ -909,7 +909,7 @@ An entry is busy while its credential holds an open `subscriptions/listen` strea
 - its watchers stop;
 - its open `subscriptions/listen` requests are completed with a result, so a protocol 2026-07-28 client sees the call finish instead of waiting on it forever;
 - that result names the ending: `credential_evicted` for size pressure, `credential_reset` for an entry reclaimed for idleness, staleness or a rebuild, `credential_revoked` for a credential GitLab refused. Without it a client cannot tell "the server ran out of room", which it should answer by reconnecting at once, from "your token was revoked", which it should answer by re-authenticating first. The whole vocabulary is in [Why a subscription ended](../reference/capabilities/subscriptions.md#why-a-subscription-ended);
-- under `--stateless=false`, the sessions that no stream ended are terminated, so the client's next request re-initializes. Such a client is told **that** its subscription ended and not why: it held no open request for an answer to be written on, which is one more reason to prefer `subscriptions/listen`.
+- under `--stateless=false`, the sessions that no stream ended are terminated. A client that follows the 2025-11-25 transport then starts a new session on its next request; the Go SDK client (v1.8.0) does not, and fails its connection with `ErrSessionMissing` once its standalone stream reconnects, or, with that stream disabled, keeps the dead session and is refused on every call, so its application has to reconnect ([upstream entry](../development/upstream-bugs.md#the-go-sdk-client-starts-no-new-session-after-a-404)). Such a client is told **that** its subscription ended and not why: it held no open request for an answer to be written on, which is one more reason to prefer `subscriptions/listen`.
 
 #### The lever, and what it costs
 
