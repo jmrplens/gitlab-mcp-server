@@ -956,6 +956,84 @@ func TestInitialize_DetectsEnterpriseFromVersion(t *testing.T) {
 	}
 }
 
+// TestEnsureInitialized_PinnedTier_SurvivesTheEditionProbe holds a tier the
+// operator pinned through the lazy re-initialization of a degraded start. That
+// path runs Initialize, whose edition probe used to replace the tier with
+// Premium for an enterprise build and Free otherwise, after the catalog had been
+// registered for the pinned tier, so the handlers that branch on IsEnterprise
+// answered for a tier the surface was not built for (issue 1016). Each case is
+// one the overwrite changed: an Ultimate pin read as Premium, a Free pin read as
+// Premium on an enterprise build, and a Premium pin read as Free on CE.
+func TestEnsureInitialized_PinnedTier_SurvivesTheEditionProbe(t *testing.T) {
+	cases := []struct {
+		name       string
+		pin        edition.Tier
+		enterprise bool
+	}{
+		{name: "ultimate pin on an enterprise build", pin: edition.Ultimate, enterprise: true},
+		{name: "free pin on an enterprise build", pin: edition.Free, enterprise: true},
+		{name: "premium pin on a CE build", pin: edition.Premium, enterprise: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/version" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.4.1", "enterprise": tc.enterprise})
+			}))
+			defer srv.Close()
+
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			client.PinTier(tc.pin)
+			client.EnableLazyInit()
+
+			client.EnsureInitialized(context.Background())
+
+			if !client.IsInitialized() {
+				t.Fatal("the lazy re-initialization did not run, so it proved nothing about the pin")
+			}
+			if got := client.Tier(); got != tc.pin {
+				t.Errorf("Tier() after re-initialization = %v, want the pinned %v", got, tc.pin)
+			}
+			if !client.TierPinned() {
+				t.Error("TierPinned() = false after PinTier")
+			}
+		})
+	}
+}
+
+// TestSetEnterprise_UnpinnedTier_FollowsTheEdition keeps the other half of the
+// rule: a tier nobody pinned still takes the edition the probe reports, which
+// is what a start that detects its tier relies on.
+func TestSetEnterprise_UnpinnedTier_FollowsTheEdition(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	client.SetTier(edition.Ultimate)
+	if client.TierPinned() {
+		t.Fatal("SetTier pinned the tier; only PinTier may")
+	}
+
+	client.SetEnterprise(false)
+	if got := client.Tier(); got != edition.Free {
+		t.Errorf("Tier() after SetEnterprise(false) on an unpinned client = %v, want %v", got, edition.Free)
+	}
+	client.SetEnterprise(true)
+	if got := client.Tier(); got != edition.Premium {
+		t.Errorf("Tier() after SetEnterprise(true) on an unpinned client = %v, want %v", got, edition.Premium)
+	}
+}
+
 // TestDetectEnterprise_OverridesFallback verifies that explicit edition data
 // from GitLab wins over the configured fallback.
 func TestDetectEnterprise_OverridesFallback(t *testing.T) {

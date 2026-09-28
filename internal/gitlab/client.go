@@ -43,6 +43,14 @@ type Client struct {
 	// approval, external status checks).
 	tier atomic.Int64
 
+	// tierPinned records that the operator named the tier (GITLAB_MCP_TIER or
+	// --tier) through [Client.PinTier]. The edition probe then leaves tier
+	// alone: /api/v4/version reports only whether the build is enterprise, so
+	// letting it write would turn a pinned Ultimate into Premium, and a pinned
+	// Free against an enterprise build into Premium, after the catalog was
+	// registered for the pinned tier (issue 1016).
+	tierPinned atomic.Bool
+
 	// bearerAuth selects the auth scheme for the raw probes this client
 	// makes outside the SDK (health/version, credential check): true sends
 	// "Authorization: Bearer" (oauth HTTP mode, where gloas- tokens are
@@ -167,10 +175,28 @@ func (c *Client) SetTier(t edition.Tier) { c.tier.Store(int64(t)) }
 // Tier returns the resolved GitLab licensing tier for this client.
 func (c *Client) Tier() edition.Tier { return edition.Tier(c.tier.Load()) }
 
+// PinTier records a tier the operator named, and keeps it: nothing the client
+// learns about the instance afterwards replaces it, a lazy re-initialization
+// included. The catalog a process registers is built for this tier, so a
+// handler reading [Client.IsEnterprise] must answer for the same one.
+func (c *Client) PinTier(t edition.Tier) {
+	c.tier.Store(int64(t))
+	c.tierPinned.Store(true)
+}
+
+// TierPinned reports whether the tier was named by the operator rather than
+// detected.
+func (c *Client) TierPinned() bool { return c.tierPinned.Load() }
+
 // SetEnterprise marks the client as connected to a Premium/Ultimate instance.
 // It sets the tier to Premium when v is true and Free when v is false; callers
-// needing the Premium/Ultimate distinction should use [Client.SetTier].
+// needing the Premium/Ultimate distinction should use [Client.SetTier]. A tier
+// set with [Client.PinTier] is left as it is, since the edition says less
+// than the pin does.
 func (c *Client) SetEnterprise(v bool) {
+	if c.tierPinned.Load() {
+		return
+	}
 	if v {
 		c.SetTier(edition.Premium)
 		return

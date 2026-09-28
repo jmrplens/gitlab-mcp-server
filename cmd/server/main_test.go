@@ -4362,6 +4362,58 @@ func TestPrepareStdioCatalog_APinnedTier_IsUsedWithoutAskingTheInstance(t *testi
 	}
 }
 
+// TestPrepareStdioCatalog_APinnedTier_SurvivesADegradedStart covers the path
+// issue 1016 found. A stdio start that cannot reach GitLab registers the
+// catalog for the pinned tier and arms a lazy re-initialization, and that
+// re-initialization, once GitLab answers, probes the edition. The probe used to
+// replace the pin with Premium, so the two handlers that pick an Enterprise
+// document at call time answered for a tier the catalog was not built for.
+func TestPrepareStdioCatalog_APinnedTier_SurvivesADegradedStart(t *testing.T) {
+	var up atomic.Bool
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Path != "/api/v4/version" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"19.4.1-ee","revision":"abc","enterprise":true}`)
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		GitLabToken:    testToken,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		Tier:           edition.Ultimate,
+		TierExplicit:   true,
+		IgnoreScopes:   true,
+		DisableRetries: true,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+	if client.IsInitialized() {
+		t.Fatal("startup initialized against an unreachable GitLab, so the lazy path this test is about never ran")
+	}
+
+	up.Store(true)
+	client.EnsureInitialized(t.Context())
+
+	if !client.IsInitialized() {
+		t.Fatal("the lazy re-initialization did not run once GitLab answered")
+	}
+	if got := client.Tier(); got != edition.Ultimate {
+		t.Errorf("client tier after the lazy re-initialization = %s, want the pinned %s", got, edition.Ultimate)
+	}
+	if serverCfg.Tier != edition.Ultimate {
+		t.Errorf("catalog tier = %s, want the pinned %s", serverCfg.Tier, edition.Ultimate)
+	}
+}
+
 // TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot covers the
 // scope step of stdio startup. A token GitLab reports as read_api is served the
 // read-only catalog (ADR-0018); a token whose scopes cannot be read is served
