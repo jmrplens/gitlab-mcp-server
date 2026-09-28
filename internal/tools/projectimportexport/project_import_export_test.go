@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -372,7 +373,14 @@ func TestGetImportStatus_Success(t *testing.T) {
 				"import_status": "failed",
 				"import_type": "gitlab_project",
 				"correlation_id": "01JQZ9V7KX",
-				"import_error": "relation import failed: merge_requests"
+				"import_error": "relation import failed: merge_requests",
+				"failed_relations": [
+					{"id": 7, "created_at": "2026-03-01T10:05:00Z", "exception_class": "ActiveRecord::RecordInvalid",
+					 "exception_message": null, "source": "process_relation_item!", "relation_name": "merge_requests", "line_number": 12},
+					{"id": 8, "created_at": "2026-03-01T10:06:00Z", "exception_class": "NoMethodError",
+					 "exception_message": null, "source": "relation_factory", "relation_name": "issues", "line_number": 3}
+				],
+				"stats": {"fetched": {"issue": 3, "note": 5}, "imported": {"issue": 2}}
 			}`)
 			return
 		}
@@ -386,6 +394,17 @@ func TestGetImportStatus_Success(t *testing.T) {
 	}
 	if out.ID != 42 {
 		t.Errorf("ID = %d, want 42", out.ID)
+	}
+	wantRelations := []FailedRelationOutput{
+		{ID: 7, CreatedAt: "2026-03-01T10:05:00Z", ExceptionClass: "ActiveRecord::RecordInvalid", Source: "process_relation_item!", RelationName: "merge_requests", LineNumber: 12},
+		{ID: 8, CreatedAt: "2026-03-01T10:06:00Z", ExceptionClass: "NoMethodError", Source: "relation_factory", RelationName: "issues", LineNumber: 3},
+	}
+	if !reflect.DeepEqual(out.FailedRelations, wantRelations) {
+		t.Errorf("FailedRelations = %+v, want %+v", out.FailedRelations, wantRelations)
+	}
+	wantStats := map[string]map[string]int64{"fetched": {"issue": 3, "note": 5}, "imported": {"issue": 2}}
+	if !reflect.DeepEqual(out.Stats, wantStats) {
+		t.Errorf("Stats = %v, want %v", out.Stats, wantStats)
 	}
 	for _, tc := range []struct{ field, got, want string }{
 		{"Description", out.Description, "restored from last week's archive"},
@@ -699,6 +718,42 @@ func TestFormatImportStatusMarkdown_AllFields(t *testing.T) {
 		"- **Correlation ID**: `abc-123`\n" +
 		"- **Error**: some warning\n\n" +
 		"---\n💡 **Next steps:**\n" +
+		"- Monitor import progress by checking status periodically\n"
+	if md != want {
+		t.Errorf("FormatImportStatusMarkdown()\n got: %q\nwant: %q", md, want)
+	}
+}
+
+// TestFormatImportStatusMarkdown_FailedRelationsAndStats verifies the two
+// tables an import status adds under its rows: one per relation the import
+// could not bring over, and the GitHub import counts sorted by stage and then
+// by object type, whatever order the map yields them in.
+func TestFormatImportStatusMarkdown_FailedRelationsAndStats(t *testing.T) {
+	md := markdownOf(t, FormatImportStatusMarkdown(ImportStatusOutput{
+		ID:                1,
+		Name:              "project",
+		PathWithNamespace: "group/project",
+		ImportStatus:      "started",
+		FailedRelations: []FailedRelationOutput{
+			{ID: 7, CreatedAt: "2026-03-01T10:05:00Z", ExceptionClass: "NoMethodError", Source: "relation|factory", RelationName: "issues", LineNumber: 3},
+		},
+		Stats: map[string]map[string]int64{"imported": {"note": 1, "issue": 2}, "fetched": {"issue": 3}},
+	}))
+	want := "## Import Status: project\n\n" +
+		"- **ID**: 1\n" +
+		"- **Path**: group/project\n" +
+		"- **Status**: started\n" +
+		"\n### Failed Relations\n\n" +
+		"| Relation | Line | Exception | Source | Failed At |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| issues | 3 | NoMethodError | relation&#124;factory | " + toolutil.FormatTime("2026-03-01T10:05:00Z") + " |\n" +
+		"\n### Import Statistics\n\n" +
+		"| Stage | Object | Count |\n" +
+		"| --- | --- | --- |\n" +
+		"| fetched | issue | 3 |\n" +
+		"| imported | issue | 2 |\n" +
+		"| imported | note | 1 |\n" +
+		"\n---\n💡 **Next steps:**\n" +
 		"- Monitor import progress by checking status periodically\n"
 	if md != want {
 		t.Errorf("FormatImportStatusMarkdown()\n got: %q\nwant: %q", md, want)

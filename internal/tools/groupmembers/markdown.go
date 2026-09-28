@@ -2,6 +2,7 @@ package groupmembers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -9,11 +10,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevelLabel names the access level on the member card and heads its
+// column in the share and inherited-membership tables.
+const accessLevelLabel = "Access Level"
+
 // accessLevel renders a membership's numeric access level as the name GitLab
 // gives it with the number beside it, "Maintainer (40)": the number is what
 // every write endpoint takes, the name is what a reader can act on.
 func accessLevel(level int) string {
 	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
+// shareAccess renders the access a share grants, with the custom role beside
+// the base level when the share carries one, "Developer (30), member role 12".
+func shareAccess(link SharedWithGroupOutput) string {
+	access := accessLevel(int(link.GroupAccessLevel))
+	if link.MemberRoleID != 0 {
+		access += fmt.Sprintf(", member role %d", link.MemberRoleID)
+	}
+	return access
 }
 
 // FormatMemberMarkdown formats a single group member as markdown.
@@ -30,7 +45,7 @@ func FormatMemberMarkdown(out Output) string {
 	// half.
 	c.Field("Membership State", out.MembershipState)
 	c.Warn("Locked", out.Locked)
-	c.Field("Access Level", accessLevel(out.AccessLevel))
+	c.Field(accessLevelLabel, accessLevel(out.AccessLevel))
 	if out.MemberRole != nil {
 		c.Field("Member Role", out.MemberRole.Name)
 	}
@@ -47,15 +62,30 @@ func FormatMemberMarkdown(out Output) string {
 	return b.String()
 }
 
-// FormatShareMarkdown formats a group share result as markdown.
+// FormatShareMarkdown formats a group share result as markdown: the group that
+// was shared, then every group it is now shared with, the new share among
+// them, since that list is what the write changed.
 func FormatShareMarkdown(out ShareOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Group Shared")
 	c.Int("ID", out.ID)
 	c.Field("Name", out.Name)
 	c.Field("Path", out.Path)
+	c.Field("Full Path", out.FullPath)
+	c.Field("Visibility", out.Visibility)
 	c.Text("Description", out.Description)
 	c.URL(out.WebURL)
+	if len(out.SharedWithGroups) > 0 {
+		t := c.Table("Shared With", "Group", "Group ID", accessLevelLabel, "Expires")
+		for _, link := range out.SharedWithGroups {
+			t.Row(
+				toolutil.EscapeMdTableCell(link.GroupFullPath),
+				strconv.FormatInt(link.GroupID, 10),
+				shareAccess(link),
+				toolutil.FormatTime(link.ExpiresAt),
+			)
+		}
+	}
 	c.End(
 		toolutil.HintAction(actionGroupMembers, "see all members in the group"),
 		toolutil.HintAction(actionMemberUnshare, "revoke this share"),
@@ -101,7 +131,7 @@ func FormatBillableMembershipsMarkdown(out BillableMembershipsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Billable Member Memberships", len(out.Memberships), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Source", "Access Level", "Expires"))
+	b.WriteString(toolutil.MarkdownTableHeader("Source", accessLevelLabel, "Expires"))
 	linked := false
 	for _, m := range out.Memberships {
 		linked = linked || m.SourceMembersURL != ""

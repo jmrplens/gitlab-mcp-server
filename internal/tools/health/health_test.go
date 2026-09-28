@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	// pathVersion identifies the path version constant used by this package.
-	pathVersion = "/api/v4/version"
+	// pathMetadata is the route the connectivity half of the check asks.
+	pathMetadata = "/api/v4/metadata"
 	// pathCurrentUser identifies the path current user constant used by this package.
 	pathCurrentUser = "/api/v4/user"
 	// fmtStatusCheckErr identifies the fmt status check err constant used by this package.
@@ -50,8 +50,11 @@ const (
 func TestCheck_Healthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case pathVersion:
-			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+		case pathMetadata:
+			testutil.RespondJSON(w, http.StatusOK, `{
+"version":"17.5.0","revision":"abc123","enterprise":true,
+"kas":{"enabled":true,"externalUrl":"grpc://kas.example.com:8150","externalK8sProxyUrl":"https://kas.example.com/k8s-proxy","version":"17.5.1"}
+}`)
 		case pathCurrentUser:
 			testutil.RespondJSON(w, http.StatusOK, `{
 "id":42,
@@ -77,6 +80,18 @@ func TestCheck_Healthy(t *testing.T) {
 	}
 	if out.GitLabRevision != "abc123" {
 		t.Errorf("GitLabRevision = %q, want %q", out.GitLabRevision, "abc123")
+	}
+	if out.GitLabEnterprise == nil || !*out.GitLabEnterprise {
+		t.Errorf("GitLabEnterprise = %v, want a pointer to true", out.GitLabEnterprise)
+	}
+	wantKAS := &KASOutput{
+		Enabled:             true,
+		ExternalURL:         "grpc://kas.example.com:8150",
+		ExternalK8SProxyURL: "https://kas.example.com/k8s-proxy",
+		Version:             "17.5.1",
+	}
+	if !reflect.DeepEqual(out.GitLabKAS, wantKAS) {
+		t.Errorf("GitLabKAS = %+v, want %+v", out.GitLabKAS, wantKAS)
 	}
 	if !out.Authenticated {
 		t.Error("Authenticated = false, want true")
@@ -109,7 +124,7 @@ func TestCheck_SlowVersionCall_ReportsHowLongThatCallTook(t *testing.T) {
 	const versionDelay = 50 * time.Millisecond
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathVersion {
+		if r.URL.Path == pathMetadata {
 			time.Sleep(versionDelay)
 			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
 			return
@@ -145,7 +160,7 @@ func TestCheck_SlowIdentityCall_IsNotCountedInTheResponseTime(t *testing.T) {
 	const identityDelay = 200 * time.Millisecond
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathVersion {
+		if r.URL.Path == pathMetadata {
 			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
 			return
 		}
@@ -183,7 +198,7 @@ func TestSetServerInfo_PopulatesCheckOutput(t *testing.T) {
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case pathVersion:
+		case pathMetadata:
 			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
 		case pathCurrentUser:
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"u","state":"active"}`)
@@ -221,7 +236,7 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case pathVersion:
+		case pathMetadata:
 			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
 		case pathCurrentUser:
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"u","state":"active"}`)
@@ -260,7 +275,7 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case pathVersion:
+		case pathMetadata:
 			testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
 		default:
 			http.NotFound(w, r)
@@ -277,6 +292,11 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	if out.Authenticated {
 		t.Error("Authenticated = true, want false")
 	}
+	// An instance that never answered is of no known edition: a pointer to
+	// false here would report the Community Edition on no evidence.
+	if out.GitLabEnterprise != nil || out.GitLabKAS != nil {
+		t.Errorf("GitLabEnterprise = %v, GitLabKAS = %v, want both nil", out.GitLabEnterprise, out.GitLabKAS)
+	}
 	if !strings.HasPrefix(out.Error, errPrefixConnectivity) {
 		t.Errorf("Error = %q, want the %q prefix", out.Error, errPrefixConnectivity)
 	}
@@ -291,8 +311,12 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case pathVersion:
-			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+		case pathMetadata:
+			// A Community Edition without the agent server answers as
+			// lib/api/entities/metadata.rb renders it for one: enterprise
+			// false, and a kas object disabled with nothing else set.
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123",`+
+				`"kas":{"enabled":false,"externalUrl":null,"externalK8sProxyUrl":null,"version":null},"enterprise":false}`)
 		case pathCurrentUser:
 			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 		default:
@@ -309,6 +333,14 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	}
 	if out.GitLabVersion != testGitLabVersion {
 		t.Errorf("GitLabVersion = %q, want %q", out.GitLabVersion, testGitLabVersion)
+	}
+	// The answer said the Community Edition and a disabled agent server: the
+	// check reports both as GitLab sent them.
+	if out.GitLabEnterprise == nil || *out.GitLabEnterprise {
+		t.Errorf("GitLabEnterprise = %v, want a pointer to false", out.GitLabEnterprise)
+	}
+	if !reflect.DeepEqual(out.GitLabKAS, &KASOutput{}) {
+		t.Errorf("GitLabKAS = %+v, want the zero agent server", out.GitLabKAS)
 	}
 	if out.Authenticated {
 		t.Error("Authenticated = true, want false")
@@ -362,11 +394,18 @@ func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
 			GitLabURL:        "https://gitlab.example.com/instance",
 			GitLabVersion:    "17.5.0-gitlab",
 			GitLabRevision:   "revision0",
-			Authenticated:    true,
-			Username:         "username-of-the-credential",
-			UserID:           4242,
-			ResponseTimeMS:   1717,
-			Error:            "error the check reported",
+			GitLabEnterprise: new(true),
+			GitLabKAS: &KASOutput{
+				Enabled:             true,
+				ExternalURL:         "grpc://kas-external-url",
+				ExternalK8SProxyURL: "https://kas-k8s-proxy-url",
+				Version:             "kas-version",
+			},
+			Authenticated:  true,
+			Username:       "username-of-the-credential",
+			UserID:         4242,
+			ResponseTimeMS: 1717,
+			Error:          "error the check reported",
 		}
 
 		got := decodeOutputAsJSON(t, out)
@@ -380,11 +419,18 @@ func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
 			"gitlab_url":         "https://gitlab.example.com/instance",
 			"gitlab_version":     "17.5.0-gitlab",
 			"gitlab_revision":    "revision0",
-			"authenticated":      true,
-			"username":           "username-of-the-credential",
-			"user_id":            float64(4242),
-			"response_time_ms":   float64(1717),
-			"error":              "error the check reported",
+			"gitlab_enterprise":  true,
+			"gitlab_kas": map[string]any{
+				"enabled":                true,
+				"external_url":           "grpc://kas-external-url",
+				"external_k8s_proxy_url": "https://kas-k8s-proxy-url",
+				"version":                "kas-version",
+			},
+			"authenticated":    true,
+			"username":         "username-of-the-credential",
+			"user_id":          float64(4242),
+			"response_time_ms": float64(1717),
+			"error":            "error the check reported",
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("Output marshaled to %#v, want %#v", got, want)
@@ -401,6 +447,24 @@ func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("zero Output marshaled to %#v, want %#v", got, want)
+		}
+	})
+
+	// A Community Edition answer is a pointer to false and a disabled agent
+	// server with nothing else: both keys stay, and the agent server keeps its
+	// enabled flag while dropping the addresses and version it was not sent.
+	t.Run("community edition without an agent server", func(t *testing.T) {
+		got := decodeOutputAsJSON(t, Output{GitLabEnterprise: new(false), GitLabKAS: &KASOutput{}})
+		want := map[string]any{
+			"status":            "",
+			"gitlab_url":        "",
+			"gitlab_enterprise": false,
+			"gitlab_kas":        map[string]any{"enabled": false},
+			"authenticated":     false,
+			"response_time_ms":  float64(0),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Community Edition Output marshaled to %#v, want %#v", got, want)
 		}
 	})
 }
@@ -466,6 +530,63 @@ func TestFormatMarkdownString_Healthy(t *testing.T) {
 		healthHints
 	if got != want {
 		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatMarkdownString_EditionAndAgentServer verifies the rows the
+// metadata answer adds beneath the revision: the edition as a flag, and the
+// agent server as a nested block whose empty fields write nothing, so a
+// Community Edition with no agent server reads as a cross and a disabled
+// server rather than as rows with nothing after their labels.
+func TestFormatMarkdownString_EditionAndAgentServer(t *testing.T) {
+	tests := []struct {
+		name string
+		out  Output
+		rows string
+	}{
+		{
+			name: "enterprise with an agent server",
+			out: Output{
+				GitLabEnterprise: new(true),
+				GitLabKAS: &KASOutput{
+					Enabled:             true,
+					ExternalURL:         "grpc://kas.example.com:8150",
+					ExternalK8SProxyURL: "https://kas.example.com/k8s-proxy",
+					Version:             "17.5.1",
+				},
+			},
+			rows: "- **Enterprise Edition**: ✅\n" +
+				"- **Agent Server for Kubernetes**:\n" +
+				"  - **Enabled**: ✅\n" +
+				"  - **Version**: 17.5.1\n" +
+				"  - **External URL**: grpc://kas.example.com:8150\n" +
+				"  - **Kubernetes API Proxy URL**: https://kas.example.com/k8s-proxy\n",
+		},
+		{
+			name: "community edition without one",
+			out:  Output{GitLabEnterprise: new(false), GitLabKAS: &KASOutput{}},
+			rows: "- **Enterprise Edition**: ❌\n" +
+				"- **Agent Server for Kubernetes**:\n" +
+				"  - **Enabled**: ❌\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.out.Status = "healthy"
+			tc.out.GitLabURL = "https://gitlab.example.com"
+			tc.out.GitLabVersion = "17.5.0"
+			got := FormatMarkdownString(tc.out)
+			want := "## ✅ GitLab Server Status: healthy\n\n" +
+				"- **GitLab URL**: https://gitlab.example.com\n" +
+				"- **Version**: 17.5.0\n" +
+				tc.rows +
+				"- **Authenticated**: ❌\n" +
+				"- **Response Time**: 0 ms\n" +
+				healthHints
+			if got != want {
+				t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
+			}
+		})
 	}
 }
 
@@ -763,7 +884,7 @@ func TestActionSpecs_EachAction_PublishesTheSurfaceAModelFindsItBy(t *testing.T)
 			individual: toolutil.IndividualToolSpec{
 				Name:        "gitlab_server_status",
 				Title:       "Server Status",
-				Description: "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.",
+				Description: "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.",
 			},
 		},
 		{
@@ -847,7 +968,7 @@ func TestActionSpecs_BothActions_StayReadOnly(t *testing.T) {
 // answer carries the instance and the identity it just read.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc(pathMetadata, func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
@@ -1056,7 +1177,7 @@ func TestWithoutUserinfo_EveryStandardRendering_RemovesTheCredential(t *testing.
 // asserts the credential reaches neither the reported URL nor the error field.
 func TestCheck_BaseURLWithUserinfo_ReportsTheURLWithoutIt(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathVersion {
+		if r.URL.Path == pathMetadata {
 			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
 			return
 		}

@@ -9,6 +9,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -455,18 +456,13 @@ func ListEmails(ctx context.Context, client *gitlabclient.Client, input ListEmai
 
 // Contribution Events.
 
-// ContributionEventOutput represents a user contribution event.
-type ContributionEventOutput struct {
-	ID          int64  `json:"id"`
-	ProjectID   int64  `json:"project_id"`
-	ActionName  string `json:"action_name"`
-	TargetID    int64  `json:"target_id,omitempty"`
-	TargetIID   int64  `json:"target_iid,omitempty"`
-	TargetType  string `json:"target_type,omitempty"`
-	TargetURL   string `json:"target_url,omitempty"`
-	TargetTitle string `json:"target_title,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
-}
+// ContributionEventOutput is one event of a user's contributions. It is the
+// entity the current user's contribution listing publishes
+// (internal/tools/events), read on another route, so it is that package's type
+// and converter rather than a copy: the copy this package kept published nine
+// of the event's keys and left out its author, the push data, the note and
+// wiki page it concerns and whether it was imported.
+type ContributionEventOutput = events.ContributionEventOutput
 
 // ContributionEventsOutput holds a paginated list of contribution events.
 type ContributionEventsOutput struct {
@@ -527,30 +523,18 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 		opts.Sort = new(input.Sort)
 	}
 
-	events, resp, err := client.GL().Users.ListUserContributionEvents(input.UserID, opts, gl.WithContext(ctx))
+	contributions, resp, err := client.GL().Users.ListUserContributionEvents(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("list_contribution_events", err, http.StatusForbidden,
 			"verify user_id and that the user's contribution events are visible to your token; private profiles are not visible")
 	}
 
-	out := make([]ContributionEventOutput, 0, len(events))
-	for _, e := range events {
-		o := ContributionEventOutput{
-			ID:          e.ID,
-			ProjectID:   e.ProjectID,
-			ActionName:  e.ActionName,
-			TargetID:    e.TargetID,
-			TargetIID:   e.TargetIID,
-			TargetType:  e.TargetType,
-			TargetTitle: e.TargetTitle,
-		}
-		if e.CreatedAt != nil {
-			o.CreatedAt = e.CreatedAt.Format(time.RFC3339)
-		}
-		out = append(out, o)
+	out := make([]ContributionEventOutput, 0, len(contributions))
+	for _, e := range contributions {
+		out = append(out, events.ToContributionEventOutput(e))
 	}
 
-	enrichContributionEventURLs(ctx, client, out)
+	events.EnrichContributionEventURLs(ctx, client, out)
 
 	return ContributionEventsOutput{
 		Events:     out,
@@ -591,18 +575,6 @@ func GetAssociationsCount(ctx context.Context, client *gitlabclient.Client, inpu
 		IssuesCount:        ac.IssuesCount,
 		MergeRequestsCount: ac.MergeRequestsCount,
 	}, nil
-}
-
-// enrichContributionEventURLs resolves project web URLs and sets TargetURL on each event.
-func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
-	ids := make([]int64, 0, len(events))
-	for i := range events {
-		ids = append(ids, events[i].ProjectID)
-	}
-	urls := toolutil.ResolveProjectWebURLs(ctx, client.GL().Projects, ids)
-	for i := range events {
-		events[i].TargetURL = toolutil.BuildTargetURL(urls[events[i].ProjectID], events[i].TargetType, events[i].TargetIID)
-	}
 }
 
 // Conversion helpers.

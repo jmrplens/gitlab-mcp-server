@@ -422,6 +422,44 @@ const (
 		"internal/tools/mrchanges serves the diff through ListMergeRequestDiffs on /diffs, and the request inventory records no request to /changes at all."
 )
 
+// The entities the closes-issues route and the two create_todo routes are read
+// on.
+const (
+	mrNoteEntity = "API::Entities::MRNote"
+	todoEntity   = "API::Entities::Todo"
+)
+
+// reasonClosesIssuesPresentsIssues answers the note the closes-issues route is
+// annotated with.
+const reasonClosesIssuesPresentsIssues = "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents " +
+	"Entities::IssueBasic beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and " +
+	"never a note. Recorded in docs/development/upstream-bugs.md for the documentation merge request."
+
+// reasonTodoGroupOnProjectRoutes answers the group of the to-do the two
+// create_todo routes present.
+const reasonTodoGroupOnProjectRoutes = "lib/api/entities/todo.rb exposes group only `if: ->(todo, _) { todo.group_id }`, and " +
+	"app/models/todo.rb validates a to-do's project absent whenever it has a group (lines 87 and 88), so a to-do belongs to a " +
+	"project or to a group and never both. POST /projects/:id/issues/:issue_iid/todo and POST " +
+	"/projects/:id/merge_requests/:merge_request_iid/todo (lib/api/todos.rb) mark a to-do on an issuable of the project the route " +
+	"names, and TodoService#mark_todo gives it that project (app/services/todo_service.rb), so no to-do these routes present " +
+	"carries the key. A group's to-dos are user.todo_list's."
+
+// reasonIssueTodoConfirmation answers the target and project of the to-do an
+// issue's create_todo answers with.
+const reasonIssueTodoConfirmation = "POST /projects/:id/issues/:issue_iid/todo presents Entities::Todo (lib/api/todos.rb), whose " +
+	"target is the whole issue the caller named in issue_iid, rendered through Entities::Issue, and whose project is the project " +
+	"the caller named in project_id, rendered through Entities::ProjectIdentity. issue.create_todo answers with the to-do's own " +
+	"keys, its author and the issue's title and URL as target_title and target_url; issue.get returns the issue and project.get " +
+	"the project."
+
+// reasonMergeRequestTodoConfirmation is the same answer for a merge request.
+const reasonMergeRequestTodoConfirmation = "POST /projects/:id/merge_requests/:merge_request_iid/todo presents Entities::Todo " +
+	"(lib/api/todos.rb), whose target is the whole merge request the caller named in merge_request_iid, rendered through " +
+	"Entities::MergeRequest, and whose project is the project the caller named in project_id, rendered through " +
+	"Entities::ProjectIdentity. merge_request.create_todo answers with the to-do's own keys, its author, the merge request's " +
+	"title and URL as target_title and target_url and the project's name as project_name; merge_request.get returns the merge " +
+	"request and project.get the project."
+
 // reasonRenderHTMLNeverPassed answers the two rendered-markup keys on the types
 // whose routes cannot ask for them.
 //
@@ -483,12 +521,48 @@ const reasonPackageVersionsOnTheDetailItem = "lib/api/entities/package.rb expose
 	"/projects/:id/packages/:package_id as well only because client-go's GetProjectPackage answers with the same Package " +
 	"struct; that route presents one package (line 89) and fills packages.DetailItem, which publishes the versions."
 
-// The entities the fields below were read on that no constant above names.
+// reasonGroupPackageVersionsOnACollection answers the other versions held
+// against the item the group listing fills.
+const reasonGroupPackageVersionsOnACollection = "lib/api/entities/package.rb exposes versions " +
+	"`unless: ->(_, opts) { opts[:collection] }`, and grape-entity's represent sets collection on every object of an array " +
+	"it presents, so GET /groups/:id/packages (lib/api/group_packages.rb, `present paginate(packages)`) turns the key off on " +
+	"every package it lists. packages.GroupListItem is filled from that route alone; package.get answers with a package's " +
+	"other versions."
+
+// ciVariableEntity is the variable entity the pipeline and schedule variable
+// routes present, and the two packages that publish those variables, spelled
+// once because each is named on every row below.
 const (
-	projectWithAccessEntity   = "API::Entities::Projects::WithAccessAndCatalogSetting"
-	basicProjectDetailsEntity = "API::Entities::BasicProjectDetails"
-	groupDetailEntity         = "API::Entities::GroupDetail"
-	projectEntity             = "API::Entities::Project"
+	ciVariableEntity     = "API::Entities::Ci::Variable"
+	pipelinesPkg         = toolsDir + "/pipelines"
+	pipelineSchedulesPkg = toolsDir + "/pipelineschedules"
+)
+
+// The two variable models' answers: each key of lib/api/entities/ci/variable.rb
+// that waits on respond_to?, which neither model does.
+const (
+	reasonPipelineVariableColumns = "lib/api/entities/ci/variable.rb exposes hidden, protected, masked, raw, " +
+		"environment_scope and description each `if: ->(entity, _) { entity.respond_to?(...) }`, and " +
+		"GET /projects/:id/pipelines/:pipeline_id/variables presents Ci::PipelineVariable (lib/api/ci/pipelines.rb), whose " +
+		"table p_ci_pipeline_variables has key, the encrypted value, variable_type, raw, partition_id, pipeline_id and " +
+		"project_id (db/structure.sql), and whose concerns (Ci::HasVariable, Ci::RawVariable) define none of the others. " +
+		"It answers raw, which pipelines.VariableOutput publishes, and no request can make it answer the rest."
+	reasonScheduleVariableColumns = "lib/api/entities/ci/variable.rb exposes hidden, protected, masked, raw, " +
+		"environment_scope and description each `if: ->(entity, _) { entity.respond_to?(...) }`, and the three schedule " +
+		"variable routes (lib/api/ci/pipeline_schedules.rb) present Ci::PipelineScheduleVariable, whose table " +
+		"ci_pipeline_schedule_variables has key, the encrypted value, variable_type, raw, the schedule, the project and the " +
+		"two timestamps (db/structure.sql), and whose concerns (Ci::HasVariable, Ci::RawVariable) define none of the others. " +
+		"It answers raw, which pipelineschedules.VariableOutput publishes, and no request can make it answer the rest; the " +
+		"description the package publishes is the schedule's own."
+)
+
+// The entities the fields below were read on that no constant above names, and
+// the LDAP package, which three rows hold against the group detail entity.
+const (
+	projectWithAccessEntity = "API::Entities::Projects::WithAccessAndCatalogSetting"
+	groupDetailEntity       = "API::Entities::GroupDetail"
+	projectEntity           = "API::Entities::Project"
+	groupLDAPPkg            = toolsDir + "/groupldap"
 )
 
 // The packages whose project presenter-option rows below answer the same
@@ -496,7 +570,6 @@ const (
 const (
 	attestationsPkg     = toolsDir + "/attestations"
 	eventsPkg           = toolsDir + "/events"
-	jobTokenScopePkg    = toolsDir + "/jobtokenscope"
 	projectDiscoveryPkg = toolsDir + "/projectdiscovery"
 	securityFindingsPkg = toolsDir + "/securityfindings"
 	vulnerabilitiesPkg  = toolsDir + "/vulnerabilities"
@@ -527,11 +600,6 @@ const (
 		"option. GET /groups/:id/projects and GET /groups/:id/projects/shared both present through present_projects in " +
 		"lib/api/groups.rb, which passes the entity, the current user and whatever with_custom_attributes adds, and never license, which " +
 		"neither route declares. The keys have never been on either response; GET /projects/:id is the one route that sends them."
-	reasonJobTokenScopeProjectOptionsNeverPassed = "lib/api/entities/basic_project_details.rb exposes license and license_url under the " +
-		"license option and custom_attributes under with_custom_attributes. lib/api/project_job_token_scope.rb presents the inbound " +
-		"allowlist with Entities::BasicProjectDetails and no option at all, and none of the three routes declares either parameter; the " +
-		"groups allowlist presents BasicGroupDetails and the POST a ProjectScopeLink, whatever their annotations say. None of the three " +
-		"keys has ever been on one of their responses."
 	reasonGroupStatisticsNeverPassed = "lib/api/entities/group.rb:42 exposes statistics under the statistics option, which only the group " +
 		"list's present_groups in lib/api/groups.rb sets, and only for a caller who can read all resources. GET /groups/:id presents through " +
 		"present_group_details and POST /groups/:id/share presents the group with the current user alone; neither passes the option and " +
@@ -725,13 +793,39 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	},
 
 	// The third case of a desc annotation naming an entity the handler does
-	// not present, after the two already recorded upstream.
+	// not present, after the two already recorded upstream. Both packages
+	// reading the route are answered: the issue package renders its rows and
+	// the merge request package calls it.
+	{Package: issuesPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
+	{Package: mergeRequestsPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
+
+	// avatar_path on the participants of an issue and of a merge request, the
+	// member family's answer for the same entity: neither route passes
+	// only_path (lib/api/issues.rb presents them with current_user and project,
+	// lib/api/merge_requests.rb with nothing).
+	{Package: issuesPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: mergeRequestsPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+
+	// The to-do an issue or a merge request answers a create_todo with. Its
+	// group is never sent on these routes, and its target and project are the
+	// objects the caller named.
+	{Package: issuesPkg, Entity: todoEntity, Field: "group", Category: categoryAssociationNullOnScope, Reason: reasonTodoGroupOnProjectRoutes},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "group", Category: categoryAssociationNullOnScope, Reason: reasonTodoGroupOnProjectRoutes},
+	{Package: issuesPkg, Entity: todoEntity, Field: "target", Category: categoryConfirmationOnly, Reason: reasonIssueTodoConfirmation},
+	{Package: issuesPkg, Entity: todoEntity, Field: "project", Category: categoryConfirmationOnly, Reason: reasonIssueTodoConfirmation},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "target", Category: categoryConfirmationOnly, Reason: reasonMergeRequestTodoConfirmation},
+	{Package: mergeRequestsPkg, Entity: todoEntity, Field: "project", Category: categoryConfirmationOnly, Reason: reasonMergeRequestTodoConfirmation},
+
+	// A merge request's reviewer, whose user this server publishes one level
+	// up beside the review.
 	{
-		Package: issuesPkg, Entity: "API::Entities::MRNote", Field: "note",
-		Category: categoryDocumentedNotSent,
-		Reason: "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents Entities::IssueBasic " +
-			"beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and never a " +
-			"note. Recorded in docs/development/upstream-bugs.md for the documentation merge request.",
+		Package: mergeRequestsPkg, Type: "ReviewerOutput", Entity: "API::Entities::MergeRequestReviewer", Field: "user",
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/merge_request_reviewer.rb exposes the reviewer as user, a UserBasic, beside the review's state and " +
+			"created_at. mergerequests.ReviewerOutput publishes every key of that user GitLab sends on the route one level up (id, " +
+			"username, name, state, locked, public_email, avatar_url and web_url; avatar_path and custom_attributes are gated by " +
+			"options GET /projects/:id/merge_requests/:merge_request_iid/reviewers never passes), and the review's state as " +
+			"review_state, since the user's state takes the key.",
 	},
 
 	// organization_id on the two hook types, which is the one condition here
@@ -748,8 +842,23 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: packagesPkg, Type: "DetailItem", Entity: packageEntity, Field: "project_id", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
 	{Package: packagesPkg, Type: "DetailItem", Entity: packageEntity, Field: "project_path", Category: categoryOptionNeverPassed, Reason: reasonPackageGroupOptionNeverPassed},
 
-	// The package's other versions, on the item only the listing fills.
+	// The package's other versions, on the item only the listing fills, and on
+	// the group listing's item, which no request for one package fills.
 	{Package: packagesPkg, Type: "ListItem", Entity: packageEntity, Field: "versions", Category: categorySDKRouteFillsAnotherType, Reason: reasonPackageVersionsOnTheDetailItem},
+	{Package: packagesPkg, Type: "GroupListItem", Entity: packageEntity, Field: "versions", Category: categoryOptionTurnedOff, Reason: reasonGroupPackageVersionsOnACollection},
+
+	// The variable keys a pipeline variable and a schedule variable cannot
+	// answer to.
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelinesPkg, Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonPipelineVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "hidden", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "protected", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "masked", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Entity: ciVariableEntity, Field: "environment_scope", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
+	{Package: pipelineSchedulesPkg, Type: "VariableOutput", Entity: ciVariableEntity, Field: "description", Category: categorySubclassCannotSatisfy, Reason: reasonScheduleVariableColumns},
 
 	// pipelines, on every package item and at the package grain alike, since
 	// no route renders it with anything in it.
@@ -807,15 +916,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupsPkg, Entity: projectEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
 	{Package: groupsPkg, Entity: projectEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonGroupProjectsLicenseNeverPassed},
 
-	// The same three project keys on the job token allowlists.
-	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
-	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "license", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
-	{Package: jobTokenScopePkg, Entity: basicProjectDetailsEntity, Field: "license_url", Category: categoryOptionNeverPassed, Reason: reasonJobTokenScopeProjectOptionsNeverPassed},
-
 	// A group's statistics, which no route presenting one group sets, and its
 	// custom attributes, which the one route that can is never asked for.
-	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
-	{Package: toolsDir + "/groupldap", Entity: groupDetailEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonGroupCustomAttributesNeverRequested},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: "custom_attributes", Category: categoryOptionNeverRequested, Reason: reasonGroupCustomAttributesNeverRequested},
 	{Package: groupMembersPkg, Entity: groupDetailEntity, Field: "statistics", Category: categoryOptionNeverPassed, Reason: reasonGroupStatisticsNeverPassed},
 
 	// The commit a submodule update answers with, and an epic's deprecated
@@ -920,6 +1024,52 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 
+	// The tree the submodule package lists to find the commit a submodule is
+	// pinned at, and the project the two contribution listings read to link
+	// each event. The license and custom attribute keys of that project stay
+	// answered by the option declarations above, which come first.
+	{Package: toolsDir + "/repositorysubmodules", Entity: "API::Entities::TreeObject", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonSubmoduleTreeLookup},
+	{Package: eventsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
+	{Package: usersPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonEventProjectLookup},
+
+	// The existence probes: three list actions read the project, and the LDAP
+	// link listing the group, only to tell a missing object from one with
+	// nothing to list. The option declarations above still answer the license
+	// and custom attribute keys, since they come first.
+	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonAttestationProjectProbe},
+	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
+	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
+	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
+
+	// The current user, which one package reads for the caller's id and the
+	// other to prove the credential.
+	{Package: toolsDir + "/awardemoji", Entity: userPublicEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonAwardEmojiCurrentUser},
+	{Package: healthPkg, Entity: userPublicEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonHealthCurrentUser},
+
+	// The instance metadata the health check reports under names of its own,
+	// one key at a time so a key GitLab adds to the entity is a finding. The
+	// version needs none, and for a reason that is not about the version: the
+	// package grain joins on key names, and the agent server's own version key,
+	// published one level down as gitlab_kas.version, carries the same name.
+	// A declaration for it here would match nothing and fail as stale. Should
+	// KASOutput stop publishing that key, the entity's version becomes a
+	// finding, and it is answered with the reason the revision is.
+	{Package: healthPkg, Entity: metadataEntity, Field: "revision", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
+	{Package: healthPkg, Entity: metadataEntity, Field: "enterprise", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
+	{Package: healthPkg, Entity: metadataEntity, Field: "kas", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
+
+	// The application settings, which the package publishes whole as a map.
+	{Package: toolsDir + "/settings", Entity: "API::Entities::ApplicationSetting", Field: declaredSegment, Category: categoryEntityPublishedElsewhere, Reason: reasonSettingsPublishedAsAMap},
+
+	// The date a user was last active, which the entity sends twice.
+	{
+		Package: usersPkg, Type: "UserActivityOutput", Entity: "API::Entities::UserActivity", Field: "last_activity_at",
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "lib/api/entities/user_activity.rb exposes last_activity_on and then exposes it again as last_activity_at, " +
+			"commented Back-compat, so the two keys carry the same date on every response. users.UserActivityOutput " +
+			"publishes that date once, as last_activity_on.",
+	},
+
 	// The project starrers, whose route annotates a user and presents the star.
 	{
 		Package: projectsPkg, Type: "StarrerOutput", Entity: userBasicEntity, Field: declaredSegment, Category: categoryDocumentedNotSent,
@@ -928,7 +1078,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"(lib/api/entities/user_stars_project.rb). None of UserBasic's keys is at the top of the response; they are under " +
 			"user, which projects.StarrerOutput publishes as ProjectUserOutput.",
 	},
-}, declaredCompactRows())
+}, declaredCompactRows(), declaredConfirmations())
 
 // reasonStatusCheckResponse answers the two objects the response to setting a
 // status check's status echoes.
@@ -945,6 +1095,71 @@ const reasonPositionPreCheck = "the package lists a merge request's diffs throug
 	"note with a bare 400 or 500, and returns nothing of the answer. mr_review.changes_get is the action that answers with a " +
 	"merge request's file diffs."
 
+// reasonSubmoduleTreeLookup answers the tree the submodule package lists.
+const reasonSubmoduleTreeLookup = "internal/tools/repositorysubmodules lists the directory each submodule sits in " +
+	"(GET /projects/:id/repository/tree, every page of it) only to find the tree node of type commit at the submodule's " +
+	"path, whose id is the commit the parent repository pins, and publishes that id as commit_sha and nothing else of " +
+	"the answer. repository.tree is the action that answers with a tree."
+
+// reasonEventProjectLookup answers the project the two contribution listings
+// read for each event.
+const reasonEventProjectLookup = "the package reads each event's project (GET /projects/:id, once per distinct project, " +
+	"through events.EnrichContributionEventURLs and toolutil.ResolveProjectWebURLs) only to build the event's target_url " +
+	"from the project's web_url, and returns nothing else of the answer. project.get is the action that answers with a " +
+	"project."
+
+// The health package and the metadata entity its connectivity check reads.
+const (
+	healthPkg      = toolsDir + "/health"
+	metadataEntity = "API::Entities::Metadata"
+)
+
+// reasonAttestationProjectProbe answers the project the attestation listing
+// reads when GitLab answers its own route with a 404.
+const reasonAttestationProjectProbe = "attestation.list reads GET /projects/:id only after " +
+	"GET /projects/:id/attestations/:subject_digest answered 404, to tell a project with no attestation for the digest (an " +
+	"empty list) from a project that does not exist or is not visible (the error), and returns nothing of the answer. " +
+	"project.get is the action that answers with a project."
+
+// reasonGraphQLProjectProbe answers the project the two GraphQL security
+// listings read when their document found no project.
+const reasonGraphQLProjectProbe = "the package reads GET /projects/:id only when its GraphQL document answered with no " +
+	"project and no top-level error, to tell a project whose security data is empty or not licensed (an empty page) from " +
+	"a path that names no project (the error), and returns nothing of the answer. project.get is the action that answers " +
+	"with a project."
+
+// reasonLDAPGroupProbe answers the group the LDAP link listing reads when its
+// own route answered 404.
+const reasonLDAPGroupProbe = "internal/tools/groupldap reads GET /groups/:id only after GET /groups/:id/ldap_group_links " +
+	"answered 404, to tell a group with no LDAP link (an empty list) from a group that does not exist (the error), and " +
+	"returns nothing of the answer. group.get is the action that answers with a group."
+
+// reasonAwardEmojiCurrentUser answers the user the merge request emoji award
+// reads to find the caller's own existing award.
+const reasonAwardEmojiCurrentUser = "internal/tools/awardemoji reads GET /user only after awarding an emoji to a merge " +
+	"request was refused as already awarded or answered 404, to learn the caller's id and return the award that caller " +
+	"may already hold, and returns nothing else of the answer. user.me is the action that answers with the current user."
+
+// reasonHealthCurrentUser answers the user the health check reads to prove the
+// credential.
+const reasonHealthCurrentUser = "the health check reads GET /user to prove the credential authenticates, and reports the " +
+	"answer's username and id as username and user_id and nothing else of it. user.me is the action that answers with " +
+	"the current user."
+
+// reasonHealthMetadata answers the four metadata keys the health check
+// publishes under names of its own.
+const reasonHealthMetadata = "lib/api/metadata.rb presents Entities::Metadata on GET /metadata, which the health check " +
+	"asks, and on the deprecated GET /version beside it: version, revision, kas and enterprise. health.Output publishes all " +
+	"four as gitlab_version, gitlab_revision, gitlab_kas (its four keys in snake case, as admin.metadata_get spells them) " +
+	"and gitlab_enterprise, the prefix setting what GitLab answered apart from what the server says about itself."
+
+// reasonSettingsPublishedAsAMap answers every key of the application settings.
+const reasonSettingsPublishedAsAMap = "settings.GetOutput and settings.UpdateOutput publish the whole answer as the settings " +
+	"map, decoded from the captured response (ADR-0021) rather than from client-go's Settings struct, so every key " +
+	"lib/api/entities/application_setting.rb sends reaches the caller as settings.<key>, a key GitLab adds included. The " +
+	"comparison reads a map as publishing no named field, which is why each key is reported, and a splat is the right " +
+	"answer here because the map has no list of keys to fall behind."
+
 // compactRow declares the keys one compact row leaves to the action returning
 // the whole object, one declaration per key.
 //
@@ -956,16 +1171,86 @@ const reasonPositionPreCheck = "the package lists a merge request's diffs throug
 // decision it belongs to, and a key missing from that list is one nobody
 // decided.
 func compactRow(pkg, typ, entity, reason string, fields ...string) []sentDeclaration {
+	return keyByKey(categoryCompactRow, pkg, typ, entity, reason, fields)
+}
+
+// confirmation declares the keys of a write's answer that its confirmation
+// leaves to the action returning the whole object, on the terms [compactRow]
+// sets out and for the same reason: each key is a decision about the surface,
+// so each is made alone.
+func confirmation(pkg, typ, entity, reason string, fields ...string) []sentDeclaration {
+	return keyByKey(categoryConfirmationOnly, pkg, typ, entity, reason, fields)
+}
+
+// keyByKey writes one declaration per key, each naming the type, with a reason
+// that is the decision's own followed by every key it leaves out.
+func keyByKey(category, pkg, typ, entity, reason string, fields []string) []sentDeclaration {
 	full := reason + " The keys it leaves out: " + strings.Join(fields, ", ") + "."
 	declarations := make([]sentDeclaration, 0, len(fields))
 	for _, field := range fields {
 		declarations = append(declarations, sentDeclaration{
 			Package: pkg, Type: typ, Entity: entity, Field: field,
-			Category: categoryCompactRow, Reason: full,
+			Category: category, Reason: full,
 		})
 	}
 	return declarations
 }
+
+// declaredConfirmations is what every write's confirmation leaves out, key by
+// key, where a type-named declaration answers it: the group a share answers
+// with, and the presenter options that share never passes.
+func declaredConfirmations() []sentDeclaration {
+	shareOptions := []string{
+		"custom_attributes", "enabled_git_access_protocol", "projects", "root_storage_statistics", "runners_token",
+		"shared_projects", "step_up_auth_required_oauth_provider",
+	}
+	options := make([]sentDeclaration, 0, len(shareOptions))
+	for _, field := range shareOptions {
+		options = append(options, sentDeclaration{
+			Package: groupMembersPkg, Type: "ShareOutput", Entity: groupDetailEntity, Field: field,
+			Category: categoryOptionNeverPassed, Reason: reasonGroupShareOptionsNeverPassed,
+		})
+	}
+	return slices.Concat(options,
+		confirmation(groupMembersPkg, "ShareOutput", groupDetailEntity, reasonGroupShareConfirmation,
+			"ai_settings", "allow_merge_on_skipped_pipeline", "allow_personal_snippets", "allowed_email_domains_list",
+			"archived", "auto_ban_user_on_excessive_projects_download", "auto_devops_enabled",
+			"auto_duo_code_review_enabled", "avatar_url", "built_in_project_templates_enabled", "created_at",
+			"crm_enabled", "default_branch", "default_branch_protection", "default_branch_protection_defaults",
+			"duo_core_features_enabled", "duo_features_enabled", "duo_namespace_access_rules", "emails_disabled",
+			"emails_enabled", "experiment_features_enabled", "extra_shared_runners_minutes_limit",
+			"file_template_project_id", "ip_restriction_ranges", "ldap_access", "ldap_cn", "ldap_group_links",
+			"lfs_enabled", "lock_built_in_project_templates_enabled", "lock_duo_features_enabled",
+			"lock_math_rendering_limits_enabled", "lock_resource_access_token_notify_inherited", "marked_for_deletion_on",
+			"math_rendering_limits_enabled", "max_artifacts_size", "membership_lock", "mentions_disabled",
+			"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_pipeline_succeeds",
+			"organization_id", "parent_id", "prevent_forking_outside_group", "prevent_sharing_groups_outside_hierarchy",
+			"project_creation_level", "repository_storage", "request_access_enabled", "require_two_factor_authentication",
+			"resource_access_token_notify_inherited", "saml_group_links", "service_access_tokens_expiration_enforced",
+			"share_with_group_lock", "shared_runners_minutes_limit", "shared_runners_setting",
+			"show_diff_preview_in_email", "subgroup_creation_level", "two_factor_grace_period",
+			"unique_project_download_limit", "unique_project_download_limit_alertlist",
+			"unique_project_download_limit_allowlist", "unique_project_download_limit_interval_in_seconds",
+			"web_based_commit_signing_enabled", "wiki_access_level"),
+	)
+}
+
+// reasonGroupShareOptionsNeverPassed answers the group keys a share's answer
+// can never carry.
+const reasonGroupShareOptionsNeverPassed = "lib/api/groups.rb answers POST /groups/:id/share with " +
+	"`present user_group, with: Entities::GroupDetail, current_user: current_user` and no other option, so " +
+	"with_projects (projects, shared_projects), user_can_admin_group (runners_token, enabled_git_access_protocol, " +
+	"step_up_auth_required_oauth_provider), with_custom_attributes (custom_attributes) and statistics " +
+	"(root_storage_statistics) are never set, and the route declares none of them as a parameter, so no answer to a " +
+	"share has carried these keys. group.get passes the first two for a caller who may administer the group."
+
+// reasonGroupShareConfirmation answers the rest of the group a share answers
+// with.
+const reasonGroupShareConfirmation = "POST /groups/:id/share answers with the whole shared group, Entities::GroupDetail " +
+	"(lib/api/groups.rb). group.group_member_share keeps what names the group (its ID, names, paths, description, " +
+	"visibility and web URL) and every group it is now shared with, the new share among them with the access level and " +
+	"expiry GitLab recorded, which is what the write changed, and leaves the rest of the group to group.get, which " +
+	"returns it whole: its settings, limits, dates, LDAP and SAML links and Duo configuration."
 
 // declaredCompactRows is what every compact row leaves out, key by key: the
 // milestone issue and merge request rows, the merge requests a commit belongs

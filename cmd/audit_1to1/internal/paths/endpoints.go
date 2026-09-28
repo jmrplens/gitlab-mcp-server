@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"regexp"
@@ -245,11 +246,8 @@ func recordedEndpoints(rows []requestinventory.Row) []Endpoint {
 		sort.Strings(named)
 		endpoints = append(endpoints, Endpoint{Method: method, Path: path, Packages: named})
 	}
-	sort.Slice(endpoints, func(i, j int) bool {
-		if endpoints[i].Path != endpoints[j].Path {
-			return endpoints[i].Path < endpoints[j].Path
-		}
-		return endpoints[i].Method < endpoints[j].Method
+	slices.SortFunc(endpoints, func(a, b Endpoint) int {
+		return cmp.Or(strings.Compare(a.Path, b.Path), strings.Compare(a.Method, b.Method))
 	})
 	return endpoints
 }

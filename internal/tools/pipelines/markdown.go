@@ -71,12 +71,10 @@ func pipelineStatusCell(status string) string {
 	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
 }
 
-// shortSHA is the abbreviation a commit SHA is shown by in a table cell.
+// shortSHA is the abbreviation a commit SHA is shown by in a table cell: its
+// first eight characters, or the whole of a shorter one.
 func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return sha[:min(len(sha), 8)]
 }
 
 // FormatDetailMarkdown renders one pipeline as the card of a single object.
@@ -158,6 +156,15 @@ func detailedStatusLabel(p DetailOutput) string {
 	return label
 }
 
+// rawCell renders the raw flag GitLab sent for a variable, and leaves the cell
+// empty where it sent none rather than print a false nobody stated.
+func rawCell(raw *bool) string {
+	if raw == nil {
+		return ""
+	}
+	return toolutil.BoolEmoji(*raw)
+}
+
 // FormatVariablesMarkdown renders a pipeline's variables as a Markdown table.
 func FormatVariablesMarkdown(out VariablesOutput) string {
 	if len(out.Variables) == 0 {
@@ -165,12 +172,13 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Pipeline Variables", len(out.Variables), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("Key", "Value", "Type"))
+	b.WriteString(toolutil.MarkdownTableHeader("Key", "Value", "Type", "Raw"))
 	for _, v := range out.Variables {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(v.Key),
 			toolutil.EscapeMdTableCell(v.Value),
 			toolutil.EscapeMdTableCell(v.VariableType),
+			rawCell(v.Raw),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
@@ -310,21 +318,24 @@ func waitHeading(out WaitOutput) string {
 
 // waitHints names what a caller can do next with the outcome the wait
 // reached, and nothing when the pipeline simply succeeded.
+//
+// It is written as two ifs rather than a switch because a case expression
+// carries no statement counter of its own, so a mutation tool counts it as
+// never covered and leaves its mutant unrun however well the tests hold it.
 func waitHints(out WaitOutput) []string {
-	switch {
-	case out.TimedOut:
+	if out.TimedOut {
 		return []string{
 			toolutil.HintAction(actionPipelineWait, "keep waiting for this pipeline"),
 			toolutil.HintAction(actionPipelineCancel, "abort it instead"),
 		}
-	case out.FinalStatus == "failed":
+	}
+	if out.FinalStatus == "failed" {
 		return []string{
 			toolutil.HintAction(actionJobList, "find the jobs that failed"),
 			toolutil.HintAction(actionPipelineRetry, "retry the failed jobs"),
 		}
-	default:
-		return nil
 	}
+	return nil
 }
 
 func formatWaitResult(out WaitOutput) *mcp.CallToolResult {

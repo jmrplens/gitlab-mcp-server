@@ -175,7 +175,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		usage:       "List the individual files belonging to one package. Provide project_id and the package_id returned by package.list to enumerate every asset, its size, and checksums.",
 		aliases:     []string{"list package files", "show package assets", "enumerate files in package", "browse package version files"},
 		related:     []string{"package.download", "package.file_delete", actionPackageList},
-		description: "List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
+		description: "List the files within a single package. Returns: package files with name, size, checksums, creation time, the pipelines that built each, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
 	},
 	"delete": {
 		usage:       "Permanently delete an entire package and all of its files. Provide project_id and the package_id from package.list. This is irreversible and removes every version asset.",

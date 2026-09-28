@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -426,7 +427,7 @@ func sortedRoutes(found map[string]map[sdkRoute]bool) map[string][]sdkRoute {
 		for route := range routes {
 			flat = append(flat, route)
 		}
-		sort.Slice(flat, func(i, j int) bool { return flat[i].operation() < flat[j].operation() })
+		slices.SortFunc(flat, func(a, b sdkRoute) int { return strings.Compare(a.operation(), b.operation()) })
 		out[name] = flat
 	}
 	return out

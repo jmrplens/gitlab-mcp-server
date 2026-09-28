@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -50,6 +51,19 @@ func treeNodeIcon(nodeType string) string {
 	}
 }
 
+// lastCommitCells renders the two cells an entry's last commit fills: its
+// short id linked to the commit with the title beside it, and when it was
+// committed. An entry GitLab sent no last commit for fills neither.
+func lastCommitCells(c *TreeCommitOutput) []string {
+	if c == nil {
+		return []string{"", ""}
+	}
+	return []string{
+		toolutil.MdTitleLink(c.ShortID, c.WebURL) + " " + toolutil.EscapeMdTableCell(c.Title),
+		toolutil.FormatTime(c.CommittedDate),
+	}
+}
+
 // FormatTreeMarkdown renders a page of a repository tree as a Markdown table.
 func FormatTreeMarkdown(out TreeOutput) string {
 	if len(out.Tree) == 0 {
@@ -57,15 +71,26 @@ func FormatTreeMarkdown(out TreeOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Repository Tree", len(out.Tree), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Type", "Name", "Path"))
+	// The last commit of each entry arrives only when the caller asked for it,
+	// and a page listed without it keeps the three columns it always had.
+	withCommits := slices.ContainsFunc(out.Tree, func(n TreeNodeOutput) bool { return n.LastCommit != nil })
+	columns := []string{"Type", "Name", "Path"}
+	if withCommits {
+		columns = append(columns, "Last Commit", "Committed")
+	}
+	b.WriteString(toolutil.MarkdownTableHeader(columns...))
 	for _, n := range out.Tree {
-		b.WriteString(toolutil.MarkdownTableRow(
+		cells := []string{
 			treeNodeIcon(n.Type),
 			toolutil.EscapeMdTableCell(n.Name),
 			toolutil.MdCodeSpanCell(n.Path),
-		))
+		}
+		if withCommits {
+			cells = append(cells, lastCommitCells(n.LastCommit)...)
+		}
+		b.WriteString(toolutil.MarkdownTableRow(cells...))
 	}
-	toolutil.WriteListFooter(&b, out.Pagination, false,
+	toolutil.WriteListFooter(&b, out.Pagination, withCommits,
 		toolutil.HintAction(actionFileGet, "read one file's content"),
 		toolutil.HintAction(actionCompare, "see differences between branches or commits"),
 	)

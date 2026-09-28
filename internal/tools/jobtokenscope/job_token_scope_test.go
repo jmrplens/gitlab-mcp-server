@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 )
 
 // Every writing handler here builds a body GitLab reads and nothing answered
@@ -72,14 +74,18 @@ func assertAddressed(t *testing.T, got capturedRequest, method, path string) {
 // tell a handler reading GitLab's flag from one returning a constant, which
 // would report every project as restricted, including the ones open to any job
 // token.
+//
+// The two flags are held in both of their disagreeing combinations, so a
+// handler reading one key into both fields fails one of the cases.
 func TestGetAccessSettings_Success(t *testing.T) {
 	cases := []struct {
-		name string
-		body string
-		want bool
+		name         string
+		body         string
+		wantInbound  bool
+		wantOutbound bool
 	}{
-		{name: "restricted to the allowlist", body: `{"inbound_enabled": true}`, want: true},
-		{name: "open to any project", body: `{"inbound_enabled": false}`, want: false},
+		{name: "restricted to the allowlist", body: `{"inbound_enabled": true, "outbound_enabled": false}`, wantInbound: true},
+		{name: "open to any project, outbound scope on", body: `{"inbound_enabled": false, "outbound_enabled": true}`, wantOutbound: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,10 +96,27 @@ func TestGetAccessSettings_Success(t *testing.T) {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 			assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope")
-			if out.InboundEnabled != tc.want {
-				t.Errorf("InboundEnabled = %t, want %t", out.InboundEnabled, tc.want)
+			if out.InboundEnabled != tc.wantInbound {
+				t.Errorf("InboundEnabled = %t, want %t", out.InboundEnabled, tc.wantInbound)
+			}
+			if out.OutboundEnabled != tc.wantOutbound {
+				t.Errorf("OutboundEnabled = %t, want %t", out.OutboundEnabled, tc.wantOutbound)
 			}
 		})
+	}
+}
+
+// TestGetAccessSettings_UndecodableCapture_IsAnError asserts that an answer
+// client-go accepts and the capture cannot read is reported rather than
+// published with the outbound flag silently false. The fixture is an object
+// whose outbound key is not a boolean: client-go models no such key and
+// decodes the rest, so only the capture's read can refuse it.
+func TestGetAccessSettings_UndecodableCapture_IsAnError(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, `{"inbound_enabled": true, "outbound_enabled": "yes"}`, &got))
+	_, err := GetAccessSettings(t.Context(), client, GetAccessSettingsInput{ProjectID: "42"})
+	if err == nil || !strings.Contains(err.Error(), "get_job_token_access_settings") {
+		t.Fatalf("GetAccessSettings() error = %v, want one naming get_job_token_access_settings", err)
 	}
 }
 
@@ -315,11 +338,29 @@ func TestPatchAccessSettings_TheFlagTheCallerChose_IsWhatGitLabReceives(t *testi
 // URL are both strings, and the card built from the row prints the path in a
 // column of its own. Every value in the fixture is distinct, so no assignment
 // is indistinguishable from its neighbor.
+//
+// The rows are projects.BasicOutput, the shape of the BasicProjectDetails
+// entity GitLab renders here, so the fixture carries every key that entity
+// sends and the whole row is compared: the two projects differ in every value,
+// the second one names no default branch and no readme, as a project the
+// caller cannot read the code of is sent.
 func TestListInboundAllowlist_EachProjectField_ComesFromItsOwnSourceField(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, `[
-		{"id": 10, "name": "project-a", "path_with_namespace": "group/project-a", "web_url": "https://gitlab.example.com/group/project-a"},
-		{"id": 11, "name": "project-b", "path_with_namespace": "other/project-b", "web_url": "https://gitlab.example.com/other/project-b"}
+		{"id": 10, "name": "project-a", "name_with_namespace": "Group / project-a", "path": "project-a",
+		 "path_with_namespace": "group/project-a", "description": "first", "visibility": "internal",
+		 "default_branch": "main", "web_url": "https://gitlab.example.com/group/project-a",
+		 "http_url_to_repo": "https://gitlab.example.com/group/project-a.git", "ssh_url_to_repo": "git@gitlab.example.com:group/project-a.git",
+		 "readme_url": "https://gitlab.example.com/group/project-a/-/blob/main/README.md",
+		 "avatar_url": "https://gitlab.example.com/a.png", "topics": ["ci"], "tag_list": ["ci"],
+		 "forks_count": 2, "star_count": 3, "created_at": "2026-01-02T03:04:05Z", "last_activity_at": "2026-02-03T04:05:06Z",
+		 "namespace": {"id": 7, "name": "Group", "path": "group", "kind": "group", "full_path": "group"}},
+		{"id": 11, "name": "project-b", "name_with_namespace": "Other / project-b", "path": "project-b",
+		 "path_with_namespace": "other/project-b", "description": "", "visibility": "private",
+		 "web_url": "https://gitlab.example.com/other/project-b",
+		 "http_url_to_repo": "https://gitlab.example.com/other/project-b.git", "ssh_url_to_repo": "git@gitlab.example.com:other/project-b.git",
+		 "topics": [], "tag_list": [], "star_count": 0, "created_at": "2026-03-04T05:06:07Z", "last_activity_at": "2026-04-05T06:07:08Z",
+		 "namespace": {"id": 8, "name": "Other", "path": "other", "kind": "group", "full_path": "other"}}
 	]`, &got))
 
 	out, err := ListInboundAllowlist(t.Context(), client, ListInboundAllowlistInput{ProjectID: "42"})
@@ -328,11 +369,27 @@ func TestListInboundAllowlist_EachProjectField_ComesFromItsOwnSourceField(t *tes
 	}
 	assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope/allowlist")
 
-	want := []AllowlistProjectItem{
-		{ID: 10, Name: "project-a", PathWithNamespace: "group/project-a", WebURL: "https://gitlab.example.com/group/project-a"},
-		{ID: 11, Name: "project-b", PathWithNamespace: "other/project-b", WebURL: "https://gitlab.example.com/other/project-b"},
+	want := []projects.BasicOutput{
+		{
+			ID: 10, Name: "project-a", NameWithNamespace: "Group / project-a", Path: "project-a",
+			PathWithNamespace: "group/project-a", Description: "first", Visibility: "internal", DefaultBranch: "main",
+			WebURL:        "https://gitlab.example.com/group/project-a",
+			HTTPURLToRepo: "https://gitlab.example.com/group/project-a.git", SSHURLToRepo: "git@gitlab.example.com:group/project-a.git",
+			ReadmeURL: "https://gitlab.example.com/group/project-a/-/blob/main/README.md",
+			AvatarURL: "https://gitlab.example.com/a.png", Topics: []string{"ci"}, TagList: []string{"ci"},
+			ForksCount: 2, StarCount: 3, CreatedAt: "2026-01-02T03:04:05Z", LastActivityAt: "2026-02-03T04:05:06Z",
+			Namespace: &projects.NamespaceOutput{ID: 7, Name: "Group", Path: "group", Kind: "group", FullPath: "group"},
+		},
+		{
+			ID: 11, Name: "project-b", NameWithNamespace: "Other / project-b", Path: "project-b",
+			PathWithNamespace: "other/project-b", Visibility: "private",
+			WebURL:        "https://gitlab.example.com/other/project-b",
+			HTTPURLToRepo: "https://gitlab.example.com/other/project-b.git", SSHURLToRepo: "git@gitlab.example.com:other/project-b.git",
+			Topics: []string{}, TagList: []string{}, CreatedAt: "2026-03-04T05:06:07Z", LastActivityAt: "2026-04-05T06:07:08Z",
+			Namespace: &projects.NamespaceOutput{ID: 8, Name: "Other", Path: "other", Kind: "group", FullPath: "other"},
+		},
 	}
-	if !slices.Equal(out.Projects, want) {
+	if !reflect.DeepEqual(out.Projects, want) {
 		t.Errorf("Projects =\n %+v\nwant\n %+v", out.Projects, want)
 	}
 }
@@ -516,8 +573,9 @@ func markdownText(t *testing.T, r *mcp.CallToolResult) string {
 func TestFormatAccessSettingsMarkdown(t *testing.T) {
 	want := "## Job Token Access Settings\n\n" +
 		"- **Inbound job token access**: limited to the allowlist\n" +
+		"- **Outbound job token scope (deprecated)**: limited (this project's job token reaches only the projects its outbound scope names)\n" +
 		accessSettingsHints
-	if got := markdownText(t, FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})); got != want {
+	if got := markdownText(t, FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true, OutboundEnabled: true})); got != want {
 		t.Errorf("FormatAccessSettingsMarkdown(enabled)\n got %q\nwant %q", got, want)
 	}
 }
@@ -832,6 +890,7 @@ func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 func TestFormatAccessSettingsMarkdown_Disabled(t *testing.T) {
 	want := "## Job Token Access Settings\n\n" +
 		"- **Inbound job token access**: not limited (any project's job token may access this project)\n" +
+		"- **Outbound job token scope (deprecated)**: not limited\n" +
 		accessSettingsHints
 	if got := markdownText(t, FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: false})); got != want {
 		t.Errorf("FormatAccessSettingsMarkdown(disabled)\n got %q\nwant %q", got, want)
@@ -845,17 +904,17 @@ func TestFormatAccessSettingsMarkdown_Disabled(t *testing.T) {
 // TestFormatListInboundAllowlistMarkdown_WithData verifies FormatListInboundAllowlistMarkdown when with data.
 func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{
-		Projects: []AllowlistProjectItem{
-			{ID: 10, Name: "proj-a", PathWithNamespace: "grp/proj-a", WebURL: "https://gitlab.example.com/grp/proj-a"},
-			{ID: 11, Name: "proj-b", PathWithNamespace: "grp/proj-b", WebURL: "https://gitlab.example.com/grp/proj-b"},
+		Projects: []projects.BasicOutput{
+			{ID: 10, Name: "proj-a", PathWithNamespace: "grp/proj-a", Visibility: "internal", WebURL: "https://gitlab.example.com/grp/proj-a"},
+			{ID: 11, Name: "proj-b", PathWithNamespace: "grp/proj-b", Visibility: "private", WebURL: "https://gitlab.example.com/grp/proj-b"},
 		},
 	})
 	// The name carries the link, so a reader is never asked to click a column
 	// that says "View" and nothing about where it goes.
 	want := "## Job Token Inbound Allowlist (2)\n\n" +
-		"| ID | Name | Path |\n| --- | --- | --- |\n" +
-		"| 10 | [proj-a](https://gitlab.example.com/grp/proj-a) | grp/proj-a |\n" +
-		"| 11 | [proj-b](https://gitlab.example.com/grp/proj-b) | grp/proj-b |\n" +
+		"| ID | Name | Path | Visibility |\n| --- | --- | --- | --- |\n" +
+		"| 10 | [proj-a](https://gitlab.example.com/grp/proj-a) | grp/proj-a | internal |\n" +
+		"| 11 | [proj-b](https://gitlab.example.com/grp/proj-b) | grp/proj-b | private |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'job.token_scope_add_project' to allow another project\n" +
@@ -937,11 +996,11 @@ func TestFormatAddGroupAllowlistMarkdown(t *testing.T) {
 // TestFormatListInboundAllowlistMarkdown_EscapesPipes verifies FormatListInboundAllowlistMarkdown when escapes pipes.
 func TestFormatListInboundAllowlistMarkdown_EscapesPipes(t *testing.T) {
 	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{
-		Projects: []AllowlistProjectItem{
-			{ID: 10, Name: "proj|special", PathWithNamespace: "grp/proj-special", WebURL: "https://gitlab.example.com/grp/proj-special"},
+		Projects: []projects.BasicOutput{
+			{ID: 10, Name: "proj|special", PathWithNamespace: "grp/proj-special", Visibility: "public", WebURL: "https://gitlab.example.com/grp/proj-special"},
 		},
 	})
-	const wantRow = "| 10 | [proj&#124;special](https://gitlab.example.com/grp/proj-special) | grp/proj-special |\n"
+	const wantRow = "| 10 | [proj&#124;special](https://gitlab.example.com/grp/proj-special) | grp/proj-special | public |\n"
 	if got := markdownText(t, r); !strings.Contains(got, wantRow) {
 		t.Errorf("FormatListInboundAllowlistMarkdown() missing %q:\n%s", wantRow, got)
 	}

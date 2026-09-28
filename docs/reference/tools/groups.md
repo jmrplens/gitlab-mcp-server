@@ -360,7 +360,7 @@ Remove a member from a GitLab group. Optionally skip subresource removal and una
 
 ### `gitlab_group_share`
 
-Share a GitLab group with another group, granting the shared group a specified access level. Optionally set an expiration date.
+Share a GitLab group with another group, granting the shared group a specified access level. Optionally set an expiration date. Returns the shared group's ID, name, path, full name and full path, description, visibility and web URL, and `shared_with_groups`: every group it is now shared with, the new share among them, each with its group ID, name and full path, access level, expiry and, on an instance with custom roles, `member_role_id`. The rest of the group GitLab sends with the answer (its settings, limits and links) is `group.get`'s.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

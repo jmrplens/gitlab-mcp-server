@@ -15,13 +15,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ServiceAccountOutput represents a service account.
+// ServiceAccountOutput represents a service account, the keys
+// lib/api/entities/service_account.rb sends. PublicEmail comes from the
+// UserSafe that entity inherits and is read off the captured response, since
+// client-go's ServiceAccount has no field for it.
 type ServiceAccountOutput struct {
 	ID               int64  `json:"id"`
 	Username         string `json:"username"`
 	Name             string `json:"name"`
 	Email            string `json:"email,omitempty"`
+	PublicEmail      string `json:"public_email,omitempty"`
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
+}
+
+// serviceAccountExtra is the key of lib/api/entities/user_safe.rb, which the
+// service account entity inherits, that client-go's ServiceAccount does not
+// model.
+type serviceAccountExtra struct {
+	PublicEmail string `json:"public_email"`
 }
 
 // ServiceAccountListOutput holds one page of the instance's service accounts
@@ -91,18 +102,26 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	accounts, resp, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ServiceAccountListOutput{}, toolutil.WrapErrWithStatusHint("list_service_accounts", err, http.StatusForbidden,
 			"listing service accounts requires an admin token")
 	}
+	// The SDK decoded the same array into accounts, so extras holds one entry
+	// per account, in the same order.
+	var extras []serviceAccountExtra
+	if err = captured.Decode(&extras); err != nil {
+		return ServiceAccountListOutput{}, toolutil.WrapErr("list_service_accounts", err)
+	}
 	out := make([]ServiceAccountOutput, 0, len(accounts))
-	for _, a := range accounts {
+	for i, a := range accounts {
 		out = append(out, ServiceAccountOutput{
 			ID:               a.ID,
 			Username:         a.Username,
 			Name:             a.Name,
 			Email:            a.Email,
+			PublicEmail:      extras[i].PublicEmail,
 			UnconfirmedEmail: a.UnconfirmedEmail,
 		})
 	}
@@ -132,6 +151,7 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	if input.Email != "" {
 		opts.Email = new(input.Email)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	account, _, err := client.GL().Users.UpdateInstanceServiceAccount(input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -143,11 +163,16 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	if account == nil {
 		return ServiceAccountOutput{}, errors.New("update_instance_service_account: GitLab API returned nil account")
 	}
+	var extra serviceAccountExtra
+	if err = captured.Decode(&extra); err != nil {
+		return ServiceAccountOutput{}, toolutil.WrapErr("update_instance_service_account", err)
+	}
 	return ServiceAccountOutput{
 		ID:               account.ID,
 		Username:         account.Username,
 		Name:             account.Name,
 		Email:            account.Email,
+		PublicEmail:      extra.PublicEmail,
 		UnconfirmedEmail: account.UnconfirmedEmail,
 	}, nil
 }
@@ -198,6 +223,7 @@ func FormatServiceAccountMarkdownString(out ServiceAccountOutput) string {
 	card.Field("Username", out.Username)
 	card.Field("Name", out.Name)
 	card.Field("Email", out.Email)
+	card.Field("Public Email", out.PublicEmail)
 	card.Field("Unconfirmed Email", out.UnconfirmedEmail)
 	card.End()
 	return sb.String()

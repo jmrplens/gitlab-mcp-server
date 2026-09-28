@@ -7,8 +7,10 @@ package issues
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1293,6 +1295,191 @@ func TestGetParticipants_MissingProject(t *testing.T) {
 	}
 }
 
+// TestGetParticipants_EveryUserBasicKey_LandsOnItsOwnField verifies that a
+// participant carries the whole of the UserBasic the route presents, each key
+// from its own fixture value, and that the two client-go's BasicUser does not
+// model, locked and public_email, are read off the captured answer for the
+// participant they belong to rather than for whichever came first.
+func TestGetParticipants_EveryUserBasicKey_LandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathIssue10+"/participants" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":11,"username":"u12","public_email":"","name":"N13","state":"active","locked":false,
+				"avatar_url":"https://gitlab.example.com/a/14","web_url":"https://gitlab.example.com/u/15"},
+			{"id":21,"username":"u22","public_email":"p23@example.com","name":"N24","state":"blocked","locked":true,
+				"avatar_url":"https://gitlab.example.com/a/25","web_url":"https://gitlab.example.com/u/26"}]`)
+	}))
+
+	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("GetParticipants() unexpected error: %v", err)
+	}
+	want := []ParticipantOutput{
+		{ID: 11, Username: "u12", Name: "N13", State: "active", AvatarURL: "https://gitlab.example.com/a/14", WebURL: "https://gitlab.example.com/u/15"},
+		{
+			ID: 21, Username: "u22", Name: "N24", State: "blocked", Locked: true, PublicEmail: "p23@example.com",
+			AvatarURL: "https://gitlab.example.com/a/25", WebURL: "https://gitlab.example.com/u/26",
+		},
+	}
+	if !reflect.DeepEqual(out.Participants, want) {
+		t.Errorf("Participants = %+v, want %+v", out.Participants, want)
+	}
+}
+
+// TestGetParticipants_AnAnswerTheCaptureCannotHold_IsAnError verifies that a
+// participant whose locked flag is not a boolean fails the call rather than
+// being read as unlocked: client-go decodes the page, since BasicUser has no
+// field for the key, and the captured read of the same bytes is what refuses.
+func TestGetParticipants_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","locked":"yes"}]`)
+	}))
+
+	_, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err == nil || !strings.Contains(err.Error(), "issueGetParticipants") {
+		t.Fatalf("GetParticipants() error = %v, want the operation's error for an undecodable answer", err)
+	}
+}
+
+// TestCreateTodo_APendingTodo_IsReportedAsOne verifies the 304 GitLab answers
+// when the caller already has a pending to-do on the issue. The answer has no
+// body, which client-go fails to decode after treating the status as a
+// success, and the caller is told what the status means and where the to-do
+// already is instead of reading an end-of-input error.
+func TestCreateTodo_APendingTodo_IsReportedAsOne(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err == nil {
+		t.Fatal("CreateTodo() error = nil, want the pending to-do reported")
+	}
+	if !strings.Contains(err.Error(), "a pending todo for this issue already exists") {
+		t.Errorf("CreateTodo() error = %q, want it to say the to-do already exists", err)
+	}
+	if !strings.Contains(err.Error(), "user.todo_list") {
+		t.Errorf("CreateTodo() error = %q, want it to name user.todo_list", err)
+	}
+}
+
+// TestCreateTodo_AnErrorThatIsNotA304_IsNotAPendingTodo verifies that only the
+// 304 is read as an existing to-do: a refusal carrying any other status keeps
+// its own remedy, the issue check for a 404 and GitLab's message otherwise,
+// and never says a to-do is pending.
+func TestCreateTodo_AnErrorThatIsNotA304_IsNotAPendingTodo(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{name: "not found", status: http.StatusNotFound, want: hintConfirmIssueExists},
+		{name: "a server error", status: http.StatusInternalServerError, want: "issueCreateTodo"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.status, `{"message":"refused"}`)
+			}))
+
+			_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("CreateTodo() error = %v, want it to contain %q", err, testCase.want)
+			}
+			if strings.Contains(err.Error(), "pending todo") {
+				t.Errorf("CreateTodo() error = %q, want no pending to-do for a %d", err, testCase.status)
+			}
+		})
+	}
+}
+
+// TestCreateTodo_ARequestThatGotNoAnswer_IsTheCancellation verifies the one
+// failure that arrives with no response at all. The pending to-do check reads
+// the status off the response, so it has to ask whether there is one first; a
+// call abandoned before GitLab answered is reported as the cancellation it is,
+// and the check is never what fails.
+func TestCreateTodo_ARequestThatGotNoAnswer_IsTheCancellation(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1}`)
+	})
+
+	_, err := CreateTodo(ctx, client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CreateTodo() error = %v, want the cancellation", err)
+	}
+}
+
+// stubbedIssues answers CreateTodo from a function and hands every other call
+// to the real service, for the one answer client-go never builds and a guard
+// is still written for.
+type stubbedIssues struct {
+	gl.IssuesServiceInterface
+	createTodo func() (*gl.Todo, *gl.Response, error)
+}
+
+// CreateTodo returns what the test's function returns.
+func (s stubbedIssues) CreateTodo(any, int64, ...gl.RequestOptionFunc) (*gl.Todo, *gl.Response, error) {
+	return s.createTodo()
+}
+
+// TestCreateTodo_ResponseWithoutHTTPResponse_IsTheOperationError verifies the
+// pending to-do check survives a response with no HTTP response inside it,
+// which client-go never builds but the guard is written for: the status is a
+// field promoted through that pointer, so reading it first would crash, and
+// the failure has to fall through to the operation's own error. The merge
+// request handler holds the same guard to the same test.
+func TestCreateTodo_ResponseWithoutHTTPResponse_IsTheOperationError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	client.GL().Issues = stubbedIssues{
+		IssuesServiceInterface: client.GL().Issues,
+		createTodo: func() (*gl.Todo, *gl.Response, error) {
+			return nil, &gl.Response{}, errors.New("answered without an HTTP response")
+		},
+	}
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err == nil {
+		t.Fatal("CreateTodo() error = nil, want the SDK's error reported")
+	}
+	if !strings.Contains(err.Error(), "answered without an HTTP response") || strings.Contains(err.Error(), "pending todo") {
+		t.Errorf("CreateTodo() error = %q, want the SDK's error and no pending to-do hint", err)
+	}
+}
+
+// TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError verifies that a to-do
+// whose updated_at is not a time fails the call rather than losing the key:
+// client-go's Todo has no field for it, so only the captured read refuses.
+func TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"updated_at":"yesterday"}`)
+	}))
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err == nil || !strings.Contains(err.Error(), "issueCreateTodo") {
+		t.Fatalf("CreateTodo() error = %v, want the operation's error for an undecodable answer", err)
+	}
+}
+
+// TestCreateTodo_WithoutAnAuthor_PublishesNone verifies that a to-do whose
+// answer names no author publishes none, rather than a user with every key
+// zero.
+func TestCreateTodo_WithoutAnAuthor_PublishesNone(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"author":null}`)
+	}))
+
+	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("CreateTodo() unexpected error: %v", err)
+	}
+	if out.Author != nil {
+		t.Errorf("Author = %+v, want none", out.Author)
+	}
+}
+
 // TestListMRsClosing_Success verifies ListMRsClosing when success.
 func TestListMRsClosing_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1668,6 +1855,23 @@ func TestFormatListMarkdown_ReferenceLabelsTheLink(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_ReferencesWithoutAFullOne_LabelTheLinkByIID checks
+// the other half of the reference rule: a references object that carries no
+// full reference is as good as none, and the link falls back to the #IID
+// rather than being labeled with an empty string nobody could click.
+func TestFormatListMarkdown_ReferencesWithoutAFullOne_LabelTheLinkByIID(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Issues: []Output{{
+			IID: 7, Title: "Ref", State: "opened", WebURL: "https://gitlab.example.com/issues/7",
+			References: &toolutil.ReferencesOutput{Short: "#7"},
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+	})
+	if !strings.Contains(md, "| [#7](https://gitlab.example.com/issues/7) | Ref |") {
+		t.Errorf("the row does not fall back to the IID:\n%s", md)
+	}
+}
+
 // TestFormatListMarkdown_HostileReference_ClosesNoLink checks what a reference
 // carrying the closing half of a link renders as: the bracket is backslash
 // escaped inside the label, so CommonMark reads the label on to the next
@@ -1849,14 +2053,18 @@ func TestFormatTodoMarkdown_Populated(t *testing.T) {
 	md := FormatTodoMarkdown(TodoOutput{
 		ID: 1, ActionName: "marked", TargetType: "Issue",
 		TargetTitle: "Bug fix", TargetURL: "https://gitlab.example.com/todo/1",
-		State: "pending", CreatedAt: testCreatedAtCov,
+		Author: &toolutil.UserBasicOutput{Username: "alice", WebURL: "https://gitlab.example.com/alice"},
+		Body:   "Review the fix", State: "pending", CreatedAt: testCreatedAtCov, UpdatedAt: "2026-01-02T03:04:05Z",
 	})
 	want := "## Todo #1\n\n" +
 		"- **Action**: marked\n" +
 		"- **Target Type**: Issue\n" +
 		"- **Target**: Bug fix\n" +
+		"- **Author**: [@alice](https://gitlab.example.com/alice)\n" +
+		"- **Body**: Review the fix\n" +
 		"- **State**: pending\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Updated**: 2 Jan 2026 03:04 UTC\n" +
 		"- **URL**: [https://gitlab.example.com/todo/1](https://gitlab.example.com/todo/1)\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'user.todo_mark_done' to mark this todo as completed\n" +
@@ -1917,15 +2125,35 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
-			{ID: 1, Username: "alice", Name: "Alice A"},
-			{ID: 2, Username: "bob", Name: "Bob B"},
+			{ID: 1, Username: "alice", Name: "Alice A", State: "active", WebURL: "https://gitlab.example.com/alice"},
+			{ID: 2, Username: "bob", Name: "Bob B", State: "blocked", Locked: true},
 		},
 	})
 	want := "## Participants (2)\n\n" +
-		"| Username | Name |\n" +
-		"| --- | --- |\n" +
-		"| @alice | Alice A |\n" +
-		"| @bob | Bob B |\n" +
+		"| Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| [@alice](https://gitlab.example.com/alice) | Alice A | active | ❌ |\n" +
+		"| @bob | Bob B | blocked | ✅ |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.get' to view the issue details\n" +
+		"- Use action 'issue.note_create' to notify participants\n"
+	if md != want {
+		t.Errorf("FormatParticipantsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatParticipantsMarkdown_NoProfileLinks_NoPreserveHint verifies that
+// the instruction to keep links is left out when no participant carries a
+// profile URL, since no username in the table is then a link.
+func TestFormatParticipantsMarkdown_NoProfileLinks_NoPreserveHint(t *testing.T) {
+	md := FormatParticipantsMarkdown(ParticipantsOutput{
+		Participants: []ParticipantOutput{{ID: 2, Username: "bob", Name: "Bob B", State: "active"}},
+	})
+	want := "## Participants (1)\n\n" +
+		"| Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| @bob | Bob B | active | ❌ |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'issue.get' to view the issue details\n" +
 		"- Use action 'issue.note_create' to notify participants\n"
@@ -5659,8 +5887,11 @@ func TestCreateTodo_EveryField_LandsOnItsOwnField(t *testing.T) {
 			return
 		}
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":301,"action_name":"assigned","target_type":"Issue",
-			"target":{"title":"Target 302","web_url":"https://gitlab.example.com/t/303"},
-			"body":"Body 304","state":"done","created_at":"2026-05-06T07:08:09Z"}`)
+			"target":{"title":"Target 302","web_url":"https://gitlab.example.com/t/target-web-url"},
+			"target_url":"https://gitlab.example.com/t/303",
+			"author":{"id":305,"username":"author306","public_email":"a307@example.com","name":"Author 308",
+				"state":"blocked","locked":true,"avatar_url":"https://gitlab.example.com/a/309","web_url":"https://gitlab.example.com/u/310"},
+			"body":"Body 304","state":"done","created_at":"2026-05-06T07:08:09Z","updated_at":"2026-06-07T08:09:10Z"}`)
 	}))
 	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
 	if err != nil {
@@ -5669,7 +5900,11 @@ func TestCreateTodo_EveryField_LandsOnItsOwnField(t *testing.T) {
 	want := TodoOutput{
 		ID: 301, ActionName: "assigned", TargetType: "Issue",
 		TargetTitle: "Target 302", TargetURL: "https://gitlab.example.com/t/303",
-		Body: "Body 304", State: "done", CreatedAt: "2026-05-06T07:08:09Z",
+		Author: &toolutil.UserBasicOutput{
+			ID: 305, Username: "author306", PublicEmail: "a307@example.com", Name: "Author 308",
+			State: "blocked", Locked: true, AvatarURL: "https://gitlab.example.com/a/309", WebURL: "https://gitlab.example.com/u/310",
+		},
+		Body: "Body 304", State: "done", CreatedAt: "2026-05-06T07:08:09Z", UpdatedAt: "2026-06-07T08:09:10Z",
 	}
 	got, err := json.Marshal(out)
 	if err != nil {

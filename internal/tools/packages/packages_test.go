@@ -848,6 +848,66 @@ func TestPackageFileList_Success(t *testing.T) {
 	}
 }
 
+// TestPackageFileList_Pipelines_EveryKeyTheEntitySends holds the pipelines
+// that built a file: every key client-go's Pipeline decodes that the package
+// pipeline entity sends, and the user's locked flag and public email read off
+// the captured answer, paired with the right pipeline of the right file. The
+// two pipelines differ in every value, and so do their users, so a capture
+// read against the wrong position fails; a file without pipelines publishes
+// none.
+func TestPackageFileList_Pipelines_EveryKeyTheEntitySends(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+{"id":20,"package_id":10,"file_name":"app.tar.gz","size":1024,"file_sha256":"abc123","pipelines":[
+ {"id":7,"iid":3,"project_id":42,"sha":"s7","ref":"main","status":"success","source":"push",
+  "created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T04:05:06Z","web_url":"https://gl/p/-/pipelines/7",
+  "user":{"id":1,"username":"ada","name":"Ada","state":"active","avatar_url":"https://gl/a.png","web_url":"https://gl/ada","locked":true,"public_email":"ada@example.com"}},
+ {"id":8,"iid":4,"project_id":42,"sha":"s8","ref":"v1","status":"failed","source":"web",
+  "created_at":"2026-02-03T04:05:06Z","updated_at":"2026-02-03T05:06:07Z","web_url":"https://gl/p/-/pipelines/8",
+  "user":{"id":2,"username":"bob","name":"Bob","state":"blocked","avatar_url":"https://gl/b.png","web_url":"https://gl/bob","locked":false,"public_email":""}}
+]},
+{"id":21,"package_id":10,"file_name":"app.pom","size":12,"file_sha256":"def456"}
+]`)
+	}))
+
+	out, err := FileList(context.Background(), client, FileListInput{ProjectID: "42", PackageID: "10"})
+	if err != nil {
+		t.Fatalf("FileList() unexpected error: %v", err)
+	}
+	want := []toolutil.PackagePipelineOutput{
+		{
+			ID: 7, IID: 3, ProjectID: 42, SHA: "s7", Ref: "main", Status: "success", Source: "push",
+			CreatedAt: "2026-01-02T03:04:05Z", UpdatedAt: "2026-01-02T04:05:06Z", WebURL: "https://gl/p/-/pipelines/7",
+			User: &toolutil.UserBasicOutput{ID: 1, Username: "ada", Name: "Ada", State: "active", AvatarURL: "https://gl/a.png", WebURL: "https://gl/ada", Locked: true, PublicEmail: "ada@example.com"},
+		},
+		{
+			ID: 8, IID: 4, ProjectID: 42, SHA: "s8", Ref: "v1", Status: "failed", Source: "web",
+			CreatedAt: "2026-02-03T04:05:06Z", UpdatedAt: "2026-02-03T05:06:07Z", WebURL: "https://gl/p/-/pipelines/8",
+			User: &toolutil.UserBasicOutput{ID: 2, Username: "bob", Name: "Bob", State: "blocked", AvatarURL: "https://gl/b.png", WebURL: "https://gl/bob"},
+		},
+	}
+	if !reflect.DeepEqual(out.Files[0].Pipelines, want) {
+		t.Errorf("Files[0].Pipelines =\n%+v\nwant\n%+v", out.Files[0].Pipelines, want)
+	}
+	if out.Files[1].Pipelines != nil {
+		t.Errorf("Files[1].Pipelines = %+v, want none for a file GitLab sent none for", out.Files[1].Pipelines)
+	}
+}
+
+// TestPackageFileList_UndecodableCapture_IsAnError asserts that an answer the
+// capture cannot read is reported rather than published without the users'
+// two keys: client-go reads the locked flag nowhere, so a flag that is not a
+// boolean is refused only by the capture.
+func TestPackageFileList_UndecodableCapture_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":20,"package_id":10,"file_name":"a","pipelines":[{"id":7,"user":{"id":1,"locked":"yes"}}]}]`)
+	}))
+	_, err := FileList(context.Background(), client, FileListInput{ProjectID: "42", PackageID: "10"})
+	if err == nil || !strings.Contains(err.Error(), "packageFileList") {
+		t.Fatalf("FileList() error = %v, want one naming packageFileList", err)
+	}
+}
+
 // TestPackageFileList_MissingPackageID verifies PackageFileList when missing package ID.
 func TestPackageFileList_MissingPackageID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))

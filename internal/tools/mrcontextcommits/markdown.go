@@ -22,19 +22,25 @@ func FormatListMarkdownString(out ListOutput) string {
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, "MR Context Commits", len(out.Commits), toolutil.PaginationOutput{})
 	sb.WriteString(toolutil.MarkdownTableHeader("SHA", "Title", "Author", "Created"))
+	linked := false
 	for _, c := range out.Commits {
 		short := c.ShortID
 		if short == "" {
 			short = c.ID
 		}
+		sha := toolutil.MdCodeSpanCell(short)
+		if c.WebURL != "" {
+			sha = toolutil.MdTitleLink(short, c.WebURL)
+			linked = true
+		}
 		sb.WriteString(toolutil.MarkdownTableRow(
-			toolutil.MdCodeSpanCell(short),
+			sha,
 			toolutil.EscapeMdTableCell(c.Title),
 			toolutil.EscapeMdTableCell(c.AuthorName),
 			toolutil.FormatTime(c.CreatedAt),
 		))
 	}
-	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, linked,
 		toolutil.HintAction(actionCommitGet, "read one of these commits in full"),
 		toolutil.HintAction(actionContextCommitsCreate, "pin another commit to this review"),
 		toolutil.HintAction(actionContextCommitsDelete, "unpin one of these commits"),

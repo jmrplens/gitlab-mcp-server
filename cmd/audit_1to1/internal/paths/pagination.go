@@ -1,7 +1,9 @@
 package paths
 
 import (
+	"cmp"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -333,8 +335,9 @@ func listOfObjects(fieldType reflect.Type) bool {
 	if fieldType.Kind() != reflect.Slice {
 		return false
 	}
-	element := dereference(fieldType.Elem())
-	return element != nil && element.Kind() == reflect.Struct
+	// A slice always names its element type, so what dereference returns here
+	// is never the nil it keeps for a route registered without a type.
+	return dereference(fieldType.Elem()).Kind() == reflect.Struct
 }
 
 // dereference follows pointers to the type underneath, and returns nil for a
@@ -488,11 +491,8 @@ func unpaginatedCollections(actions []requestinventory.Action, offset, keyset ma
 			KeysetEndpoints:  keyset[pkg],
 		})
 	}
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].Package != found[j].Package {
-			return found[i].Package < found[j].Package
-		}
-		return found[i].Action < found[j].Action
+	slices.SortFunc(found, func(a, b UnpaginatedCollection) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Action, b.Action))
 	})
 	found = classifyUnpaginated(found)
 	for _, finding := range found {

@@ -220,7 +220,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 				CommonConfusions: []string{"key must already not exist on the schedule. Use the edit action to change an existing key."},
 			},
 		},
-		description: "Create a pipeline schedule variable. Returns: the created variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.",
+		description: "Create a pipeline schedule variable. Returns: the created variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.",
 	},
 	"gitlab_pipeline_schedule_edit_variable": {
 		usage:   "Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables.",
@@ -233,7 +233,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 				ExampleBinding: `params.key:"DEPLOY_ENV"`,
 			},
 		},
-		description: "Edit a pipeline schedule variable. Returns: the updated variable with key, value, and variable_type. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
+		description: "Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
 	},
 	"gitlab_pipeline_schedule_delete_variable": {
 		usage:   "Delete a pipeline schedule variable by key. Destructive. Confirm project_id, schedule_id, and key before calling.",

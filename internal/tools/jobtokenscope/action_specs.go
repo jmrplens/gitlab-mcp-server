@@ -185,7 +185,7 @@ var jobTokenScopeActionMeta = map[string]jobTokenScopeActionMetaEntry{
 		usage:       "Read whether a project limits CI/CD job token access to an inbound allowlist. Use before changing allowlist membership to confirm the inbound scope is enabled.",
 		aliases:     []string{"get job token access settings", "show job token scope", "is job token scope enabled"},
 		related:     []string{"job.token_scope_patch", actionJobTokenScopeListInbound, actionJobTokenScopeListGroups},
-		description: "Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.",
+		description: "Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist, and the deprecated outbound scope flag. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.",
 	},
 	"gitlab_patch_job_token_access_settings": {
 		usage:       "Enable or disable the inbound CI/CD job token scope for a project. Enabling restricts which projects' job tokens may access this project to the inbound allowlist.",
@@ -197,7 +197,7 @@ var jobTokenScopeActionMeta = map[string]jobTokenScopeActionMetaEntry{
 		usage:       "List the projects whose CI/CD job tokens are allowed inbound access to this project. Use to audit allowlist membership or before adding or removing a project.",
 		aliases:     []string{"list job token allowlist projects", "show inbound job token allowlist", "audit job token project allowlist"},
 		related:     []string{actionJobTokenScopeAddProject, actionJobTokenScopeRemoveProject, actionJobTokenScopeGet},
-		description: "List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with id, name, path, and web URL plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.",
+		description: "List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with their names, paths, description, visibility, web and clone URLs, topics, counts and namespace, plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.",
 	},
 	"gitlab_add_project_job_token_allowlist": {
 		usage:       "Add a project to this project's CI/CD job token inbound allowlist so its job tokens may access this project. Requires the inbound scope to be enabled.",
@@ -209,7 +209,7 @@ var jobTokenScopeActionMeta = map[string]jobTokenScopeActionMetaEntry{
 		usage:       "List the groups allowed inbound CI/CD job token access to this project. Use to audit group allowlist membership. Requires GitLab 17.0+.",
 		aliases:     []string{"list job token allowlist groups", "show group job token allowlist", "audit job token group allowlist"},
 		related:     []string{actionJobTokenScopeAddGroup, actionJobTokenScopeRemoveGroup, actionJobTokenScopeGet},
-		description: "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name, full path, and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
+		description: "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
 	},
 	"gitlab_add_group_job_token_allowlist": {
 		usage:       "Add a group to this project's CI/CD job token allowlist so job tokens from the group's projects may access this project. Requires GitLab 17.0+.",

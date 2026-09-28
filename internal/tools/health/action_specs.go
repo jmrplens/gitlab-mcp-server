@@ -13,7 +13,7 @@ const (
 
 	// statusToolDescription is what a model reads about that tool before
 	// calling it.
-	statusToolDescription = "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current."
+	statusToolDescription = "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current."
 )
 
 // ActionSpecs returns canonical specs for MCP server health actions.

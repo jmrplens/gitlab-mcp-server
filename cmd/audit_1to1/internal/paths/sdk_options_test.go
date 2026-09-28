@@ -1,7 +1,9 @@
 package paths
 
 import (
+	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"reflect"
 	"testing"
@@ -16,9 +18,9 @@ import (
 // tagged omitzero is omitted exactly as one tagged omitempty is, and reading
 // only omitempty reported four of client-go's slices as values a caller cannot
 // decline to send. An embedded option struct's fields are promoted, so they are
-// the enclosing struct's own as far as a body is concerned. And the variadic
-// transport tail ends in Options too, so a rule that went by the name alone
-// would attribute every route to it.
+// the enclosing struct's own as far as a body is concerned. And every method
+// ends in the variadic transport tail, RequestOptionFunc, so a rule that read
+// every parameter would attribute every route to it.
 func TestReadSDKOptions_TheStructAMethodIsGiven_IsReadWithItsRoutes(t *testing.T) {
 	dir := sdkSourceIn(t, map[string]string{
 		"routes.go": `package gitlab
@@ -91,7 +93,7 @@ func (s *ProtectedPackagesService) ListRules(pid any, options ...RequestOptionFu
 	if routes := options.Routes["UpdateRulesOptions"]; len(routes) != 1 || routes[0].operation() != "PATCH /projects/:/packages/protection/rules/:" {
 		t.Errorf("routes = %+v, want the one PATCH the method sends", routes)
 	}
-	if routes, claimed := options.Routes[requestOptionType]; claimed {
+	if routes, claimed := options.Routes["RequestOptionFunc"]; claimed {
 		t.Errorf("the transport's variadic tail claimed %+v, want no route at all", routes)
 	}
 }
@@ -186,6 +188,110 @@ func TestSDKOptionReaders_ShapesClientGoHasNotUsed(t *testing.T) {
 	}
 	if got := optionParameters(&ast.FuncDecl{Type: &ast.FuncType{}}); got != nil {
 		t.Errorf("optionParameters(no parameter list) = %v, want none", got)
+	}
+}
+
+// TestJSONField_OnlyABareDashHidesTheField verifies the one spelling that
+// hides a field from encoding/json and the two that look like it and do not:
+// "-," and "-,omitempty" write the field under the key "-", the second only
+// when it holds something.
+func TestJSONField_OnlyABareDashHidesTheField(t *testing.T) {
+	cases := []struct {
+		name          string
+		tag           string
+		wantKey       string
+		wantAlways    bool
+		wantPublished bool
+	}{
+		{name: "a bare dash", tag: "`json:\"-\"`"},
+		{name: "a dash and a comma", tag: "`json:\"-,\"`", wantKey: "-", wantAlways: true, wantPublished: true},
+		{name: "a dash with omitempty", tag: "`json:\"-,omitempty\"`", wantKey: "-", wantPublished: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			key, always, published := jsonField(&ast.BasicLit{Kind: token.STRING, Value: testCase.tag}, "GoName")
+			if key != testCase.wantKey || always != testCase.wantAlways || published != testCase.wantPublished {
+				t.Errorf("jsonField(%s) = %q, %t, %t; want %q, %t, %t", testCase.tag, key, always, published,
+					testCase.wantKey, testCase.wantAlways, testCase.wantPublished)
+			}
+		})
+	}
+}
+
+// TestOptionFields_AnEmbedThatIsNoOptionStruct_IsNotPromoted verifies that an
+// embedded struct is read as more fields of the option struct only when it is
+// an option struct itself; any other embed is left alone, since the walk would
+// find no fields for it and would name it in the output as though it had some.
+func TestOptionFields_AnEmbedThatIsNoOptionStruct_IsNotPromoted(t *testing.T) {
+	structType := parseStruct(t, "ListOptions\n\tPagination\n\tName *string `json:\"name,omitempty\"`")
+
+	got := optionFields(structType)
+
+	if !reflect.DeepEqual(got.Embedded, []string{"ListOptions"}) {
+		t.Errorf("Embedded = %v, want the option struct alone", got.Embedded)
+	}
+}
+
+// TestOptionParameters_TheSameStructTwice_IsNamedOnce verifies that a method
+// taking one option struct in two parameters is recorded as taking it once,
+// so its routes are not credited to the struct twice.
+func TestOptionParameters_TheSameStructTwice_IsNamedOnce(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go",
+		"package fixture\n\nfunc (s *S) Update(a *UpdateOptions, b *UpdateOptions, c *OtherOptions, options ...RequestOptionFunc) {}\n", 0)
+	if err != nil {
+		t.Fatalf("parse the fixture: %v", err)
+	}
+	function, isFunc := file.Decls[0].(*ast.FuncDecl)
+	if !isFunc {
+		t.Fatal("the fixture declares no function")
+	}
+
+	if got := optionParameters(function); !reflect.DeepEqual(got, []string{"UpdateOptions", "OtherOptions"}) {
+		t.Errorf("optionParameters() = %v, want each option struct once", got)
+	}
+}
+
+// TestWalkOptionParams_AChainDeeperThanTheBound_StopsAtIt verifies the depth
+// bound on its own, with no type naming itself: a chain of distinct option
+// structs deeper than the bound is walked to the bound and no further, which is
+// what keeps a pathological source from walking without end even where the
+// ancestor check sees nothing repeat.
+func TestWalkOptionParams_AChainDeeperThanTheBound_StopsAtIt(t *testing.T) {
+	types := map[string]sdkOptionType{}
+	for level := 0; level <= optionDepth+1; level++ {
+		name := fmt.Sprintf("Level%dOptions", level)
+		types[name] = sdkOptionType{Fields: []sdkOptionField{
+			{GoName: "Next", Name: "next", Nested: fmt.Sprintf("Level%dOptions", level+1)},
+		}}
+	}
+
+	visited := 0
+	walkOptionParams(types, "Level0Options", "", nil, 0, func(optionParam) { visited++ })
+
+	if visited != optionDepth+1 {
+		t.Errorf("visited %d param(s), want %d, one per level up to the bound", visited, optionDepth+1)
+	}
+}
+
+// TestWalkOptionParams_AnEmbedChainDeeperThanTheBound_StopsAtIt verifies that
+// an embed spends the depth the way a nested field does. An embed promotes its
+// fields rather than naming them under a key, so it is easy to treat as free,
+// and a chain of distinct embeds, which the ancestor check never stops, would
+// then be walked as deep as it goes.
+func TestWalkOptionParams_AnEmbedChainDeeperThanTheBound_StopsAtIt(t *testing.T) {
+	types := map[string]sdkOptionType{}
+	for level := 0; level <= optionDepth+1; level++ {
+		types[fmt.Sprintf("Level%dOptions", level)] = sdkOptionType{
+			Embedded: []string{fmt.Sprintf("Level%dOptions", level+1)},
+			Fields:   []sdkOptionField{{GoName: "Own", Name: fmt.Sprintf("own_%d", level)}},
+		}
+	}
+
+	visited := 0
+	walkOptionParams(types, "Level0Options", "", nil, 0, func(optionParam) { visited++ })
+
+	if visited != optionDepth+1 {
+		t.Errorf("visited %d param(s), want %d, one per level up to the bound", visited, optionDepth+1)
 	}
 }
 

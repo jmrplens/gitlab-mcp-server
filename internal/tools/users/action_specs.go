@@ -244,7 +244,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "List a user's recent contribution events (pushes, comments, merges) filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.",
 		aliases:        []string{"list contribution events", "user activity feed", "recent contributions"},
 		relatedActions: []string{actionUserGet, "user.activities", actionUserAssociations},
-		description:    "List a user's contribution events. Returns: event entries with action, target type/title, project, and timestamp. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
+		description:    "List a user's contribution events. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
 	},
 	"gitlab_get_user_associations_count": {
 		usage:          "Get a user's association counts (groups, projects, issues, merge requests) by user_id. Use when the prompt asks how much a user owns or is involved in before deletion.",

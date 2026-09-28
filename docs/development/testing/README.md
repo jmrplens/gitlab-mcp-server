@@ -263,6 +263,22 @@ before, and `elicitationtools` keeps its 133 killed and none timed out. That is
 why the default is 300 s. A timeout figure taken before this change is not
 comparable with one taken after it, since the deadlines themselves moved.
 
+A run held to a fixed coefficient (`GREMLINS_FLAGS='--workers 2
+--timeout-coefficient 20'`, which overrides the derived one) keeps that first
+compile inside a deadline of twenty coverage runs, and a package whose tests
+import `internal/tools` does not fit: in issue 971, `issues`,
+`mergerequests`, `pipelineschedules`, `repositorysubmodules`,
+`mrcontextcommits` and `cmd/audit_1to1/internal/sdk` reported between two and
+four timeouts each, every one among the first mutants a worker compiled.
+The directory is in the key only while `-trimpath` is off: under that flag Go
+leaves a package's directory out of its compile key (`buildActionID` in
+`cmd/go/internal/work/exec.go`), so a copy of the module finds what the
+original compiled. `GOFLAGS=-trimpath` for both the
+run and a warm-up `go test -count=1 -failfast <pkg>` beforehand (the command
+gremlins runs per mutant) turned all twenty-one into kills under the same
+flags, with nothing else moving: 27, 59, 112, 206, 318 and 49 killed, each the
+earlier killed count plus the mutants that had timed out.
+
 A timeout that survives the 300 s budget is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of
 `cmd/internal/mcpsurface`'s fourteen outlasted 147 s under the deadlines in use

@@ -326,6 +326,66 @@ func TestMRApprove_Success(t *testing.T) {
 	}
 }
 
+// TestApprove_TheApproversAndTheCallersState_ReachTheOutput verifies the three
+// keys the approve route sends beside the counts: who approved, each user
+// whole with the time they approved, whether the caller has approved and
+// whether the caller may. The approvers' locked and public_email are not in
+// client-go's BasicUser and are read off the captured answer, each for the
+// approver it belongs to.
+func TestApprove_TheApproversAndTheCallersState_ReachTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathMR1+"/approve" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"approved":true,"approvals_required":2,
+			"user_has_approved":true,"user_can_approve":false,
+			"approved_by":[
+				{"user":{"id":11,"username":"u12","public_email":"","name":"N13","state":"active","locked":false,
+					"avatar_url":"https://gitlab.example.com/a/14","web_url":"https://gitlab.example.com/u/15"},
+				 "approved_at":"2026-02-03T04:05:06Z"},
+				{"user":{"id":21,"username":"u22","public_email":"p23@example.com","name":"N24","state":"blocked","locked":true,
+					"avatar_url":"https://gitlab.example.com/a/25","web_url":"https://gitlab.example.com/u/26"},
+				 "approved_at":"2026-03-04T05:06:07Z"}]}`)
+	}))
+
+	out, err := Approve(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Approve() unexpected error: %v", err)
+	}
+	want := ApproveOutput{
+		ApprovalsRequired: 2, ApprovedBy: 2, Approved: true, UserHasApproved: true,
+		ApprovedByUsers: []ApproverOutput{
+			{User: &toolutil.UserBasicOutput{
+				ID: 11, Username: "u12", Name: "N13", State: "active",
+				AvatarURL: "https://gitlab.example.com/a/14", WebURL: "https://gitlab.example.com/u/15",
+			}, ApprovedAt: "2026-02-03T04:05:06Z"},
+			{User: &toolutil.UserBasicOutput{
+				ID: 21, Username: "u22", PublicEmail: "p23@example.com", Name: "N24", State: "blocked", Locked: true,
+				AvatarURL: "https://gitlab.example.com/a/25", WebURL: "https://gitlab.example.com/u/26",
+			}, ApprovedAt: "2026-03-04T05:06:07Z"},
+		},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Approve() = %+v, want %+v", out, want)
+	}
+}
+
+// TestApprove_AnAnswerTheCaptureCannotHold_IsAnError verifies that an approver
+// whose locked flag is not a boolean fails the call rather than being read as
+// unlocked: client-go's BasicUser has no field for it and decodes the answer,
+// so only the captured read refuses.
+func TestApprove_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"approved":true,"approved_by":[{"user":{"id":1,"locked":"yes"}}]}`)
+	}))
+
+	_, err := Approve(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrApprove") {
+		t.Fatalf("Approve() error = %v, want the operation's error for an undecodable answer", err)
+	}
+}
+
 // TestMRUnapprove_Success verifies that Unapprove removes the current user's
 // approval. The mock returns 204 No Content and the test asserts no error.
 func TestMRUnapprove_Success(t *testing.T) {
@@ -896,6 +956,91 @@ func TestMRParticipants_Success(t *testing.T) {
 	}
 	if out.Participants[0].Username != "alice" {
 		t.Errorf("participant[0].Username = %q, want %q", out.Participants[0].Username, "alice")
+	}
+}
+
+// TestParticipants_EveryUserBasicKey_LandsOnItsOwnField verifies that a
+// participant carries the whole of the UserBasic the route presents, and that
+// locked and public_email, which client-go's BasicUser does not model, are read
+// off the captured answer for the participant they belong to.
+func TestParticipants_EveryUserBasicKey_LandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathMR1+"/participants" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":11,"username":"u12","public_email":"","name":"N13","state":"active","locked":false,
+				"avatar_url":"https://gitlab.example.com/a/14","web_url":"https://gitlab.example.com/u/15"},
+			{"id":21,"username":"u22","public_email":"p23@example.com","name":"N24","state":"blocked","locked":true,
+				"avatar_url":"https://gitlab.example.com/a/25","web_url":"https://gitlab.example.com/u/26"}]`)
+	}))
+
+	out, err := Participants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Participants() unexpected error: %v", err)
+	}
+	want := []ParticipantOutput{
+		{ID: 11, Username: "u12", Name: "N13", State: "active", AvatarURL: "https://gitlab.example.com/a/14", WebURL: "https://gitlab.example.com/u/15"},
+		{
+			ID: 21, Username: "u22", Name: "N24", State: "blocked", Locked: true, PublicEmail: "p23@example.com",
+			AvatarURL: "https://gitlab.example.com/a/25", WebURL: "https://gitlab.example.com/u/26",
+		},
+	}
+	if !slices.Equal(out.Participants, want) {
+		t.Errorf("Participants = %+v, want %+v", out.Participants, want)
+	}
+}
+
+// TestParticipants_AnAnswerTheCaptureCannotHold_IsAnError verifies that a
+// participant whose locked flag is not a boolean fails the call rather than
+// being read as unlocked.
+func TestParticipants_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","locked":"yes"}]`)
+	}))
+
+	_, err := Participants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrParticipants") {
+		t.Fatalf("Participants() error = %v, want the operation's error for an undecodable answer", err)
+	}
+}
+
+// TestReviewers_TheReviewersLockAndEmail_AreReadOffTheCapture verifies the two
+// UserBasic keys of a reviewer that client-go's BasicUser does not model: they
+// are read off the captured answer, where the route nests the reviewer under
+// user, for the reviewer they belong to.
+func TestReviewers_TheReviewersLockAndEmail_AreReadOffTheCapture(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"user":{"id":1,"username":"a","locked":false,"public_email":""},"state":"unreviewed"},
+			{"user":{"id":2,"username":"b","locked":true,"public_email":"b@example.com"},"state":"reviewed"}]`)
+	}))
+
+	out, err := Reviewers(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Reviewers() unexpected error: %v", err)
+	}
+	want := []ReviewerOutput{
+		{ID: 1, Username: "a", Review: "unreviewed"},
+		{ID: 2, Username: "b", Locked: true, PublicEmail: "b@example.com", Review: "reviewed"},
+	}
+	if !slices.Equal(out.Reviewers, want) {
+		t.Errorf("Reviewers = %+v, want %+v", out.Reviewers, want)
+	}
+}
+
+// TestReviewers_AnAnswerTheCaptureCannotHold_IsAnError verifies that a
+// reviewer whose locked flag is not a boolean fails the call rather than being
+// read as unlocked.
+func TestReviewers_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"user":{"id":1,"locked":"yes"},"state":"reviewed"}]`)
+	}))
+
+	_, err := Reviewers(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrReviewers") {
+		t.Fatalf("Reviewers() error = %v, want the operation's error for an undecodable answer", err)
 	}
 }
 
@@ -2177,10 +2322,21 @@ func TestFormatApproveMarkdown_Populated(t *testing.T) {
 		"- **Approved**: ✅\n" +
 		"- **Approvals Required**: 2\n" +
 		"- **Approvals Given**: 1\n" +
+		"- **You Approved**: ✅\n" +
+		"- **You Can Approve**: ❌\n" +
+		"- **Approved By**: [@alice](https://gitlab.example.com/alice) (1 Jan 2026 00:00 UTC), @bob\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'merge_request.merge' to merge this merge request\n" +
 		"- Use action 'merge_request.get' to see its full details\n"
-	if got := FormatApproveMarkdown(ApproveOutput{Approved: true, ApprovalsRequired: 2, ApprovedBy: 1}); got != want {
+	got := FormatApproveMarkdown(ApproveOutput{
+		Approved: true, ApprovalsRequired: 2, ApprovedBy: 1, UserHasApproved: true,
+		ApprovedByUsers: []ApproverOutput{
+			{User: &toolutil.UserBasicOutput{Username: testAuthorAlice, WebURL: "https://gitlab.example.com/alice"}, ApprovedAt: "2026-01-01T00:00:00Z"},
+			{},
+			{User: &toolutil.UserBasicOutput{Username: testAuthorBob}},
+		},
+	})
+	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
@@ -2192,6 +2348,8 @@ func TestFormatApproveMarkdown_Empty(t *testing.T) {
 		"- **Approved**: ❌\n" +
 		"- **Approvals Required**: 0\n" +
 		"- **Approvals Given**: 0\n" +
+		"- **You Approved**: ❌\n" +
+		"- **You Can Approve**: ❌\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'merge_request.merge' to merge this merge request\n" +
 		"- Use action 'merge_request.get' to see its full details\n"
@@ -2297,14 +2455,14 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	got := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
 			{ID: 1, Username: testAuthorAlice, Name: "Alice A", State: testStateActive},
-			{ID: 2, Username: testAuthorBob, Name: "Bob B", State: testStateActive},
+			{ID: 2, Username: testAuthorBob, Name: "Bob B", State: "blocked", Locked: true},
 		},
 	})
 	want := "## MR Participants (2)\n\n" +
-		"| ID | Username | Name | State |\n" +
-		"| --- | --- | --- | --- |\n" +
-		"| 1 | @alice | Alice A | active |\n" +
-		"| 2 | @bob | Bob B | active |\n" +
+		"| ID | Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | @alice | Alice A | active | ❌ |\n" +
+		"| 2 | @bob | Bob B | blocked | ✅ |\n" +
 		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
 		"- Use action 'merge_request.get' to view the merge request\n" +
 		"- Use action 'mr_review.note_create' to notify these participants\n"
@@ -2514,14 +2672,18 @@ func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
 	got := FormatCreateTodoMarkdown(CreateTodoOutput{
 		ID: 42, ActionName: testActionMarked, TargetType: testTargetTypeMR,
 		TargetTitle: testMRTitle, TargetURL: testMRWebURL,
-		State: testStatePending,
+		Author: &toolutil.UserBasicOutput{Username: testAuthorAlice, WebURL: "https://gitlab.example.com/alice"},
+		Body:   "Review this", State: testStatePending, UpdatedAt: "2026-01-02T03:04:05Z",
 	})
 	want := "## Todo #42\n\n" +
 		"- **ID**: 42\n" +
 		"- **Action**: marked\n" +
 		"- **Target Type**: MergeRequest\n" +
 		"- **Target**: " + testMRTitle + "\n" +
+		"- **Author**: [@alice](https://gitlab.example.com/alice)\n" +
+		"- **Body**: Review this\n" +
 		"- **State**: pending\n" +
+		"- **Updated**: 2 Jan 2026 03:04 UTC\n" +
 		"- **URL**: [" + testMRWebURL + "](" + testMRWebURL + ")\n" + todoHints
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
@@ -2817,6 +2979,50 @@ func TestCreateTodo_Success(t *testing.T) {
 	}
 	if out.CreatedAt == "" {
 		t.Error("out.CreatedAt should not be empty")
+	}
+}
+
+// TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput verifies the three
+// keys of the to-do the route sends beside the ones client-go decodes: its
+// author, whole, with the two UserBasic keys BasicUser lacks read off the
+// captured answer, its body and the instant it last changed, which client-go's
+// Todo does not model either.
+func TestCreateTodo_TheAuthorBodyAndUpdateTime_ReachTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"action_name":"marked","target_type":"MergeRequest",
+			"author":{"id":2,"username":"u3","public_email":"p4@example.com","name":"N5","state":"active","locked":true,
+				"avatar_url":"https://gitlab.example.com/a/6","web_url":"https://gitlab.example.com/u/7"},
+			"body":"Body 8","state":"pending","updated_at":"2026-09-10T11:12:13Z"}`)
+	}))
+
+	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("CreateTodo() unexpected error: %v", err)
+	}
+	want := CreateTodoOutput{
+		ID: 1, ActionName: testActionMarked, TargetType: testTargetTypeMR,
+		Author: &toolutil.UserBasicOutput{
+			ID: 2, Username: "u3", PublicEmail: "p4@example.com", Name: "N5", State: "active", Locked: true,
+			AvatarURL: "https://gitlab.example.com/a/6", WebURL: "https://gitlab.example.com/u/7",
+		},
+		Body: "Body 8", State: testStatePending, UpdatedAt: "2026-09-10T11:12:13Z",
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("CreateTodo() = %+v, want %+v", out, want)
+	}
+}
+
+// TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError verifies that a to-do
+// whose updated_at is not a time fails the call rather than losing the key:
+// client-go's Todo has no field for it, so only the captured read refuses.
+func TestCreateTodo_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"updated_at":"yesterday"}`)
+	}))
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrCreateTodo") {
+		t.Fatalf("CreateTodo() error = %v, want the operation's error for an undecodable answer", err)
 	}
 }
 
@@ -5165,11 +5371,34 @@ func TestPipelineDetailedStatusOutput_Illustration(t *testing.T) {
 	}
 }
 
+// TestBuildListOptions_AnEmptyList_LeavesItsOptionUnset verifies that an
+// empty list filter leaves its option nil rather than pointing it at an empty
+// list, which is what keeps an unset filter out of the request: client-go
+// encodes a non-nil pointer to a list however little it holds.
+func TestBuildListOptions_AnEmptyList_LeavesItsOptionUnset(t *testing.T) {
+	opts, err := buildListOptions(ListInput{ProjectID: testProjectID, IIDs: []int64{}, ApprovedByUsernames: []string{}})
+	if err != nil {
+		t.Fatalf("buildListOptions() unexpected error: %v", err)
+	}
+	if opts.IIDs != nil {
+		t.Errorf("IIDs = %v, want nil for an empty list", *opts.IIDs)
+	}
+	if opts.ApprovedByUsernames != nil {
+		t.Errorf("ApprovedByUsernames = %v, want nil for an empty list", *opts.ApprovedByUsernames)
+	}
+}
+
 // TestMarkdownHelpers_EdgeBranches exercises the nil/empty branches of the
 // markdown helper functions added for the output migration.
 func TestMarkdownHelpers_EdgeBranches(t *testing.T) {
 	if got := mrProjectPath(Output{References: &toolutil.ReferencesOutput{Full: "noseparator"}}); got != "" {
 		t.Errorf("mrProjectPath(no-sep) = %q, want empty", got)
+	}
+	if got := mrProjectPath(Output{References: &toolutil.ReferencesOutput{Full: "!5"}}); got != "" {
+		t.Errorf("mrProjectPath(!5) = %q, want empty", got)
+	}
+	if got := mrProjectPath(Output{References: &toolutil.ReferencesOutput{Full: "group/project!5"}}); got != "group/project" {
+		t.Errorf("mrProjectPath(group/project!5) = %q, want group/project", got)
 	}
 	if got := userName(nil); got != "" {
 		t.Errorf("userName(nil) = %q, want empty", got)

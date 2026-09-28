@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -455,7 +456,8 @@ const (
 	pathPipeline10 = "/api/v4/projects/42/pipelines/10"
 
 	// variablesResponse identifies the variables response constant used by this package.
-	variablesResponse = `[{"key":"CI_VAR","value":"hello","variable_type":"env_var"},{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file"}]`
+	variablesResponse = `[{"key":"CI_VAR","value":"hello","variable_type":"env_var","raw":false},{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file","raw":true},` +
+		`{"key":"OLD_VAR","value":"legacy","variable_type":"env_var"}]`
 
 	// testReportResponse identifies the test report response constant used by this package.
 	testReportResponse = `{
@@ -499,14 +501,30 @@ func TestGetVariables_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariables() unexpected error: %v", err)
 	}
-	if len(out.Variables) != 2 {
-		t.Fatalf("len(Variables) = %d, want 2", len(out.Variables))
+	// raw differs across the three, so a capture paired with the wrong
+	// variable, or not read at all, fails one of the rows; the third carries
+	// none, as an instance older than the column answers, and publishes none.
+	want := []VariableOutput{
+		{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
+		{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
+		{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
 	}
-	if out.Variables[0].Key != "CI_VAR" {
-		t.Errorf("Variables[0].Key = %q, want %q", out.Variables[0].Key, "CI_VAR")
+	if !reflect.DeepEqual(out.Variables, want) {
+		t.Errorf("Variables = %+v, want %+v", out.Variables, want)
 	}
-	if out.Variables[1].VariableType != "file" {
-		t.Errorf("Variables[1].VariableType = %q, want %q", out.Variables[1].VariableType, "file")
+}
+
+// TestGetVariables_UndecodableCapture_IsAnError asserts that an answer whose
+// raw flag is not a boolean is reported rather than published as false:
+// client-go models no raw key and decodes the rest, so only the capture's read
+// can refuse it.
+func TestGetVariables_UndecodableCapture_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"CI_VAR","value":"hello","variable_type":"env_var","raw":"yes"}]`)
+	}))
+	_, err := GetVariables(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 10})
+	if err == nil || !strings.Contains(err.Error(), "pipelineGetVariables") {
+		t.Fatalf("GetVariables() error = %v, want one naming pipelineGetVariables", err)
 	}
 }
 
@@ -1796,15 +1814,17 @@ func TestFormatDetailMarkdown_DetailedStatusOnlyWhenItSaysMore(t *testing.T) {
 func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 	out := VariablesOutput{
 		Variables: []VariableOutput{
-			{Key: "CI_VAR", Value: "hello", VariableType: "env_var"},
-			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file"},
+			{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
+			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
+			{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
 		},
 	}
-	want := "## Pipeline Variables (2)\n\n" +
-		"| Key | Value | Type |\n" +
-		"| --- | --- | --- |\n" +
-		"| CI_VAR | hello | env_var |\n" +
-		"| SECRET_FILE | /tmp/secret | file |\n" +
+	want := "## Pipeline Variables (3)\n\n" +
+		"| Key | Value | Type | Raw |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| CI_VAR | hello | env_var | " + toolutil.BoolEmoji(false) + " |\n" +
+		"| SECRET_FILE | /tmp/secret | file | " + toolutil.BoolEmoji(true) + " |\n" +
+		"| OLD_VAR | legacy | env_var |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'pipeline.get' to see the pipeline these variables ran\n"
 	if got := FormatVariablesMarkdown(out); got != want {
@@ -2530,6 +2550,41 @@ func TestCreate_WithInvalidInputs(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for unsupported input value type")
+	}
+}
+
+// TestCreate_NoInputs_SendsNoInputsKey holds what a caller who gave no inputs
+// sends: no inputs key at all. The inputs are converted whatever the caller
+// gave, and an empty conversion is left out only because the option carries
+// omitempty, so this is the test that notices if either stops being true.
+func TestCreate_NoInputs_SendsNoInputsKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/pipeline" {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			Ref    string          `json:"ref"`
+			Inputs json.RawMessage `json:"inputs"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("request body does not decode: %v", err)
+		}
+		if body.Ref != "main" {
+			t.Errorf("ref = %q, want main", body.Ref)
+		}
+		if body.Inputs != nil {
+			t.Errorf("inputs = %s, want none sent when the caller gave none", body.Inputs)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, pipelineDetailJSON)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if out.ID != 10 {
+		t.Errorf(fmtIDWant10, out.ID)
 	}
 }
 

@@ -253,18 +253,25 @@ func FormatFileListMarkdown(out FileListOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Package Files", len(out.Files), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "File Name", "Size (bytes)", "SHA256"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "File Name", "Size (bytes)", "SHA256", "Pipelines"))
+	linked := false
 	for _, f := range out.Files {
+		cells := make([]string, 0, len(f.Pipelines))
+		for i := range f.Pipelines {
+			linked = linked || f.Pipelines[i].WebURL != ""
+			cells = append(cells, pipelineSummary(&f.Pipelines[i]))
+		}
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(f.PackageFileID, 10),
 			toolutil.EscapeMdTableCell(f.FileName),
 			strconv.FormatInt(f.Size, 10),
 			toolutil.MdCodeSpanCell(shortDigest(f.SHA256)),
+			strings.Join(cells, ", "),
 		))
 	}
-	// The table carries no link, so the footer carries no instruction to keep
-	// the links of a table that has none.
-	toolutil.WriteListFooter(&b, out.Pagination, false,
+	// The instruction to keep the table's links is written only when a
+	// pipeline cell carries one, which is the one column that can.
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		"Use action 'download' to retrieve a specific file",
 		"Use action 'file_delete' to remove a single file",
 	)

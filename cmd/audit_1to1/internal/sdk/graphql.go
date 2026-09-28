@@ -1,10 +1,12 @@
 package sdk
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"slices"
 	"sort"
 	"strings"
 
@@ -81,14 +83,12 @@ func collectGraphQLSites(pkgs []*packages.Package, graphQL *types.Named) []graph
 			}
 		}
 	}
-	sort.Slice(sites, func(i, j int) bool {
-		if sites[i].pkg != sites[j].pkg {
-			return sites[i].pkg < sites[j].pkg
-		}
-		if sites[i].function != sites[j].function {
-			return sites[i].function < sites[j].function
-		}
-		return sites[i].position < sites[j].position
+	slices.SortFunc(sites, func(a, b graphqlSite) int {
+		return cmp.Or(
+			strings.Compare(a.pkg, b.pkg),
+			strings.Compare(a.function, b.function),
+			strings.Compare(a.position, b.position),
+		)
 	})
 	return sites
 }

@@ -385,11 +385,38 @@ type ApproveInput struct {
 }
 
 // ApproveOutput holds the approval state after approve/unapprove.
+//
+// POST /projects/:id/merge_requests/:merge_request_iid/approve presents
+// lib/api/entities/merge_request_approvals.rb, or on an Enterprise instance
+// ee/lib/api/entities/approval_state.rb, and both send who approved, whether
+// the caller has approved and whether the caller may approve in the same
+// shape. ApprovedBy counts the approvers; ApprovedByUsers lists them as GitLab
+// sends them, each user whole, which is read from the captured response
+// because client-go decodes the approvers' users into BasicUser.
 type ApproveOutput struct {
 	toolutil.HintableOutput
-	ApprovalsRequired int  `json:"approvals_required"`
-	ApprovedBy        int  `json:"approved_by_count"`
-	Approved          bool `json:"approved"`
+	ApprovalsRequired int              `json:"approvals_required"`
+	ApprovedBy        int              `json:"approved_by_count"`
+	Approved          bool             `json:"approved"`
+	ApprovedByUsers   []ApproverOutput `json:"approved_by,omitempty"`
+	UserHasApproved   bool             `json:"user_has_approved"`
+	UserCanApprove    bool             `json:"user_can_approve"`
+}
+
+// ApproverOutput is one approval of a merge request, as
+// lib/api/entities/approvals.rb renders it: the user who approved and when.
+type ApproverOutput struct {
+	User       *toolutil.UserBasicOutput `json:"user,omitempty"`
+	ApprovedAt string                    `json:"approved_at,omitempty"`
+}
+
+// approvalsExtra is the list of approvals as the captured answer carries it,
+// with every key of each approver's UserBasic.
+type approvalsExtra struct {
+	ApprovedBy []struct {
+		User       *toolutil.UserBasicOutput `json:"user"`
+		ApprovedAt *time.Time                `json:"approved_at"`
+	} `json:"approved_by"`
 }
 
 // ToOutput converts a GitLab API [gl.MergeRequest] (the get endpoint payload)
@@ -835,8 +862,8 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 }
 
 // Approve adds an approval to the specified merge request and returns the
-// updated approval state including required count, approved-by count, and
-// overall approved status.
+// updated approval state including required count, approved-by count, overall
+// approved status, the approvers and the caller's own approval state.
 func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (ApproveOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ApproveOutput{}, err
@@ -851,6 +878,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 	if input.SHA != "" {
 		approveOpts.SHA = new(input.SHA)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	approvals, _, err := client.GL().MergeRequestApprovals.ApproveMergeRequest(string(input.ProjectID), input.MRIID, approveOpts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsPermissionRefusal(err) {
@@ -863,10 +891,21 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 		}
 		return ApproveOutput{}, toolutil.WrapErrWithMessage("mrApprove", err)
 	}
+	var extra approvalsExtra
+	if err = captured.Decode(&extra); err != nil {
+		return ApproveOutput{}, toolutil.WrapErr("mrApprove", err)
+	}
+	var approvers []ApproverOutput
+	for _, approval := range extra.ApprovedBy {
+		approvers = append(approvers, ApproverOutput{User: approval.User, ApprovedAt: toolutil.RFC3339Ptr(approval.ApprovedAt)})
+	}
 	return ApproveOutput{
 		ApprovalsRequired: int(approvals.ApprovalsRequired),
 		ApprovedBy:        len(approvals.ApprovedBy),
 		Approved:          approvals.Approved,
+		ApprovedByUsers:   approvers,
+		UserHasApproved:   approvals.UserHasApproved,
+		UserCanApprove:    approvals.UserCanApprove,
 	}, nil
 }
 
@@ -1432,14 +1471,20 @@ type ParticipantsInput struct {
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
-// ParticipantOutput represents a single MR participant.
+// ParticipantOutput represents a single MR participant: the whole of
+// lib/api/entities/user_basic.rb, which GET
+// /projects/:id/merge_requests/:merge_request_iid/participants presents.
+// locked and public_email are read from the captured response, since
+// client-go decodes the participants into BasicUser, which models neither.
 type ParticipantOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url,omitempty"`
 }
 
 // ParticipantsOutput holds the list of participants for a merge request.
@@ -1459,35 +1504,52 @@ func Participants(ctx context.Context, client *gitlabclient.Client, input Partic
 	if input.MRIID <= 0 {
 		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("mrParticipants", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, _, err := client.GL().MergeRequests.GetMergeRequestParticipants(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("mrParticipants", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
+	extras, err := toolutil.CapturedUserBasics(captured, len(users))
+	if err != nil {
+		return ParticipantsOutput{}, toolutil.WrapErr("mrParticipants", err)
+	}
 	out := make([]ParticipantOutput, len(users))
 	for i, u := range users {
 		out[i] = ParticipantOutput{
-			ID:        u.ID,
-			Username:  u.Username,
-			Name:      u.Name,
-			State:     u.State,
-			AvatarURL: u.AvatarURL,
-			WebURL:    u.WebURL,
+			ID:          u.ID,
+			Username:    u.Username,
+			Name:        u.Name,
+			State:       u.State,
+			Locked:      extras[i].Locked,
+			PublicEmail: extras[i].PublicEmail,
+			AvatarURL:   u.AvatarURL,
+			WebURL:      u.WebURL,
 		}
 	}
 	return ParticipantsOutput{Participants: out}, nil
 }
 
 // ReviewerOutput represents a single MR reviewer with review state.
+//
+// GET /projects/:id/merge_requests/:merge_request_iid/reviewers presents
+// lib/api/entities/merge_request_reviewer.rb: the reviewer under user, the
+// review's state and when the reviewer was assigned. The reviewer's
+// UserBasic keys are published one level up, beside the review, so the
+// review's state is review_state here rather than a second state key; locked
+// and public_email are read from the captured response, since client-go
+// decodes the reviewer into BasicUser, which models neither.
 type ReviewerOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	Review    string `json:"review_state,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url,omitempty"`
+	Review      string `json:"review_state,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
 }
 
 // ReviewersOutput holds the list of reviewers for a merge request.
@@ -1507,10 +1569,15 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 	if input.MRIID <= 0 {
 		return ReviewersOutput{}, toolutil.ErrRequiredInt64("mrReviewers", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with merge_request.get. Use merge_request.update with reviewer_ids to assign reviewers")
+	}
+	extras, err := toolutil.CapturedNestedUserBasics(captured, len(reviewers))
+	if err != nil {
+		return ReviewersOutput{}, toolutil.WrapErr("mrReviewers", err)
 	}
 	out := make([]ReviewerOutput, len(reviewers))
 	for i, r := range reviewers {
@@ -1525,6 +1592,8 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 			ro.Username = r.User.Username
 			ro.Name = r.User.Name
 			ro.State = r.User.State
+			ro.Locked = extras[i].Locked
+			ro.PublicEmail = extras[i].PublicEmail
 			ro.AvatarURL = r.User.AvatarURL
 			ro.WebURL = r.User.WebURL
 		}
@@ -2010,16 +2079,50 @@ type CreateTodoInput struct {
 }
 
 // CreateTodoOutput holds the created to-do item details.
+//
+// POST /projects/:id/merge_requests/:merge_request_iid/todo presents
+// lib/api/entities/todo.rb. The to-do carries its own keys, its author and the
+// instant it last changed; the merge request it points at is the one the
+// caller named, kept here as its title and URL, and so is its project, kept as
+// its name, so both are left to merge_request.get and project.get rather than
+// repeated on a confirmation. A to-do raised on a project's merge request
+// belongs to no group, so the entity's group is never sent on this route.
 type CreateTodoOutput struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	ActionName  string `json:"action_name"`
-	TargetType  string `json:"target_type"`
-	TargetTitle string `json:"target_title"`
-	TargetURL   string `json:"target_url"`
-	State       string `json:"state"`
-	ProjectName string `json:"project_name,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
+	ID          int64                     `json:"id"`
+	ActionName  string                    `json:"action_name"`
+	TargetType  string                    `json:"target_type"`
+	TargetTitle string                    `json:"target_title"`
+	TargetURL   string                    `json:"target_url"`
+	Author      *toolutil.UserBasicOutput `json:"author,omitempty"`
+	Body        string                    `json:"body,omitempty"`
+	State       string                    `json:"state"`
+	ProjectName string                    `json:"project_name,omitempty"`
+	CreatedAt   string                    `json:"created_at,omitempty"`
+	UpdatedAt   string                    `json:"updated_at,omitempty"`
+}
+
+// todoExtra is what lib/api/entities/todo.rb sends that client-go's Todo does
+// not model, read from the captured response (ADR-0021): when the to-do last
+// changed, and the two keys of the author's UserBasic that BasicUser lacks.
+// Both gaps are recorded in docs/development/upstream-bugs.md.
+type todoExtra struct {
+	UpdatedAt *time.Time              `json:"updated_at"`
+	Author    toolutil.UserBasicExtra `json:"author"`
+}
+
+// userBasicOutput converts a user client-go decodes into BasicUser to the
+// whole of lib/api/entities/user_basic.rb, with the two keys BasicUser does not
+// model taken from what the captured answer carried for the same user. It
+// returns nil for a user the answer did not carry.
+func userBasicOutput(u *gl.BasicUser, extra toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
+	if u == nil {
+		return nil
+	}
+	return &toolutil.UserBasicOutput{
+		ID: u.ID, Username: u.Username, PublicEmail: extra.PublicEmail, Name: u.Name,
+		State: u.State, Locked: extra.Locked, AvatarURL: u.AvatarURL, WebURL: u.WebURL,
+	}
 }
 
 // CreateTodo creates a to-do item on the specified merge request for the
@@ -2034,6 +2137,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	if input.MRIID <= 0 {
 		return CreateTodoOutput{}, toolutil.ErrRequiredInt64("mrCreateTodo", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	todo, resp, err := client.GL().MergeRequests.CreateTodo(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
@@ -2044,21 +2148,26 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
+	var extra todoExtra
+	if err = captured.Decode(&extra); err != nil {
+		return CreateTodoOutput{}, toolutil.WrapErr("mrCreateTodo", err)
+	}
 	out := CreateTodoOutput{
 		ID:         todo.ID,
 		ActionName: string(todo.ActionName),
 		TargetType: string(todo.TargetType),
 		TargetURL:  todo.TargetURL,
+		Author:     userBasicOutput(todo.Author, extra.Author),
+		Body:       todo.Body,
 		State:      todo.State,
+		CreatedAt:  toolutil.RFC3339Ptr(todo.CreatedAt),
+		UpdatedAt:  toolutil.RFC3339Ptr(extra.UpdatedAt),
 	}
 	if todo.Target != nil {
 		out.TargetTitle = todo.Target.Title
 	}
 	if todo.Project != nil {
 		out.ProjectName = todo.Project.Name
-	}
-	if todo.CreatedAt != nil {
-		out.CreatedAt = todo.CreatedAt.Format(time.RFC3339)
 	}
 	return out, nil
 }

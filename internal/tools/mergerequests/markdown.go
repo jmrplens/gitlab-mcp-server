@@ -164,11 +164,10 @@ func mrProjectPath(mr Output) string {
 	if mr.References == nil {
 		return ""
 	}
+	// A reference with no "!" (LastIndex -1) and one that starts with it (0)
+	// both carry no path before the suffix, so both slice to nothing.
 	full := mr.References.Full
-	if idx := strings.LastIndex(full, "!"); idx > 0 {
-		return full[:idx]
-	}
-	return ""
+	return full[:max(strings.LastIndex(full, "!"), 0)]
 }
 
 // userName returns the username of a basic-user object, or "" when nil.
@@ -202,6 +201,24 @@ func handleList(names []string) string {
 		}
 	}
 	return strings.Join(handles, ", ")
+}
+
+// approverList renders the approvals of a merge request as the card row lists
+// them: each approver as a link to their profile, with the time they approved,
+// and nothing when nobody has.
+func approverList(approvers []ApproverOutput) string {
+	cells := make([]string, 0, len(approvers))
+	for _, approver := range approvers {
+		if approver.User == nil {
+			continue
+		}
+		cell := toolutil.MdUserLink(approver.User.Username, approver.User.WebURL)
+		if at := toolutil.FormatTime(approver.ApprovedAt); at != "" {
+			cell += " (" + at + ")"
+		}
+		cells = append(cells, cell)
+	}
+	return strings.Join(cells, ", ")
 }
 
 // FormatListMarkdown renders a page of merge requests as a Markdown table: a
@@ -243,6 +260,9 @@ func FormatApproveMarkdown(a ApproveOutput) string {
 	c.Bool("Approved", a.Approved)
 	c.Int("Approvals Required", int64(a.ApprovalsRequired))
 	c.Int("Approvals Given", int64(a.ApprovedBy))
+	c.Bool("You Approved", a.UserHasApproved)
+	c.Bool("You Can Approve", a.UserCanApprove)
+	c.Markdown("Approved By", approverList(a.ApprovedByUsers))
 	c.End(
 		toolutil.HintAction(actionMRMerge, "merge this merge request"),
 		toolutil.HintAction(actionMRGet, "see its full details"),
@@ -334,13 +354,14 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "MR Participants", len(out.Participants), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State", "Locked"))
 	for _, p := range out.Participants {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(p.ID, 10),
 			toolutil.MdUserLink(p.Username, p.WebURL),
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.State),
+			toolutil.BoolEmoji(p.Locked),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
@@ -488,8 +509,13 @@ func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 	c.Field("Target Type", t.TargetType)
 	c.Field("Target", t.TargetTitle)
 	c.Field("Project", t.ProjectName)
+	if t.Author != nil {
+		c.Markdown("Author", toolutil.MdUserLink(t.Author.Username, t.Author.WebURL))
+	}
+	c.Field("Body", t.Body)
 	c.Field("State", t.State)
 	c.Time("Created", t.CreatedAt)
+	c.Time("Updated", t.UpdatedAt)
 	c.URL(t.TargetURL)
 	c.End(
 		toolutil.HintAction(actionMRGet, "view the merge request this is about"),

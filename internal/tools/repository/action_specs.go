@@ -52,7 +52,7 @@ func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOption
 
 	switch individualTool {
 	case "gitlab_repository_tree":
-		options.Usage = "List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations."
+		options.Usage = "List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations. Pass with_last_commit to see which commit last changed each entry of one directory (not with recursive)."
 		options.Aliases = []string{"list repository files", "show repo tree", "browse repository"}
 		options.RelatedActions = []string{actionBlob, actionRawBlob, actionBranchList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -67,7 +67,7 @@ func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOption
 				ExampleBinding: `params.ref:"main"`,
 			},
 		}
-		options.IndividualTool.Description = "List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list."
+		options.IndividualTool.Description = "List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list."
 	case "gitlab_repository_blob":
 		options.Usage = "Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path."
 		options.Aliases = []string{"get file blob", "show file content", "read repository blob"}

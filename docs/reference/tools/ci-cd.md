@@ -95,7 +95,7 @@ Permanently delete a pipeline and all its jobs. This action cannot be undone. Re
 
 ### `gitlab_pipeline_variables`
 
-Get the variables for a specific pipeline. Returns variable keys, values, and types.
+Get the variables for a specific pipeline. Returns variable keys, values, types, and `raw` (whether GitLab leaves variable references in the value unexpanded, left out when GitLab sends none, as an instance older than the setting answers; the pipeline schedule variable actions follow the same rule). A pipeline variable carries no protected, masked, hidden, environment scope or description setting, so GitLab sends none of those here.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -569,14 +569,14 @@ Take ownership of a pipeline schedule, making the current user the owner. Return
 
 ### `gitlab_pipeline_schedule_create_variable`
 
-Create a new variable for a pipeline schedule. Variables are passed to pipelines triggered by the schedule. Supports env_var (default) and file types.
+Create a new variable for a pipeline schedule. Variables are passed to pipelines triggered by the schedule. Supports env_var (default) and file types. Returns the variable's key, value, type and `raw` flag.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_pipeline_schedule_edit_variable`
 
-Edit an existing pipeline schedule variable by key. Updates the value and optionally the variable type.
+Edit an existing pipeline schedule variable by key. Updates the value and optionally the variable type. Returns the variable's key, value, type and `raw` flag.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

@@ -5,11 +5,15 @@ package mrcontextcommits
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -251,11 +255,13 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 // List — CreatedAt branch + canceled context
 // ---------------------------------------------------------------------------.
 
-// TestList_WithCreatedAt verifies List when with created at.
+// TestList_WithCreatedAt verifies that a context commit's creation instant goes
+// out in RFC 3339, which is what the table's time helper reads back: Go's
+// default layout, which it used to carry, printed raw.
 func TestList_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id":"aaa111","short_id":"aaa1","title":"Commit with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2026-06-15T10:30:00Z"}
+			{"id":"aaa111","short_id":"aaa1","title":"Commit with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2026-06-15T10:30:00+02:00"}
 		]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -266,8 +272,132 @@ func TestList_WithCreatedAt(t *testing.T) {
 	if len(out.Commits) != 1 {
 		t.Fatalf("expected 1 commit, got %d", len(out.Commits))
 	}
-	if out.Commits[0].CreatedAt == "" {
-		t.Error("expected non-empty CreatedAt")
+	if got := out.Commits[0].CreatedAt; got != "2026-06-15T08:30:00Z" {
+		t.Errorf("CreatedAt = %q, want the instant in RFC 3339 UTC", got)
+	}
+}
+
+// fullCommitJSON is a context commit carrying every key
+// lib/api/entities/commit.rb exposes, each with a value no other key shares,
+// in the shape GitLab sends them: trailers maps each trailer to its last
+// value and extended_trailers to the list of all of them, which is what
+// Gitlab::Git::Commit#parse_commit_trailers builds. A trailer given twice,
+// as Reviewed-by is here, is the case the two keys exist to tell apart.
+const fullCommitJSON = `{"id":"abc123def","short_id":"abc123d","title":"Fix the parser",` +
+	`"message":"Fix the parser\n\nIt read one byte too many.","author_name":"Ann","author_email":"ann@example.com",` +
+	`"authored_date":"2026-05-01T09:00:00Z","committer_name":"Cid","committer_email":"cid@example.com",` +
+	`"committed_date":"2026-05-02T10:00:00Z","created_at":"2026-05-03T11:00:00Z","parent_ids":["p1","p2"],` +
+	`"trailers":{"Reviewed-by":"Fay","Changelog":"fixed"},` +
+	`"extended_trailers":{"Reviewed-by":["Eve","Fay"],"Changelog":["fixed"]},` +
+	`"web_url":"https://gitlab.example.com/g/p/-/commit/abc123def"}`
+
+// fullCommitItem is fullCommitJSON as the handlers publish it.
+var fullCommitItem = CommitItem{
+	ID: "abc123def", ShortID: "abc123d", Title: "Fix the parser",
+	Message:    "Fix the parser\n\nIt read one byte too many.",
+	AuthorName: "Ann", AuthorEmail: "ann@example.com", AuthoredDate: "2026-05-01T09:00:00Z",
+	CommitterName: "Cid", CommitterEmail: "cid@example.com", CommittedDate: "2026-05-02T10:00:00Z",
+	CreatedAt:        "2026-05-03T11:00:00Z",
+	ParentIDs:        []string{"p1", "p2"},
+	Trailers:         map[string]string{"Reviewed-by": "Fay", "Changelog": "fixed"},
+	ExtendedTrailers: map[string][]string{"Reviewed-by": {"Eve", "Fay"}, "Changelog": {"fixed"}},
+	WebURL:           "https://gitlab.example.com/g/p/-/commit/abc123def",
+}
+
+// TestHandlers_PublishEveryCommitKey verifies that both routes answering with
+// commits publish every key of the commit entity, each from its own field: a
+// value copied into the wrong key would make the item differ. The commit
+// carries trailers, which client-go's Commit cannot decode (its
+// extended_trailers is a map of strings), so the answer is published only
+// because it is read from the captured response in the shape GitLab sends.
+func TestHandlers_PublishEveryCommitKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "["+fullCommitJSON+"]")
+	}))
+	cases := []struct {
+		name string
+		call func() (ListOutput, error)
+	}{
+		{"list", func() (ListOutput, error) {
+			return List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+		}},
+		{"create", func() (ListOutput, error) {
+			return Create(t.Context(), client, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc123def"}})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tc.call()
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.Commits) != 1 || !reflect.DeepEqual(out.Commits[0], fullCommitItem) {
+				t.Errorf("commits = %+v, want [%+v]", out.Commits, fullCommitItem)
+			}
+		})
+	}
+}
+
+// TestHandlers_AnswerNoTypeReads_IsAnError verifies that an answer neither
+// client-go's Commit nor this package's own row can decode is reported under
+// the operation's name rather than published empty: passing over client-go's
+// failure to read a trailer must not pass over a body nothing can read. And a
+// body that is not JSON at all is client-go's error to report, with the
+// route's hint, since no type of this package's could read it either.
+func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		call func(*gitlabclient.Client) (ListOutput, error)
+		want string
+	}{
+		{"list, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) (ListOutput, error) {
+			return List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+		}, "list_mr_context_commits: "},
+		{"create, id a number", `[{"id":5}]`, func(c *gitlabclient.Client) (ListOutput, error) {
+			return Create(t.Context(), c, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc"}})
+		}, "create_mr_context_commits: "},
+		{"list, not JSON", `[{`, func(c *gitlabclient.Client) (ListOutput, error) {
+			return List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+		}, "list_mr_context_commits: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+			out, err := tc.call(client)
+			if err == nil || !strings.HasPrefix(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want one naming %q", err, tc.want)
+			}
+			if out.Commits != nil {
+				t.Errorf("commits = %+v, want none beside the error", out.Commits)
+			}
+		})
+	}
+}
+
+// TestMisreadByClientGo pins which errors the handlers pass over to read the
+// capture instead: a type mismatch in client-go's decoder, however wrapped,
+// and nothing else.
+func TestMisreadByClientGo(t *testing.T) {
+	var typeErr error = &json.UnmarshalTypeError{Value: "array", Field: "extended_trailers"}
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"type mismatch", typeErr, true},
+		{"wrapped type mismatch", fmt.Errorf("decode: %w", typeErr), true},
+		{"syntax error", &json.SyntaxError{}, false},
+		{"other error", errors.New("403 Forbidden"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := misreadByClientGo(tc.err); got != tc.want {
+				t.Errorf("misreadByClientGo(%v) = %t, want %t", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -397,6 +527,30 @@ func TestFormatListMarkdown_FallsBackToTheFullSHA(t *testing.T) {
 		"| SHA | Title | Author | Created |\n" +
 		"| --- | --- | --- | --- |\n" +
 		"| `abc123def456` | Only a long id | Dev |  |\n" + contextCommitHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_LinksTheSHAToTheCommit verifies that a commit GitLab
+// sent a web URL for is linked by its short SHA, and that the guidance then
+// opens with the instruction to keep the links, which a table without one
+// leaves out.
+func TestFormatListMarkdown_LinksTheSHAToTheCommit(t *testing.T) {
+	out := ListOutput{Commits: []CommitItem{
+		{ID: "abc123", ShortID: "abc1", Title: "Linked", AuthorName: "Dev", WebURL: "https://gitlab.example.com/g/p/-/commit/abc123"},
+		{ID: "def456", ShortID: "def4", Title: "Unlinked", AuthorName: "Dev2"},
+	}}
+	want := "## MR Context Commits (2)\n\n" +
+		"| SHA | Title | Author | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| [abc1](https://gitlab.example.com/g/p/-/commit/abc123) | Linked | Dev |  |\n" +
+		"| `def4` | Unlinked | Dev2 |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action '" + actionCommitGet + "' to read one of these commits in full\n" +
+		"- Use action '" + actionContextCommitsCreate + "' to pin another commit to this review\n" +
+		"- Use action '" + actionContextCommitsDelete + "' to unpin one of these commits\n"
 	if got := FormatListMarkdownString(out); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}

@@ -452,7 +452,7 @@ Invite a user to a group by email or user ID. Requires access_level (10=Guest, 2
 
 ### `gitlab_get_job_token_access_settings`
 
-Get the CI/CD job token access settings for a GitLab project.
+Get the CI/CD job token access settings for a GitLab project: `inbound_enabled`, whether only the projects on the allowlist may reach this project with a job token, and `outbound_enabled`, the deprecated outbound scope that limits which projects this project's own job token may reach.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -466,7 +466,7 @@ Update the CI/CD job token access settings for a GitLab project.
 
 ### `gitlab_list_job_token_inbound_allowlist`
 
-List projects on the CI/CD job token inbound allowlist for a GitLab project.
+List projects on the CI/CD job token inbound allowlist for a GitLab project. Each row is the project as GitLab's basic project entity renders it: names and paths, description, visibility, default branch, web and clone URLs, readme and avatar links, topics, star and fork counts, creation and last-activity times, and the namespace.
 
 | Annotation | **Read** |
 | ---------- | -------- |

@@ -1,8 +1,9 @@
 package paths
 
 import (
+	"cmp"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -168,7 +169,7 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 		}
 	}
 	check.OptionTypes = len(walked)
-	sort.Slice(check.Optional, func(i, j int) bool { return lessAlwaysSent(check.Optional[i], check.Optional[j]) })
+	slices.SortFunc(check.Optional, compareAlwaysSent)
 	return check
 }
 
@@ -244,28 +245,24 @@ func bodyEndpoints(requests []requestinventory.Row) []bodyEndpoint {
 		seen[endpoint] = true
 		found = append(found, endpoint)
 	}
-	sort.Slice(found, func(i, j int) bool {
-		left, right := found[i], found[j]
-		if left.pkg != right.pkg {
-			return left.pkg < right.pkg
-		}
-		if left.path != right.path {
-			return left.path < right.path
-		}
-		return left.method < right.method
+	slices.SortFunc(found, func(left, right bodyEndpoint) int {
+		return cmp.Or(
+			strings.Compare(left.pkg, right.pkg),
+			strings.Compare(left.path, right.path),
+			strings.Compare(left.method, right.method),
+		)
 	})
 	return found
 }
 
-// lessAlwaysSent orders two findings. Every field of the identity takes part,
-// so the order is total and two runs over one tree print the same list.
-func lessAlwaysSent(a, b AlwaysSentField) bool {
-	left := []string{a.Package, a.Path, a.Method, a.OptionType, a.Param}
-	right := []string{b.Package, b.Path, b.Method, b.OptionType, b.Param}
-	for i := range left {
-		if left[i] != right[i] {
-			return left[i] < right[i]
-		}
-	}
-	return false
+// compareAlwaysSent orders two findings. Every field of the identity takes
+// part, so the order is total and two runs over one tree print the same list.
+func compareAlwaysSent(a, b AlwaysSentField) int {
+	return cmp.Or(
+		strings.Compare(a.Package, b.Package),
+		strings.Compare(a.Path, b.Path),
+		strings.Compare(a.Method, b.Method),
+		strings.Compare(a.OptionType, b.OptionType),
+		strings.Compare(a.Param, b.Param),
+	)
 }

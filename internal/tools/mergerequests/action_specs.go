@@ -298,7 +298,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			usage:       "Add the caller's approval to a merge request. Pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).",
 			aliases:     []string{"approve merge request", "approve mr", "add my approval to mr", "sign off on mr", "lgtm this mr"},
 			related:     []string{"merge_request.unapprove", actionMRMerge, actionMRGet},
-			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
+			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
 		},
 		"unapprove": {
 			usage:       "Remove the caller's previously granted approval from a merge request (idempotent. Requires the caller to have approved first).",
@@ -328,13 +328,13 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			usage:       "List every user participating in a merge request (author, assignees, reviewers, commenters).",
 			aliases:     []string{"list merge request participants", "list mr participants", "who is involved in mr"},
 			related:     []string{"merge_request.reviewers", actionMRGet},
-			description: "List the participants of a merge request. Returns: participating users with username, name, and state. See also: gitlab_mr_reviewers, gitlab_mr_get.",
+			description: "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.",
 		},
 		"reviewers": {
 			usage:       "List the assigned reviewers of a merge request along with each reviewer's review state.",
 			aliases:     []string{"list merge request reviewers", "list mr reviewers", "show reviewers"},
 			related:     []string{actionMRParticipants, actionMRUpdate, actionMRApprove},
-			description: "List the reviewers of a merge request. Returns: reviewer users with username, name, and review state. See also: gitlab_mr_participants, gitlab_mr_update.",
+			description: "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.",
 		},
 		"issues_closed": {
 			usage:       "List issues that will be closed when this merge request is merged (issues referenced via 'Closes #N' in the MR description or commits).",
@@ -394,7 +394,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			usage:       "Create a to-do item on a merge request for the caller so it appears in their GitLab to-do list.",
 			aliases:     []string{"create merge request todo", "add mr todo", "mark mr as todo"},
 			related:     []string{actionMRGet, "merge_request.subscribe"},
-			description: "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target, and state. See also: gitlab_mr_get, gitlab_mr_subscribe.",
+			description: "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target title and URL, project name, author, body, state and created and updated times. See also: gitlab_mr_get, gitlab_mr_subscribe.",
 		},
 		"dependency_create": {
 			usage:       "Add a blocking dependency so this merge request cannot merge until the specified blocking MR is merged.",

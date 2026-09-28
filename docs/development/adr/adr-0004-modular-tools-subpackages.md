@@ -48,7 +48,7 @@ Split `internal/tools/` into domain sub-packages: `internal/tools/branches/`, `i
 - **POS-001**: Package namespace eliminates domain prefixes (`branches.Output` vs `BranchOutput`)
 - **POS-002**: Independent compilation and testing per domain
 - **POS-003**: Clear ownership and discoverability
-- **POS-004**: Zero import cycles — sub-packages import `toolutil/`, never each other
+- **POS-004**: Zero import cycles: sub-packages import `toolutil/`, and each other only where one publishes a row another owns (see the amended POS-004 under Consequences)
 - **NEG-001**: More directories and files to navigate
 - **NEG-002**: Orchestration layer needed to wire all sub-packages into runtime tool surfaces
 
@@ -86,7 +86,7 @@ Package-local `RegisterTools` functions have since been removed for ordinary Git
 ### Conventions
 
 - **No domain prefix on types**: Use `branches.Output`, not `BranchOutput`. The package provides the namespace.
-- **Sub-packages import only from `toolutil/`**: Never from sibling sub-packages. Shared logic goes in `toolutil/`.
+- **Sub-packages import `toolutil/`, and a sibling only for a row it owns**: Shared logic goes in `toolutil/`. A sibling is imported only where a package publishes a row that sibling owns and judges, or reads a shared data package (`labeldata`, `iterationdata`); a shape that merely resembles another package's is mirrored rather than imported (see the amended POS-004).
 - **Each sub-package is independently testable**: Uses `testutil.NewTestClient()` and `httptest` for isolated mocking.
 - **Standard file layout**: Every sub-package follows the same structure for consistency.
 
@@ -97,7 +97,7 @@ Package-local `RegisterTools` functions have since been removed for ordinary Git
 - **POS-001**: Package-level namespace eliminates verbose type prefixes (saves ~5 characters per type)
 - **POS-002**: Independent test compilation — `go test ./internal/tools/branches/` runs only branch tests
 - **POS-003**: Clear domain boundaries — each sub-package is self-contained and independently reviewable
-- **POS-004**: Zero import cycles enforced by Go compiler — sub-packages cannot import each other
+- **POS-004**: Zero import cycles enforced by Go compiler. Amended: the compiler forbids cycles and not imports, so "sub-packages cannot import each other" was never true of it. A sub-package imports a shared data package (`labeldata`, `iterationdata`) or the domain that owns a row it publishes whole (`commits.Output`, `projects.BasicOutput`), and mirrors a shape it only resembles
 - **POS-005**: Scales to 160+ sub-packages and 1000+ Enterprise/Premium tools without package-level congestion
 - **POS-006**: New tools follow a repeatable, discoverable pattern
 
@@ -105,12 +105,12 @@ Package-local `RegisterTools` functions have since been removed for ordinary Git
 
 - **NEG-001**: Directory count increased from 1 to 157+ under `internal/tools/`
 - **NEG-002**: Catalog aggregation and Markdown registration must be updated when adding new domains
-- **NEG-003**: Cross-domain operations (rare) require shared types in `toolutil/`
+- **NEG-003**: Cross-domain operations (rare) require shared types in `toolutil/`, in a shared data package, or in the domain that owns the row
 
 ## Compliance Checklist
 
-- [x] Sub-packages never import sibling sub-packages
-- [x] All shared types live in `toolutil/` or `testutil/`
+- [x] No import cycle among sub-packages, and a sibling is imported only for a row it owns or a shared data package (amended POS-004)
+- [x] Shared types live in `toolutil/`, `testutil/` or a shared data package (`labeldata`, `iterationdata`)
 - [x] Runtime-visible actions have `ActionSpec` coverage and tests
 - [x] Root registration is catalog-backed rather than a per-domain registration loop
 - [x] Standard file layout followed across all 168 domain sub-packages [counted 2026-09 as the directories under `internal/tools/` that carry `action_specs.go`; the shared packages such as `dynamic`, `actioncatalog` and `actioncompat` bring the total to 177]

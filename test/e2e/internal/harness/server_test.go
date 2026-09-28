@@ -544,6 +544,12 @@ func startStubGitLab(t *testing.T, routes ...stubRoute) *httptest.Server {
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": false})
 	})
+	// The health check reads /metadata, which GitLab serves with the same
+	// entity as the deprecated /version, while edition detection still reads
+	// /version, so the stub answers both.
+	mux.HandleFunc("/api/v4/metadata", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": false, "kas": map[string]any{"enabled": false}})
+	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": true})
 	})

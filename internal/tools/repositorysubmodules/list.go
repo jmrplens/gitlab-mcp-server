@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
 	"strings"
@@ -166,13 +167,14 @@ func resolveProjectPath(rawURL string) string {
 // "[user[:password]@]host:path". A bare "git@" is left alone: it is the ssh
 // account every such remote is written with and identifies nobody, while a
 // userinfo carrying a colon carries a password.
+//
+// With no "@" the userinfo is empty, read as authority[:0], so one test
+// decides both cases: a comparison of the index against zero would treat an
+// "@" in first place the same way on either side of it.
 func withoutSCPUserinfo(remote string) string {
 	authority, _, _ := strings.Cut(remote, "/")
 	at := strings.LastIndex(authority, "@")
-	if at < 0 {
-		return remote
-	}
-	if !strings.Contains(authority[:at], ":") {
+	if !strings.Contains(authority[:max(at, 0)], ":") {
 		return remote
 	}
 	return remote[at+1:]
@@ -206,56 +208,84 @@ func redactRemote(rawURL string) string {
 // enrichSubmoduleCommitSHAs walks the repository tree to find nodes of type
 // "commit" (mode 160000) and fills in the CommitSHA field on matching entries.
 func enrichSubmoduleCommitSHAs(ctx context.Context, client *gitlabclient.Client, projectID, ref string, entries []SubmoduleEntry) {
-	pathIndex, dirSet := buildSubmoduleIndex(entries)
+	pathIndex, dirCounts := buildSubmoduleIndex(entries)
 
-	for dir := range dirSet {
+	for dir, want := range dirCounts {
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		matchTreeCommits(ctx, client, projectID, ref, dir, pathIndex)
+		matchTreeCommits(ctx, client, projectID, ref, dir, pathIndex, want)
 	}
 }
 
-// buildSubmoduleIndex creates a path→entry lookup and a set of unique parent directories.
-func buildSubmoduleIndex(entries []SubmoduleEntry) (pathIndex map[string]*SubmoduleEntry, dirSet map[string]struct{}) {
+// buildSubmoduleIndex creates a path→entry lookup and, for each parent
+// directory, the number of distinct submodule paths it holds, which is how
+// many commit entries a listing of that directory can match.
+func buildSubmoduleIndex(entries []SubmoduleEntry) (pathIndex map[string]*SubmoduleEntry, dirCounts map[string]int) {
 	pathIndex = make(map[string]*SubmoduleEntry, len(entries))
-	dirSet = make(map[string]struct{})
 	for i := range entries {
 		pathIndex[entries[i].Path] = &entries[i]
-		dir := parentDir(entries[i].Path)
-		dirSet[dir] = struct{}{}
 	}
-	return pathIndex, dirSet
+	dirCounts = make(map[string]int)
+	for path := range pathIndex {
+		dirCounts[parentDir(path)]++
+	}
+	return pathIndex, dirCounts
 }
 
-// matchTreeCommits fetches a single directory from the repository tree and fills in
-// CommitSHA for any submodule entries whose path matches a "commit" tree node.
+// matchTreeCommits lists a single directory of the repository tree and fills
+// in CommitSHA for any submodule entries whose path matches a "commit" tree
+// node, stopping once it has matched the want submodules the directory holds.
+//
+// It follows the pages GitLab announces, through client-go's own pagination
+// iterator, because a directory holding more entries than one page does is
+// ordinary (a vendor directory, a monorepo's root), and a submodule sorted onto
+// a later page used to be reported with no commit at all. It asks for no page
+// past the one that holds the last submodule, since leaving the loop stops
+// the iterator: a large directory costs the pages up to its last submodule
+// rather than all of them.
 //
 // ref is always named: [List] resolves an empty one to the HEAD alias before
 // any of this runs, so there is no second check for it here.
-func matchTreeCommits(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string, pathIndex map[string]*SubmoduleEntry) {
+func matchTreeCommits(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string, pathIndex map[string]*SubmoduleEntry, want int) {
+	found := 0
+	for n, err := range treeNodes(ctx, client, projectID, ref, dir) {
+		if err != nil {
+			return
+		}
+		entry, ok := pathIndex[n.Path]
+		if !ok || n.Type != "commit" {
+			continue
+		}
+		entry.CommitSHA = n.ID
+		found++
+		if found == want {
+			return
+		}
+	}
+}
+
+// treeNodes lists one directory of the repository tree at ref, a hundred
+// entries a page, and yields every entry of every page GitLab announces.
+// Paging is client-go's [gl.Scan2], which asks for the next page for as long
+// as GitLab's answer names one; a consumer that stops early stops the listing.
+func treeNodes(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string) iter.Seq2[*gl.TreeNode, error] {
 	opts := &gl.ListTreeOptions{}
 	opts.PerPage = 100
 	opts.Ref = new(ref)
 	if dir != "" {
 		opts.Path = new(dir)
 	}
-	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return
-	}
-	for _, n := range nodes {
-		if entry, ok := pathIndex[n.Path]; ok && n.Type == "commit" {
-			entry.CommitSHA = n.ID
-		}
-	}
+	return gl.Scan2(func(page gl.PaginationOptionFunc) ([]*gl.TreeNode, *gl.Response, error) {
+		return client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx), page)
+	})
 }
 
 // parentDir returns the parent directory of path, or "" for root-level paths.
+// A path with no separator and one whose only separator leads it both have
+// the root as their parent, so the index is floored at zero rather than
+// compared, which would give the same answer for the two on either side of
+// the comparison and leave nothing a test could hold it to.
 func parentDir(path string) string {
-	idx := strings.LastIndex(path, "/")
-	if idx < 0 {
-		return ""
-	}
-	return path[:idx]
+	return path[:max(strings.LastIndex(path, "/"), 0)]
 }

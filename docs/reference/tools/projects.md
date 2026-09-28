@@ -686,14 +686,14 @@ Download the finished export archive of a project.
 
 ### `gitlab_import_project_from_file`
 
-Import a project from an export archive file. Accepts either base64-encoded `content_base64` or a local `.tar.gz` `file_path` under the current working directory, OS temp directory, or `GITLAB_MCP_ALLOWED_IMPORT_DIRS` after symlink resolution.
+Import a project from an export archive file. Accepts either base64-encoded `content_base64` or a local `.tar.gz` `file_path` under the current working directory, OS temp directory, or `GITLAB_MCP_ALLOWED_IMPORT_DIRS` after symlink resolution. Returns the new project's import status in the shape `gitlab_get_project_import_status` answers with.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_get_project_import_status`
 
-Get the import status of a project.
+Get the import status of a project: its identity, `import_status`, `import_type`, `correlation_id` and `import_error`, `failed_relations` (up to a hundred relations the import could not bring over, each with its relation name, line number, exception class, source and time), and, for a GitHub import, `stats`, how many objects of each type have been fetched and imported so far.
 
 | Annotation | **Read** |
 | ---------- | -------- |

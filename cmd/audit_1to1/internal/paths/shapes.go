@@ -1,7 +1,9 @@
 package paths
 
 import (
+	"cmp"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -214,11 +216,9 @@ func sortedSegments(segments map[string]*UntemplatedSegment) []UntemplatedSegmen
 	for _, segment := range segments {
 		out = append(out, *segment)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
-		}
-		return out[i].Segment < out[j].Segment
+	slices.SortFunc(out, func(a, b UntemplatedSegment) int {
+		// The larger count first, then by name.
+		return cmp.Or(cmp.Compare(b.Count, a.Count), strings.Compare(a.Segment, b.Segment))
 	})
 	return out
 }
@@ -260,14 +260,8 @@ func unpublishedFields(published []publishedType, byPackage map[string]map[strin
 // sortFindings orders the findings of either grain the way a reader reads them:
 // down the tree, then by type, then by field.
 func sortFindings(found []UnpublishedField) {
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].Package != found[j].Package {
-			return found[i].Package < found[j].Package
-		}
-		if found[i].Type != found[j].Type {
-			return found[i].Type < found[j].Type
-		}
-		return found[i].Field < found[j].Field
+	slices.SortFunc(found, func(a, b UnpublishedField) int {
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Type, b.Type), strings.Compare(a.Field, b.Field))
 	})
 }
 
@@ -450,8 +444,7 @@ func unionParams(a, b map[string]apilive.Param) map[string]apilive.Param {
 	if len(b) == 0 {
 		return a
 	}
-	out := make(map[string]apilive.Param, len(a)+len(b))
-	maps.Copy(out, a)
+	out := maps.Clone(a)
 	for name, param := range b {
 		taken, known := out[name]
 		if !known {
@@ -484,8 +477,7 @@ func unionEntityOf(a, b map[string]string) map[string]string {
 	if len(a) == 0 {
 		return b
 	}
-	out := make(map[string]string, len(a)+len(b))
-	maps.Copy(out, a)
+	out := maps.Clone(a)
 	for name, entity := range b {
 		if out[name] == "" {
 			out[name] = entity
@@ -544,8 +536,7 @@ func unionNested(a, b map[string][]string) map[string][]string {
 	if len(a) == 0 {
 		return b
 	}
-	out := make(map[string][]string, len(a)+len(b))
-	maps.Copy(out, a)
+	out := maps.Clone(a)
 	for property, names := range b {
 		out[property] = union(out[property], names)
 	}
@@ -557,7 +548,7 @@ func union(a, b []string) []string {
 	if len(a) == 0 {
 		return b
 	}
-	seen := make(map[string]bool, len(a)+len(b))
+	seen := map[string]bool{}
 	out := make([]string, 0, len(a)+len(b))
 	for _, list := range [][]string{a, b} {
 		for _, name := range list {

@@ -1,7 +1,9 @@
 package paths
 
 import (
-	"sort"
+	"cmp"
+	"slices"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -109,10 +111,8 @@ func identifierCheck(requests []requestinventory.Row) IdentifierCheck {
 	if check.Ran {
 		check.Grain = identifierGrain
 	}
-	sort.Slice(check.Leads, func(i, j int) bool { return lessLead(check.Leads[i], check.Leads[j]) })
-	if len(check.Leads) > maxIdentifierLeads {
-		check.Leads = check.Leads[:maxIdentifierLeads]
-	}
+	slices.SortFunc(check.Leads, compareLead)
+	check.Leads = check.Leads[:min(len(check.Leads), maxIdentifierLeads)]
 	return check
 }
 
@@ -151,7 +151,7 @@ func variedPlaceholders(counts map[string]int) map[string]int {
 	return varied
 }
 
-// lessLead orders two leads, the sharper ones first.
+// compareLead orders two leads, the sharper ones first.
 //
 // A lead whose row has another placeholder that did vary is the sharper one:
 // the suite reached this endpoint with two of something and only ever one of
@@ -159,16 +159,15 @@ func variedPlaceholders(counts map[string]int) map[string]int {
 // varied is usually a fixture that made one project, so those sort last and are
 // what the cap drops. Every field of the identity takes part after that, so the
 // order is total and two runs over one recording print the same list.
-func lessLead(a, b IdentifierLead) bool {
-	if sharp, otherSharp := len(a.Others) > 0, len(b.Others) > 0; sharp != otherSharp {
-		return sharp
-	}
-	left := []string{a.Package, a.Path, a.Method, a.Placeholder}
-	right := []string{b.Package, b.Path, b.Method, b.Placeholder}
-	for i := range left {
-		if left[i] != right[i] {
-			return left[i] < right[i]
-		}
-	}
-	return false
+func compareLead(a, b IdentifierLead) int {
+	return cmp.Or(
+		// Sharp is whether any other placeholder varied, one or none, compared
+		// the other way round so that one sorts first; how many varied is not
+		// the question.
+		cmp.Compare(min(len(b.Others), 1), min(len(a.Others), 1)),
+		strings.Compare(a.Package, b.Package),
+		strings.Compare(a.Path, b.Path),
+		strings.Compare(a.Method, b.Method),
+		strings.Compare(a.Placeholder, b.Placeholder),
+	)
 }

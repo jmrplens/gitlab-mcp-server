@@ -86,12 +86,6 @@ func TestIdentifierCheck_AnInventoryWithNoCounts_SaysItDidNotRun(t *testing.T) {
 // rows worth reading, and the true count has to survive it, or a reader would
 // take the printed list for the whole answer.
 func TestIdentifierCheck_ManyLeads_ArePrintedSharpestFirstAndCapped(t *testing.T) {
-	t.Run("a lead is not less than itself", func(t *testing.T) {
-		lead := IdentifierLead{Package: "internal/tools/x", Method: "GET", Path: "/a/:a_id", Placeholder: ":a_id"}
-		if lessLead(lead, lead) {
-			t.Error("lessLead(l, l) = true, want false: the order has to be strict for sort.Slice")
-		}
-	})
 	rows := make([]requestinventory.Row, 0, maxIdentifierLeads+2)
 	for i := range maxIdentifierLeads + 1 {
 		rows = append(rows, requestinventory.Row{
@@ -116,5 +110,51 @@ func TestIdentifierCheck_ManyLeads_ArePrintedSharpestFirstAndCapped(t *testing.T
 	}
 	if check.Leads[0].Package != "internal/tools/zzz" {
 		t.Errorf("first lead = %+v, want the one row where something else varied", check.Leads[0])
+	}
+}
+
+// TestCompareLead_SharpFirstThenEveryIdentityField verifies the lead order a
+// reader and the cap both rely on: a lead whose row varied something else comes
+// first whatever else it holds, how many things varied does not rank it
+// further, and after that every field of the identity is compared in turn.
+//
+// Each identity case differs from the base in one field alone and every field
+// before it is equal, so a comparison that stopped early, skipped a field or
+// read one backwards answers zero or the wrong sign for exactly that case.
+func TestCompareLead_SharpFirstThenEveryIdentityField(t *testing.T) {
+	base := IdentifierLead{Package: "internal/tools/x", Method: "GET", Path: "/a/:a_id", Placeholder: ":a_id"}
+	if got := compareLead(base, base); got != 0 {
+		t.Errorf("compareLead(l, l) = %d, want 0", got)
+	}
+
+	sharp := base
+	sharp.Package = "internal/tools/z"
+	sharp.Others = map[string]int{":b_id": 2}
+	if compareLead(sharp, base) >= 0 || compareLead(base, sharp) <= 0 {
+		t.Error("a sharp lead did not sort before a blunt one that is earlier by name")
+	}
+	sharper := sharp
+	sharper.Others = map[string]int{":b_id": 2, ":c_id": 3}
+	if got := compareLead(sharp, sharper); got != 0 {
+		t.Errorf("compareLead(one varied, two varied) = %d, want 0: sharpness is whether, not how many", got)
+	}
+
+	tests := []struct {
+		name  string
+		later func(*IdentifierLead)
+	}{
+		{name: "package", later: func(l *IdentifierLead) { l.Package = "internal/tools/y" }},
+		{name: "path", later: func(l *IdentifierLead) { l.Path = "/b/:a_id" }},
+		{name: "method", later: func(l *IdentifierLead) { l.Method = "PUT" }},
+		{name: "placeholder", later: func(l *IdentifierLead) { l.Placeholder = ":b_id" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			later := base
+			tt.later(&later)
+			if compareLead(base, later) >= 0 || compareLead(later, base) <= 0 {
+				t.Errorf("compareLead did not order two leads that differ only in the %s", tt.name)
+			}
+		})
 	}
 }

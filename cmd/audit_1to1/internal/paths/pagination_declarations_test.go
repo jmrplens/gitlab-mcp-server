@@ -105,6 +105,24 @@ func TestPaginationStaleDeclarations_AClaimThatMatchesNothing_IsAFinding(t *test
 	}
 }
 
+// TestPaginationStaleDeclarations_AnUndeclaredFinding_UsesNoDeclaration
+// verifies that a finding no declaration answers keeps no declaration alive: a
+// table whose only entry names another action is stale beside it.
+func TestPaginationStaleDeclarations_AnUndeclaredFinding_UsesNoDeclaration(t *testing.T) {
+	withPaginationDeclarations(t, []paginationDeclaration{
+		{Package: toolsDir + "/issues", Action: "issue.participants", Category: categoryEndpointNotPaginated, Reason: "sent whole"},
+	})
+	check := PaginationCheck{Ran: true, Unpaginated: []UnpaginatedCollection{
+		{Package: toolsDir + "/issues", Action: "issue.list_links"},
+	}}
+
+	stale := check.staleDeclarations()
+
+	if len(stale) != 1 || !strings.Contains(stale[0], "issue.participants") {
+		t.Errorf("staleDeclarations() = %v, want the one declaration the finding does not use", stale)
+	}
+}
+
 // TestPaginationStaleDeclarations_EveryClaimHolds_IsEmpty verifies the clean
 // case returns an empty list rather than nil, so the report renders the same way
 // every run.

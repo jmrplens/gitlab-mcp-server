@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -175,7 +174,13 @@ func TestUpdate_Output_CarriesEveryFieldOfTheCommitGitLabSent(t *testing.T) {
 			"created_at": "2026-01-15T10:32:00Z",
 			"message": "Bump core-module to abc123d\n\nPicked up the parser fix.",
 			"parent_ids": ["parent1", "parent2"],
-			"status": "running"
+			"status": "running",
+			"project_id": 42,
+			"web_url": "https://gitlab.example.com/g/p/-/commit/abc123def4567890",
+			"trailers": {"Signed-off-by": "Alice Author <alice@example.com>"},
+			"extended_trailers": {"Signed-off-by": ["Alice Author <alice@example.com>", "Bob Committer <bob@example.com>"]},
+			"last_pipeline": {"id": 77, "iid": 7, "project_id": 42, "sha": "abc123def4567890", "ref": "main",
+				"status": "pending", "source": "push", "web_url": "https://gitlab.example.com/g/p/-/pipelines/77"}
 		}`)
 	})
 
@@ -196,14 +201,24 @@ func TestUpdate_Output_CarriesEveryFieldOfTheCommitGitLabSent(t *testing.T) {
 		Title:          "Bump core-module",
 		AuthorName:     "Alice Author",
 		AuthorEmail:    "alice@example.com",
-		AuthoredDate:   time.Date(2026, time.January, 15, 10, 29, 0, 0, time.UTC).String(),
+		AuthoredDate:   "2026-01-15T10:29:00Z",
 		CommitterName:  "Bob Committer",
 		CommitterEmail: "bob@example.com",
-		CommittedDate:  time.Date(2026, time.January, 15, 10, 31, 0, 0, time.UTC).String(),
-		CreatedAt:      time.Date(2026, time.January, 15, 10, 32, 0, 0, time.UTC).String(),
+		CommittedDate:  "2026-01-15T10:31:00Z",
+		CreatedAt:      "2026-01-15T10:32:00Z",
 		Message:        "Bump core-module to abc123d\n\nPicked up the parser fix.",
 		ParentIDs:      []string{"parent1", "parent2"},
 		Status:         "running",
+		ProjectID:      42,
+		WebURL:         "https://gitlab.example.com/g/p/-/commit/abc123def4567890",
+		Trailers:       map[string]string{"Signed-off-by": "Alice Author <alice@example.com>"},
+		ExtendedTrailers: map[string][]string{
+			"Signed-off-by": {"Alice Author <alice@example.com>", "Bob Committer <bob@example.com>"},
+		},
+		LastPipeline: &toolutil.LastPipelineOutput{
+			ID: 77, IID: 7, ProjectID: 42, SHA: "abc123def4567890", Ref: "main", Status: "pending", Source: "push",
+			WebURL: "https://gitlab.example.com/g/p/-/pipelines/77",
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("update output mismatch:\ngot:  %+v\nwant: %+v", got, want)
@@ -243,6 +258,20 @@ func assertSubmoduleNotSent(t *testing.T, body map[string]any, key string) {
 	t.Helper()
 	if got, ok := body[key]; ok {
 		t.Errorf("%s sent = %v, want the key absent: the caller named no value for it", key, got)
+	}
+}
+
+// TestUpdate_UndecodableCommitDetail_IsAnError verifies that an answer the SDK
+// decodes and whose CommitDetail keys do not fit the captured read is reported
+// rather than published with those keys silently empty: client-go models no
+// project_id, so a malformed one reaches only this server's own decode.
+func TestUpdate_UndecodableCommitDetail_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id": "abc123", "short_id": "abc", "project_id": "not a number"}`)
+	}))
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", Submodule: "lib", Branch: "main", CommitSHA: "abc123"})
+	if err == nil || !strings.Contains(err.Error(), "update_repository_submodule") {
+		t.Fatalf("Update() error = %v, want the failed read of the captured commit", err)
 	}
 }
 
@@ -310,6 +339,31 @@ func TestFormatUpdateMarkdown_Content(t *testing.T) {
 		"- **Author Email**: alice@example.com\n" +
 		"- **Committed**: 20 Mar 2026 15:45 UTC\n" +
 		"- **Message**: Bump lib to v2\n" +
+		submoduleUpdateHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatUpdateMarkdown_PipelineAndURL pins the two links the card carries
+// when GitLab sent them: the commit's latest pipeline, by its number, and the
+// commit itself.
+func TestFormatUpdateMarkdown_PipelineAndURL(t *testing.T) {
+	got := renderedText(t, FormatUpdateMarkdown(UpdateOutput{
+		ID:           "abc123def456",
+		ShortID:      "abc123d",
+		Title:        "Update lib",
+		WebURL:       "https://gitlab.example.com/g/p/-/commit/abc123def456",
+		LastPipeline: &toolutil.LastPipelineOutput{ID: 77, WebURL: "https://gitlab.example.com/g/p/-/pipelines/77"},
+	}))
+
+	want := "## Submodule Updated\n\n" +
+		"- **Commit**: `abc123d`\n" +
+		"- **Full SHA**: `abc123def456`\n" +
+		"- **Title**: Update lib\n" +
+		"- **Pipeline**: [#77](https://gitlab.example.com/g/p/-/pipelines/77)\n" +
+		"- **URL**: [https://gitlab.example.com/g/p/-/commit/abc123def456](https://gitlab.example.com/g/p/-/commit/abc123def456)\n" +
 		submoduleUpdateHints
 
 	if got != want {

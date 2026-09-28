@@ -97,12 +97,14 @@ const reasonLabelDetailsRekeyed = "GitLab sends no key of this name. With with_l
 	"put the titles back in labels, and this type publishes what client-go decoded under client-go's name. Every list " +
 	"input of the type offers with_labels_details, and without it the key is absent."
 
-// reasonEventTargetURL answers target_url on the two event types.
+// reasonEventTargetURL answers target_url on the two event types. The
+// contribution event type is the one internal/tools/users publishes too, as an
+// alias, so this one declaration answers both listings.
 const reasonEventTargetURL = "no events route sends it: lib/api/entities/event.rb exposes target_type and target_iid and no " +
-	"URL for the target. enrichContributionEventURLs and enrichProjectEventURLs in internal/tools/events build it through " +
+	"URL for the target. EnrichContributionEventURLs and enrichProjectEventURLs in internal/tools/events build it through " +
 	"toolutil.BuildTargetURL from those two keys and the web_url GET /projects/:id answers with for the event's project, " +
 	"so it is a link this server adds to what the event names, and it is empty for a target type the builder has no " +
-	"path segment for."
+	"path segment for. A user's contribution events (internal/tools/users) are linked by EnrichContributionEventURLs as well."
 
 // reasonGroupDatadogProperties answers properties on the group Datadog item.
 const reasonGroupDatadogProperties = "lib/api/integrations/integratable_operations.rb mounts both routes this type is filled " +
@@ -201,7 +203,6 @@ var declaredShapeFields = []shapeDeclaration{
 	// The link this server builds to what an event names.
 	{Package: toolsDir + "/events", Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonEventTargetURL},
 	{Package: toolsDir + "/events", Type: "ProjectEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonEventTargetURL},
-	{Package: usersPkg, Type: "ContributionEventOutput", Field: "target_url", Category: categoryServerDerived, Reason: reasonUserEventTargetURL},
 
 	// Values this server echoes or derives rather than reads off a key.
 	{Package: groupAnalyticsPkg, Type: "IssuesCountOutput", Field: "group_path", Category: categoryServerDerived, Reason: reasonAnalyticsGroupPath},
@@ -240,6 +241,8 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "name", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "avatar_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "web_url", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "locked", Category: categoryServerShape, Reason: reasonReviewerFlattened},
+	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "public_email", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 	{Package: mergeRequestsPkg, Type: "ReviewerOutput", Field: "review_state", Category: categoryServerShape, Reason: reasonReviewerFlattened},
 
 	// The project starrers, whose route annotates a user and presents the star.
@@ -254,11 +257,6 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "priority", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "is_project_label", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 }
-
-// reasonUserEventTargetURL answers target_url on the user contribution events.
-const reasonUserEventTargetURL = "no events route sends it: lib/api/entities/event.rb exposes target_type and target_iid and " +
-	"no URL for the target. internal/tools/users builds it the way internal/tools/events does, from those two keys and the " +
-	"web_url GET /projects/:id answers with for the event's project, so it is a link this server adds to what the event names."
 
 // reasonAnalyticsGroupPath answers group_path on the three group counts.
 const reasonAnalyticsGroupPath = "the group_path the caller passed, echoed so the count says which group it counts: the " +

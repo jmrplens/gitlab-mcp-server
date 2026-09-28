@@ -11,12 +11,11 @@ import (
 const (
 	// optionsSuffix ends the name of every client-go struct a service method
 	// takes its parameters in. It is a naming convention rather than an
-	// interface, so it is what identifies one.
+	// interface, so it is what identifies one. The variadic tail every service
+	// method carries, RequestOptionFunc, is the transport's own and does not
+	// end in it, and [optionParameters] passes over a variadic parameter
+	// besides.
 	optionsSuffix = "Options"
-	// requestOptionType is the variadic tail every service method carries. It
-	// ends in Options too and is the transport's own, carrying nothing a
-	// request body sends.
-	requestOptionType = "RequestOptionFunc"
 	// omitEmptyOption and omitZeroOption are the two json tag options that
 	// decide whether a field is written when it holds nothing. Both are read,
 	// because client-go uses both: DefaultBranchProtectionDefaultsOptions
@@ -137,7 +136,7 @@ func collectOptionTypes(file *ast.File, into map[string]sdkOptionType) {
 // isOptionTypeName reports whether a type name is one of the structs a service
 // method takes its parameters in, which client-go names by convention.
 func isOptionTypeName(name string) bool {
-	return strings.HasSuffix(name, optionsSuffix) && name != requestOptionType
+	return strings.HasSuffix(name, optionsSuffix)
 }
 
 // optionFields reads one option struct's fields as encoding/json will write
@@ -205,8 +204,10 @@ func jsonField(tag *ast.BasicLit, goName string) (key string, always, published 
 	if !tagged {
 		return goName, true, true
 	}
-	name, rest, _ := strings.Cut(spec, ",")
-	if name == hiddenName && rest == "" {
+	// Only a bare "-" hides the field. encoding/json writes one tagged "-,"
+	// under the key "-", which is what the comma after it is for.
+	name, rest, hasOptions := strings.Cut(spec, ",")
+	if name == hiddenName && !hasOptions {
 		return "", false, false
 	}
 	if name == "" {
@@ -237,12 +238,11 @@ func collectOptionRoutes(function *ast.FuncDecl, templates map[string]string, in
 	}
 }
 
-// optionParameters names the option structs one method takes.
+// optionParameters names the option structs one method takes, each once.
 //
-// The variadic transport tail is left out by name, since it ends in Options
-// too and carries nothing a body sends; a variadic parameter is skipped
-// structurally as well, which is what keeps that true if the tail is ever
-// renamed.
+// The variadic transport tail carries nothing a body sends. Its name does not
+// end in Options, and a variadic parameter is skipped structurally as well,
+// which is what keeps that true if the tail is ever renamed.
 func optionParameters(function *ast.FuncDecl) []string {
 	if function.Type.Params == nil {
 		return nil

@@ -196,7 +196,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		options.Aliases = []string{"pipeline variables", "show pipeline variables", "get pipeline variables"}
 		options.RelatedActions = []string{actionPipelineGet, "pipeline.create", actionJobListProject}
 		options.ParameterGuidance = pipelineIDGuidance()
-		options.IndividualTool.Description = "List a pipeline's runtime variables. Returns: variable keys, values, and types. See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project."
+		options.IndividualTool.Description = "List a pipeline's runtime variables. Returns: variable keys, values, types, and whether each value is raw (not expanded). See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project."
 	case "test_report":
 		options.Usage = "Get the full test report for a pipeline by project_id and pipeline_id. Use when the task needs per-suite test counts and timing. Requires jobs that upload JUnit artifacts."
 		options.Aliases = []string{"pipeline test report", "show test report", "get test results"}

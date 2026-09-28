@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -1948,6 +1950,139 @@ func TestRepositoryTree_NodeFieldsComeFromTheirOwnKeys(t *testing.T) {
 	want := TreeNodeOutput{ID: "blob-sha-1", Name: "entry-name", Type: "blob", Path: "dir/entry-path", Mode: "100755"}
 	if out.Tree[0] != want {
 		t.Errorf("Tree[0] = %+v, want %+v", out.Tree[0], want)
+	}
+}
+
+// TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit verifies that
+// with_last_commit reaches GitLab only when the caller set it, and that each
+// entry's last commit is published whole when it did, read off the captured
+// answer since client-go's TreeNode has no field for it; an entry GitLab sent
+// none for keeps none. The commit carries trailers in the shape GitLab sends
+// them, extended_trailers mapping each to the list of its values, which
+// client-go's Commit cannot decode.
+func TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit(t *testing.T) {
+	cases := []struct {
+		name     string
+		with     bool
+		wantSent string
+		// wantFirst is the last commit the first entry publishes; the second
+		// entry, which GitLab sends none for, always publishes none.
+		wantFirst *TreeCommitOutput
+	}{
+		{name: "asked", with: true, wantSent: "true", wantFirst: &TreeCommitOutput{
+			ID: "c0ffee0000", ShortID: "c0ffee0", Title: "Touch the readme", Message: "Touch the readme",
+			AuthorName: "Ann", AuthorEmail: "ann@example.com", AuthoredDate: "2026-05-01T09:00:00Z",
+			CommitterName: "Cid", CommitterEmail: "cid@example.com", CommittedDate: "2026-05-02T08:00:00Z",
+			CreatedAt: "2026-05-03T11:00:00Z", ParentIDs: []string{"p1"},
+			Trailers:         map[string]string{"Signed-off-by": "Dee", "Changelog": "fixed"},
+			ExtendedTrailers: map[string][]string{"Signed-off-by": {"Ann", "Dee"}, "Changelog": {"fixed"}},
+			WebURL:           "https://gitlab.example.com/g/p/-/commit/c0ffee0000",
+		}},
+		{name: "not asked", with: false, wantSent: "", wantFirst: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent, out := treeWithLastCommits(t, tc.with)
+			if sent != tc.wantSent {
+				t.Errorf("with_last_commit sent = %q, want %q", sent, tc.wantSent)
+			}
+			if len(out.Tree) != 2 {
+				t.Fatalf("len(Tree) = %d, want 2", len(out.Tree))
+			}
+			if !reflect.DeepEqual(out.Tree[0].LastCommit, tc.wantFirst) {
+				t.Errorf("Tree[0].LastCommit = %+v, want %+v", out.Tree[0].LastCommit, tc.wantFirst)
+			}
+			if out.Tree[1].LastCommit != nil {
+				t.Errorf("Tree[1].LastCommit = %+v, want none: GitLab sent none for it", out.Tree[1].LastCommit)
+			}
+		})
+	}
+}
+
+// treeWithLastCommits lists a tree whose first entry GitLab answers with a
+// last commit and whose second it answers without one, and returns the
+// with_last_commit value the request carried beside the listing.
+func treeWithLastCommits(t *testing.T, with bool) (string, TreeOutput) {
+	t.Helper()
+	const lastCommit = `{"id":"c0ffee0000","short_id":"c0ffee0","title":"Touch the readme","message":"Touch the readme",` +
+		`"author_name":"Ann","author_email":"ann@example.com","authored_date":"2026-05-01T09:00:00Z",` +
+		`"committer_name":"Cid","committer_email":"cid@example.com","committed_date":"2026-05-02T10:00:00+02:00",` +
+		`"created_at":"2026-05-03T11:00:00Z","parent_ids":["p1"],` +
+		`"trailers":{"Signed-off-by":"Dee","Changelog":"fixed"},` +
+		`"extended_trailers":{"Signed-off-by":["Ann","Dee"],"Changelog":["fixed"]},` +
+		`"web_url":"https://gitlab.example.com/g/p/-/commit/c0ffee0000"}`
+	var sent atomic.Pointer[string]
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked := r.URL.Query().Get("with_last_commit")
+		sent.Store(&asked)
+		testutil.RespondJSON(w, http.StatusOK, `[`+
+			`{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644","last_commit":`+lastCommit+`},`+
+			`{"id":"a2","name":"src","type":"tree","path":"src","mode":"040000"}]`)
+	}))
+
+	out, err := Tree(t.Context(), client, TreeInput{ProjectID: "42", WithLastCommit: with})
+	if err != nil {
+		t.Fatalf("Tree() unexpected error: %v", err)
+	}
+	if sent.Load() == nil {
+		t.Fatal("the tree listing never reached GitLab")
+	}
+	return *sent.Load(), out
+}
+
+// TestRepositoryTree_WithLastCommitAndRecursive_IsRefused verifies that the
+// pair GitLab refuses is refused before a request is made, with the way
+// forward, rather than handed to GitLab for a bare 400.
+func TestRepositoryTree_WithLastCommitAndRecursive_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Tree(t.Context(), client, TreeInput{ProjectID: "42", Recursive: true, WithLastCommit: true})
+	if err == nil || !strings.Contains(err.Error(), "with_last_commit cannot be combined with recursive") {
+		t.Fatalf("Tree() error = %v, want the pair refused", err)
+	}
+}
+
+// TestRepositoryTree_UndecodableLastCommit_IsAnError verifies that a last
+// commit that does not decode is reported rather than dropped: client-go reads
+// no last_commit, so only this server's read of the captured answer meets it.
+func TestRepositoryTree_UndecodableLastCommit_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644","last_commit":"not a commit"}]`)
+	}))
+	_, err := Tree(t.Context(), client, TreeInput{ProjectID: "42", WithLastCommit: true})
+	if err == nil || !strings.Contains(err.Error(), "repositoryTree") {
+		t.Fatalf("Tree() error = %v, want the failed read of the captured tree", err)
+	}
+}
+
+// TestFormatTreeMarkdown_WithLastCommit pins the two columns a listing asked
+// with with_last_commit gains, filled for an entry GitLab sent a commit for and
+// empty for one it did not, and the instruction to keep the links the commit
+// column carries.
+func TestFormatTreeMarkdown_WithLastCommit(t *testing.T) {
+	got := FormatTreeMarkdown(TreeOutput{
+		Tree: []TreeNodeOutput{
+			{ID: "a", Name: "README.md", Type: "blob", Path: "README.md", Mode: "100644", LastCommit: &TreeCommitOutput{
+				ShortID: "c0ffee0", Title: "Touch | the readme", CommittedDate: "2026-05-02T10:00:00Z",
+				WebURL: "https://gitlab.example.com/g/p/-/commit/c0ffee0000",
+			}},
+			{ID: "b", Name: "src", Type: "tree", Path: "src", Mode: "040000"},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+
+	want := "## Repository Tree (2)\n\n" +
+		"| Type | Name | Path | Last Commit | Committed |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| \U0001F4C4 | README.md | `README.md` | [c0ffee0](https://gitlab.example.com/g/p/-/commit/c0ffee0000) Touch &#124; the readme | 2 May 2026 10:00 UTC |\n" +
+		"| \U0001F4C1 | src | `src` |  |  |\n" +
+		"\n2 items total\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'repository.file_get' to read one file's content\n" +
+		"- Use action 'repository.compare' to see differences between branches or commits\n"
+
+	if got != want {
+		t.Errorf("tree mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

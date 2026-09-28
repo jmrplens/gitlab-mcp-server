@@ -3,6 +3,7 @@ package paths
 import (
 	"errors"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
@@ -131,6 +132,28 @@ func TestAlwaysSentCheck_AGetEndpoint_IsNeverJudged(t *testing.T) {
 	}
 }
 
+// TestAlwaysSentCheck_ARouteDeclaringNoParams_IsNotJudged verifies that a route
+// the record holds and declares nothing on is passed over rather than asked
+// about. With no param to hold a field against, every field of the option
+// struct would read as a comparison that could not be made, and the endpoint
+// would be counted as judged when nothing about it was.
+func TestAlwaysSentCheck_ARouteDeclaringNoParams_IsNotJudged(t *testing.T) {
+	withSDKOptions(t, alwaysSentSource(t))
+	root := recordIn(t, map[string]response{
+		"PATCH /projects/:id/packages/protection/rules/:package_protection_rule_id": {Response: []string{"id"}},
+	})
+
+	check := alwaysSentCheck(root, []requestinventory.Row{{
+		Package: "internal/tools/protectedpackages", Kind: "rest", Method: "PATCH",
+		Path: "/projects/:project_id/packages/protection/rules/:rule_id",
+		Body: []string{"package_name_pattern"},
+	}})
+
+	if !check.Ran || check.Endpoints != 0 || check.Fields != 0 || len(check.Optional) != 0 {
+		t.Errorf("check = %+v, want a run that judged no endpoint", check)
+	}
+}
+
 // TestAlwaysSentCheck_MissingInputs_SayTheCheckDidNotRun verifies that each way
 // of having nothing to compare renders as a check that never ran rather than as
 // a clean one.
@@ -152,14 +175,35 @@ func TestAlwaysSentCheck_MissingInputs_SayTheCheckDidNotRun(t *testing.T) {
 	})
 
 	t.Run("no client-go directory", func(t *testing.T) {
-		withSDKOptions(t, alwaysSentSource(t))
+		dir := alwaysSentSource(t)
+		withSDKOptions(t, dir)
 		original := collectPairings
-		collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, errors.New("no load") }
+		// The failed load still names a directory holding option structs, so
+		// only the error can be what stops the check.
+		collectPairings = func(string) (structs.Pairings, error) {
+			return structs.Pairings{ClientGoDir: dir}, errors.New("no load")
+		}
 		t.Cleanup(func() { collectPairings = original })
 
 		root := recordIn(t, map[string]response{"PATCH /projects/:id": {Params: []string{"name"}}})
 		if check := alwaysSentCheck(root, requests); check.Ran {
 			t.Errorf("check = %+v, want ran=false when the load failed", check)
+		}
+	})
+
+	t.Run("a load that names no client-go directory", func(t *testing.T) {
+		dir := alwaysSentSource(t)
+		withSDKOptions(t, dir)
+		original, originalOptions := collectPairings, readOptions
+		collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, nil }
+		// A reader that would find option structs wherever it was pointed, so
+		// only the empty directory can be what stops the check.
+		readOptions = func(string) sdkOptions { return readSDKOptions(dir) }
+		t.Cleanup(func() { collectPairings, readOptions = original, originalOptions })
+
+		root := recordIn(t, map[string]response{"PATCH /projects/:id": {Params: []string{"name"}}})
+		if check := alwaysSentCheck(root, requests); check.Ran {
+			t.Errorf("check = %+v, want ran=false when the load found no client-go module", check)
 		}
 	})
 
@@ -199,19 +243,60 @@ func TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
 	}
 }
 
-// TestLessAlwaysSent_IsAStrictOrder verifies the finding order compares every
-// field of the identity in turn, the last of them included, and holds no
-// finding less than itself, which is what sort.Slice asks of a less function
-// and what keeps two runs over one tree printing one list.
-func TestLessAlwaysSent_IsAStrictOrder(t *testing.T) {
-	finding := AlwaysSentField{Package: "internal/tools/x", Path: "/a", Method: "PUT", OptionType: "XOptions", Param: "b"}
-	laterParam := finding
-	laterParam.Param = "c"
-	if lessAlwaysSent(finding, finding) {
-		t.Error("lessAlwaysSent(f, f) = true, want false")
+// TestBodyEndpoints_AreOrderedByPackagePathAndMethod verifies the order the
+// join asks its questions in, which is the order a report lists them in:
+// by package, then path, then method, whatever order the inventory recorded
+// them in.
+func TestBodyEndpoints_AreOrderedByPackagePathAndMethod(t *testing.T) {
+	endpoints := bodyEndpoints([]requestinventory.Row{
+		{Package: "internal/tools/issues", Kind: "rest", Method: "PUT", Path: "/projects/:project_id/issues/:issue_id"},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues/:issue_id"},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues"},
+		{Package: "internal/tools/groups", Kind: "rest", Method: "POST", Path: "/groups"},
+	})
+
+	want := []bodyEndpoint{
+		{pkg: "internal/tools/groups", method: "POST", path: "/groups"},
+		{pkg: "internal/tools/issues", method: "POST", path: "/projects/:project_id/issues"},
+		{pkg: "internal/tools/issues", method: "POST", path: "/projects/:project_id/issues/:issue_id"},
+		{pkg: "internal/tools/issues", method: "PUT", path: "/projects/:project_id/issues/:issue_id"},
 	}
-	if !lessAlwaysSent(finding, laterParam) || lessAlwaysSent(laterParam, finding) {
-		t.Error("lessAlwaysSent did not order two findings that differ only in the param")
+	if !reflect.DeepEqual(endpoints, want) {
+		t.Errorf("endpoints = %+v, want %+v", endpoints, want)
+	}
+}
+
+// TestCompareAlwaysSent_IsATotalOrder verifies the finding order compares
+// every field of the identity in turn, and holds a finding equal only to
+// itself, which is what slices.SortFunc asks of a comparison and what keeps two
+// runs over one tree printing one list.
+//
+// Each case differs from the base in one field alone and every field before it
+// is equal, so a comparison that stopped early, skipped a field or read one
+// backwards answers zero or the wrong sign for exactly that case.
+func TestCompareAlwaysSent_IsATotalOrder(t *testing.T) {
+	base := AlwaysSentField{Package: "internal/tools/x", Path: "/a", Method: "PUT", OptionType: "XOptions", Param: "b"}
+	if got := compareAlwaysSent(base, base); got != 0 {
+		t.Errorf("compareAlwaysSent(f, f) = %d, want 0", got)
+	}
+	tests := []struct {
+		name  string
+		later func(*AlwaysSentField)
+	}{
+		{name: "package", later: func(f *AlwaysSentField) { f.Package = "internal/tools/y" }},
+		{name: "path", later: func(f *AlwaysSentField) { f.Path = "/b" }},
+		{name: "method", later: func(f *AlwaysSentField) { f.Method = "PUTX" }},
+		{name: "option type", later: func(f *AlwaysSentField) { f.OptionType = "YOptions" }},
+		{name: "param", later: func(f *AlwaysSentField) { f.Param = "c" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			later := base
+			tt.later(&later)
+			if compareAlwaysSent(base, later) >= 0 || compareAlwaysSent(later, base) <= 0 {
+				t.Errorf("compareAlwaysSent did not order two findings that differ only in the %s", tt.name)
+			}
+		})
 	}
 }
 
@@ -236,6 +321,7 @@ func TestLookupParam_AListOfObjects_IsTriedUnderBothSpellings(t *testing.T) {
 		{name: "the flattened spelling of a declared param", param: "position[][x]", declared: true},
 		{name: "a plain nested param", param: "position[x]", declared: true},
 		{name: "a param the route never declares", param: "position[y]"},
+		{name: "a list member the route declares under neither spelling", param: "position[][y]"},
 	}
 
 	for _, tt := range tests {

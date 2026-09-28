@@ -141,6 +141,7 @@ readable without opening the tracker:
 | 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No, but it breaks a MUST | None taken |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
+| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Yes, for `repository.commit_list` with `trailers` | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1732,7 +1733,7 @@ them would have been wrong:
   phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
   them is a breaking change, so it is recorded rather than done.
 
-**Four more gaps were recorded and held back** by the batching the maintainer
+**Six more gaps were recorded and held back** by the batching the maintainer
 asked for above, and went out on 2026-09-27 as commit 29 of
 `gitlab-org/api/client-go!3063`, which also deprecates
 `LicenseTemplate.Featured` rather than removing it, and leaves
@@ -1740,6 +1741,21 @@ asked for above, and went out on 2026-09-27 as commit 29 of
 field this server now reads from the captured response, so each carries a
 live workaround until a release carries the commit:
 
+- `BasicUser` is missing `public_email` and `locked`, both exposed with no
+  condition by `lib/api/entities/user_basic.rb`, which is what every route
+  decoding into `BasicUser` renders (`locked` through `access_locked?`). The
+  participants of an issue and of a merge request, a merge request's reviewers
+  (nested under `user`) and approvers (nested under `approved_by[].user`), and
+  the author of the to-do an issue or a merge request answers `create_todo`
+  with all decode into it. This server publishes both keys on every one of
+  them, reading them off the captured answer (`toolutil.CapturedUserBasics`,
+  `toolutil.CapturedNestedUserBasics`, and the handlers' own reads in
+  `internal/tools/issues` and `internal/tools/mergerequests`); the package
+  pipeline's user below is the same gap met earlier.
+- `ServiceAccount` has no `public_email`, which the `UserSafe` that
+  `lib/api/entities/service_account.rb` inherits exposes with no condition.
+  The instance service account list and update in `internal/tools/users` read
+  it off the captured answer.
 - `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
   keys `API::Entities::Package::Pipeline` exposes. The pipeline's user decodes
   into `BasicUser`, which is missing the `public_email` and `locked` of the
@@ -1754,7 +1770,12 @@ live workaround until a release carries the commit:
   and `toolutil.CapturedPackages`, under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
   and publishes no `created_at` for the user; a bump carrying the five retires
-  the read.
+  the read. A package file renders the same pipeline entity under `pipelines`
+  (`lib/api/entities/package_file.rb`, real pipelines this time), and
+  client-go's `PackageFile` decodes them into its full `Pipeline`, which
+  carries the pipeline's own keys and the same short `BasicUser`;
+  `package.file_list` reads the user's two keys off the captured answer, and
+  the `BasicUser` fix above retires that read too.
 - `PendingInvite` has no `invite_token`, which
   `lib/api/entities/invitation.rb` exposes with no condition. The same struct
   declares an `ID` the entity does not expose, which the audit already reports
@@ -1769,6 +1790,57 @@ live workaround until a release carries the commit:
   `lib/api/entities/access_requester.rb` inherits. The conditional ones,
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
+
+**Six more are recorded and not yet sent**: the merge request above does not
+carry them, and each is read from the captured response in the meantime.
+
+- `Todo` has no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
+  condition, and no `group`, which it exposes on a to-do raised in a group
+  (`if: ->(todo, _) { todo.group_id }`). `internal/tools/todos` reads both off
+  the to-do list's captured answer (`toolutil.CapturedTodos`), and the issue
+  and merge request `create_todo` handlers read `updated_at`; a to-do those two
+  routes create belongs to a project and never carries `group`.
+- `SubmoduleCommit`, what `UpdateSubmodule` returns, models thirteen of the
+  eighteen keys `PUT /projects/:id/repository/submodules/:submodule` sends with
+  no condition (`lib/api/submodules.rb` presents the new commit through
+  `lib/api/entities/commit_detail.rb`). The other five are `web_url`,
+  `trailers` and `extended_trailers`, from the `Commit` entity it extends, and
+  `project_id` and `last_pipeline`, its own. `internal/tools/repositorysubmodules`
+  reads the five off the captured answer, `extended_trailers` as the map of
+  lists GitLab sends rather than as client-go's `Commit` spells it, which is
+  [a defect of its own](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists).
+- `TreeNode` has no `last_commit` and `ListTreeOptions` no `with_last_commit`,
+  the parameter GitLab 19.3 added to `GET /projects/:id/repository/tree` and
+  the key `lib/api/entities/tree_object.rb` then exposes on each entry, a
+  whole commit. `repository.tree` offers the parameter through a request
+  option that adds it to the query client-go encoded, and reads the commit off
+  the captured answer, into a type of its own rather than client-go's `Commit`
+  for the reason the entry on `extended_trailers` gives.
+- `JobTokenAccessSettings`, what `GetProjectJobTokenAccessSettings` returns,
+  has no `outbound_enabled`, which `lib/api/entities/project_job_token_scope.rb`
+  exposes with no condition beside `inbound_enabled`: the older outbound
+  scope, which GitLab deprecated and planned to remove in 18.0 and still
+  sends. `job.token_scope_get` reads it off the captured answer.
+- `PipelineVariable`, what both `GetPipelineVariables` and the three pipeline
+  schedule variable writes decode into, has no `raw`, which
+  `lib/api/entities/ci/variable.rb` sends for a `Ci::PipelineVariable` and a
+  `Ci::PipelineScheduleVariable` because both tables carry the column. The
+  entity's other conditional keys (`hidden`, `protected`, `masked`,
+  `environment_scope`, `description`) wait on `respond_to?`, which neither
+  model does, so `raw` is the only one the struct is short of on these
+  routes. `pipeline.variables` and the schedule variable create and edit read
+  it off the captured answer.
+- `ImportStatus`, what `ImportFromFile` and `ImportStatus` return, tags its
+  timestamp `create_at` where `lib/api/entities/project_identity.rb` sends
+  `created_at`, so the field never decodes, and has no `failed_relations`
+  (at most a hundred `ProjectImportFailedRelation`s) and no `stats` (a GitHub
+  import's fetched and imported counts, null for every other import), both
+  exposed with no condition by `lib/api/entities/project_import_status.rb`.
+  `internal/tools/projectimportexport` already reads both status routes
+  through a raw decode for the timestamp, and now reads the other two keys
+  there as well. The failed relation's `exception_message` is rendered by a
+  block that returns nil for every relation, so a struct for it should leave
+  that key out.
 
 That lead has since been measured and is
 [its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):
@@ -3015,6 +3087,61 @@ had been mocking as an array.
 **Effort**: small. One `int64` field, and a `GetExportStatus(gid, relation)`
 returning one `*GroupRelationStatus`, with `Relation` dropped from the list's
 options or documented as answering an object.
+
+### Commit declares extended_trailers a map of strings, and GitLab sends lists
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for `repository.commit_list` with `trailers` set: a page
+  holding one commit with a trailer fails as a whole.
+- **Workaround**: partial. The handlers that read a commit this server decodes
+  itself type the key as GitLab sends it: `repository.tree` with
+  `with_last_commit` (`repository.treeCommit`), the submodule update
+  (`repositorysubmodules.submoduleCommitExtra`), and both context commit
+  actions, which read the whole page from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `mrcontextcommits.capturedCommit` and pass over client-go's own decode
+  failure (`mrcontextcommits.misreadByClientGo`). Every handler that takes the
+  commit from client-go (`repository.commit_list`, `repository.commit_get`,
+  `repository.commit_create`, `repository.commit_cherry_pick` and
+  `repository.commit_revert` in `internal/tools/commits`, `repository.compare`
+  and `repository.merge_base`, a branch's commit in `internal/tools/branches`,
+  and a merge request's commits in `internal/tools/mrchanges`) still publishes
+  `extended_trailers` as a map of strings, and `repository.commit_list` with
+  `trailers` still fails; neither retires until the struct carries the lists.
+
+**What**: `lib/api/entities/commit.rb` at 19.4.1-ee exposes `extended_trailers`
+with no condition, documented as a hash of each trailer to the list of its
+values, and `Gitlab::Git::Commit#parse_commit_trailers`
+(`lib/gitlab/git/commit.rb`) builds it that way, `(hash[trailer.key] ||= []) <<
+value`. `Commit` in client-go v3.14.0's `commits.go` declares `ExtendedTrailers
+map[string]string`, unchanged on the community fork's main, so decoding a commit
+that carries a trailer fails with `json: cannot unmarshal array into Go struct
+field Commit.extended_trailers.Signed-off-by of type string`, and the SDK
+returns that error in place of the whole answer. Only one route fills the key
+today, which is why nothing else has failed: measured on gitlab.com on
+2026-09-27, `GET /projects/278964/repository/commits?trailers=true` answers
+commit `9f1632e2` with `"Reviewed-by"` mapped to four values, while the same
+commit read singly (`/repository/commits/9f1632e2...`) and as the last commit
+of a tree entry (`/repository/tree?with_last_commit=true`) answers `{}` for
+both trailer keys, as does the list without `trailers`. Only
+`FindCommitsRequest` passes Gitaly `trailers`; `call_find_commit`,
+`list_commits_by_oid` and the tree entries pass none. Every method answering
+with a `Commit` (`ListCommits`, `GetCommit`, `CreateCommit`, `CherryPickCommit`,
+`RevertCommit`, the comparison, the merge base, the context commits) fails the
+same way the day its route starts parsing trailers.
+
+**How we found it**: reading the entity while surfacing the context commit and
+submodule commit keys for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971), then
+decoding GitLab's own request spec fixture (`spec/requests/api/commits_spec.rb`,
+`'Signed-off-by' => [...]`) into `gl.Commit`, and confirming the one route that
+fills the key against gitlab.com. The sent audits compare key names and not
+the value's shape, so neither grain can see it.
+
+**Effort**: one field type, `map[string][]string`, which breaks exported API:
+a major version, or a second field beside the old one that decodes the lists.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

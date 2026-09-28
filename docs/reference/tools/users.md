@@ -100,7 +100,7 @@ Set or replace the currently authenticated user's avatar image. Provide a `filen
 
 ### `gitlab_list_user_contribution_events`
 
-List contribution events for a specific GitLab user. Returns events with action type, target information, and timestamps. Supports filtering by action, target type, date range, and pagination.
+List contribution events for a specific GitLab user. Returns each event whole, in the shape the current user's contribution listing uses: action type, target information and link, project, author, timestamp, the push, note or wiki page the event concerns, and whether it was imported and from where. Supports filtering by action, target type, date range, and pagination.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -532,14 +532,14 @@ Create a new instance-level service account. Optionally set `name`, `username`, 
 
 ### `gitlab_list_service_accounts`
 
-List the instance-level service accounts, one page at a time, with pagination metadata. Supports ordering by `id` or `username` with `sort` direction and pagination.
+List the instance-level service accounts, one page at a time, with pagination metadata. Each account carries its ID, username, name, email, public email and any unconfirmed email. Supports ordering by `id` or `username` with `sort` direction and pagination.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_update_instance_service_account`
 
-Update an instance-level service account. Can change `name`, `username`, or `email`. Requires admin token. Returns the updated service account including `email` and `unconfirmed_email` fields.
+Update an instance-level service account. Can change `name`, `username`, or `email`. Requires admin token. Returns the updated service account including `email`, `public_email` and `unconfirmed_email` fields.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

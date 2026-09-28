@@ -139,7 +139,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 				CommonConfusions: []string{"Supply exactly one of file_path or content_base."},
 			},
 		},
-		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, and any import error. " +
+		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. " +
 			"See also: gitlab_get_project_import_status, gitlab_download_project_export.",
 		// override_params accepts the create-project attributes, whose closed
 		// value sets are documented on the Projects API
@@ -155,7 +155,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		aliases:  []string{"import status", "check project import progress", "did project import succeed"},
 		related:  []string{actionImportFromFile, actionProjectGet},
 		guidance: projectIDGuidance(),
-		description: "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, and import error. " +
+		description: "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, import error, the relations that failed to import, and a GitHub import's fetched and imported counts. " +
 			"See also: gitlab_import_project_from_file.",
 	},
 }

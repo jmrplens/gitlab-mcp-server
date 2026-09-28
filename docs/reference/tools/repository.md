@@ -43,7 +43,7 @@ Tools marked **Delete** require user confirmation before execution.
 
 ### `gitlab_repository_tree`
 
-List the files and directories (tree) of a GitLab repository at a given path and ref. Returns file name, type (blob/tree), mode, and path with pagination. Use recursive flag to list all files in subdirectories.
+List the files and directories (tree) of a GitLab repository at a given path and ref. Returns file name, type (blob/tree/commit), mode, and path with pagination. Use recursive flag to list all files in subdirectories. Set `with_last_commit` (GitLab 19.3 or later; an older instance ignores it) to add, as `last_commit`, the most recent commit that changed each entry, which the table shows linked beside the entry with the date it was committed. The commit carries the keys of GitLab's commit entity, `extended_trailers` mapping each trailer to the list of its values as GitLab sends it. It cannot be combined with `recursive`, and the pair is refused before any request is made.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -315,7 +315,7 @@ Delete a note from a commit discussion thread.
 
 ### `gitlab_list_repository_submodules`
 
-List the Git submodules defined in a repository's `.gitmodules`. Returns each submodule's name, path, remote URL, resolved project, and the pinned commit SHA the parent repository currently points to, plus a count. Requires `project_id`; optionally specify `ref` (branch, tag, or commit SHA; defaults to the default branch).
+List the Git submodules defined in a repository's `.gitmodules`. Returns each submodule's name, path, remote URL, resolved project, and the pinned commit SHA the parent repository currently points to, plus a count. The pinned commit is read from the tree of the directory each submodule sits in, page after page until every submodule of that directory is found, so a submodule in a directory of more than a hundred entries is still found and a large directory is not read past its last submodule. Requires `project_id`; optionally specify `ref` (branch, tag, or commit SHA; defaults to the default branch).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -329,7 +329,7 @@ Read a file from inside a submodule at the exact commit the parent repository pi
 
 ### `gitlab_update_repository_submodule`
 
-Update an existing submodule reference in a GitLab repository to point to a new commit SHA.
+Update an existing submodule reference in a GitLab repository to point to a new commit SHA. Returns the commit the update created: its full and short SHA, title and message, author and committer with their dates, parents, build status, project, web URL, trailers (`extended_trailers` maps each trailer to the list of its values, as GitLab sends it), and its latest pipeline once one exists.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

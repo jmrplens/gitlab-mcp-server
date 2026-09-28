@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -366,26 +367,63 @@ func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{
 			"id":7,"username":"build-bot","name":"Build Bot",
-			"email":"bot@x.test","unconfirmed_email":"pending@x.test"
-		}]`)
+			"email":"bot@x.test","public_email":"public@x.test","unconfirmed_email":"pending@x.test"
+		},{"id":8,"username":"deploy-bot","name":"Deploy Bot","public_email":"deploy@x.test"}]`)
 	}))
 
 	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
 	if err != nil {
 		t.Fatalf("ListServiceAccounts() unexpected error: %v", err)
 	}
-	if len(out.Accounts) != 1 {
-		t.Fatalf("got %d accounts, want 1", len(out.Accounts))
+	want := []ServiceAccountOutput{
+		{
+			ID:               7,
+			Username:         "build-bot",
+			Name:             "Build Bot",
+			Email:            "bot@x.test",
+			PublicEmail:      "public@x.test",
+			UnconfirmedEmail: "pending@x.test",
+		},
+		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test"},
 	}
-	want := ServiceAccountOutput{
-		ID:               7,
-		Username:         "build-bot",
-		Name:             "Build Bot",
-		Email:            "bot@x.test",
-		UnconfirmedEmail: "pending@x.test",
+	if !slices.Equal(out.Accounts, want) {
+		t.Errorf("accounts = %+v, want %+v", out.Accounts, want)
 	}
-	if out.Accounts[0] != want {
-		t.Errorf("account = %+v, want %+v", out.Accounts[0], want)
+}
+
+// TestServiceAccounts_UndecodablePublicEmail_IsAnError verifies that both
+// service account handlers report a public_email that does not decode instead
+// of publishing the account without it: client-go's ServiceAccount has no
+// field for the key, so only this server's read of the captured answer meets
+// it.
+func TestServiceAccounts_UndecodablePublicEmail_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"username":"svc","public_email":7}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"username":"svc","public_email":7}]`)
+	}))
+	cases := []struct {
+		name string
+		op   string
+		call func() error
+	}{
+		{"list", "list_service_accounts", func() error {
+			_, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
+			return err
+		}},
+		{"update", "update_instance_service_account", func() error {
+			_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{ServiceAccountID: 5, Name: "svc"})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); err == nil || !strings.Contains(err.Error(), tc.op) {
+				t.Errorf("error = %v, want the failed read of the captured answer under %s", err, tc.op)
+			}
+		})
 	}
 }
 
@@ -601,6 +639,7 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 				"username":"svc-updated",
 				"name":"Updated Service",
 				"email":"updated@example.com",
+				"public_email":"shown@example.com",
 				"unconfirmed_email":"new@example.com"
 			}`)
 			return
@@ -631,6 +670,9 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 	}
 	if out.UnconfirmedEmail != "new@example.com" {
 		t.Errorf("out.UnconfirmedEmail = %q, want new@example.com", out.UnconfirmedEmail)
+	}
+	if out.PublicEmail != "shown@example.com" {
+		t.Errorf("out.PublicEmail = %q, want shown@example.com", out.PublicEmail)
 	}
 }
 
@@ -724,6 +766,7 @@ func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
 		Username:         "svc-7",
 		Name:             "Service Seven",
 		Email:            "svc7@example.com",
+		PublicEmail:      "public7@example.com",
 		UnconfirmedEmail: "pending@example.com",
 	}
 	assertMarkdown(t, FormatServiceAccountMarkdownString(out),
@@ -732,6 +775,7 @@ func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
 			"- **Username**: svc-7\n"+
 			"- **Name**: Service Seven\n"+
 			"- **Email**: svc7@example.com\n"+
+			"- **Public Email**: public7@example.com\n"+
 			"- **Unconfirmed Email**: pending@example.com\n")
 }
 

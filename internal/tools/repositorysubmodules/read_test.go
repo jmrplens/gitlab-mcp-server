@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -461,18 +463,6 @@ func TestList_SubmodulePaths(t *testing.T) {
 	}
 }
 
-// minLen.
-
-// TestMinLen verifies MinLen.
-func TestMinLen(t *testing.T) {
-	if minLen(3, 5) != 3 {
-		t.Error("expected 3")
-	}
-	if minLen(10, 2) != 2 {
-		t.Error("expected 2")
-	}
-}
-
 // TestRead_Base64Gitmodules verifies the Read path when .gitmodules is returned
 // with base64 encoding (exercises the base64 decode branch in resolveSubmoduleProject).
 func TestRead_Base64Gitmodules(t *testing.T) {
@@ -602,6 +592,58 @@ func TestRead_TreeEntryNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found as a tree entry") {
 		t.Errorf("expected tree entry error, got: %v", err)
+	}
+}
+
+// readPagedTreeHandler answers the .gitmodules read with the one submodule at
+// lib, the file read from the resolved project with a fixed body, and the tree
+// listing through tree, which is handed the page the request asked for.
+func readPagedTreeHandler(tree func(w http.ResponseWriter, page string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			tree(w, r.URL.Query().Get("page"))
+		case strings.Contains(r.URL.Path, "gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, oneSubmoduleGitmodules)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name": "f.txt", "file_path": "f.txt", "encoding": "text", "content": "hello"}`)
+		}
+	}
+}
+
+// TestRead_TreeListing_FollowsEveryPageOfTheDirectory verifies that a
+// submodule GitLab lists on the second page of its directory is found and its
+// file read at the commit found there, where reading the first page alone
+// refused it as not a tree entry.
+func TestRead_TreeListing_FollowsEveryPageOfTheDirectory(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		pages []string
+	)
+	client := testutil.NewTestClient(t, readPagedTreeHandler(func(w http.ResponseWriter, page string) {
+		mu.Lock()
+		pages = append(pages, page)
+		mu.Unlock()
+		if page == "" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id": "b10bb10b", "name": "README", "type": "blob", "path": "README", "mode": "100644"}]`,
+				testutil.PaginationHeaders{NextPage: "2"})
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id": "c0ffee00", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}]`)
+	}))
+
+	out, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "lib", FilePath: "f.txt"})
+	if err != nil {
+		t.Fatalf("Read() error = %v, want the submodule found on the second page", err)
+	}
+	if out.CommitSHA != "c0ffee00" {
+		t.Errorf("CommitSHA = %q, want c0ffee00", out.CommitSHA)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"", "2"}; !slices.Equal(pages, want) {
+		t.Errorf("tree pages asked = %q, want %q", pages, want)
 	}
 }
 

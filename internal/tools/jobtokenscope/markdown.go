@@ -35,6 +35,7 @@ func FormatAccessSettingsMarkdown(out AccessSettingsOutput) *mcp.CallToolResult 
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Job Token Access Settings")
 	c.Field("Inbound job token access", inboundAccessDescription(out.InboundEnabled))
+	c.Field("Outbound job token scope (deprecated)", outboundScopeDescription(out.OutboundEnabled))
 	c.End(
 		toolutil.HintAction(hintScopeListInbound, "see the projects the allowlist holds"),
 		toolutil.HintAction(hintScopePatch, "turn the restriction on or off"),
@@ -51,6 +52,15 @@ func inboundAccessDescription(enabled bool) string {
 	return "not limited (any project's job token may access this project)"
 }
 
+// outboundScopeDescription says what the deprecated outbound flag means: which
+// projects this project's own job token may reach.
+func outboundScopeDescription(enabled bool) string {
+	if enabled {
+		return "limited (this project's job token reaches only the projects its outbound scope names)"
+	}
+	return "not limited"
+}
+
 // FormatListInboundAllowlistMarkdown renders the projects on the inbound
 // allowlist as a Markdown table.
 func FormatListInboundAllowlistMarkdown(out ListInboundAllowlistOutput) *mcp.CallToolResult {
@@ -59,7 +69,7 @@ func FormatListInboundAllowlistMarkdown(out ListInboundAllowlistOutput) *mcp.Cal
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Job Token Inbound Allowlist", len(out.Projects), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility"))
 	for _, p := range out.Projects {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(p.ID, 10),
@@ -67,6 +77,7 @@ func FormatListInboundAllowlistMarkdown(out ListInboundAllowlistOutput) *mcp.Cal
 			// a column that says "View" and nothing about where it goes.
 			toolutil.MdTitleLink(p.Name, p.WebURL),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
+			toolutil.EscapeMdTableCell(p.Visibility),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,

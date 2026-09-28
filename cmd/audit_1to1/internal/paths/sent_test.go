@@ -370,3 +370,32 @@ func TestSentCheck_ARowNamedOneLevelDown_CountsAsPublished(t *testing.T) {
 		t.Errorf("Unsurfaced = %+v, want name alone", check.Sent.Unsurfaced)
 	}
 }
+
+// TestSentCheck_ARowAnotherToolsPackageDeclares_CountsAsPublished verifies that
+// the package grain credits a borrowed type's fields to the package naming it,
+// the way a merge request's commit list publishes a commit's fields through
+// `[]commits.Output`, and that the package is judged for it: a field neither
+// the borrowed type nor the package's own types publish is still a finding.
+// The borrowed type is never held to the package's endpoints in the other
+// direction, where only a top-level type of the package's own is.
+func TestSentCheck_ARowAnotherToolsPackageDeclares_CountsAsPublished(t *testing.T) {
+	root := projectRecord(t)
+	published := []publishedType{
+		{Package: "internal/tools/projects", Name: "ListOutput", Fields: []string{"projects"}},
+		{
+			Package: "internal/tools/projects", Name: "rows.Project", Fields: []string{"archived", "id", "invented", "mirror", "star_count"},
+			Inner: true, Borrowed: true,
+		},
+	}
+
+	check := shapeCheck(root, projectRows(), published)
+
+	if len(check.Sent.Unsurfaced) != 1 || check.Sent.Unsurfaced[0].Field != "name" {
+		t.Errorf("Unsurfaced = %+v, want name alone", check.Sent.Unsurfaced)
+	}
+	for _, finding := range check.Unpublished {
+		if finding.Field == "invented" {
+			t.Errorf("Unpublished = %+v, want the borrowed type left out of that direction", check.Unpublished)
+		}
+	}
+}

@@ -646,6 +646,33 @@ func packageVersionsToOutput(versions []*gl.PackageVersion, extras []toolutil.Pa
 	return out
 }
 
+// filePipelinesToOutput converts the pipelines that built a package file, or
+// nil when GitLab sent none: every key client-go's Pipeline decodes that the
+// package pipeline entity sends, and the user's two keys the capture read
+// beside it, paired by position.
+func filePipelinesToOutput(pipelines *[]gl.Pipeline, extra packageFileExtra) []toolutil.PackagePipelineOutput {
+	if pipelines == nil {
+		return nil
+	}
+	out := make([]toolutil.PackagePipelineOutput, len(*pipelines))
+	for i, p := range *pipelines {
+		out[i] = toolutil.PackagePipelineOutput{
+			ID:        p.ID,
+			IID:       p.IID,
+			ProjectID: p.ProjectID,
+			SHA:       p.SHA,
+			Ref:       p.Ref,
+			Status:    p.Status,
+			Source:    string(p.Source),
+			CreatedAt: toolutil.RFC3339Ptr(p.CreatedAt),
+			UpdatedAt: toolutil.RFC3339Ptr(p.UpdatedAt),
+			WebURL:    p.WebURL,
+			User:      packagePipelineUserToOutput(p.User, extra.Pipelines[i].User),
+		}
+	}
+	return out
+}
+
 // packagePipelineToOutput converts the pipeline that last built a package or
 // one of its other versions, or nil when GitLab sent none: the eight keys
 // client-go's PackagePipeline decodes, and the three the capture read beside
@@ -722,6 +749,25 @@ type FileListItem struct {
 	FileMD5       string `json:"file_md5,omitempty"`
 	FileSHA1      string `json:"file_sha1,omitempty"`
 	CreatedAt     string `json:"created_at,omitempty"`
+	// Pipelines are the pipelines that built the file, which
+	// lib/api/entities/package_file.rb sends when there is one and the caller
+	// may read the project's pipelines. client-go decodes each into its
+	// Pipeline, which carries every key but the two its BasicUser leaves out of
+	// the user who ran it; those are read off the captured response.
+	Pipelines []toolutil.PackagePipelineOutput `json:"pipelines,omitempty"`
+}
+
+// packageFileExtra is what lib/api/entities/package_file.rb sends on a
+// package file that client-go's PackageFile does not carry: the locked flag
+// and public email of the user who ran each of its pipelines.
+type packageFileExtra struct {
+	Pipelines []packageFilePipelineExtra `json:"pipelines"`
+}
+
+// packageFilePipelineExtra is one pipeline of a package file, reduced to what
+// client-go leaves out of it.
+type packageFilePipelineExtra struct {
+	User *toolutil.UserBasicExtra `json:"user"`
 }
 
 // FileListOutput contains the paginated list of package files.
@@ -755,14 +801,21 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	files, resp, err := client.GL().Packages.ListPackageFiles(string(input.ProjectID), pkgID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return FileListOutput{}, toolutil.WrapErrWithStatusHint("packageFileList", err, http.StatusNotFound,
 			"verify package_id with package.list; the package may have been deleted")
 	}
+	// The SDK decoded the same array into files, so extras holds one entry per
+	// file, and each entry one per pipeline, in the same order.
+	var extras []packageFileExtra
+	if err = captured.Decode(&extras); err != nil {
+		return FileListOutput{}, toolutil.WrapErr("packageFileList", err)
+	}
 
 	items := make([]FileListItem, 0, len(files))
-	for _, f := range files {
+	for i, f := range files {
 		items = append(items, FileListItem{
 			PackageFileID: f.ID,
 			PackageID:     f.PackageID,
@@ -772,6 +825,7 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 			FileMD5:       f.FileMD5,
 			FileSHA1:      f.FileSHA1,
 			CreatedAt:     toolutil.RFC3339Ptr(f.CreatedAt),
+			Pipelines:     filePipelinesToOutput(f.Pipeline, extras[i]),
 		})
 	}
 
