@@ -2,14 +2,15 @@
 // MCP results. Most MCP clients ignore fields they do not understand, so the
 // server ships its full surface (icons, content annotations, structured
 // content) unconditionally. OpenAI Codex is the exception: the Codex builds
-// bundled with ChatGPT.app (verified on codex-cli 0.148.0-alpha.9, which pins
-// rmcp 3.2.0) fail any result whose annotations carry a non-integer priority,
-// and every affected call surfaces as "Unexpected response type". rmcp types
-// the field correctly; the defect is Codex's build, where Cargo feature
-// unification turns serde_json's arbitrary_precision on for the whole binary,
-// so a buffered decimal reaches the float field as serde_json's private number
-// map, the field refuses it and the untagged result falls through to rmcp's
-// CustomResult (row 17 of docs/development/upstream-bugs.md). This package
+// bundled with ChatGPT.app (verified on codex-cli 0.148.0-alpha.9) fail any
+// result whose annotations carry a non-integer priority, and every affected
+// call surfaces as "Unexpected response type". rmcp types the field correctly,
+// at 3.2.0, the version Codex pins, as on its main branch; the defect is
+// Codex's build, where Cargo feature unification turns serde_json's
+// arbitrary_precision on for the whole binary, so a buffered decimal reaches
+// the float field as serde_json's private number map, the field refuses it and
+// the untagged result falls through to rmcp's CustomResult (row 17 of
+// docs/development/upstream-bugs.md). This package
 // detects Codex from the clientInfo the session reports and writes the
 // priority as the nearest spec-legal integer (0 or 1) for that session;
 // audience, structuredContent, outputSchema, icons, and every other field are

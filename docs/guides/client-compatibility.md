@@ -4,7 +4,7 @@ The server ships its full MCP surface — tool icons, content annotations, `stru
 
 ## The Codex profile
 
-The OpenAI Codex builds bundled with ChatGPT.app (verified on `codex-cli 0.148.0-alpha.9`, which builds on `rmcp` 3.2.0) fail to parse any MCP result whose annotations carry a **non-integer `priority`** (for example `0.6`, which the MCP specification allows as a 0–1 number). `rmcp` types the field correctly; the defect is Codex's build, where Cargo feature unification turns on `serde_json`'s `arbitrary_precision` for the whole binary, so a decimal reaches the float field as `serde_json`'s private number map, the field refuses it and the result falls through to `rmcp`'s catch-all variant. A literal `1.0` fails the same way; only `1` and `0` pass. Every affected `tools/call` is reported as:
+The OpenAI Codex builds bundled with ChatGPT.app (verified on `codex-cli 0.148.0-alpha.9`; Codex now pins `rmcp` 3.2.0) fail to parse any MCP result whose annotations carry a **non-integer `priority`** (for example `0.6`, which the MCP specification allows as a 0–1 number). `rmcp` types the field correctly; the defect is Codex's build, where Cargo feature unification turns on `serde_json`'s `arbitrary_precision` for the whole binary, so a decimal reaches the float field as `serde_json`'s private number map, the field refuses it and the result falls through to `rmcp`'s catch-all variant. A literal `1.0` fails the same way; only `1` and `0` pass. Every affected `tools/call` is reported as:
 
 ```text
 tool call error: tool call failed for `gitlab/<tool>`
