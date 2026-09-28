@@ -6,10 +6,11 @@
 #   ce  starts gitlab/gitlab-ce with the CI runner, the fixture service and
 #       the Bitbucket import fixture, and runs the arguments as an unlicensed
 #       runtime.
-#   ee  starts gitlab/gitlab-ee, activates it with the cached license or the
-#       activation code the repository .env carries, registers the runner and
-#       runs the arguments as a licensed runtime. No Bitbucket: the importer
-#       scenarios are Free and run under ce.
+#   ee  starts gitlab/gitlab-ee with the same, activates it with the cached
+#       license or the activation code the repository .env carries, and runs
+#       the arguments as a licensed runtime. The Bitbucket fixture starts here
+#       too: the import is a Free action the common package drives on either
+#       runtime, and a complete run of either leaves nothing out.
 #
 # Everything after the runtime, with an optional -- in front of it, is handed
 # to go test through gotestsum: the packages, the -run filter, the timeout.
@@ -30,18 +31,50 @@
 # container, or assumes the daemon shares this filesystem. Point
 # E2E_DOCKER_GITLAB_URL at the address the fixture is reached from.
 #
+# The GitLab and runner images are held to the registry without pulling on
+# every run: docker-images.sh asks which image each tag names today and pulls
+# only when that is not the image the daemon holds, removing the one it
+# replaced when nothing else holds it. `docker compose up` alone pulls only a
+# missing image, which is how a host kept testing a five-week-old GitLab while
+# every scenario gated on a newer release skipped. A registry that cannot be
+# reached keeps the local image with a warning. The release the run tested is
+# printed before the tests, read from the instance rather than from the tag.
+#
+# A run asked to be complete (E2E_GATE_SKIPS=true) is started with the external
+# network on unless the caller said otherwise, in the environment, in the file
+# E2E_ENV_FILE names or in the repository .env, and refuses to start at all
+# when the caller turned it off or left the Bitbucket fixture out: either skips
+# scenarios nothing declares, so the gate would fail the run an hour later for
+# a reason known before it began. An offline host runs with E2E_GATE_SKIPS=false,
+# which is not a complete run.
+#
+# Before the teardown takes the volumes with it, GitLab's exceptions log is
+# copied into the reports, so a 500 a scenario met can be traced to the
+# exception behind it after the stack is gone.
+#
 # Environment, all optional:
 #   E2E_DOCKER_GITLAB_URL          http://localhost:8929
 #   E2E_DOCKER_BITBUCKET_URL       http:// and the GitLab URL's host on port 7990,
 #                                  whatever port or path the GitLab URL carries
-#   E2E_BITBUCKET                  true under ce; false skips the Bitbucket fixture
+#   E2E_BITBUCKET                  true; false leaves the Bitbucket fixture out, which a
+#                                  run asked to be complete refuses
+#   E2E_EXTERNAL_NETWORK           read by the harness; a run asked to be complete sets
+#                                  it to true unless the caller set it, and refuses false
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
 #   E2E_REPORT_NAME                stem of the junit, json and output files: e2e-<runtime>
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
 #   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
 #                                  absolute, and only useful when the binary was built with -cover
-#   GITLAB_IMAGE                   the image for the runtime; the defaults above
+#   GITLAB_IMAGE                   the image for the runtime; the defaults above. A tag
+#                                  pins a release and is held to the registry the
+#                                  same way; a digest pins an image and is never asked
+#   GITLAB_RUNNER_IMAGE            the CI runner's image; gitlab/gitlab-runner:latest
+#   E2E_GATE_SKIPS                 true asks for a complete run, whose skips are held to
+#                                  the ones cmd/audit_e2e_coverage/skip_declarations.go
+#                                  declares for the runtime, failing a run whose tests
+#                                  passed on any other; make test-e2e-ce and test-e2e-ee
+#                                  set it unless the caller did
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
 #   E2E_GITLAB_EXTERNAL_URL        what the compose file gives GitLab as external_url; the GitLab URL
@@ -85,6 +118,34 @@ E2E_DOCKER_GITLAB_URL="${E2E_DOCKER_GITLAB_URL:-http://localhost:8929}"
 # shellcheck source=test/e2e/scripts/fixture-addresses.sh
 . "${SCRIPT_DIR}/fixture-addresses.sh"
 derive_fixture_addresses
+# shellcheck source=test/e2e/scripts/docker-images.sh
+. "${SCRIPT_DIR}/docker-images.sh"
+# shellcheck source=test/e2e/scripts/skip-gate.sh
+. "${SCRIPT_DIR}/skip-gate.sh"
+# shellcheck source=test/e2e/scripts/gitlab-exceptions.sh
+. "${SCRIPT_DIR}/gitlab-exceptions.sh"
+
+# A run asked to be complete calls public URLs unless the caller said not to,
+# wherever the harness would have read that, and is refused before anything
+# starts when it cannot be complete: its gate would fail it for a skip nothing
+# declares, after an hour of tests. The refusal says how to run such a host.
+if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
+    E2E_EXTERNAL_NETWORK="$(complete_run_external_network "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"
+    export E2E_EXTERNAL_NETWORK
+    refusal="$(complete_run_refusal "${E2E_EXTERNAL_NETWORK}" "${E2E_BITBUCKET:-true}")"
+    if [ -n "${refusal}" ]; then
+        {
+            echo "ERROR: this run was asked to be complete (E2E_GATE_SKIPS=true) and cannot be:"
+            while IFS= read -r line; do
+                echo "  ${line}"
+            done <<<"${refusal}"
+            echo "  A host that cannot give it that runs with E2E_GATE_SKIPS=false, which is not a complete run:"
+            echo "  its skips are held to nothing, and its record says nothing about what the suite covers."
+        } >&2
+        exit 2
+    fi
+fi
+
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
 E2E_REPORT_NAME="${E2E_REPORT_NAME:-e2e-${RUNTIME}}"
 GOTESTSUM="${GOTESTSUM:-gotestsum}"
@@ -112,15 +173,24 @@ export E2E_COMMIT="${E2E_COMMIT:-$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/n
 # down that does not name it, and would be left running beside the new stack.
 COMPOSE=(docker compose -f "${COMPOSE_FILE}")
 DOWN=("${COMPOSE[@]}" --profile bitbucket down -v --remove-orphans)
-WITH_BITBUCKET=false
 if [ "${RUNTIME}" = "ce" ]; then
     export GITLAB_IMAGE="${GITLAB_IMAGE:-gitlab/gitlab-ce:latest}"
-    if [ "${E2E_BITBUCKET:-true}" = "true" ]; then
-        WITH_BITBUCKET=true
-    fi
+    EDITION="CE"
 else
     export GITLAB_IMAGE="${GITLAB_IMAGE:-gitlab/gitlab-ee:latest}"
+    EDITION="EE"
 fi
+# Both runtimes start the Bitbucket fixture. It is a second JVM of about a
+# gigabyte, and the licensed run used to go without it, which left the Bitbucket
+# Server import skipping there and a complete run incomplete; the import is a
+# Free action the common package drives on either runtime.
+WITH_BITBUCKET=false
+if [ "${E2E_BITBUCKET:-true}" = "true" ]; then
+    WITH_BITBUCKET=true
+fi
+# The compose file reads the same variable, so the image checked below is the
+# one the runner service starts.
+export GITLAB_RUNNER_IMAGE="${GITLAB_RUNNER_IMAGE:-gitlab/gitlab-runner:latest}"
 
 # The status the run ended with, read by the teardown. Unset until the tests
 # have run, so a failure during provisioning exits with the shell's own.
@@ -128,6 +198,10 @@ RUN_STATUS=""
 
 teardown() {
     local exit_status=$?
+    # First, while the gitlab service still holds it: the down below deletes
+    # the volume the exceptions log is on.
+    echo "=== Saving GitLab's exceptions log ==="
+    save_gitlab_exceptions "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-gitlab-exceptions.json" "${COMPOSE[@]}"
     if [ "${E2E_KEEP_STACK:-false}" = "true" ]; then
         echo "=== E2E_KEEP_STACK is set; the stack stays up ==="
         [ -n "${RUN_STATUS}" ] && exit "${RUN_STATUS}"
@@ -148,24 +222,34 @@ trap teardown EXIT
 echo "=== Cleaning up previous containers (if any) ==="
 "${DOWN[@]}" 2>/dev/null || true
 
+# After the cleanup, so a container of the previous stack no longer holds the
+# image a pull replaces, and before compose starts anything, so what it starts
+# is the image the tag names today.
+echo "=== Checking the GitLab and runner images against their registry ==="
+refresh_image "${GITLAB_IMAGE}"
+refresh_image "${GITLAB_RUNNER_IMAGE}"
+
+UP=("${COMPOSE[@]}")
+STARTING="ephemeral GitLab ${EDITION}"
 if [ "${WITH_BITBUCKET}" = "true" ]; then
-    echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
     E2E_BITBUCKET_ADMIN_PASSWORD="$(openssl rand -hex 16)"
     export E2E_BITBUCKET_ADMIN_PASSWORD
-    "${COMPOSE[@]}" --profile bitbucket up -d
-elif [ "${RUNTIME}" = "ce" ]; then
-    echo "=== Starting ephemeral GitLab CE ==="
-    "${COMPOSE[@]}" up -d
-else
-    echo "=== Starting ephemeral GitLab EE ==="
+    UP+=(--profile bitbucket)
+    STARTING="${STARTING} and Bitbucket fixture"
+fi
+UP+=(up -d)
+echo "=== Starting ${STARTING} ==="
+activation_code=""
+if [ "${RUNTIME}" = "ee" ]; then
     activation_code="$("${SCRIPT_DIR}/enterprise-activation-code.sh")"
     if [ -n "${activation_code}" ]; then
         echo "    Passing Enterprise activation code to GitLab EE container"
     elif [ -s "${E2E_ENTERPRISE_LICENSE_FILE:-${REPO_ROOT}/test/e2e/.enterprise-license}" ]; then
         echo "    Reusing cached Enterprise license during setup"
     fi
-    GITLAB_ACTIVATION_CODE="${activation_code}" "${COMPOSE[@]}" up -d
 fi
+# The compose file hands an empty activation code to CE, as it always has.
+GITLAB_ACTIVATION_CODE="${activation_code}" "${UP[@]}"
 
 echo "=== Waiting for GitLab readiness ==="
 "${SCRIPT_DIR}/wait-for-gitlab.sh" "${E2E_DOCKER_GITLAB_URL}" 600
@@ -194,6 +278,11 @@ if [ "${WITH_BITBUCKET}" = "true" ]; then
     echo "=== Provisioning Bitbucket import fixture at ${E2E_DOCKER_BITBUCKET_URL} (published on ${E2E_BITBUCKET_BIND}) ==="
     "${SCRIPT_DIR}/setup-bitbucket.sh" "${E2E_DOCKER_BITBUCKET_URL}"
 fi
+
+# Read from the instance rather than off the tag, since a tag says what was
+# asked for and this says what answered, and printed inside the tee below as
+# well, so the saved output of a run names the release it tested.
+TESTED_VERSION="$(tested_gitlab_version "${E2E_DOCKER_GITLAB_URL}" "${REPO_ROOT}/test/e2e/.env.docker")" || TESTED_VERSION="unknown"
 
 echo "=== Running E2E tests (${RUNTIME}) ==="
 mkdir -p "${E2E_REPORT_DIR}"
@@ -228,6 +317,7 @@ fi
 
 set +e
 (
+    echo "GitLab under test: ${TESTED_VERSION}, from ${GITLAB_IMAGE}"
     set -a
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/test/e2e/.env.docker"
@@ -241,3 +331,17 @@ set +e
 ) 2>&1 | tee "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt"
 RUN_STATUS="${PIPESTATUS[0]}"
 set -e
+
+# A complete run is held to the skips it may end with as well: the gate reads
+# the stream gotestsum just wrote and fails on a skip that no declaration in
+# cmd/audit_e2e_coverage/skip_declarations.go covers, and on a declaration no
+# skip of this run matches. It runs whatever the tests did, so a failing run
+# still names its undeclared skips, and it decides the status only of a run
+# whose tests passed, so a failing run is never reported as a skip finding.
+if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
+    echo "=== Holding the run's skips to the declared ones (${RUNTIME}) ==="
+    GATE_STATUS=0
+    gate_skips "${RUNTIME}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json" \
+        "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt" || GATE_STATUS=$?
+    RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"
+fi

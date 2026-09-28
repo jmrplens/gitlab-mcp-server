@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -886,6 +887,16 @@ func TestMain_ExitStatus_HandedToTheProcess(t *testing.T) {
 	dir := t.TempDir()
 	recordPath, pagePath := filepath.Join(dir, "e2e-coverage.json"), filepath.Join(dir, "e2e-coverage.md")
 	writeRecordJSON(t, recordPath, pageFixture(t))
+	// The skip gate is judged here against the live table, whatever it holds
+	// when this runs, so the case proves main hands run that table rather than
+	// pinning what the table says.
+	recordedSkips, readErr := readSkips(skipsFixture("ce"))
+	if readErr != nil {
+		t.Fatalf("readSkips() error = %v", readErr)
+	}
+	live := judgeSkips("ce", recordedSkips, declaredSkips)
+	liveSummary := fmt.Sprintf("skips: %d skipped on ce, %d declared, %d undeclared, %d stale declarations\n",
+		len(recordedSkips), len(live.excused), len(live.undeclared), len(live.stale))
 	cases := []struct {
 		name   string
 		args   []string
@@ -898,6 +909,11 @@ func TestMain_ExitStatus_HandedToTheProcess(t *testing.T) {
 			want: exitOK, output: "record: rendered " + pagePath + " from " + recordPath + "\n",
 		},
 		{name: "a run asked for nothing exits two", want: exitUsage, output: "audit_e2e_coverage: nothing to do"},
+		{
+			name: "the skip gate judges the recorded CE run against the declared table",
+			args: []string{"-dir", dir, "-check-skips", "-runtime", "ce", "-results", skipsFixture("ce")},
+			want: exitFindings, output: liveSummary,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

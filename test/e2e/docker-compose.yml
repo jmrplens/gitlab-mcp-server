@@ -68,7 +68,7 @@ services:
       start_period: 120s
 
   gitlab-runner:
-    image: gitlab/gitlab-runner:latest
+    image: ${GITLAB_RUNNER_IMAGE:-gitlab/gitlab-runner:latest}
     depends_on:
       gitlab:
         condition: service_healthy
@@ -107,8 +107,8 @@ services:
       start_period: 30s
 
   # e2e-bitbucket provides a real self-hosted Bitbucket Data Center for the
-  # import_bitbucket_server e2e coverage (profile "bitbucket", enabled by the
-  # CE docker target). Unattended setup is driven by bitbucket.properties
+  # import_bitbucket_server e2e coverage (profile "bitbucket", enabled by both
+  # Docker targets). Unattended setup is driven by bitbucket.properties
   # written before the stock entrypoint runs; the license is Atlassian's
   # public 3-hour timebomb Data Center test license
   # (https://developer.atlassian.com/platform/marketplace/timebomb-licenses-for-testing-server-apps/),

@@ -427,6 +427,29 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # below says what to do then.
 E2E_GITLAB_TIMEOUT ?= 3600s
 
+# What makes the two Docker runs of the rebuilt suite, test-e2e-ce and
+# test-e2e-ee, the complete runs: the ones whose record says what the suite
+# covers, and so the ones nothing may quietly leave out.
+#
+# E2E_GATE_SKIPS asks run-docker-e2e.sh for a complete run. It holds the run's
+# skips to the ones cmd/audit_e2e_coverage/skip_declarations.go declares for
+# its runtime, so a run whose tests all passed still fails on a scenario that
+# skipped for a reason nobody declared, and on a declaration no skip of it
+# matched; a green run used to read as full coverage whatever it had skipped
+# (issue 1014). It also starts the run with E2E_EXTERNAL_NETWORK=true, so the
+# GitHub, Gists and Bitbucket Cloud importers, which call a public URL, run:
+# the harness keeps that opt-in, since such a test fails for reasons that have
+# nothing to do with this server, but the host running a complete run has
+# Internet. The script sets it only when the caller did not, in the
+# environment, on the make command line, in the file E2E_ENV_FILE names or in
+# the repository .env, and refuses to start when the caller turned it off,
+# since four importer scenarios would then skip and the gate fail the run an
+# hour later. An offline host says E2E_GATE_SKIPS=false, which is not a
+# complete run. The modeleval targets share the script and set neither: a
+# model evaluation is not a coverage claim, and its cases skip by design where
+# a tier lacks them.
+e2e_complete_run_env = E2E_GATE_SKIPS="$${E2E_GATE_SKIPS:-true}"
+
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
 # Instrumented under COVER=1: the binary every documented run drives is the one
 # built here, so this is where -cover has to enter. The target is .PHONY, so an
@@ -437,6 +460,7 @@ e2e-server-binary:
 
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
+	$(e2e_complete_run_env) \
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
@@ -444,8 +468,9 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
-## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code, run the common and ee packages of the rebuilt suite, tear down.
+## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code (+ Bitbucket fixture), run the common and ee packages of the rebuilt suite, tear down.
 test-e2e-ee: ensure-gotestsum e2e-server-binary
+	$(e2e_complete_run_env) \
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
