@@ -131,6 +131,11 @@ func (id CallID) String() string { return id.Action + " (" + id.Variant + ")" }
 // ID is the call's identity in the record.
 func (c Call) ID() CallID { return CallID{Action: c.Action, Variant: c.Variant} }
 
+// SchemaAction is the one action a record holds three calls of, one per way
+// its schema is asked for, spelled once here and in the generator that makes
+// the calls.
+const SchemaAction = "orbit.schema"
+
 // ExpectedCalls is every call a whole record holds, in the order the
 // generator makes them. The status call comes first because it carries the
 // version the record is stamped with.
@@ -138,9 +143,9 @@ func ExpectedCalls() []CallID {
 	return []CallID{
 		{Action: "orbit.status", Variant: "raw"},
 		{Action: "orbit.status", Variant: "llm"},
-		{Action: "orbit.schema", Variant: "raw"},
-		{Action: "orbit.schema", Variant: "llm"},
-		{Action: "orbit.schema", Variant: "expand"},
+		{Action: SchemaAction, Variant: "raw"},
+		{Action: SchemaAction, Variant: "llm"},
+		{Action: SchemaAction, Variant: "expand"},
 		{Action: "orbit.tools", Variant: "default"},
 		{Action: "orbit.dsl", Variant: "raw"},
 		{Action: "orbit.dsl", Variant: "llm"},

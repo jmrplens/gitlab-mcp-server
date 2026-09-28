@@ -177,7 +177,7 @@ func TestIndexedAnswer_RefusesOnlyTheRawAnswersOfAnUnindexedNamespace(t *testing
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := indexedAnswer(tc.id, tc.output)
-			if refused := errors.Is(err, errUnindexed); refused != tc.refused {
+			if errors.Is(err, errUnindexed) != tc.refused {
 				t.Errorf("indexedAnswer() = %v, want refused %t", err, tc.refused)
 			}
 		})

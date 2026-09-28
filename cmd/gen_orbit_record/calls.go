@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -72,13 +73,13 @@ func callSpecs() []callSpec {
 		{id: orbitrecord.CallID{Action: "orbit.status", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("llm")})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.schema", Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Format: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.schema", Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Format: "llm"})
 		}},
-		{id: orbitrecord.CallID{Action: "orbit.schema", Variant: "expand"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "expand"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Expand: []string{"Project"}, Format: "raw"})
 		}},
 		{id: orbitrecord.CallID{Action: "orbit.tools", Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
@@ -131,7 +132,11 @@ func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) 
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Close() }()
 
-	client, err := newClient("http://"+listener.Addr().String(), cfg.token)
+	// Plain HTTP on purpose: the proxy listens on 127.0.0.1 inside this
+	// process, so the hop never leaves the machine, and the leg to GitLab.com
+	// the proxy makes is the one TLS protects.
+	proxyURL := url.URL{Scheme: "http", Host: listener.Addr().String()}
+	client, err := newClient(proxyURL.String(), cfg.token)
 	if err != nil {
 		return orbitrecord.Document{}, fmt.Errorf("build the client the handlers call through: %w", err)
 	}

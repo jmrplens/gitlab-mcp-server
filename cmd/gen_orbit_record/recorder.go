@@ -17,11 +17,15 @@ import (
 // are written below.
 const apiPrefix = "/api/v4"
 
+// contentTypeHeader is read on both legs of an exchange: the request's says
+// how to name the body's fields, the answer's is recorded and passed back.
+const contentTypeHeader = "Content-Type"
+
 // forwardedHeaders are the request headers the proxy passes on. The list is
 // short on purpose: a copied Accept-Encoding would make the proxy's own
 // transport hand back the compressed bytes it asked for, and the recording
 // could not read them.
-var forwardedHeaders = []string{"Accept", "Authorization", "Content-Type", "Private-Token", "User-Agent"}
+var forwardedHeaders = []string{"Accept", "Authorization", contentTypeHeader, "Private-Token", "User-Agent"}
 
 // exchange is one request the proxy forwarded and what came back, as the
 // record needs it: names, never values.
@@ -91,14 +95,14 @@ func (r *recorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			method:      req.Method,
 			path:        route,
 			query:       queryNames(req),
-			body:        bodyNames(req.Header.Get("Content-Type"), body),
+			body:        bodyNames(req.Header.Get(contentTypeHeader), body),
 			status:      resp.StatusCode,
-			contentType: mediaType(resp.Header.Get("Content-Type")),
+			contentType: mediaType(resp.Header.Get(contentTypeHeader)),
 			payload:     payload,
 		})
 	}
-	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
-		w.Header().Set("Content-Type", contentType)
+	if contentType := resp.Header.Get(contentTypeHeader); contentType != "" {
+		w.Header().Set(contentTypeHeader, contentType)
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(payload)
