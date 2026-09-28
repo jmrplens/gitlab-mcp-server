@@ -34,7 +34,7 @@ import (
 // commit, so a collector release that tightened validation would either fail a
 // run nobody had changed anything in, or, worse, relax one and let a defect
 // through unannounced. Bumping this is a deliberate act with a diff.
-const collectorImage = "otel/opentelemetry-collector-contrib:0.159.0"
+const collectorImage = "otel/opentelemetry-collector-contrib:0.161.0"
 
 // The container-side paths. The receiver binds 0.0.0.0 rather than the image
 // default of localhost, because a published port reaches the container from
