@@ -677,11 +677,13 @@ func TestGate_NonPostMethodsReachTheSDK(t *testing.T) {
 }
 
 // TestGate_HealthAndCardNeedNoCredential verifies that the endpoints a load
-// balancer and a registry read are not behind authentication.
+// balancer and a registry read are not behind authentication. `/mcp/server-card`
+// sits beside the MCP endpoint, which is authenticated, and must not inherit
+// that.
 func TestGate_HealthAndCardNeedNoCredential(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
 
-	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
+	for _, path := range []string{"/health", "/server-card", "/mcp/server-card", "/.well-known/mcp/server-card.json"} {
 		t.Run(path, func(t *testing.T) {
 			got := srv.do(t, request{method: http.MethodGet, path: path})
 			if got.status != http.StatusOK {

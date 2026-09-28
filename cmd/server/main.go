@@ -2797,24 +2797,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		w.Header().Set("Access-Control-Max-Age", "3600")
 		w.WriteHeader(http.StatusNoContent)
 	}
-	// The SEP-2127 card is identity and connection metadata, so it is built
-	// here, once, rather than through the build-once-in-the-background dance
-	// the enumerating document needs: it registers no catalog and opens no
-	// session. A failure can only be a marshaling bug, and the route answers
-	// 503 rather than serving a card this process could not render.
-	discoveryCardJSON, discoveryCardErr := buildDiscoveryCardFn(cfg)
-	if discoveryCardErr != nil {
-		slog.WarnContext(ctx, "failed to build the server card, "+serverCardPath+" returns 503", "error", discoveryCardErr)
-	}
-	discoveryCardETag := entityTagFor(discoveryCardJSON)
-	discoveryCardHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(headerAllowOrigin, "*")
-		if discoveryCardJSON == nil {
-			writeCardUnavailable(w)
-			return
-		}
-		writeServerCard(w, r, discoveryCardETag, discoveryCardJSON)
-	}
+	mountDiscoveryCard(ctx, cfg, mux, cardPreflight)
 	legacyCardHandler := func(w http.ResponseWriter, r *http.Request) {
 		// The card's audience is browser-based registry scanners; without
 		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
@@ -2845,29 +2828,9 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		}
 		writeServerCard(w, r, serverCardETag, serverCardJSON)
 	}
-	// The two paths serve two different documents, which is the whole point.
-	//
-	// /server-card is the location SEP-2127 reserves, and it gets the SEP-2127
-	// card: identity and how to connect, and no primitives, because that
-	// extension omits them on purpose (see cmd/server/discovery_card.go). A
-	// card is application-level metadata about one server rather than the
-	// site-wide metadata /.well-known is reserved for, and the extension has
-	// said so in writing since commit 10e958fa (2026-06-08).
-	//
 	// The .well-known path the earlier draft recommended keeps the
-	// enumerating SEP-1649 document. Scanners written against that draft are
-	// already fetching it, and it is the only unauthenticated answer this
-	// project publishes to what the server can do, so breaking it would cost
-	// something and gain nothing.
-	//
-	// Both used to answer the enumerating document, differing only in
-	// Content-Type. That put the older shape at the location reserved for the
-	// newer one, and a deployment that wanted to be conformant had to shadow
-	// this route with a static file in its reverse proxy.
-	for _, path := range publicPaths(cfg, serverCardPath) {
-		mux.HandleFunc("OPTIONS "+path, cardPreflight)
-		mux.HandleFunc("GET "+path, discoveryCardHandler)
-	}
+	// enumerating SEP-1649 document, and the SEP-2127 card mounted just above
+	// is a different document; see [mountDiscoveryCard] for why both exist.
 	for _, path := range publicPaths(cfg, serverCardLegacyPath) {
 		mux.HandleFunc("OPTIONS "+path, cardPreflight)
 		mux.HandleFunc("GET "+path, legacyCardHandler)
@@ -3211,6 +3174,67 @@ func writeUnsupportedProtocolVersion(w http.ResponseWriter, r *http.Request, sup
 	}
 }
 
+// mountDiscoveryCard builds the SEP-2127 server card and mounts it, with its
+// preflight, at every path the card is published at.
+//
+// The card locations serve two different documents, which is the whole point.
+// The extension reserves `<streamable-http-url>/server-card`, and every form of
+// that URL this server answers gets the SEP-2127 card: identity and how to
+// connect, and no primitives, because that extension omits them on purpose (see
+// cmd/server/discovery_card.go). The MCP endpoint answers at the root and at
+// /mcp, so the card is at /server-card and at /mcp/server-card, and each again
+// under --public-url's path prefix. The /mcp form is the one a client derives
+// from an endpoint published as https://host/mcp, which is the example the
+// extension itself gives; it used to answer 404, because --public-url ending in
+// /mcp names no prefix and the card was mounted at /server-card alone. A card
+// is application-level metadata about one server rather than the site-wide
+// metadata /.well-known is reserved for, and the extension has said so in
+// writing since commit 10e958fa (2026-06-08).
+//
+// The .well-known path the earlier draft recommended keeps the enumerating
+// SEP-1649 document, mounted by the caller. Scanners written against that
+// draft are already fetching it, and it is the only unauthenticated answer this
+// project publishes to what the server can do, so breaking it would cost
+// something and gain nothing. Both used to answer the enumerating document,
+// differing only in Content-Type. That put the older shape at the location
+// reserved for the newer one, and a deployment that wanted to be conformant had
+// to shadow this route with a static file in its reverse proxy.
+//
+// What is not mounted is the AI Catalog at /.well-known/ai-catalog.json, which
+// answers the catch-all's unauthenticated 404. A catalog lists what a whole
+// host publishes, and only whoever runs the host knows that: this process is
+// one entry in it at most, often behind a prefix on a host serving other
+// things. The HTTP server mode guide shows the entry that points at this card.
+//
+// The card is identity and connection metadata, so it is built here, once,
+// rather than through the build-once-in-the-background dance the enumerating
+// document needs: it registers no catalog and opens no session. A failure can
+// only be a marshaling bug, and the routes answer 503 rather than serving a
+// card this process could not render. The warning names every path it
+// disables, because an operator reading it is about to check the one their
+// proxy or their AI Catalog points at.
+func mountDiscoveryCard(ctx context.Context, cfg *config.Config, mux *http.ServeMux, preflight http.HandlerFunc) {
+	paths := publicPaths(cfg, serverCardPath, mcpEndpointPath+serverCardPath)
+	cardJSON, err := buildDiscoveryCardFn(cfg)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to build the server card, these paths answer 503: "+
+			strings.Join(paths, ", "), "error", err)
+	}
+	tag := entityTagFor(cardJSON)
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(headerAllowOrigin, "*")
+		if cardJSON == nil {
+			writeCardUnavailable(w)
+			return
+		}
+		writeServerCard(w, r, tag, cardJSON)
+	}
+	for _, path := range paths {
+		mux.HandleFunc("OPTIONS "+path, preflight)
+		mux.HandleFunc("GET "+path, handler)
+	}
+}
+
 // mcpEndpointPatterns lists the ServeMux patterns the MCP handler is mounted
 // on. "/{$}" is the exact root: the bare "/" pattern would be the catch-all
 // this routing exists to remove.
@@ -3235,12 +3259,6 @@ func mcpEndpointPatterns(cfg *config.Config) []string {
 	)
 }
 
-// publicPaths returns each given path, plus its form under the --public-url
-// path prefix when the deployment publishes one.
-//
-// A proxy that forwards its prefix rather than stripping it reaches this
-// server at /prefix/health, not /health. The prefix is not new configuration:
-// --public-url already tells the server the path it is published under.
 // serverCardMediaType picks the media type for the path the card was fetched
 // from, matching on the suffix so a deployment mounting the card under
 // --public-url's path prefix is classified the same way.
@@ -3251,6 +3269,12 @@ func serverCardMediaType(requestPath string) string {
 	return mimeServerCard
 }
 
+// publicPaths returns each given path, plus its form under the --public-url
+// path prefix when the deployment publishes one.
+//
+// A proxy that forwards its prefix rather than stripping it reaches this
+// server at /prefix/health, not /health. The prefix is not new configuration:
+// --public-url already tells the server the path it is published under.
 func publicPaths(cfg *config.Config, paths ...string) []string {
 	prefix := publicURLPath(cfg.PublicURL)
 	if prefix == "" {
@@ -3266,6 +3290,12 @@ func publicPaths(cfg *config.Config, paths ...string) []string {
 // publicURLPath extracts the path component of --public-url, normalized to
 // have no trailing slash. It returns "" for a path-less origin, whose
 // requests already arrive at the root.
+//
+// It returns "" for a URL whose path is exactly /mcp too, because that names
+// the endpoint rather than a prefix in front of it: the MCP endpoint, and the
+// server card at /mcp/server-card, are mounted there whatever --public-url
+// says. Treating it as a prefix would mount /mcp/server-card a second time,
+// which ServeMux refuses with a panic at startup.
 func publicURLPath(publicURL string) string {
 	if publicURL == "" {
 		return ""
@@ -3899,7 +3929,10 @@ const mcpEndpointPath = "/mcp"
 
 // Paths the server card is published at.
 const (
-	// serverCardPath is the location the server-card extension recommends.
+	// serverCardPath is the suffix the server-card extension reserves: it is
+	// appended to the streamable-HTTP URL, not to the host, so it is mounted
+	// after every path the MCP endpoint answers on, the root and
+	// [mcpEndpointPath] alike, and again under --public-url's prefix.
 	serverCardPath = "/server-card"
 	// serverCardLegacyPath is the location its earlier draft recommended,
 	// kept mounted for scanners already fetching it.

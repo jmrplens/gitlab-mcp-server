@@ -403,12 +403,19 @@ responde:
 | ----------------------------------------------------- | --------- |
 | `/gitlab/health`, `/health`                           | `200`     |
 | `/gitlab/server-card`, `/server-card`                 | `200`     |
+| `/gitlab/mcp/server-card`, `/mcp/server-card`         | `200`     |
 | `/.well-known/oauth-protected-resource`               | `404`     |
 | `/.well-known/oauth-protected-resource/gitlab`        | `200`     |
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`     |
+| `/.well-known/ai-catalog.json`                        | `404`     |
 
 `/health` y la tarjeta del servidor se montan bajo el prefijo además de en la
-raíz; los metadatos OAuth no, y el desafío `401` apunta a la forma derivada. La
+raíz, y la tarjeta también tras la forma `/mcp` del endpoint, porque la
+extensión de tarjetas de servidor añade su sufijo a la URL del endpoint y no al
+host. El AI Catalog no le corresponde al servidor: lista lo que publica el host
+entero, y un despliegue que quiera uno lo sirve desde el proxy (consulta
+[Publicar un AI Catalog](/gitlab-mcp-server/es/operations/http-server/#publicar-un-ai-catalog)).
+Los metadatos OAuth no se montan bajo el prefijo, y el desafío `401` apunta a la forma derivada. La
 forma escueta tampoco se sirve: es el documento del recurso que _es_ el origen,
 y un servidor que vive bajo una ruta no lo es. Un proxy que solo enruta
 `/gitlab` responde `404` al documento que todo cliente OAuth pide primero, y el
@@ -420,9 +427,12 @@ Dos más que muerden. **No dejes que el proxy hable CORS:** el servidor responde
 su propio preflight a partir de `--trusted-origins`, a la que se añade
 automáticamente el origen de `--public-url`, y un proxy que también emita
 `Access-Control-Allow-Origin` produce dos, que los navegadores rechazan de
-plano mientras `curl` informa de un alegre `200`. Y **todo lo que el proxy no
-enrute es un `404`, no un `401`**, porque el endpoint MCP se monta en patrones
-concretos y no como comodín.
+plano mientras `curl` informa de un alegre `200`. La única excepción es un
+documento que el proxy sirve por sí mismo en lugar de reenviarlo: el AI Catalog
+del ejemplo de nginx nunca llega al servidor, así que el proxy es lo único que
+puede enviar su cabecera CORS. Y **todo lo que el proxy no enrute es un `404`,
+no un `401`**, porque el endpoint MCP se monta en patrones concretos y no como
+comodín.
 
 <Tabs>
 <TabItem label="nginx">
@@ -445,6 +455,17 @@ server {
     location /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+    }
+
+    # AI Catalog: documento propio del host, servido aquí y nunca reenviado.
+    # `types { }` vacía el mapa de extensiones, sin lo cual mime.types lo
+    # envía como application/json y default_type nunca llega a aplicarse.
+    location = /.well-known/ai-catalog.json {
+        alias /etc/nginx/ai-catalog.json;
+        types { }
+        default_type application/ai-catalog+json;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "public, max-age=3600" always;
     }
 
     location / {

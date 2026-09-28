@@ -390,7 +390,7 @@ func TestProxy_HealthAndCardSurviveTheProxy(t *testing.T) {
 	base := startProxy(t, upstream)
 	plain := &server{baseURL: base + "/plain"}
 
-	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
+	for _, path := range []string{"/health", "/server-card", "/mcp/server-card", "/.well-known/mcp/server-card.json"} {
 		t.Run(path, func(t *testing.T) {
 			got := plain.do(t, request{method: http.MethodGet, path: path})
 			if got.status != http.StatusOK {

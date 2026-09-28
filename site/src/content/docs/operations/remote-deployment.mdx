@@ -394,12 +394,19 @@ Started with `--public-url=https://mcp.example.com/gitlab`, the server answers:
 | ----------------------------------------------------- | ------ |
 | `/gitlab/health`, `/health`                           | `200`  |
 | `/gitlab/server-card`, `/server-card`                 | `200`  |
+| `/gitlab/mcp/server-card`, `/mcp/server-card`         | `200`  |
 | `/.well-known/oauth-protected-resource`               | `404`  |
 | `/.well-known/oauth-protected-resource/gitlab`        | `200`  |
 | `/gitlab/.well-known/oauth-protected-resource/gitlab` | `404`  |
+| `/.well-known/ai-catalog.json`                        | `404`  |
 
 `/health` and the server card are mounted under the prefix as well as at the
-root; the OAuth metadata is not, and the `401` challenge points at the derived
+root, and the card after the endpoint's `/mcp` form too, because the server-card
+extension appends its suffix to the endpoint's URL rather than to the host. The
+AI Catalog is not the server's to answer: it lists what the whole host
+publishes, and a deployment that wants one serves it from the proxy (see
+[Publishing an AI Catalog](/gitlab-mcp-server/operations/http-server/#publishing-an-ai-catalog)).
+The OAuth metadata is not mounted under the prefix, and the `401` challenge points at the derived
 form. The path-less form is not served either: it is the document of the
 resource that _is_ the origin, which a server living under a path is not. A proxy that routes only `/gitlab` answers `404` for the document every
 OAuth client fetches first, and discovery fails before the MCP endpoint is ever
@@ -411,9 +418,11 @@ Two more that bite. **Do not let the proxy speak CORS:** the server answers its
 own preflight from `--trusted-origins`, to which the `--public-url` origin is
 added automatically, and a proxy that also emits `Access-Control-Allow-Origin`
 produces two of them, which browsers reject outright while `curl` reports a
-cheerful `200`. And **anything the proxy does not route is a `404`, not a
-`401`**, because the MCP endpoint is mounted on specific patterns rather than as
-a catch-all.
+cheerful `200`. The one exception is a document the proxy serves itself rather
+than forwards: the AI Catalog in the nginx example never reaches the server, so
+the proxy is the only thing that can send its CORS header. And **anything the
+proxy does not route is a `404`, not a `401`**, because the MCP endpoint is
+mounted on specific patterns rather than as a catch-all.
 
 <Tabs>
 <TabItem label="nginx">
@@ -436,6 +445,17 @@ server {
     location /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+    }
+
+    # AI Catalog: the host's own document, served here and never forwarded.
+    # `types { }` clears the extension map, without which mime.types sends
+    # the file as application/json and default_type is never reached.
+    location = /.well-known/ai-catalog.json {
+        alias /etc/nginx/ai-catalog.json;
+        types { }
+        default_type application/ai-catalog+json;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "public, max-age=3600" always;
     }
 
     location / {

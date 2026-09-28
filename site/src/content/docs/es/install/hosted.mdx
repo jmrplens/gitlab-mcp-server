@@ -75,7 +75,8 @@ cuando solo quieres leer.
 | Autenticación              | Modo OAuth. `Authorization: Bearer` en cada petición, verificado contra GitLab.com, nunca guardado en el servidor.                                                                   |
 | Salud                      | `GET https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",...}`.                                                                           |
 | Ficha del servidor         | [`https://mcp.jmrp.io/es/servers/gitlab/`](https://mcp.jmrp.io/es/servers/gitlab/): el catálogo completo y la configuración por cliente, sin autenticación.                          |
-| Ficha MCP del servidor     | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación.                                                                                                                     |
+| Ficha MCP del servidor     | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación: la ficha SEP-2127, identidad y conexión, sin herramientas. Es el `url` de su entrada en un AI Catalog.              |
+| Ficha SEP-1649             | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json`, sin autenticación: el documento enumerante anterior, con cada herramienta, prompt y recurso.                      |
 | Directorio                 | [mcp.jmrp.io](https://mcp.jmrp.io/) lista los servidores MCP que mantiene el autor; [`servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos. |
 
 Un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando.

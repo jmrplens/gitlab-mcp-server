@@ -3,10 +3,113 @@
 package httpe2e
 
 import (
+	"encoding/json"
+	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
+
+// TestServerCard_TheURLItAdvertisesServesTheCard follows the card the way a
+// client that found it does: read `remotes[0].url`, append the suffix the
+// server-card extension reserves, and fetch that.
+//
+// The extension puts the card at `<streamable-http-url>/server-card`, so the
+// endpoint a card advertises implies where the card itself lives. Before the
+// card was mounted after /mcp as well, a deployment published as
+// https://host/mcp advertised that URL and answered 404 at
+// https://host/mcp/server-card, because a public URL whose path is /mcp names
+// no prefix and the card was at /server-card alone. The public deployment
+// answered 404 at https://mcp.jmrp.io/gitlab/mcp/server-card for the same
+// reason, which is the card URL of its endpoint's /mcp form. Each row starts a
+// real binary with that --public-url and sends the request with the advertised
+// host in Host, since that is what arrives through the proxy the URL implies.
+func TestServerCard_TheURLItAdvertisesServesTheCard(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+
+	tests := []struct {
+		publicURL string
+		// endpointForms are the other paths the MCP endpoint answers at under
+		// this URL, each of which has a card of its own by the same rule.
+		endpointForms []string
+	}{
+		{publicURL: "https://mcp.example.invalid", endpointForms: []string{"/mcp"}},
+		{publicURL: "https://mcp.example.invalid/mcp"},
+		{publicURL: "https://mcp.example.invalid/gitlab", endpointForms: []string{"/gitlab/mcp"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.publicURL, func(t *testing.T) {
+			srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--public-url="+tt.publicURL)
+
+			root := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+			if root.status != http.StatusOK {
+				t.Fatalf("GET /server-card = %d, want 200: %s", root.status, root.body)
+			}
+			advertised := advertisedRemote(t, root.body)
+			if advertised.String() != tt.publicURL {
+				t.Errorf("remotes[0].url = %q, want the --public-url %q", advertised, tt.publicURL)
+			}
+
+			for _, endpoint := range append([]string{advertised.Path}, tt.endpointForms...) {
+				t.Run(endpoint+"/server-card", func(t *testing.T) {
+					assertCardServedAt(t, srv, advertised.Host, endpoint+"/server-card", root.body)
+				})
+			}
+		})
+	}
+}
+
+// advertisedRemote reads `remotes[0].url` out of a card, failing the test when
+// the card carries none: a deployment started with --public-url must say where
+// it is reached.
+func advertisedRemote(t *testing.T, card string) *url.URL {
+	t.Helper()
+
+	var parsed struct {
+		Remotes []struct {
+			URL string `json:"url"`
+		} `json:"remotes"`
+	}
+	if err := json.Unmarshal([]byte(card), &parsed); err != nil {
+		t.Fatalf("the card is not JSON: %v\n%s", err, card)
+	}
+	if len(parsed.Remotes) == 0 {
+		t.Fatalf("a deployment with --public-url published no remotes: %s", card)
+	}
+	advertised, err := url.Parse(parsed.Remotes[0].URL)
+	if err != nil {
+		t.Fatalf("remotes[0].url %q: %v", parsed.Remotes[0].URL, err)
+	}
+	return advertised
+}
+
+// assertCardServedAt fetches a card URL the way a client that followed the card
+// would, with the advertised host in Host and the card's media type in Accept,
+// and holds the answer to the card the root path serves.
+func assertCardServedAt(t *testing.T, srv *server, host, path, want string) {
+	t.Helper()
+
+	got := srv.do(t, request{
+		method:  http.MethodGet,
+		path:    path,
+		headers: map[string]string{"Host": host, "Accept": "application/mcp-server-card+json"},
+	})
+	if got.status != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200: the endpoint answers there and its card does not: %s", path, got.status, got.body)
+	}
+	mediaType, _, err := mime.ParseMediaType(got.header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("Content-Type %q: %v", got.header.Get("Content-Type"), err)
+	}
+	if mediaType != "application/mcp-server-card+json" {
+		t.Errorf("Content-Type = %q, want the card's own media type", mediaType)
+	}
+	if got.body != want {
+		t.Errorf("the card at %s differs from the one at /server-card", path)
+	}
+}
 
 // TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument pins the rules that
 // apply to the discovery document because it is a document, not because it is

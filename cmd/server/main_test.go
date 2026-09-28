@@ -4771,13 +4771,18 @@ func TestServeHTTP_UnknownPath_Is404NotAChallenge(t *testing.T) {
 	waitForHTTPServerReady(t, addr, errCh)
 
 	tests := []struct {
-		name string
-		path string
-		want int
+		name   string
+		method string
+		path   string
+		want   int
 	}{
 		{name: "a well-known document this server does not serve", path: "/.well-known/oauth-authorization-server", want: http.StatusNotFound},
 		{name: "the retired well-known mcp path", path: "/.well-known/mcp", want: http.StatusNotFound},
 		{name: "an invented path", path: "/nope", want: http.StatusNotFound},
+		// The AI Catalog lists everything a host publishes, which only the
+		// deployment knows, so the binary serves none; a catalog fetch is a
+		// GET, and it gets the same unauthenticated 404 as any other path.
+		{name: "the AI Catalog belongs to the deployment", method: http.MethodGet, path: "/.well-known/ai-catalog.json", want: http.StatusNotFound},
 		// The endpoint itself still authenticates: 404 must not have
 		// swallowed the routes that matter.
 		{name: "the root is the MCP endpoint", path: "/", want: http.StatusUnauthorized},
@@ -4785,8 +4790,12 @@ func TestServeHTTP_UnknownPath_Is404NotAChallenge(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-			req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+tt.path, strings.NewReader(body))
+			method := http.MethodPost
+			var body io.Reader = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+			if tt.method != "" {
+				method, body = tt.method, http.NoBody
+			}
+			req, reqErr := http.NewRequestWithContext(t.Context(), method, "http://"+addr+tt.path, body)
 			if reqErr != nil {
 				t.Fatalf("new request: %v", reqErr)
 			}
@@ -7873,6 +7882,86 @@ func TestServeHTTP_DiscoveryCard_IsServedFromTheReservedPath(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_DiscoveryCard_AnswersAtEveryFormOfTheEndpointURL drives each
+// path the SEP-2127 card is mounted at, for each shape of --public-url, against
+// a listening server.
+//
+// The table test of [publicPaths] says which paths are asked for; this one
+// says the mux answers them, which is where a registration could still go
+// wrong: a pattern shadowed by the MCP endpoint's own, a path mounted twice
+// (ServeMux panics at startup, which the /mcp row exists to rule out), or a
+// preflight left on the old path only. Every form answers the same document
+// under the same validator, so a client revalidating at one form with a tag
+// another form gave it is told 304.
+func TestServeHTTP_DiscoveryCard_AnswersAtEveryFormOfTheEndpointURL(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+
+	tests := []struct {
+		name      string
+		publicURL string
+		paths     []string
+	}{
+		{name: "no public url", paths: []string{"/server-card", "/mcp/server-card"}},
+		{name: "an origin with no path", publicURL: "https://mcp.example.com", paths: []string{"/server-card", "/mcp/server-card"}},
+		{name: "an endpoint published at /mcp", publicURL: "https://mcp.example.com/mcp", paths: []string{"/server-card", "/mcp/server-card"}},
+		{
+			name:      "an endpoint published under a prefix",
+			publicURL: "https://mcp.example.com/gitlab",
+			paths:     []string{"/server-card", "/gitlab/server-card", "/mcp/server-card", "/gitlab/mcp/server-card"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := statelessTestConfig(mockGL.URL, false)
+			cfg.PublicURL = tt.publicURL
+			addr, shutdown := startStatelessServeHTTP(t, cfg)
+			defer shutdown()
+
+			var document []byte
+			for _, path := range tt.paths {
+				t.Run(path, func(t *testing.T) {
+					body, status, header := getDiscoveryCardAt(t, addr, path)
+					if status != http.StatusOK {
+						t.Fatalf("GET %s = %d, want 200: %s", path, status, body)
+					}
+					if got := header.Get(hdrContentType); got != mimeServerCard {
+						t.Errorf("Content-Type = %q, want %q", got, mimeServerCard)
+					}
+					if got, want := header.Get(hdrETag), entityTagFor(body); got != want {
+						t.Errorf("ETag = %q, want %q", got, want)
+					}
+					if document == nil {
+						document = body
+					} else if !bytes.Equal(body, document) {
+						t.Errorf("GET %s answered a different document than %s", path, tt.paths[0])
+					}
+					assertCardNotModified(t, "http://"+addr+path, entityTagFor(document))
+					assertCardPreflight(t, "http://"+addr+path)
+				})
+			}
+		})
+	}
+}
+
+// assertCardNotModified revalidates a card URL with a tag and expects 304.
+func assertCardNotModified(t *testing.T, cardURL, tag string) {
+	t.Helper()
+	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, cardURL, http.NoBody)
+	if reqErr != nil {
+		t.Fatalf("build the conditional request: %v", reqErr)
+	}
+	req.Header.Set("If-None-Match", tag)
+	resp, doErr := testHTTPClient.Do(req)
+	if doErr != nil {
+		t.Fatalf("GET %s: %v", cardURL, doErr)
+	}
+	readAndCloseBody(t, resp)
+	if resp.StatusCode != http.StatusNotModified {
+		t.Errorf("GET %s with If-None-Match %s = %d, want %d", cardURL, tag, resp.StatusCode, http.StatusNotModified)
+	}
+}
+
 // TestServeHTTP_DiscoveryCardCannotBeRendered_AnswersUnavailable covers the
 // other half of that handler, the deployment whose card could not be rendered.
 //
@@ -7925,8 +8014,15 @@ func TestServeHTTP_DiscoveryCardCannotBeRendered_AnswersUnavailable(t *testing.T
 	if !strings.Contains(string(body), "server card unavailable") {
 		t.Errorf("body = %s, want the JSON refusal naming the card as unavailable", body)
 	}
-	if !logged("failed to build the server card, /server-card returns 503") {
-		t.Error("startup logged no warning naming the route the failed build disabled")
+	if !logged("failed to build the server card, these paths answer 503: /server-card, /mcp/server-card") {
+		t.Error("startup logged no warning naming every route the failed build disabled")
+	}
+	for _, path := range []string{serverCardPath, mcpEndpointPath + serverCardPath} {
+		t.Run(path, func(t *testing.T) {
+			if _, got, _ := getDiscoveryCardAt(t, addr, path); got != http.StatusServiceUnavailable {
+				t.Errorf("GET %s = %d, want %d: every form of the card shares one failed build", path, got, http.StatusServiceUnavailable)
+			}
+		})
 	}
 
 	cancel()
@@ -7948,15 +8044,23 @@ func TestServeHTTP_DiscoveryCardCannotBeRendered_AnswersUnavailable(t *testing.T
 // whose body is already closed would invite a caller to read it again.
 func getDiscoveryCard(t *testing.T, addr string) (body []byte, status int, header http.Header) {
 	t.Helper()
+	return getDiscoveryCardAt(t, addr, serverCardPath)
+}
+
+// getDiscoveryCardAt is [getDiscoveryCard] for any path the card may be
+// mounted at, which is every form of the MCP endpoint's URL with the
+// extension's suffix appended.
+func getDiscoveryCardAt(t *testing.T, addr, path string) (body []byte, status int, header http.Header) {
+	t.Helper()
 
 	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet,
-		"http://"+addr+serverCardPath, http.NoBody)
+		"http://"+addr+path, http.NoBody)
 	if reqErr != nil {
 		t.Fatalf("build the card request: %v", reqErr)
 	}
 	resp, doErr := testHTTPClient.Do(req)
 	if doErr != nil {
-		t.Fatalf("GET %s: %v", serverCardPath, doErr)
+		t.Fatalf("GET %s: %v", path, doErr)
 	}
 	defer resp.Body.Close()
 
@@ -10976,6 +11080,68 @@ func TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix(t *testing.T) 
 	}
 }
 
+// TestPublicPaths_TheServerCardFollowsEveryFormOfTheEndpoint pins where the
+// SEP-2127 card is mounted for each shape of --public-url.
+//
+// The extension reserves `<streamable-http-url>/server-card`: the suffix goes
+// on the endpoint's URL, not on the host. This server's endpoint answers at the
+// root and at /mcp, and again under a forwarded prefix, so the card has to be
+// at each of those plus the suffix. The row that motivated it is a deployment
+// published as https://host/mcp: its card URL is https://host/mcp/server-card,
+// and while the card was mounted at /server-card alone that answered 404,
+// because a public URL whose path is /mcp names no prefix. The last column is
+// the card URL a client derives from the card's own `remotes[0].url`, which
+// has to be one of the mounted paths or the card points at a 404.
+func TestPublicPaths_TheServerCardFollowsEveryFormOfTheEndpoint(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		publicURL string
+		want      []string
+		derived   string
+	}{
+		{
+			name:    "no public url",
+			want:    []string{"/server-card", "/mcp/server-card"},
+			derived: "/server-card",
+		},
+		{
+			name:      "an origin with no path",
+			publicURL: "https://mcp.example.com",
+			want:      []string{"/server-card", "/mcp/server-card"},
+			derived:   "/server-card",
+		},
+		{
+			name:      "an endpoint published at /mcp",
+			publicURL: "https://mcp.example.com/mcp",
+			want:      []string{"/server-card", "/mcp/server-card"},
+			derived:   "/mcp/server-card",
+		},
+		{
+			name:      "an endpoint published under a prefix",
+			publicURL: "https://mcp.example.com/gitlab",
+			want:      []string{"/server-card", "/gitlab/server-card", "/mcp/server-card", "/gitlab/mcp/server-card"},
+			derived:   "/gitlab/server-card",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := publicPaths(&config.Config{PublicURL: tt.publicURL}, serverCardPath, mcpEndpointPath+serverCardPath)
+
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("publicPaths = %v, want %v", got, tt.want)
+			}
+			if !slices.Contains(got, tt.derived) {
+				t.Errorf("the card URL a client derives from remotes[0].url, %s, is not among %v", tt.derived, got)
+			}
+		})
+	}
+}
+
 // TestMCPEndpointPatterns_CoverTheRootTheEndpointAndThePrefix pins the routes
 // the MCP handler is mounted on.
 //
@@ -11030,6 +11196,9 @@ func TestServerCardMediaType_FollowsThePathTheCardWasFetchedFrom(t *testing.T) {
 		want string
 	}{
 		{name: "the current location", path: serverCardPath, want: mimeServerCard},
+		{name: "the current location after the named endpoint", path: mcpEndpointPath + serverCardPath, want: mimeServerCard},
+		{name: "the current location behind a forwarded prefix", path: "/gitlab" + serverCardPath, want: mimeServerCard},
+		{name: "the named endpoint behind a forwarded prefix", path: "/gitlab" + mcpEndpointPath + serverCardPath, want: mimeServerCard},
 		{name: "the legacy well-known location", path: serverCardLegacyPath, want: mimeJSON},
 		{name: "the legacy location behind a forwarded prefix", path: "/gitlab" + serverCardLegacyPath, want: mimeJSON},
 	}
