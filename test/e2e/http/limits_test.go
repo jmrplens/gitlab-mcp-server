@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // countTools returns how many tools a tools/list reply advertises.
@@ -379,8 +381,29 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 		// The claim the previous version of this case got wrong. Asserted from
 		// the server's own startup line, because fifteen served calls are
 		// equally consistent with a limiter of ten and with no limiter at all.
-		if awaitLog(t, srv, "rate limit enabled") == "" {
-			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", srv.logs())
+		line := awaitLogLine(t, srv, "rate limit enabled")
+		if line == "" {
+			t.Fatalf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", srv.logs())
+		}
+		// The line is where an operator learns the three buckets before a
+		// refusal teaches them, so each figure is held to the default it
+		// announces, the process bucket's to its register row (RTC-007).
+		fields := []struct {
+			name string
+			want string
+		}{
+			{name: "rps", want: `"rps":10`},
+			{name: "burst", want: `"burst":40`},
+			{name: "catalog_rps", want: `"catalog_rps":1`},
+			{name: "catalog_process_tools_per_second", want: fmt.Sprintf(`"catalog_process_tools_per_second":%d`, tenancy.CatalogProcessRate)},
+			{name: "catalog_process_burst_tools", want: fmt.Sprintf(`"catalog_process_burst_tools":%d`, tenancy.CatalogProcessBurst)},
+		}
+		for _, field := range fields {
+			t.Run(field.name, func(t *testing.T) {
+				if !strings.Contains(line, field.want+",") && !strings.Contains(line, field.want+"}") {
+					t.Errorf("the rate limit line is missing %s:\n%s", field.want, line)
+				}
+			})
 		}
 	})
 }
