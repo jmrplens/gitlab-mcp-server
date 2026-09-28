@@ -1084,6 +1084,7 @@ Default mode: a Markdown report to stdout with mode comparison, per-tool costs, 
 #### Notes
 
 The `--compare-schemas` mode replaces the former `audit_meta_schema` spike binary. The `-footprint` mode replaces the token-footprint half of the former `gen_readme` binary; the statistics half moved to `gen_stats`.
+
 ### audit_metrics
 
 Comprehensive metrics summary: individual/meta/dynamic tool counts, catalog actions, resources/prompts, codebase file counts, and a per-domain breakdown.
