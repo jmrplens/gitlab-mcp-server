@@ -396,6 +396,51 @@ there is no pool, no gate and one tenant; it is consulted in no way that changes
 middleware order or adds a lock on the request path; and it holds nothing derived from a
 credential.
 
+## Two MCP clauses the server meets in part
+
+MCP 2026-07-28 has one mandatory limit and one note on `clientInfo` that this server
+meets only in part. Where it stands on each was decided in
+[issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959), and the rows they
+concern record that decision (`Decided`) in place of the findings that asked for it
+(F-19 and F-33).
+
+**"Servers MUST: [...] Rate limit tool invocations"**
+([server/tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools),
+Security Considerations). The clause names no unit, no value and no refusal. `RTC-001`
+meets it with a token bucket counted in requests and refilling at the configured rate
+per second, drawn on by `tools/call` and by the four other methods that reach GitLab
+with the caller's credential; it refuses a tool call as a tool error and the other four
+in-band with `-42900`, and it exists to bound a client in a loop, whose volume an HTTP
+deployment would otherwise pass on to the instance and to every other caller sharing its
+address. Its key is the pool entry in HTTP mode, one token and GitLab URL pair, where it
+is on by default at 10 a second with 40 in hand; on stdio it is the process, and it is
+off by default there. A stdio process serves one person with their own token on their
+own machine, so there is no co-tenant to protect and a limiter there would only refuse
+its one user's own calls, while GitLab's own per-user limits still apply to every call it
+forwards. The same bucket is switched on for stdio by setting
+`GITLAB_MCP_RATE_LIMIT_RPS` above zero, with `GITLAB_MCP_RATE_LIMIT_BURST` beside it.
+`--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio accepts
+them and ignores them without a warning, so the variable is the stdio switch.
+`test/e2e/stdio` holds both halves against the binary: a tool call refused with the
+variable set, and none refused without it.
+
+**`clientInfo` "SHOULD NOT" change behavior**
+([basic](https://modelcontextprotocol.io/specification/2026-07-28/basic)). The note says
+implementations "SHOULD NOT use them to change the behavior of the client or server, and
+SHOULD NOT rely on them for security decisions". The second half is met: identity comes
+from the credential (`INV-001`). The first is departed from on purpose: `IDN-013` writes
+annotation priorities as 0 or 1 for a session whose `clientInfo` names Codex. Its key is
+the session, so it reaches only a session that knows its client: stdio in either
+protocol era, HTTP with `--stateless=false`, and any session at 2026-07-28, since go-sdk
+fills `ClientInfo` from each request's `_meta` there. A client on 2025-11-25 or earlier
+over the default stateless HTTP transport has no session that saw `initialize`, so the
+profile never applies to it (`test/e2e/http` pins that as the profile's limit).
+It is the workaround for a Codex build that rejects a fractional priority, it changes how
+one number is written and nothing a model reads, it never decides who a caller is or what
+it may do, `GITLAB_MCP_CLIENT_COMPAT=off` removes it, and it retires only once a Codex
+built on an rmcp carrying the fix is widely deployed, not merely released (row 17 of
+[`upstream-bugs.md`](upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call)).
+
 ## Validation checklist
 
 A new limit, or a change to an existing one, answers each item in its pull request and in
@@ -456,8 +501,18 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-One finding is answered, and stays in the list with its issue. F-03, the listing bucket
-with no process partner, is answered by `RTC-007`, the first of issue 951's three
+Three findings are answered, and stay in the list with their issues. F-03, the listing
+bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
-longer. Issue 951 stays open for F-31.
+longer. Issue 951 stays open for F-31. F-19 and F-33 are answered by issue 959's decision
+that what they recorded is the server's position, stated in
+[Two MCP clauses the server meets in part](#two-mcp-clauses-the-server-meets-in-part):
+`RTC-001` and `IDN-013` record that decision and carry neither any longer. Four more
+have been carried by no row since the register landed, because each records something no
+row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
+message the SDK gives the server no way to send, and F-23 and F-27 stale statements.
+`TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue` holds both sets: a finding no
+row carries fails unless it is one of those four or a row records its issue in
+`Decided`, and the answered set is named, so a finding dropped from a row by mistake
+fails too.

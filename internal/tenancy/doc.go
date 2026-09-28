@@ -59,5 +59,10 @@
 // A row that disagrees with the specification's invariants today carries the
 // finding that records the disagreement, and [Validate] accepts it only
 // because it does. No finding is fixed here: each is filed as an issue of its
-// own, and [FindingIssue] names it.
+// own, and [FindingIssue] names it. When that issue answers the finding, the
+// rows stop carrying it and the finding stays in [AllFindings] with its
+// issue. An answer is a change of code, as issue 951's RTC-007 answered F-03,
+// or a decision that the departure is the position, recorded in the Decided
+// of the rows it concerns, as issue 959 answered F-19 on RTC-001 and F-33 on
+// IDN-013.
 package tenancy

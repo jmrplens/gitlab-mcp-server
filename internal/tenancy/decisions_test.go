@@ -2,6 +2,7 @@ package tenancy
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -166,6 +167,88 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 	}
 	if FindingIssue("F-03") != 951 {
 		t.Errorf("F-03 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-03"))
+	}
+}
+
+// TestDecisions_TwoMCPClauses_AreDecidedByIssue959 pins what issue 959
+// decided about the two clauses of MCP the server meets in part: the tool-call
+// bucket stays off by default on stdio, and the response profile chosen from
+// clientInfo stays as a deliberate deviation. Both are recorded as decisions
+// on the rows they concern, which therefore no longer carry F-19 and F-33;
+// the findings themselves stay in the register's list, filed as issue 959's,
+// because a decision answers a finding rather than removing it from the
+// specification. The two defaults the stdio position rests on are pinned with
+// every other value, in TestValues_HoldTheirPins.
+func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
+	for _, tc := range []struct {
+		id      string
+		finding string
+	}{
+		{"RTC-001", "F-19"},
+		{"IDN-013", "F-33"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, ok := Lookup(tc.id)
+			if !ok {
+				t.Fatalf("%s names no row", tc.id)
+			}
+			if !slices.Contains(d.Decided, "issue 959") || d.Carries(tc.finding) {
+				t.Errorf("%s: decided %v, carries %s %v; want issue 959's decision recorded and %s no longer carried",
+					tc.id, d.Decided, tc.finding, d.Carries(tc.finding), tc.finding)
+			}
+			if FindingIssue(tc.finding) != 959 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 959's", tc.finding, FindingIssue(tc.finding))
+			}
+		})
+	}
+}
+
+// findingsOfNoRow are the findings that record no row's departure, so no row
+// has carried them since the register landed: F-18 is a budget GitLab.com
+// keeps that nothing in the process accounts for, F-24 a message the SDK
+// gives the server no way to send, and F-23 and F-27 are stale statements in
+// comments and documents. Each is closed in its issue without a row changing.
+var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
+
+// TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue holds the rule the
+// package comment states: a finding stops being carried only when its issue
+// answers it, and the answer is recorded in the Decided of a row. A finding
+// dropped from a row by mistake is carried by nothing and answered by nothing,
+// and fails its subtest unless it is one of findingsOfNoRow, which a row must
+// then not carry either. The answered set is named as well, because a row
+// records the issue that decided and not the finding it answered, so a finding
+// whose issue answered another one elsewhere (F-31, whose issue 951 answered
+// F-03 on RTC-007) would pass its subtest if it were dropped; the next finding
+// answered joins that list in the change that answers it.
+func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
+	carried := map[string]bool{}
+	decided := map[string]bool{}
+	for _, d := range Decisions() {
+		for _, f := range d.Findings {
+			carried[f] = true
+		}
+		for _, by := range d.Decided {
+			decided[by] = true
+		}
+	}
+	var answered []string
+	for _, f := range AllFindings() {
+		ofNoRow := slices.Contains(findingsOfNoRow, f.ID)
+		if !carried[f.ID] && !ofNoRow {
+			answered = append(answered, f.ID)
+		}
+		t.Run(f.ID, func(t *testing.T) {
+			by := "issue " + strconv.Itoa(f.Issue)
+			switch {
+			case carried[f.ID] && ofNoRow:
+				t.Errorf("%s is declared to record no row's departure, yet a row carries it", f.ID)
+			case !carried[f.ID] && !ofNoRow && !decided[by]:
+				t.Errorf("%s is carried by no row and no row records %s's decision; restore it to the rows it describes, or record the issue that answered it in their Decided", f.ID, by)
+			}
+		})
+	}
+	if got, want := strings.Join(answered, ","), "F-03,F-19,F-33"; got != want {
+		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
 

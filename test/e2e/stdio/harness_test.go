@@ -416,6 +416,16 @@ func (s *session) send(t *testing.T, msg string) {
 // catch and a hung test reports it as a timeout with no detail.
 func (s *session) readMessage(t *testing.T, within time.Duration) map[string]any {
 	t.Helper()
+	_, decoded := s.readRawMessage(t, within)
+	return decoded
+}
+
+// readRawMessage is readMessage returning the line as the server wrote it
+// beside its decoding, for a case about the bytes on the pipe rather than the
+// value they carry: a decoder reads 1 and 1.0 as the same number, and a client
+// that refuses the second is the reason one case here exists.
+func (s *session) readRawMessage(t *testing.T, within time.Duration) (string, map[string]any) {
+	t.Helper()
 
 	type result struct {
 		line string
@@ -438,10 +448,10 @@ func (s *session) readMessage(t *testing.T, within time.Duration) map[string]any
 			// is not JSON-RPC on stdout breaks every client, whatever it is.
 			t.Fatalf("stdout carried a line that is not JSON: %q\nstderr: %s", r.line, s.stderrText())
 		}
-		return decoded
+		return r.line, decoded
 	case <-time.After(within):
 		t.Fatalf("the server did not answer within %s (stderr: %s)", within, s.stderrText())
-		return nil
+		return "", nil
 	}
 }
 
@@ -460,11 +470,19 @@ func (s *session) readMessage(t *testing.T, within time.Duration) map[string]any
 // nothing here sends two requests without reading the first one back.
 func (s *session) call(t *testing.T, msg string) map[string]any {
 	t.Helper()
+	_, got := s.callRaw(t, msg)
+	return got
+}
+
+// callRaw is call returning the response line as it crossed the pipe beside
+// its decoding (see readRawMessage).
+func (s *session) callRaw(t *testing.T, msg string) (string, map[string]any) {
+	t.Helper()
 
 	want := requestIDOf(t, msg)
 	s.send(t, msg)
 	for {
-		got := s.readMessage(t, 30*time.Second)
+		line, got := s.readRawMessage(t, 30*time.Second)
 		if _, isCall := got["method"]; isCall && got["id"] == nil {
 			s.mu.Lock()
 			s.notifications = append(s.notifications, got)
@@ -478,7 +496,7 @@ func (s *session) call(t *testing.T, msg string) map[string]any {
 			t.Fatalf("waiting for the response to id %v, read a message for id %v after passing %d notification(s): %v\nstderr: %s",
 				want, got["id"], passed, got, s.stderrText())
 		}
-		return got
+		return line, got
 	}
 }
 
@@ -559,15 +577,41 @@ func (s *session) waitForStderr(t *testing.T, needle string, within time.Duratio
 // request builds a JSON-RPC request carrying the per-request _meta a
 // 2026-07-28 client sends.
 func request(id int, method, params string) string {
+	return requestFrom(`{"name":"stdio-e2e","version":"1"}`, id, method, params)
+}
+
+// requestFrom is request sent by the client clientInfo names, a JSON object.
+// At 2026-07-28 the _meta of a session's first request is where the server
+// learns who the client says it is, since there is no initialize.
+func requestFrom(clientInfo string, id int, method, params string) string {
 	meta := `"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `",` +
 		`"io.modelcontextprotocol/clientCapabilities":{},` +
-		`"io.modelcontextprotocol/clientInfo":{"name":"stdio-e2e","version":"1"}}`
+		`"io.modelcontextprotocol/clientInfo":` + clientInfo + `}`
 	if params == "" {
 		params = "{" + meta + "}"
 	} else {
 		params = params[:len(params)-1] + "," + meta + "}"
 	}
 	return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, id, method, params)
+}
+
+// currentUserArguments asks for the caller's own user, the cheapest tool call
+// that reaches GitLab: the fake answers it from /api/v4/user, and it is what
+// the tool-call rate limit is charged for.
+const currentUserArguments = `{"name":"gitlab_execute_action","arguments":{"action":"user.current","params":{}}}`
+
+// currentUserCall is that tool call as a 2026-07-28 request with the given id.
+func currentUserCall(id int) string {
+	return request(id, "tools/call", currentUserArguments)
+}
+
+// served reports whether a tools/call was answered with a result its handler
+// produced without error. A refusal never is, and neither is an action the
+// catalog does not know, which is answered as a result flagged isError and so
+// passes every check that only asks whether the call came back.
+func served(got map[string]any) bool {
+	result, ok := got["result"].(map[string]any)
+	return ok && got["error"] == nil && result["isError"] != true
 }
 
 // fakeGitLab is a running fake instance and what a test can observe about it.

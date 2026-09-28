@@ -4,7 +4,7 @@ The server ships its full MCP surface — tool icons, content annotations, `stru
 
 ## The Codex profile
 
-The OpenAI Codex builds bundled with ChatGPT.app (verified on `codex-cli 0.148.0-alpha.9`) fail to parse any MCP result whose annotations carry a **non-integer `priority`** (for example `0.6`, which the MCP specification allows as a 0–1 number). The response degrades inside Codex's bundled `rmcp` parser and every affected `tools/call` is reported as:
+The OpenAI Codex builds bundled with ChatGPT.app (verified on `codex-cli 0.148.0-alpha.9`; Codex now pins `rmcp` 3.2.0) fail to parse any MCP result whose annotations carry a **non-integer `priority`** (for example `0.6`, which the MCP specification allows as a 0–1 number). `rmcp` types the field correctly; the defect is Codex's build, where Cargo feature unification turns on `serde_json`'s `arbitrary_precision` for the whole binary, so a decimal reaches the float field as `serde_json`'s private number map, the field refuses it and the result falls through to `rmcp`'s catch-all variant. A literal `1.0` fails the same way; only `1` and `0` pass. Every affected `tools/call` is reported as:
 
 ```text
 tool call error: tool call failed for `gitlab/<tool>`
@@ -15,11 +15,21 @@ Since this server annotates its markdown content blocks with float priorities, e
 
 The fix is a per-session compatibility middleware (`internal/clientcompat`):
 
-- **Detection** — the `initialize` request's `clientInfo` is matched case-insensitively for `codex` in the name or title. Codex has identified itself as `codex-mcp-client` / `Codex` since v0.20.
-- **Rewrite** — only the `priority` field is rounded to the nearest spec-legal integer (0 or 1, both of which Codex parses) in `tools/call` results, `resources/list`, `resources/templates/list`, and `prompts/get`. Audience annotations, markdown text, `structuredContent`, `outputSchema`, icons, and the tool-level annotations Codex's approval policy reads (`readOnlyHint`, `destructiveHint`) are all delivered unchanged.
-- **Isolation** — results are cloned before rewriting, so in HTTP mode concurrent non-Codex sessions of the same pooled server keep the full response.
+- **Detection**: the `clientInfo` the session reports is matched case-insensitively for `codex` in the name or title: the one in `initialize` on protocol 2025-11-25 and earlier, and the one in the request's `_meta` on 2026-07-28, where the SDK reads it from. Codex has identified itself as `codex-mcp-client` / `Codex` since v0.20.
+- **Reach**: the profile applies wherever the session knows its client, which is stdio in either protocol era, HTTP with `--stateless=false`, and any HTTP session at 2026-07-28. It does **not** apply to a Codex client speaking 2025-11-25 or earlier to the default stateless HTTP transport: there every POST gets a session of its own that never saw `initialize`, so there is no `clientInfo` to read and that client is sent the fractional priority. Such a deployment needs `--stateless=false` for the profile to reach an older Codex. `test/e2e/http` and `test/e2e/stdio` pin both halves.
+- **Rewrite**: only the `priority` field is rounded to the nearest spec-legal integer (0 or 1, both of which Codex parses) in `tools/call` results, `resources/list`, `resources/templates/list`, and `prompts/get`; a priority rounded to 0 is left out, as the field is optional. It works because Go writes an integral number as `1` and never as `1.0`, a wire form a unit test and `test/e2e/stdio` both pin. Audience annotations, markdown text, `structuredContent`, `outputSchema`, icons, and the tool-level annotations Codex's approval policy reads (`readOnlyHint`, `destructiveHint`) are all delivered unchanged.
+- **Isolation**: results are cloned before rewriting, so in HTTP mode concurrent non-Codex sessions of the same pooled server keep the full response.
+- **Open question**: ChatGPT connector sessions are reported upstream to identify as `openai-mcp`, which the `codex` match would miss. It is unverified, and the match changes only once an `initialize` captured from such a session shows it ([row 17](../development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call) records it).
 
 Every other client — including Claude Code, Claude Desktop, and every client in the survey above — receives the complete, unmodified response with the exact float priorities.
+
+### A deliberate deviation from the specification
+
+MCP 2026-07-28 says `clientInfo` is self-reported and that implementations "SHOULD NOT use them to change the behavior of the client or server, and SHOULD NOT rely on them for security decisions" ([basic](https://modelcontextprotocol.io/specification/2026-07-28/basic)). The Codex profile departs from the first half, knowingly, and [issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959) decided to keep it:
+
+- **It is a formatting choice and nothing more.** It changes how one number is written and nothing a model reads. It never decides who a caller is or what it may do: identity and authority come from the credential on each request, never from what a client says about itself, so the second half of the note is met.
+- **It can be turned off.** `GITLAB_MCP_CLIENT_COMPAT=off` (below) gives every client the same response.
+- **It retires with the defect.** The fix is merged in `rmcp` ([modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300)) and in no release yet, and it reaches users through a chain of three: an `rmcp` release carrying it, a Codex release built on that `rmcp`, and a ChatGPT.app that bundles that Codex. The profile goes once that Codex is widely deployed, not merely released, since users of the bundled build do not choose their version. [Row 17 of the upstream register](../development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call) tracks each link, with [openai/codex#38979](https://github.com/openai/codex/issues/38979).
 
 ### Kill switch
 
