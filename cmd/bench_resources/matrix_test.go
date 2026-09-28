@@ -241,6 +241,9 @@ func TestParseSteps_AcceptsAscendingCountsOnly(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Errorf("parseSteps(%q) = %v, %v; want an error saying %q", tc.raw, got, err, tc.wantErr)
 				}
+				if err != nil && !strings.HasPrefix(err.Error(), "-clients: ") {
+					t.Errorf("parseSteps(%q) = %v, want the refusal to name -clients", tc.raw, err)
+				}
 				return
 			}
 			if err != nil {
@@ -248,6 +251,27 @@ func TestParseSteps_AcceptsAscendingCountsOnly(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("parseSteps(%q) = %v, want %v", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseCounts_NamesTheFlagAndWhatItCounts verifies the refusals of the
+// shared parser speak for the flag that was given, so a -held run is not told
+// about credential counts it never typed.
+func TestParseCounts_NamesTheFlagAndWhatItCounts(t *testing.T) {
+	cases := []struct {
+		name, raw, want string
+	}{
+		{name: "nothing given", raw: "", want: "-held: no held-call counts given"},
+		{name: "not a count", raw: "x", want: `-held: "x" is not a positive held-call count`},
+		{name: "out of order", raw: "3,1", want: "-held: 1 does not come after 3; the counts must ascend"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseCounts("-held", heldCounted, tc.raw)
+			if err == nil || err.Error() != tc.want {
+				t.Errorf("parseCounts(%q) = %v, want %q", tc.raw, err, tc.want)
 			}
 		})
 	}

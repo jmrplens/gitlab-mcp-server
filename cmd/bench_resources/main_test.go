@@ -479,6 +479,20 @@ func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 				fairness: "tools-call-rps", rounds: 3, sampleInterval: 0, stepDuration: step,
 			}, "-sample-interval",
 		},
+		// A held run is a measurement too, so the same short-circuit must
+		// not carry it past what it cannot measure with.
+		{"held with check", options{check: true, held: "1", heldCredentials: 1}, "-check"},
+		{"held with render", options{render: true, held: "1", heldCredentials: 1}, "-render"},
+		{"held with fairness", options{held: "1", heldCredentials: 1, fairness: "tools-call-rps"}, "-fairness"},
+		{"held counts that descend", options{held: "5,2", heldCredentials: 1}, "-held:"},
+		{"held with no credential", options{held: "1", heldCredentials: 0}, "-held-credentials"},
+		{"held under a negative limit", options{held: "1", heldCredentials: 1, heldNoFile: -1}, "-held-nofile"},
+		{
+			"held that measures", options{
+				held: "1,2", heldCredentials: 2, heldNoFile: 256,
+				rounds: 3, sampleInterval: good, stepDuration: step,
+			}, "",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -821,6 +835,17 @@ func TestLocateRoot_MeasureOnlyRunNeedsNoRepository(t *testing.T) {
 	})
 	t.Run("a fairness run that must build one", func(t *testing.T) {
 		if _, err := locateRoot(options{fairness: "tools-call-rps"}); err == nil {
+			t.Error("locateRoot found a root to build the server in where there is none")
+		}
+	})
+	// A held run is the same shape: its own document, nothing drawn.
+	t.Run("a held run with a binary", func(t *testing.T) {
+		if _, err := locateRoot(options{held: "1", binary: "/somewhere/server"}); err != nil {
+			t.Errorf("locateRoot = %v, want a held run to need no checkout", err)
+		}
+	})
+	t.Run("a held run that must build one", func(t *testing.T) {
+		if _, err := locateRoot(options{held: "1"}); err == nil {
 			t.Error("locateRoot found a root to build the server in where there is none")
 		}
 	})

@@ -278,6 +278,84 @@ func TestHTTPRPC_NameHeader_ComesFromTheFieldTheMethodNamesIt(t *testing.T) {
 	}
 }
 
+// TestHTTPRPC_ParamHeader_MirrorsTheExecuteAction verifies the one parameter
+// header this harness sends: gitlab_execute_action's action, which the tool's
+// schema marks for mirroring and the 2026-07-28 transport refuses a call
+// without. A held run calls that tool and nothing else did, so every call it
+// made was refused with a 400 until the header was sent.
+//
+// The header is sent only where the value exists: a call that names no action,
+// or names it as something other than a string, sends none, so the server
+// refuses it the way it would refuse a real client that left it out.
+func TestHTTPRPC_ParamHeader_MirrorsTheExecuteAction(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		params map[string]any
+		want   string
+	}{
+		{
+			name:   "an execute call carries its action",
+			method: methodToolsCall,
+			params: map[string]any{"name": executeTool, "arguments": map[string]any{"action": "project.get"}},
+			want:   "project.get",
+		},
+		{
+			name:   "another tool carries nothing",
+			method: methodToolsCall,
+			params: map[string]any{"name": "gitlab_find_action", "arguments": map[string]any{"action": "project.get"}},
+		},
+		{
+			name:   "an execute call with no action carries nothing",
+			method: methodToolsCall,
+			params: map[string]any{"name": executeTool, "arguments": map[string]any{}},
+		},
+		{
+			name:   "an execute call with no arguments carries nothing",
+			method: methodToolsCall,
+			params: map[string]any{"name": executeTool},
+		},
+		{
+			name:   "an action that is not a string carries nothing",
+			method: methodToolsCall,
+			params: map[string]any{"name": executeTool, "arguments": map[string]any{"action": 7}},
+		},
+		{
+			name:   "another method naming the tool carries nothing",
+			method: methodPromptsGet,
+			params: map[string]any{"name": executeTool, "arguments": map[string]any{"action": "project.get"}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got http.Header
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Clone()
+				w.Header().Set(headerContentType, mediaJSON)
+				_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+			}))
+			defer server.Close()
+
+			client := newHTTPRPC(server.URL, "token")
+			defer client.close()
+
+			if _, err := client.call(context.Background(), tc.method, tc.params); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			values, sent := got[http.CanonicalHeaderKey(executeActionHeader)]
+			if tc.want == "" {
+				if sent {
+					t.Errorf("%s = %q, want no header", executeActionHeader, values)
+				}
+				return
+			}
+			if got.Get(executeActionHeader) != tc.want {
+				t.Errorf("%s = %q, want %q", executeActionHeader, got.Get(executeActionHeader), tc.want)
+			}
+		})
+	}
+}
+
 // TestHTTPRPC_AcceptedResponse_IsNotAnAnswer verifies a 202 is a failed
 // measurement even when something that parses arrives alongside it.
 //

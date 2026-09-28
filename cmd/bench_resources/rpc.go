@@ -229,6 +229,32 @@ func headerNameFor(method string, params map[string]any) string {
 	}
 }
 
+// executeTool is the dynamic surface's tool that runs a catalog action, and
+// executeActionHeader the header its action argument is mirrored into: the
+// tool's schema marks that argument with SEP-2243's x-mcp-header, and from
+// protocol 2026-07-28 the transport refuses a call whose header is missing.
+const (
+	executeTool         = "gitlab_execute_action"
+	executeActionHeader = "Mcp-Param-Action"
+)
+
+// paramHeaderFor returns the parameter header a request must carry and its
+// value, or two empty strings when it carries none. The one tool this harness
+// calls that declares one is gitlab_execute_action, whose action argument is
+// mirrored; the value is never invented, so a call that names no action sends
+// no header and is refused the way a real client's would be.
+func paramHeaderFor(method string, params map[string]any) (name, value string) {
+	if method != methodToolsCall || params["name"] != executeTool {
+		return "", ""
+	}
+	arguments, _ := params["arguments"].(map[string]any)
+	action, ok := arguments["action"].(string)
+	if !ok {
+		return "", ""
+	}
+	return executeActionHeader, action
+}
+
 // call posts one request and reads the answer.
 func (c *httpRPC) call(ctx context.Context, method string, params map[string]any) ([]byte, error) {
 	body, err := requestBody(c.ids.Add(1), method, params)
@@ -247,6 +273,9 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	req.Header.Set("Mcp-Method", method)
 	if name := headerNameFor(method, params); name != "" {
 		req.Header.Set("Mcp-Name", name)
+	}
+	if header, value := paramHeaderFor(method, params); header != "" {
+		req.Header.Set(header, value)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
 

@@ -11,7 +11,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -176,6 +175,13 @@ func quickMatrix(settings matrixSettings) []scenarioPlan {
 // list that went down would be measuring the previous step's pool again
 // under a smaller name.
 func parseSteps(raw string) ([]int, error) {
+	return parseCounts("-clients", "credential", raw)
+}
+
+// parseCounts reads a comma-separated list of positive counts in ascending
+// order for the flag named. The refusals name the flag and what is counted,
+// which is the noun before "count" in them ("credential count").
+func parseCounts(flagName, counted, raw string) ([]int, error) {
 	var steps []int
 	for field := range strings.SplitSeq(raw, ",") {
 		trimmed := strings.TrimSpace(field)
@@ -184,15 +190,15 @@ func parseSteps(raw string) ([]int, error) {
 		}
 		value, err := strconv.Atoi(trimmed)
 		if err != nil || value <= 0 {
-			return nil, fmt.Errorf("-clients: %q is not a positive credential count", trimmed)
+			return nil, fmt.Errorf("%s: %q is not a positive %s count", flagName, trimmed, counted)
 		}
 		if len(steps) > 0 && value <= steps[len(steps)-1] {
-			return nil, fmt.Errorf("-clients: %d does not come after %d; the counts must ascend", value, steps[len(steps)-1])
+			return nil, fmt.Errorf("%s: %d does not come after %d; the counts must ascend", flagName, value, steps[len(steps)-1])
 		}
 		steps = append(steps, value)
 	}
 	if len(steps) == 0 {
-		return nil, errors.New("-clients: no credential counts given")
+		return nil, fmt.Errorf("%s: no %s counts given", flagName, counted)
 	}
 	return slices.Clip(steps), nil
 }

@@ -79,6 +79,13 @@ type options struct {
 	fairnessLeadIn    time.Duration
 	fairnessDeadline  time.Duration
 	fairnessRepeats   int
+	// The held-request mode (held.go): a mode of its own for the same reason
+	// the fairness one is, since it writes a document of its own and draws
+	// nothing.
+	held            string
+	heldCredentials int
+	heldNoFile      int
+	heldJSON        string
 }
 
 // exitProcess is the exit main takes on failure, so a test can drive main
@@ -130,6 +137,11 @@ func parseFlags() options {
 	flag.DurationVar(&opts.fairnessLeadIn, "fairness-lead-in", defaultFairnessLeadIn, "unmeasured window before each arm's phase, which drains the bound's burst")
 	flag.DurationVar(&opts.fairnessDeadline, "fairness-deadline", defaultFairnessDeadline, "how long a request may take from its intended dispatch before a client would have given up")
 	flag.IntVar(&opts.fairnessRepeats, "fairness-repeats", defaultFairnessRepeats, "how many times the pair of arms is run, alternating their order")
+	flag.StringVar(&opts.held, "held", "",
+		"measure what held requests cost instead of the matrix: comma-separated counts of tools/call held open at once, ascending")
+	flag.IntVar(&opts.heldCredentials, "held-credentials", 1, "credentials a -held run spreads its calls across")
+	flag.IntVar(&opts.heldNoFile, "held-nofile", 0, "descriptor limit a -held run starts the server under; 0 inherits this process's")
+	flag.StringVar(&opts.heldJSON, "held-json", defaultHeldRecord, "document a -held run writes; never the published record")
 	flag.Parse()
 
 	flag.Visit(func(f *flag.Flag) {
@@ -161,6 +173,9 @@ func (o options) validate() error {
 	if o.fairness != "" && (o.render || o.check) {
 		return fmt.Errorf("-fairness measures two servers and draws nothing, so it cannot be combined with %s, "+
 			"which draws the committed artifacts and measures nothing", renderFlagName(o))
+	}
+	if err := o.validateHeld(); err != nil {
+		return err
 	}
 	if o.render || o.check {
 		return nil
@@ -227,7 +242,7 @@ func locateRoot(opts options) (string, error) {
 	if err == nil {
 		return root, nil
 	}
-	if (opts.noRender || opts.fairness != "") && opts.binary != "" {
+	if (opts.noRender || opts.fairness != "" || opts.held != "") && opts.binary != "" {
 		cwd, wdErr := getwd()
 		if wdErr != nil {
 			return "", fmt.Errorf("get working directory: %w", wdErr)
@@ -251,6 +266,9 @@ func execute(opts options) error {
 	// its own and draws nothing, so it must never reach readRun or renderAll.
 	if opts.fairness != "" {
 		return runFairness(opts, root)
+	}
+	if opts.held != "" {
+		return runHeld(opts, root)
 	}
 
 	recordPath := resolve(root, opts.record)

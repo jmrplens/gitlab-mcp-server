@@ -887,6 +887,50 @@ func TestHTTPTarget_Arguments_SwitchTheLimiterAndSizeThePoolOnlyWhenAsked(t *tes
 	}
 }
 
+// TestHTTPTarget_NoFile_StartsTheServerUnderTheLimitInItsOwnPlace verifies a
+// descriptor limit reaches the server itself, as both its soft and its hard
+// limit, and that the process sampled is the server rather than the shell that
+// set the limit.
+//
+// Both limits, because Go raises its soft limit to the hard one at startup: a
+// soft limit alone would be undone before the server served anything, and the
+// step that was meant to run out of descriptors would never get near the
+// limit. And the server in the shell's place, because the sampler reads the
+// process by the pid the target started, which would otherwise be a shell
+// holding three descriptors whatever the server did.
+func TestHTTPTarget_NoFile_StartsTheServerUnderTheLimitInItsOwnPlace(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the limits are read back from /proc")
+	}
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+	binary := standinBinary(t)
+	tgt := &httpTarget{binary: binary, plan: standinPlan(transportHTTP), stubURL: stub.url, nofile: 256}
+	t.Cleanup(tgt.close)
+	if _, err := tgt.start(t.Context()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	args := serverCommandLine(t, tgt)
+	if len(args) == 0 || args[0] != binary {
+		t.Errorf("the sampled process runs %q, want the server %s in the shell's place", args, binary)
+	}
+	procs := tgt.processes()
+	limits, err := os.ReadFile("/proc/" + strconv.Itoa(procs[0].Pid) + "/limits")
+	if err != nil {
+		t.Fatalf("read the server's limits: %v", err)
+	}
+	for line := range strings.SplitSeq(string(limits), "\n") {
+		if !strings.HasPrefix(line, "Max open files") {
+			continue
+		}
+		if fields := strings.Fields(strings.TrimPrefix(line, "Max open files")); len(fields) < 2 || fields[0] != "256" || fields[1] != "256" {
+			t.Errorf("limits line %q, want 256 soft and 256 hard", line)
+		}
+		return
+	}
+	t.Errorf("no descriptor limit in %s", limits)
+}
+
 // serverCommandLine reads the one running server's arguments back from /proc.
 func serverCommandLine(t *testing.T, tgt *httpTarget) []string {
 	t.Helper()

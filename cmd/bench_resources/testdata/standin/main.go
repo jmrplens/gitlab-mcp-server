@@ -22,6 +22,14 @@
 // control and the difference between its two arms can be driven without a real
 // server; the shapes are exact because telling a refusal from a failure is the
 // one thing that harness does which a canned answer would let drift.
+//
+// A gitlab_execute_action call running project.get reads the project from the
+// instance --gitlab-url names and answers once that read has, which is what
+// makes a call the held-request mode's stand-in instance holds a call this
+// process holds too; the call must carry the action in Mcp-Param-Action, as the
+// real transport demands. STANDIN_HELD_LIMIT, when positive, answers every
+// POST past that many in flight with a 503, the shape the real server's held
+// ceiling refuses with.
 package main
 
 import (
@@ -35,8 +43,10 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -59,17 +69,42 @@ const (
 	refusalPrefix = "rate limit exceeded for "
 	refusalSuffix = "; retry after a short backoff"
 	refusalCode   = -42900
+	// heldLimitEnv caps the POSTs served at once, as the real held ceiling
+	// does, and heldRefusal is the first line of the answer past it.
+	heldLimitEnv = "STANDIN_HELD_LIMIT"
+	heldRefusal  = "This server is holding as many requests as it serves at once. Retry later."
+	// The one tool and action whose call reaches the instance.
+	executeTool   = "gitlab_execute_action"
+	projectAction = "project.get"
 )
 
 // request is the subset of a JSON-RPC request the stand-in reads.
 type request struct {
 	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
+	Params struct {
+		Name      string `json:"name"`
+		Arguments struct {
+			Action string `json:"action"`
+			Params struct {
+				ProjectID string `json:"project_id"`
+			} `json:"params"`
+		} `json:"arguments"`
+	} `json:"params"`
 	// credential and tool come from the request's headers rather than its body,
 	// because the bound is per credential and the refusal names the tool.
 	credential string
 	tool       string
 }
+
+// gitlabURL is the instance a project read goes to, from --gitlab-url.
+var gitlabURL string
+
+// inFlight counts the POSTs being served now, against heldLimit.
+var (
+	inFlight  atomic.Int64
+	heldLimit int64
+)
 
 // bound is the per-credential limit a positive --rate-limit-rps turns on.
 //
@@ -117,7 +152,7 @@ type rpcError struct {
 func main() {
 	httpMode := flag.Bool("http", false, "serve HTTP instead of stdio")
 	addr := flag.String("http-addr", "", "listen address in HTTP mode")
-	flag.String("gitlab-url", "", "accepted and ignored")
+	flag.StringVar(&gitlabURL, "gitlab-url", "", "the instance a project read goes to")
 	flag.String("tool-surface", "", "accepted and ignored")
 	rps := flag.Float64("rate-limit-rps", 0, "positive turns on the crude per-credential bound below")
 	burst := flag.Int("rate-limit-burst", 1, "requests of the metered method served per credential before the bound refuses")
@@ -132,6 +167,14 @@ func main() {
 	limit.method = os.Getenv(refuseEnv)
 	if limit.method == "" {
 		limit.method = "tools/call"
+	}
+	if raw := os.Getenv(heldLimitEnv); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed <= 0 {
+			fmt.Fprintln(os.Stderr, "standin: "+heldLimitEnv+" must be a positive count")
+			os.Exit(1)
+		}
+		heldLimit = parsed
 	}
 
 	if *telemetry {
@@ -227,6 +270,14 @@ func serveHTTP(addr string) error {
 // handleMCP checks the headers a 2026-07-28 client must send and answers in
 // the SSE shape the real server uses by default.
 func handleMCP(w http.ResponseWriter, r *http.Request) {
+	if heldLimit > 0 {
+		held := inFlight.Add(1)
+		defer inFlight.Add(-1)
+		if held > heldLimit {
+			http.Error(w, heldRefusal, http.StatusServiceUnavailable)
+			return
+		}
+	}
 	if r.Header.Get("PRIVATE-TOKEN") == "" {
 		http.Error(w, "missing credential", http.StatusUnauthorized)
 		return
@@ -243,6 +294,10 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Header.Get("Mcp-Method") != req.Method {
 		http.Error(w, "Mcp-Method does not name the request's method", http.StatusBadRequest)
+		return
+	}
+	if req.Params.Name == executeTool && r.Header.Get("Mcp-Param-Action") != req.Params.Arguments.Action {
+		http.Error(w, "Mcp-Param-Action does not name the call's action", http.StatusBadRequest)
 		return
 	}
 	req.credential = r.Header.Get("PRIVATE-TOKEN")
@@ -289,6 +344,10 @@ func respond(req request) []byte {
 	case req.Method == "resources/list":
 		result = map[string]any{"resources": []any{}}
 	case req.Method == "tools/call":
+		if err := readProjectFor(req); err != nil {
+			failure = &rpcError{Code: -32603, Message: err.Error()}
+			break
+		}
 		result = map[string]any{
 			"content": []map[string]any{{"type": "text", "text": "ok"}},
 			"isError": false,
@@ -298,6 +357,36 @@ func respond(req request) []byte {
 	}
 
 	return encode(req, result, failure)
+}
+
+// readProjectFor reads the project a project.get call names from the instance,
+// and returns once the instance has answered in full; any other call reads
+// nothing. The whole body is read because the instance holds a read after its
+// headers, so the answer is only complete once the hold is released.
+func readProjectFor(req request) error {
+	if req.Params.Name != executeTool || req.Params.Arguments.Action != projectAction {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	target := strings.TrimSuffix(gitlabURL, "/") + "/api/v4/projects/" + req.Params.Arguments.Params.ProjectID
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
+	if err != nil {
+		return fmt.Errorf("project read: %w", err)
+	}
+	httpReq.Header.Set("PRIVATE-TOKEN", req.credential)
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("project read: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if _, copyErr := io.Copy(io.Discard, resp.Body); copyErr != nil {
+		return fmt.Errorf("project read: %w", copyErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("project read: HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // refusal is what the bound answers with, in whichever of the two shapes the
