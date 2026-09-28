@@ -53,6 +53,7 @@ const metaEntryPrefix = "gitlab_"
 var allowedIDs = map[string]string{
 	"achievement.namespace":    "a GraphQL field path, quoted in upstream-bugs.md as the selection client-go sends",
 	"gotest.tools":             "the Go module gotest.tools, named in the static analysis page",
+	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in upstream-bugs.md",
 	"mcp.schema":               "the middle of the Agent Plugins schema file name, mcp.schema.json",
 	"project.security_setting": "GitLab's own entity name, quoted in upstream-bugs.md as the thing the endpoint answers with",
 	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the enterprise guide quotes",
