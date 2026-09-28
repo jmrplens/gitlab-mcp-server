@@ -22,7 +22,9 @@
 //	    +--> TokenCache hit ---> verified identity
 //	    |
 //	    v
-//	verification slot --- none free in time ---> ErrVerificationBusy
+//	verification slot --- none free in time, not cached meanwhile ---> ErrVerificationBusy
+//	    |
+//	    +--> TokenCache hit, verified meanwhile ---> verified identity
 //	    |
 //	    v
 //	GitLab /user (identity) and scope introspection
@@ -34,10 +36,13 @@
 //
 // Both things on this path that grew with what callers send are bounded. The
 // identity cache holds a fixed number of identities and makes room by dropping
-// the one used least recently; the verifier sends GitLab its round trips under
-// a fixed number of slots, counting work rather than callers, so a token the
-// cache does not hold waits for one briefly and is refused when none frees. A
-// token the cache holds is answered before a slot is asked for.
+// an expired one or, when none has expired, the one used least recently; the
+// verifier sends GitLab its round trips under a fixed number of slots,
+// counting work rather than callers, so a token the cache does not hold waits
+// for one briefly and is refused when none frees. A token the cache holds is
+// answered before a slot is asked for, and the cache is read again when the
+// wait ends and once a slot is held, so a request that waited behind another
+// carrying the same new token finds the identity that one verified.
 //
 // [NewProtectedResourceHandler] serves OAuth Protected Resource Metadata so MCP
 // clients can discover the GitLab authorization servers this deployment

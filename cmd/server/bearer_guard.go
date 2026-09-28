@@ -11,12 +11,20 @@
 // your token at all".
 //
 // The guard runs first and answers those cases itself. A request it lets
-// through reaches the SDK middleware, whose own verification is a hit on the
-// cache this guard just populated, so the upstream cost is one call either
-// way. The cache is bounded and drops the identity used least recently, and the
-// one just stored is the most recent, so pushing it out between the guard and
-// the middleware would take the cache's whole capacity of other verifications
-// in that moment, which the verifier's slots do not allow.
+// through reaches the SDK middleware, whose own verification finds the
+// identity this guard just stored, so the upstream cost is one verification
+// either way.
+//
+// Two things can take that identity away in the moment between the two, and
+// neither is expected. The cache is bounded and drops the identity used least
+// recently, so ten thousand other distinct credentials would have to be used
+// in that moment; and an identity is cached no longer than its token lives, so
+// a token expiring in that moment is gone. Either way the middleware verifies
+// again. A token GitLab now refuses is answered 401 by the SDK, which is right.
+// A verification that finds every slot taken is answered by the SDK too, with
+// a 500 carrying the verifier's error rather than this guard's 503, and that
+// error's text says only that the token could not be verified right now, so
+// the rare path discloses no more than the guard would have.
 
 package main
 
@@ -287,27 +295,6 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 // classify turns a verification error into the response it deserves, keeping
 // "your credential is bad" and "GitLab could not tell us" apart.
 func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, instance, token string) *gateFailure {
-	// Every verification slot stayed busy for as long as this request waited,
-	// so the token was never sent anywhere. Answered like an upstream failure
-	// and for the same reasons: 503 with Retry-After, not cached, and not
-	// charged, since charging a refusal nobody judged would let a flood of
-	// invented tokens lock out the valid ones arriving from the same address.
-	//
-	// The text says the token could not be verified and nothing about why.
-	// The cause is other callers' traffic, and a refusal telling one caller
-	// that others are verifying would disclose it (INV-019); the operator reads
-	// the cause in the throttled log line, which names neither the caller nor
-	// the token.
-	if errors.Is(err, oauth.ErrVerificationBusy) {
-		refusalLog.log(ctx, slog.LevelWarn, "token verification refused: every verification slot stayed busy", "error", err)
-		return &gateFailure{
-			status:  http.StatusServiceUnavailable,
-			code:    errCodeUpstreamUnavailable,
-			message: "This token could not be verified right now. Retry shortly. The token itself has not been rejected.",
-			header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
-		}
-	}
-
 	if upstream, ok := errors.AsType[*oauth.UpstreamError](err); ok {
 		// Deliberately not charged to the limiter and never cached: the
 		// token was never judged, so counting this would let a GitLab
@@ -397,16 +384,50 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 	}
 
-	// Anything else means the verification round-trip itself went wrong —
-	// an undecodable body, for instance. The credential was not judged, so
-	// it is treated like any other upstream failure.
-	slog.Error("token verification failed", "error", err)
+	// Anything else is a verification that produced no verdict: the round
+	// trip itself went wrong (an undecodable body, for instance), every
+	// verification slot stayed taken for as long as the request waited
+	// (ADM-014), or the request ended while it waited. The credential was not
+	// judged in any of them, so each is answered like an upstream failure:
+	// 503 with Retry-After, not cached, and not charged, since charging a
+	// refusal nobody judged would let a flood of invented tokens lock out the
+	// valid ones arriving from the same address.
+	//
+	// All three are answered in the same words. The next action is the same,
+	// and a sentence of its own for the slots would tell a caller that other
+	// callers are verifying. A caller that presents a new token to an instance
+	// it knows to be healthy and is refused after the slot wait can still
+	// infer that much from the refusal itself, which is the one bit INV-019
+	// accepts for a bound keyed on the process; the wording adds nothing to
+	// it. The log line is where the operator tells the three apart.
+	logUnverified(ctx, err)
 	return &gateFailure{
 		status:  http.StatusServiceUnavailable,
 		code:    errCodeUpstreamUnavailable,
 		message: "GitLab could not verify this token right now. Retry shortly. The token itself has not been rejected.",
 		header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
 	}
+}
+
+// logUnverified writes the operator's account of a verification that produced
+// no verdict, which the caller is told about in the same words whichever it
+// was (see [bearerGuard.classify]).
+//
+// The two lines about the slots are throttled, since a flood produces one per
+// request and neither names the caller or the token, so nothing is lost by
+// counting them. A wait the request's own end cut short is kept apart from
+// saturation: its client left, the slots need not have been full, and saying
+// they were would give the operator a cause that was not there.
+func logUnverified(ctx context.Context, err error) {
+	if errors.Is(err, oauth.ErrVerificationBusy) {
+		refusalLog.log(ctx, slog.LevelWarn, "token verification refused: every verification slot stayed busy")
+		return
+	}
+	if ctx.Err() != nil {
+		refusalLog.log(ctx, slog.LevelInfo, "token verification abandoned: the request ended before it was verified", "error", err)
+		return
+	}
+	slog.ErrorContext(ctx, "token verification failed", "error", err)
 }
 
 // unacceptedRecipientFailure builds the 401 for a token the instance accepts
@@ -572,9 +593,6 @@ func (g *bearerGuard) missingScopeDescription() string {
 // that has every reason to believe they granted the right thing, and a message
 // naming only api and read_api leaves them to work out what went wrong.
 func describeScopeShortfall(granted []string, minimum, advertised string) string {
-	// Two plain conditions rather than a tagless switch: a case expression
-	// carries no statement counter of its own, so a mutation tool reads its
-	// mutants as uncovered however thoroughly the tests below drive them.
 	held := "no GitLab API scope"
 	if len(granted) == 1 {
 		held = "the " + granted[0] + " scope"

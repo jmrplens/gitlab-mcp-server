@@ -112,6 +112,19 @@ func TestValues_HoldTheirPins(t *testing.T) {
 	}
 }
 
+// TestValues_OAuthCacheCapacity_IsTheLargestPool holds the one relation
+// between two values the register states in prose: the identity cache holds as
+// many identities as the largest pool an operator may configure, so no pool the
+// server can be given serves more credentials than the cache remembers (ADM-005
+// and POL-001). The two stay separate literals, each frozen above, because a
+// change to either is a policy change of its own; this test is what makes that
+// change look at the other.
+func TestValues_OAuthCacheCapacity_IsTheLargestPool(t *testing.T) {
+	if OAuthCacheCapacity != PoolSizeMax {
+		t.Errorf("OAuthCacheCapacity = %d and PoolSizeMax = %d; the cache must hold the largest pool", OAuthCacheCapacity, PoolSizeMax)
+	}
+}
+
 // TestValues_EveryRowValueIsFrozen holds three lists to one: the constants
 // values.go declares, the values the rows name, and the frozen table. A
 // constant no row names is a value nobody decided; a value a row names that is

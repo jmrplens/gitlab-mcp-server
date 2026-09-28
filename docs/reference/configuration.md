@@ -324,8 +324,8 @@ Replace `https://gitlab.com` with your self-managed GitLab URL when needed.
 With OAuth mode:
 
 - All tokens are verified against GitLab's `/api/v4/user` endpoint before reaching the MCP handler
-- Verified tokens are cached (SHA-256 hashed, keyed on instance and token) for `--oauth-cache-ttl` duration (default 15m, range 1m–2h), at most 10,000 of them; a full cache drops the identity used least recently
-- At most 16 tokens the cache does not hold are verified at once across the process; a new token that waits five seconds without a free slot is answered `503` with `Retry-After`, uncharged. Neither bound is configurable
+- Verified tokens are cached (SHA-256 hashed, keyed on instance and token) for `--oauth-cache-ttl` duration (default 15m, range 1m–2h), at most 10,000 of them; a full cache drops an expired identity or, when none has expired, the one used least recently
+- At most 16 tokens the cache does not hold are verified at once across the process; a new token that waits five seconds without a free slot is answered `503` with `Retry-After`, uncharged. Neither bound is configurable. The ceiling bounds how many verification requests are in flight, not how many reach GitLab in a minute
 - An RFC 9728 metadata endpoint is served at `/.well-known/oauth-protected-resource`, enabling MCP clients with OAuth 2.1 support to discover the GitLab authorization server automatically
 - OAuth mode is Bearer-only: a `PRIVATE-TOKEN` header is not accepted, so that what the `WWW-Authenticate` challenge advertises is exactly what is accepted. Legacy mode reads both headers
 

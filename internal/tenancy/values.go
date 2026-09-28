@@ -135,7 +135,9 @@ const (
 	// OAuthCacheSweepFloor is the floor under that cadence (ADM-005).
 	OAuthCacheSweepFloor = 30 * time.Second
 	// OAuthCacheCapacity is how many verified OAuth identities the cache
-	// holds before the least recently used one makes room (ADM-005).
+	// holds before an expired or least recently used one makes room
+	// (ADM-005). It equals PoolSizeMax, the largest pool an operator may
+	// configure, and the values test holds the two equal.
 	OAuthCacheCapacity = 10000
 	// OAuthVerifications is how many OAuth token verifications the process
 	// runs at once (ADM-014).

@@ -1098,9 +1098,10 @@ func startHoldingFakeGitLab(t *testing.T) (gitlab *fakeGitLab, release func()) {
 	return &fakeGitLab{url: srv.URL, calls: func() int { return int(held.Load()) }}, release
 }
 
-// postBearer is one tools/list carrying token, for a goroutine: it never
-// touches a *testing.T, and a failure to make the call at all is its error.
-func postBearer(ctx context.Context, srv *server, token string) (response, error) {
+// postBearer is one tools/list carrying token, forwarded for client by the
+// trusted proxy the flood test runs behind, for a goroutine: it never touches
+// a *testing.T, and a failure to make the call at all is its error.
+func postBearer(ctx context.Context, srv *server, client, token string) (response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.baseURL+"/mcp", strings.NewReader(toolsListBody))
 	if err != nil {
 		return response{}, err
@@ -1110,6 +1111,7 @@ func postBearer(ctx context.Context, srv *server, token string) (response, error
 	req.Header.Set("MCP-Protocol-Version", protocolVersion)
 	req.Header.Set("Mcp-Method", "tools/list")
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Forwarded-For", client)
 	resp, err := srv.httpClient().Do(req)
 	if err != nil {
 		return response{}, err
@@ -1125,15 +1127,24 @@ type floodAnswer struct {
 	err  error
 }
 
+// floodClient is the forwarded address flood request i arrives from: one
+// address per token, the shape of a flood spread over many sources, which the
+// per-address budgets cannot see as one.
+func floodClient(i int) string {
+	return "198.51.100." + strconv.Itoa(i+1)
+}
+
 // floodVerifications sends n tools/list requests at once, each carrying a
-// distinct token startHoldingFakeGitLab holds, and returns where their answers
-// arrive. The goroutines touch no *testing.T.
+// distinct token startHoldingFakeGitLab holds and each forwarded for an
+// address of its own, and returns where their answers arrive. The context is
+// read here, on the test goroutine, so the goroutines touch no *testing.T.
 func floodVerifications(t *testing.T, srv *server, n int) <-chan floodAnswer {
 	t.Helper()
+	ctx := t.Context()
 	answers := make(chan floodAnswer, n)
 	for i := range n {
 		go func() {
-			resp, err := postBearer(t.Context(), srv, floodTokenPrefix+strconv.Itoa(i))
+			resp, err := postBearer(ctx, srv, floodClient(i), floodTokenPrefix+strconv.Itoa(i))
 			answers <- floodAnswer{resp, err}
 		}()
 	}
@@ -1158,7 +1169,9 @@ func nextFloodAnswer(t *testing.T, answers <-chan floodAnswer) response {
 
 // assertVerificationSaturated checks the refusal of a request that waited in
 // vain for a verification slot: 503 -50300 with the fixed Retry-After, no
-// challenge, and a text that says the token could not be verified.
+// challenge, and the words a verification with no verdict is always answered
+// with, so the refusal says nothing a caller could not infer from being
+// refused at all.
 func assertVerificationSaturated(t *testing.T, got response) {
 	t.Helper()
 	if got.status != http.StatusServiceUnavailable {
@@ -1170,7 +1183,7 @@ func assertVerificationSaturated(t *testing.T, got response) {
 	if challenge := got.header.Get("WWW-Authenticate"); challenge != "" {
 		t.Errorf("a refusal nobody judged challenged the client to reauthorize: %q", challenge)
 	}
-	for _, want := range []string{"-50300", "This token could not be verified right now.", "has not been rejected"} {
+	for _, want := range []string{"-50300", "GitLab could not verify this token right now.", "has not been rejected"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(got.body, want) {
 				t.Errorf("body lacks %q: %s", want, truncate(got.body))
@@ -1182,23 +1195,26 @@ func assertVerificationSaturated(t *testing.T, got response) {
 // TestOAuth_VerificationFlood_IsBoundedAndChargesNothing pins issue 950's
 // verification ceiling (register row ADM-014) against the binary.
 //
-// Twenty distinct tokens arrive at once against an instance that holds each
-// identity request. Sixteen reach GitLab, which is the ceiling, and no more
-// arrive while they are held. The other four wait out their five seconds and
-// are answered 503 -50300 with Retry-After, in words that say the token could
-// not be verified and not why, so no caller learns about another's traffic.
-// None of that is charged: the deployment blocks an address after one charged
-// failure, and a new token from the same address is still served afterwards.
-// The operator reads the cause in one throttled log line that names no token.
+// Twenty distinct tokens arrive at once, each forwarded by a trusted proxy for
+// an address of its own, against an instance that holds each identity request.
+// That is the distributed shape the per-address budgets cannot see as one.
+// Sixteen reach GitLab, which is the ceiling, and no more arrive while they
+// are held. The other four wait out their five seconds and are answered 503
+// -50300 with Retry-After, in the words a verification with no verdict is
+// always answered with, so the wording adds nothing to what being refused
+// tells a caller. None of that is charged: the per-address and
+// distinct-credential budgets both block on their first charge here, and a
+// new token from every address of the flood is still served afterwards. The
+// operator reads the cause in one throttled log line that names no token.
 //
 // A credential the deployment already holds is served while every slot is
 // taken, because the identity cache is read before a slot is asked for.
-// Before the ceiling every token reached GitLab at once, up to three requests
-// each, however many arrived.
 func TestOAuth_VerificationFlood_IsBoundedAndChargesNothing(t *testing.T) {
 	const slots, excess = 16, 4
 	gitlab, release := startHoldingFakeGitLab(t)
-	srv := oauthServer(t, gitlab.url, "--auth-failure-limit=1")
+	srv := oauthServer(t, gitlab.url,
+		"--auth-failure-limit=1", "--auth-distinct-token-limit=1",
+		"--trusted-proxy-header=X-Forwarded-For", "--trusted-proxies=127.0.0.1,::1")
 
 	if warm := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer gloas-in-service"})); warm.status != http.StatusOK {
 		t.Fatalf("the credential in service = %d before the flood, want 200: %s", warm.status, truncate(warm.body))
@@ -1235,9 +1251,17 @@ func TestOAuth_VerificationFlood_IsBoundedAndChargesNothing(t *testing.T) {
 		})
 	}
 
-	if after := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer gloas-after-the-flood"})); after.status != http.StatusOK {
-		t.Errorf("a new token after the flood = %d, want 200: a refusal nobody judged was charged to the address: %s",
-			after.status, truncate(after.body))
+	for i := range slots + excess {
+		t.Run("a new token from "+floodClient(i), func(t *testing.T) {
+			after, err := postBearer(t.Context(), srv, floodClient(i), "gloas-after-the-flood-"+strconv.Itoa(i))
+			if err != nil {
+				t.Fatalf("the request could not be made: %v", err)
+			}
+			if after.status != http.StatusOK {
+				t.Errorf("a new token after the flood = %d, want 200: a refusal nobody judged was charged to the address: %s",
+					after.status, truncate(after.body))
+			}
+		})
 	}
 
 	logs := srv.logs()

@@ -247,13 +247,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
   or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
   `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
-  (`HLD-002`, `HLD-004`, `RTC-007`), which tells a caller that has not reached its own
-  bound that the process has reached its one, and so that others are holding or spending
-  it (issue 951, ADR-0023 NEG-007). Neither carries a count of what others hold or an
-  identity, and neither says more than a caller could infer from its own count: the
-  stream ceilings name the scope that refused, which a caller counting its own streams
-  knows already, and `RTC-007` answers in `RTC-003`'s words, so only the log line says
-  which bucket refused.
+  (`HLD-002`, `HLD-004`, `RTC-007`, `ADM-014`), which tells a caller that has not
+  reached its own bound, or that knows the upstream to be healthy, that the process has
+  reached its one, and so that others are holding, spending or verifying against it
+  (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of what others hold or
+  an identity, and neither says more than a caller could infer from its own count or its
+  own wait: the stream ceilings name the scope that refused, which a caller counting its
+  own streams knows already, `RTC-007` answers in `RTC-003`'s words and `ADM-014` in the
+  words `ADM-002` uses for a verification with no verdict, so only the log line says
+  which bound refused.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -515,19 +517,30 @@ that what they recorded is the server's position, stated in
 `RTC-001` and `IDN-013` record that decision and carry neither any longer. F-29 and F-30
 are answered by issue 950. The OAuth identity cache (`ADM-005`) holds at most ten
 thousand identities, the largest pool an operator may configure, and a full cache drops
-the one used least recently to hold the one GitLab has just verified. The verification's
-round trips to GitLab run under a ceiling of their own keyed on the process (`ADM-014`):
-sixteen verifications at once, not configurable, with slots that are not the pool's
-probe slots (`POL-006`), so neither kind of work can starve the other. A token the cache
-does not hold waits at most five seconds for a slot and is then refused with a gate 503
-`-50300` and `Retry-After`, charged to no budget, in words that do not say other
-callers are the cause. A token the cache holds never waits, so a credential this
-deployment is serving is not refused while verification is saturated. Measured through
-the verifier against a stand-in GitLab, a hundred thousand distinct credentials held
-a hundred thousand entries and sixty megabytes before, and hold ten thousand and seven
-megabytes now; two thousand invented tokens at once put two thousand verification
-requests in flight before, and sixteen now. `ADM-002`, `ADM-005` and `POL-006` carry
-neither finding any longer, and `ADM-005` and `ADM-014` record the decision. Four more
+an expired identity or, when none has expired, the one used least recently, to hold the
+one GitLab has just verified. What pushes a live identity out is ten thousand other
+distinct credentials used since its last request, so on a deployment serving close to
+that many, every new verification does. The verification's round trips to GitLab run
+under a ceiling of their own keyed on the process (`ADM-014`): sixteen verifications at
+once, not configurable, with slots that are not the pool's probe slots (`POL-006`), so
+neither kind of work occupies the other's slots. It bounds concurrency and not rate,
+about three hundred and twenty requests a second at fifty milliseconds a round trip,
+which is above GitLab.com's allowance for unauthenticated traffic from one address. A
+token the cache does not hold waits at most five seconds for a slot and is then refused
+with a gate 503 `-50300` and `Retry-After`, charged to no budget, in the words `ADM-002`
+uses for a verification with no verdict; a caller that knows the instance to be healthy
+can still infer from the refusal that others are verifying, the one bit `INV-019`
+accepts for a bound keyed on the process. A token the cache holds is answered before a
+slot is asked for. The cost falls on one population, and it is stated rather than
+measured with `make bench-fairness`, whose driver speaks no OAuth: a legitimate
+credential presented for the first time while a flood holds every slot is refused with
+the flood for as long as the flood lasts, which trades the admission of new credentials
+during a flood for the load the instance receives. Measured through the verifier
+against a stand-in GitLab, a hundred thousand distinct credentials held a hundred
+thousand entries and sixty megabytes before, and hold ten thousand and seven megabytes
+now; two thousand invented tokens at once put two thousand verification requests in
+flight before, and sixteen now. `ADM-002`, `ADM-005` and `POL-006` carry neither finding
+any longer, and `ADM-005` and `ADM-014` record the decision. Four more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
 message the SDK gives the server no way to send, and F-23 and F-27 stale statements.

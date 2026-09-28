@@ -393,12 +393,28 @@ func newVerificationClient(skipTLS bool) *http.Client {
 // GET /user, which runs after these requests have already been sent.
 //
 // These slots are the verifier's own, not the pool's, so neither kind of work
-// can take the other's: a flood of invented tokens held in verification does
-// not stop the pool admitting the tokens that passed it, and a burst of pool
-// builds does not stop verification. A slot's requests run one after another,
-// so sixteen slots put at most sixteen verification requests in flight against
-// the instance at any moment, beside the pool's sixteen; at fifty milliseconds
-// a round trip that still verifies a hundred new tokens a second.
+// can take the other's slots: a flood of invented tokens held in verification
+// does not occupy the slots the pool builds an entry under, and a burst of pool
+// builds does not occupy verification's. A slot's requests run one after
+// another, so sixteen slots put at most sixteen verification requests in flight
+// against the instance at any moment, beside the pool's sixteen.
+//
+// What it bounds is concurrency, not rate. The requests a slot sends follow one
+// another as fast as the instance answers, so the rate is the slots divided by
+// the round trip: at fifty milliseconds, sixteen slots send about three hundred
+// and twenty requests a second, and verify about a hundred new tokens a second
+// at three requests each. That is well above the per-address limits GitLab.com
+// documents for unauthenticated traffic, which is what a request carrying a
+// token GitLab refuses counts as, so on GitLab.com this ceiling is not what
+// keeps the deployment's address under GitLab's throttle. It is what keeps the
+// relayed load proportional to the instance's own speed rather than to how
+// many tokens arrive at once.
+//
+// The price is paid by the one population it can reach: a legitimate credential
+// presented for the first time while a flood holds every slot waits with the
+// flood, and is refused like it once [verificationWait] runs out, for as long
+// as the flood lasts. A credential the cache holds is not in that population,
+// since it is answered before a slot is asked for.
 //
 // It is not configurable, because an operator who could raise it could undo
 // what it bounds (INV-004).
@@ -414,14 +430,20 @@ const verificationSlots = tenancy.OAuthVerifications // register row ADM-014
 // Retry-After, never a verdict on the token.
 const verificationWait = tenancy.OAuthVerificationWait // register row ADM-014
 
-// ErrVerificationBusy reports that no verification slot came free while the
-// request waited for one, or that the request ended while it waited.
+// ErrVerificationBusy reports that every verification slot stayed taken for as
+// long as the request waited for one.
 //
 // Like [UpstreamError] it says nothing about the credential: the token was
 // never sent anywhere. So it must be answered as "retry later", never cached as
 // a rejection and never charged to an authentication budget, or a flood of
 // invented tokens would lock out the valid ones arriving beside it.
-var ErrVerificationBusy = errors.New("token verification is saturated, retry shortly")
+//
+// Its text says nothing about why, because it can reach the caller: the bearer
+// guard answers it in words of its own, but the SDK's middleware, verifying a
+// second time, writes a verifier error it does not recognize into its own
+// answer. A sentence about saturation there would tell a caller that other
+// callers are verifying (INV-019).
+var ErrVerificationBusy = errors.New("the token could not be verified right now; retry shortly")
 
 // verificationGate is the set of slots one verifier's round trips run under.
 type verificationGate struct {
@@ -431,14 +453,30 @@ type verificationGate struct {
 
 // acquire takes a slot, waiting at most g.wait and no longer than ctx lives,
 // and returns the function that gives it back.
+//
+// A free slot is taken before anything else is looked at. Go chooses at random
+// among the cases of a select that are ready together, so with the wait folded
+// into one select a request whose context had already ended would be refused
+// half the time with a slot free, and a request refused that way is not one
+// the slots turned away. A request whose context ends while it waits is
+// refused with an error of its own for the same reason: its client left, and
+// counting it as saturation would tell the operator the slots were full when
+// they need not have been.
 func (g *verificationGate) acquire(ctx context.Context) (func(), error) {
+	release := func() { <-g.slots }
+	select {
+	case g.slots <- struct{}{}:
+		return release, nil
+	default:
+	}
+
 	timer := time.NewTimer(g.wait)
 	defer timer.Stop()
 	select {
 	case g.slots <- struct{}{}:
-		return func() { <-g.slots }, nil
+		return release, nil
 	case <-ctx.Done():
-		return nil, fmt.Errorf("%w: the request ended while it waited for a slot: %w", ErrVerificationBusy, context.Cause(ctx))
+		return nil, fmt.Errorf("token verification abandoned, the request ended first: %w", context.Cause(ctx))
 	case <-timer.C:
 		return nil, ErrVerificationBusy
 	}
@@ -511,19 +549,33 @@ func newGitLabVerifier(resolve InstanceResolver, client *http.Client, cacheTTL t
 		// A cached identity is answered before a slot is asked for, so a
 		// credential this deployment already serves never waits behind a
 		// flood of tokens it has not seen.
-		if cache != nil {
-			if info, cached := cache.Get(gitlabURL, token); cached {
-				return info, nil
-			}
+		if info, cached := cachedIdentity(cache, gitlabURL, token); cached {
+			return info, nil
 		}
 
+		// The cache is asked again at the end of the wait, however it ended,
+		// and once a slot is held. A client that opens several requests at
+		// once with a token it has just been issued sends each of them here,
+		// and one that waited behind another finds the identity that one
+		// verified: without these reads it would send its own round trips
+		// once a slot came free, or be refused a credential the cache already
+		// held when none did. Requests that found slots free together still
+		// verify side by side; this is the cheap half of collapsing them, and
+		// the half that matters under saturation.
 		release, err := slots.acquire(ctx)
 		if err != nil {
+			if info, cached := cachedIdentity(cache, gitlabURL, token); cached {
+				return info, nil
+			}
 			return nil, err
 		}
 		// Held through introspection too: every request the verification
 		// sends GitLab is counted, not only the first.
 		defer release()
+
+		if info, cached := cachedIdentity(cache, gitlabURL, token); cached {
+			return info, nil
+		}
 
 		user, err := askIdentity(ctx, client, gitlabURL, token)
 		if err != nil {
@@ -549,6 +601,15 @@ func newGitLabVerifier(resolve InstanceResolver, client *http.Client, cacheTTL t
 		}
 		return admitToken(cache, gitlabURL, token, cacheTTL, user, result), nil
 	}
+}
+
+// cachedIdentity is the identity cache holds for the token, if a cache was
+// given and holds a live one.
+func cachedIdentity(cache *TokenCache, gitlabURL, token string) (*auth.TokenInfo, bool) {
+	if cache == nil {
+		return nil, false
+	}
+	return cache.Get(gitlabURL, token)
 }
 
 // askIdentity sends GET /api/v4/user with the token and reads the identity

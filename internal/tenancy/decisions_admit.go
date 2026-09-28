@@ -126,13 +126,15 @@ func admitDecisions() []Decision {
 			},
 			Source: Configurable, Flags: []string{"--oauth-cache-ttl"}, Envs: []string{"GITLAB_MCP_OAUTH_CACHE_TTL"},
 			Config: []string{"OAuthCacheTTL"}, Malformed: RefuseStartup, Zero: ZeroSelectsDefault,
-			// Full, the cache drops the identity used least recently to hold
-			// the one GitLab has just verified, which issue 950 decided
-			// (answering F-29): refusing the newcomer would refuse a credential
-			// GitLab accepted. The identity taken costs its credential one more
-			// verification, which ADM-014 bounds, and while its address is
-			// blocked the exemption a cached identity gives it; the capacity is
-			// a constant, the largest pool an operator may configure.
+			// Full, the cache drops an expired identity or, when none has
+			// expired, the one used least recently, to hold the one GitLab has
+			// just verified, which issue 950 decided (answering F-29): refusing
+			// the newcomer would refuse a credential GitLab accepted. The
+			// identity taken costs its credential one more verification, which
+			// ADM-014 bounds, and while its address is blocked the exemption a
+			// cached identity gives it; the capacity is a constant, the largest
+			// pool an operator may configure (POL-001's PoolSizeMax, held equal
+			// by the values test).
 			AtCapacity: EvictAcrossKeys,
 			Decided:    []string{"issue 950"},
 			Findings:   []string{"F-34"},
@@ -270,7 +272,16 @@ func admitDecisions() []Decision {
 		},
 		{
 			// The verifier's own slots, not POL-006's, so neither kind of work
-			// can starve the other (issue 950, answering F-30).
+			// takes the other's slots (issue 950, answering F-30).
+			//
+			// Its refusal is ADM-002's for a verification that produced no
+			// verdict, word for word and from the same return: the next action
+			// is the same, and a sentence of its own would tell a caller that
+			// others are verifying. A caller refused after the slot wait while
+			// it knows the instance to be healthy can infer that much from being
+			// refused at all, which is the one bit INV-019 accepts for a bound
+			// keyed on the process; the wording adds nothing to it. The log line
+			// it writes is where an operator tells the two apart.
 			ID: "ADM-014", Question: Admit, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "OAuth token verifications the process runs at once",
 			Key:      KeyProcess, StdioKey: KeyNone,
@@ -283,7 +294,7 @@ func admitDecisions() []Decision {
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnavailable, Status: 503,
-					RetryAfter: RetryAfterFixed, Prefix: "This token could not be verified right now.",
+					RetryAfter: RetryAfterFixed, Prefix: "GitLab could not verify this token right now.",
 					Answer: RetryLater, At: classify,
 				},
 			},

@@ -31,17 +31,27 @@ import (
 // verification against GitLab the next time it is presented, which the
 // verification ceiling ([verificationSlots]) bounds in turn, and, while its
 // address is blocked by an authentication budget, the exemption a cached
-// identity gives it. The victim is the entry used least recently, so a
-// credential in steady use is the last to go: a caller would have to push more
-// distinct valid credentials through verification than this bound between two
-// of its requests, and verification admits at most [verificationSlots] at a
-// time.
+// identity gives it.
+//
+// An expired identity makes room first, since it answers nobody. Only when
+// none has expired does the identity used least recently go, and every read
+// counts as a use, so what pushes a live identity out is the cache's whole
+// capacity of other distinct credentials used since its own last request,
+// read or verified alike, at least one of them newly verified. That is
+// exactly the capacity and no more. A deployment serving far fewer
+// credentials than that loses one only to a caller verifying thousands of its
+// own, which [verificationSlots] stretches over time: ten thousand
+// verifications at the hundred or so a second the slots allow against an
+// instance answering in fifty milliseconds take about a minute and a half. A
+// deployment already serving close to ten thousand credentials is in the
+// other case: every new verification pushes out whichever identity was used
+// least recently, however regularly its credential comes back.
 //
 // Ten thousand is the largest pool an operator may configure (--max-http-clients
-// tops out at the same figure), so no pool the server can be given serves more
-// credentials than this cache remembers. Measured through the verifier, an
-// entry retains about seven hundred bytes, so the bound holds the cache to about
-// seven megabytes where a hundred thousand credentials used to hold sixty.
+// tops out at the same figure, and the register's values test holds the two
+// equal), so no pool the server can be given serves more credentials than this
+// cache remembers. Measured through the verifier, an entry retains about seven
+// hundred bytes, so the bound holds the cache to about seven megabytes.
 const identityCacheCapacity = tenancy.OAuthCacheCapacity // register row ADM-005
 
 // cacheEntry is one verified identity and when it stops being one. The key is
@@ -63,14 +73,23 @@ type cacheEntry struct {
 // credential verified against the first as proof of identity on the second.
 //
 // Every read that finds a live entry marks it used, and a full cache makes
-// room by dropping the entry used least recently (see [identityCacheCapacity]).
-// That is why a read takes the same lock a write does: finding an entry
-// changes the order the cache would evict in.
+// room by dropping an expired entry or, when none has expired, the entry used
+// least recently (see [identityCacheCapacity]). That is why a read takes the
+// same lock a write does: finding an entry changes the order the cache would
+// evict in.
 type TokenCache struct {
 	mu       sync.Mutex
 	entries  map[string]*list.Element
 	recency  *list.List
 	capacity int
+	// soonest is no later than the expiry of any entry held, so before it
+	// nothing held can have expired. A full cache walks its entries for an
+	// expired one only once soonest has passed: a stream of new identities
+	// arriving at a cache full of live ones then costs one comparison each
+	// rather than a walk of ten thousand entries under the lock every read
+	// takes. The zero value means no entry has set it, and holds only while
+	// the cache is empty.
+	soonest time.Time
 }
 
 // NewTokenCache creates an empty [TokenCache] holding at most
@@ -119,11 +138,12 @@ func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
 // Put stores a [auth.TokenInfo] for the given raw token with the specified TTL.
 //
 // A key already held is refreshed in place. A new key in a full cache first
-// drops the entry used least recently, so the cache never holds more than its
-// capacity.
+// makes room, dropping every expired entry or, when none has expired, the
+// entry used least recently, so the cache never holds more than its capacity.
 func (c *TokenCache) Put(gitlabURL, token string, info *auth.TokenInfo, ttl time.Duration) {
 	key := tokenKey(gitlabURL, token)
-	expiresAt := time.Now().Add(ttl)
+	now := time.Now()
+	expiresAt := now.Add(ttl)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -132,12 +152,50 @@ func (c *TokenCache) Put(gitlabURL, token string, info *auth.TokenInfo, ttl time
 		entry := entryOf(element)
 		entry.info, entry.expiresAt = info, expiresAt
 		c.recency.MoveToFront(element)
+		c.noteExpiryLocked(expiresAt)
 		return
+	}
+	if len(c.entries) >= c.capacity {
+		c.makeRoomLocked(now)
+	}
+	c.entries[key] = c.recency.PushFront(&cacheEntry{key: key, info: info, expiresAt: expiresAt})
+	c.noteExpiryLocked(expiresAt)
+}
+
+// makeRoomLocked frees one place in a full cache. An expired identity answers
+// nobody, so a sweep goes first whenever one may have expired; the identity
+// used least recently goes only when the sweep freed nothing. The caller holds
+// c.mu.
+func (c *TokenCache) makeRoomLocked(now time.Time) {
+	if expiredAt(now, c.soonest) {
+		c.sweepLocked(now)
 	}
 	if len(c.entries) >= c.capacity {
 		c.removeLocked(c.recency.Back())
 	}
-	c.entries[key] = c.recency.PushFront(&cacheEntry{key: key, info: info, expiresAt: expiresAt})
+}
+
+// sweepLocked drops every entry expired as of now, and sets soonest to the
+// earliest expiry among the entries left. The caller holds c.mu.
+func (c *TokenCache) sweepLocked(now time.Time) {
+	c.soonest = time.Time{}
+	for element := c.recency.Front(); element != nil; {
+		next := element.Next()
+		if expiresAt := entryOf(element).expiresAt; expiredAt(now, expiresAt) {
+			c.removeLocked(element)
+		} else {
+			c.noteExpiryLocked(expiresAt)
+		}
+		element = next
+	}
+}
+
+// noteExpiryLocked keeps soonest no later than an expiry the cache now holds.
+// The caller holds c.mu.
+func (c *TokenCache) noteExpiryLocked(expiresAt time.Time) {
+	if c.soonest.IsZero() || expiresAt.Before(c.soonest) {
+		c.soonest = expiresAt
+	}
 }
 
 // removeLocked drops one entry from both the map and the recency list. The
@@ -187,13 +245,7 @@ func (c *TokenCache) Cleanup() {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for element := c.recency.Front(); element != nil; {
-		next := element.Next()
-		if expiredAt(now, entryOf(element).expiresAt) {
-			c.removeLocked(element)
-		}
-		element = next
-	}
+	c.sweepLocked(now)
 }
 
 // expired reports whether a deadline has been reached as of now, counting the

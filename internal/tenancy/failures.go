@@ -57,7 +57,7 @@ const (
 )
 
 // Failures returns every refusal the legacy gate and the OAuth bearer guard
-// return: eight in the gate's resolve, seven in the guard's check and seven in
+// return: eight in the gate's resolve, seven in the guard's check and six in
 // its classify. Five are charged, and each of them is a failure the caller
 // caused; the rest are refused without a charge, because the credential was
 // never judged or the refusal is about the request rather than the token.
@@ -107,10 +107,6 @@ func Failures() []Failure {
 
 		// The OAuth bearer guard, classifying a verification error.
 		{
-			Kind: "verification-saturated", Decision: "ADM-014", At: classifySite(), Status: 503,
-			Prefix: "This token could not be verified right now.",
-		},
-		{
 			Kind: "upstream", Decision: "ADM-002", At: classifySite(), Status: 503,
 			Prefix: "GitLab could not verify this token right now;",
 		},
@@ -127,6 +123,9 @@ func Failures() []Failure {
 			Kind: "gitlab-rejected", Attributable: true, Charged: true, Decision: "ADM-002",
 			At: classifySite(), Status: 401, Prefix: rejectedPrefix,
 		},
+		// A verification that produced no verdict, whether the round trip
+		// failed or no slot came free: ADM-014's refusal is this return too, in
+		// the same words, as POL-006's is ADM-001's above.
 		{
 			Kind: "verification-failed", Decision: "ADM-002", At: classifySite(), Status: 503,
 			Prefix: "GitLab could not verify this token right now.",

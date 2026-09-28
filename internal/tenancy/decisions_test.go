@@ -207,12 +207,13 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 // TestDecisions_OAuthVerification_IsBoundedByIssue950 pins what issue 950
 // decided for the two things on the OAuth admission path that grew with what
 // callers send. The identity cache (ADM-005) has a constant capacity and takes
-// the least recently used identity to hold a new one, which crosses keys and so
-// records the decision; the verification's round trips (ADM-014) run under a
-// ceiling keyed on the process that no operator can change, with slots of its
-// own rather than the pool's probe slots (POL-006), and a request that waited
-// in vain is told to retry and is charged nothing. No row carries F-29 or F-30
-// any longer, and both stay filed as issue 950's.
+// an expired or least recently used identity to hold a new one, which crosses
+// keys and so records the decision; the verification's round trips (ADM-014)
+// run under a ceiling keyed on the process that no operator can change, with
+// slots of its own rather than the pool's probe slots (POL-006), and a request
+// that waited in vain is told to retry and is charged nothing (its words are
+// held by TestDecisions_ADM014_RefusesInADM002sWords). No row carries F-29 or
+// F-30 any longer, and both stay filed as issue 950's.
 func TestDecisions_OAuthVerification_IsBoundedByIssue950(t *testing.T) {
 	cache, _ := Lookup("ADM-005")
 	if !slices.Contains(cache.Values, "OAuthCacheCapacity") || cache.AtCapacity != EvictAcrossKeys ||
@@ -255,6 +256,28 @@ func TestDecisions_OAuthVerification_IsBoundedByIssue950(t *testing.T) {
 				t.Errorf("%s is filed as issue %d, want it kept as issue 950's", finding, FindingIssue(finding))
 			}
 		})
+	}
+}
+
+// TestDecisions_ADM014_RefusesInADM002sWords pins the refusal of the
+// verification ceiling to the one ADM-002 gives a verification with no verdict,
+// field for field: the same function, status, code, text and Retry-After. The
+// next action is the same, and a sentence of its own would tell a caller that
+// others are verifying; a caller that knows the instance to be healthy can
+// still infer that much from being refused at all, which is the one bit
+// INV-019 accepts for a bound keyed on the process, and this is what keeps the
+// wording from adding to it.
+func TestDecisions_ADM014_RefusesInADM002sWords(t *testing.T) {
+	slots, _ := Lookup("ADM-014")
+	admission, _ := Lookup("ADM-002")
+	shared := func(r Refusal) bool {
+		return slices.ContainsFunc(admission.Refusals, func(a Refusal) bool {
+			return a.At == r.At && a.Status == r.Status && a.Code == r.Code && a.Prefix == r.Prefix && a.RetryAfter == r.RetryAfter
+		})
+	}
+	if len(slots.Refusals) != 1 || !shared(slots.Refusals[0]) {
+		t.Errorf("ADM-014 refuses with %+v; want exactly one refusal, ADM-002's for a verification with no verdict, "+
+			"so a caller is not told others are verifying", slots.Refusals)
 	}
 }
 
@@ -512,7 +535,7 @@ func rowPins() map[string]rowPin {
 		"ADM-014": {Admit, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyProcess, []refusalPin{
 			{
 				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
-				prefix: "This token could not be verified right now.", answer: RetryLater,
+				prefix: "GitLab could not verify this token right now.", answer: RetryLater,
 			},
 		}},
 		"AUB-001": {Admit, Budget, ClassA, Valued, KeyAddress, KeyNone, KeyNone, KeyNone, pinBlockedAt()},

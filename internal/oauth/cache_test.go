@@ -161,6 +161,120 @@ func TestTokenCache_Full_EvictsTheLeastRecentlyUsed(t *testing.T) {
 	}
 }
 
+// TestTokenCache_Full_DropsAnExpiredIdentityBeforeALiveOne pins the other half
+// of the victim a full cache chooses: an expired identity goes first, whatever
+// its place in the recency order, and the identity used least recently goes
+// only when none has expired. An entry can be used recently and expired
+// already, since a TTL is shortened to the token's own expiry, and dropping a
+// live identity to keep it would cost a credential in service its entry for
+// nothing.
+func TestTokenCache_Full_DropsAnExpiredIdentityBeforeALiveOne(t *testing.T) {
+	t.Parallel()
+
+	cache := newTokenCache(3)
+	cache.Put(testInstance, "live-oldest", &auth.TokenInfo{UserID: "1"}, time.Hour)
+	cache.Put(testInstance, "live-newer", &auth.TokenInfo{UserID: "2"}, time.Hour)
+	// Stored last, so it is the most recently used, and expired already.
+	cache.Put(testInstance, "expired-recent", &auth.TokenInfo{UserID: "3"}, -time.Minute)
+
+	cache.Put(testInstance, "arriving", &auth.TokenInfo{UserID: "4"}, time.Hour)
+
+	if got := cache.Len(); got != 3 {
+		t.Errorf("Len() = %d, want the capacity, 3", got)
+	}
+	for _, tc := range []struct {
+		token string
+		want  bool
+	}{{"live-oldest", true}, {"live-newer", true}, {"expired-recent", false}, {"arriving", true}} {
+		t.Run(tc.token, func(t *testing.T) {
+			t.Parallel()
+			if _, ok := cache.Get(testInstance, tc.token); ok != tc.want {
+				t.Errorf("%s cached = %v, want %v: the expired identity makes room, not the live one used least recently",
+					tc.token, ok, tc.want)
+			}
+		})
+	}
+}
+
+// TestTokenCache_Full_WalksOnlyOnceSomethingCanHaveExpired pins what keeps a
+// full cache cheap: it looks for an expired identity only once the earliest
+// expiry it holds has passed. A cache whose bound says nothing can have
+// expired yet drops the identity used least recently without walking the
+// others, which a cache of ten thousand live identities under a stream of new
+// ones would otherwise do on every verification. The bound is set by hand here
+// to a state the cache never reaches on its own, because that is the only way
+// to see whether the walk happened.
+func TestTokenCache_Full_WalksOnlyOnceSomethingCanHaveExpired(t *testing.T) {
+	t.Parallel()
+
+	cache := newTokenCache(2)
+	cache.Put(testInstance, "live", &auth.TokenInfo{UserID: "1"}, time.Hour)
+	cache.Put(testInstance, "expired", &auth.TokenInfo{UserID: "2"}, -time.Minute)
+	cache.mu.Lock()
+	cache.soonest = time.Now().Add(time.Hour)
+	cache.mu.Unlock()
+
+	cache.Put(testInstance, "arriving", &auth.TokenInfo{UserID: "3"}, time.Hour)
+
+	cache.mu.Lock()
+	_, expiredKept := cache.entries[tokenKey(testInstance, "expired")]
+	_, liveKept := cache.entries[tokenKey(testInstance, "live")]
+	cache.mu.Unlock()
+	if !expiredKept || liveKept {
+		t.Errorf("expired kept %v, live kept %v; want no walk while the bound is ahead, so the least recently used goes",
+			expiredKept, liveKept)
+	}
+}
+
+// TestTokenCache_Soonest_TracksTheEarliestExpiryHeld pins the bound the walk
+// is gated on: the first identity stored sets it, a later expiry leaves it, an
+// earlier one lowers it whether it arrives with a new key or a refreshed one,
+// and a sweep sets it to the earliest expiry among what is left, or clears it
+// when nothing is.
+func TestTokenCache_Soonest_TracksTheEarliestExpiryHeld(t *testing.T) {
+	t.Parallel()
+
+	cache := newTokenCache(10)
+	expiryOf := func(token string) time.Time {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		return entryOf(cache.entries[tokenKey(testInstance, token)]).expiresAt
+	}
+	soonest := func() time.Time {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		return cache.soonest
+	}
+
+	// sequential: each step reads the bound the step before it left.
+	for _, step := range []struct {
+		name  string
+		do    func()
+		token string
+	}{
+		{"the first identity sets it", func() { cache.Put(testInstance, "b", &auth.TokenInfo{}, time.Hour) }, "b"},
+		{"a later expiry leaves it", func() { cache.Put(testInstance, "c", &auth.TokenInfo{}, 2*time.Hour) }, "b"},
+		{"an earlier new key lowers it", func() { cache.Put(testInstance, "a", &auth.TokenInfo{}, 30*time.Minute) }, "a"},
+		{"an earlier refresh lowers it", func() { cache.Put(testInstance, "c", &auth.TokenInfo{}, time.Minute) }, "c"},
+		{"an expired key lowers it into the past", func() { cache.Put(testInstance, "gone", &auth.TokenInfo{}, -time.Minute) }, "gone"},
+		{"a sweep sets it to the earliest left", cache.Cleanup, "c"},
+	} {
+		step.do()
+		if got, want := soonest(), expiryOf(step.token); !got.Equal(want) {
+			t.Errorf("%s: soonest = %v, want %s's expiry, %v", step.name, got, step.token, want)
+		}
+	}
+
+	for _, token := range []string{"a", "b", "c"} {
+		cache.Evict(testInstance, token)
+	}
+	cache.Put(testInstance, "gone-too", &auth.TokenInfo{}, -time.Minute)
+	cache.Cleanup()
+	if got := soonest(); !got.IsZero() {
+		t.Errorf("soonest = %v after a sweep that left nothing, want it cleared", got)
+	}
+}
+
 // TestTokenCache_Put_KnownKeyRefreshesInPlace pins that storing a key the
 // cache already holds replaces its identity and deadline, makes it the most
 // recently used, and evicts nothing: re-verifying a credential in service must
