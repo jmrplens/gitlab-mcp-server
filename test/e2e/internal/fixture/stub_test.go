@@ -589,8 +589,13 @@ func (s *stubGitLab) branch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "protected": false, "commit": map[string]any{"id": "abc123"}})
 }
 
-// mergeRequest answers the next merge status, the last repeating.
+// mergeRequest answers the next merge status, the last repeating, and an
+// update from the script, since what GitLab kept of it is the test's to say.
 func (s *stubGitLab) mergeRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPut {
+		s.scriptedRoute(w, r)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if answer, ok := s.state[r.URL.Path]; ok {
@@ -623,8 +628,13 @@ func (s *stubGitLab) pipeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": pathID(r, "pipeline"), "status": nextStatus(&s.pipelineStatuses)})
 }
 
-// stateAnswer answers whatever the test put under the request path.
+// stateAnswer answers whatever the test put under the request path, and an
+// update from the script, like a merge request.
 func (s *stubGitLab) stateAnswer(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPut {
+		s.scriptedRoute(w, r)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if answer, ok := s.state[r.URL.Path]; ok {
