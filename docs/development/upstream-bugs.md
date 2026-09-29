@@ -588,7 +588,9 @@ example needs to stay reachable for callers still using it.
   At 16:44 @hustewart asked for the failure to be addressed and for a ping to
   start another pipeline. Our reply in that thread (17:28 UTC) set that out and
   offered two ways through: a pipeline on the merged result, whose ref was
-  regenerated at 17:17 UTC on a `master` that carries !256904, or a rebase onto
+  regenerated at 17:17 UTC on a `master` that carries
+  [gitlab-org/gitlab!256904](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256904),
+  or a rebase onto
   current `master`, held back because the push would reset the two approvals.
   It waited on @hustewart's choice, and the rebase was the way through: the
   branch went onto current `master` as `fb3ecfdc`, the merge train pipeline
@@ -2033,6 +2035,16 @@ merged and released in v3.14.0, `gitlab-org/api/client-go!3063` has its row as
 the single merge request agreed in the thread, and the count paragraph says 25
 of the 290 fields are released and seven more are in
 `gitlab-org/api/client-go!3048`. Nothing is owed on the umbrella now.
+
+**Behind again on 2026-09-29.** The description, last edited at 21:50 UTC on
+2026-09-27, still reads
+[gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
+as open and waiting on a maintainer, still counts 25 fields released with
+seven more in that merge request where 32 are now released, still gives
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+36 commits, and does not name
+[gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301),
+the 4.0 issue the first review asked for. A rewrite is owed, once approved.
 
 **Three findings from that batch that are not merge requests**, because sending
 them would have been wrong:
@@ -5303,8 +5315,9 @@ rebases to `0.32.4`.
   `unit-test`, is ours: three `orbit-server` tests pin the skill version at
   `0.32.2` (lines 22 and 74 of
   `crates/orbit-server/src/grpc/service/tests/skills.rs` and one in
-  `crates/orbit-server/src/skills/mod.rs`, added on `main` by `bf510a5d` on
-  2026-09-28, which the branch is based on), and the change bumps
+  `crates/orbit-server/src/skills/mod.rs`, set to `0.32.2` on `main` by
+  `bf510a5d` on 2026-09-28 in the same commit that bumped the skill, which the
+  branch is based on), and the change bumps
   `skills/orbit/SKILL.md` to `0.32.3`, so the branch owes those assertions
   the new version. The same three fail on
   [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651),
