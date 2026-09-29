@@ -153,10 +153,17 @@ func allowDecisions() []Decision {
 			// Promoted: which method is charged to which bucket, and so which
 			// is charged to none, is MeterFor's answer, and the middleware
 			// switches on it.
+			//
+			// Issue 951 decided that initialize stays charged to none once
+			// HLD-010 bounded the stateful sessions it opens: a price in the
+			// opener's own rate would sit on a key a caller can mint (INV-003)
+			// and multiply with every token it mints, so it would bound
+			// nothing the process ceiling does not.
 			ID: "RTC-004", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Promoted,
 			Resource: "initialize, resources/list, prompts/list and every other unmetered method",
 			Key:      KeyRequest, StdioKey: KeyRequest,
 			Functions: []string{"MeterFor"},
+			Decided:   []string{"issue 951"},
 			Sites:     []Site{enforce(pkgToolutil, "attachRateLimitFunc")},
 		},
 		{
@@ -406,15 +413,18 @@ func allowDecisions() []Decision {
 			// then holds its slot for --session-timeout, thirty minutes by
 			// default and up to a day, while every other tenant's initialize is
 			// refused. Before this ceiling an idle session refused nobody, and
-			// what exhausted the process was a thousand held streams. Whether a
-			// per-credential ceiling should stand beside it, as HLD-001 stands
-			// beside HLD-002, or initialize be metered, is put to the
-			// maintainer, and issue 951 stays open for that answer.
+			// what exhausted the process was a thousand held streams. Issue 951
+			// decided to leave that cost where it is: no per-credential ceiling
+			// stands beside it, as HLD-001 stands beside HLD-002, and initialize
+			// stays unmetered (RTC-004), because the credential is a mintable
+			// key (INV-003) and a per-credential number, or a price in the
+			// opener's own rate, multiplies with every token a caller mints.
 			//
-			// Its value is a share of HLD-011's: the held-call ceiling divided
-			// by SessionHeldDivisor, 96 sessions under a hard limit of 1024,
-			// and half of the fallback's figure where the platform has no
-			// limit to read. An idle session holds no connection, and the one
+			// Its value is a share of HLD-011's, the half issue 951 confirmed:
+			// the held-call ceiling divided by SessionHeldDivisor, 96 sessions
+			// under a hard limit of 1024, and half of the fallback's figure
+			// where the platform has no limit to read. An idle session holds
+			// no connection, and the one
 			// it can hold open is its standalone stream, whose held slot
 			// (HLD-011) the session takes with its own and keeps until it ends,
 			// so the sessions take at most half of the held slots, the
@@ -424,9 +434,10 @@ func allowDecisions() []Decision {
 			// session costs 88 to 110 KiB of resident set and four goroutines,
 			// which the descriptor limit does not raise, so under the 524288 a
 			// systemd service gets, 114560 idle sessions come to about ten to
-			// twelve GiB, and there the process's memory limit bounds them.
-			// Whether a fixed cap should stand beside the derived one is put
-			// to the maintainer with the rest.
+			// twelve GiB, and there the container's memory limit bounds them.
+			// Issue 951 decided that no fixed cap stands beside the derived
+			// one: the container's memory limit already bounds that memory,
+			// and a cap no flag moves would be sized for one host.
 			//
 			// It counts a session from the POST that opens one, which is any
 			// POST carrying no session id on a deployment that keeps sessions
@@ -443,15 +454,17 @@ func allowDecisions() []Decision {
 			// (POL-002), an entry holding only stateful sessions is quiet
 			// (POL-003), and evicting it ends those sessions, so a newcomer
 			// this row then refuses has taken from another key exactly what
-			// the row counts. The gate refuses past the ceiling with a 503
-			// before the SDK creates anything, and the first request
-			// dispatched on the new session keeps the slot until the session
-			// ends. With --session-timeout=0 (END-005) that is when a client
+			// the row counts, a cost issue 951 accepted with the order. The
+			// gate refuses past the ceiling with a 503 before the SDK creates
+			// anything, and the first request dispatched on the new session
+			// keeps the slot until the session ends. With --session-timeout=0
+			// (END-005) that is when a client
 			// deletes it or the pool evicts its credential, after
 			// --pool-idle-timeout without a request (never with 0) or to make
 			// room at --max-http-clients, and startup says so. The refusal is
 			// HLD-011's, in words that name no bound, which is INV-019's one
-			// bit; the log line says which ceiling refused.
+			// bit, as issue 951 confirmed for this row; the log line says
+			// which ceiling refused.
 			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "stateful sessions across every credential",
 			Key:      KeyProcess, StdioKey: KeyNone,
@@ -492,16 +505,25 @@ func allowDecisions() []Decision {
 			// credential (issue 951, answering F-31 for them; HLD-010 answers
 			// it for the stateful sessions). It stands alone, keyed on the process
 			// with no per-caller number beside it: a per-caller one would
-			// multiply by however many credentials a caller mints, and would
-			// bound nothing INV-018 asks of this row. Whether a per-credential
-			// ceiling should stand beside it anyway, as HLD-001 stands beside
-			// HLD-002, is put to the maintainer in the pull request.
+			// multiply by however many credentials a caller mints (INV-003),
+			// and would bound nothing INV-018 asks of this row. Issue 951
+			// decided so, rather than setting a per-credential ceiling beside
+			// it as HLD-001 stands beside HLD-002, and accepted that one
+			// credential can fill it where the limit is small. It bounds
+			// descriptors and not memory, about 190 KiB a held call, which the
+			// container's memory limit bounds: issue 951 also decided that the
+			// server keeps no memory cap of its own.
 			//
 			// Its value is derived rather than written: the descriptors the
 			// process may open, read once at startup, less an eighth spare and
 			// the listen streams HLD-002 reserves, divided by what one held
 			// call costs. Where the platform has no limit to read it is sized
-			// against FallbackDescriptorLimit. The runtime raises the soft
+			// against FallbackDescriptorLimit, which issue 951 kept rather than
+			// no ceiling, so Windows, the platform with none, is not left
+			// unbounded by default.
+			// Issue 951 decided the derivation too: no operator setting moves
+			// the figure, and raising the hard descriptor limit raises it
+			// together with what it protects. The runtime raises the soft
 			// limit to the hard one before main, so the limit read is the hard
 			// one: 192 under 1024, and far above anything a rate-limited
 			// caller reaches under a default systemd or container limit.
@@ -530,8 +552,9 @@ func allowDecisions() []Decision {
 			// which departs from PAT-003 (take the process slot before
 			// anything per key): a slot taken before admission would let a
 			// caller with no credential hold one for as long as its
-			// verification takes. What a refused newcomer has spent by then is
-			// its admission: in legacy mode the pool entry its first call
+			// verification takes, and issue 951 accepted the departure for that
+			// reason. What a refused newcomer has spent by then is its
+			// admission: in legacy mode the pool entry its first call
 			// builds (POL-006's probe of GitLab, the tier, the catalog), which
 			// at the pool's bound evicts another credential's quiet entry
 			// (POL-002), and in oauth mode one of ADM-014's verification slots.
@@ -541,10 +564,10 @@ func allowDecisions() []Decision {
 			// name no bound, no figure and no caller: with no per-caller
 			// ceiling beside it any refusal of it tells its caller that the
 			// process is full, and no wording can take that bit back, which is
-			// the one INV-019 accepts for a bound keyed on the process. The
-			// log line is the one place that says which bound refused. Whether
-			// a held call makes an entry busy is POL-003's answer and did not
-			// change: it does not.
+			// the one INV-019 accepts for a bound keyed on the process, as
+			// issue 951 confirmed for this row. The log line is the one place
+			// that says which bound refused. Whether a held call makes an entry
+			// busy is POL-003's answer and did not change: it does not.
 			ID: "HLD-011", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "calls the process holds open across every credential",
 			Key:      KeyProcess, StdioKey: KeyNone,

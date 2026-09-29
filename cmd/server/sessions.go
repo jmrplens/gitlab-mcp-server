@@ -43,8 +43,11 @@ import (
 // and the descriptor limit raises none of that: under the 524288 a systemd
 // service gets, the ceiling is 114560 sessions, about ten to twelve GiB of
 // them idle, and there the memory the process is given is what bounds the
-// sessions. Whether a fixed cap should
-// stand beside the derived one is put to the maintainer (issue 951).
+// sessions. Issue 951 decided that no fixed cap stands beside the derived one:
+// the container's memory limit already bounds that memory, and a cap no flag
+// moves would be sized for one host. Nor does a per-credential ceiling, and
+// initialize stays unmetered: a credential is a key a caller can mint, so a
+// per-credential number multiplies with every token it mints.
 const sessionHeldDivisor = tenancy.SessionHeldDivisor // register row HLD-010
 
 // statefulSessionsFor is the session ceiling of a process that may hold held

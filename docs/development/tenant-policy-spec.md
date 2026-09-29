@@ -258,8 +258,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   the log line says which bound refused. `HLD-010` and `HLD-011` have no per-caller
   ceiling beside them, so any refusal of either says the process is full whatever its
   words, and both use the same words, which say only that the server is busy, naming no
-  bound, no figure and no caller; that they fall under this exception rather than needing
-  one of their own is put to the maintainer in their pull requests.
+  bound, no figure and no caller. They fall under this exception rather than needing one
+  of their own, which issue 951 decided: the bit is the one the exception already
+  accepts, and no per-caller ceiling is set beside them to hide it, since a number on a
+  key a caller can mint multiplies with every token it mints (`INV-003`).
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -538,7 +540,7 @@ an empty completion). Every refusal says `This server is busy. Retry later.` and
 charged to nothing. The slot is taken after admission, which departs from what issue 951
 asks, that the process slot be taken before anything keyed on the credential: a slot
 taken first would let a caller with no credential hold one for as long as its
-verification takes, and the departure is put to the maintainer in the pull request. A
+verification takes, and issue 951 accepted the departure for that reason. A
 refused newcomer has spent its admission by then, the pool entry its first call builds
 in legacy mode (with `POL-006`'s probe, and at the pool's bound the eviction of another
 credential's quiet entry, `POL-002`) or one of `ADM-014`'s verification slots in oauth
@@ -549,7 +551,16 @@ set, linearly to 4000 calls (8010 descriptors, 873 MiB); under a hard limit of 1
 process held 503 and stopped accepting connections, `/health` among them. With the
 ceiling, under the same limit and 4000 calls offered, from one credential and from a
 hundred, it held 192 in 394 descriptors and refused the other 3808; with the limit
-inherited (1048576) it held all 4000, as it did without the ceiling. The third,
+inherited (1048576) it held all 4000, as it did without the ceiling. Issue 951 decided
+that nothing stands beside it. No per-credential ceiling does: the credential is a key a
+caller can mint (`INV-003`), so a per-credential number multiplies with every token a
+caller mints and cannot bound what the process holds, and one credential can therefore
+fill the ceiling where the limit is small, at the default rate in about fifteen seconds.
+No memory cap does either: the figure bounds descriptors, and where the limit is large
+the memory held calls take, about 190 KiB each, is bounded by the container's memory
+limit, which the operator sets and the server does not repeat. And Windows keeps the
+figure a limit of 1024 gives rather than none, so that platform is not left unbounded by
+default. The third,
 `HLD-010`, bounds the stateful sessions the process keeps on `--stateless=false` across
 every credential, which the SDK keeps until the client deletes one, the pool evicts its
 credential or it sits idle for `--session-timeout`, and which nothing bounded while
@@ -583,18 +594,24 @@ its stream, bounded by the ceiling. What the ceiling bounds is descriptors, and 
 only where the limit is small: an idle session's 88 to 110 KiB of resident set, measured
 with the ceiling at 500 to 4000 sessions, is not something the descriptor limit raises,
 so the 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
-idle, and there the process's memory limit bounds them first. Standing
+idle, and there the container's memory limit bounds them first. Standing
 alone, it is also cheap to fill: `initialize` spends no rate and an idle session holds no
 connection, so one credential can take every slot, and a session nobody deletes holds its
 slot for `--session-timeout`, half an hour by default and a day at most, and with a
 timeout of zero (`END-005`) until the pool evicts its credential, while every other
-tenant's `initialize` is refused. Before this ceiling an idle session refused nobody. A
-per-credential partner beside it, metering `initialize`, and a fixed cap for memory are
-put to the maintainer, and issue 951 stays open for them. The slot is taken after
+tenant's `initialize` is refused. Before this ceiling an idle session refused nobody.
+Issue 951 decided to leave both costs where they are, for `HLD-011`'s reason. No
+per-credential ceiling stands beside it and `initialize` stays unmetered (`RTC-004`),
+because the credential is a key a caller can mint (`INV-003`): a per-credential number,
+and a price in the opener's own rate, multiply with every token a caller mints. No fixed
+cap stands beside the derived figure either, because the container's memory limit bounds
+the memory the figure does not, and a fixed cap no flag moves would be sized for one
+host. The slot is taken after
 admission, the departure `HLD-011` records, and it costs more here: at the pool's bound a
 newcomer's admission evicts another credential's quiet entry (`POL-002`), an entry
 holding only stateful sessions is quiet (`POL-003`), and evicting it ends those sessions,
-so a newcomer this row then refuses has taken from another key what the row counts.
+so a newcomer this row then refuses has taken from another key what the row counts;
+issue 951 accepted that cost with the order.
 `IDN-010`, the owner record every stateful session carries, is bounded by the same count
 and no longer carries F-31, and neither does `HLD-010`; that bound is stated on the row
 and nowhere the register can hold it. F-19 and F-33 are answered by issue 959's decision

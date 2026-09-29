@@ -179,9 +179,10 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 // TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951 pins what issue
 // 951 decided for the calls the process holds open: a ceiling keyed on the
 // process that no operator sets, derived from the process's descriptor limit
-// and standing alone, refusing the newcomer on every channel its methods carry
-// with words that say to retry later and charge nothing, and existing only
-// over HTTP. Its gate refusal holds in both eras, since it answers a POST of
+// and nothing else, so no memory cap, and standing alone with no
+// per-credential partner, refusing the newcomer on every channel its methods
+// carry with words that say to retry later and charge nothing, and existing
+// only over HTTP. Its gate refusal holds in both eras, since it answers a POST of
 // 2026-07-28 and a POST that would open a stateful session with no slot left
 // for its standalone stream, which only an earlier revision sends.
 func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
@@ -192,6 +193,11 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 			"refusing the newcomer, decided by issue 951, carrying no finding and counting what MeterFor meters",
 			held.Key, held.StdioKey, held.Source, held.ProtectsProcess, held.Partner, held.AtCapacity,
 			held.Decided, held.Findings, held.Functions)
+	}
+	descriptors := []string{"HeldRequestDescriptors", "DescriptorSpareDivisor", "FallbackDescriptorLimit"}
+	if !slices.Equal(held.Values, descriptors) {
+		t.Errorf("HLD-011 values %v, want %v alone: issue 951 decided the server keeps no memory cap, "+
+			"so the ceiling is sized from descriptors and the container's memory limit bounds memory", held.Values, descriptors)
 	}
 	want := []struct {
 		channel Channel
@@ -234,7 +240,9 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 // the SDK, which closes its session with it. The owner records the sessions
 // grow (IDN-010) carry the finding no longer either, since a session past the
 // ceiling is refused before it is recorded, and no row carries F-31 now while
-// it stays filed as issue 951's.
+// it stays filed as issue 951's. No per-credential ceiling stands beside it,
+// which issue 951 decided because a number on a credential multiplies with
+// every token a caller mints, and no fixed cap stands beside its one value.
 func TestDecisions_StatefulSessions_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	sessions, _ := Lookup("HLD-010")
 	held, _ := Lookup("HLD-011")
@@ -273,6 +281,21 @@ func TestDecisions_StatefulSessions_AreBoundedOnTheProcessByIssue951(t *testing.
 	}
 }
 
+// TestDecisions_Initialize_StaysUnmeteredByIssue951 pins the other half of
+// what issue 951 decided for the stateful sessions: initialize stays charged to
+// no bucket (RTC-004) once HLD-010 bounds the sessions it opens, since a price
+// in the opener's own rate would sit on a key a caller can mint and multiply
+// with every token it mints, and the row records that decision.
+func TestDecisions_Initialize_StaysUnmeteredByIssue951(t *testing.T) {
+	unmetered, _ := Lookup("RTC-004")
+	if !slices.Contains(unmetered.Decided, "issue 951") {
+		t.Errorf("RTC-004 decided %v, want issue 951 recorded", unmetered.Decided)
+	}
+	if meter := MeterFor("initialize"); meter != Unmetered {
+		t.Errorf("MeterFor(initialize) = %d, want Unmetered", meter)
+	}
+}
+
 // withFunctions is d naming the register functions given, so a row that names
 // none can be held to a predicate written for one that does.
 func withFunctions(d Decision, functions []string) Decision {
@@ -281,9 +304,11 @@ func withFunctions(d Decision, functions []string) Decision {
 }
 
 // heldIsDecidedByIssue951 reports whether HLD-011 has the shape issue 951
-// decided for it: a value derived on the process alone, over HTTP only,
-// refusing the newcomer, carrying no finding and counting what MeterFor
-// meters to an upstream.
+// decided for it: a value derived on the process alone, with no per-credential
+// partner (a credential is a key a caller can mint, so a number on it
+// multiplies with every token the caller mints), over HTTP only, refusing the
+// newcomer, carrying no finding and counting what MeterFor meters to an
+// upstream.
 func heldIsDecidedByIssue951(held Decision) bool {
 	return held.Key == KeyProcess && held.StdioKey == KeyNone && held.Source == Derived && held.ProtectsProcess &&
 		held.Partner == "" && held.AtCapacity == RefuseNewcomer && slices.Contains(held.Decided, "issue 951") &&
