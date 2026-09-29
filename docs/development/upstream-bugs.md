@@ -917,8 +917,8 @@ both approximated, and Rails writes the sign in front (`-1,234`).
 - **In review**: yes, open. The commit makes all eight return a
   `*GraphQLResponseError` carrying the top-level errors, as the work item and
   saved view methods already do. A caller matching `ErrNotFound` on the three
-  that returned it sees a different error, which is the one of the four
-  decisions the merge request asked the maintainers for that is still open.
+  that returned it sees a different error, and that change is the one decision
+  of the four the merge request asked the maintainers for that is still open.
   On 2026-09-29 the maintainer asked whether the eight now return that error
   and did not before; the reply says yes, since five of them returned success
   for a refused mutation and three a bare `ErrNotFound`, and waits on the
@@ -5679,8 +5679,8 @@ will reach any future delegation of the same shape on a POST, PUT or PATCH.
 The fix is a nil-pointer check where the decision is made, in
 `NewRequestToURL`, rather than at each delegation, since the next one will be
 written the same way. It changes what every caller passing a nil options
-pointer sends, so v3 takes it behind an opt-in client option and 4.0 makes it
-the default.
+pointer sends, so the merge request now puts it behind an opt-in client
+option, and 4.0 makes it the default.
 
 - **Reported**: yes, as commit 2 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
