@@ -820,27 +820,59 @@ suite failed on the flag it was setting rather than on its own subject.
   and keeps the `int64` fields.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes, and it covers less than it was written for.
-  `internal/tools/appstatistics.Get` decodes the response itself, into
-  `json.Number` fields, and encoding/json refuses a string that is not a JSON
-  number literal: `"999"` decodes and `"1,234"` fails with `invalid syntax`,
-  checked on 2026-09-27. The whole answer therefore fails at the first count
-  of a thousand or more. Until a release carries the commit above, the
-  workaround has to drop the separator itself, as that commit's
-  `UnmarshalJSON` does.
+- **Workaround**: yes, since
+  [issue 1019](https://github.com/jmrplens/gitlab-mcp-server/issues/1019).
+  `internal/tools/appstatistics.Get` builds the request itself and decodes
+  each count into a `delimitedCount`, which reads it the way the commit
+  above's `UnmarshalJSON` does: a JSON number, or a string whose space and
+  punctuation characters are dropped as group separators, a minus sign in
+  the first place kept, and any other character refused. A count that does
+  not parse, or does not fit an `int64`, fails the call instead of being
+  published as 0. Before that issue the counts were decoded as `json.Number`,
+  which refuses a string that is not a JSON number literal (`"999"` decoded
+  and `"1,234"` failed with `invalid syntax`, checked on 2026-09-27), so the
+  whole answer failed at the first count of a thousand or more, and the one
+  error it did not surface, `Int64` on a number past the type, was dropped
+  and read as 0. What retires it: a client-go release carrying the commit,
+  after which `Get` calls `GetApplicationStatistics` and the type goes.
 
-**What**: the struct uses `int64` fields, while some GitLab versions return the
-counts as JSON strings, so decoding fails.
+**What**: the struct uses `int64` fields, while GitLab returns every count as
+a JSON string, so decoding fails.
 
-**Before reporting**: as with `GetNamespace`, pin down which versions send
-strings.
-
-**Pinned down while writing the commit**: every version since at least 13.0.
+**Which versions send strings**, the question this entry used to leave open
+before a report, was answered while writing the commit: every version since
+at least 13.0.
 `lib/api/entities/application_statistics.rb` renders each count through
 `number_with_delimiter`, which returns a string, so
 `GET /application/statistics` answers `"issues": "1,234"`, and the separator
 is the one the caller's `preferred_language` uses, which is not always a
 comma.
+
+**Which separator each language gives**, read on 2026-09-28 from GitLab's
+`master` at `e52599d01de0` (2026-09-22) rather than from a booted instance:
+ActiveSupport's number helper was run outside GitLab under each of the 27
+languages `Gitlab::I18n::AVAILABLE_LANGUAGES` offers, set as
+`API::Helpers#current_user` sets it, with the locale files GitLab loads
+(rails-i18n 7.0.10, the version its `Gemfile.lock` pins, plus
+`config/locales`) and its `config.i18n.fallbacks = [:en]`. Three forms come
+out, and a count below a thousand has none:
+
+| Separator             | `1234567` renders as | Languages                                                                                                                                                                                                       |
+| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Comma                 | `1,234,567`          | `en`, `ja`, `ko`, and the sixteen GitLab spells with a region (`cs_CZ`, `da_DK`, `fil_PH`, `ga_IE`, `gl_ES`, `id_ID`, `nb_NO`, `nl_NL`, `pl_PL`, `pt_BR`, `ro_RO`, `si_LK`, `tr_TR`, `zh_CN`, `zh_HK`, `zh_TW`) |
+| Period                | `1.234.567`          | `de`, `es`, `it`                                                                                                                                                                                                |
+| Space (ASCII, U+0020) | `1 234 567`          | `bg`, `eo`, `fr`, `ru`, `uk`                                                                                                                                                                                    |
+
+The regional sixteen group with a comma because rails-i18n spells its locales
+with a hyphen (`pt-BR`, `zh-CN`), without the region (`pl`, `nl`) or not at
+all (`fil`, `ga`, `si`), while GitLab sets `I18n.locale` to the underscore
+form, which matches no locale file and falls back to English; a Polish or
+Dutch caller therefore sees a comma where rails-i18n's own `pl` and `nl`
+files would give a space and a period. rails-i18n 8.1.0, which GitLab's
+`Gemfile` takes when it runs on the next Rails, gives each of the eleven
+locales without a region the separator 7.0.10 gives it. A negative count is
+possible for one field: `forks` is fork network members less fork networks,
+both approximated, and Rails writes the sign in front (`-1,234`).
 
 ### The security attribute and category mutations discard GraphQL errors
 

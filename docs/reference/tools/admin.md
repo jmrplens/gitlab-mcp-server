@@ -386,6 +386,8 @@ Delete an OAuth2 application (admin). Params: id (required).
 
 Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.
 
+GitLab sends each count as a string whose digits are grouped the way the caller's preferred language groups them (`1,234`, `1.234` or `1 234`). The tool reads all three, and a plain JSON number, and returns integers; a count it cannot read fails the call instead of being reported as 0.
+
 | Annotation | **Read** |
 | ---------- | -------- |
 
