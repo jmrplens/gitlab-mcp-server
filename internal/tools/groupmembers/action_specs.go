@@ -317,7 +317,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Remove a direct member from a group (destructive, requires confirmation). Returns: a delete confirmation. See also: gitlab_group_members_list, gitlab_group_member_get, gitlab_group_member_edit.",
 	},
 	"gitlab_group_share": {
-		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group). Group shares accept only Guest/Reporter/Developer/Maintainer levels.",
+		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group), and optionally expires_at or member_role_id for a custom role (Ultimate). Group shares accept Guest through Owner, and Minimal access on Premium/Ultimate.",
 		aliases: []string{"share group with group", "grant group access to another group", "add group share"},
 		related: []string{actionMemberUnshare, actionGroupGet, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -325,12 +325,18 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 			"share_group_id": shareGroupIDGuidance("Numeric ID of the recipient group that should gain access."),
 			"group_access": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Access level granted to the recipient group (10/20/30/40 only).",
+				ValueSource:      "Access level granted to the recipient group's members: 10, 15, 20, 25, 30, 40 or 50, and 5 on Premium/Ultimate.",
 				ExampleBinding:   "params.group_access:30",
-				CommonConfusions: []string{"Group shares accept only 10/20/30/40. 5, 15, 25, and 60 are rejected."},
+				CommonConfusions: []string{"60 (Admin) is not a share level and is rejected. With member_role_id, group_access must equal the custom role's base access level."},
+			},
+			"member_role_id": {
+				SemanticRole:     "member_role_id",
+				ValueSource:      "ID of a custom member role the share grants (Ultimate). Its base access level must equal group_access.",
+				ExampleBinding:   "params.member_role_id:7",
+				CommonConfusions: []string{"member_role_id references a custom role definition, not group_access. Without Ultimate custom roles GitLab records the share without it."},
 			},
 		},
-		description: "Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
+		description: "Share a group with another group at a chosen access level, optionally granting a custom member role. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level, expiry and custom role. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
 	},
 	"gitlab_group_unshare": {
 		usage:   "Stop sharing a group with another group by group_id plus share_group_id. Destructive: requires confirmation. Use this to revoke a previously created group share.",

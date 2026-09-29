@@ -3,7 +3,8 @@
 // groupmembers_test.go covers the two licensed listings of a group's
 // people: the billable members, with the memberships of one of them and
 // the removal of one, and the users an identity provider provisioned,
-// which on a stack with no provider is nobody.
+// which on a stack with no provider is nobody. It also covers the one
+// licensed part of a group share, the custom role it grants.
 
 package ee
 
@@ -13,6 +14,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupmembers"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
@@ -136,6 +138,85 @@ func TestGroupBillableMembers_DeveloperAdded_ListedWithMembershipsAndRemoved(t *
 	if !containsUsername(after.Members, e.Runtime().Username) {
 		e.T.Errorf("the group's billable members no longer hold its owner %q after the removals: %v", e.Runtime().Username, billableUsernames(after.Members))
 	}
+}
+
+// shareGrant is what a group share records for the group it is made with:
+// the access level its members gain and the custom role it grants, read off
+// the row of either package that publishes one.
+type shareGrant struct {
+	level int64
+	role  int64
+}
+
+// memberShareGrant finds the share with a group among the rows a members'
+// share answers with.
+func memberShareGrant(links []groupmembers.SharedWithGroupOutput, groupID int64) (shareGrant, bool) {
+	for _, link := range links {
+		if link.GroupID == groupID {
+			return shareGrant{level: link.GroupAccessLevel, role: link.MemberRoleID}, true
+		}
+	}
+	return shareGrant{}, false
+}
+
+// detailShareGrant finds the share with a group among the rows a group's
+// detail lists.
+func detailShareGrant(links []groups.SharedWithGroupOutput, groupID int64) (shareGrant, bool) {
+	for _, link := range links {
+		if link.GroupID == groupID {
+			return shareGrant{level: link.GroupAccessLevel, role: link.MemberRoleID}, true
+		}
+	}
+	return shareGrant{}, false
+}
+
+// TestGroupMemberShare_CustomRole_RecordedOnTheShare shares a host group of
+// each surface's own with a guest group of its own through
+// group.group_member_share, at Guest and with an instance custom role based
+// on Guest, and checks that the share with the guest carries that level and
+// that role twice: in the answer, and in the host's detail read back
+// afterwards. The answer alone could only echo what was sent; the detail is
+// what GitLab kept. The share is then revoked through the members' unshare.
+//
+// GitLab drops member_role_id without a word where custom roles are not
+// licensed, so on an Ultimate instance a share that comes back without the
+// role is the defect this scenario exists to catch: until issue 1027 the
+// action offered no member_role_id at all.
+func TestGroupMemberShare_CustomRole_RecordedOnTheShare(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)))
+
+	// fixture.NewMemberRole builds the role on Guest, the level the share
+	// has to name, since GitLab refuses a custom role whose base access
+	// level is not the share's.
+	role := fixture.NewMemberRole(e)
+	want := shareGrant{level: memberRoleBaseAccessLevel, role: role.ID}
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		host := fixture.NewGroup(e, fixture.WithGroupNamePrefix("share-host"))
+		guest := fixture.NewGroup(e, fixture.WithGroupNamePrefix("share-guest"))
+		params := map[string]any{"group_id": host.IDParam()}
+
+		shared := harness.Do[groupmembers.ShareOutput](s, actionGroupMemberShare, withParams(params, map[string]any{
+			"share_group_id": guest.ID, "group_access": memberRoleBaseAccessLevel, "member_role_id": role.ID,
+		}))
+		if shared.ID != host.ID {
+			e.T.Errorf("group_member_share answered group %d, want the host %d", shared.ID, host.ID)
+		}
+		if got, found := memberShareGrant(shared.SharedWithGroups, guest.ID); !found || got != want {
+			e.T.Errorf("the share's answer records the share with group %d as %+v (found %t), want %+v", guest.ID, got, found, want)
+		}
+
+		detail := harness.Do[groups.DetailOutput](s, actionGroupGet, params)
+		if got, found := detailShareGrant(detail.SharedWithGroups, guest.ID); !found || got != want {
+			e.T.Errorf("the host's detail records the share with group %d as %+v (found %t), want %+v", guest.ID, got, found, want)
+		}
+
+		harness.DoVoid(s, actionGroupMemberUnshare, withParams(params, map[string]any{"share_group_id": guest.ID}))
+		if after := harness.Do[groups.DetailOutput](s, actionGroupGet, params); len(after.SharedWithGroups) != 0 {
+			e.T.Errorf("the host is still shared with %+v after the members' unshare", after.SharedWithGroups)
+		}
+	})
 }
 
 // TestGroupProvisionedUsers_NoProvider_ListsNobody lists the provisioned

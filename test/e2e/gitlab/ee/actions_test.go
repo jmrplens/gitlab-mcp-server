@@ -284,6 +284,13 @@ const (
 	actionGroupListProvisionedUsers          harness.ActionID = "group.list_provisioned_users"
 )
 
+// The group members' share and unshare, Free in the catalog and driven here
+// for the custom role only an Ultimate instance lets a share grant.
+const (
+	actionGroupMemberShare   harness.ActionID = "group.group_member_share"
+	actionGroupMemberUnshare harness.ActionID = "group.group_member_unshare"
+)
+
 // Group webhooks and their sub-operations.
 const (
 	actionGroupHookAdd                harness.ActionID = "group.hook_add"

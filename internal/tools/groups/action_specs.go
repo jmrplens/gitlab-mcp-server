@@ -529,7 +529,7 @@ func groupCreateUpdateEnumOverrides(includeUpdateOnly bool) []toolutil.InputSche
 func applyGroupShareTransferMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
 	switch individualTool {
 	case "gitlab_group_share_with_group":
-		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (group.group_member_share is the GroupMembers-API equivalent.)"
+		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (group.group_member_share reaches the same route and names the recipient share_group_id.)"
 		options.Aliases = []string{"share group via groups api", "grant another group access to this group", "create group-to-group share link"}
 		options.RelatedActions = []string{actionGroupSharedWith, actionGroupUnshare, actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -539,8 +539,14 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"group_id is the group being shared. shared_group_id is the group receiving access."},
 			},
 			"group_access": {
-				ValueSource:    "Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).",
+				ValueSource:    "Access level 10, 15, 20, 25, 30, 40 or 50 (Guest, Planner, Reporter, Security Manager, Developer, Maintainer, Owner), and 5 (Minimal access) on Premium/Ultimate.",
 				ExampleBinding: `params.group_access:30`,
+			},
+			"member_role_id": {
+				SemanticRole:     "member_role_id",
+				ValueSource:      "ID of a custom member role the share grants (Ultimate). Its base access level must equal group_access.",
+				ExampleBinding:   "params.member_role_id:7",
+				CommonConfusions: []string{"member_role_id references a custom role definition, not group_access. Without Ultimate custom roles GitLab records the share without it."},
 			},
 		}
 		options.IndividualTool.Description = "Share a GitLab group with another group (Groups API). Returns: a confirmation with the granted access role. See also: gitlab_group_shared_with_list, gitlab_group_unshare_from_group, gitlab_group_get."

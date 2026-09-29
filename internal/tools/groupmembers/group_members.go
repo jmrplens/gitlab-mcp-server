@@ -3,6 +3,7 @@ package groupmembers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -188,7 +189,7 @@ type AddInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to add,required"`
 	Username     string               `json:"username,omitempty" jsonschema:"Username to add (alternative to user_id)"`
-	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
 }
@@ -197,7 +198,7 @@ type AddInput struct {
 type EditInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id" jsonschema:"User ID,required"`
-	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)"`
+	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
 }
@@ -211,11 +212,18 @@ type RemoveInput struct {
 }
 
 // ShareInput contains parameters for sharing a group with another group.
+//
+// group.share_with_group reaches the same route with an input of its own
+// (groups.ShareGroupInput). The two are kept apart because each action's
+// parameter names are what a caller already sends, and renaming
+// share_group_id or shared_group_id to match the other would break one of
+// them; what they may send is the same.
 type ShareInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path to share,required"`
 	ShareGroupID int64                `json:"share_group_id" jsonschema:"Group ID to share with,required"`
-	GroupAccess  int                  `json:"group_access" jsonschema:"Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares"`
+	GroupAccess  int                  `json:"group_access" jsonschema:"Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Share expiration date (YYYY-MM-DD)"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role the share grants (Ultimate only). Its base access level must equal group_access" tier:"ultimate"`
 }
 
 // UnshareInput contains parameters for unsharing a group.
@@ -430,7 +438,22 @@ func removeMemberOutput(ctx context.Context, client *gitlabclient.Client, input 
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group member."}, nil
 }
 
+// errShareGroupAccess refuses a group_access no share can carry. It names the
+// levels POST /groups/:id/share accepts: lib/api/groups.rb validates the
+// parameter against Gitlab::Access.values_with_minimal_access, which is Guest
+// through Owner (Planner and Security Manager among them) on every build, and
+// Minimal access as well on an Enterprise build. 60 (Admin) is not a
+// membership level, and Grape would refuse it and any other number the same
+// way, so asking GitLab would only move the refusal later.
+var errShareGroupAccess = errors.New("group_access must be one of 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) or 50 (Owner); 60 (Admin) is not valid for group shares")
+
 // ShareGroup shares a group with another group.
+//
+// It sends through Groups.ShareGroupWithGroup rather than
+// GroupMembers.ShareWithGroup, which reaches the same route: the options of
+// the second carry no member_role_id, and their expires_at has no omitempty,
+// so a share without an expiry sent "expires_at": null on every call, while
+// ShareGroupWithGroupOptions leaves out every field the caller did not set.
 func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInput) (ShareOutput, error) {
 	if input.GroupID == "" {
 		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", toolutil.ErrFieldRequired("group_id"))
@@ -442,35 +465,42 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", toolutil.ErrFieldRequired("group_access"))
 	}
 	switch input.GroupAccess {
-	case 10, 20, 30, 40:
+	case 5, 10, 15, 20, 25, 30, 40, 50:
 	default:
-		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", errors.New("group_access must be one of 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project group shares"))
+		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", errShareGroupAccess)
 	}
-	opts := &gl.ShareWithGroupOptions{
+	opts := &gl.ShareGroupWithGroupOptions{
 		GroupID:     new(input.ShareGroupID),
 		GroupAccess: new(gl.AccessLevelValue(input.GroupAccess)),
 	}
 	if input.ExpiresAt != "" {
-		opts.ExpiresAt = new(input.ExpiresAt)
+		expiresAt, err := gl.ParseISOTime(input.ExpiresAt)
+		if err != nil {
+			return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", fmt.Errorf("expires_at must be a date in YYYY-MM-DD form: %w", err))
+		}
+		opts.ExpiresAt = &expiresAt
 	}
-	g, _, err := client.GL().GroupMembers.ShareWithGroup(
+	if input.MemberRoleID != 0 {
+		opts.MemberRoleID = new(input.MemberRoleID)
+	}
+	g, _, err := client.GL().Groups.ShareGroupWithGroup(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
-				"this group is already shared with the target group. Use group.group_member_unshare first to change the access level")
+				"GitLab could not record the share. If this group is already shared with the target group, use group.group_member_unshare first to change it. With member_role_id, the custom role must belong to this group's top-level group and its base access level must equal group_access. 5 (Minimal access) needs a Premium or Ultimate license and a top-level group. Where the top-level group restricts membership by email domain, the target group's allowed domains must be a subset of it")
 		}
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+		if toolutil.IsPermissionRefusal(err) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
-				"sharing requires Owner role on this group AND Maintainer+ on the target group; cross-hierarchy sharing may be disabled in group/instance settings")
+				"the credential may not share groups: a fine-grained personal access token needs the share_group permission. A caller without the Owner role on this group, or without read access to the target group, is answered 404 rather than 403")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
-				"group_access must be one of 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project group shares")
+				"group_access must be one of 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner), or 5 (Minimal access) on a Premium or Ultimate instance; expires_at must be YYYY-MM-DD")
 		}
 		return ShareOutput{}, toolutil.WrapErrWithStatusHint("group_share", err, http.StatusNotFound,
-			"verify group_id and share_group_id with group.get. share_group_id must be a numeric group ID, not a path")
+			"verify group_id and share_group_id with group.get. share_group_id must be a numeric group ID, not a path. GitLab also answers 404 when the caller may not link this group or read the target group, and when the top-level group prevents sharing outside its hierarchy")
 	}
 	return ShareOutput{
 		ID:               g.ID,

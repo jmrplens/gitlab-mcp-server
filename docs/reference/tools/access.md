@@ -554,7 +554,7 @@ List groups invited to a GitLab group. Filter by `relation` (direct, inherited),
 
 ### `gitlab_group_member_add`
 
-Add a user as a direct member of a group. Requires `access_level` (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner). Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Premium/Ultimate).
+Add a user as a direct member of a group. Requires `access_level` (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Premium/Ultimate).
 
 | Annotation | **Create** |
 | ---------- | ---------- |

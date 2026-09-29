@@ -113,15 +113,10 @@ func buildAcceptedEnumGaps() map[string]string {
 
 		"groups.ShareGroupInput.group_access=0":      shareAccessLevel,
 		"groups.ShareGroupInput.group_access=60":     shareAccessLevel,
+		"groupmembers.ShareInput.group_access=0":     shareAccessLevel,
+		"groupmembers.ShareInput.group_access=60":    shareAccessLevel,
 		"projects.ShareProjectInput.group_access=0":  shareAccessLevel,
 		"projects.ShareProjectInput.group_access=60": shareAccessLevel,
-		// The group share handler admits 10, 20, 30 and 40 and refuses the
-		// rest before the request leaves (Share in group_members.go, pinned
-		// by its tests), so offering a level it refuses would only move the
-		// error later. doc/api/groups.md#share-groups-with-groups lists 5
-		// through 50; whether the handler should follow it is a decision
-		// about the handler, recorded here rather than made here.
-		"groupmembers.ShareInput.group_access": "the handler admits 10, 20, 30 and 40 only and refuses every other level before the request leaves (group_members.go Share, pinned by its tests); doc/api/groups.md#share-groups-with-groups lists 5 through 50",
 
 		// --- Protection levels (AccessLevelValue) ---
 		"branches.ProtectInput.push_access_level":                    protectedBranchLevels,
