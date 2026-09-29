@@ -429,8 +429,8 @@ own machine, so there is no co-tenant to protect and a limiter there would only 
 its one user's own calls, while GitLab's own per-user limits still apply to every call it
 forwards. The same bucket is switched on for stdio by setting
 `GITLAB_MCP_RATE_LIMIT_RPS` above zero, with `GITLAB_MCP_RATE_LIMIT_BURST` beside it.
-`--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio accepts
-them and ignores them without a warning, so the variable is the stdio switch.
+`--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio ignores
+them and says so at startup (issue 1045), so the variable is the stdio switch.
 `test/e2e/stdio` holds both halves against the binary: a tool call refused with the
 variable set, and none refused without it.
 

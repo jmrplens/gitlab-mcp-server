@@ -696,6 +696,14 @@ is correct by placement; this row was the one whose wording invited the mistake.
 The documentation half is fixed. Whether the binary should warn when an
 HTTP-only flag is passed to a stdio run is a code decision.
 
+**Resolved by issue 1045.** A stdio run given a flag that lands in the HTTP
+configuration says so once at startup, at `WARN`, naming each flag with the
+variable stdio reads instead, and at `INFO` under `--transport=auto`, whose
+command line serves either transport. `--read-only` or `--safe-mode` asking to
+hold back writes refuses the start instead, since ignoring it would serve them.
+The set of flags is `httpOnlyFlags` in `cmd/server/http_only_flags.go`, held to
+the registrations into `httpConfig` by a test that reads the source.
+
 ### D9: the SDK's plain-text 403 is the one refusal that is not JSON-RPC
 
 | Side | Location                                 |

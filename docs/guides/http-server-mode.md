@@ -266,7 +266,7 @@ The MCP specification requires a server to "Rate limit tool invocations" ([serve
 - **Default**: on, at `--rate-limit-rps=10` with `--rate-limit-burst=40`, because an HTTP deployment is shared: every call it forwards is charged to its own address, so one looping client's volume lands on the instance and on every other caller. `--rate-limit-rps=0` turns it off.
 - **Refusal**: a refused `tools/call` is a tool result flagged `isError` that begins `rate limit exceeded for <tool>`; the other four methods are refused in-band with JSON-RPC `-42900`.
 
-stdio is the other half of the position and is off by default, since one process serving one person has no co-tenant to protect; there `GITLAB_MCP_RATE_LIMIT_RPS` is the switch, because stdio accepts `--rate-limit-rps` and ignores it without a warning. [Security, where the server stands on the MCP clause](../concepts/security.md#where-the-server-stands-on-the-mcp-clause) has both transports side by side.
+stdio is the other half of the position and is off by default, since one process serving one person has no co-tenant to protect; there `GITLAB_MCP_RATE_LIMIT_RPS` is the switch, because stdio ignores `--rate-limit-rps` and says so at startup, naming the variable instead. [Security, where the server stands on the MCP clause](../concepts/security.md#where-the-server-stands-on-the-mcp-clause) has both transports side by side.
 
 ### Requests held open at once
 
