@@ -678,8 +678,9 @@ a proxy should still be deliberate about five things:
   is a normal MCP result carrying an error, so it will not show up in HTTP-level
   monitoring.
 - **Bounds.** `--max-http-clients` caps pooled entries, not sessions or the
-  requests they hold; the process bounds those at 192 held at once across every
-  credential, not configurable, and answers the next with `503`.
+  requests they hold; the process bounds the calls held at once across every
+  credential by its descriptor limit (192 under a hard limit of 1024), not
+  configurable, and refuses the next one as busy.
   `--pool-idle-timeout` reclaims unused ones, and `--session-timeout` applies to
   stateful mode only.
 - **The token passes through the box.** Every caller's GitLab token reaches this

@@ -171,12 +171,13 @@ raises.
 | `--http-idle-timeout`                     | `0`         | Idle connection closure                                                                                                                                                                                                                                                  | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `--drain-delay`                           | `0`         | How long `/health` answers `503 draining` before the listener closes                                                                                                                                                                                                     | Set it to at least one probe interval. See [Health-driven ejection](#health-driven-ejection-and-the-drain-window)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-Three further limits are not configurable and are worth knowing: ten resource
-watchers per credential and 512 across the process, and ten failed
-authentications a minute per client address before that address is answered
-`429` for a minute. The watcher ceilings refuse rather than evicting, because a
-watcher belongs to one credential and stopping one to admit another is the trade
-this server does not make. Both refusals carry `-32000`; the process one says
+Two further limits are not configurable and are worth knowing: ten resource
+watchers per credential and 512 across the process. A third is configurable and
+worth knowing too: ten failed authentications a minute per client address by
+default (`--auth-failure-limit` and `--auth-failure-window`) before that address
+is answered `429` for the window. The watcher ceilings refuse rather than
+evicting, because a watcher belongs to one credential and stopping one to admit
+another is the trade this server does not make. Both refusals carry `-32000`; the process one says
 `server-wide` in as many words, and the per-credential one carries that
 credential's own count, so a client's error says which number it met. The
 process ceiling is worth 52 credentials at the per-credential cap, and holding
@@ -186,16 +187,21 @@ WARN, once per refusal, and there is no number to raise in answer. The
 authentication limit has a trap behind a proxy, described in
 [Operations at scale](#what-to-monitor).
 
-A fourth caps what an instance can have in flight: 192 requests held open at
-once across every credential, a `subscriptions/listen` stream aside, since the
-stream ceilings count it. A held call costs two file descriptors, six goroutines
-and about 190 KiB, and the figure is what fits beside the 512 streams under a
-descriptor limit of 1024. The next request is refused `503` with `Retry-After`
-before the MCP handler reads it, and the log says `request refused: too many
-requests held across the process`. Size the fleet for it: callers that wait on
-pipelines hold their slot for as long as they wait, so an instance serving many
-of them at once needs replicas beside it rather than a larger number, which
-there is none of to raise. See
+Another caps what an instance can have in flight: as many calls held open at
+once, across every credential, as the instance's hard descriptor limit leaves
+room for beside the 512 listen streams, which is 192 under a limit of 1024 and
+229120 under the 524288 a systemd service gets by default. A held call costs two
+file descriptors, six goroutines and about 190 KiB, and the startup line
+announces the figure as `held_requests_per_process`. A `subscriptions/listen`
+stream is not counted, since the stream ceilings count it. The next call is
+refused as busy, with `503` and `Retry-After` before the MCP handler reads it on
+protocol 2026-07-28, and the log says `request refused: too many requests held
+across the process`. Size the fleet for it where the limit is small: callers
+that wait on pipelines hold their slot for as long as they wait, so an instance
+serving many of them at once needs a larger descriptor limit or replicas beside
+it, since no flag moves the figure. Where the limit is large, memory runs out
+before the ceiling does, at about 190 KiB a held call, and the container's
+memory limit is the bound to size. See
 [Requests held open at once](http-server-mode.md#requests-held-open-at-once).
 
 ### What does not scale with the credential count

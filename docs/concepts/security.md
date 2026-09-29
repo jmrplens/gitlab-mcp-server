@@ -677,46 +677,69 @@ and at the HTTP defaults one credential can open thousands of calls in the time
 one of them is held. Measured through `cmd/bench_resources`' held mode against a
 stand-in GitLab that holds every read, each held call costs the process two file
 descriptors, six goroutines, about 51 KiB of live heap and about 190 KiB of
-resident set, linearly: 4000 held calls took 8010 descriptors and 873 MiB, and a
-process started with a descriptor limit of 1024 held 503 of them and then stopped
-accepting connections at all, `/health` among them, while every call past the
-limit failed at its dial to GitLab.
+resident set, linearly: 4000 held calls took 8010 descriptors and 873 MiB. A
+process whose hard descriptor limit was 1024 held 503 of them and then stopped
+accepting connections at all, `/health` among them; of 1000 calls offered, 558
+were served once GitLab answered and 442 failed with "too many open files" at
+their dial to GitLab.
 
-So the process holds at most **192 requests at once across every credential**
-(register row `HLD-011`). A request takes its slot in the transport gate once
-its credential is admitted, before the MCP handler or anything keyed on the
-credential runs, and gives it back when its `POST` ends; one past the ceiling is
-answered there with `503`, JSON-RPC `-50300` and `Retry-After`, costs its
-credential no rate-limit token and is charged to no budget. A
-`subscriptions/listen` stream does not take a slot, since the stream ceilings
-count it, and the gate knows one without reading the body only on protocol
-2026-07-28, where the SDK holds the `Mcp-Method` header to the body. The figure
-is sized so that this ceiling and the stream ceiling together fit under a
-descriptor limit of 1024: 512 streams at one descriptor, 192 held requests at
-two, and an eighth of the limit spare for the idle process, `/health` and the
-connections being refused. Measured with that limit and 4000 calls offered at
-once, the process held 192 in 402 descriptors, refused the other 3808 and
-answered `/health` in a millisecond.
+So the process holds at most **as many calls at once, across every credential,
+as its descriptor limit leaves room for** (register row `HLD-011`). It reads the
+limit once at startup, leaves an eighth of it spare for the idle process,
+`/health` and the connections being refused, reserves one descriptor for each of
+the 512 listen streams, and divides the rest by the two descriptors a held call
+costs: 192 under a hard limit of 1024, 229120 under the 524288 a systemd service
+gets by default. The limit that counts is the hard one, because the Go runtime
+raises the soft limit to it before the server starts; where the platform has no
+limit to read (Windows) the ceiling is the one a limit of 1024 gives. Measured
+under a hard limit of 1024, from one credential and from a hundred, with 4000
+calls offered at once, the process held 192 in 394 descriptors, refused the
+other 3808 and answered `/health` in a millisecond; with the limit inherited
+(1048576), it held all 4000, as it did before the ceiling existed.
+
+What it counts is a call that reaches GitLab (`tools/call`, `resources/read`,
+`resources/subscribe`, `prompts/get`, `completion/complete`), from its dispatch
+until it returns. The calls are counted where the SDK dispatches them, so each
+call of a JSON-RPC batch takes a slot of its own, a response the client sends to
+a request of the server's own (its answer to an elicitation, say) takes none and
+so is never refused by a full ceiling, and a `subscriptions/listen`, which the
+stream ceilings count, takes none on any revision. A call on protocol 2026-07-28
+or later, where the SDK holds the `Mcp-Method` header to the body, takes its slot
+in the transport gate instead, before the SDK reads it, and is refused there with
+`503`, JSON-RPC `-50300`, `Retry-After` and its connection closed; a call on an
+older revision is refused where it is dispatched, the way the rate limit refuses
+the same method. Either way the slot is taken once the credential is admitted,
+so a refusal costs the credential no rate-limit token and is charged to no
+budget; what a refused newcomer has spent by then is its admission, which in
+legacy mode may have built its pool entry, probed GitLab and, at the pool's
+bound, evicted another credential's quiet entry, and in `--auth-mode=oauth` one
+verification slot. Taking the slot before admission instead would let a caller
+with no credential hold one for as long as its verification takes.
 
 It is keyed on the process and not configurable for the reason the stream and
 watcher ceilings are: a per-caller number would multiply by however many
 credentials a caller mints, and a number an operator could raise could be raised
-past what the process can hold. It promises no caller a share, so one credential
-that fills it has the next request from anybody refused until a held call ends,
-and a deployment that needs more calls in flight at once runs more replicas.
+past what the process can hold; raising the descriptor limit raises the ceiling
+and what it protects together. It promises no caller a share, so where the limit
+is small one credential that fills it has the next call from anybody refused
+until a held call ends, and a deployment that needs more calls in flight raises
+the limit or runs more replicas. Where the limit is large the ceiling sits far
+above what the default rate limit lets any caller reach, and memory, about
+190 KiB of resident set a held call, runs out first; nothing here bounds that.
 Having no per-caller ceiling beside it, any refusal of it tells its caller that
-the process is full, the one bit `INV-019` accepts for a bound keyed on the
-process, and its words say nothing more; the log line names the scope and the
-figure:
+the process is full, the one bit `INV-019` accepts for the refusal of a bound
+keyed on the process, and its words, `This server is busy. Retry later.`, say
+nothing more; the log line is the one place that names the scope and the figure:
 
 ```json
 {"level":"WARN","msg":"request refused: too many requests held across the process","scope":"process","limit_held_requests":192}
 ```
 
-It bounds requests, not connections: a client that keeps idle connections open
+It bounds calls, not connections: a client that keeps idle connections open
 holds a descriptor for each whatever this counts, and `--http-idle-timeout` is
-what closes those. Stateful sessions are not bounded yet either; that is the part
-of issue 951 still open.
+what closes those; the gate's refusal closes its own connection so that refused
+callers do not accumulate them. Stateful sessions are not bounded yet either;
+that is the part of issue 951 still open.
 
 ### Defense-in-depth
 

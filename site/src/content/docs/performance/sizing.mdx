@@ -160,18 +160,27 @@ number of instances raises.
 | `--http-idle-timeout`                     | `0`         | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                                                                                                                                                                                                                                                             |
 | `--drain-delay`                           | `0`         | Set it to at least one balancer detection interval                                                                                                                                                                                                                                                                                                                                                                                      |
 
-Four further limits are not configurable: ten resource watchers per credential
-and 512 across the process, 192 requests held open at once across the process,
-and ten failed authentications a minute per client address before that address
-is answered `429` for a minute. The watcher ceilings refuse rather than
-evicting: a credential is one API call to mint, so a per-credential number
-multiplies by however many a caller holds and only the process-wide one bounds
-the process. The held-request ceiling is sized from the same measurement: each
-request waiting on GitLab costs the process two file descriptors (the client's
-connection and the outbound one), so 192 of them, beside 512 listen streams at
-one descriptor each and an eighth of the limit spare, fit a descriptor limit of
-1024, the default soft limit on most Linux hosts. A request past it is answered
-`503` with a `Retry-After` of 30 seconds, and `/health` keeps answering.
+Two further limits are not configurable: ten resource watchers per credential
+and 512 across the process, and the calls held open at once across the process.
+The watcher ceilings refuse rather than evicting: a credential is one API call to
+mint, so a per-credential number multiplies by however many a caller holds and
+only the process-wide one bounds the process. The held-call ceiling follows the
+descriptor limit the process runs under rather than a number: each call waiting
+on GitLab costs it two file descriptors (the client's connection and the
+outbound one), so it leaves an eighth of the limit spare and one descriptor for
+each of the 512 listen streams and gives the rest to held calls, two apiece. That
+is 192 under a hard limit of 1024 and 229120 under the 524288 a systemd service
+gets by default; the hard limit is the one that counts, because the Go runtime
+raises the soft limit to it before the server starts. A call past it is refused
+as busy, with `503` and a `Retry-After` of 30 seconds on protocol 2026-07-28;
+under a hard limit of 1024, with 4000 calls offered from one credential or from
+a hundred, the process stayed at 394 descriptors and `/health` answered in a
+millisecond. Where the limit is large, memory runs out first, at about 190 KiB a
+held call, so the container's memory limit is the figure to size.
+
+The failed-authentication budget is configurable: ten failures a minute per
+client address by default (`--auth-failure-limit`, `--auth-failure-window`)
+before that address is answered `429` for the window.
 
 ## What does not scale with the credential count
 

@@ -747,8 +747,9 @@ five things:
   is a normal MCP result carrying an error, so it will not show up in HTTP-level
   monitoring.
 - **Bounds.** `--max-http-clients` caps pooled entries, not sessions or the
-  requests they hold; the process bounds those at 192 held at once across every
-  credential, not configurable, and answers the next with `503` (see
+  requests they hold; the process bounds the calls held at once across every
+  credential by its descriptor limit (192 under a hard limit of 1024), not
+  configurable, and refuses the next one as busy (see
   [Requests held open at once](http-server-mode.md#requests-held-open-at-once)).
   `--pool-idle-timeout` reclaims unused ones, except an
   entry with a live subscription, which is not idle however long it has been
