@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,125 |
-| Unit test functions                                   | 18,726 |
-| E2E test functions                                    |  1,399 |
-| cmd test functions                                    |  4,240 |
+| Total test functions                                  | 20,168 |
+| Unit test functions                                   | 18,767 |
+| E2E test functions                                    |  1,401 |
+| cmd test functions                                    |  4,281 |
 | Test files (internal/)                                |    681 |
-| Test files (cmd/)                                     |    265 |
-| Test files (test/e2e/)                                |    397 |
+| Test files (cmd/)                                     |    267 |
+| Test files (test/e2e/)                                |    398 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     31 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.8% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,979 | 64.5% |
+| `TestFunc_Scenario` (2-part)           | 12,995 | 64.4% |
 | `TestFunc` (no underscore)             |    913 |  4.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,233 | 31.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,260 | 31.0% |
 
 ## Test Distribution
 
@@ -50,9 +50,9 @@
 | Core packages           |          3,605 |        210 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            380 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,501 |        455 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,399 |        397 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,240 |        265 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,125** |  **1,343** |                                                                                                 |
+| E2E integration         |          1,401 |        398 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,281 |        267 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,168** |  **1,346** |                                                                                                 |
 
 ### Core Packages
 
