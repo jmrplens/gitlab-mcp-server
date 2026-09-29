@@ -1585,7 +1585,13 @@ check-bench-resources:
 ## and refused counts separately, and can answer that the bound helped nobody.
 ## Minutes on a modest host. Writes bench/fairness.json, which is not committed,
 ## and draws no chart: it touches neither the published record nor the artifacts
-## check-bench-resources compares. BOUND selects which limit is measured.
+## check-bench-resources compares. BOUND selects which limit is measured:
+## tools-call-rps, tools-list-rps, tools-list-process or oauth-verification.
+## oauth-verification is the OAuth verification ceiling (register row ADM-014):
+## it builds a second server with the ceiling taken out through the go
+## command's -overlay, drives a flood of invented tokens against a stand-in
+## GitLab that answers each verification in 100 ms, and needs Linux, since the
+## flood is sent from addresses in 127.2.0.0/16 on the loopback.
 BOUND ?= tools-call-rps
 bench-fairness:
 	go run ./cmd/bench_resources/ -fairness $(BOUND)

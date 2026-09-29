@@ -927,3 +927,103 @@ func TestStdioRPC_Await_NothingArrived_ReportsWhatEndedTheWait(t *testing.T) {
 		t.Error("await left the waiter registered after the server exited")
 	}
 }
+
+// recordingServer answers every POST with an empty result and keeps the
+// headers and the peer address of the last one.
+type recordingServer struct {
+	*httptest.Server
+	mu     sync.Mutex
+	header http.Header
+	peer   string
+}
+
+func newRecordingServer(t *testing.T) *recordingServer {
+	t.Helper()
+	s := &recordingServer{}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.header, s.peer = r.Header.Clone(), r.RemoteAddr
+		s.mu.Unlock()
+		w.Header().Set(headerContentType, mediaJSON)
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+// last is the headers and the peer of the last request.
+func (s *recordingServer) last() (http.Header, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header, s.peer
+}
+
+// TestHTTPRPC_CallAs_PresentsTheCredentialItIsGiven verifies a request carries
+// the credential it was handed rather than the client's own, as a bearer token
+// to a server in OAuth mode and with the forwarded address it names, and that
+// an ordinary call goes out exactly as it did before.
+func TestHTTPRPC_CallAs_PresentsTheCredentialItIsGiven(t *testing.T) {
+	server := newRecordingServer(t)
+	client := newHTTPRPC(server.URL, "bench-token-0")
+	defer client.close()
+
+	if _, err := client.call(t.Context(), methodToolsList, nil); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	header, _ := server.last()
+	if header.Get("PRIVATE-TOKEN") != "bench-token-0" || header.Get("Authorization") != "" || header.Get(headerForwardedFor) != "" {
+		t.Errorf("headers = %v, want the client's own personal access token and nothing else", header)
+	}
+
+	client.bearer = true
+	if _, err := client.callAs(t.Context(), methodToolsList, nil, credential{token: "fresh", forwardedFor: "10.0.0.7"}); err != nil {
+		t.Fatalf("callAs: %v", err)
+	}
+	header, _ = server.last()
+	if header.Get("Authorization") != "Bearer fresh" || header.Get("PRIVATE-TOKEN") != "" || header.Get(headerForwardedFor) != "10.0.0.7" {
+		t.Errorf("headers = %v, want the credential given, as a bearer, from the address it names", header)
+	}
+}
+
+// TestNewSourcedHTTPRPC_LeavesFromItsSource verifies a sourced client's
+// requests leave from the local address it names, which is the transport
+// source the server charges, and present their credential as a bearer when
+// asked to.
+func TestNewSourcedHTTPRPC_LeavesFromItsSource(t *testing.T) {
+	server := newRecordingServer(t)
+	client := newSourcedHTTPRPC(server.URL, "127.0.0.1", true)
+	defer client.close()
+	if _, err := client.callAs(t.Context(), methodToolsList, nil, credential{token: "x"}); err != nil {
+		t.Fatalf("callAs: %v", err)
+	}
+	header, peer := server.last()
+	if !strings.HasPrefix(peer, "127.0.0.1:") || header.Get("Authorization") != "Bearer x" {
+		t.Errorf("peer %q and headers %v, want a bearer request from 127.0.0.1", peer, header)
+	}
+}
+
+// TestStatusError_KeepsTheJSONRPCErrorItCarried verifies a refused response
+// keeps the code and words its body carried, which is what tells the
+// verification ceiling's 503 apart from any other 503 in front of the server,
+// and that a body carrying none leaves nothing to unwrap.
+func TestStatusError_KeepsTheJSONRPCErrorItCarried(t *testing.T) {
+	carried := statusError(methodToolsList, 503, []byte(`{"jsonrpc":"2.0","id":null,"error":{"code":-50300,"message":"busy"}}`))
+	var rpc rpcError
+	if !errors.As(error(carried), &rpc) || rpc.Code != -50300 || rpc.Message != "busy" {
+		t.Errorf("statusError = %+v, want the JSON-RPC error reachable through it", carried)
+	}
+	if carried.Status != 503 || carried.Snippet == "" {
+		t.Errorf("statusError = %+v, want the status and the snippet kept", carried)
+	}
+	for name, body := range map[string]string{
+		"a body that is not JSON":       "service unavailable",
+		"a JSON body carrying no error": `{"message":"down"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			bare := statusError(methodToolsList, 503, []byte(body))
+			if bare.RPC != nil || bare.Unwrap() != nil {
+				t.Errorf("statusError = %+v, want nothing to unwrap", bare)
+			}
+		})
+	}
+}

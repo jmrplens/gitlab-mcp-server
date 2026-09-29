@@ -28,7 +28,12 @@ import (
 // fairnessSchema is the version of the shape below, independent of the
 // measurement record's, so a change here never bumps the schema of a record
 // this mode does not write.
-const fairnessSchema = 1
+//
+// Version 2 added what a verification bound needs said: a row's credential and
+// the refusals that are not the bound's, what the instance saw, which build
+// the arm without the bound ran, and what the bound protects when that is not
+// the quiet population.
+const fairnessSchema = 2
 
 // FairnessDoc is one fairness session.
 type FairnessDoc struct {
@@ -50,6 +55,11 @@ type FairnessSettings struct {
 	LeadInSeconds float64 `json:"lead_in_seconds"`
 	DeadlineMs    float64 `json:"deadline_ms"`
 	Repeats       int     `json:"repeats"`
+	// UpstreamDelayMs is the stand-in GitLab's round trip for each
+	// verification request, and FloodSources how many transport sources the
+	// invented tokens arrived from; both are absent where the run had none.
+	UpstreamDelayMs float64 `json:"upstream_delay_ms,omitempty"`
+	FloodSources    int     `json:"flood_sources,omitempty"`
 }
 
 // FairnessBound is the limit under test and how each arm put it there.
@@ -60,6 +70,15 @@ type FairnessBound struct {
 	ArgsOn  []string `json:"args_on"`
 	EnvOff  []string `json:"env_off,omitempty"`
 	EnvOn   []string `json:"env_on,omitempty"`
+	// VariantOff is what the arm without the bound ran in place of the binary
+	// under test, for a bound no switch reaches: the one declaration its build
+	// replaced.
+	VariantOff string `json:"variant_off,omitempty"`
+	// Protects names what the bound protects when that is not the quiet
+	// population, and Shared what the populations contend for when it is not
+	// the machine.
+	Protects string `json:"protects,omitempty"`
+	Shared   string `json:"shared,omitempty"`
 }
 
 // FairnessRepeat is one pair of arms, in the order they ran.
@@ -76,11 +95,31 @@ type FairnessArm struct {
 	Env         []string             `json:"env,omitempty"`
 	Populations []FairnessPopulation `json:"populations"`
 	Process     FairnessProcess      `json:"process"`
+	// Upstream is what the stand-in GitLab saw of token verification over the
+	// phase, for a bound whose purpose is what reaches the instance.
+	Upstream *FairnessUpstream `json:"upstream,omitempty"`
 	// Comparable is false when this arm failed a control, which is what stops
 	// the verdict comparing it rather than the arm being discarded: what it
 	// measured is still written, with the reason beside it.
 	Comparable bool     `json:"comparable"`
 	Notes      []string `json:"notes,omitempty"`
+}
+
+// FairnessUpstream is what the instance saw of token verification over one
+// arm's phase.
+//
+// Two readings, because the three verification endpoints are asked by the
+// pool's own probes as well as by the verifier, and only a request carrying an
+// invented token is certainly the verifier's: nothing else ever presents one.
+type FairnessUpstream struct {
+	// Requests and PeakInFlight are every request on the verification
+	// endpoints, and the most in flight at once.
+	Requests     int64 `json:"requests"`
+	PeakInFlight int64 `json:"peak_in_flight"`
+	// InventedRequests and InventedPeakInFlight are the same for requests
+	// carrying an invented token.
+	InventedRequests     int64 `json:"invented_requests"`
+	InventedPeakInFlight int64 `json:"invented_peak_in_flight"`
 }
 
 // FairnessPopulation is one tenant population's experience.
@@ -101,18 +140,24 @@ type FairnessPopulation struct {
 // the same row.
 type FairnessMethod struct {
 	Method string `json:"method"`
-	Detail string `json:"detail,omitempty"`
+	// Credential is the credential the row's requests presented, empty when
+	// it was the lane's own (see credentialOwn).
+	Credential string `json:"credential,omitempty"`
+	Detail     string `json:"detail,omitempty"`
 	// Intended is every tick the schedule reached; Dropped is those the driver
 	// never sent, whether because it could hold no slot or because it arrived
-	// past the request's own deadline; Dispatched is the rest, and the four
+	// past the request's own deadline; Dispatched is the rest, and the five
 	// outcomes below sum to it.
 	Intended   int `json:"intended"`
 	Dropped    int `json:"dropped"`
 	Dispatched int `json:"dispatched"`
 	Served     int `json:"served"`
 	Refused    int `json:"refused"`
-	Failed     int `json:"failed"`
-	TimedOut   int `json:"timed_out"`
+	// RefusedOther is the requests refused the way the run expects that is
+	// not the bound's: an invented token's 401.
+	RefusedOther int `json:"refused_other"`
+	Failed       int `json:"failed"`
+	TimedOut     int `json:"timed_out"`
 	// ServedLatency and RefusedLatency are separate distributions under
 	// separate names and are never merged. How fast a refusal comes back is
 	// worth knowing; counted as a served request it would make every bound look
@@ -125,6 +170,9 @@ type FairnessMethod struct {
 	Lateness     MethodLatency `json:"dispatch_lateness"`
 	FirstFailure string        `json:"first_failure,omitempty"`
 }
+
+// label names the row: its method, qualified by its credential.
+func (m FairnessMethod) label() string { return rowKey(m.Method, m.Credential) }
 
 // FairnessProcess is what the two processes cost over one arm's phase.
 type FairnessProcess struct {
@@ -148,6 +196,7 @@ type FairnessProcess struct {
 type FairnessComparison struct {
 	Population string `json:"population"`
 	Method     string `json:"method"`
+	Credential string `json:"credential,omitempty"`
 	Detail     string `json:"detail,omitempty"`
 	// Metric names which percentile was compared: p99 when both arms carried
 	// enough served samples for it to be a distinct observation, p50 otherwise.
@@ -350,15 +399,15 @@ func offeredEqually(index int, from, to FairnessArm) string {
 			return fmt.Sprintf("repetition %d: the arms did not drive the same populations", index+1)
 		}
 		for _, method := range pop.Methods {
-			counterpart, found := other.method(method.Method)
+			counterpart, found := other.method(method.label())
 			if !found {
-				return fmt.Sprintf("repetition %d: the arms did not drive %s for the %s population", index+1, method.Method, pop.Name)
+				return fmt.Sprintf("repetition %d: the arms did not drive %s for the %s population", index+1, method.label(), pop.Name)
 			}
 			if diverged(method.Dispatched, counterpart.Dispatched) {
 				return fmt.Sprintf(
 					"repetition %d: the %s population dispatched %d %s requests with the bound %s and %d with it %s, "+
 						"more than the %.0f%% the arms may differ by; the two arms did not offer the server the same work",
-					index+1, pop.Name, method.Dispatched, method.Method, from.Arm, counterpart.Dispatched, to.Arm,
+					index+1, pop.Name, method.Dispatched, method.label(), from.Arm, counterpart.Dispatched, to.Arm,
 					offeredTolerance*100,
 				)
 			}
@@ -391,7 +440,7 @@ func quietWasDropped(index int, arms ...FairnessArm) string {
 				return fmt.Sprintf(
 					"repetition %d, the %s arm: the driver could not send %d of the quiet population's %s requests, "+
 						"so its distribution is over what the driver managed rather than what it intended",
-					index+1, arm.Arm, method.Dropped, method.Method,
+					index+1, arm.Arm, method.Dropped, method.label(),
 				)
 			}
 		}
@@ -432,7 +481,7 @@ func quietSurvived(index int, arms ...FairnessArm) string {
 					"repetition %d, the %s arm: %d of the quiet population's %d dispatched %s requests completed (%.0f%%), "+
 						"below the %.0f%% a comparison of served percentiles needs; what survived a phase that lost "+
 						"most of the population is not that population's experience",
-					index+1, arm.Arm, method.Served, method.Dispatched, method.Method,
+					index+1, arm.Arm, method.Served, method.Dispatched, method.label(),
 					share*100, quietSurvivorshipFloor*100,
 				)
 			}
@@ -480,7 +529,16 @@ func quietRegression(doc *FairnessDoc) string {
 // One refusal is enough and needs no counterpart in the other arm: it is the
 // bound acting on the tenant it exists to protect, which is a categorical
 // finding rather than a quantity to be weighed against the run's noise.
+//
+// A bound that protects something else was never claimed to leave the quiet
+// tenant better off, so the same finding is not a contradiction there but the
+// cost the bound was measured for, and the sentence says which of the two it
+// is. The direction stays worse: for the quiet tenant it is.
 func quietWasRefused(doc *FairnessDoc) string {
+	consequence := "The tenant this bound exists to protect was the one it turned away"
+	if doc.Bound.Protects != "" {
+		consequence = "This bound protects " + doc.Bound.Protects + " rather than the quiet tenant, and that is what it cost the tenant"
+	}
 	for _, repeat := range doc.Repeats {
 		on, _ := repeat.arm(armOn)
 		quiet, ok := on.population(populationQuiet)
@@ -489,11 +547,8 @@ func quietWasRefused(doc *FairnessDoc) string {
 		}
 		for _, method := range quiet.Methods {
 			if method.Refused > 0 {
-				return fmt.Sprintf(
-					"repetition %d: the bound refused %d of the quiet population's %d %s requests. "+
-						"The tenant this bound exists to protect was the one it turned away",
-					repeat.Index+1, method.Refused, method.Intended, method.Method,
-				)
+				return fmt.Sprintf("repetition %d: the bound refused %d of the quiet population's %d %s requests. %s",
+					repeat.Index+1, method.Refused, method.Intended, method.label(), consequence)
 			}
 		}
 	}
@@ -545,9 +600,14 @@ func quietGaveUpMore(doc *FairnessDoc) string {
 }
 
 // saturationFailure reports a host the noisy population never contended for.
+//
+// Only asked of a bound whose populations contend for the machine. One whose
+// populations contend for its own slots reaches the quiet tenant through
+// those, on an idle host as much as on a busy one, and holding it to a busy
+// host would refuse the one comparison it can make.
 func saturationFailure(doc *FairnessDoc) string {
 	floor := saturationFloor * float64(doc.Host.CPUs)
-	if floor <= 0 {
+	if floor <= 0 || doc.Bound.Shared != "" {
 		return ""
 	}
 	worst := math.Inf(1)
@@ -586,8 +646,8 @@ func quietMethods(doc *FairnessDoc) []string {
 				continue
 			}
 			for _, method := range quiet.Methods {
-				if !slices.Contains(methods, method.Method) {
-					methods = append(methods, method.Method)
+				if !slices.Contains(methods, method.label()) {
+					methods = append(methods, method.label())
 				}
 			}
 		}
@@ -595,7 +655,9 @@ func quietMethods(doc *FairnessDoc) []string {
 	return methods
 }
 
-// compareMethod compares one method across every repetition.
+// compareMethod compares one row across every repetition. The row is named by
+// its label, and the comparison carries its method and credential apart, as
+// the arms' own records do.
 func compareMethod(doc *FairnessDoc, method string) FairnessComparison {
 	out := FairnessComparison{Population: populationQuiet, Method: method, Metric: metricP99}
 	pairs := methodPairs(doc, method)
@@ -603,7 +665,7 @@ func compareMethod(doc *FairnessDoc, method string) FairnessComparison {
 	// taken, so one short window cannot leave the rest compared on a different
 	// percentile from itself.
 	for _, pair := range pairs {
-		out.Detail = pair.on.Detail
+		out.Method, out.Credential, out.Detail = pair.on.Method, pair.on.Credential, pair.on.Detail
 		if pair.off.Served < p99MinSamples || pair.on.Served < p99MinSamples {
 			out.Metric = metricP50
 		}
@@ -747,16 +809,19 @@ func summarizeDirections(comparisons []FairnessComparison) FairnessVerdict {
 	for _, direction := range []string{directionNotComparable, directionWorse, directionIndistinguishable} {
 		for _, c := range comparisons {
 			if c.Direction == direction {
-				return FairnessVerdict{Direction: direction, Reason: c.Method + ": " + c.Reason}
+				return FairnessVerdict{Direction: direction, Reason: c.label() + ": " + c.Reason}
 			}
 		}
 	}
 	reasons := make([]string, 0, len(comparisons))
 	for _, c := range comparisons {
-		reasons = append(reasons, c.Method+": "+c.Reason)
+		reasons = append(reasons, c.label()+": "+c.Reason)
 	}
 	return FairnessVerdict{Direction: directionBetter, Reason: strings.Join(reasons, "; ")}
 }
+
+// label names the row a comparison is of.
+func (c FairnessComparison) label() string { return rowKey(c.Method, c.Credential) }
 
 // arm returns one arm of a repetition by name.
 func (r FairnessRepeat) arm(name string) (FairnessArm, bool) {
@@ -778,10 +843,11 @@ func (a FairnessArm) population(name string) (FairnessPopulation, bool) {
 	return FairnessPopulation{}, false
 }
 
-// method returns one method of a population.
+// method returns one row of a population by its label, which for a row
+// presenting the lane's own credential is the method's own name.
 func (p FairnessPopulation) method(name string) (FairnessMethod, bool) {
 	for _, method := range p.Methods {
-		if method.Method == name {
+		if method.label() == name {
 			return method, true
 		}
 	}
@@ -843,10 +909,18 @@ func (a FairnessArm) summary() string {
 		a.Arm, a.Process.CoresBusy, a.Process.CPUMsPerServed, a.Process.DriverCoresBusy)
 	for _, pop := range a.Populations {
 		for _, method := range pop.Methods {
-			fmt.Fprintf(&b, "; %s %s served %d refused %d failed %d timed out %d, served p50 %s ms p99 %s ms",
-				pop.Name, method.Method, method.Served, method.Refused, method.Failed, method.TimedOut,
-				msLabel(method.ServedLatency.P50), msLabel(method.ServedLatency.P99))
+			fmt.Fprintf(&b, "; %s %s served %d refused %d", pop.Name, method.label(), method.Served, method.Refused)
+			if method.RefusedOther > 0 {
+				fmt.Fprintf(&b, " refused otherwise %d", method.RefusedOther)
+			}
+			fmt.Fprintf(&b, " failed %d timed out %d, served p50 %s ms p99 %s ms",
+				method.Failed, method.TimedOut, msLabel(method.ServedLatency.P50), msLabel(method.ServedLatency.P99))
 		}
+	}
+	if up := a.Upstream; up != nil {
+		fmt.Fprintf(&b, "; the instance answered %d verification requests, at most %d at once, "+
+			"%d of them for invented tokens, at most %d of those at once",
+			up.Requests, up.PeakInFlight, up.InventedRequests, up.InventedPeakInFlight)
 	}
 	return b.String()
 }
@@ -863,22 +937,29 @@ func (d *FairnessDoc) summary() string {
 // settingsFor records the knobs a plan was run with.
 func settingsFor(plan fairnessPlan) FairnessSettings {
 	return FairnessSettings{
-		Surface:       plan.Surface,
-		PhaseSeconds:  round(plan.Phase.Seconds()),
-		LeadInSeconds: round(plan.LeadIn.Seconds()),
-		DeadlineMs:    round(float64(plan.Deadline.Milliseconds())),
-		Repeats:       plan.Repeats,
+		Surface:         plan.Surface,
+		PhaseSeconds:    round(plan.Phase.Seconds()),
+		LeadInSeconds:   round(plan.LeadIn.Seconds()),
+		DeadlineMs:      round(float64(plan.Deadline.Milliseconds())),
+		Repeats:         plan.Repeats,
+		UpstreamDelayMs: round(float64(plan.UpstreamDelay.Microseconds()) / 1000),
+		FloodSources:    plan.floodSources(),
 	}
 }
 
 // boundRecord records the bound and the switches each arm used, so a reader
 // can see what was actually in force rather than trusting the name.
 func boundRecord(plan fairnessPlan) FairnessBound {
-	return FairnessBound{
+	record := FairnessBound{
 		ID: plan.Bound.ID, Label: plan.Bound.Label,
 		ArgsOff: plan.armArgs(armOff), ArgsOn: plan.armArgs(armOn),
 		EnvOff: plan.armEnv(armOff), EnvOn: plan.armEnv(armOn),
+		Protects: plan.Bound.Protects, Shared: plan.Bound.Shared,
 	}
+	if plan.Bound.Variant != nil {
+		record.VariantOff = plan.Bound.Variant.describe()
+	}
+	return record
 }
 
 // writeFairness writes the document, in the shape every other committed JSON

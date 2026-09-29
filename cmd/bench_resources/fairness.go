@@ -31,6 +31,13 @@
 // arguments and environment of both arms and the wire shape of its own
 // refusal, so the listen ceilings and whatever the policy work produces are a
 // literal in the table below rather than a copy of this file.
+//
+// One bound has no switch at all: the OAuth verification ceiling is a constant
+// no operator can move (register row ADM-014), so the arm without it cannot be
+// the same binary started differently. Its bound names a variant instead, a
+// build of this checkout with the one declaration that sizes the ceiling
+// replaced, so the two arms still differ in exactly one thing and the server
+// carries no switch that takes a security bound out.
 package main
 
 import (
@@ -42,6 +49,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -56,15 +64,39 @@ const (
 // The verbs a population may be given. A verb is a request kind rather than a
 // method, because the bounds this has to reach next refuse a held resource
 // rather than a rate and will need a kind that opens a stream and keeps it.
+//
+// The last two are the same methods as the first two, carrying a credential
+// other than the lane's own. A bound on verification cannot be reached by a
+// credential that was verified before the phase began, which is every
+// credential the first two present: what reaches it is a credential presented
+// for the first time, and a token no GitLab ever issued.
 const (
-	verbCall = "call"
-	verbList = "list"
+	verbCall         = "call"
+	verbList         = "list"
+	verbCallNew      = "call-new"
+	verbListInvented = "list-invented"
+)
+
+// The credentials a verb may present in place of its lane's own.
+//
+// The lane's own is the one admission verified before the phase, or the new
+// one it most recently presented and was served with, which is how a new
+// credential is presented once and then reused, as a client that has just
+// been issued a token does. Either way it is one the server already holds, so
+// the rows that present it are the population's cached credentials.
+const (
+	credentialOwn      = ""
+	credentialNew      = "new"
+	credentialInvented = "invented"
 )
 
 // verbSpec is one request a population issues.
 type verbSpec struct {
 	ID     string
 	Method string
+	// Credential is which credential the request presents: the lane's own
+	// when empty, one presented for the first time, or one no GitLab issued.
+	Credential string
 	// params builds fresh parameters per request. Fresh because the request
 	// encoder writes the per-request _meta into the map it is handed, so a
 	// shared one would be written by every goroutine at once.
@@ -74,22 +106,42 @@ type verbSpec struct {
 	detail func(call toolCall) string
 }
 
+// key is the row this verb's requests are recorded under.
+func (v verbSpec) key() string { return rowKey(v.Method, v.Credential) }
+
+// rowKey names one row of a population's record: the method, qualified by the
+// credential it presented when that was not the lane's own.
+//
+// One method is two rows when a population presents two kinds of credential
+// with it, and the two must never be one distribution: a first presentation
+// that waited five seconds for a verification slot and a cached credential
+// answered at once are different experiences of the same call, and a
+// percentile over both would report neither.
+func rowKey(method, credential string) string {
+	if credential == credentialOwn {
+		return method
+	}
+	return method + " (" + credential + " credential)"
+}
+
+// callParams and listParams build the two methods' parameters, shared by the
+// verbs that send the same method with another credential.
+func callParams(call toolCall) map[string]any {
+	return map[string]any{"name": call.Name, "arguments": call.Args}
+}
+
+func listParams(toolCall) map[string]any { return nil }
+
+func callDetail(call toolCall) string { return call.Detail }
+
+func listDetail(toolCall) string { return detailWholeSurface }
+
 // verbs are every request kind a population can be given.
 var verbs = map[string]verbSpec{
-	verbCall: {
-		ID:     verbCall,
-		Method: methodToolsCall,
-		params: func(call toolCall) map[string]any {
-			return map[string]any{"name": call.Name, "arguments": call.Args}
-		},
-		detail: func(call toolCall) string { return call.Detail },
-	},
-	verbList: {
-		ID:     verbList,
-		Method: methodToolsList,
-		params: func(toolCall) map[string]any { return nil },
-		detail: func(toolCall) string { return detailWholeSurface },
-	},
+	verbCall:         {ID: verbCall, Method: methodToolsCall, params: callParams, detail: callDetail},
+	verbList:         {ID: verbList, Method: methodToolsList, params: listParams, detail: listDetail},
+	verbCallNew:      {ID: verbCallNew, Method: methodToolsCall, Credential: credentialNew, params: callParams, detail: callDetail},
+	verbListInvented: {ID: verbListInvented, Method: methodToolsList, Credential: credentialInvented, params: listParams, detail: listDetail},
 }
 
 // refusalSpec is one wire shape a bound's refusal arrives in.
@@ -176,6 +228,72 @@ type boundSpec struct {
 	// to more than one instance of it, and naming the gap beats a plan that
 	// runs and measures nothing.
 	Undrivable string
+
+	// OAuth starts both arms in OAuth mode, with every credential presented
+	// as a bearer token.
+	OAuth bool
+	// Variant, when set, is what the arm without the bound runs in place of
+	// the binary under test: this checkout with one declaration replaced. It
+	// is for a bound no switch reaches, and ArgsOff then equals ArgsOn.
+	Variant *buildVariant
+	// Slots, when set, is a ceiling on concurrent work that makes a request
+	// wait for a slot and refuses it when none frees, as the verification
+	// ceiling does. It is what the plan reasons about for such a bound, the
+	// way Bucket is for a rate.
+	Slots *slotSpec
+	// Otherwise is every wire shape a refusal arrives in that is expected of
+	// the run and is not this bound's: the 401 an invented token earns is the
+	// whole of what a flood of them is answered with when the bound is out.
+	// Such a request is refused otherwise, which is neither this bound's
+	// refusal nor a failure of the run.
+	Otherwise []refusalSpec
+	// Protects names what the bound protects when that is not the quiet
+	// population. Such a bound is not measured for whether it leaves the quiet
+	// tenant better off, which it never claimed, but for what it costs that
+	// tenant, and the verdict's sentences say so.
+	Protects string
+	// Shared names what the two populations contend for when it is not the
+	// machine. The saturation gate is about the machine: a bound whose
+	// populations contend for its own slots reaches the quiet tenant whether
+	// or not the host is busy.
+	Shared string
+	// Defaults are the settings a run of this bound takes where the flag was
+	// not given, for a bound the command's own defaults would not drive.
+	Defaults planDefaults
+}
+
+// planDefaults are a bound's own defaults for the settings a flag can name. A
+// zero field keeps the command's default.
+type planDefaults struct {
+	Quiet, Noisy            int
+	NoisyRate               float64
+	Phase, LeadIn, Deadline time.Duration
+	UpstreamDelay           time.Duration
+}
+
+// slotSpec is a ceiling on concurrent work: how many requests hold a slot at
+// once, how long a request waits for one, and how many round trips to the
+// instance a request holds it for.
+//
+// Held as numbers for the same reason bucketSpec is. A flood that the slots
+// can serve as fast as it arrives never fills them, and a lead-in shorter than
+// the wait measures a queue that has not formed yet; both follow from these
+// figures and the round trip the run puts in front of every verification.
+type slotSpec struct {
+	// Count and Wait are the ceiling itself.
+	Count int
+	Wait  time.Duration
+	// InventedRoundTrips is how many requests to the instance a refused
+	// credential holds a slot for, and NewRoundTrips the same for one the
+	// instance accepts.
+	InventedRoundTrips, NewRoundTrips int
+}
+
+// capacity is how many invented credentials the slots finish a second when
+// each request to the instance takes delay, which is what a flood has to
+// exceed before any of it waits.
+func (s slotSpec) capacity(delay time.Duration) float64 {
+	return float64(s.Count) / (float64(s.InventedRoundTrips) * delay.Seconds())
 }
 
 // onArgs are the switches that put the bound in force.
@@ -287,12 +405,58 @@ const rateLimitRefusal = toolutil.RateLimitRefusalPrefix
 // count one bound's refusals against the other.
 const serverBusyCode = -32000
 
-// httpOK and httpTooManyRequests are the two statuses a refusal can arrive
-// with, spelled here so a refusalSpec reads as data.
+// The statuses a refusal can arrive with, spelled here so a refusalSpec reads
+// as data.
 const (
-	httpOK              = 200
-	httpTooManyRequests = 429
+	httpOK                 = 200
+	httpUnauthorized       = 401
+	httpTooManyRequests    = 429
+	httpServiceUnavailable = 503
 )
+
+// registerRefusal is the refusal a register row declares at one status, in the
+// shape this classifier matches.
+//
+// Read from the register rather than restated, because the register is where
+// a refusal's words are held to the code that writes them (make check-tenancy,
+// G8): a sentence copied here would drift from the server without anything
+// noticing, and every refusal it stopped matching would count as a failure of
+// the run. A row or status the register does not hold gives the zero shape,
+// which matches nothing and which the bound table's own test refuses.
+func registerRefusal(id string, status int) refusalSpec {
+	row, ok := tenancy.Lookup(id)
+	if !ok {
+		return refusalSpec{}
+	}
+	for _, refusal := range row.Refusals {
+		if refusal.Status == status && refusal.Prefix != "" {
+			return refusalSpec{Status: refusal.Status, Code: refusal.Code, TextPrefix: refusal.Prefix}
+		}
+	}
+	return refusalSpec{}
+}
+
+// oauthArgs start a server in OAuth mode behind the loopback addresses the
+// flood arrives from, with the rate limit off in both arms.
+//
+// The public URL is required by OAuth mode and is never dialed. The trusted
+// proxies are the whole loopback range because the flood's transport sources
+// are loopback addresses of their own: behind one proxy the transport-source
+// budget (register row AUB-002) blocks a flood after five hundred distinct
+// forwarded addresses a minute, so a flood large enough to fill the slots
+// arrives the way a large one does, through many sources, and no budget but
+// the one under test turns any of it away. The rate limit is off because it is
+// per credential and every credential here is new.
+var oauthArgs = []string{
+	limiterOffArg,
+	"--auth-mode=oauth",
+	"--public-url=https://bench.invalid",
+	"--trusted-proxies=127.0.0.0/8",
+	"--trusted-proxy-header=" + headerForwardedFor,
+}
+
+// headerForwardedFor is the header the flood names its client address in.
+const headerForwardedFor = "X-Forwarded-For"
 
 // fairnessBounds are the bounds this scenario can be pointed at.
 //
@@ -396,6 +560,53 @@ var fairnessBounds = []boundSpec{
 		QuietVerbs: []string{verbCall, verbList},
 		Undrivable: "this driver has no verb that opens a stream and holds it, which is what a held-resource ceiling refuses",
 	},
+	{
+		ID:    "oauth-verification",
+		Label: "the OAuth verification ceiling (register row ADM-014)",
+		// The ceiling is sixteen verifications at once with a five-second
+		// wait, both constants no operator can move, so both arms start with
+		// the same switches and the arm without it runs a build whose slots
+		// no flood here can fill. Everything else about the two binaries is
+		// the one checkout.
+		OAuth:   true,
+		ArgsOff: oauthArgs,
+		ArgsOn:  oauthArgs,
+		Variant: &buildVariant{
+			File:        "internal/oauth/verifier.go",
+			Declaration: "const verificationSlots = ",
+			Replacement: "const verificationSlots = 1 << 20 // cmd/bench_resources: the arm without the ceiling",
+		},
+		// An invented token costs its slot one request, which GitLab answers
+		// 401; a token GitLab accepts costs three, the identity and the two
+		// scope introspection requests, which the stand-in answers the way an
+		// instance that will not describe a token does.
+		Slots: &slotSpec{
+			Count: tenancy.OAuthVerifications, Wait: tenancy.OAuthVerificationWait,
+			InventedRoundTrips: 1, NewRoundTrips: 3,
+		},
+		Refusals:  []refusalSpec{registerRefusal("ADM-014", httpServiceUnavailable)},
+		Otherwise: []refusalSpec{registerRefusal("ADM-002", httpUnauthorized)},
+		Protects:  "the GitLab instance the verifications reach",
+		Shared:    "the verification slots",
+		// The flood is nothing but invented tokens. The quiet population
+		// presents one new credential in every four requests and reuses it
+		// for the rest, so its two rows are the onboarding the ceiling can
+		// cost and the cached credentials it must not.
+		NoisyVerbs: []string{verbListInvented},
+		QuietVerbs: []string{verbCallNew, verbCall, verbCall, verbCall},
+		// Sized for a host of a few cores: four hundred invented tokens a
+		// second against slots that finish a hundred and sixty at a hundred
+		// milliseconds a round trip, which is a round trip GitLab.com answers
+		// the identity request in from a nearby region. The lead-in outlasts
+		// the wait, so the queue has formed before the phase begins, and the
+		// deadline outlasts the wait, so a client that waits it out is not
+		// counted as one that gave up.
+		Defaults: planDefaults{
+			Noisy: 8, NoisyRate: 50,
+			Phase: 30 * time.Second, LeadIn: 10 * time.Second, Deadline: 15 * time.Second,
+			UpstreamDelay: 100 * time.Millisecond,
+		},
+	},
 }
 
 // rateLimitCode is the JSON-RPC code a bucket refuses with on a method whose
@@ -464,6 +675,11 @@ type fairnessPlan struct {
 	// on one arm, and the spread between repetitions is the only measure of
 	// host noise the verdict has.
 	Repeats int
+	// UpstreamDelay is how long the stand-in GitLab takes to answer each
+	// token verification request. Zero answers at once, which is what every
+	// scenario but a verification bound's measures with: on loopback a slot
+	// frees in microseconds, so no flood this driver can offer fills one.
+	UpstreamDelay time.Duration
 }
 
 // The default shape, sized for a host a developer has and a run that happens
@@ -498,24 +714,46 @@ func fairnessPlanFor(opts options) (fairnessPlan, error) {
 	if quietRate <= 0 {
 		quietRate = bound.quietRate()
 	}
+	// The same holds for the upstream round trip, and for every setting the
+	// bound has a default of its own for: a flag the caller typed wins, and a
+	// flag left at the command's default takes the bound's.
+	delay := opts.fairnessUpstreamDelay
+	if delay <= 0 {
+		delay = bound.Defaults.UpstreamDelay
+	}
+	given := opts.fairnessSet
+	defaults := bound.Defaults
 	plan := fairnessPlan{
 		ID:      "fairness-" + opts.fairnessSurface + "-" + bound.ID,
 		Surface: opts.fairnessSurface,
 		Bound:   bound,
 		Quiet: populationSpec{
-			Name: populationQuiet, Credentials: opts.fairnessQuiet,
+			Name: populationQuiet, Credentials: setting(given[flagFairnessQuiet], opts.fairnessQuiet, defaults.Quiet),
 			Rate: quietRate, Verbs: bound.QuietVerbs,
 		},
 		Noisy: populationSpec{
-			Name: populationNoisy, Credentials: opts.fairnessNoisy,
-			Rate: opts.fairnessNoisyRate, Verbs: bound.NoisyVerbs,
+			Name: populationNoisy, Credentials: setting(given[flagFairnessNoisy], opts.fairnessNoisy, defaults.Noisy),
+			Rate:  setting(given[flagFairnessNoisyRate], opts.fairnessNoisyRate, defaults.NoisyRate),
+			Verbs: bound.NoisyVerbs,
 		},
-		Phase:    opts.fairnessPhase,
-		LeadIn:   opts.fairnessLeadIn,
-		Deadline: opts.fairnessDeadline,
-		Repeats:  opts.fairnessRepeats,
+		Phase:         setting(given[flagFairnessPhase], opts.fairnessPhase, defaults.Phase),
+		LeadIn:        setting(given[flagFairnessLeadIn], opts.fairnessLeadIn, defaults.LeadIn),
+		Deadline:      setting(given[flagFairnessDeadline], opts.fairnessDeadline, defaults.Deadline),
+		Repeats:       opts.fairnessRepeats,
+		UpstreamDelay: delay,
 	}
 	return plan, plan.validate()
+}
+
+// setting is the value a plan takes for one setting: the flag's when the
+// caller typed it or the bound has no default of its own, the bound's
+// otherwise.
+func setting[T comparable](typed bool, flagged, bound T) T {
+	var none T
+	if typed || bound == none {
+		return flagged
+	}
+	return bound
 }
 
 // validate refuses a plan that would measure something other than what it
@@ -536,6 +774,11 @@ func (p fairnessPlan) validate() error {
 		return fmt.Errorf("the phase and the deadline must be positive and the lead-in must not be negative, got %s, %s and %s",
 			p.Phase, p.LeadIn, p.Deadline)
 	}
+	if sources := p.floodSources(); sources > maxFloodSources {
+		return fmt.Errorf("the noisy population's invented tokens would need %d transport sources to stay under the "+
+			"transport-source budget, more than the %d that 127.2.0.0/16 holds: lower -fairness-noisy-rate or -fairness-noisy",
+			sources, maxFloodSources)
+	}
 	// Both populations are measured against the bound by what they offer it
 	// rather than by their rate, which are the same number only for a
 	// population whose every verb the bound meters.
@@ -547,6 +790,9 @@ func (p fairnessPlan) validate() error {
 			noisyOffered, p.Bound.Bucket.meteredRate())
 	}
 	if err := p.quietIsQuiet(); err != nil {
+		return err
+	}
+	if err := p.slotsFill(); err != nil {
 		return err
 	}
 	// A phase that opens on a full bucket measures the burst, and a lead-in
@@ -601,6 +847,115 @@ func (p fairnessPlan) quietIsQuiet() error {
 		offered, p.Bound.Bucket.meteredRate(), ceiling, p.Bound.quietRate())
 }
 
+// slotsFill refuses a plan that could not fill a slot bound, or that would
+// measure its queue before the queue had formed.
+//
+// Each check is the slot counterpart of one the bucket gets above. A flood the
+// slots finish as fast as it arrives is a noisy population the bound never
+// refuses; a lead-in shorter than the wait is a phase that begins before the
+// first waiter has been turned away; and two more are the slots' own. With no
+// round trip at the instance a slot frees in microseconds, so no rate this
+// driver can offer holds one. And a deadline shorter than a new credential's
+// wait and verification counts a client that waited the ceiling out as one
+// that gave up, which files the cost this bound imposes under the wrong
+// outcome.
+func (p fairnessPlan) slotsFill() error {
+	slots := p.Bound.Slots
+	if slots == nil {
+		return nil
+	}
+	if p.UpstreamDelay <= 0 {
+		return fmt.Errorf("%s holds a slot for as long as the instance takes to answer, and the stand-in's round trip "+
+			"is %s: a slot then frees in microseconds and no flood this driver can offer holds one. "+
+			"Name one with -fairness-upstream-delay", p.Bound.Label, p.UpstreamDelay)
+	}
+	offered := p.Bound.meteredOffered(p.Noisy) * float64(p.Noisy.Credentials)
+	capacity := slots.capacity(p.UpstreamDelay)
+	if offered <= capacity {
+		return fmt.Errorf("the noisy population offers %g requests a second against %d slots that finish %g a second "+
+			"at a %s round trip: the slots would never all be held, and the run would spend both arms discovering that",
+			offered, slots.Count, capacity, p.UpstreamDelay)
+	}
+	if p.LeadIn < slots.Wait {
+		return fmt.Errorf("the lead-in of %s is shorter than the %s a request waits for a slot: the measured phase would "+
+			"begin before the first waiter was refused, and report a queue that had not formed", p.LeadIn, slots.Wait)
+	}
+	if floor := p.slotDeadlineFloor(); p.Deadline < floor {
+		return fmt.Errorf("the deadline of %s is shorter than the %s a new credential may take to wait for a slot and "+
+			"make its %d round trips: a client that waited the ceiling out would be counted as one that gave up",
+			p.Deadline, floor, slots.NewRoundTrips)
+	}
+	// The quiet population's own new credentials take slots too, and a
+	// population whose onboarding alone kept half of them busy would be the
+	// contention rather than the tenant it falls on.
+	newcomers := float64(p.Quiet.Credentials) * p.Quiet.Rate * credentialShare(p.Quiet.Verbs, credentialNew)
+	if held := newcomers * float64(slots.NewRoundTrips) * p.UpstreamDelay.Seconds(); held > quietMaxShare*float64(slots.Count) {
+		return fmt.Errorf("the quiet population presents %g new credentials a second, which keep %.1f of the %d slots "+
+			"busy on their own, above the %g this comparison allows it: lower -fairness-quiet-rate or -fairness-quiet",
+			newcomers, held, slots.Count, quietMaxShare*float64(slots.Count))
+	}
+	return nil
+}
+
+// slotDeadlineFloor is the least a request may take before its client gives up
+// on a slot bound: the whole wait, a new credential's round trips and the
+// call's own, and a second for the server between them.
+func (p fairnessPlan) slotDeadlineFloor() time.Duration {
+	trips := int64(p.Bound.Slots.NewRoundTrips + 1)
+	return p.Bound.Slots.Wait + time.Duration(trips*int64(p.UpstreamDelay)) + slotDeadlineMargin
+}
+
+// slotDeadlineMargin is the server's own time inside a slot bound's deadline:
+// admission, the pool and the call, which on loopback take milliseconds, with
+// room for a host busy enough to be worth measuring.
+const slotDeadlineMargin = time.Second
+
+// credentialShare is the fraction of a verb cycle that presents one kind of
+// credential.
+func credentialShare(verbIDs []string, credential string) float64 {
+	if len(verbIDs) == 0 {
+		return 0
+	}
+	matching := 0
+	for _, id := range verbIDs {
+		if verbs[id].Credential == credential {
+			matching++
+		}
+	}
+	return float64(matching) / float64(len(verbIDs))
+}
+
+// floodSources is how many transport sources the noisy population's invented
+// tokens arrive from, and zero when it presents none.
+//
+// Enough that each stays at half of what the transport-source budget
+// (register row AUB-002) counts in a window: that budget blocks a source once
+// five hundred distinct forwarded addresses have failed through it inside a
+// minute, and then refuses everything from that source, the quiet tenant's
+// new credentials included, before any slot is asked for. A flood that tripped
+// it would measure that budget rather than the ceiling.
+func (p fairnessPlan) floodSources() int {
+	share := credentialShare(p.Noisy.Verbs, credentialInvented)
+	if share == 0 {
+		return 0
+	}
+	perWindow := float64(p.Noisy.Credentials) * p.Noisy.Rate * share * tenancy.AuthFailureWindow.Seconds()
+	return max(1, int(math.Ceil(perWindow/(sourceKeyShare*tenancy.TransportSourceDistinctKeys))))
+}
+
+// sourceKeyShare is how much of the transport-source budget one flood source
+// may spend in a window.
+const sourceKeyShare = 0.5
+
+// poolEntries is how many credentials one arm presents, the new ones
+// included, which is what the server's pool is sized to: a credential the pool
+// evicted mid-phase would be rebuilt, and the rebuild measured as its latency.
+func (p fairnessPlan) poolEntries() int {
+	fresh := credentialShare(p.Quiet.Verbs, credentialNew) *
+		float64(p.Quiet.Credentials*(p.leadInTicks(p.Quiet)+p.ticks(p.Quiet)))
+	return min(p.totalCredentials()+int(math.Ceil(fresh)), tenancy.PoolSizeMax)
+}
+
 // refusalsExpected is how many requests this bound must refuse over a phase if
 // it is in force at all: everything a population offers above what the bound
 // meters, for as long as the phase lasts.
@@ -609,7 +964,15 @@ func (p fairnessPlan) quietIsQuiet() error {
 // bound that fired once in three thousand requests and a bound absent from the
 // build are the same arm to a control that only asks whether anything was
 // refused, and telling them apart is the whole job of that control.
+//
+// A slot bound's capacity is the process's rather than one credential's, so
+// what a population offers above it is counted over all its credentials at
+// once.
 func (p fairnessPlan) refusalsExpected(s populationSpec) float64 {
+	if slots := p.Bound.Slots; slots != nil {
+		above := p.Bound.meteredOffered(s)*float64(s.Credentials) - slots.capacity(p.UpstreamDelay)
+		return max(0, above) * p.Phase.Seconds()
+	}
 	if p.Bound.Bucket == nil {
 		return 0
 	}
@@ -690,9 +1053,16 @@ func (p fairnessPlan) totalCredentials() int {
 
 // describe renders the plan for the progress line.
 func (p fairnessPlan) describe() string {
-	return fmt.Sprintf("%s surface, %s: %d quiet credentials at %g/s against %d noisy at %g/s, %s phase after a %s lead-in, %d repetitions",
+	line := fmt.Sprintf("%s surface, %s: %d quiet credentials at %g/s against %d noisy at %g/s, %s phase after a %s lead-in, %d repetitions",
 		p.Surface, p.Bound.Label, p.Quiet.Credentials, p.Quiet.Rate, p.Noisy.Credentials, p.Noisy.Rate,
 		p.Phase, p.LeadIn, p.Repeats)
+	if p.UpstreamDelay > 0 {
+		line += fmt.Sprintf(", %s at the instance for each verification request", p.UpstreamDelay)
+	}
+	if sources := p.floodSources(); sources > 0 {
+		line += fmt.Sprintf(", invented tokens from %d transport sources", sources)
+	}
+	return line
 }
 
 // armArgs and armEnv are the bound's switches for one arm.
@@ -759,15 +1129,31 @@ func classifyOutcome(method string, err error, refusals []refusalSpec) string {
 	return outcomeFailed
 }
 
-// The four terminal outcomes of a request. Four rather than two because a
-// refusal is neither a success nor a breakage: counted as a success it makes
-// the bound look efficient for refusing work, and counted as a failure it
-// makes it look broken.
+// classifyExpecting is classifyOutcome with the refusals a run expects that are
+// not the bound's: a failure one of those shapes matches is refused otherwise.
+//
+// Asked only of what classifyOutcome called a failure, so a shape listed in
+// both places is the bound's, and a request the client gave up on stays timed
+// out whatever it would have been answered with.
+func classifyExpecting(method string, err error, refusals, otherwise []refusalSpec) string {
+	kind := classifyOutcome(method, err, refusals)
+	if kind == outcomeFailed && slices.ContainsFunc(otherwise, func(r refusalSpec) bool { return r.matches(method, err) }) {
+		return outcomeRefusedOther
+	}
+	return kind
+}
+
+// The terminal outcomes of a request. More than two because a refusal is
+// neither a success nor a breakage: counted as a success it makes the bound
+// look efficient for refusing work, and counted as a failure it makes it look
+// broken. And a refusal the run expects that is not the bound's, the 401 an
+// invented token earns, is neither the bound's refusal nor a failure.
 const (
-	outcomeServed   = "served"
-	outcomeRefused  = "refused"
-	outcomeFailed   = "failed"
-	outcomeTimedOut = "timed_out"
+	outcomeServed       = "served"
+	outcomeRefused      = "refused"
+	outcomeRefusedOther = "refused_other"
+	outcomeFailed       = "failed"
+	outcomeTimedOut     = "timed_out"
 )
 
 // matches reports whether an error is this refusal shape.

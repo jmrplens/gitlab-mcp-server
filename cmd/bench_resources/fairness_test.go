@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -799,4 +800,299 @@ func TestVerbs_BuildFreshParametersPerRequest(t *testing.T) {
 			t.Errorf("detail = %q, want %q", got, detailWholeSurface)
 		}
 	})
+}
+
+// oauthOptions are the flags of an OAuth verification run that typed nothing
+// but the bound, so every setting the bound has a default for takes it.
+func oauthOptions() options {
+	opts := fairnessOptions()
+	opts.fairness = "oauth-verification"
+	return opts
+}
+
+// oauthPlan is the plan oauthOptions build, which the bound's defaults make a
+// valid one.
+func oauthPlan(t *testing.T) fairnessPlan {
+	t.Helper()
+	plan, err := fairnessPlanFor(oauthOptions())
+	if err != nil {
+		t.Fatalf("fairnessPlanFor: %v", err)
+	}
+	return plan
+}
+
+// TestRowKey_QualifiesOnlyACredentialThatIsNotTheLanesOwn verifies a row is
+// named by its method alone unless it presented another credential, which is
+// what keeps every record the bounds before this one wrote reading as it did.
+func TestRowKey_QualifiesOnlyACredentialThatIsNotTheLanesOwn(t *testing.T) {
+	cases := map[string]string{
+		verbCall:         methodToolsCall,
+		verbList:         methodToolsList,
+		verbCallNew:      "tools/call (new credential)",
+		verbListInvented: "tools/list (invented credential)",
+	}
+	for id, want := range cases {
+		t.Run(id, func(t *testing.T) {
+			verb := verbs[id]
+			if got := verb.key(); got != want {
+				t.Errorf("key = %q, want %q", got, want)
+			}
+			row := FairnessMethod{Method: verb.Method, Credential: verb.Credential}
+			if got := row.label(); got != want {
+				t.Errorf("label = %q, want %q", got, want)
+			}
+			if got := (FairnessComparison{Method: verb.Method, Credential: verb.Credential}).label(); got != want {
+				t.Errorf("comparison label = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestRegisterRefusal_ReadsTheShapeTheRegisterDeclares verifies the
+// verification bound's two refusal shapes come from the register rows that
+// declare them, and that a row or status the register does not hold gives a
+// shape that matches nothing.
+func TestRegisterRefusal_ReadsTheShapeTheRegisterDeclares(t *testing.T) {
+	busy := registerRefusal("ADM-014", httpServiceUnavailable)
+	if busy.Status != httpServiceUnavailable || busy.Code != tenancy.CodeUnavailable ||
+		busy.TextPrefix != "GitLab could not verify this token right now." {
+		t.Errorf("ADM-014 = %+v, want the register's 503, -50300 and words", busy)
+	}
+	rejected := registerRefusal("ADM-002", httpUnauthorized)
+	if rejected.Status != httpUnauthorized || rejected.Code != tenancy.CodeUnauthorized ||
+		rejected.TextPrefix != "GitLab rejected this token." {
+		t.Errorf("ADM-002 at 401 = %+v, want the register's rejection", rejected)
+	}
+	// ADM-002 refuses twice at 403, once in words built at run time and once in
+	// words that fold; only the second is a shape a classifier can match.
+	if scope := registerRefusal("ADM-002", 403); scope.TextPrefix != "GitLab rejected this token for lacking the scope" {
+		t.Errorf("ADM-002 at 403 = %+v, want the refusal whose words fold", scope)
+	}
+	for name, got := range map[string]refusalSpec{
+		"a row the register does not hold": registerRefusal("ADM-999", httpUnauthorized),
+		"a status the row does not refuse": registerRefusal("ADM-014", httpUnauthorized),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got != (refusalSpec{}) {
+				t.Errorf("registerRefusal = %+v, want the zero shape", got)
+			}
+		})
+	}
+}
+
+// TestFairnessPlanFor_TakesTheBoundsDefaultsWhereNoFlagWasTyped verifies a
+// bound's own defaults stand wherever the caller typed nothing, and that a
+// flag the caller typed wins over them.
+//
+// The verification bound cannot be driven by the command's defaults at all: a
+// two-second deadline counts every request that waited out the five-second
+// slot wait as one the client gave up on, and eighty invented tokens a second
+// never fill slots that finish a hundred and sixty. So `make bench-fairness
+// BOUND=oauth-verification` would refuse to run without them.
+func TestFairnessPlanFor_TakesTheBoundsDefaultsWhereNoFlagWasTyped(t *testing.T) {
+	plan := oauthPlan(t)
+	if plan.Noisy.Credentials != 8 || plan.Noisy.Rate != 50 || plan.Phase != 30*time.Second ||
+		plan.LeadIn != 10*time.Second || plan.Deadline != 15*time.Second || plan.UpstreamDelay != 100*time.Millisecond {
+		t.Errorf("plan = %+v, want the bound's own defaults", plan)
+	}
+	// The bound has no default of its own for the quiet population's size, so
+	// the flag's value stands.
+	if plan.Quiet.Credentials != 2 {
+		t.Errorf("quiet credentials = %d, want the flag's 2", plan.Quiet.Credentials)
+	}
+
+	opts := oauthOptions()
+	opts.fairnessSet = map[string]bool{
+		flagFairnessNoisy: true, flagFairnessNoisyRate: true, flagFairnessPhase: true,
+		flagFairnessLeadIn: true, flagFairnessDeadline: true, flagFairnessQuiet: true,
+	}
+	opts.fairnessNoisy, opts.fairnessNoisyRate = 20, 30
+	opts.fairnessPhase, opts.fairnessLeadIn, opts.fairnessDeadline = 5*time.Second, 6*time.Second, 9*time.Second
+	opts.fairnessUpstreamDelay = 50 * time.Millisecond
+	typed, err := fairnessPlanFor(opts)
+	if err != nil {
+		t.Fatalf("fairnessPlanFor: %v", err)
+	}
+	if typed.Noisy.Credentials != 20 || typed.Noisy.Rate != 30 || typed.Phase != 5*time.Second ||
+		typed.LeadIn != 6*time.Second || typed.Deadline != 9*time.Second || typed.UpstreamDelay != 50*time.Millisecond {
+		t.Errorf("plan = %+v, want every typed flag to win", typed)
+	}
+}
+
+// TestParseFlags_OAuthVerificationDefaults_MakeAPlanThatValidates verifies the
+// Makefile's `make bench-fairness BOUND=oauth-verification` describes a run
+// that measures something, and that a flag typed on the command line is the
+// one that counts.
+func TestParseFlags_OAuthVerificationDefaults_MakeAPlanThatValidates(t *testing.T) {
+	if _, err := fairnessPlanFor(withArgs(t, "-fairness=oauth-verification")); err != nil {
+		t.Errorf("fairnessPlanFor over the bound's defaults = %v, want a plan they can run", err)
+	}
+	opts := withArgs(t, "-fairness=oauth-verification", "-fairness-noisy=2", "-json=x.json")
+	if !opts.fairnessSet[flagFairnessNoisy] || opts.fairnessSet["json"] {
+		t.Errorf("fairnessSet = %v, want the fairness flag typed and nothing else", opts.fairnessSet)
+	}
+	// Two credentials at fifty a second is a hundred, under the hundred and
+	// sixty the slots finish: the typed value won and the plan says why it
+	// cannot be run.
+	if _, err := fairnessPlanFor(opts); err == nil || !strings.Contains(err.Error(), "never all be held") {
+		t.Errorf("fairnessPlanFor = %v, want the typed flood refused as too small", err)
+	}
+}
+
+// TestFairnessPlan_SlotsFill_RefusesAPlanThatCouldNotFillTheSlots verifies
+// every way a slot bound's plan is refused before a process is started, and
+// that each limit admits the value sitting exactly on it.
+func TestFairnessPlan_SlotsFill_RefusesAPlanThatCouldNotFillTheSlots(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(*fairnessPlan)
+		want string
+	}{
+		{name: "no round trip at the instance", edit: func(p *fairnessPlan) { p.UpstreamDelay = 0 }, want: "-fairness-upstream-delay"},
+		// Sixteen slots at a hundred milliseconds finish a hundred and sixty,
+		// which eight credentials at twenty a second offer exactly.
+		{name: "a flood the slots finish as it arrives", edit: func(p *fairnessPlan) { p.Noisy.Rate = 20 }, want: "never all be held"},
+		{name: "a lead-in shorter than the wait", edit: func(p *fairnessPlan) { p.LeadIn = 4 * time.Second }, want: "before the first waiter"},
+		{name: "a deadline shorter than a waiter's", edit: func(p *fairnessPlan) { p.Deadline = 6 * time.Second }, want: "gave up"},
+		{
+			name: "a quiet population whose onboarding fills the slots itself",
+			edit: func(p *fairnessPlan) { p.Quiet.Credentials, p.Quiet.Rate = 100, 3 },
+			want: "busy on their own",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := oauthPlan(t)
+			tc.edit(&plan)
+			if err := plan.validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("validate = %v, want an error about %q", err, tc.want)
+			}
+		})
+	}
+
+	boundaries := []struct {
+		name string
+		edit func(*fairnessPlan)
+	}{
+		{name: "a lead-in exactly as long as the wait", edit: func(p *fairnessPlan) { p.LeadIn = 5 * time.Second }},
+		// The wait, four round trips of a hundred milliseconds and the second
+		// of margin.
+		{name: "a deadline exactly on its floor", edit: func(p *fairnessPlan) { p.Deadline = 6400 * time.Millisecond }},
+		// Forty credentials at four a second, one request in four new, present
+		// forty new credentials a second; at two round trips of a tenth of a
+		// second each they keep exactly the eight slots a quiet tenant may. The
+		// slots are a copy, since the plan's points at the bound table's own.
+		{name: "a quiet onboarding exactly at its share", edit: func(p *fairnessPlan) {
+			slots := *p.Bound.Slots
+			slots.NewRoundTrips = 2
+			p.Bound.Slots = &slots
+			p.Quiet.Credentials, p.Quiet.Rate = 40, 4
+		}},
+	}
+	for _, tc := range boundaries {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := oauthPlan(t)
+			tc.edit(&plan)
+			if err := plan.validate(); err != nil {
+				t.Errorf("validate = %v, want a plan on the boundary accepted", err)
+			}
+		})
+	}
+}
+
+// TestFairnessPlan_Validate_RefusesAFloodNoLoopbackRangeCanCarry verifies a
+// flood needing more transport sources than 127.2.0.0/16 holds is refused
+// rather than sent through sources that wrap around onto each other.
+func TestFairnessPlan_Validate_RefusesAFloodNoLoopbackRangeCanCarry(t *testing.T) {
+	plan := oauthPlan(t)
+	plan.Noisy.Rate = 1e6
+	if err := plan.validate(); err == nil || !strings.Contains(err.Error(), "127.2.0.0/16") {
+		t.Errorf("validate = %v, want the flood refused for its sources", err)
+	}
+}
+
+// TestFairnessPlan_SlotArithmetic_FollowsTheFlood verifies the figures a slot
+// bound's run is sized from: the share of a cycle that presents a credential,
+// the flood's transport sources, the pool, and the refusals the positive
+// control demands.
+func TestFairnessPlan_SlotArithmetic_FollowsTheFlood(t *testing.T) {
+	plan := oauthPlan(t)
+	if got := credentialShare(plan.Quiet.Verbs, credentialNew); got != 0.25 {
+		t.Errorf("new credential share = %g, want one in four", got)
+	}
+	if got := credentialShare(nil, credentialNew); got != 0 {
+		t.Errorf("share of no verbs = %g, want zero", got)
+	}
+	// Four hundred a second over a minute is twenty-four thousand distinct
+	// addresses, at two hundred and fifty a source.
+	if got := plan.floodSources(); got != 96 {
+		t.Errorf("floodSources = %d, want 96", got)
+	}
+	if got := (fairnessPlan{Noisy: populationSpec{Credentials: 1, Rate: 1, Verbs: []string{verbList}}}).floodSources(); got != 0 {
+		t.Errorf("floodSources of a flood of own credentials = %d, want none", got)
+	}
+	// Two quiet credentials at two a second over forty seconds present eighty
+	// requests each, a quarter of them new: forty new credentials beside the
+	// ten the populations hold.
+	if got := plan.poolEntries(); got != 50 {
+		t.Errorf("poolEntries = %d, want 50", got)
+	}
+	huge := plan
+	huge.Quiet.Credentials, huge.Phase = 10000, time.Hour
+	if got := huge.poolEntries(); got != tenancy.PoolSizeMax {
+		t.Errorf("poolEntries = %d, want it held to the largest pool the server accepts", got)
+	}
+	// Four hundred offered against a hundred and sixty finished, for thirty
+	// seconds.
+	if got := plan.refusalsExpected(plan.Noisy); got != 7200 {
+		t.Errorf("refusalsExpected = %g, want 7200", got)
+	}
+	if got := plan.refusalsExpected(plan.Quiet); got != 0 {
+		t.Errorf("refusalsExpected of the quiet population = %g, want none", got)
+	}
+	if got := (slotSpec{Count: 16, InventedRoundTrips: 2}).capacity(100 * time.Millisecond); got != 80 {
+		t.Errorf("capacity = %g, want sixteen slots over two round trips of a tenth of a second", got)
+	}
+	if got := plan.describe(); !strings.Contains(got, "100ms at the instance") || !strings.Contains(got, "96 transport sources") {
+		t.Errorf("describe = %q, want the round trip and the sources named", got)
+	}
+}
+
+// TestClassifyExpecting_FilesTheRunsOwnRefusalsApart verifies a refusal the
+// run expects and the bound does not own is neither the bound's nor a failure,
+// and that the order of the checks leaves every other outcome where it was.
+func TestClassifyExpecting_FilesTheRunsOwnRefusalsApart(t *testing.T) {
+	bound := oauthPlan(t).Bound
+	gate := func(status, code int, message string) error {
+		return fmt.Errorf("tools/list: %w", &httpStatusError{
+			Method: methodToolsList, Status: status, RPC: &rpcError{Code: code, Message: message},
+		})
+	}
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "an invented token's 401", want: outcomeRefusedOther,
+			err: gate(httpUnauthorized, tenancy.CodeUnauthorized, "GitLab rejected this token. Check that it is valid."),
+		},
+		{
+			name: "a slot that never freed", want: outcomeRefused,
+			err: gate(httpServiceUnavailable, tenancy.CodeUnavailable, "GitLab could not verify this token right now. Retry shortly."),
+		},
+		{
+			name: "an instance that did not answer is neither", want: outcomeFailed,
+			err: gate(httpServiceUnavailable, tenancy.CodeUnavailable, "GitLab could not verify this token right now; the instance is unreachable."),
+		},
+		{name: "a client that gave up", err: context.DeadlineExceeded, want: outcomeTimedOut},
+		{name: "a served request", want: outcomeServed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifyExpecting(methodToolsList, tc.err, bound.Refusals, bound.Otherwise); got != tc.want {
+				t.Errorf("classifyExpecting = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }

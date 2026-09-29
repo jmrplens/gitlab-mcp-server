@@ -42,7 +42,10 @@ var settleCeiling = 3 * time.Second
 // runner holds what every scenario needs: the binary under measurement and the
 // two stand-in services.
 type runner struct {
-	binary         string
+	binary string
+	// variant is the build the arm without a bound that has no switch runs,
+	// empty unless such a bound is being measured.
+	variant        string
 	stub           *stubGitLab
 	otlp           *otlpSink
 	sampleInterval time.Duration

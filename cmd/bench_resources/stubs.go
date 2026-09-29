@@ -11,10 +11,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // stubGitLab answers the handful of endpoints the server probes while it
@@ -26,6 +29,12 @@ import (
 // makes it keep waiting: while a hold is on, every project read is held until
 // the hold is released, so the server under measurement holds the call that
 // asked for it.
+//
+// The three requests an OAuth verification sends, the user and the two scope
+// introspection endpoints, are answered after a delay a run may set, which is
+// the round trip a verification slot is held for, and counted while they are
+// in flight. A token carrying the invented prefix is refused 401 there, the
+// way GitLab answers a token it never issued.
 type stubGitLab struct {
 	url    string
 	server *httptest.Server
@@ -36,6 +45,109 @@ type stubGitLab struct {
 	mu      sync.Mutex
 	release chan struct{}
 	held    atomic.Int64
+
+	// delay is how long, in nanoseconds, each verification request is
+	// answered after; verifying counts those requests and invented the ones
+	// among them carrying an invented token, which only a verifier sends.
+	delay     atomic.Int64
+	verifying gauge
+	invented  gauge
+}
+
+// gauge counts requests in flight: how many now, the most at once since it was
+// last reset, and how many arrived since then.
+type gauge struct {
+	now, peak, total atomic.Int64
+}
+
+// enter counts a request in, raising the peak when it is a new high.
+func (g *gauge) enter() {
+	now := g.now.Add(1)
+	g.total.Add(1)
+	for {
+		peak := g.peak.Load()
+		if now <= peak || g.peak.CompareAndSwap(peak, now) {
+			return
+		}
+	}
+}
+
+// leave counts a request out.
+func (g *gauge) leave() { g.now.Add(-1) }
+
+// reset starts a window: nothing has arrived in it yet, and the most in flight
+// is what is in flight now.
+func (g *gauge) reset() {
+	g.total.Store(0)
+	g.peak.Store(g.now.Load())
+}
+
+// setDelay sets how long each verification request is answered after.
+func (s *stubGitLab) setDelay(delay time.Duration) { s.delay.Store(int64(delay)) }
+
+// resetUpstream starts the window the next upstream reading covers.
+func (s *stubGitLab) resetUpstream() {
+	s.verifying.reset()
+	s.invented.reset()
+}
+
+// upstream is what the instance saw of verification since the window began.
+func (s *stubGitLab) upstream() FairnessUpstream {
+	return FairnessUpstream{
+		Requests: s.verifying.total.Load(), PeakInFlight: s.verifying.peak.Load(),
+		InventedRequests: s.invented.total.Load(), InventedPeakInFlight: s.invented.peak.Load(),
+	}
+}
+
+// answerVerification answers one of the three requests a verification sends:
+// after the delay, 401 for an invented token, and otherwise body, or a 404
+// when there is none, which is how an instance says it will not describe a
+// token.
+func (s *stubGitLab) answerVerification(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.calls.Add(1)
+		invented := strings.HasPrefix(tokenOf(r), inventedTokenPrefix)
+		s.verifying.enter()
+		defer s.verifying.leave()
+		if invented {
+			s.invented.enter()
+			defer s.invented.leave()
+		}
+		pause(r.Context(), time.Duration(s.delay.Load()))
+		switch {
+		case invented:
+			w.Header().Set(headerContentType, mediaJSON)
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+		case body == "":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.Header().Set(headerContentType, mediaJSON)
+			_, _ = w.Write([]byte(body))
+		}
+	}
+}
+
+// tokenOf is the credential a request presents, as a bearer token or as a
+// personal access token.
+func tokenOf(r *http.Request) string {
+	if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		return bearer
+	}
+	return r.Header.Get("PRIVATE-TOKEN")
+}
+
+// pause waits for delay, or less when the request ends first.
+func pause(ctx context.Context, delay time.Duration) {
+	if delay <= 0 {
+		return
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	}
 }
 
 // hold makes every project read from now on wait, and returns the function
@@ -90,11 +202,9 @@ func startStubGitLab() *stubGitLab {
 		w.Header().Set(headerContentType, mediaJSON)
 		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"benchmark"}`))
 	})
-	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
-		stub.calls.Add(1)
-		w.Header().Set(headerContentType, mediaJSON)
-		_, _ = w.Write([]byte(`{"id":1,"username":"benchmark","name":"benchmark"}`))
-	})
+	mux.HandleFunc("/api/v4/user", stub.answerVerification(`{"id":1,"username":"benchmark","name":"benchmark"}`))
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", stub.answerVerification(""))
+	mux.HandleFunc("/oauth/token/info", stub.answerVerification(""))
 	mux.HandleFunc("GET /api/v4/projects/{id}", stub.answerProject)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		stub.calls.Add(1)

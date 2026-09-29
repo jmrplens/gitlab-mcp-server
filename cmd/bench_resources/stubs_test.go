@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -330,6 +331,124 @@ func TestDrain_EmptyAndAbsentBodies_MeasureZero(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := drain(tc.req); got != 0 {
 				t.Errorf("drain = %d, want 0", got)
+			}
+		})
+	}
+}
+
+// verifyStub sends one verification request to the stand-in, presenting token
+// as a bearer, and returns the status it was answered with.
+func verifyStub(t *testing.T, url, token string) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("build GET %s: %v", url, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
+// TestStubGitLab_Verification_AnswersAfterItsRoundTripAndCountsWhatIsInFlight
+// verifies the three requests a verification sends: each answered after the
+// run's round trip, an invented token refused 401 wherever it asks, and every
+// request counted in flight with those carrying an invented token apart.
+//
+// The round trip is what a verification slot is held for, and the invented
+// peak is the one figure that can only be the verifier's, since nothing else
+// ever presents an invented token: both are what the verification bound's
+// answer is read from.
+func TestStubGitLab_Verification_AnswersAfterItsRoundTripAndCountsWhatIsInFlight(t *testing.T) {
+	stub := startStubGitLab()
+	defer stub.close()
+	stub.setDelay(30 * time.Millisecond)
+
+	started := time.Now()
+	if got := verifyStub(t, stub.url+"/api/v4/user", newTokenPrefix+"1"); got != http.StatusOK {
+		t.Errorf("a valid token's identity = %d, want 200", got)
+	}
+	if elapsed := time.Since(started); elapsed < 30*time.Millisecond {
+		t.Errorf("the identity came back in %s, want the round trip of 30ms first", elapsed)
+	}
+	cases := []struct {
+		name, path, token string
+		want              int
+	}{
+		{name: "an invented token's identity", path: "/api/v4/user", token: inventedTokenPrefix + "1", want: http.StatusUnauthorized},
+		{name: "an invented token's scopes", path: "/api/v4/personal_access_tokens/self", token: inventedTokenPrefix + "2", want: http.StatusUnauthorized},
+		{name: "a valid token's personal access token scopes", path: "/api/v4/personal_access_tokens/self", token: "bench-token-0", want: http.StatusNotFound},
+		{name: "a valid token's OAuth scopes", path: "/oauth/token/info", token: "bench-token-0", want: http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := verifyStub(t, stub.url+tc.path, tc.token); got != tc.want {
+				t.Errorf("status = %d, want %d", got, tc.want)
+			}
+		})
+	}
+	up := stub.upstream()
+	if up.Requests != 5 || up.InventedRequests != 2 || up.PeakInFlight != 1 || up.InventedPeakInFlight != 1 {
+		t.Errorf("upstream = %+v, want five requests one at a time, two of them invented", up)
+	}
+
+	// Two at once, then a reset: the window after it has seen nothing yet.
+	stub.setDelay(100 * time.Millisecond)
+	done := make(chan int, 2)
+	for index := range 2 {
+		go func() {
+			status, _, _ := getStubWithin(stub.url+"/api/v4/user?"+strconv.Itoa(index), 5*time.Second)
+			done <- status
+		}()
+	}
+	for range 2 {
+		<-done
+	}
+	if got := stub.upstream().PeakInFlight; got != 2 {
+		t.Errorf("peak = %d, want the two requests that were in flight together", got)
+	}
+	stub.resetUpstream()
+	if got := stub.upstream(); got != (FairnessUpstream{}) {
+		t.Errorf("upstream after a reset = %+v, want an empty window", got)
+	}
+}
+
+// TestPause_EndsWithTheRequest verifies a round trip is cut short by a caller
+// that left, so a flood the server abandoned does not keep the stand-in's
+// handlers, and with them the gauges, busy for the rest of their delay.
+func TestPause_EndsWithTheRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	started := time.Now()
+	pause(ctx, time.Minute)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Errorf("pause took %s on a request that had already ended", elapsed)
+	}
+	pause(t.Context(), 0)
+}
+
+// TestTokenOf_ReadsEitherCredentialHeader verifies the stand-in reads the
+// credential a legacy client and an OAuth client each present.
+func TestTokenOf_ReadsEitherCredentialHeader(t *testing.T) {
+	cases := []struct {
+		name, header, value, want string
+	}{
+		{name: "a bearer token", header: "Authorization", value: "Bearer abc", want: "abc"},
+		{name: "a personal access token", header: "PRIVATE-TOKEN", value: "xyz", want: "xyz"},
+		{name: "an authorization that is not a bearer", header: "Authorization", value: "Basic abc", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://stub.invalid/", http.NoBody)
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			req.Header.Set(tc.header, tc.value)
+			if got := tokenOf(req); got != tc.want {
+				t.Errorf("tokenOf = %q, want %q", got, tc.want)
 			}
 		})
 	}
