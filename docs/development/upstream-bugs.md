@@ -144,7 +144,7 @@ readable without opening the tracker:
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes, except `merge_request.commits`, `search.commits` and the readers of an embedded commit, resources, prompts and completions included |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
-| 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), open | No | Yes | Yes |
+| 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, unreleased** | Yes | Partial |
 | 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), open | No | No | Not yet, with issue 1031 |
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329) | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), open | No | No | Not yet, with issue 1031 |
@@ -375,8 +375,8 @@ v3.14.0 until the Dependabot cooldown for a Go minor ends on 2026-10-12. Rows
   waits on the reviewers, the writer and the backend coach, and nothing is
   pending on us. Read again on 2026-09-27 it is where that left it: head
   `83c6e83e` with a green fork pipeline, none of the six rules' approvals yet,
-  the writer's four threads answered and hers to resolve, and the coach,
-  @narendran-kannan, not yet reviewing, though `gitlab-bot` nudged him on
+  the writer's four threads answered and theirs to resolve, and the coach,
+  @narendran-kannan, not yet reviewing, though `gitlab-bot` nudged them on
   2026-09-25. The issue carries only the bot's labelling note, and nobody has
   asked us anything on either. The ready is not to be posted again, so
   nothing is owed from here.
@@ -1601,9 +1601,10 @@ of change whose test is one assertion on the built URL.
   `go test -run SystemHook` and `go vet` pass on it. The thread was answered
   and resolved, as was the answered handover thread, so no discussion is open
   and the merge request waited on @PatrickRice's approval, which the new
-  commits required. He approved it at 18:34 UTC on 2026-09-28 and put it on
-  the merge train, which merged it at 18:55 (merge commit `5f0e219a`), and it was tagged ten minutes later in
-  **v3.15.0**, so none of the fourteen is open any longer.
+  commits required. @PatrickRice approved it at 18:34 UTC on 2026-09-28 and
+  put it on the merge train, which merged it at 18:55 (merge commit
+  `5f0e219a`), and it was tagged ten minutes later in **v3.15.0**, so none of
+  the fourteen is open any longer.
   The rest of this entry, the gaps held back below, went out on 2026-09-27 in
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
   described further down, which does not touch `system_hooks.go` and so does
@@ -1813,7 +1814,7 @@ key added to the fixture of an existing test.
 **The gap is usually in GitLab's own documentation too, and that is a second
 merge request.** A code owner asked for it on
 [!3045](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3045)
-rather than opening it himself, so cross-checking all eight fields against
+rather than opening it themselves, so cross-checking all eight fields against
 `doc/api/` was worth doing: two of the eight, `file_extension` and
 `is_receptive`, appeared nowhere on their page, and a third page showed
 `public_email` in none of its fourteen example responses. Nine documentation
@@ -1975,16 +1976,16 @@ review, and at 00:12 UTC on 2026-09-28 it added its own labels
 `a1a4b996` with 36 commits, and nothing is owed on it from here.
 
 **The first review, 2026-09-29.** At 00:13 UTC @PatrickRice answered the list
-of breaking halves held for 4.0, addressed to @heidi.berry and copying us. He
-agrees with each deferral: the six `V2` siblings, the two `WithOptions`
-siblings (which he would deprecate in 4.0 and remove in 5.0), the two
+of breaking halves held for 4.0, addressed to @heidi.berry and copying us. The
+review agrees with each deferral: the six `V2` siblings, the two `WithOptions`
+siblings (to be deprecated in 4.0 and removed in 5.0), the two
 narrow-typed fields kept beside their object fields, and the dead fields kept
-deprecated until 4.0. He reads the structs that decode several entities as
+deprecated until 4.0. It reads the structs that decode several entities as
 routes that should move to their `Basic` struct in 4.0, and would leave the two
 deprecated methods alone, since a deprecated GitLab route lives a long time and
-older instances still serve it. He asks for an issue tracking the 4.0 halves
+older instances still serve it. It asks for an issue tracking the 4.0 halves
 against the v4 release, which is how the project keeps such decisions. One
-point goes further than the merge request: he calls
+point goes further than the merge request: it calls
 `CIRestrictPipelineCancellationRole` a bug rather than a breaking change,
 because none of `AccessControlValue`'s four values is one the setting accepts,
 which argues for making the new type distinct now instead of an alias of the
@@ -2036,15 +2037,29 @@ the single merge request agreed in the thread, and the count paragraph says 25
 of the 290 fields are released and seven more are in
 `gitlab-org/api/client-go!3048`. Nothing is owed on the umbrella now.
 
-**Behind again on 2026-09-29.** The description, last edited at 21:50 UTC on
-2026-09-27, still reads
+**Behind again on 2026-09-29.** The description, then last edited at 21:50
+UTC on 2026-09-27, still read
 [gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
-as open and waiting on a maintainer, still counts 25 fields released with
-seven more in that merge request where 32 are now released, still gives
+as open and waiting on a maintainer, still counted 25 fields released with
+seven more in that merge request where 32 were released, still gave
 [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
-36 commits, and does not name
+36 commits, and did not name
 [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301),
-the 4.0 issue the first review asked for. A rewrite is owed, once approved.
+the 4.0 issue the first review asked for. It was rewritten at 11:21 UTC on
+2026-09-29, in five places and nothing else:
+[gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
+reads merged and released in v3.15.0; the count paragraph says 32 of the 290
+fields are released, the seven on `Hook` among them; the update paragraph says
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+opened with 36 commits, carries a 37th after the first review, and leaves its
+4.0 halves to
+[gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301);
+the service account paragraph, which still said the `public_email` additions
+for `ServiceAccount` and `ProjectServiceAccount` had not been sent, says
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+adds them; and
+[gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699)
+reads merged and due in 19.5. Nothing is owed on the umbrella now.
 
 **Three findings from that batch that are not merge requests**, because sending
 them would have been wrong:
@@ -4687,7 +4702,7 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   passed, and the next pipeline runs it against the refreshed snapshot. The
   merge request's description and a correction in the `danger-review` thread
   set out the router's timeline, and it was readied the same day naming
-  @marc_shaw for the re-review. He approved it at 12:57 UTC, with one
+  @marc_shaw for the re-review. @marc_shaw approved it at 12:57 UTC, with one
   non-blocking suggestion, that no spec covered the `author == current_user`
   half of `can_cancel_auto_merge?`, and asked @egrieff for a second review;
   @uchandran approved it at 13:07 UTC. The suggestion was applied at 18:39 UTC
@@ -4711,7 +4726,7 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   it, which satisfies the `/config/`, `/lib/` and `/spec/` rules and leaves no
   approval to give, started the merged-results pipeline 2881689669 and set it
   to join the merge train when its checks pass. That pipeline failed
-  `cells-routes:router-in-sync`, and he asked for a rebase. The branch was
+  `cells-routes:router-in-sync`, and @egrieff asked for a rebase. The branch was
   rebased onto `820afbe6` as `c9a6d805` at 23:28 UTC; the push reset
   @uchandran's approval and aborted the merge-train add, and our reply to the
   rebase request did not mention the train. The fork pipeline on `c9a6d805`
@@ -4728,9 +4743,9 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   passes only once `master` has those routes.
 
   **Where it stands on 2026-09-27.** Approved, with @egrieff's approval
-  covering every code-owner rule; one unresolved thread, his rebase request,
+  covering every code-owner rule; one unresolved thread, the rebase request,
   which we answered; its fork pipeline red on that job; and off the merge
-  train. His non-blocking suggestion, meant for a later merge request, is
+  train. @egrieff's non-blocking suggestion, meant for a later merge request, is
   resolved and needs nothing now. It waits on `master` gaining those routes,
   and then on a maintainer starting a merged-results pipeline and adding it to
   the train again.
@@ -4782,7 +4797,7 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   this is a breaking change whichever way it is argued, since it changes the
   response of a stable endpoint, and @marc_shaw proposed the shape that was
   taken instead: leave the old endpoint exactly as it behaves, deprecate it in
-  the documentation, and add a new one under the current naming. His reason is
+  the documentation, and add a new one under the current naming. The reason is
   worth recording because it applies to every future contribution of this shape:
   "we basically can't deprecate our API, by introducing another endpoint, we are
   now maintaining the old and the new". That is why the deprecation is a
@@ -5035,24 +5050,33 @@ being refused; and completing the `action` and `type` lists of
   issue was opened first.
 - **In review**: yes,
   [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074),
-  opened 2026-09-28 from the community fork. The maintainer's first review the
-  same day changed the fix (below), the change was pushed as a second commit,
-  and the merge request waits on the reviewers again. Read on 2026-09-29: the
+  opened 2026-09-28 from the community fork, now merged. The maintainer's
+  first review the same day changed the fix (below), the change was pushed as
+  a second commit, and the merge request waited on the reviewers again. Read
+  on 2026-09-29: the
   reviewer @jannik_lehmann, who approved it at 08:49 UTC on 2026-09-28, asked
   @c_fons at 19:41 UTC that day to take the maintainer review, and @c_fons
   approved it at 10:19 UTC on 2026-09-29, which gives it both required
-  approvals. He resolved the `KnownSignIn` thread @alipniagov had opened,
-  which the second commit answers, and opened one proposing a reworded squash
-  commit message and asking whether it reads right to us; that thread blocks
-  the merge, so it now waits on our answer. The fork pipeline on `5436dc9a`
-  passed; the merged-results pipeline 2889991113 was red on one blocking job
-  only, the downstream `rspec:predictive:system-full` pipeline, whose reruns
-  of 2026-09-29 stopped every shard before running a spec because the runner
-  skipped the git checkout and `scripts/utils.sh` was not there to source.
-  That is the infrastructure, not the change; the job `pajamas_adoption`,
-  also red, is allowed to fail. A new merged-results pipeline, 2892863818,
-  started at 10:27 UTC. Nothing is retried from our side.
-- **Merged**: no.
+  approvals. @c_fons resolved the `KnownSignIn` thread @alipniagov had
+  opened, which the second commit answers, and opened one proposing a reworded
+  squash commit message and asking whether it reads right to us. We answered
+  in that thread at 11:14 UTC that it does. Two merge checks still failed
+  then: that thread, and the request for changes that came with
+  @alipniagov's first review at 12:55 UTC on 2026-09-28, which GitLab still
+  counted although @alipniagov left the reviewers a minute later. Between
+  11:49 and 11:51 UTC @c_fons resolved every thread, bypassed that request,
+  and added the merge request to the merge train. On the way there, the fork
+  pipeline on `5436dc9a` passed, and the merged-results pipeline 2889991113
+  was red on infrastructure only: its downstream `rspec:predictive:system-full`
+  pipeline, rerun on 2026-09-29, stopped every shard before running a spec
+  because the runner skipped the git checkout and `scripts/utils.sh` was not
+  there to source, and the red `pajamas_adoption` is allowed to fail. The
+  next merged-results pipeline, 2892863818, started at 10:27 UTC and passed.
+  Nothing was retried from our side.
+- **Merged**: yes, at 11:54 UTC on 2026-09-29 through the merge train (merge
+  commit `ed88da02`, squash commit `563dadc2` carrying the message @c_fons
+  proposed), and the merge train pipeline, 2893132892, passed. No release tag
+  carries it yet; 19.5 is the first release that will.
 - **Blocking**: yes, for `issue.work_item_saved_view_create` and
   `issue.work_item_saved_view_subscribe` from any client authenticated with a
   token, which is every client of this server. The other five saved view
@@ -5106,7 +5130,7 @@ saves the view inside `current_user.with_lock`, so `mergeRequestSavedViewCreate`
 reason; it fails before the save and leaves nothing behind. This server does
 not expose it.
 
-**Fix in review**: [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074)
+**Fix merged**: [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074)
 fixes it where the state is left rather than in either caller:
 `update_tracked_fields!` clears the dirty state of the tracked attributes after
 the throttled block (`clear_attribute_changes` over
@@ -5298,7 +5322,11 @@ Both entries here were filed as an issue first and then a merge request that
 closes it, because the project's `CONTRIBUTING.md` asks for an issue before any
 non-trivial merge request. Each merge request bumps the Orbit skill to
 `0.32.3`, as every change under `skills/orbit/` must, so whichever lands second
-rebases to `0.32.4`.
+needs `0.32.4`. Nothing in the project's pipeline will flag it: the two
+branches merge cleanly, since both make the same change to the version, and
+`skill-version-bump-check` compares a branch with its merge request's diff
+base, where the skill stays at `0.32.2` until the branch is rebased. The
+commit that updated each branch's tests (below) says so in its message.
 
 ### The DSL schema says a path query may omit `rel_types`
 
@@ -5318,10 +5346,22 @@ rebases to `0.32.4`.
   `crates/orbit-server/src/skills/mod.rs`, set to `0.32.2` on `main` by
   `bf510a5d` on 2026-09-28 in the same commit that bumped the skill, which the
   branch is based on), and the change bumps
-  `skills/orbit/SKILL.md` to `0.32.3`, so the branch owes those assertions
+  `skills/orbit/SKILL.md` to `0.32.3`, so the branch owed those assertions
   the new version. The same three fail on
   [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651),
-  for the same reasons.
+  for the same reasons. `0acf02c0`, pushed at 11:21 UTC on 2026-09-29, sets
+  the three to `0.32.3`, and its message tells the maintainers about the
+  `0.32.4` the second merge request to land will need. In its fork pipeline,
+  2893038521, `unit-test` passed, and the pipeline finished with the two jobs
+  that stop before running as its only failures. One of them will fail for
+  real in the merged-results pipeline a maintainer runs, where the branch and
+  the target share a merge base:
+  `pinned-version-check` (`scripts/check-pinned-version.sh`) refuses a change
+  to `config/schemas/graph_query.schema.json` that does not bump `query_dsl`
+  in `config/versions.yaml`, unless the description carries
+  `[skip pinned-version-check]`, which the script asks for when a change does
+  not affect the shape. This branch only rewords a description there, and its
+  description does not carry the marker yet.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
@@ -5368,7 +5408,14 @@ while rewriting `orbit.query` for issue 1031.
   75's merge request is in: no reviewer but GitLab Duo, and a fork pipeline
   red on the same three jobs, `unit-test` among them because its own bump of
   `skills/orbit/SKILL.md` to `0.32.3` breaks the three tests that pin
-  `0.32.2`.
+  `0.32.2`. `639f3d11`, pushed at 11:21 UTC with `0acf02c0` and carrying
+  its message with the other merge request's number, sets them to `0.32.3`,
+  and `unit-test` passed in its fork pipeline, 2893038522. Its
+  `pinned-version-check` will fail in the merged-results pipeline for the
+  reason row 75's will, and this branch also changes the schema's declared
+  `default` from `both` to `outgoing`, which is what the compiler already
+  applies, so whether that takes a `query_dsl` bump or the marker is the
+  maintainers' call.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
@@ -5407,11 +5454,11 @@ choice.
   [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58),
   still open, mergeable, and unreviewed on 2026-09-27. Its last activity is
   the maintainer's answer of 2026-08-05: the change is breaking by Go's
-  convention and needs a v2 of the module, which he has not had time to
+  convention and needs a v2 of the module, which they have not had time to
   prepare. It went unanswered, and deliberately: there is no form of it that
   breaks nothing, since the type of `PGPValidator.KeyRing` is the import
   itself and moving it to a subpackage is breaking too, and this server no
-  longer depends on the module, so a reply would only ask him again. Nothing
+  longer depends on the module, so a reply would only ask them again. Nothing
   is owed on it.
 - **Merged**: no.
 - **Blocking**: no.
