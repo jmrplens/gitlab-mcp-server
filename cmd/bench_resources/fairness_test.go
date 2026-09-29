@@ -954,10 +954,13 @@ func TestFairnessPlan_SlotsFill_RefusesAPlanThatCouldNotFillTheSlots(t *testing.
 		{name: "a flood the slots finish as it arrives", edit: func(p *fairnessPlan) { p.Noisy.Rate = 20 }, want: "never all be held"},
 		{name: "a lead-in shorter than the wait", edit: func(p *fairnessPlan) { p.LeadIn = 4 * time.Second }, want: "before the first waiter"},
 		{name: "a deadline shorter than a waiter's", edit: func(p *fairnessPlan) { p.Deadline = 6 * time.Second }, want: "gave up"},
+		// The floor is the wait, four round trips of a hundred milliseconds
+		// and the second of margin, so a millisecond under it is refused.
+		{name: "a deadline a millisecond under its floor", edit: func(p *fairnessPlan) { p.Deadline = 6399 * time.Millisecond }, want: "the 6.4s a new credential"},
 		{
 			name: "a quiet population whose onboarding fills the slots itself",
 			edit: func(p *fairnessPlan) { p.Quiet.Credentials, p.Quiet.Rate = 100, 3 },
-			want: "busy on their own",
+			want: "busy on their own, above the 8 this comparison allows it",
 		},
 	}
 	for _, tc := range cases {
@@ -1009,6 +1012,32 @@ func TestFairnessPlan_Validate_RefusesAFloodNoLoopbackRangeCanCarry(t *testing.T
 	if err := plan.validate(); err == nil || !strings.Contains(err.Error(), "127.2.0.0/16") {
 		t.Errorf("validate = %v, want the flood refused for its sources", err)
 	}
+
+	// One credential at 273058 invented tokens a second is 16383480 a minute,
+	// which at 250 a source needs 65533.92 sources: exactly the 65534 the range
+	// holds, and one more token a second needs one more.
+	cases := []struct {
+		name    string
+		rate    float64
+		sources int
+		refused bool
+	}{
+		{name: "a flood filling the range exactly", rate: 273058, sources: maxFloodSources},
+		{name: "a flood one source past it", rate: 273059, sources: maxFloodSources + 1, refused: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			edge := oauthPlan(t)
+			edge.Noisy.Credentials, edge.Noisy.Rate = 1, tc.rate
+			if got := edge.floodSources(); got != tc.sources {
+				t.Fatalf("floodSources = %d, want %d", got, tc.sources)
+			}
+			err := edge.validate()
+			if refused := err != nil && strings.Contains(err.Error(), "127.2.0.0/16"); refused != tc.refused {
+				t.Errorf("validate = %v, want refused for its sources: %t", err, tc.refused)
+			}
+		})
+	}
 }
 
 // TestFairnessPlan_SlotArithmetic_FollowsTheFlood verifies the figures a slot
@@ -1030,6 +1059,13 @@ func TestFairnessPlan_SlotArithmetic_FollowsTheFlood(t *testing.T) {
 	}
 	if got := (fairnessPlan{Noisy: populationSpec{Credentials: 1, Rate: 1, Verbs: []string{verbList}}}).floodSources(); got != 0 {
 		t.Errorf("floodSources of a flood of own credentials = %d, want none", got)
+	}
+	// A flood that invents a token on every other request fails half as many
+	// distinct credentials, and needs half the sources.
+	half := plan
+	half.Noisy.Verbs = []string{verbListInvented, verbList}
+	if got := half.floodSources(); got != 48 {
+		t.Errorf("floodSources of a flood inventing every other token = %d, want 48", got)
 	}
 	// Two quiet credentials at two a second over forty seconds present eighty
 	// requests each, a quarter of them new: forty new credentials beside the
@@ -1055,6 +1091,14 @@ func TestFairnessPlan_SlotArithmetic_FollowsTheFlood(t *testing.T) {
 	}
 	if got := plan.describe(); !strings.Contains(got, "100ms at the instance") || !strings.Contains(got, "96 transport sources") {
 		t.Errorf("describe = %q, want the round trip and the sources named", got)
+	}
+	// A bound with no instance round trip and no invented tokens says neither.
+	bucket, err := fairnessPlanFor(withArgs(t, "-fairness=tools-call-rps"))
+	if err != nil {
+		t.Fatalf("fairnessPlanFor: %v", err)
+	}
+	if got := bucket.describe(); strings.Contains(got, "at the instance") || strings.Contains(got, "transport sources") {
+		t.Errorf("describe = %q, want no round trip and no sources named for a bucket bound", got)
 	}
 }
 

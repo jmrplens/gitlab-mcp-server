@@ -55,6 +55,11 @@ func TestBuildVariant_Rewrite_ReplacesTheOneLineItNames(t *testing.T) {
 			src:  "package x\nconst slots = 16",
 			want: "package x\nconst slots = 1 << 20",
 		},
+		{
+			name: "a declaration on the file's first line",
+			src:  "const slots = 16\npackage x\n",
+			want: "const slots = 1 << 20\npackage x\n",
+		},
 		{name: "a declaration that is gone", src: "package x\nconst other = 16\n", wantErr: "no longer declares"},
 		{name: "a declaration made twice", src: "const slots = 1\nconst slots = 2\n", wantErr: "more than one line"},
 	}

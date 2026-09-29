@@ -977,10 +977,7 @@ func (p fairnessPlan) refusalsExpected(s populationSpec) float64 {
 		return 0
 	}
 	above := p.Bound.meteredOffered(s) - p.Bound.Bucket.meteredRate()
-	if above <= 0 {
-		return 0
-	}
-	return above * float64(s.Credentials) * p.Phase.Seconds()
+	return max(0, above) * float64(s.Credentials) * p.Phase.Seconds()
 }
 
 // validate refuses a population that would not be a tenant.

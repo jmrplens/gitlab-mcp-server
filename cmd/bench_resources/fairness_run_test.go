@@ -172,6 +172,29 @@ func TestDrive_MeasuresLatencyFromTheIntendedInstant(t *testing.T) {
 	}
 }
 
+// TestMethodTally_Render_CountsEveryOutcomeAsDispatched verifies a row's
+// dispatched count is the sum of its five outcomes, each counted once and with
+// its own sign.
+//
+// The counts are distinct powers of two, so a sum that dropped an outcome,
+// counted one twice or subtracted it lands on a number no other combination
+// makes.
+func TestMethodTally_Render_CountsEveryOutcomeAsDispatched(t *testing.T) {
+	tally := &methodTally{counts: map[string]int{
+		outcomeServed: 1, outcomeRefused: 2, outcomeRefusedOther: 4, outcomeFailed: 8, outcomeTimedOut: 16,
+	}}
+	got := tally.render(verbs[verbListInvented])
+	if got.Served != 1 || got.Refused != 2 || got.RefusedOther != 4 || got.Failed != 8 || got.TimedOut != 16 {
+		t.Errorf("outcomes = %+v, want each count where it was recorded", got)
+	}
+	if got.Dispatched != 31 {
+		t.Errorf("dispatched = %d, want 31, the five outcomes together", got.Dispatched)
+	}
+	if got.Credential != credentialInvented {
+		t.Errorf("credential = %q, want the verb's", got.Credential)
+	}
+}
+
 // TestIssue_GivesUpWhenAClientWould verifies the per-request deadline is
 // anchored at the intended instant, so a request the driver dispatched late
 // does not get a fresh deadline the moment it leaves.

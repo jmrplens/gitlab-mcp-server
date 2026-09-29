@@ -155,11 +155,9 @@ func tokenOf(r *http.Request) string {
 	return r.Header.Get("PRIVATE-TOKEN")
 }
 
-// pause waits for delay, or less when the request ends first.
+// pause waits for delay, or less when the request ends first. A delay of zero
+// or less needs no guard of its own: a timer set to it fires at once.
 func pause(ctx context.Context, delay time.Duration) {
-	if delay <= 0 {
-		return
-	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
