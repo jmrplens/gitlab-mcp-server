@@ -1716,46 +1716,77 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 	assertContains(t, err, actionJobList)
 }
 
-// TestJobCancel_ForceTrue verifies Cancel with Force=true routes to
-// CancelJobWithOptions, sends force=true in the request body, and returns the cancelled job.
-func TestJobCancel_ForceTrue(t *testing.T) {
-	forceSent := false
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-				if v, ok := body["force"].(bool); ok && v {
-					forceSent = true
-				}
+// TestJobCancel_Body_CarriesForceOnlyWhenAsked pins the body of the cancel
+// POST with and without force, and that either call returns the cancelled job.
+//
+// The case without force is the one with a history. client-go's CancelJob
+// delegates to CancelJobWithOptions with a nil options pointer, which
+// NewRequestToURL marshals as the four bytes "null" (entry 51 of
+// docs/development/upstream-bugs.md). Cancel now calls the options variant
+// itself with a non-nil value, so a call without force sends the empty
+// object, and a body of "null" fails here before the comparison.
+func TestJobCancel_Body_CarriesForceOnlyWhenAsked(t *testing.T) {
+	tests := []struct {
+		name  string
+		force bool
+		want  map[string]any
+	}{
+		{name: "without force", force: false, want: map[string]any{}},
+		{name: "with force", force: true, want: map[string]any{"force": true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body []byte
+			client := cancelBodyRecordingClient(t, &body)
+
+			out, err := Cancel(context.Background(), client, CancelInput{ProjectID: "42", JobID: 100, Force: tt.force})
+			if err != nil {
+				t.Fatalf("Cancel() unexpected error: %v", err)
 			}
-			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":100,"name":"build","stage":"build","status":"canceled",
-				"ref":"main","tag":false,"duration":10.0,"queued_duration":1.0,
-				"web_url":"https://gitlab.example.com/-/jobs/100",
-				"pipeline":{"id":10},"created_at":"2026-03-01T10:00:00Z"
-			}`)
+			var sent map[string]any
+			if err = json.Unmarshal(body, &sent); err != nil {
+				t.Fatalf("cancel body %q is not a JSON object: %v", body, err)
+			}
+			if sent == nil {
+				t.Fatalf("cancel body = %q, want a JSON object rather than null", body)
+			}
+			if !reflect.DeepEqual(sent, tt.want) {
+				t.Errorf("cancel body = %#v, want %#v", sent, tt.want)
+			}
+			if out.ID != 100 || out.Status != "canceled" {
+				t.Errorf("Cancel() = job %d with status %q, want job 100 with status canceled", out.ID, out.Status)
+			}
+		})
+	}
+}
+
+// cancelBodyRecordingClient returns a client whose mock answers the cancel
+// POST with a cancelled job and keeps the request body it was sent in *body.
+// Anything else is reported and answered 404. The body is written on the
+// httptest server's goroutine and read after Cancel returns, which the
+// response it waited for orders.
+func cancelBodyRecordingClient(t *testing.T, body *[]byte) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathJobCancel {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
+		}
+		*body = read
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":100,"name":"build","stage":"build","status":"canceled",
+			"ref":"main","tag":false,"duration":10.0,"queued_duration":1.0,
+			"web_url":"https://gitlab.example.com/-/jobs/100",
+			"pipeline":{"id":10},"created_at":"2026-03-01T10:00:00Z"
+		}`)
 	}))
-
-	out, err := Cancel(context.Background(), client, CancelInput{
-		ProjectID: "42",
-		JobID:     100,
-		Force:     true,
-	})
-	if err != nil {
-		t.Fatalf("Cancel(Force=true) unexpected error: %v", err)
-	}
-	if !forceSent {
-		t.Error("Cancel(Force=true) did not send force=true in request body")
-	}
-	if out.Status != "canceled" {
-		t.Errorf("out.Status = %q, want canceled", out.Status)
-	}
-	if out.ID != 100 {
-		t.Errorf(fmtIDWant100, out.ID)
-	}
 }
 
 // TestJobCancel_CancelledContext verifies JobCancel when cancelled context.

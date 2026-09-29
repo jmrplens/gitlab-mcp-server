@@ -283,8 +283,16 @@ type CancelInput struct {
 
 // Cancel cancels a running CI/CD job via the GitLab Jobs cancel API
 // (POST /projects/:id/jobs/:job_id/cancel). When Force is true, the
-// call uses [gl.CancelJobOptions] to cancel jobs in non-cancellable
-// states (requires GitLab v17.2+).
+// request carries force=true, which cancels a job in a non-cancellable
+// state (requires GitLab v17.2+).
+//
+// It always calls the options variant, with a non-nil [gl.CancelJobOptions].
+// That variant is the only binding that carries force: client-go marks it
+// deprecated only because it plans to fold the option into CancelJob in v4.
+// CancelJob itself delegates to it with a nil options pointer, which reaches
+// the body as the four bytes `null` recorded in entry 51 of
+// docs/development/upstream-bugs.md, so a call without force sends the empty
+// object `{}` here instead.
 func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -297,14 +305,11 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 		return Output{}, toolutil.ErrRequiredInt64("jobCancel", "job_id")
 	}
 
-	var j *gl.Job
-	var err error
+	opts := &gl.CancelJobOptions{}
 	if input.Force {
-		//nolint:staticcheck // CancelJobWithOptions is the only way to pass Force until v4.0 merges it into CancelJob.
-		j, _, err = client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, &gl.CancelJobOptions{Force: new(true)}, gl.WithContext(ctx))
-	} else {
-		j, _, err = client.GL().Jobs.CancelJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+		opts.Force = new(true)
 	}
+	j, _, err := client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries force until client-go v4 folds it into CancelJob, and a non-nil value keeps a call without force from sending null (entry 51 of docs/development/upstream-bugs.md).
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("jobCancel", err,

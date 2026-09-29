@@ -118,6 +118,7 @@ var acceptedMissingMethods = map[string]string{
 	// covered method already drives; one action per endpoint is the rule.
 	"RepositoryFiles.GetRawFile":      "COVERED_VARIANT. Same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
 	"DraftNotes.PublishAllDraftNotes": "COVERED_VARIANT. Same POST .../draft_notes/bulk_publish endpoint; mr_review.draft_note_publish_all calls PublishAllDraftNotesWithOptions, the only binding that carries the route's note, internal and reviewer_state",
+	"Jobs.CancelJob":                  "COVERED_VARIANT. Same POST /projects/:id/jobs/:job_id/cancel endpoint; job.cancel calls CancelJobWithOptions, the only binding that carries the route's force, with a non-nil options value so a call without force sends {} instead of the null CancelJob sends (entry 51 of docs/development/upstream-bugs.md)",
 	"Jobs.GetJobArtifacts":            "COVERED_VARIANT. Same GET /projects/:id/jobs/:job_id/artifacts endpoint; job.artifacts calls GetJobArtifactsWithOptions, the only binding that carries the route's file_type (declared from GitLab 19.4)",
 	"GroupMembers.ShareWithGroup":     "COVERED_VARIANT. Same POST /groups/:id/share endpoint; group.group_member_share and group.share_with_group call Groups.ShareGroupWithGroup, the only binding that carries the route's member_role_id and leaves out an expires_at the caller did not set",
 
