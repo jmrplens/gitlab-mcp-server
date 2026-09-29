@@ -17,10 +17,12 @@ package tenancy
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func allowDecisions() []Decision {
-	// heldRefusalPrefix is what every refusal of HLD-011 begins with, and
-	// heldRefusal where its in-band refusals are built.
+	// heldRefusalPrefix is what every refusal of HLD-010 and HLD-011 begins
+	// with, heldRefusal where HLD-011's in-band refusals are built, and
+	// busyFailure the gate refusal both write.
 	const heldRefusalPrefix = "This server is busy."
 	heldRefusal := refuse(pkgServer, "heldRequestsRefusal")
+	busyFailure := refuse(pkgServer, "processBusyFailure")
 	busy := refuse(pkgServer, "listenLimits.busy")
 	listenRefusal := Refusal{
 		Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeServerBusyLegacy,
@@ -387,27 +389,75 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
-			// A decision by absence, recorded like RTC-004: nothing bounds how
-			// many stateful sessions exist, while the reason the listen
-			// ceilings give applies to every held connection (F-31, issue
-			// 951). The requests the process holds open were the other half
-			// of this row until HLD-011 bounded them; the sessions are the
-			// half F-31 still records.
-			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Ruled,
-			Resource: "stateful sessions",
+			// The ceiling on the stateful sessions the process keeps, across
+			// every credential (issue 951, answering the half of F-31 HLD-011
+			// left; this row was the decision by absence that recorded it). On
+			// --stateless=false the SDK keeps every session a client opens,
+			// with the goroutines serving it and its owner record (IDN-010),
+			// until the client deletes it, the pool evicts its credential or it
+			// has sat idle for --session-timeout, and initialize is metered to
+			// no bucket (RTC-004), so a caller could open sessions as fast as
+			// it could post. It stands alone, keyed on the process, for
+			// HLD-011's reason; whether a per-credential ceiling should stand
+			// beside it is put to the maintainer in the pull request, and so is
+			// a partner that is cheaper to fill here than there, since an
+			// initialize spends no rate.
+			//
+			// Its value is a share of HLD-011's: the held-call ceiling divided
+			// by SessionHeldDivisor. An idle session holds no connection, and
+			// the one it can hold open, its standalone stream, is a held
+			// request HLD-011 counts, so the streams of every session take at
+			// most half of the held slots and the descriptor budget HLD-011 is
+			// sized from holds as it was: 96 sessions under a hard limit of
+			// 1024. Where the platform has no limit to read it is half of the
+			// fallback's figure.
+			//
+			// It counts a session from the POST that opens one, which is any
+			// POST carrying no session id on a deployment that keeps sessions:
+			// the SDK creates a session for every such POST and closes it with
+			// the POST unless its initialize completed. The gate takes the slot
+			// after admission, the departure from PAT-003 HLD-011 records for
+			// the same reason, and refuses past the ceiling with a 503 before
+			// the SDK creates anything. The first request dispatched on the new
+			// session keeps the slot until the session ends. The refusal is
+			// HLD-011's, in words that name no bound, which is INV-019's one
+			// bit; the log line says which ceiling refused.
+			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+			Resource: "stateful sessions across every credential",
 			Key:      KeyProcess, StdioKey: KeyNone,
-			ReasonUnit: KeyProcess, ProtectsProcess: true,
-			Source:   SourceNone,
-			Findings: []string{"F-31"},
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Reason:   "only a ceiling keyed on the process bounds the sessions it keeps",
+			ReasonAt: reasonAt(pkgServer, "processStatefulSessions"),
+			Values:   []string{"SessionHeldDivisor"},
+			Source:   Derived, Zero: ZeroNotApplicable,
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"issue 951"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodGate}, Era: EraLegacy, Channel: Gate, Code: CodeUnavailable, Status: 503,
+					RetryAfter: RetryAfterFixed, Prefix: heldRefusalPrefix, Answer: RetryLater,
+					At: busyFailure,
+				},
+			},
 			Sites: []Site{
+				alias(pkgServer, "sessionHeldDivisor", "SessionHeldDivisor"),
+				enforce(pkgServer, "statefulSessionsFor"),
+				enforce(pkgServer, "processStatefulSessions"),
+				enforce(pkgServer, "mcpServerGate.opensSession"),
+				enforce(pkgServer, "claimSessionSlot"),
+				enforce(pkgServer, "statefulSessionsMiddleware"),
+				enforce(pkgServer, "newServerShell"),
+				enforce(pkgServer, "mcpServerGate.middleware"),
+				enforce(pkgServer, "registerOAuthMCPHandlers"),
+				enforce(pkgServer, "registerLegacyMCPHandlers"),
 				enforce(pkgServer, "streamableHTTPOptions"),
-				enforce(pkgServer, "sessionOwners.record"),
+				busyFailure,
 			},
 		},
 		{
 			// The ceiling on the calls the process holds open, across every
-			// credential (issue 951, answering F-31 for them; the stateful
-			// sessions stay on HLD-010). It stands alone, keyed on the process
+			// credential (issue 951, answering F-31 for them; HLD-010 answers
+			// it for the stateful sessions). It stands alone, keyed on the process
 			// with no per-caller number beside it: a per-caller one would
 			// multiply by however many credentials a caller mints, and would
 			// bound nothing INV-018 asks of this row. Whether a per-credential
@@ -431,7 +481,12 @@ func allowDecisions() []Decision {
 			// the one the SDK read out of the body; the gate takes the slot
 			// itself only for a POST whose headers the SDK holds to the body
 			// (protocol 2026-07-28 or later), and refuses it with a 503 before
-			// the SDK reads it. Either way the slot is taken after admission,
+			// the SDK reads it. The gate also counts the one request a stateful
+			// session holds open that is not a call, its standalone stream (a
+			// GET on --stateless=false), for as long as the stream is open,
+			// refused the same way: HLD-010 keeps the sessions to half of this
+			// ceiling, so their streams can take at most half of the slots.
+			// Either way the slot is taken after admission,
 			// which departs from PAT-003 (take the process slot before
 			// anything per key): a slot taken before admission would let a
 			// caller with no credential hold one for as long as its
@@ -463,9 +518,12 @@ func allowDecisions() []Decision {
 			Decided:    []string{"issue 951"},
 			Refusals: []Refusal{
 				{
-					Methods: []string{MethodGate}, Era: EraModern, Channel: Gate, Code: CodeUnavailable, Status: 503,
+					// A POST on protocol 2026-07-28 or later, and a stateful
+					// session's standalone stream, which only earlier
+					// revisions open.
+					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnavailable, Status: 503,
 					RetryAfter: RetryAfterFixed, Prefix: heldRefusalPrefix, Answer: RetryLater,
-					At: refuse(pkgServer, "heldRequestsFailure"),
+					At: busyFailure,
 				},
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: heldRefusalPrefix, Answer: RetryLater,
@@ -499,7 +557,7 @@ func allowDecisions() []Decision {
 				enforce(pkgServer, "mcpServerGate.middleware"),
 				enforce(pkgServer, "registerOAuthMCPHandlers"),
 				enforce(pkgServer, "registerLegacyMCPHandlers"),
-				refuse(pkgServer, "heldRequestsFailure"),
+				busyFailure,
 				heldRefusal,
 			},
 		},

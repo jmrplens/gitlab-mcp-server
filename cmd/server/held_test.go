@@ -510,7 +510,7 @@ func TestHeldRequestsRefusal_NamesTheBoundOnlyInTheLog(t *testing.T) {
 // caller does not keep a descriptor of the limit the ceiling protects.
 func TestHeldRequestsFailure_IsAGate503ThatSaysToRetryAndCloses(t *testing.T) {
 	t.Parallel()
-	failure := heldRequestsFailure()
+	failure := processBusyFailure()
 	if failure.status != http.StatusServiceUnavailable || failure.code != tenancy.CodeUnavailable {
 		t.Errorf("status %d, code %d; want 503 and %d", failure.status, failure.code, tenancy.CodeUnavailable)
 	}

@@ -134,12 +134,18 @@ func identifyDecisions() []Decision {
 			},
 		},
 		{
+			// The records grow with the sessions they name, and a session is
+			// refused before it is ever recorded once the process holds its
+			// ceiling of them (issue 951, which answered F-31 here): a stateful
+			// session at HLD-010's, and on the stateless transport, where each
+			// POST's session ends with it, the one kind of session recorded
+			// there, a listen's, at HLD-002's.
 			ID: "IDN-010", Question: Identify, Kind: Rule, Class: ClassC, Disposition: Mechanism,
 			Resource: "which owner each session belongs to",
 			Key:      KeySession, StdioKey: KeyNone, Table: true,
-			Decided:  []string{"ADR-0020"},
-			Findings: []string{"F-31"},
-			Sites:    []Site{enforce(pkgServer, "sessionOwners.record")},
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"ADR-0020", "issue 951"},
+			Sites:      []Site{enforce(pkgServer, "sessionOwners.record")},
 		},
 		{
 			ID: "ADM-011", Question: Identify, Kind: Rule, Class: ClassQ, Disposition: Ruled,

@@ -12,8 +12,13 @@ import "time"
 // Each group names the rows that read it. The reasons stay in the comments of
 // the sites, where the gate finds them; what is here is the number.
 
-// Holdings (HLD-001 to HLD-004, HLD-007, HLD-011, RTC-005).
+// Holdings (HLD-001 to HLD-004, HLD-007, HLD-010, HLD-011, RTC-005).
 const (
+	// SessionHeldDivisor is the share of the held-request ceiling the
+	// stateful sessions may number, as its reciprocal: a half, so the
+	// standalone streams of every session, each one a held request, can take
+	// at most half of the held slots (HLD-010).
+	SessionHeldDivisor = 2
 	// HeldRequestDescriptors is how many file descriptors one request the
 	// process holds open costs it: the caller's connection and the one to
 	// GitLab (HLD-011, measured through cmd/bench_resources' held mode).
@@ -130,9 +135,9 @@ const (
 const (
 	// UpstreamRetryAfter is the Retry-After a gate refusal advertises when
 	// GitLab failed the verification without saying when to come back
-	// (ADM-002), and the one the two ceilings on the process's own work
-	// advertise, the verification slots (ADM-014) and the held requests
-	// (HLD-011).
+	// (ADM-002), and the one the three ceilings on the process's own work
+	// advertise, the verification slots (ADM-014), the stateful sessions
+	// (HLD-010) and the held requests (HLD-011).
 	UpstreamRetryAfter = 30 * time.Second
 	// OAuthCacheTTL is how long a verified OAuth token is reused (ADM-005).
 	OAuthCacheTTL = 15 * time.Minute

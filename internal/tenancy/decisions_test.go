@@ -86,8 +86,10 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // TestDecisions_DispositionCounts pins how many rows the register holds of
 // each disposition in this layer: RTC-004 is promoted to MeterFor, and POL-003
 // to Busy. ADM-014, the verification ceiling issue 950 added, is the
-// twenty-ninth valued row, and HLD-011, the held-request ceiling issue 951
-// added, the thirtieth.
+// twenty-ninth valued row, HLD-011, the held-request ceiling issue 951 added,
+// the thirtieth, and HLD-010, the session ceiling the same issue put in place
+// of the decision by absence that row used to record, the thirty-first, which
+// is also why there is one ruled row fewer.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -98,8 +100,8 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 30},
-		{"ruled", Ruled, 35},
+		{"valued", Valued, 31},
+		{"ruled", Ruled, 34},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 10},
@@ -146,7 +148,7 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 // it refuses with that row's own refusal, so no caller is told that other
 // callers are listing (INV-019). Neither row carries F-03 any longer, since
 // the departure it recorded is answered. The finding itself stays in the
-// register's list, where issue 951 still holds F-31.
+// register's list, filed as issue 951's.
 func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 	entry, _ := Lookup("RTC-003")
 	process, _ := Lookup("RTC-007")
@@ -179,9 +181,9 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 // process that no operator sets, derived from the process's descriptor limit
 // and standing alone, refusing the newcomer on every channel its methods carry
 // with words that say to retry later and charge nothing, and existing only
-// over HTTP. The stateful sessions are the half of F-31 it does not answer, so
-// HLD-010 keeps the finding for them, names only them now, and the finding
-// stays filed as issue 951's.
+// over HTTP. Its gate refusal holds in both eras, since it answers a POST of
+// 2026-07-28 and a stateful session's standalone stream, which only an earlier
+// revision opens.
 func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	held, _ := Lookup("HLD-011")
 	if !heldIsDecidedByIssue951(held) {
@@ -218,15 +220,63 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 			}
 		})
 	}
+	if gate := held.Refusals[0]; gate.Era != EraAny {
+		t.Errorf("HLD-011's gate refusal holds in era %d, want both: a modern POST and a stateful session's stream", gate.Era)
+	}
+}
 
+// TestDecisions_StatefulSessions_AreBoundedOnTheProcessByIssue951 pins what
+// issue 951 decided for the stateful sessions, the half of F-31 HLD-011 left:
+// HLD-010 is no longer the decision by absence that carried the finding but a
+// ceiling of the same shape as HLD-011's, derived from it by the one value it
+// names, refusing the newcomer in the gate with HLD-011's own refusal in the
+// only era that has sessions, charging nothing. The owner records the sessions
+// grow (IDN-010) carry the finding no longer either, since a session past the
+// ceiling is refused before it is recorded, and no row carries F-31 now while
+// it stays filed as issue 951's.
+func TestDecisions_StatefulSessions_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	sessions, _ := Lookup("HLD-010")
-	if sessions.Resource != "stateful sessions" || !sessions.Carries("F-31") || sessions.Source != SourceNone {
-		t.Errorf("HLD-010: resource %q, findings %v, source %d; want the stateful sessions alone, nothing bounding "+
-			"them, and F-31 carried for them", sessions.Resource, sessions.Findings, sessions.Source)
+	held, _ := Lookup("HLD-011")
+	if !heldIsDecidedByIssue951(withFunctions(sessions, held.Functions)) || len(sessions.Functions) != 0 {
+		t.Errorf("HLD-010: key %s, stdio %s, source %d, protects the process %v, partner %q, at capacity %d, "+
+			"decided %v, findings %v, functions %v; want HLD-011's shape, naming no function",
+			sessions.Key, sessions.StdioKey, sessions.Source, sessions.ProtectsProcess, sessions.Partner,
+			sessions.AtCapacity, sessions.Decided, sessions.Findings, sessions.Functions)
+	}
+	if !slices.Equal(sessions.Values, []string{"SessionHeldDivisor"}) || sessions.Disposition != Valued {
+		t.Errorf("HLD-010 values %v, disposition %d; want SessionHeldDivisor alone, valued", sessions.Values, sessions.Disposition)
+	}
+	if len(sessions.Refusals) != 1 {
+		t.Fatalf("HLD-010 declares %d refusals, want 1", len(sessions.Refusals))
+	}
+	refusal, gate := sessions.Refusals[0], held.Refusals[0]
+	if refusal.Era != EraLegacy || refusal.Channel != gate.Channel || refusal.Code != gate.Code ||
+		refusal.Status != gate.Status || refusal.RetryAfter != gate.RetryAfter || refusal.Prefix != gate.Prefix ||
+		refusal.At != gate.At || len(refusal.Charged) != 0 {
+		t.Errorf("HLD-010 refuses with %+v; want HLD-011's gate refusal %+v, in the era that has sessions", refusal, gate)
+	}
+	owners, _ := Lookup("IDN-010")
+	if owners.Carries("F-31") || owners.AtCapacity != RefuseNewcomer || !slices.Contains(owners.Decided, "issue 951") {
+		t.Errorf("IDN-010: findings %v, at capacity %d, decided %v; want no finding, the newcomer refused, "+
+			"and issue 951 recorded", owners.Findings, owners.AtCapacity, owners.Decided)
+	}
+	for _, d := range Decisions() {
+		t.Run(d.ID, func(t *testing.T) {
+			if d.Carries("F-31") {
+				t.Errorf("%s still carries F-31, which issue 951 answered", d.ID)
+			}
+		})
 	}
 	if FindingIssue("F-31") != 951 {
 		t.Errorf("F-31 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-31"))
 	}
+}
+
+// withFunctions is d naming the register functions given, so a row that names
+// none can be held to a predicate written for one that does.
+func withFunctions(d Decision, functions []string) Decision {
+	d.Functions = functions
+	return d
 }
 
 // heldIsDecidedByIssue951 reports whether HLD-011 has the shape issue 951
@@ -363,10 +413,11 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // and fails its subtest unless it is one of findingsOfNoRow, which a row must
 // then not carry either. The answered set is named as well, because a row
 // records the issue that decided and not the finding it answered, so a finding
-// whose issue answered another one elsewhere (F-31, whose issue 951 answered
-// F-03 on RTC-007) would pass its subtest if it were dropped; the next finding
-// answered joins that list in the change that answers it, as F-29 and F-30 did
-// when issue 950 bounded the OAuth identity cache and verification.
+// whose issue answered another one elsewhere (F-31 while issue 951 had
+// answered only F-03 on RTC-007) would pass its subtest if it were dropped;
+// the next finding answered joins that list in the change that answers it, as
+// F-29 and F-30 did when issue 950 bounded the OAuth identity cache and
+// verification, and F-31 did when issue 951 bounded the stateful sessions.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -394,7 +445,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-19,F-29,F-30,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-19,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -710,10 +761,15 @@ func rowPins() map[string]rowPin {
 		"HLD-007": {Allow, Lifetime, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("lifetime_reached", StartOver),
 		}},
-		"HLD-010": {Allow, Ceiling, ClassP, Ruled, KeyProcess, KeyNone, KeyNone, KeyProcess, nil},
+		"HLD-010": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyProcess, KeyProcess, []refusalPin{
+			{
+				methods: "http", era: EraLegacy, channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
+				prefix: pinBusy, answer: RetryLater,
+			},
+		}},
 		"HLD-011": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyProcess, KeyProcess, []refusalPin{
 			{
-				methods: "http", era: EraModern, channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
+				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
 				prefix: pinBusy, answer: RetryLater,
 			},
 			{methods: "tools/call", channel: ToolError, prefix: pinBusy, answer: RetryLater},

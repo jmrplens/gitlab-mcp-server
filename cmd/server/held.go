@@ -247,8 +247,11 @@ func heldRequestsRefusal(ctx context.Context, method string, limit int64) (mcp.R
 // where the method carries a JSON-RPC error.
 const heldRefusalCode = tenancy.CodeTooManyRequests // register row HLD-011
 
-// heldRequestsFailure is the refusal a POST the gate counted meets when every
-// slot is taken: 503, in the gate, before the SDK has read anything.
+// processBusyFailure is the refusal a request the gate counted meets when a
+// ceiling on what the process holds is full: 503, in the gate, before the SDK
+// has read anything. The held calls and the standalone streams meet it at this
+// ceiling, and a POST that would open a stateful session at the session
+// ceiling (register row HLD-010).
 //
 // It says what heldRefusalText says. Retry-After is the register's fixed
 // pause, the one the other ceiling on the process's own work answers with
@@ -258,7 +261,7 @@ const heldRefusalCode = tenancy.CodeTooManyRequests // register row HLD-011
 // kept it would hold a descriptor of the very limit the ceiling protects, and
 // the server keeps an idle connection open for as long as --http-idle-timeout
 // says, which is forever by default.
-func heldRequestsFailure() *gateFailure {
+func processBusyFailure() *gateFailure {
 	return &gateFailure{
 		status:  http.StatusServiceUnavailable,
 		code:    errCodeUpstreamUnavailable,
@@ -273,7 +276,7 @@ func heldRequestsFailure() *gateFailure {
 // refuseHeldRequest writes the gate's refusal and the operator's line for it.
 func refuseHeldRequest(w http.ResponseWriter, r *http.Request, limit int64) {
 	logHeldRefusal(r.Context(), limit)
-	heldRequestsFailure().write(w, r)
+	processBusyFailure().write(w, r)
 }
 
 // logHeldRefusal writes the operator's line for a refusal of the ceiling.

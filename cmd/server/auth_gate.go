@@ -293,6 +293,11 @@ type mcpServerGate struct {
 	// only the tests build, takes none and leaves every call to the servers'
 	// own count.
 	held *heldRequests
+	// statefulSessions is the count of stateful sessions the process keeps,
+	// shared by every gate of the process (HLD-010), which the gate takes a
+	// slot of for a POST that would open one. A gate built without one, which
+	// only the tests build, counts no session.
+	statefulSessions *heldRequests
 	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
 	// may skip authentication.
 	//
@@ -371,17 +376,35 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
+		// A POST that would open a stateful session takes a session slot here,
+		// before the SDK creates anything, and is refused with a 503 when none
+		// is free (HLD-010). The session keeps the slot once the first request
+		// on it is dispatched, and a POST whose session did not survive it
+		// gives the slot back as it returns. Like the held slot below, it is
+		// taken once the credential is admitted, the order both rows record.
+		if g.statefulSessions != nil && g.opensSession(r) {
+			if !g.statefulSessions.acquire() {
+				refuseStatefulSession(w, r, g.statefulSessions.limit)
+				return
+			}
+			slot := &sessionSlot{sessions: g.statefulSessions}
+			defer slot.releaseUnkept()
+			ctx = context.WithValue(ctx, sessionSlotKey{}, slot)
+		}
 		// A POST whose headers name one held call takes its slot here, before
 		// the SDK reads a byte of it, and is refused with a 503 when none is
 		// free; every other call is counted where the SDK dispatches it
-		// (HLD-011). Either way the slot is taken once the credential is
-		// admitted and before anything keyed on it runs, so a refusal spends
-		// none of the credential's rate. That departs from PAT-003, which
-		// takes the process slot before anything per key: admission comes
-		// first, because a slot taken before it would let a caller with no
-		// credential hold one for as long as its verification takes, and the
-		// register records what a refused newcomer has spent by then.
-		if g.held != nil && gateCountsRequest(r) {
+		// (HLD-011). So does a GET, which reaches this point only on a
+		// deployment that keeps sessions (addressesSession) and is a session's
+		// standalone stream, held open for as long as the session lives.
+		// Either way the slot is taken once the credential is admitted and
+		// before anything keyed on it runs, so a refusal spends none of the
+		// credential's rate. That departs from PAT-003, which takes the
+		// process slot before anything per key: admission comes first,
+		// because a slot taken before it would let a caller with no credential
+		// hold one for as long as its verification takes, and the register
+		// records what a refused newcomer has spent by then.
+		if g.held != nil && (gateCountsRequest(r) || r.Method == http.MethodGet) {
 			if !g.held.acquire() {
 				refuseHeldRequest(w, r, g.held.limit)
 				return

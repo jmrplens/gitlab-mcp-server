@@ -28,6 +28,7 @@ type frozenValue struct {
 // change that adds it.
 func frozenValues() []frozenValue {
 	return []frozenValue{
+		{"SessionHeldDivisor", SessionHeldDivisor, 2},
 		{"HeldRequestDescriptors", HeldRequestDescriptors, 2},
 		{"DescriptorSpareDivisor", DescriptorSpareDivisor, 8},
 		{"FallbackDescriptorLimit", FallbackDescriptorLimit, 1024},

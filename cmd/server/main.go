@@ -1986,6 +1986,12 @@ func newServerShell(
 	// counts nothing.
 	server.AddReceivingMiddleware(heldRequestsMiddleware(processHeldRequests))
 
+	// The stateful session a POST opened keeps the slot the gate took for it
+	// from the first request dispatched on it until it ends (register row
+	// HLD-010). Only a POST the gate reserved a slot for carries one, so a
+	// stateless or stdio server carries it and claims nothing.
+	server.AddReceivingMiddleware(statefulSessionsMiddleware)
+
 	identifier := attachIdentityMiddlewares(server, settings, toolSurface)
 
 	shell.server = server
@@ -2686,12 +2692,11 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 	return serveHTTPOn(ctx, cfg, httpAddr, nil, httpIdleTimeout)
 }
 
-// serveHTTPOn is serveHTTP with an optional pre-bound listener. When
-// listener is non-nil it is served directly and httpAddr is used only for
-// logging and host validation; when nil, the server binds httpAddr itself.
-func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
-	slog.InfoContext(ctx,
-		"starting MCP server in HTTP mode",
+// httpStartupAttrs is what the HTTP mode's startup line announces: the
+// address, the settings an operator comparing two instances reads first, and
+// the process-wide figures no flag moves.
+func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
+	return []any{
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
@@ -2700,6 +2705,9 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// bounds that, derived from the descriptor limit this process runs
 		// under, and no flag moves it (HLD-011).
 		"held_requests_per_process", processHeldRequests.limit,
+		// Half of the figure above, and counted only on --stateless=false,
+		// the one transport that keeps sessions (HLD-010).
+		"stateful_sessions_per_process", processStatefulSessions.limit,
 		"session_timeout", cfg.SessionTimeout,
 		"stateless", cfg.Stateless,
 		"json_response", cfg.JSONResponse,
@@ -2710,7 +2718,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"commit", commit,
 		"build", buildIdentifier(version, commit),
 		"config_digest", configDigest(cfg),
-	)
+	}
+}
+
+// serveHTTPOn is serveHTTP with an optional pre-bound listener. When
+// listener is non-nil it is served directly and httpAddr is used only for
+// logging and host validation; when nil, the server binds httpAddr itself.
+func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
+	slog.InfoContext(ctx, "starting MCP server in HTTP mode", httpStartupAttrs(cfg, httpAddr)...)
 
 	if !cfg.Stateless {
 		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
@@ -3420,11 +3435,12 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		// parameters: a gate rejection is a pool failure, not a verdict on
 		// the credential, but a client reaching it must still be told the
 		// scope and where the metadata lives.
-		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
-		bearerOnly: true,
-		oauthMode:  true,
-		held:       processHeldRequests,
-		stateless:  cfg.Stateless,
+		challenge:        oauthChallenge(requiredScope, resourceMetadataURL),
+		bearerOnly:       true,
+		oauthMode:        true,
+		held:             processHeldRequests,
+		statefulSessions: processStatefulSessions,
+		stateless:        cfg.Stateless,
 	}
 
 	tokenCache := oauth.NewTokenCache()
@@ -3582,6 +3598,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		credentials:        binding.credentials,
 		challenge:          legacyAuthChallenge,
 		held:               processHeldRequests,
+		statefulSessions:   processStatefulSessions,
 		stateless:          cfg.Stateless,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
