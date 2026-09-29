@@ -1511,10 +1511,15 @@ func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
 // block carry neither between them: handed GITLAB_MCP_EXCLUDE_TOOLS it
 // returned that row and every row after it down to the end of the block, so an
 // assertion about the one row could be satisfied by another.
+//
+// An entry is a line that starts with the name, not one that mentions it: the
+// paragraph above the flag groups names the flags a stdio run refuses to start
+// with, and a match anywhere in a line returned that paragraph as the entry of
+// -exclude-tools.
 func helpEntry(help, flagName string) string {
 	lines := strings.Split(help, "\n")
 	for i, candidate := range lines {
-		if !strings.Contains(candidate, flagName) {
+		if !strings.HasPrefix(strings.TrimSpace(candidate), flagName) {
 			continue
 		}
 		depth := helpIndent(candidate)
@@ -1541,9 +1546,11 @@ func helpIndent(line string) int {
 // depth, for a flag row and for an environment row.
 //
 // The environment rows are the case that matters: nothing but their indent
-// separates one from the next, and the helper used to run on past them.
+// separates one from the next, and the helper used to run on past them. The
+// prose line above the rows names two of them, and is not their entry.
 func TestHelpEntry_SiblingRows_EndTheEntry(t *testing.T) {
 	help := strings.Join([]string{
+		"  Prose that names -second and SECOND_VAR in passing, above both rows.",
 		" Section",
 		"  -first string    first flag",
 		"                   continues here",
@@ -15075,14 +15082,21 @@ var undocumentedFlags = map[string]string{
 //
 // The names come from the source rather than from flag.CommandLine, because
 // they are registered in main() and a test cannot call that. Reading the calls
-// is what the audit commands in cmd/ do for the same reason.
+// is what the audit commands in cmd/ do for the same reason. The flags
+// env_flags.go registers are named by its table instead, which that source
+// read does not see: -allow-private-instances and -description-substitutions
+// were missing from the help until the table was read here too.
 func TestPrintHelp_DocumentsEveryFlag(t *testing.T) {
 	stdout := captureStdout(t)
 	printHelp()
 	help := stdout()
 
+	names := registeredFlagNames(t)
+	for _, entry := range envBackedFlags {
+		names = append(names, entry.flagName)
+	}
 	var missing []string
-	for _, name := range registeredFlagNames(t) {
+	for _, name := range names {
 		if _, declared := undocumentedFlags[name]; declared {
 			continue
 		}
