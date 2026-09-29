@@ -2736,10 +2736,11 @@ func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
 //
 // The transport itself is a legacy mode. And with --session-timeout=0 the SDK
 // never closes an idle session, so one no client deletes keeps its slot of the
-// session ceiling (HLD-010) until the pool evicts its credential's entry, which
-// is never while that credential stays active or with --pool-idle-timeout=0: a
-// client that opens sessions and deletes none then takes the slots one by one
-// until no tenant can open another. Zero still means off (END-005); the line is
+// session ceiling (HLD-010) until the pool evicts its credential's entry: after
+// --pool-idle-timeout without a request (never with 0), or to make room at
+// --max-http-clients. A client that opens sessions, deletes none and keeps its
+// credential in use then takes the slots one by one until no tenant can open
+// another. Zero still means off (END-005); the line is
 // what tells the operator who chose it.
 func warnStatefulSessions(ctx context.Context, cfg *config.Config) {
 	if cfg.Stateless {

@@ -64,10 +64,11 @@ func endDecisions() []Decision {
 			//
 			// Off costs more beside HLD-010 (issue 951). A session no client
 			// deletes then holds its slot of the session ceiling until the
-			// pool evicts its credential's entry, which is never while that
-			// credential stays active or with --pool-idle-timeout=0, so a
-			// client that opens sessions and deletes none takes the slots one
-			// by one until no tenant can open another. Zero keeps its meaning,
+			// pool evicts its credential's entry, after --pool-idle-timeout
+			// without a request (never with 0) or to make room at
+			// --max-http-clients, so a client that opens sessions, deletes
+			// none and keeps its credential in use takes the slots one by one
+			// until no tenant can open another. Zero keeps its meaning,
 			// and the server says what it costs at startup.
 			ID: "END-005", Question: End, Kind: Lifetime, Class: ClassQ, Disposition: Valued,
 			Resource: "how long a stateful session may sit idle",

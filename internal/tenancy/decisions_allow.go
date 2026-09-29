@@ -447,11 +447,11 @@ func allowDecisions() []Decision {
 			// before the SDK creates anything, and the first request
 			// dispatched on the new session keeps the slot until the session
 			// ends. With --session-timeout=0 (END-005) that is when a client
-			// deletes it or the pool evicts its credential, which is never
-			// while the credential stays active or with --pool-idle-timeout=0,
-			// and startup says so. The refusal is HLD-011's, in words that name
-			// no bound, which is INV-019's one bit; the log line says which
-			// ceiling refused.
+			// deletes it or the pool evicts its credential, after
+			// --pool-idle-timeout without a request (never with 0) or to make
+			// room at --max-http-clients, and startup says so. The refusal is
+			// HLD-011's, in words that name no bound, which is INV-019's one
+			// bit; the log line says which ceiling refused.
 			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
 			Resource: "stateful sessions across every credential",
 			Key:      KeyProcess, StdioKey: KeyNone,

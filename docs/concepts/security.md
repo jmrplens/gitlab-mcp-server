@@ -805,10 +805,11 @@ deletes holds its slot until `--session-timeout` ends it, half an hour by
 default and a day at most, while every other tenant's `initialize` is refused.
 Before this ceiling an idle session refused nobody; what exhausted the process
 was a thousand held streams. With `--session-timeout=0` a session nobody deletes
-holds its slot until the pool evicts its credential, which is never while that
-credential stays active, and startup warns about that combination. Whether a
-per-credential ceiling should stand beside this one, or `initialize` be
-metered, is put to the maintainer on issue 951. A deployment that needs more
+holds its slot until the pool evicts its credential, after
+`--pool-idle-timeout` without a request or to make room at `--max-http-clients`,
+and startup warns about that combination. Whether a per-credential ceiling
+should stand beside this one, or `initialize` be metered, is put to the
+maintainer on issue 951. A deployment that needs more
 stateful clients at once shortens that timeout, raises the descriptor limit, or
 moves its clients to the default stateless transport, which keeps no sessions
 at all.
