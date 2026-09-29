@@ -434,10 +434,13 @@ func allowDecisions() []Decision {
 			// session costs 88 to 110 KiB of resident set and four goroutines,
 			// which the descriptor limit does not raise, so under the 524288 a
 			// systemd service gets, 114560 idle sessions come to about ten to
-			// twelve GiB, and there the container's memory limit bounds them.
+			// twelve GiB, and there the memory limit the process runs under (a
+			// container's, or a systemd unit's MemoryMax) bounds them where one
+			// is set; a unit without MemoryMax is bounded only by the host.
 			// Issue 951 decided that no fixed cap stands beside the derived
-			// one: the container's memory limit already bounds that memory,
-			// and a cap no flag moves would be sized for one host.
+			// one: the memory limit the process runs under bounds that memory
+			// where one is set, which is the case the decision accepts, and a
+			// cap no flag moves would be sized for one host.
 			//
 			// It counts a session from the POST that opens one, which is any
 			// POST carrying no session id on a deployment that keeps sessions
@@ -511,8 +514,10 @@ func allowDecisions() []Decision {
 			// it as HLD-001 stands beside HLD-002, and accepted that one
 			// credential can fill it where the limit is small. It bounds
 			// descriptors and not memory, about 190 KiB a held call, which the
-			// container's memory limit bounds: issue 951 also decided that the
-			// server keeps no memory cap of its own.
+			// memory limit the process runs under (a container's, or a systemd
+			// unit's MemoryMax) bounds where one is set: issue 951 also decided
+			// that the server keeps no memory cap of its own, and a unit
+			// without MemoryMax is bounded only by the host.
 			//
 			// Its value is derived rather than written: the descriptors the
 			// process may open, read once at startup, less an eighth spare and

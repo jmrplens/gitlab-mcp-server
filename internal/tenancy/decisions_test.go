@@ -197,7 +197,7 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	descriptors := []string{"HeldRequestDescriptors", "DescriptorSpareDivisor", "FallbackDescriptorLimit"}
 	if !slices.Equal(held.Values, descriptors) {
 		t.Errorf("HLD-011 values %v, want %v alone: issue 951 decided the server keeps no memory cap, "+
-			"so the ceiling is sized from descriptors and the container's memory limit bounds memory", held.Values, descriptors)
+			"so the ceiling is sized from descriptors and the memory limit the process runs under bounds memory", held.Values, descriptors)
 	}
 	want := []struct {
 		channel Channel
