@@ -500,8 +500,19 @@ func (t *fairTally) dropped(pop string, verb verbSpec) {
 }
 
 // record files one completed request under its outcome.
+//
+// The refusals the run expects that are not the bound's are asked of an
+// invented credential alone. They are the 401 a token no GitLab issued earns,
+// and the same answer to a credential the stand-in accepts, the quiet
+// population's own or a new one, is the server failing: counted as refused
+// otherwise, it would leave the arm comparable and its percentiles computed
+// over the requests that survived.
 func (t *fairTally) record(pop string, verb verbSpec, obs observation) {
-	kind := classifyExpecting(verb.Method, obs.err, t.refusals, t.otherwise)
+	otherwise := t.otherwise
+	if verb.Credential != credentialInvented {
+		otherwise = nil
+	}
+	kind := classifyExpecting(verb.Method, obs.err, t.refusals, otherwise)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	entry := t.entry(pop, verb)

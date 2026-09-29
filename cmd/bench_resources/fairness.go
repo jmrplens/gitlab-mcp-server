@@ -245,7 +245,9 @@ type boundSpec struct {
 	// the run and is not this bound's: the 401 an invented token earns is the
 	// whole of what a flood of them is answered with when the bound is out.
 	// Such a request is refused otherwise, which is neither this bound's
-	// refusal nor a failure of the run.
+	// refusal nor a failure of the run. Only a request presenting an invented
+	// credential is held to these shapes: the same 401 to any other is a
+	// failure.
 	Otherwise []refusalSpec
 	// Protects names what the bound protects when that is not the quiet
 	// population. Such a bound is not measured for whether it leaves the quiet

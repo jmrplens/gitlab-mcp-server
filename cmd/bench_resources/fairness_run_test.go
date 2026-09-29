@@ -195,6 +195,47 @@ func TestMethodTally_Render_CountsEveryOutcomeAsDispatched(t *testing.T) {
 	}
 }
 
+// TestFairTally_Record_TakesTheRunsOwnRefusalsFromAnInventedCredentialAlone
+// verifies the 401 an invented token earns is refused otherwise on the flood's
+// row and a failure on every row presenting a credential the stand-in accepts.
+//
+// Asked of every row, the shape matched the quiet population's calls too, so a
+// server answering a valid credential 401 filed it beside the flood's expected
+// rejections: the arm stayed comparable and its served percentiles were
+// computed over whatever survived, which is a broken server counted as a fair
+// one.
+func TestFairTally_Record_TakesTheRunsOwnRefusalsFromAnInventedCredentialAlone(t *testing.T) {
+	bound := oauthPlan(t).Bound
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	rejected := bound.Otherwise[0]
+	cases := []struct {
+		verb        string
+		wantFailed  int
+		wantRefused int
+	}{
+		{verb: verbCall, wantFailed: 1},
+		{verb: verbCallNew, wantFailed: 1},
+		{verb: verbListInvented, wantRefused: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.verb, func(t *testing.T) {
+			verb := verbs[tc.verb]
+			tally := newFairTally(call, bound.Refusals, bound.Otherwise...)
+			tally.record(populationQuiet, verb, observation{err: fmt.Errorf("%s: %w", verb.Method, &httpStatusError{
+				Method: verb.Method, Status: rejected.Status,
+				RPC: &rpcError{Code: rejected.Code, Message: rejected.TextPrefix + " Check that it is valid."},
+			})})
+			row := tally.methods[populationQuiet][verb.key()].render(verb)
+			if row.Failed != tc.wantFailed || row.RefusedOther != tc.wantRefused {
+				t.Errorf("row = %+v, want %d failed and %d refused otherwise", row, tc.wantFailed, tc.wantRefused)
+			}
+		})
+	}
+}
+
 // TestIssue_GivesUpWhenAClientWould verifies the per-request deadline is
 // anchored at the intended instant, so a request the driver dispatched late
 // does not get a fresh deadline the moment it leaves.
