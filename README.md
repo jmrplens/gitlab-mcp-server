@@ -474,10 +474,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,387 |       322,415 |
-| Unit tests (`_test.go`)  |       957 |       641,557 |
-| End-to-end tests         |       508 |       108,520 |
-| **Total**                | **2,852** | **1,072,492** |
+| Source (`.go`, non-test) |     1,387 |       322,446 |
+| Unit tests (`_test.go`)  |       957 |       641,582 |
+| End-to-end tests         |       508 |       108,568 |
+| **Total**                | **2,852** | **1,072,596** |
 
 ### Functions
 
@@ -486,7 +486,7 @@ and the workaround this server carries until it ships.
 | Source functions                | 11,069 |
 | . Exported (public)             |  3,293 |
 | . Unexported (private)          |  7,776 |
-| Unit test functions (`TestXxx`) | 18,814 |
+| Unit test functions (`TestXxx`) | 18,815 |
 | Subtests (`t.Run(...)`)         |  6,962 |
 | End-to-end test functions       |  1,401 |
 
@@ -497,7 +497,7 @@ and the workaround this server carries until it ships.
 | Test lines vs source lines         | 1.99× more tests than code |
 | Average source file length         |                 ~232 lines |
 | Average test file length           |                 ~670 lines |
-| Comment lines in source            |  79,034 (~24.5% of source) |
+| Comment lines in source            |  79,064 (~24.5% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
