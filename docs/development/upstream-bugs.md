@@ -120,7 +120,7 @@ readable without opening the tracker:
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), open; [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | No | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572) | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, unreleased** | No | None possible |
-| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
+| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No issue; named as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None taken |
@@ -342,6 +342,21 @@ merged on 2026-09-28 and is in **v3.15.0**, so row 34 reads 14 of 14, and
 merged at 23:59 UTC the same day and is in no tag yet. The pin stays at
 v3.14.0 until the Dependabot cooldown for a Go minor ends on 2026-10-12. Rows
 22, 46, 72, 75 and 76 each moved a step, recorded in their sections.
+
+Later on 2026-09-29 row 72's merge request merged, and the GitHub trackers were
+read again, for every go-sdk issue and pull request this file links. go-sdk
+has cut no release since v1.8.0 and `main` is 30 commits ahead of it, so every
+go-sdk merge here is still unreleased; on
+[modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226)
+the maintainer wrote on 2026-09-14 that the next release "will happen in ~2
+months". Nothing there asks anything of us. Rows 8, 11, 12, 48 and 68 moved a
+step, recorded in their sections: a maintainer updated row 11's pull request
+from `main`, row 68's issue was triaged and its pull request now conflicts with
+`main`, the pull requests of rows 8, 11 and 12 were brought up to date with
+`main` again that afternoon, and row 48's case turned out to be named upstream
+as a known limitation of a pull request another contributor opened and a
+maintainer merged, whose discussion also showed the entry's
+claim about the transports that reach it to be too wide.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -3619,7 +3634,8 @@ was filed on 2026-09-25.
   ([modelcontextprotocol/go-sdk#1155](https://github.com/modelcontextprotocol/go-sdk/issues/1155),
   with the pull request
   [modelcontextprotocol/go-sdk#1197](https://github.com/modelcontextprotocol/go-sdk/pull/1197),
-  both still open) and the keep-alive comment
+  both still open, the pull request conflicting with `main` when read on
+  2026-09-29) and the keep-alive comment
   ([modelcontextprotocol/go-sdk#1229](https://github.com/modelcontextprotocol/go-sdk/issues/1229),
   since closed by the merge below).
 - **In review**: yes, theirs,
@@ -3635,7 +3651,9 @@ was filed on 2026-09-25.
   peer that stopped reading still fails. Its test fails against `main` every
   time and waits for review. Read on 2026-09-27 it is up to date with `main`,
   its nine checks are green, it has had no review yet, and nothing is owed on
-  it from here.
+  it from here. On 2026-09-29 it was six commits behind `main`; I updated it
+  from `main` (merge commit `4bb3af60`) and its nine checks passed. It has
+  still had no review.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -3743,7 +3761,9 @@ passing if the SDK ever fixes this and the filter is removed.
   field that pull request added, which says the headers are still
   uncommitted. It is mergeable and waits for review. Read on 2026-09-27 it is
   still up to date with `main`, its ten checks are green, and its one review
-  thread, answered on 2026-09-20, waits on the reviewer.
+  thread, answered on 2026-09-20, waits on the reviewer. On 2026-09-29 it was
+  six commits behind `main`; I updated it from `main` (merge commit
+  `761b52b2`) and its ten checks passed. The thread still waits.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -3816,7 +3836,7 @@ the server's output.
   of the first version on purpose; since 2026-09-27 the pull request carries
   them too (below).
 
-  **Where it stands on 2026-09-28.** The two things owed on 2026-09-27 were
+  **Where it stands on 2026-09-29.** The two things owed on 2026-09-27 were
   done that day in one push that also rebuilt the branch on `main` as it then
   stood (`e07f0c9d`). The promise of 2026-09-15 in the reviewer's thread is
   kept: once
@@ -3834,8 +3854,13 @@ the server's output.
   longer sent a per-session subscription id in `_meta`. A session that has
   recorded no version at all moves from legacy to new-protocol, which is what
   SEP-2575 says such a session is. No reviewer has answered since, and `main`
-  gained three commits on 2026-09-28, so the branch is behind again and branch
-  protection needs it updated before it can merge.
+  gained three commits on 2026-09-28, so the branch was behind again. At 09:15
+  UTC on 2026-09-29 @guglielmo-san updated it from `main` (merge commit
+  `85f855fd`), and all nine checks passed on it. `main` gained two more
+  commits the same morning, and at 12:42 UTC I updated it again with GitHub's
+  Update branch (merge commit `bb0e7c5a`), which merges `main` in and so kept
+  `85f855fd`, where a rebase would have dropped it; its nine checks passed
+  again. It has had no review since 2026-09-15.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
@@ -4190,13 +4215,30 @@ The delivery end was the only part of the design with no per-credential seam.
 
 - **Reported**: no, not yet. It shares a root cause with the entry above, whose
   proposal is still waiting on a maintainer decision, and the shape of the fix
-  here depends on what they choose.
+  here depends on what they choose. The case is on record upstream all the
+  same:
+  [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275),
+  opened by another contributor and merged on 2026-09-18 (`4608cda9`, in no
+  release yet), fixed the listen teardown for the three list-changed
+  registries and names this case under "Known limitations": "Two listens
+  subscribed to the same URI. `resourceSubscriptions[uri][session]` overwrites
+  the same way, and the deferred `unsubscribe` deletes it." Its author offered
+  to open an issue with tests, and none has been opened. On that pull request
+  @guglielmo-san held on 2026-09-17 that keying by session is fine and only
+  the teardown was wrong; the author answered the same day with a failing test
+  for the resource path. What we file has to meet that position.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no. It needs a client that opens two `subscriptions/listen`
   covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
-  stdio or `--stateless=false`. The SDK's own client never holds two at once,
-  but it reaches the same state when it unsubscribes a URI and subscribes it
+  stdio. Neither HTTP mode reaches it: v1.8.0's stateful handler refuses every
+  2026-07-28 request but `server/discover` ("this server is stateful",
+  `mcp/streamable.go`), so `--stateless=false` serves no listen at all, and a
+  stateless POST's session ends with its response. The SDK's own client never
+  holds two at once, which is why
+  [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275)
+  calls the case unreachable from the Go client, but it reaches the same
+  state when it unsubscribes a URI and subscribes it
   again before the server has run the first listen's teardown: on 2026-07-28
   `Unsubscribe` only cancels the listen and returns, so the second listen's
   subscribe can land first, is acknowledged, and is then deleted by the first
@@ -4364,11 +4406,13 @@ the code. The release that reports the refusal fails it.
   own with a hook for the state a new session loses, or the error staying
   terminal and documented as needing one. Either changes or documents an
   existing API, so it was filed for go-sdk's proposal process to choose.
+  @guglielmo-san labelled it P2 at 09:53 UTC on 2026-09-28, its first triage.
 - **In review**: yes, theirs,
   [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300),
   opened by another contributor on 2026-09-26 on the first shape. Measured
   below, it reaches this server's 404 on the two paths where the 404 names no
-  request, and not on the one where it names a call. On 2026-09-28 I backed it
+  request, and not on the one where it names a call. On 2026-09-27 (22:00 and
+  22:09 UTC) I backed it
   over the documentation-only shape on the issue
   ([comment](https://github.com/modelcontextprotocol/go-sdk/issues/1299#issuecomment-5860217879))
   and reviewed it
@@ -4382,10 +4426,16 @@ the code. The release that reports the refusal fails it.
   without the change on the body that names the request's ID. A body naming
   `"id": null`, the shape the TypeScript SDK server answers an unknown session
   with, already recovers without it. The author took the change and its test
-  into the pull request the same day, as its second commit (`3e21beb4`, "treat
-  a 404 with a JSON-RPC error body as a missing session"); the table below was
-  measured with the change as proposed in the review, and has not been run
-  again against that commit.
+  into the pull request on 2026-09-28 (11:46 UTC), as its second commit
+  (`3e21beb4`, "treat a 404 with a JSON-RPC error body as a missing
+  session"); the table below was measured with the change as proposed in the
+  review, and has not been run again against that commit. Read on 2026-09-29
+  it conflicts with `main`, since
+  [modelcontextprotocol/go-sdk#1297](https://github.com/modelcontextprotocol/go-sdk/pull/1297)
+  appended to the same two `mcpgodebug` documents on 2026-09-28; its checks
+  have never run, the workflows of its first head waiting for a maintainer's
+  approval and its second head having none; and no maintainer has reviewed
+  it. The conflict is the author's to resolve.
 - **Merged**: no.
 - **Blocking**: no, and only under `--stateless=false`, the one mode that mints
   session IDs. There the gate answers 404 (row ADM-007) to any request carrying
@@ -5353,15 +5403,19 @@ commit that updated each branch's tests (below) says so in its message.
   the three to `0.32.3`, and its message tells the maintainers about the
   `0.32.4` the second merge request to land will need. In its fork pipeline,
   2893038521, `unit-test` passed, and the pipeline finished with the two jobs
-  that stop before running as its only failures. One of them will fail for
+  that stop before running as its only failures. One of them would fail for
   real in the merged-results pipeline a maintainer runs, where the branch and
   the target share a merge base:
   `pinned-version-check` (`scripts/check-pinned-version.sh`) refuses a change
   to `config/schemas/graph_query.schema.json` that does not bump `query_dsl`
   in `config/versions.yaml`, unless the description carries
   `[skip pinned-version-check]`, which the script asks for when a change does
-  not affect the shape. This branch only rewords a description there, and its
-  description does not carry the marker yet.
+  not affect the shape. This branch only rewords a description there, so at
+  12:44 UTC on 2026-09-29 its description gained the marker, at the top of its
+  collapsed details block, where the project's description lint does not count
+  it and the 2700 characters a pipeline reads of a description still hold it,
+  with an offer of a patch bump instead; the Files list also names the test
+  pins now.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
@@ -5411,11 +5465,13 @@ while rewriting `orbit.query` for issue 1031.
   `0.32.2`. `639f3d11`, pushed at 11:21 UTC with `0acf02c0` and carrying
   its message with the other merge request's number, sets them to `0.32.3`,
   and `unit-test` passed in its fork pipeline, 2893038522. Its
-  `pinned-version-check` will fail in the merged-results pipeline for the
-  reason row 75's will, and this branch also changes the schema's declared
+  `pinned-version-check` would fail in the merged-results pipeline for the
+  reason row 75's would, and this branch also changes the schema's declared
   `default` from `both` to `outgoing`, which is what the compiler already
-  applies, so whether that takes a `query_dsl` bump or the marker is the
-  maintainers' call.
+  applies, so no query is accepted, rejected or answered differently. Its
+  description gained the marker at the same time and in the same place as row
+  75's, with an offer of a `query_dsl` bump should the maintainers read the
+  declared default as part of the contract.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
