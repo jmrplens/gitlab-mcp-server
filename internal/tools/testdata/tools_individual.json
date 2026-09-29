@@ -5394,7 +5394,7 @@
           "type": "array"
         },
         "security_scan_profile_id": {
-          "description": "Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning, for which attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted",
+          "description": "Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4. container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name",
           "type": "string"
         }
       },
@@ -8759,7 +8759,13 @@
             },
             "extended_trailers": {
               "additionalProperties": {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "type": "object"
             },
@@ -9106,7 +9112,13 @@
             },
             "extended_trailers": {
               "additionalProperties": {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "type": "object"
             },
@@ -9374,7 +9386,13 @@
                   },
                   "extended_trailers": {
                     "additionalProperties": {
-                      "type": "string"
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
                     },
                     "type": "object"
                   },
@@ -11673,7 +11691,13 @@
         },
         "extended_trailers": {
           "additionalProperties": {
-            "type": "string"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "type": "object"
         },
@@ -12248,7 +12272,13 @@
         },
         "extended_trailers": {
           "additionalProperties": {
-            "type": "string"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "type": "object"
         },
@@ -12615,7 +12645,13 @@
         },
         "extended_trailers": {
           "additionalProperties": {
-            "type": "string"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "type": "object"
         },
@@ -12871,7 +12907,13 @@
               },
               "extended_trailers": {
                 "additionalProperties": {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
                 },
                 "type": "object"
               },
@@ -13477,7 +13519,13 @@
         },
         "extended_trailers": {
           "additionalProperties": {
-            "type": "string"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "type": "object"
         },
@@ -18105,7 +18153,56 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "show_status": {
+                    "type": "boolean"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked",
+                  "show_status"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "author_email": {
+                "type": "string"
+              },
+              "author_gravatar_url": {
                 "type": "string"
               },
               "author_name": {
@@ -18124,6 +18221,9 @@
                 "type": "string"
               },
               "created_at": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "extended_trailers": {
@@ -18157,6 +18257,9 @@
                 "type": "string"
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "trailers": {
@@ -51487,12 +51590,21 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "deleted_at": {
+          "type": "string"
+        },
         "download_path": {
           "type": "string"
         },
         "latest_serial": {
           "minimum": 0,
           "type": "integer"
+        },
+        "locked_at": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -51505,10 +51617,15 @@
             "null",
             "array"
           ]
+        },
+        "updated_at": {
+          "type": "string"
         }
       },
       "required": [
-        "name"
+        "name",
+        "created_at",
+        "updated_at"
       ],
       "type": "object"
     },
@@ -62432,7 +62549,7 @@
           ]
         },
         "min_access_level": {
-          "description": "Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -64249,7 +64366,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -65325,7 +65442,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "expires_at": {
@@ -65620,7 +65737,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
+          "description": "New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
           "type": "integer"
         },
         "expires_at": {
@@ -68309,7 +68426,7 @@
           "type": "boolean"
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -74426,7 +74543,7 @@
   },
   {
     "name": "gitlab_group_share",
-    "description": "Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
+    "description": "Share a group with another group at a chosen access level, optionally granting a custom member role. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level, expiry and custom role. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -74436,7 +74553,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares",
+          "description": "Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares",
           "type": "integer"
         },
         "group_id": {
@@ -74445,6 +74562,10 @@
             "string",
             "integer"
           ]
+        },
+        "member_role_id": {
+          "description": "Custom member role the share grants (Ultimate only). Its base access level must equal group_access",
+          "type": "integer"
         },
         "share_group_id": {
           "description": "Group ID to share with",
@@ -74559,7 +74680,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level granted to the shared group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares",
           "type": "integer"
         },
         "group_id": {
@@ -74570,11 +74691,8 @@
           ]
         },
         "member_role_id": {
-          "description": "Custom member role ID to grant (Ultimate)",
-          "type": [
-            "null",
-            "integer"
-          ]
+          "description": "Custom member role the share grants (Ultimate only). Its base access level must equal group_access",
+          "type": "integer"
         },
         "shared_group_id": {
           "description": "ID of the group to share with",
@@ -74646,7 +74764,7 @@
           ]
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -74898,7 +75016,7 @@
           ]
         },
         "min_access_level": {
-          "description": "Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
           "type": "integer"
         },
         "order_by": {
@@ -98590,12 +98708,23 @@
   },
   {
     "name": "gitlab_issue_participants",
-    "description": "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.",
+    "description": "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL, with pagination metadata. See also: gitlab_issue_get, gitlab_issue_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "issue_iid": {
           "description": "Issue IID (project-scoped internal ID, not 'issue_id')",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -98623,6 +98752,42 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         },
         "participants": {
           "items": {
@@ -98669,7 +98834,8 @@
         }
       },
       "required": [
-        "participants"
+        "participants",
+        "pagination"
       ],
       "type": "object"
     },
@@ -108556,10 +108722,21 @@
   },
   {
     "name": "gitlab_list_attestations",
-    "description": "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
+    "description": "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -108568,7 +108745,7 @@
           ]
         },
         "subject_digest": {
-          "description": "Subject digest (hash) to filter attestations",
+          "description": "Hex-encoded SHA-256 digest of the attested artifact: its 64 hex characters, in either case. An OCI-style sha256: prefix is accepted and removed and the hex is lowered before the request",
           "type": "string"
         }
       },
@@ -108644,10 +108821,47 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         }
       },
       "required": [
-        "attestations"
+        "attestations",
+        "pagination"
       ],
       "type": "object"
     },
@@ -120163,12 +120377,23 @@
   },
   {
     "name": "gitlab_list_mr_context_commits",
-    "description": "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.",
+    "description": "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, the title and description rendered to HTML, author and committer with their dates, the GitLab account the author email belongs to and the author's Gravatar image, trailers and web URL, with pagination metadata. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "merge_request_iid": {
           "description": "Merge request IID",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -120192,7 +120417,56 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "show_status": {
+                    "type": "boolean"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked",
+                  "show_status"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "author_email": {
+                "type": "string"
+              },
+              "author_gravatar_url": {
                 "type": "string"
               },
               "author_name": {
@@ -120211,6 +120485,9 @@
                 "type": "string"
               },
               "created_at": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "extended_trailers": {
@@ -120246,6 +120523,9 @@
               "title": {
                 "type": "string"
               },
+              "title_html": {
+                "type": "string"
+              },
               "trailers": {
                 "additionalProperties": {
                   "type": "string"
@@ -120278,10 +120558,47 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         }
       },
       "required": [
-        "commits"
+        "commits",
+        "pagination"
       ],
       "type": "object"
     },
@@ -123481,7 +123798,7 @@
           "type": "string"
         },
         "report_type": {
-          "description": "Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING",
+          "description": "Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF. SARIF needs GitLab 18.11, and an older GitLab drops it and answers with no findings",
           "items": {
             "type": "string"
           },
@@ -126272,12 +126589,21 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "deleted_at": {
+                "type": "string"
+              },
               "download_path": {
                 "type": "string"
               },
               "latest_serial": {
                 "minimum": 0,
                 "type": "integer"
+              },
+              "locked_at": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -126290,10 +126616,15 @@
                   "null",
                   "array"
                 ]
+              },
+              "updated_at": {
+                "type": "string"
               }
             },
             "required": [
-              "name"
+              "name",
+              "created_at",
+              "updated_at"
             ],
             "type": "object"
           },
@@ -126469,7 +126800,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Filter by event action type",
+          "description": "Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.",
           "enum": [
             "created",
             "updated",
@@ -126482,7 +126813,8 @@
             "left",
             "destroyed",
             "expired",
-            "approved"
+            "approved",
+            "transferred"
           ],
           "type": "string"
         },
@@ -126530,7 +126862,7 @@
           "type": "string"
         },
         "target_type": {
-          "description": "Filter by event target type",
+          "description": "Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.",
           "enum": [
             "issue",
             "milestone",
@@ -126539,7 +126871,8 @@
             "project",
             "snippet",
             "user",
-            "epic"
+            "wiki",
+            "design"
           ],
           "type": "string"
         },
@@ -127603,7 +127936,7 @@
           "type": "string"
         },
         "report_type": {
-          "description": "Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING",
+          "description": "Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, CONTAINER_SCANNING_FOR_REGISTRY, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF, GENERIC",
           "items": {
             "type": "string"
           },
@@ -134385,7 +134718,13 @@
               },
               "extended_trailers": {
                 "additionalProperties": {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
                 },
                 "type": "object"
               },
@@ -138459,7 +138798,13 @@
               },
               "extended_trailers": {
                 "additionalProperties": {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
                 },
                 "type": "object"
               },
@@ -138730,7 +139075,13 @@
                     },
                     "extended_trailers": {
                       "additionalProperties": {
-                        "type": "string"
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "null",
+                          "array"
+                        ]
                       },
                       "type": "object"
                     },
@@ -152153,12 +152504,23 @@
   },
   {
     "name": "gitlab_mr_participants",
-    "description": "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.",
+    "description": "List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email, with pagination metadata. See also: gitlab_mr_reviewers, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -152186,6 +152548,42 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         },
         "participants": {
           "items": {
@@ -152232,7 +152630,8 @@
         }
       },
       "required": [
-        "participants"
+        "participants",
+        "pagination"
       ],
       "type": "object"
     },
@@ -152245,12 +152644,23 @@
   },
   {
     "name": "gitlab_mr_pipelines",
-    "description": "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get.",
+    "description": "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -152278,6 +152688,42 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         },
         "pipelines": {
           "items": {
@@ -152469,7 +152915,8 @@
         }
       },
       "required": [
-        "pipelines"
+        "pipelines",
+        "pagination"
       ],
       "type": "object"
     },
@@ -153282,12 +153729,23 @@
   },
   {
     "name": "gitlab_mr_reviewers",
-    "description": "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.",
+    "description": "List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time, with pagination metadata. See also: gitlab_mr_participants, gitlab_mr_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -153315,6 +153773,42 @@
             "null",
             "array"
           ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
         },
         "reviewers": {
           "items": {
@@ -153367,7 +153861,8 @@
         }
       },
       "required": [
-        "reviewers"
+        "reviewers",
+        "pagination"
       ],
       "type": "object"
     },
@@ -177308,7 +177803,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)",
+          "description": "Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.",
           "enum": [
             "created",
             "updated",
@@ -177321,7 +177816,8 @@
             "left",
             "destroyed",
             "expired",
-            "approved"
+            "approved",
+            "transferred"
           ],
           "type": "string"
         },
@@ -177372,7 +177868,7 @@
           "type": "string"
         },
         "target_type": {
-          "description": "Filter by target type (issue, milestone, merge_request, note, project, snippet, user)",
+          "description": "Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.",
           "enum": [
             "issue",
             "milestone",
@@ -177381,7 +177877,8 @@
             "project",
             "snippet",
             "user",
-            "epic"
+            "wiki",
+            "design"
           ],
           "type": "string"
         }
@@ -210631,7 +211128,13 @@
             },
             "extended_trailers": {
               "additionalProperties": {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "type": "object"
             },
@@ -210792,7 +211295,13 @@
               },
               "extended_trailers": {
                 "additionalProperties": {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
                 },
                 "type": "object"
               },
@@ -211224,7 +211733,13 @@
         },
         "extended_trailers": {
           "additionalProperties": {
-            "type": "string"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "type": "object"
         },
@@ -219135,7 +219650,13 @@
               },
               "extended_trailers": {
                 "additionalProperties": {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "null",
+                    "array"
+                  ]
                 },
                 "type": "object"
               },
@@ -227611,7 +228132,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
+          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
           "type": "integer"
         },
         "order_by": {
@@ -234847,7 +235368,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)",
+          "description": "Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.",
           "enum": [
             "created",
             "updated",
@@ -234860,7 +235381,8 @@
             "left",
             "destroyed",
             "expired",
-            "approved"
+            "approved",
+            "transferred"
           ],
           "type": "string"
         },
@@ -234908,7 +235430,7 @@
           "type": "string"
         },
         "target_type": {
-          "description": "Filter by target type (issue, milestone, merge_request, note, project, snippet, user)",
+          "description": "Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.",
           "enum": [
             "issue",
             "milestone",
@@ -234917,7 +235439,8 @@
             "project",
             "snippet",
             "user",
-            "epic"
+            "wiki",
+            "design"
           ],
           "type": "string"
         }

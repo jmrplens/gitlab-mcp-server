@@ -543,7 +543,7 @@ Attach a GitLab security scan profile to one or more projects and/or groups via 
 
 - `group_ids` (array of integers): Numeric IDs of the groups to attach the profile to
 - `project_ids` (array of integers): Numeric IDs of the projects to attach the profile to
-- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning, for which attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted
+- `security_scan_profile_id` (string) (required): Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4. container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -5109,7 +5109,7 @@ List groups invited to a GitLab group. Returns: the invited groups with path and
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -5293,7 +5293,7 @@ List accessible GitLab groups with filtering and pagination. Returns: matching g
 - `archived` (boolean): Limit to archived groups (true) or non-archived (false)
 - `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `marked_for_deletion_on` (string): Filter to groups marked for deletion on this date (YYYY-MM-DD)
-- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order groups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to groups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -5339,7 +5339,7 @@ Add a user as a direct member of a group. Returns: the created membership with a
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -5354,7 +5354,7 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 
 **Parameters:**
 
-- `access_level` (integer): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
+- `access_level` (integer): New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -5560,7 +5560,7 @@ List the projects in a GitLab group. Returns: compact project rows with names an
 - `archived` (boolean): Filter archived projects
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `include_subgroups` (boolean): Include projects in subgroups
-- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)
 - `owned` (boolean): Limit to projects owned by current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -5970,13 +5970,14 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_share
 
-Share a group with another group at a chosen access level. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level and expiry. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.
+Share a group with another group at a chosen access level, optionally granting a custom member role. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level, expiry and custom role. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.
 
 **Parameters:**
 
 - `expires_at` (string): Share expiration date (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares
+- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares
 - `group_id` (string or integer) (required): Group ID or URL-encoded path to share
+- `member_role_id` (integer): Custom member role the share grants (Ultimate only). Its base access level must equal group_access
 - `share_group_id` (integer) (required): Group ID to share with
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -5988,9 +5989,9 @@ Share a GitLab group with another group (Groups API). Returns: a confirmation wi
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level granted to the shared group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)
+- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares
 - `group_id` (string or integer) (required): Group ID or URL-encoded path of the group being shared
-- `member_role_id` (integer): Custom member role ID to grant (Ultimate)
+- `member_role_id` (integer): Custom member role the share grants (Ultimate only). Its base access level must equal group_access
 - `shared_group_id` (integer) (required): ID of the group to share with
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -6003,7 +6004,7 @@ List projects shared with a GitLab group. Returns: compact project rows with nam
 
 - `archived` (boolean): Filter archived projects
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -6027,7 +6028,7 @@ List groups shared with a GitLab group (group-to-group shares). Returns: the sha
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order shared groups by field: name, path, id, or similarity (similarity only applies with search). Default is name
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -7100,11 +7101,13 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_participants
 
-List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.
+List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL, with pagination metadata. See also: gitlab_issue_get, gitlab_issue_note_list.
 
 **Parameters:**
 
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID, not 'issue_id')
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -7646,12 +7649,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_attestations
 
-List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.
+List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.
 
 **Parameters:**
 
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `subject_digest` (string) (required): Subject digest (hash) to filter attestations
+- `subject_digest` (string) (required): Hex-encoded SHA-256 digest of the attested artifact: its 64 hex characters, in either case. An OCI-style sha256: prefix is accepted and removed and the hex is lowered before the request
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8423,11 +8428,13 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_mr_context_commits
 
-List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.
+List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, the title and description rendered to HTML, author and committer with their dates, the GitLab account the author email belongs to and the author's Gravatar image, trailers and web URL, with pagination metadata. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request IID
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -8697,7 +8704,7 @@ List a pipeline's security report findings with severity, scanner, report-type a
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `pipeline_iid` (string) (required): Pipeline IID within the project
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
-- `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
+- `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF. SARIF needs GitLab 18.11, and an older GitLab drops it and answers with no findings
 - `scanner` (array of strings): Filter by scanner external IDs
 - `severity` (array of strings): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
 - `sort` (string): Sort order: severity_desc (default) or severity_asc
@@ -8826,7 +8833,7 @@ List a user's contribution events. Returns: event entries with action, target ty
 
 **Parameters:**
 
-- `action` (string): Filter by event action type
+- `action` (string): Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.
 - `after` (string): Only events after this date (YYYY-MM-DD)
 - `before` (string): Only events before this date (YYYY-MM-DD)
 - `order_by` (string): Column to order keyset-paginated results by (e.g. id)
@@ -8836,7 +8843,7 @@ List a user's contribution events. Returns: event entries with action, target ty
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Include all events across a user's projects (e.g. 'all')
 - `sort` (string): Sort order: asc or desc
-- `target_type` (string): Filter by event target type
+- `target_type` (string): Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.
 - `user_id` (integer) (required): The ID of the user whose events to retrieve
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -8890,7 +8897,7 @@ List a project's vulnerabilities with severity, state, scanner, and report-type 
 - `has_resolution` (boolean): Filter by whether a resolution exists
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
 - `project_path` (string) (required): Full path of the project (e.g. my-group/my-project)
-- `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING
+- `report_type` (array of strings): Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, CONTAINER_SCANNING_FOR_REGISTRY, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF, GENERIC
 - `scanner` (array of strings): Filter by scanner external IDs
 - `severity` (array of strings): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
 - `sort` (string): Sort order: severity_desc, severity_asc, detected_desc, detected_asc
@@ -10063,22 +10070,26 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_participants
 
-List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email. See also: gitlab_mr_reviewers, gitlab_mr_get.
+List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email, with pagination metadata. See also: gitlab_mr_reviewers, gitlab_mr_get.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_pipelines
 
-List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get.
+List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -10153,11 +10164,13 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_reviewers
 
-List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time. See also: gitlab_mr_participants, gitlab_mr_update.
+List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time, with pagination metadata. See also: gitlab_mr_participants, gitlab_mr_update.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -11856,7 +11869,7 @@ List a project's visible activity events. Returns: each event with action_name, 
 
 **Parameters:**
 
-- `action` (string): Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)
+- `action` (string): Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.
 - `after` (string): Return events after this date (YYYY-MM-DD)
 - `before` (string): Return events before this date (YYYY-MM-DD)
 - `order_by` (string): Column by which to order keyset-paginated results (id)
@@ -11866,7 +11879,7 @@ List a project's visible activity events. Returns: each event with action_name, 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sort` (string): Sort order (asc or desc, default desc)
-- `target_type` (string): Filter by target type (issue, milestone, merge_request, note, project, snippet, user)
+- `target_type` (string): Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15183,7 +15196,7 @@ List the subgroups (descendant groups) of a GitLab group. Returns: descendant gr
 - `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `marked_for_deletion_on` (string): Filter to subgroups marked for deletion on this date (YYYY-MM-DD)
-- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
+- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
 - `order_by` (string): Order subgroups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to subgroups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -15831,7 +15844,7 @@ List the current user's contribution events. Returns: each event with action_nam
 
 **Parameters:**
 
-- `action` (string): Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)
+- `action` (string): Filter by event action, one of created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired, approved, transferred. Any other value is refused before the request, since GitLab would ignore it and answer every event.
 - `after` (string): Return events after this date (YYYY-MM-DD)
 - `before` (string): Return events before this date (YYYY-MM-DD)
 - `order_by` (string): Column by which to order keyset-paginated results (id)
@@ -15841,7 +15854,7 @@ List the current user's contribution events. Returns: each event with action_nam
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Include events from all projects (all) or only user's projects
 - `sort` (string): Sort order (asc or desc)
-- `target_type` (string): Filter by target type (issue, milestone, merge_request, note, project, snippet, user)
+- `target_type` (string): Filter by event target type, one of issue, milestone, merge_request, note, project, snippet, user, wiki, design. GitLab refuses any other value, epic included. Responses spell the type in model form (Issue, MergeRequest, WikiPage::Meta, DesignManagement::Design), which a filter does not accept.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

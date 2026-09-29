@@ -246,11 +246,19 @@
 // all six. [OrbitCheck] reads docs/development/orbit-responses.json, a
 // recording cmd/gen_orbit_record makes through the handlers against
 // GitLab.com, whose every call names the output type its handler returned, and
-// walks that type to every depth against the recorded key tree. Its findings
-// are answered in orbit_declarations.go, keyed by the path under the output,
-// under three categories of their own: a key GitLab never sends where
-// client-go puts it, a key sent only under a condition the recording did not
-// meet, and a body carried whole.
+// walks that type to every depth against the recorded key tree. The recording
+// keeps the JSON kind of every value too, which no other record here does, so
+// a third question is asked of it, element by element down a list, in two
+// halves (see [typeSource.kinds]). The decoder half holds the client-go struct
+// a converter fills the output type from, which is what the handler decodes
+// GitLab's answer into and so what fails at run time, to whether it decodes
+// each kind the answers carried at a key it declares. The published half holds
+// the output type to whether it carries each kind as it came to the caller,
+// with a null carried only as a null or as the key left out. Its findings are
+// answered in orbit_declarations.go, keyed by the path under the output and
+// the question, under three categories of their own: a key GitLab never sends
+// where client-go puts it, a key sent only under a condition the recording did
+// not meet, and a body carried whole.
 //
 // # Does a list say where it ends
 //

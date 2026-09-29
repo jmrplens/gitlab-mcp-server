@@ -32,6 +32,22 @@ import (
 // type publishes that no recorded answer carries, and a key an answer carries
 // that no field publishes.
 //
+// The record keeps the JSON kind of every value, which no other record here
+// does, so a third question is asked of every key, at the key and at every
+// depth of elements below it, in two halves that ask it of two types (see
+// [typeSource.kinds]). A handler never decodes GitLab's answer into its output
+// type: it decodes it into the client-go struct a converter then reads, so a
+// number that begins to arrive as a string fails that struct at run time, and
+// the decoder half holds each struct a converter pairs with the output type to
+// the kinds recorded at the keys it declares. The published half holds the
+// output type to the same kinds, asking whether it carries each one as it came
+// to the caller, a null as a null or as the key left out. Without either, the
+// only trace of a changed kind would be a diff of a re-recording, which is
+// then committed. The converter between the two is read by neither: a value
+// it drops, reformats or defaults is not seen, and a null element of a list,
+// which the Orbit converters skip, is reported against the published type all
+// the same.
+//
 // Three rules keep it honest. A field whose Go type is not a struct of the
 // package (a scalar, or a value decoded as any and passed on as it came) is a
 // leaf, and nothing an answer carries below it is judged, since the server
@@ -74,6 +90,42 @@ type OrbitCheck struct {
 	// Unsurfaced are the keys a recorded answer carries that no field of the
 	// type publishes.
 	Unsurfaced []OrbitField `json:"unsurfaced,omitempty"`
+	// KindsCompared counts the places the published half of the third
+	// question was put: each field both sides have, at each depth of elements
+	// a kind was recorded at, whose Go type could be judged. It is what tells
+	// an empty Mismatched from a question nobody asked.
+	KindsCompared int `json:"kinds_compared"`
+	// Mismatched are the fields whose Go type does not carry a kind the
+	// answers carried there, one per depth of elements the kind was recorded
+	// at, the path spelled with that many element markers.
+	Mismatched []OrbitField `json:"mismatched_kinds,omitempty"`
+	// KindsUnjudged are the fields the answers carried whose Go type this
+	// reader cannot map to a JSON kind: one that decodes or writes itself, one
+	// from a package it does not model, one it cannot read. They are listed so
+	// the third question's blind spot is counted rather than silent.
+	KindsUnjudged []OrbitField `json:"kinds_unjudged,omitempty"`
+	// DecodersRead is false when the converter pairing could not be had, which
+	// is the one way the decoder half is skipped while the rest runs.
+	DecodersRead bool `json:"decoders_read"`
+	// Decoders names each output type compared and the client-go struct a
+	// converter fills it from, as "package.Type from gl.Struct", sorted: what
+	// the decoder half was put to.
+	Decoders []string `json:"decoders,omitempty"`
+	// Undecoded names the output types no converter pairs with a client-go
+	// struct, which the decoder half has nothing to ask of.
+	Undecoded []string `json:"outputs_without_decoder,omitempty"`
+	// DecoderKindsCompared counts the places the decoder half was put, as
+	// KindsCompared does for the published half.
+	DecoderKindsCompared int `json:"decoder_kinds_compared"`
+	// DecoderMismatched are the fields of a client-go struct that do not
+	// decode a kind the answers carried there, which is a handler failing at
+	// run time, spelled as Mismatched is and naming the struct as gl.Struct.
+	DecoderMismatched []OrbitField `json:"decoder_mismatched_kinds,omitempty"`
+	// DecoderKindsUnjudged are the fields of a client-go struct this reader
+	// cannot map to a JSON kind, and the structs it cannot judge at all, one
+	// that decodes its whole body itself or one the parse did not find, named
+	// at the body's path.
+	DecoderKindsUnjudged []OrbitField `json:"decoder_kinds_unjudged,omitempty"`
 	// Missing names the output types the record names and the tree no longer
 	// declares: the recording is of a handler that returns something else now.
 	Missing []string `json:"types_not_found,omitempty"`
@@ -97,8 +149,13 @@ type OrbitField struct {
 	Type string `json:"type"`
 	// Field is the json tag, or the key an answer carried.
 	Field string `json:"field"`
+	// GoType is the field's Go type as the source writes it, for a kind
+	// finding.
+	GoType string `json:"go_type,omitempty"`
 	// Kinds are the JSON kinds the answers carried the key with, for a key
-	// no field publishes.
+	// no field publishes, the kinds the field's Go type does not take, for
+	// a kind finding, and every kind recorded there, for a field whose type
+	// could not be judged.
 	Kinds []string `json:"kinds,omitempty"`
 	// Calls are the recorded calls searched.
 	Calls []string `json:"calls"`
@@ -111,11 +168,12 @@ type OrbitField struct {
 // declared reports whether a declaration accounts for this finding.
 func (f OrbitField) declared() bool { return f.Category != "" }
 
-// undeclared counts the findings of both directions no declaration accounts
-// for, which is what a reader is asked to act on.
+// undeclared counts the findings of the three questions, both halves of the
+// third, no declaration accounts for, which is what a reader is asked to act
+// on.
 func (c OrbitCheck) undeclared() int {
 	count := 0
-	for _, findings := range [][]OrbitField{c.Unpublished, c.Unsurfaced} {
+	for _, findings := range [][]OrbitField{c.Unpublished, c.Unsurfaced, c.Mismatched, c.DecoderMismatched} {
 		for _, finding := range findings {
 			if !finding.declared() {
 				count++
@@ -166,6 +224,8 @@ func orbitCheck(root string) OrbitCheck {
 		return OrbitCheck{}
 	}
 	check := OrbitCheck{Ran: true, Record: orbitrecord.FileName, Source: doc.Source, Calls: len(doc.Calls)}
+	decoders := readDecoders(root)
+	check.DecodersRead = decoders != nil
 	sources := map[string]*typeSource{}
 	nested := map[string]bool{}
 	for _, output := range outputsOf(doc.Calls) {
@@ -184,19 +244,28 @@ func orbitCheck(root string) OrbitCheck {
 		if wrapper != "" {
 			check.Wrappers = append(check.Wrappers, shortPackage(pkg)+"."+name)
 		}
-		judge := orbitJudgement{pkg: pkg, output: name, calls: output.labels(), published: published, recorded: recorded}
+		judge := orbitJudgement{pkg: pkg, output: name, calls: output.labels(), published: published, recorded: recorded, types: source}
 		check.Unpublished = append(check.Unpublished, judge.unpublished()...)
 		check.Unsurfaced = append(check.Unsurfaced, judge.unsurfaced()...)
+		kinds := judge.mismatched()
+		check.KindsCompared += kinds.compared
+		check.Mismatched = append(check.Mismatched, kinds.found...)
+		check.KindsUnjudged = append(check.KindsUnjudged, kinds.unjudged...)
 		check.Compared = append(check.Compared, shortPackage(pkg)+"."+name)
 		for _, typeName := range published.structsBelow {
 			nested[qualifiedType(pkg, typeName)] = true
 		}
+		if decoders != nil {
+			decoders.judge(&check, output, pkg, name)
+		}
 	}
 	check.Nested = slices.Sorted(maps.Keys(nested))
-	sortOrbitFindings(check.Unpublished)
-	sortOrbitFindings(check.Unsurfaced)
-	check.Unpublished, check.Unsurfaced, check.UnusedDeclarations = classifyOrbitFindings(check.Unpublished, check.Unsurfaced)
-	return check
+	for _, findings := range [][]OrbitField{
+		check.Unpublished, check.Unsurfaced, check.Mismatched, check.KindsUnjudged, check.DecoderMismatched, check.DecoderKindsUnjudged,
+	} {
+		sortOrbitFindings(findings)
+	}
+	return check.classified()
 }
 
 // qualifiedType names a type the walk reached the way the type grain's lists
@@ -260,10 +329,21 @@ func splitOutput(output string) (pkg, name string) {
 
 // typeSource is one package's structs, resolved the way the published-type
 // walk resolves them: the package's own and the shapes internal/toolutil
-// shares, the hints type aside.
+// shares, the hints type aside. Beside them it keeps what the package says
+// about its other types: what each is declared as, and which decode or write
+// themselves. The decoder half reads client-go's package into one too, with
+// no shared shapes.
+//
+// Only the package's own types are known that way. A type internal/toolutil
+// declares as something other than a struct is one this reader cannot judge,
+// and a shared struct is judged by its fields, which is right for every shared
+// struct today, since none of them decodes or writes itself.
 type typeSource struct {
-	structs map[string]declaredStruct
-	scalars map[string]bool
+	structs  map[string]declaredStruct
+	scalars  map[string]bool
+	named    map[string]goShape
+	decoders map[string]bool
+	encoders map[string]bool
 }
 
 // readTypeSource parses one package under the repository root.
@@ -274,7 +354,7 @@ func readTypeSource(root, pkg string) *typeSource {
 	for _, candidate := range parsed.structs {
 		byName[candidate.Name] = candidate
 	}
-	return &typeSource{structs: byName, scalars: parsed.scalars}
+	return &typeSource{structs: byName, scalars: parsed.scalars, named: parsed.named, decoders: parsed.decoders, encoders: parsed.encoders}
 }
 
 // publishedTree is everything one output type publishes, at every depth.
@@ -295,6 +375,9 @@ type publishedField struct {
 	field string
 	// child is the struct the field carries, empty for a leaf.
 	child string
+	// shape is the field's Go type, which the kinds recorded at it are held
+	// to.
+	shape goShape
 }
 
 // walk publishes one output type's fields to every depth. A struct already on
@@ -309,7 +392,7 @@ func (s *typeSource) walk(name string) publishedTree {
 		whole := flatten(s.structs[structName], s.structs, s.scalars, map[string]bool{})
 		for _, field := range whole.Fields {
 			path := joinPath(prefix, field)
-			entry := publishedField{owner: structName, field: field}
+			entry := publishedField{owner: structName, field: field, shape: whole.FieldShapes[field]}
 			if child := whole.FieldTypes[field]; s.isStruct(child) && !walking[child] {
 				entry.child = child
 				below[child] = true
@@ -332,7 +415,11 @@ func (s *typeSource) isStruct(typeName string) bool {
 
 // recordedKey is what the answers of one output type carried at one path.
 type recordedKey struct {
-	kinds    map[string]bool
+	// kinds are the JSON kinds carried, by the depth of elements they were
+	// carried at: 0 for the key's own value, 1 for the elements of the list
+	// it holds. The elided path spells both the same way, and a kind means
+	// something only at its own depth.
+	kinds    map[int]map[string]bool
 	verbatim bool
 }
 
@@ -348,12 +435,16 @@ func recordedKeys(calls []orbitrecord.Call, topLevel []string) (keys map[string]
 	for _, call := range calls {
 		for _, key := range call.Response.Keys {
 			path := joinPath(wrapper, orbitrecord.Elided(key.Path))
+			depth := trailingElements(key.Path)
 			entry := keys[path]
 			if entry.kinds == nil {
-				entry.kinds = map[string]bool{}
+				entry.kinds = map[int]map[string]bool{}
+			}
+			if entry.kinds[depth] == nil {
+				entry.kinds[depth] = map[string]bool{}
 			}
 			for _, kind := range key.Kinds {
-				entry.kinds[kind] = true
+				entry.kinds[depth][kind] = true
 			}
 			entry.verbatim = entry.verbatim || key.Verbatim
 			keys[path] = entry
@@ -374,13 +465,23 @@ func bareArray(calls []orbitrecord.Call) bool {
 	return len(calls) > 0
 }
 
-// orbitJudgement is one output type held against its recorded answers.
+// orbitJudgement is one output type held against its recorded answers, or,
+// for the decoder half of the kinds question, the client-go struct its handler
+// decodes them into.
 type orbitJudgement struct {
 	pkg       string
 	output    string
 	calls     []string
 	published publishedTree
 	recorded  map[string]recordedKey
+	// types resolves a field's Go type for the kinds question.
+	types *typeSource
+	// decoding puts the kinds question under the decoder's reading rather
+	// than the published type's (see [typeSource.kinds]).
+	decoding bool
+	// qualifier is written before the name of the struct a kind finding
+	// names: empty for this repository's types, gl. for client-go's.
+	qualifier string
 }
 
 // unpublished reports every published field no answer carries, at the top of
@@ -441,7 +542,7 @@ func (j orbitJudgement) unsurfaced() []OrbitField {
 		}
 		found = append(found, OrbitField{
 			Package: j.pkg, Output: j.output, Path: path, Type: owner.child, Field: lastSegment(path),
-			Kinds: slices.Sorted(maps.Keys(j.recorded[path].kinds)), Calls: j.calls,
+			Kinds: slices.Sorted(maps.Keys(j.recorded[path].kinds[0])), Calls: j.calls,
 		})
 	}
 	return found

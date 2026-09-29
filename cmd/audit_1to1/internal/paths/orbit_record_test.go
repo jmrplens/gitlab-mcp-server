@@ -7,14 +7,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/orbitrecord"
 )
 
 // orbitFixture is a package shaped like internal/tools/orbit where it matters:
 // a status output publishing the flat copies client-go promotes beside the
 // nested object GitLab sends, a nested type reached at two depths, a value
-// passed through as any, a bare-array wrapper, a body carried whole, and a
-// type that reaches itself.
+// passed through as any, a bare-array wrapper, a body carried whole, a type
+// that reaches itself, and a field of a type from a package the kinds question
+// does not model.
 const orbitFixture = `package orbitx
 
 import "example.com/toolutil"
@@ -72,6 +74,10 @@ type TreeOutput struct {
 	Name     string       ` + "`json:\"name\"`" + `
 	Children []TreeOutput ` + "`json:\"children\"`" + `
 }
+
+type ClockOutput struct {
+	Uptime time.Duration ` + "`json:\"uptime\"`" + `
+}
 `
 
 // orbitShared is the shared shapes package of the fixture tree: a person the
@@ -87,13 +93,18 @@ type Person struct {
 }
 `
 
-// keys spells a recorded key tree, every path an object, and a path ending in
-// "!" kept verbatim.
+// keys spells a recorded key tree: a path ending in "!" kept verbatim, a path
+// written "path=kind|kind" carrying those kinds, and every other path an
+// object.
 func keys(entries ...string) []orbitrecord.Key {
 	var out []orbitrecord.Key
 	for _, entry := range entries {
-		path, verbatim := strings.CutSuffix(entry, "!")
-		out = append(out, orbitrecord.Key{Path: path, Kinds: []string{orbitrecord.KindObject}, Verbatim: verbatim})
+		spec, verbatim := strings.CutSuffix(entry, "!")
+		path, kinds, spelled := strings.Cut(spec, "=")
+		if !spelled {
+			kinds = orbitrecord.KindObject
+		}
+		out = append(out, orbitrecord.Key{Path: path, Kinds: strings.Split(kinds, "|"), Verbatim: verbatim})
 	}
 	return out
 }
@@ -103,14 +114,20 @@ func orbitCall(action, variant, output string, keyTree []orbitrecord.Key) orbitr
 	return orbitrecord.Call{Action: action, Variant: variant, Output: "internal/tools/orbitx." + output, Response: orbitrecord.Response{Status: 200, Keys: keyTree}}
 }
 
-// stubOrbitRecord hands the check a record without writing one, and empties
-// the declaration table, whose real entries are about the real tree.
+// stubOrbitRecord hands the check a record without writing one, empties the
+// declaration table, whose real entries are about the real tree, and hands
+// every check that asks for the converter pairing one naming no client-go
+// directory, so the decoder half is skipped unless a case gives it one with
+// stubDecoders.
 func stubOrbitRecord(t *testing.T, doc orbitrecord.Document, err error) {
 	t.Helper()
-	previousRead, previousDeclarations := readOrbitRecord, declaredOrbitFields
+	previousRead, previousDeclarations, previousPairings := readOrbitRecord, declaredOrbitFields, collectPairings
 	readOrbitRecord = func(string) (orbitrecord.Document, error) { return doc, err }
 	declaredOrbitFields = nil
-	t.Cleanup(func() { readOrbitRecord, declaredOrbitFields = previousRead, previousDeclarations })
+	collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, nil }
+	t.Cleanup(func() {
+		readOrbitRecord, declaredOrbitFields, collectPairings = previousRead, previousDeclarations, previousPairings
+	})
 }
 
 // orbitTree writes the fixture package and its shared shapes under a new root.
@@ -137,14 +154,15 @@ func TestOrbitCheck_WithoutARecord_DoesNotRun(t *testing.T) {
 // directions on the status shape: a flat copy GitLab never sends is reported
 // once at its top and never for its fields, a field the nested object lacks is
 // reported under it, a key an answer adds is reported at its top with the type
-// it belongs in, and nothing below a value published as any is judged.
+// it belongs in and the kinds of the key itself, never those of the elements
+// of the list it holds, and nothing below a value published as any is judged.
 func TestOrbitCheck_AnOutputAndItsAnswers_AreComparedAtEveryDepth(t *testing.T) {
 	stubOrbitRecord(t, orbitrecord.Document{Source: orbitrecord.Source{OrbitVersion: "0.130.0"}, Calls: []orbitrecord.Call{
 		orbitCall("orbit.status", "raw", "StatusOutput", keys(
-			orbitrecord.Root, "user", "user.available", "user.extra", "user.extra.deep",
-			"system", "system.status", "system.region", "system.owner", "system.owner.login",
-			"system.components", "system.components[]", "system.components[].name",
-			"system.components[].metrics", "system.components[].metrics.kind", "added",
+			orbitrecord.Root, "user", "user.available=boolean", "user.extra", "user.extra.deep",
+			"system", "system.status=string", "system.region", "system.owner", "system.owner.login=string",
+			"system.components=array", "system.components[]", "system.components[].name=string",
+			"system.components[].metrics", "system.components[].metrics.kind", "added=array", "added[]",
 		)),
 	}}, nil)
 
@@ -158,7 +176,7 @@ func TestOrbitCheck_AnOutputAndItsAnswers_AreComparedAtEveryDepth(t *testing.T) 
 	}
 	object := []string{orbitrecord.KindObject}
 	wantUnsurfaced := []OrbitField{
-		{Package: "internal/tools/orbitx", Output: "StatusOutput", Path: "added", Type: "StatusOutput", Field: "added", Kinds: object, Calls: calls},
+		{Package: "internal/tools/orbitx", Output: "StatusOutput", Path: "added", Type: "StatusOutput", Field: "added", Kinds: []string{orbitrecord.KindArray}, Calls: calls},
 		{Package: "internal/tools/orbitx", Output: "StatusOutput", Path: "system.region", Type: "StatusSystem", Field: "region", Kinds: object, Calls: calls},
 		{Package: "internal/tools/orbitx", Output: "StatusOutput", Path: "user.extra", Type: "StatusUser", Field: "extra", Kinds: object, Calls: calls},
 	}
@@ -178,6 +196,11 @@ func TestOrbitCheck_AnOutputAndItsAnswers_AreComparedAtEveryDepth(t *testing.T) 
 	if check.undeclared() != 6 {
 		t.Errorf("undeclared() = %d, want 6", check.undeclared())
 	}
+	// Every kind the answers carried is one its field decodes, so the third
+	// question finds nothing where the first two found six.
+	if check.Mismatched != nil || check.KindsUnjudged != nil {
+		t.Errorf("mismatched = %+v, unjudged = %+v, want none", check.Mismatched, check.KindsUnjudged)
+	}
 }
 
 // TestOrbitCheck_ABareArrayAnswer_IsItsWrappersOneField verifies the tools
@@ -185,7 +208,7 @@ func TestOrbitCheck_AnOutputAndItsAnswers_AreComparedAtEveryDepth(t *testing.T) 
 // that wraps it, the wrapper key is not reported, and a type with two fields
 // is not taken for a wrapper.
 func TestOrbitCheck_ABareArrayAnswer_IsItsWrappersOneField(t *testing.T) {
-	arrayRoot := keys("[]", "[].name", "[].parameters!")
+	arrayRoot := keys("[]", "[].name=string", "[].parameters!")
 	arrayRoot = append([]orbitrecord.Key{{Path: orbitrecord.Root, Kinds: []string{orbitrecord.KindArray}}}, arrayRoot...)
 	stubOrbitRecord(t, orbitrecord.Document{Calls: []orbitrecord.Call{
 		orbitCall("orbit.tools", "default", "ToolsOutput", arrayRoot),
@@ -245,7 +268,7 @@ func TestOrbitCheck_AVerbatimBody_ShieldsNothingOfItsCarrier(t *testing.T) {
 // answer carries below it is passed through rather than judged.
 func TestOrbitCheck_ATypeThatReachesItself_IsWalkedOnce(t *testing.T) {
 	stubOrbitRecord(t, orbitrecord.Document{Calls: []orbitrecord.Call{
-		orbitCall("orbit.tree", "raw", "TreeOutput", keys(orbitrecord.Root, "name", "children", "children[]", "children[].name", "children[].children")),
+		orbitCall("orbit.tree", "raw", "TreeOutput", keys(orbitrecord.Root, "name=string", "children=array", "children[]", "children[].name=string", "children[].children=array")),
 	}}, nil)
 
 	check := orbitCheck(orbitTree(t))
