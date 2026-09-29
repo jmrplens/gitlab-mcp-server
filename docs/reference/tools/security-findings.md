@@ -42,19 +42,19 @@ List security report findings for a specific pipeline run. Supports filtering by
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter      | Type     | Required | Description                                                                                                                                                         |
-| -------------- | -------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_path` | string   |   Yes    | Full path of the project (e.g. `my-group/my-project`)                                                                                                               |
-| `pipeline_iid` | string   |   Yes    | Pipeline IID (internal ID within the project)                                                                                                                       |
-| `severity`     | string[] |    No    | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN`                                                                                          |
-| `scanner`      | string[] |    No    | Filter by scanner external IDs                                                                                                                                      |
-| `report_type`  | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING` |
-| `state`        | string[] |    No    | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`                                                                                                   |
-| `sort`         | string   |    No    | Sort order: `severity_desc` (default) or `severity_asc`                                                                                                             |
-| `first`        | int      |    No    | Number of items per page (default: 20)                                                                                                                              |
-| `after`        | string   |    No    | Cursor for forward pagination                                                                                                                                       |
-| `last`         | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                      |
-| `before`       | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                           |
+| Parameter      | Type     | Required | Description                                                                                                                                                                                               |
+| -------------- | -------- | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path` | string   |   Yes    | Full path of the project (e.g. `my-group/my-project`)                                                                                                                                                     |
+| `pipeline_iid` | string   |   Yes    | Pipeline IID (internal ID within the project)                                                                                                                                                             |
+| `severity`     | string[] |    No    | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN`                                                                                                                                |
+| `scanner`      | string[] |    No    | Filter by scanner external IDs                                                                                                                                                                            |
+| `report_type`  | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING`, `SARIF` (`SARIF` needs GitLab 18.11) |
+| `state`        | string[] |    No    | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`                                                                                                                                         |
+| `sort`         | string   |    No    | Sort order: `severity_desc` (default) or `severity_asc`                                                                                                                                                   |
+| `first`        | int      |    No    | Number of items per page (default: 20)                                                                                                                                                                    |
+| `after`        | string   |    No    | Cursor for forward pagination                                                                                                                                                                             |
+| `last`         | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                                                            |
+| `before`       | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                                                                 |
 
 ### Output fields
 
@@ -87,6 +87,8 @@ Each finding includes:
 | `vulnerability_state` | string | Current state of the linked vulnerability                                                                                                                                      |
 
 The issue links and the merge request of a finding are those of its vulnerability, since GitLab resolves both through it: read them with `vulnerability.get` on the `vulnerability_id`.
+
+`severity` and `report_type` are plain strings in GitLab's schema, which GitLab looks up in enums of its own, so a value outside the lists above is refused before anything is sent, naming the values it takes. Sent on, an unknown severity is answered with a 500, and an unknown report type is dropped without a word and filters out every finding, which reads as a pipeline that found nothing. The report types are the vulnerability report types less the two a pipeline scan never records, `CONTAINER_SCANNING_FOR_REGISTRY` and `GENERIC`, which the vulnerability list does take. Both lists are held by the package's tests to the pinned GitLab schema. `SARIF` is the one value younger than the action: GitLab's pipeline scans gained it in 18.11, so on 18.5 to 18.10 it passes the check here and GitLab drops it the way it drops any value it has no scan type for, answering with no findings. Both GitLab behaviours are recorded in the [upstream register](../../development/upstream-bugs.md), with this check as the workaround each needs until GitLab validates the argument itself.
 
 The action needs GitLab 18.5 or later, the release that added the newest fields it reads (`original_severity` and the token status's `last_verified_at`). A finding's `unverified` flag, added in 18.11, is not read, since GitLab refuses a whole document that names a field it does not have.
 

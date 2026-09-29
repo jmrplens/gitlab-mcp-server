@@ -158,6 +158,13 @@ func TestAdmin_TerraformStates(t *testing.T) {
 	if got.Name != stateName || got.LatestSerial != 2 {
 		e.T.Errorf("terraform_state_get answered %+v, want %q at serial 2", got, stateName)
 	}
+	// The fixture pushes without taking a lock and nothing has deleted the
+	// state yet, so GitLab sends a creation and an update time and a null for
+	// the other two, which the item leaves out rather than writing the year one.
+	if got.CreatedAt == "" || got.UpdatedAt == "" || got.LockedAt != "" || got.DeletedAt != "" {
+		e.T.Errorf("terraform_state_get answered created %q, updated %q, locked %q, deleted %q; want the first two set and the others empty for an unlocked live state",
+			got.CreatedAt, got.UpdatedAt, got.LockedAt, got.DeletedAt)
+	}
 
 	lockParams := map[string]any{"project_id": project.IDParam(), "name": stateName}
 	// client-go sends no lock-info body, so the backend deterministically

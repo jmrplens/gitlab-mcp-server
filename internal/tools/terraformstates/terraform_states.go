@@ -19,11 +19,38 @@ type ListInput struct {
 }
 
 // StateItem represents a Terraform state.
+//
+// The four times are what client-go's document already selects and decodes,
+// and each is written the way the pinned schema types it on TerraformState:
+// createdAt and updatedAt are Time!, so they are always written, while
+// lockedAt and deletedAt are nullable, null for a state that is unlocked and
+// not scheduled for deletion, and client-go decodes a null into the zero time,
+// so they are left out then rather than written as the year one. The latest
+// version's serial and download path are nullable too, for a state nothing
+// has written yet. The package's tests hold each field to the schema.
 type StateItem struct {
 	toolutil.HintableOutput
 	Name         string `json:"name"`
 	LatestSerial uint64 `json:"latest_serial,omitempty"`
 	DownloadPath string `json:"download_path,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	LockedAt     string `json:"locked_at,omitempty"`
+	DeletedAt    string `json:"deleted_at,omitempty"`
+}
+
+// toStateItem converts a state as client-go decodes it, which the list and
+// the get both answer with.
+func toStateItem(s gl.TerraformState) StateItem {
+	return StateItem{
+		Name:         s.Name,
+		LatestSerial: s.LatestVersion.Serial,
+		DownloadPath: s.LatestVersion.DownloadPath,
+		CreatedAt:    toolutil.RFC3339(s.CreatedAt),
+		UpdatedAt:    toolutil.RFC3339(s.UpdatedAt),
+		LockedAt:     toolutil.RFC3339(s.LockedAt),
+		DeletedAt:    toolutil.RFC3339(s.DeletedAt),
+	}
 }
 
 // ListOutput contains a list of Terraform states.
@@ -41,11 +68,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	items := make([]StateItem, 0, len(states))
 	for _, s := range states {
-		items = append(items, StateItem{
-			Name:         s.Name,
-			LatestSerial: s.LatestVersion.Serial,
-			DownloadPath: s.LatestVersion.DownloadPath,
-		})
+		items = append(items, toStateItem(s))
 	}
 	return ListOutput{States: items}, nil
 }
@@ -65,11 +88,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 		return StateItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_terraform_state", err, http.StatusNotFound,
 			"verify state name with admin.terraform_state_list; the state may not exist for this project")
 	}
-	return StateItem{
-		Name:         s.Name,
-		LatestSerial: s.LatestVersion.Serial,
-		DownloadPath: s.LatestVersion.DownloadPath,
-	}, nil
+	return toStateItem(*s), nil
 }
 
 // Delete.

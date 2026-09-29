@@ -7,9 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/vektah/gqlparser/v2/ast"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -930,6 +935,240 @@ func TestFormatLocation(t *testing.T) {
 				t.Errorf("formatLocation() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestList_UnknownFilterValue_RefusedBeforeTheRequest verifies that a severity
+// or report type GitLab's finder does not have is refused here, naming the
+// values it does have, and that nothing is sent.
+//
+// Both filters are plain String arguments, so the schema lets anything
+// through and GitLab decides: an unknown severity is a KeyError answered with
+// a 500 that names nothing, and an unknown report type is dropped without a
+// word, which filters out every finding and reads as a pipeline that found
+// nothing. SAST_IAC is the case that makes the second one easy to hit, since
+// the vulnerability report enums elsewhere in GitLab have it and Security::Scan
+// does not. A bad value after a good one is refused too, so the check reads
+// the whole list rather than its head.
+func TestList_UnknownFilterValue_RefusedBeforeTheRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input ListInput
+		want  string
+	}{
+		{
+			name:  "severity",
+			input: ListInput{Severity: []string{"HIGH", "SEVERE"}},
+			want:  `invalid severity "SEVERE", must be one of: ` + strings.Join(findingSeverities, ", "),
+		},
+		{
+			name:  "report_type",
+			input: ListInput{ReportType: []string{"SAST", "SAST_IAC"}},
+			want:  `invalid report_type "SAST_IAC", must be one of: ` + strings.Join(findingReportTypes, ", "),
+		},
+		{
+			name:  "report_type_the_vulnerability_enum_has_and_scans_do_not",
+			input: ListInput{ReportType: []string{"container_scanning_for_registry"}},
+			want:  `invalid report_type "container_scanning_for_registry"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondGraphQLError(w, http.StatusOK, "not reached")
+			}))
+			tc.input.ProjectPath, tc.input.PipelineIID = "my-group/my-project", "7"
+			_, err := List(context.Background(), client, tc.input)
+			if err == nil {
+				t.Fatal("List() error = nil, want the value refused")
+			}
+			if !strings.Contains(err.Error(), tc.want) || !strings.HasPrefix(err.Error(), "list_security_findings: ") {
+				t.Errorf("List() error = %q, want list_security_findings: ... %q", err.Error(), tc.want)
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("List() sent %d request(s), want none for a refused value", n)
+			}
+		})
+	}
+}
+
+// TestList_KnownFilterValues_InAnyCase_ReachGitLabLowercased verifies the
+// other half of the check: a value the finder has is taken however the caller
+// spelled its case and whatever space surrounds it, since the handler trims
+// and lowercases what it sends, and SARIF, the one report type the
+// description did not list before the schema held it, is among them.
+func TestList_KnownFilterValues_InAnyCase_ReachGitLabLowercased(t *testing.T) {
+	var sent map[string]any
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+			}
+			sent = vars
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project":{"pipeline":{"securityReportFindings":{"nodes":[],"pageInfo":{"hasNextPage":false,"hasPreviousPage":false,"endCursor":"","startCursor":""}}}}}`)
+		},
+	})
+	_, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "7",
+		Severity:    []string{"critical", " High "},
+		ReportType:  []string{"Sarif", "cluster_image_scanning"},
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v, want known values taken in any case", err)
+	}
+	for key, want := range map[string][]any{
+		"severity":   {"critical", "high"},
+		"reportType": {"sarif", "cluster_image_scanning"},
+	} {
+		t.Run(key, func(t *testing.T) {
+			if got, _ := sent[key].([]any); !reflect.DeepEqual(got, want) {
+				t.Errorf("%s = %#v, want %#v", key, sent[key], want)
+			}
+		})
+	}
+}
+
+// reportTypesScansDoNotHave are the VulnerabilityReportType values
+// Security::Scan has no scan type for at the pinned 19.5.0-pre (5041f73d695),
+// so the finder drops them and [findingReportTypes] leaves them out. Each is a
+// declaration the test below holds to the schema, so it fails once the enum no
+// longer has the value or once the list offers it.
+var reportTypesScansDoNotHave = map[string]string{
+	"CONTAINER_SCANNING_FOR_REGISTRY": "a vulnerability's report type for registry scans; Security::Scan's scan_type enum has no such value",
+	"GENERIC":                         "a vulnerability's report type for generic reports; Security::Scan's scan_type enum has no such value",
+}
+
+// describedValues reads the values a filter's description lists after its
+// colon, "Filter by state: A, B" or "Sort order: a (default) or b", sorted,
+// up to the sentence that may follow the list.
+func describedValues(description string) []string {
+	_, list, _ := strings.Cut(description, ": ")
+	list, _, _ = strings.Cut(list, ". ")
+	list = strings.ReplaceAll(list, " (default)", "")
+	list = strings.ReplaceAll(list, ", or ", ", ")
+	list = strings.ReplaceAll(list, " or ", ", ")
+	values := strings.Split(list, ", ")
+	slices.Sort(values)
+	return values
+}
+
+// sortedEnum returns the values the pinned schema declares for the enum named
+// typeName, sorted.
+func sortedEnum(t *testing.T, schema *ast.Schema, typeName string) []string {
+	t.Helper()
+	definition, ok := schema.Types[typeName]
+	if !ok || definition.Kind != ast.Enum {
+		t.Fatalf("the pinned schema declares no enum %s", typeName)
+	}
+	values := make([]string, 0, len(definition.EnumValues))
+	for _, value := range definition.EnumValues {
+		values = append(values, value.Name)
+	}
+	slices.Sort(values)
+	return values
+}
+
+// servedProperty returns one property of the input schema the list action
+// serves, overrides applied.
+func servedProperty(t *testing.T, name string) map[string]any {
+	t.Helper()
+	specs := ActionSpecs(testutil.NewTestClient(t, http.NewServeMux()))
+	properties, _ := specs[0].Route.InputSchema["properties"].(map[string]any)
+	property, ok := properties[name].(map[string]any)
+	if !ok {
+		t.Fatalf("the served input schema has no %q property", name)
+	}
+	return property
+}
+
+// enumStrings returns the string values of an enum a schema publishes, sorted.
+func enumStrings(enum any) []string {
+	list, _ := enum.([]any)
+	values := make([]string, 0, len(list))
+	for _, value := range list {
+		s, _ := value.(string)
+		values = append(values, s)
+	}
+	slices.Sort(values)
+	return values
+}
+
+// TestFilters_HeldToThePinnedSchema holds every value list the list action
+// publishes, in its descriptions and in its schema enums, to the enum the
+// pinned GitLab schema declares for it, so a value GitLab adds or one never
+// listed is a failure here rather than a reading of two lists by hand at each
+// re-pin, which is what issue 1022 found missed. State and sort are typed by
+// the document, so their enum is the one the document declares its variable
+// with. Severity and report type are String arguments GitLab resolves through
+// Ruby enums the schema does not publish, so they are held to the enum the
+// finding's own field of that name is typed with, less the declared values
+// the scans do not have.
+func TestFilters_HeldToThePinnedSchema(t *testing.T) {
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("graphqlschema.Schema() error: %v", err)
+	}
+	document, err := graphqlschema.ParseAgainst(schema, queryListFindings)
+	if err != nil {
+		t.Fatalf("the pinned schema refuses queryListFindings: %v", err)
+	}
+	variables := document.Operations[0].VariableDefinitions
+	finding := schema.Types["PipelineSecurityReportFinding"]
+	fieldEnum := func(field string) []string { return sortedEnum(t, schema, finding.Fields.ForName(field).Type.Name()) }
+
+	reportTypes := fieldEnum("reportType")
+	var scannable []string
+	for _, value := range reportTypes {
+		if _, dropped := reportTypesScansDoNotHave[value]; !dropped {
+			scannable = append(scannable, value)
+		}
+	}
+	for value := range reportTypesScansDoNotHave {
+		t.Run("declared "+value, func(t *testing.T) {
+			if !slices.Contains(reportTypes, value) {
+				t.Errorf("%s is declared, but the pinned %v no longer has it", value, reportTypes)
+			}
+		})
+	}
+
+	sortedCopy := func(values []string) []string {
+		out := slices.Clone(values)
+		slices.Sort(out)
+		return out
+	}
+	stateEnum := sortedEnum(t, schema, variables.ForName("state").Type.Name())
+	sortEnum := sortedEnum(t, schema, variables.ForName("sort").Type.Name())
+	stateItems, _ := servedProperty(t, "state")["items"].(map[string]any)
+	cases := []struct {
+		name string
+		got  []string
+		want []string
+	}{
+		{"severity values", sortedCopy(findingSeverities), fieldEnum("severity")},
+		{"severity description", describedValues(servedProperty(t, "severity")["description"].(string)), fieldEnum("severity")},
+		{"report type values", sortedCopy(findingReportTypes), scannable},
+		{"report type description", describedValues(servedProperty(t, "report_type")["description"].(string)), scannable},
+		{"state description", describedValues(servedProperty(t, "state")["description"].(string)), stateEnum},
+		{"state enum", enumStrings(stateItems["enum"]), stateEnum},
+		{"sort description", describedValues(servedProperty(t, "sort")["description"].(string)), sortEnum},
+		{"sort enum", enumStrings(servedProperty(t, "sort")["enum"]), sortEnum},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !slices.Equal(tc.got, tc.want) {
+				t.Errorf("%s = %v, want %v", tc.name, tc.got, tc.want)
+			}
+		})
+	}
+	// SARIF joined Security::Scan's scan types at 18.11 and the list needs
+	// 18.5, so an older instance drops it as it drops any value it has no scan
+	// type for; the description is where a caller learns that.
+	if description, _ := servedProperty(t, "report_type")["description"].(string); !strings.Contains(description, "SARIF needs GitLab 18.11") {
+		t.Errorf("report_type description = %q, want it to give SARIF its release", description)
 	}
 }
 

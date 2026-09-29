@@ -21,9 +21,9 @@ This domain is distinct from vulnerabilities and security findings: scan profile
 
 ### Prerequisites
 
-- **GitLab Ultimate** (18.7+ for the status query; the built-in `dependency_scanning` profile requires 19.0+).
+- **GitLab Ultimate** 18.7 or later, the release scan profiles and the status query arrived in.
 - The target project or group must belong to a **group namespace**, not a personal namespace, and all targets in one call must share the same root namespace.
-- **Attach** takes a built-in **scan type** (`dependency_scanning`, `sast`, `secret_detection`, or `container_scanning`) and creates that namespace's default profile on the fly — no profile has to exist beforehand.
+- **Attach** takes the **name of a GitLab default profile** (`secret_detection`, `sast`, `dependency_scanning`, `dependency_scanning_post_processing`, `triage_and_remediation_conservative`, `triage_and_remediation_standard`, or `triage_and_remediation_proactive`) and creates that namespace's copy of it on the fly, so no profile has to exist beforehand. A default profile is named by its scan type, except the three Triage and Remediation presets. Each name needs a GitLab release of its own: `secret_detection` is as old as scan profiles, `sast` needs 18.10 and `dependency_scanning` 18.11, both behind a feature flag until 19.0, `dependency_scanning_post_processing` needs 19.2, and the three Triage and Remediation presets need 19.4, behind the `triage_and_remediation_profile` flag, on by default. `container_scanning` and `business_logic` are scan types GitLab builds no default profile for, and the bare `triage_and_remediation` names none of its presets, so attach refuses all three by name, and the refusal lists the names it takes and the release each needs.
 - **Detach** takes the **persisted profile's numeric ID**, which you obtain from `gitlab_list_project_scan_profile_statuses` after attaching (a scan-type name is not accepted by detach).
 
 ### Common Questions
@@ -53,11 +53,11 @@ Attach a security scan profile to one or more projects and/or groups.
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-| Parameter                  | Type   | Required | Description                                                                                                                                                                                                     |
-| -------------------------- | ------ | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `security_scan_profile_id` | string |   Yes    | A built-in scan type (`dependency_scanning`, `sast`, `secret_detection`, or `container_scanning`) — the default profile is created on the fly. A numeric profile ID or full `gid://` global ID is also accepted |
-| `project_ids`              | int[]  |    No    | Numeric IDs of the projects to attach the profile to                                                                                                                                                            |
-| `group_ids`                | int[]  |    No    | Numeric IDs of the groups to attach the profile to                                                                                                                                                              |
+| Parameter                  | Type   | Required | Description                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------ | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `security_scan_profile_id` | string |   Yes    | The name of a GitLab default profile (see Prerequisites for the names and the release each needs), whose copy in the namespace is created on the fly; `container_scanning`, `business_logic` and the bare `triage_and_remediation` are refused by name. A numeric profile ID or full `gid://` global ID is also accepted |
+| `project_ids`              | int[]  |    No    | Numeric IDs of the projects to attach the profile to                                                                                                                                                                                                                                                                     |
+| `group_ids`                | int[]  |    No    | Numeric IDs of the groups to attach the profile to                                                                                                                                                                                                                                                                       |
 
 At least one of `project_ids` or `group_ids` must be provided. Targets must be in a group namespace and share one root namespace. Requires Maintainer or Owner on the targets.
 

@@ -150,6 +150,9 @@ readable without opening the tracker:
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329) | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), open | No | No | Not yet, with issue 1031 |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330) | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), open | No | No, but results can be silently incomplete | Not yet, with issue 1031 |
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | No | No | No | No | Yes |
+| 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | No | No | No | No | Yes |
+| 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | No | No | No | No | Yes |
+| 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -5066,6 +5069,121 @@ report nothing new.
 
 **How we found it**: checking every published example against GitLab.com
 while moving `orbit.query` to version 12 of the DSL for issue 1031.
+
+### An unknown severity on a pipeline's findings list answers 500
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. A severity GitLab knows works; one it does not know fails
+  the whole request with nothing saying which value was wrong.
+- **Workaround**: yes. `securityfindings.List`
+  (`internal/tools/securityfindings/security_findings.go`) refuses a severity
+  outside `findingSeverities` before it sends anything, naming the values it
+  takes, and the package's tests hold that list to `VulnerabilitySeverity`,
+  the enum the finding's own `severity` is typed with in the pinned schema
+  (`TestList_UnknownFilterValue_RefusedBeforeTheRequest`,
+  `TestFilters_HeldToThePinnedSchema`). What retires it is GitLab validating
+  the argument itself, below; the local list then only duplicates the
+  schema's.
+
+**Where**: the `severity` argument of `Pipeline.securityReportFindings`
+(`ee/app/graphql/resolvers/pipeline_security_report_findings_resolver.rb`),
+typed `[GraphQL::Types::String]`, reaches `Security::FindingsFinder#severities`
+(`ee/app/finders/security/findings_finder.rb`), which reads it with
+`Security::Finding.severities.fetch_values(*params[:severity])`. Read at
+19.5.0-pre (`5041f73d695`) on 2026-09-28.
+
+**What**: the schema cannot refuse a value, since the argument is a plain
+string, and `fetch_values` raises `KeyError` for a key the enum does not have,
+which reaches the caller as `500 Internal server error` naming neither the
+argument nor the value. The value is looked up as written, so the lowercase
+severities the enum is keyed by work and an uppercase one would not; this
+server sends them lowercased, which is why the handler judges them in any case.
+
+**Proposal**: type the argument as `[Types::VulnerabilitySeverityEnum]`, which
+is what the finding's own `severity` field is, so GraphQL refuses an unknown
+value with an argument error naming it; failing that, validate it in the
+resolver before the finder runs.
+
+### An unknown report type on a pipeline's findings list is dropped and filters out every finding
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The request succeeds, which is the problem: the answer is
+  an empty page that reads as a pipeline whose scans found nothing.
+- **Workaround**: yes. `securityfindings.List` refuses a report type outside
+  `findingReportTypes` before it sends anything, naming the values it takes,
+  and the package's tests hold that list to `VulnerabilityReportType` less the
+  two values `Security::Scan` has no scan type for (`CONTAINER_SCANNING_FOR_REGISTRY`
+  and `GENERIC`). `SARIF` is the gap the workaround cannot close: `Security::Scan`
+  gained `sarif` at 18.11 while the action needs 18.5, so on 18.5 to 18.10 the
+  value passes the check and GitLab drops it, and the input's description says
+  so. What retires the workaround is GitLab validating the argument itself.
+
+**Where**: the `report_type` argument of `Pipeline.securityReportFindings`
+(`ee/app/graphql/resolvers/pipeline_security_report_findings_resolver.rb`),
+typed `[GraphQL::Types::String]`, reaches `Security::FindingsFinder#by_report_types`
+(`ee/app/finders/security/findings_finder.rb`), which merges
+`Security::Scan.by_scan_types(params[:report_type])`, and that scope filters on
+`Security::Scan.sanitize_scan_types` (`ee/app/models/security/scan.rb`):
+`scan_types.keys & Array(given_types).map(&:to_s)`. Read at 19.5.0-pre
+(`5041f73d695`) on 2026-09-28, and on `18-10-stable-ee` and `18-11-stable-ee`
+for `sarif`.
+
+**What**: a value `Security::Scan` has no scan type for is removed by the
+intersection without a word, and a filter left empty matches no scan, so the
+answer is an empty list rather than an error. A misspelled report type, one
+the vulnerability list takes and a pipeline scan never records, and one a
+newer GitLab added all read the same way, as a clean pipeline.
+
+**Proposal**: type the argument with an enum of the scan types
+`Security::Scan` has, or refuse in the finder a value `sanitize_scan_types`
+would drop, so the caller is told which value GitLab does not know.
+
+### The scan profile attach mutation drops the reason it refused a name
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. A name GitLab builds a default profile for attaches; one
+  it does not fails with an error that says the resource does not exist or
+  the caller may not act on it, which reads as a permission problem.
+- **Workaround**: yes. `securityscanprofiles.Attach`
+  (`internal/tools/securityscanprofiles/security_scan_profiles.go`) answers a
+  failed attach with a hint naming the default profile names attach takes
+  (`DefaultProfileNames`), the GitLab release each needs
+  (`DefaultProfileFloors`) and the scan types refused by name
+  (`RefusedByName`), and the input's description, the usage line and the meta
+  group description say the same before the call. The package's tests hold
+  the names to `SecurityScanProfileType` in the pinned schema, and the EE
+  scenario attaches by `container_scanning` and asserts the hint. What
+  retires the hint's guesswork is GitLab passing its own message on.
+
+**Where**: `Mutations::Security::ScanProfiles::Attach#resolve_profile!`
+(`ee/app/graphql/mutations/security/scan_profiles/attach.rb`) calls
+`Security::ScanProfiles::FindOrCreateService.execute`
+(`ee/app/services/security/scan_profiles/find_or_create_service.rb`) and, when
+the result is not a success, calls `raise_resource_not_available_error!`. Read
+at 19.5.0-pre (`5041f73d695`) on 2026-09-28 and on every stable branch from
+18-7 to 19-4.
+
+**What**: the service answers a name that is not a preset key of
+`Security::DefaultScanProfilesHelper.default_scan_profiles` with
+"Could not find a default scan profile for this type" (and a namespace that is
+not a root with "Namespace must be a root namespace"), and the mutation throws
+that message away for the generic "The resource that you are attempting to
+access does not exist or you don't have permission to perform this action".
+`container_scanning` and `business_logic` are values of
+`SecurityScanProfileType` no release builds a default profile for, and the
+bare `triage_and_remediation` names none of the three presets its profiles are
+keyed by, so all three are refused this way, as is any name on an instance
+older than the release that added it.
+
+**Proposal**: return the service's message, as an argument error or in the
+payload's `errors`, the way the mutation already returns the attach
+service's own errors.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

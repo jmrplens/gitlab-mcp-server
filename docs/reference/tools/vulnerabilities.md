@@ -45,20 +45,20 @@ List project vulnerabilities with extensive filtering support. Returns a paginat
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter        | Type     | Required | Description                                                                                                                                                         |
-| ---------------- | -------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_path`   | string   |   Yes    | Full path of the project (e.g. `my-group/my-project`)                                                                                                               |
-| `severity`       | string[] |    No    | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN`                                                                                          |
-| `state`          | string[] |    No    | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`                                                                                                   |
-| `scanner`        | string[] |    No    | Filter by scanner external IDs                                                                                                                                      |
-| `report_type`    | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING` |
-| `has_issues`     | bool     |    No    | Filter by whether a linked issue exists                                                                                                                             |
-| `has_resolution` | bool     |    No    | Filter by whether a resolution exists                                                                                                                               |
-| `sort`           | string   |    No    | Sort order: `severity_desc`, `severity_asc`, `detected_desc`, `detected_asc`                                                                                        |
-| `first`          | int      |    No    | Number of items per page (default: 20)                                                                                                                              |
-| `after`          | string   |    No    | Cursor for forward pagination                                                                                                                                       |
-| `last`           | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                      |
-| `before`         | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                           |
+| Parameter        | Type     | Required | Description                                                                                                                                                                                                                |
+| ---------------- | -------- | :------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path`   | string   |   Yes    | Full path of the project (e.g. `my-group/my-project`)                                                                                                                                                                      |
+| `severity`       | string[] |    No    | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN`                                                                                                                                                 |
+| `state`          | string[] |    No    | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`                                                                                                                                                          |
+| `scanner`        | string[] |    No    | Filter by scanner external IDs                                                                                                                                                                                             |
+| `report_type`    | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `CONTAINER_SCANNING_FOR_REGISTRY`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING`, `SARIF`, `GENERIC` |
+| `has_issues`     | bool     |    No    | Filter by whether a linked issue exists                                                                                                                                                                                    |
+| `has_resolution` | bool     |    No    | Filter by whether a resolution exists                                                                                                                                                                                      |
+| `sort`           | string   |    No    | Sort order: `severity_desc`, `severity_asc`, `detected_desc`, `detected_asc`                                                                                                                                               |
+| `first`          | int      |    No    | Number of items per page (default: 20)                                                                                                                                                                                     |
+| `after`          | string   |    No    | Cursor for forward pagination                                                                                                                                                                                              |
+| `last`           | int      |    No    | Number of items per page when paging backward. Cannot be combined with `first`                                                                                                                                             |
+| `before`         | string   |    No    | Cursor for backward pagination, from a previous response's `start_cursor`                                                                                                                                                  |
 
 ### `gitlab_get_vulnerability`
 
@@ -105,6 +105,8 @@ The list, the get and the four state changes answer with the same vulnerability 
 GitLab refuses a whole document that names a field it does not have, so two kinds of field are not read. The fields GitLab's GraphQL reference marks Status: Experiment (reachability, malware, the due date, the detected pipelines, tracked refs and others), since GitLab may remove an experiment without notice. And the fields newer than GitLab 18.10 (`unverified`, added in 18.11), since the six actions share one selection and one such field would stop all of them on an older instance.
 
 The list, the get and the four state changes need GitLab 18.10 or later, the release that added the newest field they read (`removed_from_code`), and the security findings list needs 18.5 (`original_severity` and the token status's `last_verified_at`), each read from GitLab's versioned GraphQL reference.
+
+The values each filter lists, and the dismissal reasons, are the enums the documents declare those variables with, and the package's tests hold every list to the pinned GitLab schema, so a value GitLab adds fails them at the re-pin that brings it. `report_type` takes `VulnerabilityReportType`, which is not the enum the security scanner reports use: it has `CONTAINER_SCANNING_FOR_REGISTRY`, `SARIF` and `GENERIC`, and it has no `SAST_ADVANCED`, `SAST_IAC` or `BUSINESS_LOGIC`, which GitLab refuses here.
 
 The list does not offer every filter GitLab's schema declares on `vulnerabilities`. GitLab 19.5 adds `securityAttributesFilters` there, and it cannot be used on this list: GitLab marks it an experiment and answers it on group queries only, behind the `vulnerability_report_security_attributes_filter` feature flag, refusing it on a project with "The security_attributes_filters filter is not available." (`VulnerabilityFilterable#validate_security_attributes_filters!` in GitLab's source), and this list reads a project's vulnerabilities.
 

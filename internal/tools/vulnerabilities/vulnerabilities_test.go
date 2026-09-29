@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -203,6 +204,80 @@ func TestList_EmptyProjectPath(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("expected error for empty project_path, got nil")
+	}
+}
+
+// describedValues reads the values an input's description lists after its
+// colon, "Filter by state: A, B", sorted.
+func describedValues(description string) []string {
+	_, list, _ := strings.Cut(description, ": ")
+	values := strings.Split(list, ", ")
+	slices.Sort(values)
+	return values
+}
+
+// TestEnumInputs_HeldToThePinnedSchema holds every value list the list and
+// dismiss actions publish, in an input's description and in its schema enum,
+// to the enum the action's own document declares the variable with, read out
+// of the pinned GitLab schema. The report type description is why it exists:
+// it listed eight of VulnerabilityReportType's eleven values, and nothing
+// compared the two, so the three GitLab added never reached a model and a
+// re-pin that adds a fourth would not have either. A value GitLab adds or one
+// never listed now fails here, the day the pin moves.
+func TestEnumInputs_HeldToThePinnedSchema(t *testing.T) {
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("graphqlschema.Schema() error: %v", err)
+	}
+	specs := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())) {
+		specs[spec.IndividualTool.Name] = spec
+	}
+	cases := []struct {
+		property, tool, document, variable string
+		// enum is whether the property also publishes the values as a schema
+		// enum, which is held to the same list as its description.
+		enum bool
+	}{
+		{"severity", "gitlab_list_vulnerabilities", queryListVulnerabilities, "severity", false},
+		{"state", "gitlab_list_vulnerabilities", queryListVulnerabilities, "state", false},
+		{"report_type", "gitlab_list_vulnerabilities", queryListVulnerabilities, "reportType", false},
+		{"sort", "gitlab_list_vulnerabilities", queryListVulnerabilities, "sort", true},
+		{"dismissal_reason", "gitlab_dismiss_vulnerability", mutationDismiss, "dismissalReason", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.property, func(t *testing.T) {
+			parsed, parseErr := graphqlschema.ParseAgainst(schema, tc.document)
+			if parseErr != nil {
+				t.Fatalf("the pinned schema refuses the %s document: %v", tc.tool, parseErr)
+			}
+			definition := schema.Types[parsed.Operations[0].VariableDefinitions.ForName(tc.variable).Type.Name()]
+			want := make([]string, 0, len(definition.EnumValues))
+			for _, value := range definition.EnumValues {
+				want = append(want, value.Name)
+			}
+			slices.Sort(want)
+
+			properties, _ := specs[tc.tool].Route.InputSchema["properties"].(map[string]any)
+			property, _ := properties[tc.property].(map[string]any)
+			description, _ := property["description"].(string)
+			if got := describedValues(description); !slices.Equal(got, want) {
+				t.Errorf("%s description lists %v, want the pinned %s %v", tc.property, got, definition.Name, want)
+			}
+			if !tc.enum {
+				return
+			}
+			enum, _ := property["enum"].([]any)
+			got := make([]string, 0, len(enum))
+			for _, value := range enum {
+				s, _ := value.(string)
+				got = append(got, s)
+			}
+			slices.Sort(got)
+			if !slices.Equal(got, want) {
+				t.Errorf("%s enum = %v, want the pinned %s %v", tc.property, got, definition.Name, want)
+			}
+		})
 	}
 }
 

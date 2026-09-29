@@ -13,11 +13,55 @@ import (
 )
 
 // gidPrefix is the leading token of a GitLab GraphQL global ID. Callers may
-// pass a security scan profile identifier (numeric database ID or a built-in
-// scan type such as "dependency_scanning", "sast", "secret_detection", or
-// "container_scanning") or a fully formed global ID; the former is wrapped with
-// [gl.SecurityScanProfileGID].
+// pass a security scan profile identifier (a numeric database ID or one of
+// [DefaultProfileNames]) or a fully formed global ID; the former is wrapped
+// with [gl.SecurityScanProfileGID].
 const gidPrefix = "gid://"
+
+// DefaultProfileNames lists the names attach takes in place of a persisted
+// profile's ID, written as the sentence fragment every text that offers them
+// repeats: the input's description, the attach usage line, the attach error
+// hint and the meta-tool group description in internal/tools.
+//
+// They are the preset keys of the default profiles GitLab defines
+// (Security::DefaultScanProfilesHelper at 19.5.0-pre, 5041f73d695): a key is
+// the profile's scan type, except for the three Triage and Remediation
+// presets, which GitLab 19.4 added behind the triage_and_remediation_profile
+// flag, on by default. For such a name attach finds or creates the
+// namespace's default profile. They are not the SecurityScanProfileType enum:
+// container_scanning and business_logic are scan types GitLab defines no
+// default profile for, and FindOrCreateService answers either by name with
+// "Could not find a default scan profile for this type", which the mutation
+// turns into a resource-not-available error (see [RefusedByName]). The
+// package's tests hold this list to that enum, so a scan type GitLab adds
+// fails them until someone decides which side of the line it falls on.
+//
+// It is one literal rather than two joined with a plus, for the reason
+// [errDetachIdentifier] gives: a plus at package level is a mutant no test
+// can reach.
+const DefaultProfileNames = "secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive"
+
+// DefaultProfileFloors says from which GitLab release each name of
+// [DefaultProfileNames] exists, in the words every text offering the names
+// adds after them, so a caller of an older instance is not handed a name its
+// GitLab refuses. secret_detection is as old as scan profiles themselves
+// (18.7), which is the floor of the whole domain and needs no word of its
+// own. Read from Security::DefaultScanProfilesHelper at every stable branch
+// from 18-7 to 19-4: sast arrives at 18.10 and dependency_scanning at 18.11,
+// both behind a feature flag until 19.0, dependency_scanning_post_processing
+// at 19.2, and the Triage and Remediation presets at 19.4.
+const DefaultProfileFloors = "sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4"
+
+// RefusedByName names the SecurityScanProfileType values attach refuses by
+// name, in the sentence every text offering [DefaultProfileNames] adds. Two
+// are scan types GitLab builds no default profile for; the third is the scan
+// type whose default profiles are keyed by preset, so the bare type is the
+// key of none of them. FindOrCreateService answers each with "Could not find
+// a default scan profile for this type", which the attach mutation replaces
+// with a generic resource-not-available error naming none of this, and that
+// is why the handler's hint says it (upstream register, "the scan profile
+// attach mutation drops the reason it refused a name").
+const RefusedByName = "container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name"
 
 // gidAuthority is the authority every global ID GitLab issues carries, as in
 // gid://gitlab/Security::ScanProfile/90. It is what distinguishes a global ID
@@ -27,7 +71,7 @@ const gidAuthority = "gitlab"
 // AttachInput holds parameters for attaching a security scan profile to
 // projects and/or groups.
 type AttachInput struct {
-	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning, for which attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted,required"`
+	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4. container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name,required"`
 	ProjectIDs            []int64 `json:"project_ids,omitempty" jsonschema:"Numeric IDs of the projects to attach the profile to"`
 	GroupIDs              []int64 `json:"group_ids,omitempty" jsonschema:"Numeric IDs of the groups to attach the profile to"`
 }
@@ -188,7 +232,9 @@ func Attach(ctx context.Context, client *gitlabclient.Client, input AttachInput)
 	}
 	if _, err := client.GL().SecurityScanProfiles.AttachSecurityScanProfile(opts, gl.WithContext(ctx)); err != nil {
 		return MutationOutput{}, toolutil.WrapErrWithHint("attach security scan profile", err,
-			"use a valid scan-type identifier (dependency_scanning, sast, secret_detection, or container_scanning); targets must belong to a group namespace (not a personal namespace) and share one root namespace; requires Maintainer or Owner on the targets and Ultimate")
+			"use the name of a GitLab default profile ("+DefaultProfileNames+") or a persisted profile's numeric ID; "+
+				DefaultProfileFloors+"; "+RefusedByName+"; targets must belong to a group namespace "+
+				"(not a personal namespace) and share one root namespace; requires Maintainer or Owner on the targets and Ultimate")
 	}
 	return MutationOutput{
 		Status:                "success",
