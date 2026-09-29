@@ -199,17 +199,17 @@ func assertWorkItemListed(e *harness.Env, s *harness.Session, params map[string]
 // that selects only what Community Edition defines, so the whole lifecycle
 // can run on Community Edition, and the failure says so. Taking the client-go
 // release that carries the fix is not enough on its own, since it leaves the
-// default selecting every field: the actions have to pass
-// WorkItemDefaultListFields() on a Free instance, or a release has to make the
-// default safe there.
+// default selecting every field, and the maintainers decided that default
+// stays Enterprise: the actions have to pass WorkItemDefaultListFields() on a
+// Free instance.
 func assertCommunityWidgetRefusal(e *harness.Env, s *harness.Session, id harness.ActionID, params map[string]any) {
 	e.T.Helper()
 	_, err := harness.Try[workitems.GetOutput](s, id, params)
 	if err == nil {
 		e.T.Fatalf("%s answered on Community Edition, where client-go's document selected five licensed widgets "+
 			"its schema does not define (docs/development/upstream-bugs.md, entry 45). The action now sends a "+
-			"selection Community Edition defines, either WorkItemDefaultListFields() from a client-go release "+
-			"that carries the fix or a default made safe there: run workItemLifecycle on Community Edition too, "+
+			"selection Community Edition defines, WorkItemDefaultListFields() from a client-go release that "+
+			"carries the fix, since the default stays Enterprise: run workItemLifecycle on Community Edition too, "+
 			"delete workItemLifecycleOnCommunity, and record the entry as merged", id)
 	}
 	refusal := err.Error()
