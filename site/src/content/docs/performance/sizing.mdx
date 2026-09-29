@@ -177,7 +177,11 @@ as busy, with `503` and a `Retry-After` of 30 seconds on protocol 2026-07-28;
 under a hard limit of 1024, with 4000 calls offered from one credential or from
 a hundred, the process stayed at 394 descriptors and `/health` answered in a
 millisecond. Where the limit is large, memory runs out first, at about 190 KiB a
-held call, so the container's memory limit is the figure to size.
+held call, so the container's memory limit is the figure to size: the server
+keeps no memory cap of its own, by decision (issue 951). No per-credential
+ceiling stands beside it, by the same decision and for the reason given above:
+a number on a credential multiplies by however many a caller holds. One
+credential can therefore fill it where the limit is small.
 
 The session ceiling is half the held-call one, 96 under a hard limit of 1024 and
 114560 under 524288, because each session takes a held-call slot for its
@@ -190,9 +194,12 @@ most 183 descriptors and kept answering `/health`; before the ceiling it kept
 every session until the streams had taken all 1024 descriptors and then stopped
 answering. Where the limit is large the ceiling bounds descriptors and not
 memory: 114560 idle sessions would take about ten to twelve GiB, so the
-container's memory limit is again the figure to size. A session nobody deletes
-keeps its slot until `--session-timeout`, and with `--session-timeout=0` until
-the pool evicts its credential.
+container's memory limit is again the figure to size, and no fixed cap stands
+beside the derived one. A session nobody deletes keeps its slot until
+`--session-timeout`, and with `--session-timeout=0` until the pool evicts its
+credential. One credential can fill the ceiling at no cost, since `initialize`
+spends no rate-limit token, and no per-credential ceiling stands beside it, by
+the same decision and for the same reason.
 
 The failed-authentication budget is configurable: ten failures a minute per
 client address by default (`--auth-failure-limit`, `--auth-failure-window`)

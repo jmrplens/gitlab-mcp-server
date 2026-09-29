@@ -183,7 +183,11 @@ segundos en el protocolo 2026-07-28; bajo un límite duro de 1024, con 4000
 llamadas ofrecidas desde una credencial o desde cien, el proceso se quedó en 394
 descriptores y `/health` respondió en un milisegundo. Donde el límite es grande
 se agota antes la memoria, unos 190 KiB por llamada retenida, así que la cifra a
-dimensionar es el límite de memoria del contenedor.
+dimensionar es el límite de memoria del contenedor: el servidor no tiene un tope
+de memoria propio, por decisión (issue 951). No hay un techo por credencial a
+su lado, por la misma decisión y por la razón que se da más arriba: un número
+por credencial se multiplica por cuantas tenga quien llame. Por eso una sola
+credencial puede llenarlo donde el límite es pequeño.
 
 El techo de sesiones es la mitad del de llamadas retenidas, 96 bajo un límite
 duro de 1024 y 114560 bajo 524288, porque cada sesión ocupa al abrirse una plaza
@@ -197,9 +201,12 @@ respondiendo a `/health`; antes del techo mantenía cada sesión hasta que los
 flujos ocupaban los 1024 descriptores y entonces dejaba de responder. Donde el
 límite es grande el techo acota descriptores y no memoria: 114560 sesiones
 inactivas ocuparían entre unos diez y doce GiB, así que la cifra a dimensionar
-vuelve a ser el límite de memoria del contenedor. Una sesión que nadie borra
-conserva su plaza hasta `--session-timeout`, y con `--session-timeout=0` hasta
-que el pool desaloja su credencial.
+vuelve a ser el límite de memoria del contenedor, y no hay un tope fijo junto a
+la cifra derivada. Una sesión que nadie borra conserva su plaza hasta
+`--session-timeout`, y con `--session-timeout=0` hasta que el pool desaloja su
+credencial. Una sola credencial puede llenar el techo sin coste, porque
+`initialize` no gasta ningún token del rate limit, y no hay un techo por
+credencial a su lado, por la misma decisión y la misma razón.
 
 El presupuesto de autenticaciones fallidas sí es configurable: diez fallos por
 minuto y dirección de cliente por defecto (`--auth-failure-limit`,
