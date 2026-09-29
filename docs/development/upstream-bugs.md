@@ -145,7 +145,7 @@ readable without opening the tracker:
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), open | No | Yes | Yes |
-| 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it blocks the condition gate on three packages | Partial |
+| 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), open | No | No | Not yet, with issue 1031 |
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329) | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), open | No | No | Not yet, with issue 1031 |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330) | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), open | No | No, but results can be silently incomplete | Not yet, with issue 1031 |
@@ -5536,18 +5536,27 @@ had shown one of them going nowhere.
   reproduction directly, within days, and rarely merges a pull request as
   sent, so the fix may well arrive as the maintainer's own commit; either way
   the entry retires on the release that carries it.
-- **Blocking**: no for the server. It blocks the condition gate on three
-  packages: `cmd/server` and `internal/toolutil` panic before anything is
-  instrumented, and `test/e2e/internal/harness` with `-tags=e2e` is never
-  instrumented at all.
-- **Workaround**: partial. `scripts/check-spec-conditions.sh` reports a
-  package gobco cannot instrument as not measured instead of failing, so the
-  gate passes without measuring those packages;
-  [issue 1017](https://github.com/jmrplens/gitlab-mcp-server/issues/1017)
-  measures them from a copy that leaves the other platforms' files out, which
-  is what the fix does inside gobco. It retires when a gobco release carries
-  the fix and the pin, `github.com/rillig/gobco@v1.3.4` in the Makefile and
-  the script, moves to it.
+- **Blocking**: no for the server. It blocked the condition gate on three
+  packages: `cmd/server` and `internal/toolutil` panicked before anything was
+  instrumented, and `test/e2e/internal/harness` with `-tags=e2e` was never
+  instrumented at all. With the workaround below only the harness is left
+  unmeasured.
+- **Workaround**: partial.
+  [Issue 1017](https://github.com/jmrplens/gitlab-mcp-server/issues/1017)
+  measures such a package from a copy of the module that leaves out the files
+  the go command does not build here and blanks the constraint lines gobco's
+  narrow build context would misread, which is what the fix does inside gobco:
+  `scripts/coverage-conditions.sh`, run by `make coverage-conditions` and by
+  `scripts/check-spec-conditions.sh`, measures `cmd/server` at 1990 of 2032
+  conditions and `internal/toolutil` at 3604 of 3782 on linux/amd64. The
+  harness is not measured: every file of it sits behind `e2e`, so blanking
+  its constraints fails its own test that each file carries exactly that
+  line, and the script says the figure it printed is not a measurement. The
+  platform halves the copy leaves out (five files of `cmd/server`, two of
+  `internal/toolutil`) are measured only on a platform that builds them, and
+  nothing runs gobco there today. It retires when a gobco release carries the
+  fix and the pin, `github.com/rillig/gobco@v1.3.4` in
+  `scripts/coverage-conditions.sh`, moves to it.
 
 **Where**: `rillig/gobco` at `7a09995` (v1.3.4 behaves the same).
 `instrumenter.instrument` hands every `.go` file of the directory to

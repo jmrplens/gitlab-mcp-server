@@ -22,13 +22,19 @@
 #   here is narrow on purpose, so that it can gate.
 #
 #   A package gobco cannot instrument is reported and does not fail. It
-#   copies every .go file ignoring //go:build, so a package with
-#   build-constrained files dies with a redeclaration panic, and it resolves
-#   the external test package against the non-test files alone, so a package
-#   whose export_test.go hands a symbol to its _test package dies with
-#   "undefined". Twenty-five of the packages carrying an action_specs.go are
-#   in the second state today. Failing on them would fail for the tool's
+#   resolves the external test package against the non-test files alone, so
+#   a package whose export_test.go hands a symbol to its _test package dies
+#   with "undefined". Twenty-five of the packages carrying an action_specs.go
+#   are in that state today. Failing on them would fail for the tool's
 #   limits rather than for anything about this repository.
+#
+# gobco is run through scripts/coverage-conditions.sh, the recipe behind
+# `make coverage-conditions`, rather than directly: gobco also parses every
+# .go file of a directory ignoring //go:build, and a package holding a file
+# per platform dies with a redeclaration panic (issue 1017). The script
+# stages such a package so gobco reads the files that build here, and a
+# package in that shape is measured by this gate instead of reported as not
+# measured.
 #
 # A condition that genuinely cannot take the other value is declared on its
 # own line, and the declaration is held to the discipline every declaration
@@ -42,7 +48,6 @@
 
 set -euo pipefail
 
-readonly GOBCO="github.com/rillig/gobco@v1.3.4"
 readonly DECLARATION='// gobco:'
 
 base="${1:-origin/main}"
@@ -89,8 +94,15 @@ for file in "${changed[@]}"; do
   pkg="$(dirname "$file")"
   echo "check-spec-conditions: measuring $pkg"
 
-  if ! output="$(cd "$pkg" && go run "$GOBCO" 2>&1)"; then
-    echo "  not measured: gobco could not instrument this package: $(printf '%s' "$output" | head -n 1)"
+  if ! output="$("$repo_root/scripts/coverage-conditions.sh" "./$pkg" 2>&1)"; then
+    # The first line gobco panicked with, or the script's own verdict on the
+    # run, rather than the first line of output, which a staged run opens
+    # with its notice. Every verdict the script gives a run it will not pass
+    # on says either that it refuses or that the figure is not a measurement:
+    # a package it will not load, a report of no condition, and a gobco that
+    # exited non-zero, staged or not.
+    reason="$(grep -m 1 -E '^panic: |^gobco: .*(refusing to|is not a measurement)' <<<"$output" || head -n 1 <<<"$output")"
+    echo "  not measured: gobco could not instrument this package: $reason"
     continue
   fi
 

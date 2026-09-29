@@ -148,7 +148,7 @@ make coverage-conditions PKG=./internal/tools/topics   # gobco, condition covera
 
 **The gate on a package you changed is `Lived 0` and `Not covered 0`.** A mutant that LIVED is a change to the source that no test noticed, which is a missing assertion rather than a missing line. A mutant NOT COVERED is a line no test reaches at all. `--invert-logical` is on, so `&&` and `||` are checked for independence and a test that only ever takes one side of a condition is reported.
 
-`coverage-conditions` answers the neighbouring question: which boolean conditions were never evaluated both ways. Its operands count separately, so a line it reports is a missing test case rather than a missing line of coverage.
+`coverage-conditions` answers the neighbouring question: which boolean conditions were never evaluated both ways. Its operands count separately, so a line it reports is a missing test case rather than a missing line of coverage. A package behind a build tag is measured with `TAGS=<tag>` beside `PKG`, and a package holding a file per platform is measured in a staged copy of the module whose left-out files the run names, since their conditions are not measured on this platform.
 
 Neither is optional on new code. Line coverage tells you the test ran; these tell you the test would have noticed.
 

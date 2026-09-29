@@ -60,6 +60,7 @@ cover_*
 coverage_*
 !coverage_test.go
 !scripts/coverage_mutants_sh_test.py
+!scripts/coverage_conditions_sh_test.py
 
 # Temporary output/result files
 *-results.txt
