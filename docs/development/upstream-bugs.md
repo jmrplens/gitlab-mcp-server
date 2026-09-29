@@ -982,8 +982,11 @@ endpoint is a new method with its own result type, and would let a tool answer
   fourteen actions of the twenty it lacked, the seven Enterprise ones marked
   so, and `DeploymentStatusValue` `skipped` beside `blocked`. The cancellation
   role gets `CIRestrictPipelineCancellationRoleValue` with its three values,
-  declared as an alias of `AccessControlValue` so no caller breaks; a distinct
-  type is left for 4.0.
+  declared at first as an alias of `AccessControlValue` so no caller broke.
+  After the review read the old typing as a bug, commit 37 (`a4b189e7`, added
+  2026-09-29) makes it a type of its own, which stops compiling code that holds
+  the role in an `AccessControlValue`; GitLab's Terraform provider is such code
+  (see the review of the joint merge request below).
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The handlers forward the string a caller passes, so the
@@ -1971,9 +1974,35 @@ point goes further than the merge request: he calls
 because none of `AccessControlValue`'s four values is one the setting accepts,
 which argues for making the new type distinct now instead of an alias of the
 old. The four decisions the description asks for are not answered yet, there
-is no approval, and @heidi.berry has not replied. Owed from here, once agreed
-with the maintainer of this repository: a reply taking up both requests, the
-tracking issue and the distinct type as a commit on the merge request.
+is no approval, and @heidi.berry has not replied.
+
+**Answered, 2026-09-29.** Both requests were taken up the same day, each text
+reviewed by a second agent before it went out:
+
+- [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
+  tracks the 4.0 halves, with the review's additions: the `WithOptions`
+  siblings removed in 5.0 and the narrower structs in 4.0.
+- Commit 37 (`a4b189e7`) makes `CIRestrictPipelineCancellationRoleValue` a
+  type of its own. Preparing it showed the old typing was not unused: GitLab's
+  Terraform provider sets the role through
+  [`AccessControlLevelValueToName`](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/blob/da9cb4f79ab5976ed4b2aa03e416454ca741124e/internal/provider/api/access_level_helpers.go#L118-132),
+  which returns an `AccessControlValue` and exists, by its own comment, because
+  of this typing, and four lines in three of its test files hold the role the
+  same way. That code stops compiling when the provider moves to the release
+  carrying the commit. The reply says so and offers to drop the commit.
+- Commit 32's `User.Skype` note and message dated the removal of `skype` to
+  18.4; GitLab stopped sending it in 18.2
+  ([gitlab-org/gitlab@70437e6e](https://gitlab.com/gitlab-org/gitlab/-/commit/70437e6efbdc7bd99201f13ac7dc6fa6dee3472f)).
+  The branch was force-pushed from `a1a4b996` to `a4b189e7`, now 37 commits;
+  commits 33 to 36 changed only their hashes.
+- The [reply](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063#note_3922840298)
+  asks whether the `WithOptions` siblings, deprecated at birth like the three
+  already in the library, should instead stay undeprecated until 4.0 or say
+  5.0. The description gained the "Is this a breaking change?" and "How was
+  this tested?" headings the project's merge requests use.
+
+It now waits on the maintainers for the four decisions, the `WithOptions`
+schedule and whether commit 37 stays.
 
 **The umbrella's description is behind again**, read on 2026-09-27, in four
 places: its table still reads `gitlab-org/api/client-go!3052` as in review,
