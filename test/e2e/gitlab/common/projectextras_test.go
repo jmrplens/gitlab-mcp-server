@@ -149,7 +149,15 @@ func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.
 	under := namespace + "/"
 
 	drained := fixture.DrainSidekiqWithin(e.Ctx, e.Client(), transferDrainWait)
-	moved := harness.Do[projects.TransferOutput](s, actionProjectTransfer, withParams(params, map[string]any{"namespace": namespace}))
+	// GitLab moves the project before it closes the transfer on the project's
+	// namespace, and until then refuses the next one with "Unable to initiate
+	// transfer. The project may already have a transfer in progress." The
+	// transfer back is sent right after project.get has seen the first move,
+	// so it can land in that window, which it did on 19.4.1-ee. GitLab's own
+	// troubleshooting page answers that refusal with a retry, and so does this.
+	moved := harness.Eventually[projects.TransferOutput](s, actionProjectTransfer,
+		withParams(params, map[string]any{"namespace": namespace}), transferRetryInterval, transferRetryWait,
+		func(out projects.TransferOutput) bool { return out.ID == project.ID })
 	if moved.ID != project.ID || moved.TransferQueued || !strings.HasPrefix(moved.PathWithNamespace, under) {
 		e.T.Errorf("the transfer to %q answered %+v, want project %d applied under %q (Sidekiq drained before it: %t)", namespace, moved, project.ID, under, drained)
 	}
@@ -167,6 +175,16 @@ func transferProjectAndWait(e *harness.Env, s *harness.Session, project fixture.
 // 19.4.1, and short enough that a queue that never empties fails the scenario
 // rather than holding the package until its timeout.
 const transferDrainWait = 3 * time.Minute
+
+// transferRetryInterval and transferRetryWait bound how long a transfer is
+// resent while GitLab still holds the previous one open on the namespace.
+// The window is the tail of a move already applied, so it is seconds; a
+// refusal that outlasts the wait is a transfer that did not close, and the
+// failure names GitLab's last answer.
+const (
+	transferRetryInterval = 5 * time.Second
+	transferRetryWait     = 90 * time.Second
+)
 
 // TestProjectCreateForUser_Admin_PlacesItInTheUsersNamespace creates a
 // project on behalf of a disposable user, on every surface, and reads the
