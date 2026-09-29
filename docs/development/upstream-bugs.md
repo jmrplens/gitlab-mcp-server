@@ -149,6 +149,7 @@ readable without opening the tracker:
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), open | No | No | Not yet, with issue 1031 |
 | 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329) | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), open | No | No | Not yet, with issue 1031 |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330) | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), open | No | No, but results can be silently incomplete | Not yet, with issue 1031 |
+| 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -322,6 +323,12 @@ unreleased still is, and
 has not changed since 2026-08-05. The rows the lanes of the second wave add
 are not in this pass; they arrive with those lanes and take the numbers after
 76.
+
+Row 77 was added on 2026-09-28 for
+[issue 1025](https://github.com/jmrplens/gitlab-mcp-server/issues/1025). It is
+the class of rows 38 and 39, read from a 19.5.0-pre checkout and not yet from a
+running instance, and nothing has been raised upstream for it; its section
+says what a merge request would carry.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -611,6 +618,81 @@ all.
 **Effort**: small. One line in `lib/api/projects.rb` plus the regenerated
 OpenAPI document, where the change is a single `$ref`, because
 `APIEntitiesPublicGroupDetails` is already a component of the document.
+
+### The context commit list is annotated with Commit and presents CommitWithLink
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The keys arrive; only the route's description, and
+  everything generated from it, says they do not.
+- **Workaround**: yes, two halves. `mrcontextcommits.List` reads the commits
+  off the captured response (ADR-0021), which it already did for
+  `extended_trailers` (row 69), and publishes four of the keys the presented
+  entity adds: `author`, `author_gravatar_url`, `description_html` and
+  `title_html`, on `mrcontextcommits.CommitItem`, whose doc comment says why
+  each of the others is left out. The audit half is four declarations in
+  `cmd/audit_1to1/internal/paths/shape_declarations.go` under
+  `route-annotation-names-another-entity-than-the-handler-presents`, one per
+  key, since the record holds the route under `Commit` and so reports every
+  one of them as a key no response carries. They retire when
+  `cmd/gen_api_live` is run against a release that carries the fix: the
+  stale-declaration check then fails on all four, and the sent direction
+  starts reporting the six keys this server does not publish, which will want
+  declarations of their own in `sent_declarations.go`.
+
+**Where**: `lib/api/merge_requests.rb`, the `desc` block of
+`GET :id/merge_requests/:merge_request_iid/context_commits` (lines 576 to 591
+at `f23a2b35383`, a 19.5.0-pre checkout).
+
+**What**: the description says `success Entities::Commit`, and the handler
+presents
+`with: Entities::CommitWithLink, type: :full, request: merge_request`.
+`CommitWithLink` (`lib/api/entities/commit_with_link.rb`) is `Commit` plus
+`author` (a `UserPath`), `author_gravatar_url`, `commit_url` and
+`commit_path`, and under `type: :full`, which the route passes,
+`description_html`, `title_html`, `signature_html`, `prev_commit_id`,
+`next_commit_id` and `pipeline_status_path`. The `POST` at the same path is
+annotated `Entities::Commit` and presents it, correctly, so two routes on one
+path answer with two entities under one annotation. `APIEntitiesCommitWithLink`
+is not a component of `doc/api/openapi/openapi_v3.yaml` at all, and
+`doc/api/merge_request_context_commits.md` prints the list's example body with
+the `Commit` keys only.
+
+**Read from the source, not yet measured.** Four of the ten added keys are
+null on every commit this route sends, which is why they are not published
+here: `prev_commit_id`, `next_commit_id` and `pipeline_status_path` read
+presenter options the route does not pass, and `signature_html` renders only
+for a commit with a signature, which a context commit never has, because
+`MergeRequestContextCommit#to_commit` rebuilds it with `Commit.from_hash` from
+the stored row and `Commit#raw_signature_type` reads the signature off a
+Gitaly commit the hash does not carry. `author` is null for an email no
+confirmed account holds (`Commit#lazy_author` looks it up with
+`User.by_any_email(emails, confirmed: true)`), and its `show_status` is false
+on every author, since that lookup does not preload the status association
+`UserStatusTooltip` checks. The e2e scenario for the context commits asserts
+the author and `title_html` on the list and their absence on the answer to the
+`POST`, which is the first time a running instance is asked; this section is
+to be amended with what it answers.
+
+**How we found it**: surfacing the context commit keys for
+[issue 971](https://github.com/jmrplens/gitlab-mcp-server/issues/971) read the
+handler rather than the annotation, and
+[issue 1025](https://github.com/jmrplens/gitlab-mcp-server/issues/1025)
+recorded it. The R-PATH sent report could not have: it reads the entity off
+the annotation, so none of the ten keys ever reached it.
+
+**Root cause**: the class of the entry above and of row 38. A `desc` block
+naming an entity the handler does not present is invisible to every test,
+because Grape uses it for documentation only.
+
+**Effort**: small, and a candidate for the same kind of documentation merge
+request as row 39: one line in `lib/api/merge_requests.rb`, the regenerated
+OpenAPI document, which gains the `APIEntitiesCommitWithLink` component (and
+`APIEntitiesUserPath` under it) rather than a changed `$ref` alone, and the
+page's example body. Whether the four keys that are always null belong on this
+route at all is a second question, left out of the finding so the annotation
+stays reviewable on its own.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 

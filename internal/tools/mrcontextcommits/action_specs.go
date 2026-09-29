@@ -71,7 +71,7 @@ func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {
 			"get extra commits added to mr review",
 		}
 		options.RelatedActions = []string{actionMergeRequestGet, actionMergeRequestCommits, actionContextCommitsCreate, actionContextCommitsDelete}
-		options.IndividualTool.Description = "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL, with pagination metadata. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits."
+		options.IndividualTool.Description = "List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, the title and description rendered to HTML, author and committer with their dates, the GitLab account the author email belongs to and the author's Gravatar image, trailers and web URL, with pagination metadata. See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits."
 	case "gitlab_create_mr_context_commits":
 		options.Usage = "Attach one or more existing repository commit SHAs to a merge request as context commits, adding them to the review without changing the MR's source/target branches. Resolve SHAs with " + actionCommitList + " or " + actionMergeRequestCommits + " first."
 		options.Aliases = []string{

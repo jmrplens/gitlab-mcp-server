@@ -393,12 +393,20 @@ Update the merge request approval settings of a project. Set only the fields you
 
 List context commits associated with a merge request, one page at a time with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter. Returns each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL, the short SHA linked to the commit in the table. `extended_trailers` maps each trailer to the list of its values, as GitLab sends it; the commits are read from GitLab's answer in that shape, since client-go's commit type cannot decode a trailer. GitLab keeps no parents for a pinned commit, so `parent_ids` is empty here and filled on the answer to `gitlab_create_mr_context_commits`.
 
+The list also carries four keys the answer to `gitlab_create_mr_context_commits` does not, because GitLab presents this route's commits with its `CommitWithLink` entity while the route's own documentation names `Commit` (recorded in [upstream-bugs.md](../../development/upstream-bugs.md#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink)):
+
+- `author`: the GitLab account the author email belongs to (`id`, `username`, `public_email`, `name`, `state`, `locked`, `avatar_url`, `web_url`, `path` and `show_status`), absent when no confirmed account holds that email. The table links the author's name to the account's profile.
+- `author_gravatar_url`: the instance's Gravatar image for the author email, absent when the instance has Gravatar turned off.
+- `title_html` and `description_html`: the commit title and the rest of its message rendered to HTML, as GitLab's commit page shows them (a first line of 100 characters or more is shortened in the title and kept whole in the description).
+
+The entity's other keys are not published: `commit_url` and `commit_path` repeat `web_url`, and `signature_html`, `prev_commit_id`, `next_commit_id` and `pipeline_status_path` are null on every commit this route sends.
+
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_create_mr_context_commits`
 
-Add context commits to a merge request. Returns the commits pinned, with the same keys as the listing plus each commit's parents.
+Add context commits to a merge request. Returns the commits pinned with the keys of GitLab's `Commit` entity, which this route presents: the listing's keys without the four `CommitWithLink` adds (no author account, Gravatar image or rendered HTML), plus each commit's parents. The route answers with every commit it pinned in one response and is not paged, so the answer carries no pagination block.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
