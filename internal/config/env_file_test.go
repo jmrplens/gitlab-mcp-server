@@ -728,8 +728,11 @@ func TestAnnouncedKeys_BoundsWithoutTruncatingWhatFits(t *testing.T) {
 		for i := range keys {
 			keys[i] = "K" + strconv.Itoa(i)
 		}
-		if got := announcedKeys(keys); len(got) != maxAnnouncedKeys {
-			t.Errorf("announcedKeys kept %d keys, want the list capped at %d", len(got), maxAnnouncedKeys)
+		// The names are handed over sorted (dotenvKeys sorts them), and the
+		// ones announced are the first of them: a cut that kept the right count
+		// from the wrong end would name the last ten instead.
+		if got := announcedKeys(keys); !slices.Equal(got, keys[:maxAnnouncedKeys]) {
+			t.Errorf("announcedKeys = %v, want the first %d keys, %v", got, maxAnnouncedKeys, keys[:maxAnnouncedKeys])
 		}
 	})
 

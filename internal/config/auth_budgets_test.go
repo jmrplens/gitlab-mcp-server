@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +71,35 @@ func TestLoadAuthBudgetEnv_ZeroTurnsABudgetOff(t *testing.T) {
 	}
 	if got != (authBudgetEnv{}) {
 		t.Errorf("loadAuthBudgetEnv() = %+v, want every field zero", got)
+	}
+}
+
+// TestLoadAuthBudgetEnv_EachMaximum_IsAccepted pins which side of each bound
+// the maximum itself sits on.
+//
+// The refusal cases below are all past a maximum, so they hold the bound only
+// from above: a check that also refused the maximum would still refuse every
+// one of them. The maxima are published as the largest value an operator may
+// set, in the environment table and in the refusal's own "exceeds maximum of"
+// wording, so a deployment configured at exactly that figure has to start.
+func TestLoadAuthBudgetEnv_EachMaximum_IsAccepted(t *testing.T) {
+	t.Setenv(EnvPrefix+"AUTH_FAILURE_LIMIT", strconv.Itoa(MaxAuthFailureLimit))
+	t.Setenv(EnvPrefix+"AUTH_FAILURE_WINDOW", MaxAuthFailureWindow.String())
+	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_LIMIT", strconv.Itoa(MaxAuthDistinctTokenLimit))
+	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_WINDOW", MaxAuthDistinctWindow.String())
+
+	got, err := loadAuthBudgetEnv()
+	if err != nil {
+		t.Fatalf("loadAuthBudgetEnv() with every setting at its maximum error = %v, want nil", err)
+	}
+	want := authBudgetEnv{
+		failureLimit:   MaxAuthFailureLimit,
+		failureWindow:  MaxAuthFailureWindow,
+		distinctLimit:  MaxAuthDistinctTokenLimit,
+		distinctWindow: MaxAuthDistinctWindow,
+	}
+	if got != want {
+		t.Errorf("loadAuthBudgetEnv() = %+v, want %+v", got, want)
 	}
 }
 

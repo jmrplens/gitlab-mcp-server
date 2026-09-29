@@ -388,6 +388,11 @@ most often meets are not the first ones listed.
   d > 0 { return d }` falls through to `return 0`, and `sleepCtx`'s
   `if d <= 0 { return ctx.Err() }` falls through to a zero timer that fires at
   once — at zero, each pair returns the same thing just as promptly.
+  Where the branch does nothing but cut a value down to the bound, the `min`
+  or `max` builtin says the same thing with no comparison left to flip, and
+  that is the better answer: `internal/config`'s `announcedKeys` cut its list
+  of key names behind `len(keys) > maxAnnouncedKeys`, which keeps the same ten
+  keys either way when there are exactly ten, and now cuts it with `min`.
 - **A tie-break comparator under an inequality guard.** The `sort.Slice` idiom
   `if a.x != b.x { return a.x < b.x }` has proved its two operands unequal
   before it compares them, so `<` and `<=` decide the same order and the
@@ -414,7 +419,11 @@ most often meets are not the first ones listed.
   since a Unix time at or before 1970 is already in the past, and it is gone.
 - **A tool artifact.** Mutations inside package-level constant initializers
   and `switch { case … }` expressions are reported as not covered because
-  neither carries a statement counter, not because no test reaches them.
+  neither carries a statement counter, not because no test reaches them. One
+  shape among them is equivalent rather than unobserved: a product with a zero
+  operand, such as `0 * time.Second`, is zero whatever the operator, so its
+  mutant cannot be killed by any test. Spell the zero without the product
+  (`time.Duration(0)`), as `internal/config`'s `DefaultDrainDelay` now is.
 - **An error branch that cannot fail for the type in hand.** `json.Marshal` of
   a struct carrying no channel, function or cycle cannot return an error, and
   `json.Unmarshal` of that marshaller's own output into a `map[string]any`
