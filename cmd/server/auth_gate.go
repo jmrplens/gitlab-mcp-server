@@ -287,9 +287,11 @@ type mcpServerGate struct {
 	// identity — never as an unverified PRIVATE-TOKEN a request might also
 	// carry, which ExtractToken would otherwise prefer.
 	bearerOnly bool
-	// held is the count of requests the process holds open, shared by every
-	// gate of the process (HLD-011). A gate built without one, which only the
-	// tests build, holds requests without counting them.
+	// held is the count of calls the process holds open, shared by every gate
+	// and server of the process (HLD-011), which the gate takes a slot of for
+	// a POST whose headers name one held call. A gate built without one, which
+	// only the tests build, takes none and leaves every call to the servers'
+	// own count.
 	held *heldRequests
 	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
 	// may skip authentication.
@@ -368,21 +370,25 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			sessionFailure.write(w, r)
 			return
 		}
-		// The slot is taken once the credential is admitted and before the
-		// SDK or anything keyed on the credential runs: a request refused
-		// here has spent none of its credential's rate, and one the
-		// credential's own bounds refuse gives the slot back as its POST
-		// ends. Taking it after admission rather than before keeps a caller
-		// with no credential from holding slots while it waits to be
-		// refused; admission has process bounds of its own (POL-006, ADM-014).
-		if holdsRequest(r) {
+		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
+		// A POST whose headers name one held call takes its slot here, before
+		// the SDK reads a byte of it, and is refused with a 503 when none is
+		// free; every other call is counted where the SDK dispatches it
+		// (HLD-011). Either way the slot is taken once the credential is
+		// admitted and before anything keyed on it runs, so a refusal spends
+		// none of the credential's rate. That departs from PAT-003, which
+		// takes the process slot before anything per key: admission comes
+		// first, because a slot taken before it would let a caller with no
+		// credential hold one for as long as its verification takes, and the
+		// register records what a refused newcomer has spent by then.
+		if g.held != nil && gateCountsRequest(r) {
 			if !g.held.acquire() {
-				refuseHeldRequest(w, r)
+				refuseHeldRequest(w, r, g.held.limit)
 				return
 			}
 			defer g.held.release()
+			ctx = context.WithValue(ctx, gateHeldSlotKey{}, &gateHeldSlot{})
 		}
-		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
 		// The credential travels on the HTTP request context, which the carrier
 		// registry then makes reachable from inside the MCP handler chain. It
 		// cannot be put on the handler's own context here: that context does not

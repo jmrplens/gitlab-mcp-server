@@ -327,13 +327,28 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 // choose another.
 func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags ...string) (*server, error) {
 	t.Helper()
+	return tryStartServerLaunched(t, port, directLaunch, env, flags...)
+}
+
+// launcher turns the binary and its arguments into the command that starts
+// it, for a test that needs the process started some other way than directly.
+type launcher func(bin string, args []string) (string, []string)
+
+// directLaunch starts the binary itself.
+func directLaunch(bin string, args []string) (string, []string) { return bin, args }
+
+// tryStartServerLaunched is tryStartServerOnPort with the command built by
+// launch.
+func tryStartServerLaunched(t *testing.T, port int, launch launcher, env map[string]string, flags ...string) (*server, error) {
+	t.Helper()
 
 	bin := serverBinary(t)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 
 	args := append([]string{"--http", "--http-addr=" + addr}, withInstancePolicy(flags)...)
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, args...)
+	name, argv := launch(bin, args)
+	cmd := exec.CommandContext(ctx, name, argv...)
 	prepareForTermination(cmd)
 	cmd.Env = append(configFreeEnviron(),
 		"LOG_LEVEL=info",

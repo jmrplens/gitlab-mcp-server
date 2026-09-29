@@ -14,10 +14,17 @@ import "time"
 
 // Holdings (HLD-001 to HLD-004, HLD-007, HLD-011, RTC-005).
 const (
-	// HeldRequestsPerProcess is how many requests the process holds open at
-	// once across every credential, a subscriptions/listen stream aside
+	// HeldRequestDescriptors is how many file descriptors one request the
+	// process holds open costs it: the caller's connection and the one to
+	// GitLab (HLD-011, measured through cmd/bench_resources' held mode).
+	HeldRequestDescriptors = 2
+	// DescriptorSpareDivisor is the share of the process's descriptor limit
+	// the held-request ceiling leaves spare, as its reciprocal: an eighth
 	// (HLD-011).
-	HeldRequestsPerProcess = 192
+	DescriptorSpareDivisor = 8
+	// FallbackDescriptorLimit is the descriptor limit the held-request
+	// ceiling is sized against where the platform has none to read (HLD-011).
+	FallbackDescriptorLimit = 1024
 	// ListenStreamsPerCredential is how many subscriptions/listen streams one
 	// credential may hold open (HLD-001).
 	ListenStreamsPerCredential = 64

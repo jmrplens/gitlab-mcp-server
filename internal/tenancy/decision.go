@@ -119,7 +119,9 @@ const (
 	// OptionOnly is a value only a Go option changes, which no operator can
 	// reach.
 	OptionOnly
-	// Derived is a value computed from another decision's.
+	// Derived is a value computed from another decision's, or from a limit
+	// the process is started under (HLD-011, from its descriptor limit). No
+	// operator sets it, as none sets a constant.
 	Derived
 )
 

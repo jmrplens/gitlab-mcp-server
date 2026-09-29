@@ -256,7 +256,9 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   own streams knows already, `RTC-007` answers in `RTC-003`'s words and `ADM-014` in the
   words `ADM-002` uses for a verification with no verdict, so only the log line says
   which bound refused. `HLD-011` has no per-caller ceiling beside it, so any refusal of it
-  says the process is full; it says that and names no figure and no caller.
+  says the process is full whatever its words, and they say only that the server is busy,
+  naming no bound, no figure and no caller; that it falls under this exception rather than
+  needing one of its own is put to the maintainer in its pull request.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -512,18 +514,38 @@ Five findings are answered, and stay in the list with their issues. F-03, the li
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
-longer. The second of those changes answers half of F-31: `HLD-011` bounds the requests
-the process holds open, at 192 across every credential, not configurable, a
-`subscriptions/listen` aside since `HLD-001` and `HLD-002` count it. A request takes its
-slot in the gate once its credential is admitted and gives it back when its POST ends,
-and one past the ceiling is refused there, a 503 `-50300` with `Retry-After`, charged to
-nothing. Measured through `cmd/bench_resources`' held mode against a stand-in GitLab
-that holds every read, a held call costs the process two descriptors, six goroutines,
-about 51 KiB of live heap and about 190 KiB of resident set, linearly to 4000 calls
-(8010 descriptors, 873 MiB); started with a descriptor limit of 1024, the process held
-503 and stopped accepting connections, `/health` among them. The ceiling is sized so
-that it and the listen ceiling fit together under that limit: 512 streams at one
-descriptor, 192 held requests at two, and an eighth of the limit spare. The stateful
+longer. The second of those changes answers half of F-31: `HLD-011` bounds the calls
+the process holds open across every credential, not configurable, a
+`subscriptions/listen` aside since `HLD-001` and `HLD-002` count it. Its value is derived
+from the descriptors the process may open, read once at startup: an eighth of the limit
+spare, one descriptor for each of the 512 listen streams, and two for each held call,
+which is 192 under a hard limit of 1024 and 229120 under the 524288 a systemd service is
+given by default. The hard limit is the one that counts, because the Go runtime raises
+the soft limit to it before `main`; where the platform has no limit to read, the value
+is the one a limit of 1024 gives. It counts the calls that reach GitLab, the methods
+`MeterFor` charges to the tool-call and completion buckets, where the SDK dispatches
+them, so each call of a JSON-RPC batch counts, a response the client sends to a request
+of the server's own never does, and neither does a listen on any revision. A POST on
+protocol 2026-07-28 or later, whose `Mcp-Method` header the SDK holds to the body, takes
+its slot in the gate instead and is refused there, a 503 `-50300` with `Retry-After` and
+the connection closed; a call on an older revision is refused where it is dispatched,
+the way `RTC-001` refuses the same method (a result flagged with `isError`, `-42900`, or
+an empty completion). Every refusal says `This server is busy. Retry later.` and is
+charged to nothing. The slot is taken after admission, which departs from what issue 951
+asks, that the process slot be taken before anything keyed on the credential: a slot
+taken first would let a caller with no credential hold one for as long as its
+verification takes, and the departure is put to the maintainer in the pull request. A
+refused newcomer has spent its admission by then, the pool entry its first call builds
+in legacy mode (with `POL-006`'s probe, and at the pool's bound the eviction of another
+credential's quiet entry, `POL-002`) or one of `ADM-014`'s verification slots in oauth
+mode, and none of its rate. Measured through `cmd/bench_resources`' held mode
+against a stand-in GitLab that holds every read, a held call costs the process two
+descriptors, six goroutines, about 51 KiB of live heap and about 190 KiB of resident
+set, linearly to 4000 calls (8010 descriptors, 873 MiB); under a hard limit of 1024 the
+process held 503 and stopped accepting connections, `/health` among them. With the
+ceiling, under the same limit and 4000 calls offered, from one credential and from a
+hundred, it held 192 in 394 descriptors and refused the other 3808; with the limit
+inherited (1048576) it held all 4000, as it did without the ceiling. The stateful
 sessions are the half it does not answer, so F-31 stays on `HLD-010` and `IDN-010` for
 them and issue 951 stays open. F-19 and F-33 are answered by issue 959's decision
 that what they recorded is the server's position, stated in

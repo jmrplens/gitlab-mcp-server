@@ -1,12 +1,12 @@
 //go:build httpe2e
 
-// held_test.go holds the ceiling on the requests the process holds open
+// held_test.go holds the ceiling on the calls the process holds open
 // (register row HLD-011, issue 951) on the wire.
 //
-// A held request is a tools/call waiting on a GitLab that has not answered.
-// The stand-in instance below holds every project read until the test lets it
-// go, so the test can put exactly as many calls in flight as the ceiling allows
-// and then ask for one more.
+// A held call is a tools/call waiting on a GitLab that has not answered. The
+// stand-in instance below holds every read of project 1 until the test lets it
+// go, so the test can put exactly as many calls in flight as the ceiling
+// allows and then ask for more, in every shape a POST can carry one.
 package httpe2e
 
 import (
@@ -14,8 +14,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,8 +32,32 @@ import (
 // heldRefusalLine is the operator's line for a refusal at the ceiling.
 const heldRefusalLine = "request refused: too many requests held across the process"
 
-// holdingGitLab is a stand-in instance that holds every project read until
-// release is called, and counts the reads it is holding.
+// heldBusy is what every refusal of the ceiling says: that the server is busy
+// and to retry, naming no bound and no figure.
+const heldBusy = "This server is busy. Retry later."
+
+// heldDescriptorLimit is the descriptor limit the server is started under, soft
+// and hard, where the platform has one to set: the limit a small container is
+// given, and the one the issue's measurement asks the process to survive.
+const heldDescriptorLimit = 1024
+
+// underDescriptorLimit starts the server through a shell that lowers its
+// descriptor limit and then puts the server in its own place, so the process
+// the harness signals is the server's. Windows has no such limit to set, and
+// the server sizes its ceiling there against the register's fallback, which
+// is the figure a limit of 1024 gives.
+func underDescriptorLimit(limit int) launcher {
+	return func(bin string, args []string) (string, []string) {
+		if runtime.GOOS == "windows" {
+			return bin, args
+		}
+		return "/bin/sh", append([]string{"-c", `ulimit -n "$0" && exec "$@"`, strconv.Itoa(limit), bin}, args...)
+	}
+}
+
+// holdingGitLab is a stand-in instance that holds every read of project 1
+// until release is called, answers project 2 at once, and counts the reads it
+// is holding.
 type holdingGitLab struct {
 	url     string
 	held    func() int64
@@ -38,9 +65,9 @@ type holdingGitLab struct {
 }
 
 // startHoldingProjectsGitLab serves the probes a pool entry needs and holds
-// every project read. The headers are written before the wait, because the
-// server gives GitLab a minute to answer with headers and would abandon and
-// resend a read held before them.
+// every read of project 1. The headers are written before the wait, because
+// the server gives GitLab a minute to answer with headers and would abandon
+// and resend a read held before them.
 func startHoldingProjectsGitLab(t *testing.T) *holdingGitLab {
 	t.Helper()
 
@@ -60,15 +87,18 @@ func startHoldingProjectsGitLab(t *testing.T) *holdingGitLab {
 	})
 	mux.HandleFunc("/api/v4/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = http.NewResponseController(w).Flush()
-		held.Add(1)
-		select {
-		case <-gate:
-		case <-r.Context().Done():
+		if r.PathValue("id") == "1" {
+			w.WriteHeader(http.StatusOK)
+			_ = http.NewResponseController(w).Flush()
+			held.Add(1)
+			select {
+			case <-gate:
+			case <-r.Context().Done():
+			}
+			held.Add(-1)
 		}
-		held.Add(-1)
-		_, _ = fmt.Fprint(w, `{"id":1,"name":"proj","path_with_namespace":"g/p","web_url":"http://example.invalid/g/p"}`)
+		_, _ = fmt.Fprintf(w, `{"id":%s,"name":"proj","path_with_namespace":"g/p","web_url":"http://example.invalid/g/p"}`,
+			r.PathValue("id"))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -82,23 +112,17 @@ func startHoldingProjectsGitLab(t *testing.T) *holdingGitLab {
 	return &holdingGitLab{url: srv.URL, held: held.Load, release: release}
 }
 
-// heldCall is one tools/call that runs project.get through the dynamic
-// surface, for a goroutine: it touches no *testing.T, and a failure to make
-// the call at all is its error.
-func heldCall(ctx context.Context, client *http.Client, baseURL string, id int) (response, error) {
-	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) + `,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
-		`"arguments":{"action":"project.get","params":{"project_id":"1"}},` +
-		`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+// heldPost sends body to the MCP endpoint with the headers given and the
+// test's credential, for a goroutine: it touches no *testing.T, and a failure
+// to make the call at all is its error.
+func heldPost(ctx context.Context, client *http.Client, baseURL, body string, header http.Header) (response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/mcp", strings.NewReader(body))
 	if err != nil {
 		return response{}, err
 	}
+	maps.Copy(req.Header, header)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", acceptHeader)
-	req.Header.Set("MCP-Protocol-Version", protocolVersion)
-	req.Header.Set("Mcp-Method", "tools/call")
-	req.Header.Set("Mcp-Name", "gitlab_execute_action")
-	req.Header.Set("Mcp-Param-Action", "project.get")
 	req.Header.Set("PRIVATE-TOKEN", "glpat-held")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -106,20 +130,66 @@ func heldCall(ctx context.Context, client *http.Client, baseURL string, id int) 
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
+	if resp.Close {
+		// net/http takes Connection out of the header it hands back and
+		// records it here instead.
+		resp.Header.Set("Connection", "close")
+	}
 	return response{status: resp.StatusCode, header: resp.Header, body: string(raw)}, err
 }
 
-// assertHeldRefusal checks the answer to a call past the held ceiling: a 503
-// with the register's fixed Retry-After, a JSON-RPC body echoing the call's id
-// with -50300 and the register's words, and the operator's log line naming the
-// process as the scope and the ceiling as the figure.
-func assertHeldRefusal(t *testing.T, srv *server, refused response) {
+// modernHeldCall is one tools/call running project.get on project through the
+// dynamic surface, the way a 2026-07-28 client sends it.
+func modernHeldCall(ctx context.Context, client *http.Client, baseURL string, id int, project string) (response, error) {
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) + `,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+		`"arguments":{"action":"project.get","params":{"project_id":"` + project + `"}},` +
+		`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+	return heldPost(ctx, client, baseURL, body, http.Header{
+		"Mcp-Protocol-Version": {protocolVersion},
+		"Mcp-Method":           {"tools/call"},
+		"Mcp-Name":             {"gitlab_execute_action"},
+		"Mcp-Param-Action":     {"project.get"},
+	})
+}
+
+// legacyCall is one tools/call running project.get on project 2 without the
+// protocol's _meta, the way a client of an older revision sends it.
+func legacyCall(id int) string {
+	return `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) + `,"method":"tools/call","params":{"name":"gitlab_execute_action",` +
+		`"arguments":{"action":"project.get","params":{"project_id":"2"}}}}`
+}
+
+// heldCeilingOf reads the ceiling the server announced at startup, which is
+// what its descriptor limit gave it.
+func heldCeilingOf(t *testing.T, srv *server) int {
+	t.Helper()
+	line := awaitLogLine(t, srv, `"held_requests_per_process":`)
+	match := regexp.MustCompile(`"held_requests_per_process":(\d+)`).FindStringSubmatch(line)
+	if match == nil {
+		t.Fatalf("the startup line announces no held-request ceiling: %q", line)
+	}
+	ceiling, err := strconv.Atoi(match[1])
+	if err != nil {
+		t.Fatalf("the announced ceiling %q is not a number: %v", match[1], err)
+	}
+	return ceiling
+}
+
+// assertHeldGateRefusal checks the answer to a modern call past the ceiling: a
+// 503 with the register's fixed Retry-After and the connection closed, a
+// JSON-RPC body echoing the call's id with -50300 and the busy words, and the
+// operator's log line naming the process as the scope and the ceiling as the
+// figure.
+func assertHeldGateRefusal(t *testing.T, srv *server, refused response, ceiling int) {
 	t.Helper()
 	if refused.status != http.StatusServiceUnavailable {
 		t.Fatalf("the call past the ceiling = %d, want 503: %s", refused.status, truncate(refused.body))
 	}
 	if got, want := refused.header.Get("Retry-After"), strconv.Itoa(int(tenancy.UpstreamRetryAfter.Seconds())); got != want {
 		t.Errorf("Retry-After = %q, want %q", got, want)
+	}
+	if got := refused.header.Get("Connection"); got != "close" {
+		t.Errorf("Connection = %q, want the refused caller's connection closed", got)
 	}
 	var rpc struct {
 		ID    json.RawMessage `json:"id"`
@@ -131,14 +201,12 @@ func assertHeldRefusal(t *testing.T, srv *server, refused response) {
 	if decodeErr := json.Unmarshal([]byte(refused.body), &rpc); decodeErr != nil {
 		t.Fatalf("the refusal is not a JSON-RPC body: %v: %s", decodeErr, truncate(refused.body))
 	}
-	if string(rpc.ID) != "1" || rpc.Error.Code != tenancy.CodeUnavailable ||
-		!strings.HasPrefix(rpc.Error.Message, "This server is holding as many requests as it serves at once.") {
-		t.Errorf("refusal id %s, code %d, message %q; want the request's id, %d and the register's words",
-			rpc.ID, rpc.Error.Code, rpc.Error.Message, tenancy.CodeUnavailable)
+	if string(rpc.ID) != "1" || rpc.Error.Code != tenancy.CodeUnavailable || rpc.Error.Message != heldBusy {
+		t.Errorf("refusal id %s, code %d, message %q; want the request's id, %d and %q",
+			rpc.ID, rpc.Error.Code, rpc.Error.Message, tenancy.CodeUnavailable, heldBusy)
 	}
 	line := awaitLogLine(t, srv, heldRefusalLine)
-	if !strings.Contains(line, `"scope":"process"`) ||
-		!strings.Contains(line, `"limit_held_requests":`+strconv.Itoa(tenancy.HeldRequestsPerProcess)) {
+	if !strings.Contains(line, `"scope":"process"`) || !strings.Contains(line, `"limit_held_requests":`+strconv.Itoa(ceiling)) {
 		t.Errorf("the refusal line does not name its scope and figure: %q", line)
 	}
 }
@@ -160,23 +228,86 @@ func heldCallServed(t *testing.T, resp response, err error) bool {
 	return false
 }
 
-// TestLimit_ProcessBoundsHeldRequests fills the ceiling with calls GitLab
-// keeps waiting and asks for one more.
+// assertOlderRevisionsAtTheCeiling checks what a client of an older revision
+// meets with every slot taken: its call is refused by the SDK's dispatch as a
+// result flagged with isError, each call of its batch is refused on its own,
+// so a batch cannot carry more calls than there are slots, and its
+// notification is still accepted, since it holds nothing.
+func assertOlderRevisionsAtTheCeiling(t *testing.T, ctx context.Context, client *http.Client, baseURL string) {
+	t.Helper()
+	older, err := heldPost(ctx, client, baseURL, legacyCall(2), http.Header{"Mcp-Protocol-Version": {"2025-11-25"}})
+	if err != nil || older.status != http.StatusOK || !strings.Contains(older.body, heldBusy) ||
+		!strings.Contains(older.body, `"isError":true`) {
+		t.Errorf("an older revision's call past the ceiling = %d (%v): %s; want a result flagged with isError saying %q",
+			older.status, err, truncate(older.body), heldBusy)
+	}
+	batch, err := heldPost(ctx, client, baseURL, "["+legacyCall(3)+","+legacyCall(4)+"]",
+		http.Header{"Mcp-Protocol-Version": {"2025-03-26"}})
+	if err != nil || batch.status != http.StatusOK || strings.Count(batch.body, heldBusy) != 2 {
+		t.Errorf("a batch of two calls past the ceiling = %d (%v): %s; want each call refused on its own",
+			batch.status, err, truncate(batch.body))
+	}
+	notification, err := heldPost(ctx, client, baseURL,
+		`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":1}}`,
+		http.Header{"Mcp-Protocol-Version": {"2025-11-25"}})
+	if err != nil || notification.status != http.StatusAccepted {
+		t.Errorf("a notification with every slot taken = %d (%v), want 202: it holds nothing", notification.status, err)
+	}
+}
+
+// offerPastTheCeiling sends count modern calls at once, each on a connection
+// of its own, and reports how many were refused with the gate's 503. It
+// touches no *testing.T, since the calls run on goroutines of their own.
+func offerPastTheCeiling(ctx context.Context, baseURL string, count int) int {
+	flood := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	var refused atomic.Int64
+	var wait sync.WaitGroup
+	for i := range count {
+		wait.Go(func() {
+			resp, err := modernHeldCall(ctx, flood, baseURL, 5000+i, "2")
+			if err == nil && resp.status == http.StatusServiceUnavailable {
+				refused.Add(1)
+			}
+		})
+	}
+	wait.Wait()
+	return int(refused.Load())
+}
+
+// TestLimit_ProcessBoundsHeldRequests starts the server under a descriptor
+// limit of 1024, fills the ceiling that limit gives it with calls GitLab keeps
+// waiting, and then asks for more in every shape a POST can carry a call.
 //
-// The one more is refused in the gate, before the SDK reads it: a 503 whose
+// A modern call is refused in the gate, before the SDK reads it: a 503 whose
 // JSON-RPC body echoes its id and carries -50300, with the register's fixed
-// Retry-After, in the words the register declares, and a line in the log
-// naming the process as the scope. /health still answers, which is what the
-// ceiling exists to keep true, and a subscriptions/listen still reaches the
-// SDK, since the listen ceilings count it rather than this one. Once GitLab
-// answers, every held call is served and the next call is served too.
+// Retry-After, the connection closed, words that name no bound, and a line in
+// the log naming the process as the scope. A call on an older revision is
+// refused by the SDK's dispatch as a result flagged with isError, and each
+// call of an older revision's batch on its own, so a batch cannot carry more
+// calls than there are slots. A notification is still accepted, since it
+// holds nothing, and a listen still reaches the SDK, since the listen ceilings
+// count it rather than this one.
+//
+// Then it offers six hundred more modern calls at once: held, they would need
+// more descriptors than the limit allows, and the process would stop accepting
+// connections, /health among them. Refused and closed, they cost nothing that
+// stays, and /health answers. (Windows has no descriptor limit to set, so
+// there the last half shows only that the refusals are made.) Once GitLab
+// answers, every held call is served, and the next call is served too.
 //
 // The rate limit is off so one credential can hold every slot: the per-caller
 // bucket would otherwise refuse the calls first, which is a different bound.
 func TestLimit_ProcessBoundsHeldRequests(t *testing.T) {
 	gitlab := startHoldingProjectsGitLab(t)
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--rate-limit-rps=0", "--capability-surface=full")
-	const ceiling = tenancy.HeldRequestsPerProcess
+	srv, err := tryStartServerLaunched(t, ephemeralPort, underDescriptorLimit(heldDescriptorLimit), nil,
+		"--gitlab-url="+gitlab.url, "--rate-limit-rps=0", "--capability-surface=full")
+	if err != nil {
+		t.Fatalf("starting the server under a descriptor limit of %d: %v", heldDescriptorLimit, err)
+	}
+	ceiling := heldCeilingOf(t, srv)
+	if ceiling != 192 {
+		t.Fatalf("the server announced a ceiling of %d under a descriptor limit of %d, want 192", ceiling, heldDescriptorLimit)
+	}
 
 	// One client with room for every held call's connection, and no timeout
 	// of its own: the calls are held on purpose, and the test's context ends
@@ -192,36 +323,44 @@ func TestLimit_ProcessBoundsHeldRequests(t *testing.T) {
 	outcomes := make(chan outcome, ceiling)
 	for i := range ceiling {
 		go func() {
-			resp, err := heldCall(ctx, client, srv.baseURL, 1000+i)
-			outcomes <- outcome{resp, err}
+			resp, callErr := modernHeldCall(ctx, client, srv.baseURL, 1000+i, "1")
+			outcomes <- outcome{resp, callErr}
 		}()
 	}
 
 	deadline := time.Now().Add(time.Minute)
-	for gitlab.held() < ceiling && time.Now().Before(deadline) {
+	for gitlab.held() < int64(ceiling) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := gitlab.held(); got != ceiling {
+	if got := gitlab.held(); got != int64(ceiling) {
 		t.Fatalf("GitLab is holding %d calls, want the ceiling's %d in flight before the next is offered", got, ceiling)
 	}
 
-	refused, err := heldCall(ctx, client, srv.baseURL, 1)
+	refused, err := modernHeldCall(ctx, client, srv.baseURL, 1, "2")
 	if err != nil {
 		t.Fatalf("the call past the ceiling could not be made: %v", err)
 	}
-	assertHeldRefusal(t, srv, refused)
+	assertHeldGateRefusal(t, srv, refused, ceiling)
 
-	if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
-		t.Errorf("/health = %d with every held slot taken, want 200", health.status)
-	}
+	assertOlderRevisionsAtTheCeiling(t, ctx, client, srv.baseURL)
 
 	const listenMeta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
 		`"io.modelcontextprotocol/clientCapabilities":{},` +
 		`"io.modelcontextprotocol/clientInfo":{"name":"probe","version":"1"}}`
 	sseFrameContaining(t, srv, "subscriptions/listen", "2026-07-28",
-		`{"jsonrpc":"2.0","id":2,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true},`+
+		`{"jsonrpc":"2.0","id":5,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true},`+
 			listenMeta+`}}`,
 		"notifications/subscriptions/acknowledged")
+
+	// More modern calls than the descriptor limit could hold, all at once, on
+	// connections of their own.
+	const extra = 600
+	if got := offerPastTheCeiling(ctx, srv.baseURL, extra); got != extra {
+		t.Errorf("%d of the %d calls offered past the ceiling were refused with 503, want every one", got, extra)
+	}
+	if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
+		t.Errorf("/health = %d after %d calls were offered past the ceiling, want 200", health.status, extra)
+	}
 
 	gitlab.release()
 	served := 0
@@ -235,7 +374,7 @@ func TestLimit_ProcessBoundsHeldRequests(t *testing.T) {
 		t.Fatalf("%d of the %d held calls were served once GitLab answered", served, ceiling)
 	}
 
-	after, err := heldCall(ctx, client, srv.baseURL, 3)
+	after, err := modernHeldCall(ctx, client, srv.baseURL, 6, "2")
 	if err != nil || after.status != http.StatusOK {
 		t.Errorf("a call after the held ones ended = %d (%v), want 200 now that the slots are free: %s",
 			after.status, err, truncate(after.body))

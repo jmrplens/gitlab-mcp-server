@@ -113,7 +113,8 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 }
 
 // TestDecisions_FunctionsNameThePromotedRules pins which rows name a register
-// function: the five rows of the method meter name MeterFor, POL-003 names
+// function: the five rows of the method meter name MeterFor, and so does
+// HLD-011, which counts the methods it meters to an upstream; POL-003 names
 // Busy, the three authentication budgets name the switch that says whether
 // each is on, and every other row names none.
 func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
@@ -123,6 +124,7 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 		"RTC-003": "MeterFor",
 		"RTC-004": "MeterFor",
 		"RTC-007": "MeterFor",
+		"HLD-011": "MeterFor",
 		"POL-003": "Busy",
 		"AUB-001": "BudgetOn",
 		"AUB-002": "TransportSourceBudgetOn",
@@ -173,29 +175,48 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 }
 
 // TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951 pins what issue
-// 951 decided for the requests the process holds open: a ceiling keyed on the
-// process that no operator can change and that stands alone, refusing the
-// newcomer in the gate with a 503 that says to retry later and charges nothing,
-// and that exists only over HTTP. The stateful sessions are the half of F-31 it
-// does not answer, so HLD-010 keeps the finding for them, names only them now,
-// and the finding stays filed as issue 951's.
+// 951 decided for the calls the process holds open: a ceiling keyed on the
+// process that no operator sets, derived from the process's descriptor limit
+// and standing alone, refusing the newcomer on every channel its methods carry
+// with words that say to retry later and charge nothing, and existing only
+// over HTTP. The stateful sessions are the half of F-31 it does not answer, so
+// HLD-010 keeps the finding for them, names only them now, and the finding
+// stays filed as issue 951's.
 func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	held, _ := Lookup("HLD-011")
-	if held.Key != KeyProcess || held.StdioKey != KeyNone || held.Source != Constant || !held.ProtectsProcess ||
-		held.Partner != "" || held.AtCapacity != RefuseNewcomer || !slices.Contains(held.Decided, "issue 951") ||
-		len(held.Findings) != 0 {
+	if !heldIsDecidedByIssue951(held) {
 		t.Errorf("HLD-011: key %s, stdio %s, source %d, protects the process %v, partner %q, at capacity %d, "+
-			"decided %v, findings %v; want a constant on the process alone, over HTTP only, refusing the "+
-			"newcomer, decided by issue 951 and carrying no finding",
+			"decided %v, findings %v, functions %v; want a derived value on the process alone, over HTTP only, "+
+			"refusing the newcomer, decided by issue 951, carrying no finding and counting what MeterFor meters",
 			held.Key, held.StdioKey, held.Source, held.ProtectsProcess, held.Partner, held.AtCapacity,
-			held.Decided, held.Findings)
+			held.Decided, held.Findings, held.Functions)
 	}
-	if len(held.Refusals) != 1 {
-		t.Fatalf("HLD-011 declares %d refusals, want one", len(held.Refusals))
+	want := []struct {
+		channel Channel
+		code    int
+		status  int
+		retry   RetryAfter
+	}{
+		{Gate, CodeUnavailable, 503, RetryAfterFixed},
+		{ToolError, 0, 0, RetryAfterNone},
+		{RPC, CodeTooManyRequests, 0, RetryAfterNone},
+		{EmptyCompletion, 0, 0, RetryAfterNone},
 	}
-	if r := held.Refusals[0]; r.Channel != Gate || r.Status != 503 || r.Code != CodeUnavailable ||
-		r.RetryAfter != RetryAfterFixed || r.Answer != RetryLater || len(r.Charged) != 0 {
-		t.Errorf("HLD-011 refuses with %+v; want a gate 503 with the fixed Retry-After, retry later, charging nothing", r)
+	if len(held.Refusals) != len(want) {
+		t.Fatalf("HLD-011 declares %d refusals, want %d", len(held.Refusals), len(want))
+	}
+	for i, w := range want {
+		t.Run(w.channel.String(), func(t *testing.T) {
+			r := held.Refusals[i]
+			if r.Channel != w.channel || r.Code != w.code || r.Status != w.status || r.RetryAfter != w.retry ||
+				r.Answer != RetryLater || len(r.Charged) != 0 {
+				t.Errorf("HLD-011 refuses with %+v; want channel %s, code %d, status %d, retry later, charging nothing",
+					r, w.channel, w.code, w.status)
+			}
+			if w.channel != EmptyCompletion && r.Prefix != "This server is busy." {
+				t.Errorf("prefix %q, want words that name no bound", r.Prefix)
+			}
+		})
 	}
 
 	sessions, _ := Lookup("HLD-010")
@@ -206,6 +227,16 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	if FindingIssue("F-31") != 951 {
 		t.Errorf("F-31 is filed as issue %d, want it kept as issue 951's", FindingIssue("F-31"))
 	}
+}
+
+// heldIsDecidedByIssue951 reports whether HLD-011 has the shape issue 951
+// decided for it: a value derived on the process alone, over HTTP only,
+// refusing the newcomer, carrying no finding and counting what MeterFor
+// meters to an upstream.
+func heldIsDecidedByIssue951(held Decision) bool {
+	return held.Key == KeyProcess && held.StdioKey == KeyNone && held.Source == Derived && held.ProtectsProcess &&
+		held.Partner == "" && held.AtCapacity == RefuseNewcomer && slices.Contains(held.Decided, "issue 951") &&
+		len(held.Findings) == 0 && slices.Equal(held.Functions, []string{"MeterFor"})
 }
 
 // TestDecisions_TwoMCPClauses_AreDecidedByIssue959 pins what issue 959
@@ -426,6 +457,7 @@ const (
 	pinSubMeths = "resources/subscribe,subscriptions/listen"
 	pinCharged  = "AUB-001,AUB-002,AUB-003"
 	pinRetry503 = "GitLab could not verify this token right now"
+	pinBusy     = "This server is busy."
 )
 
 func pinBlockedAt() []refusalPin {
@@ -681,9 +713,15 @@ func rowPins() map[string]rowPin {
 		"HLD-010": {Allow, Ceiling, ClassP, Ruled, KeyProcess, KeyNone, KeyNone, KeyProcess, nil},
 		"HLD-011": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyProcess, KeyProcess, []refusalPin{
 			{
-				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
-				prefix: "This server is holding as many requests as it serves at once.", answer: RetryLater,
+				methods: "http", era: EraModern, channel: Gate, code: -50300, status: 503, retry: RetryAfterFixed,
+				prefix: pinBusy, answer: RetryLater,
 			},
+			{methods: "tools/call", channel: ToolError, prefix: pinBusy, answer: RetryLater},
+			{
+				methods: "resources/read,resources/subscribe,prompts/get", channel: RPC, code: -42900,
+				prefix: pinBusy, answer: RetryLater,
+			},
+			{methods: "completion/complete", channel: EmptyCompletion, answer: RetryLater},
 		}},
 		"POL-001": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyNone, KeyNone, KeyNone, nil},
 		"POL-002": {Allow, Rule, ClassR, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{

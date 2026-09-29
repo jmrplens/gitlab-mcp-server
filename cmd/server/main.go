@@ -555,7 +555,8 @@ FLAGS
 
  Limits and pooling (HTTP mode)
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries, not sessions (default %d). The
-                            requests held open at once are bounded across the process at %d, not configurable
+                            calls held open at once are bounded across the process by its descriptor limit,
+                            at %d here, and no flag moves it
   -pool-idle-timeout dur    Reclaim a pooled credential entry after this long unused, except one with a live subscription (default %s, 0 to disable)
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
@@ -727,7 +728,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
-		config.DefaultMaxHTTPClients, maxHeldRequestsPerProcess, config.DefaultPoolIdleTimeout,
+		config.DefaultMaxHTTPClients, processHeldRequests.limit, config.DefaultPoolIdleTimeout,
 		tenancy.CatalogProcessRate, tenancy.CatalogProcessBurst,
 		config.DefaultRateLimitBurst,
 		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
@@ -1978,6 +1979,13 @@ func newServerShell(
 		)
 	}
 
+	// Ceiling on the calls the process holds open across every credential
+	// (register row HLD-011). Added after the rate limit so it runs before it:
+	// a call it refuses spends none of its credential's bucket. It counts only
+	// calls that arrived on an HTTP POST, so a stdio server carries it and
+	// counts nothing.
+	server.AddReceivingMiddleware(heldRequestsMiddleware(processHeldRequests))
+
 	identifier := attachIdentityMiddlewares(server, settings, toolSurface)
 
 	shell.server = server
@@ -2689,8 +2697,9 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"max_clients", cfg.MaxHTTPClients,
 		// Announced beside the pool's bound because the flag help says the
 		// pool bounds entries and not what they hold: this is the figure that
-		// bounds that, and no flag moves it (HLD-011).
-		"held_requests_per_process", maxHeldRequestsPerProcess,
+		// bounds that, derived from the descriptor limit this process runs
+		// under, and no flag moves it (HLD-011).
+		"held_requests_per_process", processHeldRequests.limit,
 		"session_timeout", cfg.SessionTimeout,
 		"stateless", cfg.Stateless,
 		"json_response", cfg.JSONResponse,
