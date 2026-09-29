@@ -4,8 +4,6 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
-
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // httpOnlyFlag describes a flag whose value lands in [httpConfig], which a
@@ -21,6 +19,12 @@ import (
 // limiter and no message, and one who passed --read-only got a server that
 // writes. The fix is to say so at startup, once, naming each flag and the
 // variable that carries the same setting on stdio where there is one.
+//
+// The variables are spelled out rather than built from [config.EnvPrefix]:
+// a concatenation in a package-level initializer is folded by the compiler,
+// so it is a mutant no test can reach, and
+// TestHTTPOnlyFlags_NameVariablesStdioReads already holds every spelling to a
+// variable [config.Load] reads.
 type httpOnlyFlag struct {
 	// stdioVariable is the variable that carries the same setting on stdio,
 	// or empty where stdio has no such setting at all: the listener, the pool,
@@ -62,19 +66,19 @@ var httpOnlyFlags = map[string]httpOnlyFlag{
 	"drain-delay":                {},
 	"gitlab-url":                 {stdioVariable: "GITLAB_URL"},
 	"allow-any-gitlab-url":       {},
-	"skip-tls-verify":            {stdioVariable: config.EnvPrefix + "SKIP_TLS_VERIFY"},
-	"tier":                       {stdioVariable: config.EnvPrefix + "TIER"},
-	"ignore-scopes":              {stdioVariable: config.EnvPrefix + "IGNORE_SCOPES"},
-	"tool-surface":               {stdioVariable: config.EnvPrefix + "TOOL_SURFACE"},
-	"capability-surface":         {stdioVariable: config.EnvPrefix + "CAPABILITY_SURFACE"},
-	"meta-param-schema":          {stdioVariable: config.EnvPrefix + "META_PARAM_SCHEMA"},
-	"embedded-resources":         {stdioVariable: config.EnvPrefix + "EMBEDDED_RESOURCES"},
-	"exclude-tools":              {stdioVariable: config.EnvPrefix + "EXCLUDE_TOOLS"},
-	"read-only":                  {stdioVariable: config.EnvPrefix + "READ_ONLY", withholds: func(h *httpConfig) bool { return h.readOnly }},
-	"safe-mode":                  {stdioVariable: config.EnvPrefix + "SAFE_MODE", withholds: func(h *httpConfig) bool { return h.safeMode }},
-	"action-timeout":             {stdioVariable: config.EnvPrefix + "ACTION_TIMEOUT"},
-	"rate-limit-rps":             {stdioVariable: config.EnvPrefix + "RATE_LIMIT_RPS"},
-	"rate-limit-burst":           {stdioVariable: config.EnvPrefix + "RATE_LIMIT_BURST"},
+	"skip-tls-verify":            {stdioVariable: "GITLAB_MCP_SKIP_TLS_VERIFY"},
+	"tier":                       {stdioVariable: "GITLAB_MCP_TIER"},
+	"ignore-scopes":              {stdioVariable: "GITLAB_MCP_IGNORE_SCOPES"},
+	"tool-surface":               {stdioVariable: "GITLAB_MCP_TOOL_SURFACE"},
+	"capability-surface":         {stdioVariable: "GITLAB_MCP_CAPABILITY_SURFACE"},
+	"meta-param-schema":          {stdioVariable: "GITLAB_MCP_META_PARAM_SCHEMA"},
+	"embedded-resources":         {stdioVariable: "GITLAB_MCP_EMBEDDED_RESOURCES"},
+	"exclude-tools":              {stdioVariable: "GITLAB_MCP_EXCLUDE_TOOLS"},
+	"read-only":                  {stdioVariable: "GITLAB_MCP_READ_ONLY", withholds: func(h *httpConfig) bool { return h.readOnly }},
+	"safe-mode":                  {stdioVariable: "GITLAB_MCP_SAFE_MODE", withholds: func(h *httpConfig) bool { return h.safeMode }},
+	"action-timeout":             {stdioVariable: "GITLAB_MCP_ACTION_TIMEOUT"},
+	"rate-limit-rps":             {stdioVariable: "GITLAB_MCP_RATE_LIMIT_RPS"},
+	"rate-limit-burst":           {stdioVariable: "GITLAB_MCP_RATE_LIMIT_BURST"},
 	"max-http-clients":           {},
 	"revalidate-interval":        {},
 	"pool-idle-timeout":          {},
@@ -124,13 +128,11 @@ func describeIgnoredFlag(name string) string {
 
 // The three lines [reportStdioIgnoredFlags] writes. test/e2e/stdio reads them
 // off the real binary's stderr, spelled out there because it cannot import
-// this package.
+// this package. Each is one literal, for the reason [httpOnlyFlag] gives.
 const (
-	stdioIgnoredFlagsLine = "these flags are read in HTTP mode only, and a stdio server takes its configuration " +
-		"from the environment, so they have no effect"
+	stdioIgnoredFlagsLine     = "these flags are read in HTTP mode only, and a stdio server takes its configuration from the environment, so they have no effect"
 	stdioAutoIgnoredFlagsLine = "--transport=auto chose stdio, so the flags given for HTTP mode have no effect on this run"
-	stdioWithheldWritesLine   = "a flag asking to hold back writes was passed to a stdio server, which reads it in HTTP mode " +
-		"only and would serve the writes, so this deployment will not be started under a capability it did not ask for"
+	stdioWithheldWritesLine   = "a flag asking to hold back writes was passed to a stdio server, which reads it in HTTP mode only and would serve the writes, so this deployment will not be started under a capability it did not ask for"
 )
 
 // reportStdioIgnoredFlags tells the operator of a stdio run which of the flags
