@@ -411,10 +411,12 @@ func newVerificationClient(skipTLS bool) *http.Client {
 // many tokens arrive at once.
 //
 // The price is paid by the one population it can reach: a legitimate credential
-// presented for the first time while a flood holds every slot waits with the
-// flood, and is refused like it once [verificationWait] runs out, for as long
-// as the flood lasts. A credential the cache holds is not in that population,
-// since it is answered before a slot is asked for.
+// presented for the first time while a flood holds every slot waits in the
+// flood's queue and is served only when a slot frees before [verificationWait]
+// runs out, which under a sustained flood is about the slots' share of the
+// demand; the rest are refused like the flood (make bench-fairness
+// BOUND=oauth-verification measures it). A credential the cache holds is not
+// in that population, since it is answered before a slot is asked for.
 //
 // It is not configurable, because an operator who could raise it could undo
 // what it bounds (INV-004).
