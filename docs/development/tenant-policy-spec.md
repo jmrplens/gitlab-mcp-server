@@ -624,19 +624,25 @@ flood's queue and is served only when a slot frees before its five seconds do. O
 sixteen-thread host with the run held to five cores, a stand-in GitLab answering each
 verification request in 100 ms, a flood of four hundred invented tokens a second from
 ninety-six transport sources, and eight quiet credentials presenting four new tokens a
-second between them beside twelve requests on credentials already cached, the ceiling
-served 50 of the 120 new tokens of a thirty-second phase in each of two repetitions,
-after 5.5 s at the median where they took 0.52 s without it, and refused the other 70;
-the 360 cached requests were served in both arms, at 14 ms at the median. The share
-served is the slots' share of the demand: 104 and 100 of 120 at 50 ms, 26 and 29 at
-200 ms, and 24 and 27 at 100 ms under a flood of a thousand a second. What the ceiling
+second between them beside twelve requests a second on credentials already cached, the
+ceiling served 42 and 40 of the 120 new tokens of a thirty-second phase in two
+repetitions, after 5.5 s at the median where they took 0.52 s without it, and refused
+the rest; every one of the 360 cached requests was served in both arms, at a median of
+14 ms with the ceiling and 13 and 15 ms without it. The phase follows the lead-in on
+one clock and opens after the flood has settled into its queue, so these are what a
+sustained flood leaves rather than what an empty queue serves in its first seconds.
+The share served follows the slots' share of what arrives, which is two in five here,
+and stays below it: 80 and 82 of 120 at 50 ms, where the slots finish four in five, 17
+and 17 at 200 ms, where they finish one in five, and 17 and 17 at 100 ms under a flood
+of a thousand a second, where they finish about one in six. What the ceiling
 buys is the instance's load, which the slots and the round trip set whatever the flood:
-at 100 ms the instance received 5,638 requests under the flood of four hundred and 5,612
-under the flood of a thousand, never more than 19 at once, against 12,600 and 30,600 and
-up to 76 and 125 at once without it. The queue moves into the process instead, since
-each waiting request holds its connection for up to the five seconds: the server's
-resident set peaked at 273 MiB against 172 without the ceiling under the flood of four
-hundred, and at 434 against 194 under the flood of a thousand. Nothing bounds how many
+at 100 ms the instance received about 5,640 requests under the flood of four hundred and
+about 5,600 under the flood of a thousand, never more than 20 at once, against 12,600
+and 30,600 and up to 56 and 110 at once without it. The queue moves into the process
+instead, since each waiting request holds its connection for up to the five seconds:
+the server's resident set peaked at 273 and 277 MiB against 175 and 178 without the
+ceiling under the flood of four hundred, and at 436 and 438 against 188 under the flood
+of a thousand. Nothing bounds how many
 requests wait but the rate they arrive at, and their connections are descriptors outside
 the held calls `HLD-011` counts, since the wait comes before the gate admits a request;
 the runs had a descriptor limit of 1048576 and did not reach it. The ceiling trades the
