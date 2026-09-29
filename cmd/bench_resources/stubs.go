@@ -56,30 +56,46 @@ type stubGitLab struct {
 
 // gauge counts requests in flight: how many now, the most at once since it was
 // last reset, and how many arrived since then.
+//
+// A mutex rather than three atomics: the peak has to move with the count it is
+// the peak of, and a compare-and-swap loop does that only by retrying on a
+// contention no test can arrange on purpose. A stand-in answering a few
+// hundred requests a second does not notice the lock.
 type gauge struct {
-	now, peak, total atomic.Int64
+	mu               sync.Mutex
+	now, peak, total int64
 }
 
 // enter counts a request in, raising the peak when it is a new high.
 func (g *gauge) enter() {
-	now := g.now.Add(1)
-	g.total.Add(1)
-	for {
-		peak := g.peak.Load()
-		if now <= peak || g.peak.CompareAndSwap(peak, now) {
-			return
-		}
-	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.now++
+	g.total++
+	g.peak = max(g.peak, g.now)
 }
 
 // leave counts a request out.
-func (g *gauge) leave() { g.now.Add(-1) }
+func (g *gauge) leave() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.now--
+}
 
 // reset starts a window: nothing has arrived in it yet, and the most in flight
 // is what is in flight now.
 func (g *gauge) reset() {
-	g.total.Store(0)
-	g.peak.Store(g.now.Load())
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.total = 0
+	g.peak = g.now
+}
+
+// read is what the window saw: how many arrived, and the most at once.
+func (g *gauge) read() (total, peak int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.total, g.peak
 }
 
 // setDelay sets how long each verification request is answered after.
@@ -93,9 +109,11 @@ func (s *stubGitLab) resetUpstream() {
 
 // upstream is what the instance saw of verification since the window began.
 func (s *stubGitLab) upstream() FairnessUpstream {
+	requests, peak := s.verifying.read()
+	invented, inventedPeak := s.invented.read()
 	return FairnessUpstream{
-		Requests: s.verifying.total.Load(), PeakInFlight: s.verifying.peak.Load(),
-		InventedRequests: s.invented.total.Load(), InventedPeakInFlight: s.invented.peak.Load(),
+		Requests: requests, PeakInFlight: peak,
+		InventedRequests: invented, InventedPeakInFlight: inventedPeak,
 	}
 }
 

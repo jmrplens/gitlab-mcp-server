@@ -416,6 +416,31 @@ func TestStubGitLab_Verification_AnswersAfterItsRoundTripAndCountsWhatIsInFlight
 	}
 }
 
+// TestGauge_KeepsItsPeakAndStartsAWindowFromWhatIsInFlight verifies the gauge
+// the verification figures are read from, one step at a time: the peak stays
+// at its high after requests leave, and a reset starts a window whose peak is
+// what is still in flight rather than nothing, so a request that outlives the
+// reset is counted in the window it ends in.
+func TestGauge_KeepsItsPeakAndStartsAWindowFromWhatIsInFlight(t *testing.T) {
+	var g gauge
+	g.enter()
+	g.enter()
+	g.leave()
+	g.enter()
+	if total, peak := g.read(); total != 3 || peak != 2 {
+		t.Errorf("after three in and one out: total %d peak %d, want 3 and 2", total, peak)
+	}
+	g.leave()
+	g.reset()
+	if total, peak := g.read(); total != 0 || peak != 1 {
+		t.Errorf("after a reset with one in flight: total %d peak %d, want 0 and 1", total, peak)
+	}
+	g.enter()
+	if total, peak := g.read(); total != 1 || peak != 2 {
+		t.Errorf("after one more in: total %d peak %d, want 1 and 2", total, peak)
+	}
+}
+
 // TestPause_EndsWithTheRequest verifies a round trip is cut short by a caller
 // that left, so a flood the server abandoned does not keep the stand-in's
 // handlers, and with them the gauges, busy for the rest of their delay.
