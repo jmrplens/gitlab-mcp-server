@@ -110,6 +110,19 @@ func TestResolveIdentity_NilRequest(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_ExtraWithoutTokenInfo_FallsBackToTheContext verifies a
+// request that carries request extras but no token info, which is what a stdio
+// call looks like, is answered from the identity stored in the context.
+func TestResolveIdentity_ExtraWithoutTokenInfo_FallsBackToTheContext(t *testing.T) {
+	ctxID := toolutil.UserIdentity{UserID: "6", Username: "from-ctx"}
+	ctx := toolutil.IdentityToContext(context.Background(), ctxID)
+
+	got := toolutil.ResolveIdentity(ctx, &mcp.CallToolRequest{Extra: &mcp.RequestExtra{}})
+	if got != ctxID {
+		t.Errorf("ResolveIdentity() = %+v, want the context identity %+v", got, ctxID)
+	}
+}
+
 // TestResolveIdentity_NoIdentity verifies that ResolveIdentity returns an
 // unauthenticated zero-value identity when neither the context nor the request
 // carries any identity information.

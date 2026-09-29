@@ -47,6 +47,32 @@ func TestRegisterSurfaceToolFromSpec_InvalidSpecPanics(t *testing.T) {
 	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "noop"})
 }
 
+// TestRegisterSurfaceToolFromSpec_OwnFormatter_IsTheOneServed verifies a tool
+// registered with a formatter of its own answers through it, rather than
+// through the Markdown registry every other surface tool falls back on.
+func TestRegisterSurfaceToolFromSpec_OwnFormatter_IsTheOneServed(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	route := RouteFunc(func(_ context.Context, _ surfaceToolTestInput) (testOutput, error) {
+		return testOutput{Result: "route"}, nil
+	})
+	spec := NewActionSpec("get", route, ActionSpecOptions{
+		IndividualTool: IndividualToolSpec{Name: "gitlab_test_get", Title: "Test Get"},
+	})
+	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{
+		Description:  "Test tool with its own formatter.",
+		FormatResult: func(any) *mcp.CallToolResult { return SuccessResult("from its own formatter") },
+	})
+
+	session := newSurfaceToolSession(t, server, nil)
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_get", Arguments: map[string]any{"id": 1}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if got := surfaceToolResultText(result); !strings.Contains(got, "from its own formatter") {
+		t.Errorf("result text = %q, want the tool's own formatter's text", got)
+	}
+}
+
 // TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute verifies catalog-backed individual tools centralize destructive confirmation.
 func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) {
 	var called atomic.Bool

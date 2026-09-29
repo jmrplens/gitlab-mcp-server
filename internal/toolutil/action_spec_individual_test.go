@@ -460,6 +460,11 @@ func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
 			wantReadOnly: &falsehood,
 		},
 		{
+			name:         "a read-only false on a mutating action is kept",
+			overrides:    IndividualToolAnnotationOverrides{ReadOnly: &falsehood},
+			wantReadOnly: &falsehood,
+		},
+		{
 			name:           "idempotent claim on a non-repeatable action is dropped",
 			overrides:      IndividualToolAnnotationOverrides{Idempotent: &truth},
 			wantIdempotent: nil,
@@ -474,6 +479,11 @@ func TestIndividualToolAnnotationOverrides_NarrowingOnly(t *testing.T) {
 			name:           "a narrowing idempotent override is kept",
 			overrides:      IndividualToolAnnotationOverrides{Idempotent: &falsehood},
 			idempotent:     true,
+			wantIdempotent: &falsehood,
+		},
+		{
+			name:           "an idempotent false on a non-repeatable action is kept",
+			overrides:      IndividualToolAnnotationOverrides{Idempotent: &falsehood},
 			wantIdempotent: &falsehood,
 		},
 	}
@@ -566,6 +576,16 @@ func TestTypeIdentity_NamesTypesByPackagePath(t *testing.T) {
 	if !strings.HasPrefix(got, "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil.") || !strings.HasSuffix(got, "toolutil.testInput") {
 		t.Errorf("TypeIdentity(testInput) = %q, want the package path and the type", got)
 	}
+}
+
+// TestApplyIndividualRequiredFields_NilSchema_IsLeftAlone verifies a route
+// with an input type and no schema is left with no schema: the required list
+// has nowhere to go, and writing it into a nil map would panic. The call
+// returning is the evidence.
+func TestApplyIndividualRequiredFields_NilSchema_IsLeftAlone(t *testing.T) {
+	t.Parallel()
+
+	applyIndividualRequiredFields(nil, reflect.TypeFor[testInput]())
 }
 
 // TestIndividualInputSchema_SharedRouteDerivesOnce verifies the individual

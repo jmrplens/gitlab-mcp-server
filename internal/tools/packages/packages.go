@@ -18,6 +18,11 @@ import (
 const (
 	fmtCtxCancelled = "context canceled: %w"
 	fmtPkgPublish   = "packagePublish: %w"
+	// hintFileNameSegments is what a caller is told when client-go refuses a
+	// file_name while formatting the package path. For the string project ID
+	// both handlers pass, the file name is the only thing FormatPackageURL can
+	// refuse (gl.ErrInvalidFileName), so the hint is the whole answer.
+	hintFileNameSegments = "file_name segments between / separators must not be empty, \".\", or \"..\""
 )
 
 // Publish.
@@ -105,6 +110,20 @@ func publishWithTracker(
 		return PublishOutput{}, err
 	}
 
+	// The path is formatted once, before the file is opened: a file_name
+	// client-go refuses is refused here without reading a byte of the file,
+	// and PublishPackageFile formats the same coordinates again, so once this
+	// succeeds neither the upload nor the URL below can fail on it.
+	pkgPath, err := client.GL().GenericPackages.FormatPackageURL(
+		string(input.ProjectID),
+		input.PackageName,
+		input.PackageVersion,
+		input.FileName,
+	)
+	if err != nil {
+		return PublishOutput{}, toolutil.WrapErrWithHint("packagePublish", err, hintFileNameSegments)
+	}
+
 	reader, fileSize, cleanup, err := toolutil.OpenFileOrBase64Source("packagePublish", input.FilePath, input.ContentBase64)
 	if err != nil {
 		return PublishOutput{}, err
@@ -136,25 +155,11 @@ func publishWithTracker(
 		gl.WithContext(ctx),
 	)
 	if err != nil {
-		if errors.Is(err, gl.ErrInvalidFileName) {
-			return PublishOutput{}, toolutil.WrapErrWithHint("packagePublish", err,
-				"file_name segments between / separators must not be empty, \".\", or \"..\"")
-		}
 		return PublishOutput{}, toolutil.WrapErrWithStatusHint("packagePublish", err, http.StatusBadRequest,
 			"package_name and package_version must match pattern [A-Za-z0-9.\\-_]+ with version following SemVer; verify file_name does not already exist in this package or use status=hidden to override")
 	}
 
-	var pkgURL string
-	pkgPath, err := client.GL().GenericPackages.FormatPackageURL(
-		string(input.ProjectID),
-		input.PackageName,
-		input.PackageVersion,
-		input.FileName,
-	)
-	if err == nil {
-		pkgURL = strings.TrimRight(client.GL().BaseURL().String(), "/") + "/" + pkgPath
-	}
-
+	pkgURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + "/" + pkgPath
 	out := PublishOutput{
 		PackageFileID: published.ID,
 		PackageID:     published.PackageID,
@@ -667,7 +672,7 @@ func filePipelinesToOutput(pipelines *[]gl.Pipeline, extra packageFileExtra) []t
 			CreatedAt: toolutil.RFC3339Ptr(p.CreatedAt),
 			UpdatedAt: toolutil.RFC3339Ptr(p.UpdatedAt),
 			WebURL:    p.WebURL,
-			User:      packagePipelineUserToOutput(p.User, extra.Pipelines[i].User),
+			User:      toolutil.UserBasicFrom(p.User, extra.Pipelines[i].User),
 		}
 	}
 	return out
@@ -690,38 +695,14 @@ func packagePipelineToOutput(pipeline *gl.PackagePipeline, extra *toolutil.Packa
 		UpdatedAt: toolutil.RFC3339Ptr(pipeline.UpdatedAt),
 		WebURL:    pipeline.WebURL,
 	}
-	var userExtra *toolutil.UserBasicExtra
+	var userExtra toolutil.UserBasicExtra
 	if extra != nil {
 		out.IID = extra.IID
 		out.ProjectID = extra.ProjectID
 		out.Source = extra.Source
 		userExtra = extra.User
 	}
-	out.User = packagePipelineUserToOutput(pipeline.User, userExtra)
-	return out
-}
-
-// packagePipelineUserToOutput converts the user who ran one of a package's
-// pipelines, or nil when GitLab sent none: the six keys client-go's BasicUser
-// decodes that the entity sends, and the two the capture read beside it. The
-// seventh key BasicUser decodes, created_at, is not one GitLab's UserBasic
-// sends, so it is not published.
-func packagePipelineUserToOutput(user *gl.BasicUser, extra *toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
-	if user == nil {
-		return nil
-	}
-	out := &toolutil.UserBasicOutput{
-		ID:        user.ID,
-		Username:  user.Username,
-		Name:      user.Name,
-		State:     user.State,
-		AvatarURL: user.AvatarURL,
-		WebURL:    user.WebURL,
-	}
-	if extra != nil {
-		out.PublicEmail = extra.PublicEmail
-		out.Locked = extra.Locked
-	}
+	out.User = toolutil.UserBasicFrom(pipeline.User, userExtra)
 	return out
 }
 
@@ -765,9 +746,9 @@ type packageFileExtra struct {
 }
 
 // packageFilePipelineExtra is one pipeline of a package file, reduced to what
-// client-go leaves out of it.
+// client-go leaves out of it, the zero value for a pipeline no user ran.
 type packageFilePipelineExtra struct {
-	User *toolutil.UserBasicExtra `json:"user"`
+	User toolutil.UserBasicExtra `json:"user"`
 }
 
 // FileListOutput contains the paginated list of package files.

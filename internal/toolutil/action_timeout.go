@@ -27,10 +27,7 @@ var actionTimeoutNanos atomic.Int64
 // SetActionTimeout sets the deadline every action runs under. Zero or a
 // negative value disables it.
 func SetActionTimeout(d time.Duration) {
-	if d < 0 {
-		d = 0
-	}
-	actionTimeoutNanos.Store(int64(d))
+	actionTimeoutNanos.Store(int64(max(d, 0)))
 }
 
 // ActionTimeout reports the deadline every action runs under, 0 for none.

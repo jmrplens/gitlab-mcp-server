@@ -2,7 +2,6 @@ package toolutil
 
 import (
 	"fmt"
-	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -59,18 +58,20 @@ func ExpandResourceURI(template string, params map[string]any) (string, bool) {
 	}
 	var b strings.Builder
 	rest := template
+	// Cut rather than index arithmetic: an offset one off in the step past the
+	// closing brace leaves rest where it was and loops for ever, and the scan
+	// is the same one ResourceTemplateVariables makes.
 	for {
-		open := strings.IndexByte(rest, '{')
-		if open == -1 {
+		before, afterOpen, opened := strings.Cut(rest, "{")
+		if !opened {
 			b.WriteString(rest)
 			return b.String(), true
 		}
-		closing := strings.IndexByte(rest[open:], '}')
-		if closing == -1 {
+		name, afterClose, closed := strings.Cut(afterOpen, "}")
+		if !closed {
 			return "", false
 		}
-		b.WriteString(rest[:open])
-		name := rest[open+1 : open+closing]
+		b.WriteString(before)
 		reserved := strings.HasPrefix(name, "+")
 		name = strings.TrimPrefix(name, "+")
 		value, ok := resourceParamValue(params[name])
@@ -86,7 +87,7 @@ func ExpandResourceURI(template string, params map[string]any) (string, bool) {
 		} else {
 			b.WriteString(escapeSimpleExpansion(value))
 		}
-		rest = rest[open+closing+1:]
+		rest = afterClose
 	}
 }
 
@@ -129,9 +130,11 @@ func isUnreserved(c byte) bool {
 }
 
 // resourceParamValue renders one parameter for a URI. JSON numbers arrive as
-// float64, and an identifier must never be written as 4.2e+01 or 42.0, so
-// integral values are formatted as integers; anything empty is reported as
-// absent.
+// float64, and an identifier must never be written as 4.2e+01 or 42.0, so a
+// float is written in its shortest 'f' form, which gives a whole number no
+// fraction and no exponent at any magnitude, without the int64 conversion an
+// out-of-range value would make platform-dependent; anything empty is
+// reported as absent.
 func resourceParamValue(value any) (string, bool) {
 	switch v := value.(type) {
 	case nil:
@@ -140,8 +143,10 @@ func resourceParamValue(value any) (string, bool) {
 		v = strings.TrimSpace(v)
 		return v, v != ""
 	case float64:
-		if v == math.Trunc(v) && math.Abs(v) < 1e15 {
-			return strconv.FormatInt(int64(v), 10), true
+		// Negative zero is the one whole number the 'f' form spells with a
+		// sign, and an identifier has none.
+		if v == 0 {
+			return "0", true
 		}
 		return strconv.FormatFloat(v, 'f', -1, 64), true
 	case int:

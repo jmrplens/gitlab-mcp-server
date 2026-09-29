@@ -139,20 +139,24 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, message)
-	switch {
-	case errors.Is(err, elicitation.ErrInputPending):
+	if errors.Is(err, elicitation.ErrInputPending) {
 		slog.DebugContext(ctx, "destructive confirmation pending client input", "tool", tool)
 		return flow.InputRequiredResult(), nil
-	case errors.Is(err, elicitation.ErrDeclined):
+	}
+	if errors.Is(err, elicitation.ErrDeclined) {
 		slog.InfoContext(ctx, "destructive action declined by user", "tool", tool)
 		// Distinct from a dismissal, because the model should act differently:
 		// a decision to say no means stop and offer something else, where a
 		// dialog that was dismissed can reasonably be asked again later.
 		return CancelledResult("The user declined this operation. Do not retry it; ask what they would like instead."), nil
-	case errors.Is(err, elicitation.ErrCancelled):
+	}
+	if errors.Is(err, elicitation.ErrCancelled) {
 		slog.InfoContext(ctx, "destructive confirmation dismissed", "tool", tool)
 		return CancelledResult("The confirmation was dismissed without an answer. Nothing was changed; you may ask again if the user still wants this."), nil
-	case err != nil:
+	}
+	// Written as ifs rather than a tagless switch so the mutation gate can see
+	// this condition: a case expression carries no statement counter.
+	if err != nil {
 		// Fail closed: a destructive action must never proceed on a
 		// malformed or failed confirmation exchange.
 		slog.WarnContext(ctx, "destructive confirmation failed", "tool", tool, "error", err)

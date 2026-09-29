@@ -73,6 +73,14 @@ func TestApplyCanonicalParamRanges_ExistingBoundWins(t *testing.T) {
 	if perPage["minimum"] != 1 || perPage["maximum"] != 100 {
 		t.Errorf("per_page bounds = %v..%v, want 1..100", perPage["minimum"], perPage["maximum"])
 	}
+
+	// A declared ceiling survives the same way, beside a floor the property
+	// did not declare and so still receives.
+	capped := map[string]any{"type": "integer", "maximum": 50}
+	applyCanonicalParamRanges(map[string]any{"properties": map[string]any{"per_page": capped}})
+	if capped["minimum"] != 1 || capped["maximum"] != 50 {
+		t.Errorf("capped per_page bounds = %v..%v, want 1..50", capped["minimum"], capped["maximum"])
+	}
 }
 
 // TestApplyCanonicalParamFormats_TypeGuard verifies the canonical date/time
@@ -231,5 +239,18 @@ func TestApplyInputSchemaOverrides_NilSchema_SkipsEveryOverride(t *testing.T) {
 
 	if len(schema) != 0 {
 		t.Errorf("a nil schema gained content: %v", schema)
+	}
+}
+
+// TestSchemaOverrideTarget_NestedObjectProperty verifies an override path
+// reaches a property of a nested object directly, not only one inside an
+// array's items: the step into a child with no items stays on the child.
+func TestSchemaOverrideTarget_NestedObjectProperty(t *testing.T) {
+	name := map[string]any{"type": "string"}
+	schema := map[string]any{"properties": map[string]any{
+		"owner": map[string]any{"type": "object", "properties": map[string]any{"name": name}},
+	}}
+	if got := schemaOverrideTarget(schema, "owner.name"); !reflect.DeepEqual(got, name) {
+		t.Errorf("schemaOverrideTarget(owner.name) = %#v, want %#v", got, name)
 	}
 }

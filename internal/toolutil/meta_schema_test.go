@@ -500,6 +500,22 @@ func TestMetaActionSchema_GuidanceEncodesOnlyTheFacetsSet(t *testing.T) {
 	}
 }
 
+// TestEnrichDestructiveSchema_DeclaredConfirm_IsKept verifies a destructive
+// action that declares its own confirm property keeps it, and still gets the
+// destructive marker, rather than having the generic confirm written over it.
+func TestEnrichDestructiveSchema_DeclaredConfirm_IsKept(t *testing.T) {
+	declared := map[string]any{"type": "boolean", "description": "Confirm the purge of every artifact."}
+	schema := map[string]any{"properties": map[string]any{"confirm": declared}}
+	got := enrichDestructiveSchema(schema, true)
+	props, _ := got["properties"].(map[string]any)
+	if !reflect.DeepEqual(props["confirm"], declared) {
+		t.Errorf("confirm = %#v, want the declared property kept", props["confirm"])
+	}
+	if got["x_destructive"] != true {
+		t.Errorf("x_destructive = %v, want true", got["x_destructive"])
+	}
+}
+
 // TestMetaActionSchema_GuidanceWithNothingToSay_OmitsTheExtension verifies a
 // guidance table whose every entry is empty publishes no x_parameter_guidance
 // key at all. A parameter map with nothing in it costs the model tokens to

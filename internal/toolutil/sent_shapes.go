@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
@@ -506,11 +508,14 @@ type NamespaceBasicOutput struct {
 }
 
 // TodoExtra is what GitLab's todo entity sends that client-go's Todo does not
-// carry: when the todo last changed, and the group it belongs to, which is
-// present only on a todo raised in a group rather than a project.
+// carry: when the todo last changed, the group it belongs to, which is present
+// only on a todo raised in a group rather than a project, and the two keys of
+// its author's UserBasic that client-go's BasicUser leaves out, which
+// [UserBasicFrom] completes the author with.
 type TodoExtra struct {
 	UpdatedAt *time.Time            `json:"updated_at"`
 	Group     *NamespaceBasicOutput `json:"group"`
+	Author    UserBasicExtra        `json:"author"`
 }
 
 // CapturedTodo reads them off the captured answer to a request that returned
@@ -903,12 +908,12 @@ type PackageVersionExtra struct {
 // package's pipeline that client-go's PackagePipeline does not carry: the
 // pipeline's iid, its project and its source, three of the eleven keys the
 // entity exposes, and the two keys of the UserBasic who ran it that client-go's
-// BasicUser leaves out.
+// BasicUser leaves out, the zero value for a pipeline no user ran.
 type PackagePipelineExtra struct {
-	IID       int64           `json:"iid"`
-	ProjectID int64           `json:"project_id"`
-	Source    string          `json:"source"`
-	User      *UserBasicExtra `json:"user"`
+	IID       int64          `json:"iid"`
+	ProjectID int64          `json:"project_id"`
+	Source    string         `json:"source"`
+	User      UserBasicExtra `json:"user"`
 }
 
 // CapturedPackage reads them off the captured answer to a request for one
@@ -1379,12 +1384,34 @@ func CapturedProjects(capture *gitlabclient.ResponseCapture, decoded int) ([]Pro
 }
 
 // UserBasicExtra is what lib/api/entities/user_basic.rb sends that client-go's
-// ProjectUser does not model, and neither does its BasicUser, which is what the
-// user who ran a package's pipeline decodes into. Both are
-// unconditional on that entity, so a plain value is the honest shape here.
+// ProjectUser does not model, and neither does its BasicUser, which is what a
+// to-do's author and the user who ran a package's pipeline decode into. Both
+// are unconditional on that entity, so a plain value is the honest shape here.
 type UserBasicExtra struct {
 	Locked      bool   `json:"locked"`
 	PublicEmail string `json:"public_email"`
+}
+
+// UserBasicFrom converts a user client-go decodes into BasicUser to the whole
+// of lib/api/entities/user_basic.rb, with the two keys BasicUser does not model
+// taken from what the captured answer carried for the same user. The seventh
+// key BasicUser decodes, created_at, is not one UserBasic sends, so it is not
+// published. It returns nil for a user the answer did not carry; the extra
+// read off a null or absent user is the zero value, so nothing is lost.
+func UserBasicFrom(u *gl.BasicUser, extra UserBasicExtra) *UserBasicOutput {
+	if u == nil {
+		return nil
+	}
+	return &UserBasicOutput{
+		ID:          u.ID,
+		Username:    u.Username,
+		PublicEmail: extra.PublicEmail,
+		Name:        u.Name,
+		State:       u.State,
+		Locked:      extra.Locked,
+		AvatarURL:   u.AvatarURL,
+		WebURL:      u.WebURL,
+	}
 }
 
 // CapturedUserBasics reads, off the captured answer to a request that renders

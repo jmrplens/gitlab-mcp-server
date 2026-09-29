@@ -198,7 +198,8 @@ func NormalizeActionAlias(action string, routes ActionMap) string {
 		if !slices.Contains(route.CompatibilityAliases, alias) {
 			continue
 		}
-		if matched != "" && matched != name {
+		// A map visits each name once, so a second match is a second action.
+		if matched != "" {
 			return action
 		}
 		matched = name
@@ -646,7 +647,9 @@ func requiredJSONFieldNames(rt reflect.Type) []string {
 			names = append(names, requiredJSONFieldNames(field.Type)...)
 			continue
 		}
-		if jsonName != "" && jsonSchemaTagHasRequired(field.Tag.Get("jsonschema")) {
+		// jsonFieldName answers "" only for the untagged embed handled above,
+		// so every field that reaches here has a name.
+		if jsonSchemaTagHasRequired(field.Tag.Get("jsonschema")) {
 			names = append(names, jsonName)
 		}
 	}
@@ -799,7 +802,7 @@ func normalizeIDAlias(params map[string]any, fields map[string]struct{}, accepts
 	}
 	canonical := ""
 	for name := range fields {
-		if name == "id" || !strings.HasSuffix(name, "_id") {
+		if !strings.HasSuffix(name, "_id") {
 			continue
 		}
 		if canonical != "" {
@@ -897,7 +900,7 @@ func explainIDParamAlias(params map[string]any, fields map[string]struct{}, acce
 	}
 	canonical := ""
 	for name := range fields {
-		if name == "id" || !strings.HasSuffix(name, "_id") {
+		if !strings.HasSuffix(name, "_id") {
 			continue
 		}
 		if canonical != "" {
@@ -917,7 +920,7 @@ func explainIIDParamAlias(params map[string]any, fields map[string]struct{}, acc
 	}
 	canonical := ""
 	for name := range fields {
-		if name == "iid" || !strings.HasSuffix(name, "_iid") {
+		if !strings.HasSuffix(name, "_iid") {
 			continue
 		}
 		if canonical != "" {
@@ -1043,7 +1046,7 @@ func normalizeIIDAlias(params map[string]any, fields map[string]struct{}, accept
 	}
 	canonical := ""
 	for name := range fields {
-		if name == "iid" || !strings.HasSuffix(name, "_iid") {
+		if !strings.HasSuffix(name, "_iid") {
 			continue
 		}
 		if canonical != "" {
@@ -1145,8 +1148,10 @@ func splitPackageFilePath(filePath string) (dir, filename string) {
 	if filePath == "" {
 		return ".", ""
 	}
+	// The trim above leaves no leading slash, so the index is -1 or past 0;
+	// the test names the one value that means "none" rather than a bound.
 	idx := strings.LastIndex(filePath, "/")
-	if idx < 0 {
+	if idx == -1 {
 		return ".", filePath
 	}
 	return filePath[:idx], filePath[idx+1:]
@@ -1893,10 +1898,9 @@ func coerceSchemaParamValue(name string, value, property any) (any, bool) {
 }
 
 func coerceSchemaArrayValue(value, property any) (any, bool) {
-	prop, ok := property.(map[string]any)
-	if !ok {
-		return value, false
-	}
+	// The caller reaches here only for a property schemaPropertyHasType found
+	// to be an object declaring "array", so the assertion cannot fail.
+	prop, _ := property.(map[string]any)
 	items, ok := prop["items"].(map[string]any)
 	if !ok {
 		return value, false
@@ -2879,8 +2883,11 @@ func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) st
 // added by MetaToolDescriptionPrefix while preserving standalone descriptions
 // that happen to start with an example.
 func StripMetaToolDescriptionPrefix(description string) string {
+	// strings.Split answers at least one element, and a two-line header with
+	// nothing after it is handed back whole by the last test below, so the
+	// only length that must stop here is one.
 	lines := strings.Split(description, "\n")
-	if len(lines) < 2 {
+	if len(lines) == 1 {
 		return description
 	}
 

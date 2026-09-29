@@ -247,3 +247,18 @@ func TestOnceMap_ConcurrentCallersShareOneBuild(t *testing.T) {
 		}
 	}
 }
+
+// TestOnceMap_ForgetOfAStaleSlot_KeepsTheCurrentOne verifies forget removes a
+// key's slot only while it is still the slot it was handed. The second of two
+// callers released by one panicking build arrives holding the spent slot the
+// first has already replaced, and must not take the replacement away.
+func TestOnceMap_ForgetOfAStaleSlot_KeepsTheCurrentOne(t *testing.T) {
+	var cache OnceMap[string, int]
+	if got := cache.Load("k", func() int { return 7 }); got != 7 {
+		t.Fatalf("Load() = %d, want 7", got)
+	}
+	cache.forget("k", &onceEntry[int]{})
+	if got, ok := cache.Peek("k"); !ok || got != 7 {
+		t.Errorf("Peek() = %d, %v after forgetting a stale slot, want 7, true", got, ok)
+	}
+}

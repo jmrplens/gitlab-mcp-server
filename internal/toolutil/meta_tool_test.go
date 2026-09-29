@@ -691,6 +691,117 @@ func TestNormalizeParamAliasesForSchema_CanonicalWins(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchema_EachGuardLeavesWhatItShould verifies the
+// half of every alias guard the rewriting cases never reach: a canonical the
+// caller already sent is kept over the alias, and an alias is left alone when
+// the schema takes the alias itself or does not take its canonical. Each case
+// is the one input that turns its guard the other way, and the whole result
+// is compared, so a guard that rewrote anyway would show as a changed key.
+func TestNormalizeParamAliasesForSchema_EachGuardLeavesWhatItShould(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		schema map[string]any
+		params map[string]any
+		want   map[string]any
+	}{
+		{
+			name:   "id beside its canonical keeps the canonical",
+			schema: testActionSpecSchema("project_id"),
+			params: map[string]any{"id": "a/b", "project_id": "c/d"},
+			want:   map[string]any{"project_id": "c/d"},
+		},
+		{
+			name:   "iid beside its canonical keeps the canonical",
+			schema: testActionSpecSchema("issue_iid"),
+			params: map[string]any{"iid": "1", "issue_iid": "2"},
+			want:   map[string]any{"issue_iid": "2"},
+		},
+		{
+			name:   "environment where the schema takes no name",
+			schema: testActionSpecSchema("description"),
+			params: map[string]any{"environment": "prod"},
+			want:   map[string]any{"environment": "prod"},
+		},
+		{
+			name:   "environment where the schema takes environment too",
+			schema: testActionSpecSchema("name", "environment"),
+			params: map[string]any{"environment": "prod"},
+			want:   map[string]any{"environment": "prod"},
+		},
+		{
+			name:   "environment_id where the schema takes it too",
+			schema: testActionSpecSchema("environment", "environment_id"),
+			params: map[string]any{"environment_id": "prod"},
+			want:   map[string]any{"environment_id": "prod"},
+		},
+		{
+			name:   "environment_id beside environment keeps environment",
+			schema: testActionSpecSchema("environment"),
+			params: map[string]any{"environment_id": "a", "environment": "b"},
+			want:   map[string]any{"environment": "b"},
+		},
+		{
+			name:   "discussion_id where the schema takes no note_id",
+			schema: testActionSpecSchema("description"),
+			params: map[string]any{"discussion_id": "x", "description": "hi"},
+			want:   map[string]any{"discussion_id": "x", "description": "hi"},
+		},
+		{
+			name:   "active where the schema takes active too",
+			schema: testActionSpecSchema("paused", "active"),
+			params: map[string]any{"active": true},
+			want:   map[string]any{"active": true},
+		},
+		{
+			name:   "branches already given keep their aliases untouched",
+			schema: testActionSpecSchema("source_branch", "target_branch"),
+			params: map[string]any{"source_branch": "a", "ref": "b", "target_branch": "c", "to": "d"},
+			want:   map[string]any{"source_branch": "a", "ref": "b", "target_branch": "c", "to": "d"},
+		},
+		{
+			name:   "a branch alias the schema takes is not a branch",
+			schema: testActionSpecSchema("source_branch", "target_branch", "ref"),
+			params: map[string]any{"ref": "feature"},
+			want:   map[string]any{"ref": "feature"},
+		},
+		{
+			name:   "a branch alias that is not text is not a branch",
+			schema: testActionSpecSchema("source_branch", "target_branch"),
+			params: map[string]any{"ref": float64(7)},
+			want:   map[string]any{"ref": float64(7)},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := NormalizeParamAliasesForSchema(testCase.params, testCase.schema); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("NormalizeParamAliasesForSchema() = %#v, want %#v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestNormalizeParamAliasesForSchemaWithExplanation_ExplainsOnlyARewrite
+// verifies the explanation names an alias only where the normalization would
+// rewrite it: never beside its canonical, never where the schema lacks the
+// canonical or takes the alias, and never for a schema with no properties.
+func TestNormalizeParamAliasesForSchemaWithExplanation_ExplainsOnlyARewrite(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		schema map[string]any
+		params map[string]any
+	}{
+		{name: "canonical already sent", schema: testActionSpecSchema("query"), params: map[string]any{"search": "a", "query": "b"}},
+		{name: "schema lacks the canonical", schema: testActionSpecSchema("description"), params: map[string]any{"search": "a"}},
+		{name: "schema takes the alias", schema: testActionSpecSchema("query", "search"), params: map[string]any{"search": "a"}},
+		{name: "schema has no properties", schema: map[string]any{"type": "object"}, params: map[string]any{"search": "a"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, explanations := NormalizeParamAliasesForSchemaWithExplanation(testCase.params, testCase.schema); len(explanations) != 0 {
+				t.Errorf("explanations = %+v, want none", explanations)
+			}
+		})
+	}
+}
+
 // TestNormalizeParamAliasesForSchema_ObservedDynamicAliases verifies aliases
 // seen in dynamic execution traces normalize only when the selected schema
 // exposes the canonical field.
@@ -1457,6 +1568,12 @@ func TestParamValidationError_Unwrap(t *testing.T) {
 	}
 	if got := (&ParamValidationError{}).Error(); got != "invalid params" {
 		t.Fatalf("empty ParamValidationError error = %q, want invalid params", got)
+	}
+	if got := (*ParamValidationError)(nil).Error(); got != "invalid params" {
+		t.Fatalf("nil ParamValidationError error = %q, want invalid params", got)
+	}
+	if got := validationErr.Error(); got != "decode failed" {
+		t.Fatalf("ParamValidationError error = %q, want the wrapped message", got)
 	}
 }
 
@@ -4276,6 +4393,44 @@ func TestCoerceStructuredValue_NonRoleScalarItems_Unchanged(t *testing.T) {
 	}
 }
 
+// TestCoerceStructuredValue_WhatNeedsNoRewrite_IsReportedUnchanged verifies
+// the two shapes a slice-of-struct field accepts as they are: a role name for
+// a struct with no access_level, which has nowhere to go, and a list whose
+// objects the field normalization leaves exactly as they were, which must not
+// be reported as a change.
+func TestCoerceStructuredValue_WhatNeedsNoRewrite_IsReportedUnchanged(t *testing.T) {
+	type rule struct {
+		A int `json:"a"`
+	}
+	for _, testCase := range []struct {
+		name  string
+		value any
+	}{
+		{name: "role name for a struct without access_level", value: "developer"},
+		{name: "objects the normalization keeps", value: []any{map[string]any{"a": float64(1)}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			coerced, changed := coerceStructuredValue("rules", testCase.value, reflect.TypeFor[[]rule]())
+			if changed || !reflect.DeepEqual(coerced, testCase.value) {
+				t.Errorf("coerceStructuredValue() = (%#v, %v), want (%#v, false)", coerced, changed, testCase.value)
+			}
+		})
+	}
+}
+
+// TestNormalizeStructuredObjectFields_ApprovalAliasBesideItsCanonical_KeepsTheCanonical
+// verifies an approval-count alias sent beside required_approvals is dropped
+// and the canonical value kept, rather than overwritten by the alias.
+func TestNormalizeStructuredObjectFields_ApprovalAliasBesideItsCanonical_KeepsTheCanonical(t *testing.T) {
+	type rule struct {
+		RequiredApprovals int `json:"required_approvals"`
+	}
+	got := normalizeStructuredObjectFields(map[string]any{"required_approvals": 2, "approval_count": 5}, reflect.TypeFor[rule]())
+	if want := map[string]any{"required_approvals": 2}; !reflect.DeepEqual(got, want) {
+		t.Errorf("normalizeStructuredObjectFields() = %#v, want %#v", got, want)
+	}
+}
+
 // TestNormalizeStructuredObjectFields_NoReflectableFields_ReturnsValue
 // verifies that objects targeted at a struct without JSON fields are
 // returned unchanged.
@@ -5245,6 +5400,239 @@ func TestCoerceNumericParamsDirect(t *testing.T) {
 	}
 }
 
+// coercedInput is a struct target carrying one field of every shape the
+// struct-led coercers rewrite, two of each where a coercer clones the params
+// on its first rewrite, so the second rewrite is the one that finds the clone
+// already made.
+type coercedInput struct {
+	Tags         []string `json:"tags"`
+	Scopes       []string `json:"scopes"`
+	Labels       string   `json:"labels"`
+	AddLabels    string   `json:"add_labels"`
+	RemoveLabels []string `json:"remove_labels"`
+	ProjectID    string   `json:"project_id"`
+	IID          string   `json:"iid"`
+	Count        int      `json:"count"`
+	Weight       float64  `json:"weight"`
+}
+
+// TestStructParamCoercers_RewriteEveryMatchingValue verifies each struct-led
+// coercer rewrites every value it matches and nothing else: two values in one
+// call, a comma field whose Go type is a list and so is left alone, a label
+// value already in its comma form, and iid, the one id spelling no suffix
+// rule catches.
+func TestStructParamCoercers_RewriteEveryMatchingValue(t *testing.T) {
+	target := reflect.TypeFor[coercedInput]()
+	for _, testCase := range []struct {
+		name   string
+		coerce func(map[string]any) (map[string]any, error)
+		params map[string]any
+		want   map[string]any
+	}{
+		{
+			name:   "single strings for two string slices",
+			coerce: func(p map[string]any) (map[string]any, error) { return coerceSingleStringSlices(p, target), nil },
+			params: map[string]any{"tags": "a", "scopes": "b"},
+			want:   map[string]any{"tags": []string{"a"}, "scopes": []string{"b"}},
+		},
+		{
+			name:   "label lists for two comma fields, not for a list field",
+			coerce: func(p map[string]any) (map[string]any, error) { return coerceStringListParams(p, target), nil },
+			params: map[string]any{"labels": []any{"a", "b"}, "add_labels": []string{"c"}, "remove_labels": []any{"x"}},
+			want:   map[string]any{"labels": "a,b", "add_labels": "c", "remove_labels": []any{"x"}},
+		},
+		{
+			name:   "a label string already in its comma form",
+			coerce: func(p map[string]any) (map[string]any, error) { return coerceStringListParams(p, target), nil },
+			params: map[string]any{"labels": "a,b"},
+			want:   map[string]any{"labels": "a,b"},
+		},
+		{
+			name:   "numbers for two string ids, iid among them",
+			coerce: func(p map[string]any) (map[string]any, error) { return coerceStringIDNumbers(p, target), nil },
+			params: map[string]any{"project_id": float64(42), "iid": float64(7)},
+			want:   map[string]any{"project_id": "42", "iid": "7"},
+		},
+		{
+			name:   "two numeric strings",
+			coerce: func(p map[string]any) (map[string]any, error) { return coerceNumericParams(p, target) },
+			params: map[string]any{"count": "3", "weight": "2.5"},
+			want:   map[string]any{"count": int64(3), "weight": 2.5},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.coerce(testCase.params)
+			if err != nil || !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("coerce(%#v) = %#v, %v; want %#v", testCase.params, got, err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCoerceValueForTargetType_EveryNumericKind verifies a numeric string is
+// coerced for a field of every integer and float kind, each landing in the
+// widest type of its family, which is what encoding/json then narrows.
+func TestCoerceValueForTargetType_EveryNumericKind(t *testing.T) {
+	for _, testCase := range []struct {
+		target reflect.Type
+		want   any
+	}{
+		{reflect.TypeFor[int](), int64(5)},
+		{reflect.TypeFor[int8](), int64(5)},
+		{reflect.TypeFor[int16](), int64(5)},
+		{reflect.TypeFor[int32](), int64(5)},
+		{reflect.TypeFor[int64](), int64(5)},
+		{reflect.TypeFor[uint](), uint64(5)},
+		{reflect.TypeFor[uint8](), uint64(5)},
+		{reflect.TypeFor[uint16](), uint64(5)},
+		{reflect.TypeFor[uint32](), uint64(5)},
+		{reflect.TypeFor[uint64](), uint64(5)},
+		{reflect.TypeFor[float32](), float64(5)},
+		{reflect.TypeFor[float64](), float64(5)},
+	} {
+		t.Run(testCase.target.String(), func(t *testing.T) {
+			coerced, changed, err := coerceValueForTargetType("n", "5", testCase.target)
+			if err != nil || !changed || coerced != testCase.want {
+				t.Errorf("coerceValueForTargetType(%s) = %#v, %v, %v; want %#v, true, nil",
+					testCase.target, coerced, changed, err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestIsNumericKind_EveryKind verifies each of the twelve numeric kinds is
+// numeric and that a kind outside them is not.
+func TestIsNumericKind_EveryKind(t *testing.T) {
+	for _, kind := range []reflect.Kind{
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64,
+	} {
+		t.Run(kind.String(), func(t *testing.T) {
+			if !isNumericKind(kind) {
+				t.Errorf("isNumericKind(%s) = false, want true", kind)
+			}
+		})
+	}
+	if isNumericKind(reflect.String) {
+		t.Error("isNumericKind(string) = true, want false")
+	}
+}
+
+// TestValueMatchesDeclaredType_EveryIntegerType verifies a value of each Go
+// integer type is taken as already matching an integer property, so none of
+// them is rewritten.
+func TestValueMatchesDeclaredType_EveryIntegerType(t *testing.T) {
+	integer := map[string]any{"type": "integer"}
+	for _, value := range []any{
+		int(1), int8(1), int16(1), int32(1), int64(1),
+		uint(1), uint8(1), uint16(1), uint32(1), uint64(1),
+	} {
+		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
+			if !valueMatchesDeclaredType(value, integer) {
+				t.Errorf("valueMatchesDeclaredType(%T) = false, want true", value)
+			}
+		})
+	}
+}
+
+// TestIntegerParsers_RefuseBelowInt64 verifies a whole number below the int64
+// range is refused rather than wrapped, by the float path and the string path
+// alike.
+func TestIntegerParsers_RefuseBelowInt64(t *testing.T) {
+	if text, ok := integerFloatString(-1e19); ok || text != "" {
+		t.Errorf("integerFloatString(-1e19) = %q, %v; want \"\", false", text, ok)
+	}
+	if got, err := integerFromString("-1e19"); err == nil {
+		t.Errorf("integerFromString(-1e19) = %d, nil; want an error", got)
+	}
+}
+
+// TestIsCommaStringParam_EveryName verifies the three label parameters are
+// the comma-joined ones and another name is not.
+func TestIsCommaStringParam_EveryName(t *testing.T) {
+	for _, name := range []string{"labels", "add_labels", "remove_labels"} {
+		t.Run(name, func(t *testing.T) {
+			if !isCommaStringParam(name) {
+				t.Errorf("isCommaStringParam(%q) = false, want true", name)
+			}
+		})
+	}
+	if isCommaStringParam("assignees") {
+		t.Error("isCommaStringParam(assignees) = true, want false")
+	}
+}
+
+// TestSchemaParamCoercers_RewriteEveryMatchingValue verifies the schema-led
+// coercers the way the struct-led ones are verified above: two rewrites in
+// one call, a value already in its target form, an array property whose items
+// declare no type, number items, and an integer array one of whose items
+// already fits.
+func TestSchemaParamCoercers_RewriteEveryMatchingValue(t *testing.T) {
+	stringArray := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	for _, testCase := range []struct {
+		name   string
+		schema map[string]any
+		params map[string]any
+		want   map[string]any
+	}{
+		{
+			name:   "single strings for two string arrays",
+			schema: map[string]any{"properties": map[string]any{"tags": stringArray, "scopes": stringArray}},
+			params: map[string]any{"tags": "a", "scopes": "b"},
+			want:   map[string]any{"tags": []string{"a"}, "scopes": []string{"b"}},
+		},
+		{
+			name:   "label lists for two comma properties",
+			schema: testActionSpecSchema("labels", "add_labels"),
+			params: map[string]any{"labels": []any{"a"}, "add_labels": []any{"b", "c"}},
+			want:   map[string]any{"labels": "a", "add_labels": "b,c"},
+		},
+		{
+			name:   "a label string already in its comma form",
+			schema: testActionSpecSchema("labels"),
+			params: map[string]any{"labels": "a,b"},
+			want:   map[string]any{"labels": "a,b"},
+		},
+		{
+			name:   "an array whose items declare nothing",
+			schema: map[string]any{"properties": map[string]any{"ids": map[string]any{"type": "array"}}},
+			params: map[string]any{"ids": []any{"1"}},
+			want:   map[string]any{"ids": []any{"1"}},
+		},
+		{
+			name:   "number items",
+			schema: map[string]any{"properties": map[string]any{"weights": map[string]any{"type": "array", "items": map[string]any{"type": "number"}}}},
+			params: map[string]any{"weights": []any{"2.5"}},
+			want:   map[string]any{"weights": []any{2.5}},
+		},
+		{
+			name:   "integer items the first of which already fits",
+			schema: map[string]any{"properties": map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}}}},
+			params: map[string]any{"ids": []any{float64(2), "1"}},
+			want:   map[string]any{"ids": []any{float64(2), int64(1)}},
+		},
+		{
+			name:   "a number property given something that is not text",
+			schema: map[string]any{"properties": map[string]any{"weight": map[string]any{"type": "number"}}},
+			params: map[string]any{"weight": true},
+			want:   map[string]any{"weight": true},
+		},
+		{
+			name:   "a string id given something that is not a number",
+			schema: testActionSpecSchema("project_id"),
+			params: map[string]any{"project_id": true},
+			want:   map[string]any{"project_id": true},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := NormalizeParamAliasesForSchema(testCase.params, testCase.schema); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("NormalizeParamAliasesForSchema() = %#v, want %#v", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCoerceUnsignedIntegerValueDirect verifies the unsigned-integer
 // coercion helper returns the input unchanged for non-string values.
 func TestCoerceUnsignedIntegerValueDirect(t *testing.T) {
@@ -5373,6 +5761,96 @@ func TestValidateMetaToolParamsMissingRequiredDirect(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Errorf("result.IsError = false, want true")
+	}
+}
+
+// TestValidateMetaToolParams_MissingRequiredBesideAnUnknownName_IsLeftToTheHandler
+// verifies a params object that misses a required name and also carries a
+// name the schema does not know is not refused as missing: the caller has most
+// likely put the value under another spelling, which the alias normalization
+// and the handler's own decoding are there to answer.
+func TestValidateMetaToolParams_MissingRequiredBesideAnUnknownName_IsLeftToTheHandler(t *testing.T) {
+	route := ActionRoute{InputSchema: map[string]any{
+		"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
+		"required":   []any{"project_id"},
+	}}
+	input := &MetaToolInput{Action: "get_project", Params: map[string]any{"project": "a/b"}}
+	if result := validateMetaToolParams("tool", route, input); result != nil {
+		t.Errorf("validateMetaToolParams() = %+v, want nil", result)
+	}
+}
+
+// TestRequiredParamNames_KeepsOnlyNamedEntries verifies the required list is
+// read in both shapes a schema carries it in, with an empty name or a
+// non-string entry skipped, and that a required value of any other shape
+// names nothing.
+func TestRequiredParamNames_KeepsOnlyNamedEntries(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		required any
+		want     []string
+	}{
+		{name: "list of any", required: []any{"b", "", 7, "a"}, want: []string{"a", "b"}},
+		{name: "list of strings", required: []string{"b", "", "a"}, want: []string{"a", "b"}},
+		{name: "a single string", required: "a", want: nil},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := requiredParamNames(map[string]any{"required": testCase.required}); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("requiredParamNames() = %#v, want %#v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestMetaToolParameterGuidanceSummary_RendersEachFacetOnItsOwn verifies a
+// guidance entry carrying only a value source, or only common confusions, is
+// still listed, and is written without the semantic role it does not have.
+func TestMetaToolParameterGuidanceSummary_RendersEachFacetOnItsOwn(t *testing.T) {
+	routes := ActionMap{
+		"do_thing": {
+			ParameterGuidance: map[string]ParameterGuidance{
+				"source_only":    {ValueSource: "project.list"},
+				"confusion_only": {CommonConfusions: []string{"project_path"}},
+			},
+		},
+	}
+	got := metaToolParameterGuidanceSummary(routes, []string{"do_thing"})
+	for _, want := range []string{
+		"- do_thing.confusion_only. Avoid: project_path",
+		"- do_thing.source_only. Source: project.list",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("summary = %q, want a line %q", got, want)
+			}
+		})
+	}
+}
+
+// TestBuildMetaOneOf_CompactNilInputSchema_FallsBackToOpenObject verifies the
+// compact mode leaves a route with no InputSchema to the same permissive
+// object the full mode gives it, rather than compacting nothing.
+func TestBuildMetaOneOf_CompactNilInputSchema_FallsBackToOpenObject(t *testing.T) {
+	routes := ActionMap{"act": {}}
+	branches := buildMetaOneOf(routes, []string{"act"}, true)
+	branch, _ := branches[0].(map[string]any)
+	props, _ := branch["properties"].(map[string]any)
+	params, _ := props["params"].(map[string]any)
+	if want := map[string]any{"type": "object", "additionalProperties": true}; !reflect.DeepEqual(params, want) {
+		t.Errorf("params = %#v, want %#v", params, want)
+	}
+}
+
+// TestCompactParamsSchema_PropertyWithoutType_KeepsNoType verifies a property
+// that declares no type is compacted to an entry without one, rather than
+// being given a type it never had.
+func TestCompactParamsSchema_PropertyWithoutType_KeepsNoType(t *testing.T) {
+	got := compactParamsSchema(map[string]any{"properties": map[string]any{
+		"anything": map[string]any{"description": "any value"},
+	}})
+	props, _ := got["properties"].(map[string]any)
+	if entry := props["anything"]; !reflect.DeepEqual(entry, map[string]any{}) {
+		t.Errorf("anything = %#v, want an empty entry", entry)
 	}
 }
 

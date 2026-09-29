@@ -1119,6 +1119,23 @@ func TestPublish_FileNameShapes(t *testing.T) {
 	}
 }
 
+// TestPublish_RefusedFileName_IsRefusedBeforeTheFileIsRead verifies a
+// file_name client-go refuses is refused before the local file is opened: the
+// file_path names nothing, so a handler that opened it first would answer with
+// the missing file instead of the segment rule, and no request leaves.
+func TestPublish_RefusedFileName_IsRefusedBeforeTheFileIsRead(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := Publish(context.Background(), nil, client, PublishInput{
+		ProjectID:      "42",
+		PackageName:    "pkg",
+		PackageVersion: "1.0.0",
+		FileName:       "dist/../escape.bin",
+		FilePath:       filepath.Join(t.TempDir(), "absent.bin"),
+	})
+	assertFileNameShapeResult(t, "Publish", "dist/../escape.bin", "must not be empty", err)
+}
+
 // TestDownload_FileNameShapes verifies the v2.58.2 file-name contract on the
 // download path, as table-driven subtests:
 //
@@ -1387,13 +1404,8 @@ func TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend(t *testing.T)
 
 // TestPublish_SelectAndURL verifies the publish request carries the default
 // response selector unless one was given, and that the answer names the URL
-// the file can be fetched from.
-//
-// The URL assertion is also what stands in for the branch that leaves it
-// empty. The same coordinates already built the request GitLab accepted, so
-// FormatPackageURL cannot fail here and gobco reports its `err == nil` as
-// never false; the property behind the guard is that a publish which
-// succeeded always publishes a URL, and that is what is asserted.
+// the file can be fetched from, built from the path formatted before the
+// upload so a publish that succeeded always publishes one.
 func TestPublish_SelectAndURL(t *testing.T) {
 	for _, testCase := range []struct {
 		name    string
@@ -1619,7 +1631,7 @@ func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
 	extra := toolutil.PackageExtra{
 		Pipeline: &toolutil.PackagePipelineExtra{
 			IID: 8, ProjectID: 42, Source: "push",
-			User: &toolutil.UserBasicExtra{Locked: true, PublicEmail: "alice@example.com"},
+			User: toolutil.UserBasicExtra{Locked: true, PublicEmail: "alice@example.com"},
 		},
 	}
 
@@ -2071,10 +2083,6 @@ func TestPackagePipelineToOutput_WithoutTheCapturedKeys(t *testing.T) {
 	}
 	if got.User == nil || got.User.ID != 5 || got.User.Username != "alice" || got.User.Locked || got.User.PublicEmail != "" {
 		t.Errorf("user = %+v, want the decoded keys and no captured ones", got.User)
-	}
-	user := packagePipelineUserToOutput(&gl.BasicUser{ID: 6}, &toolutil.UserBasicExtra{Locked: true, PublicEmail: "bob@example.com"})
-	if user.ID != 6 || !user.Locked || user.PublicEmail != "bob@example.com" {
-		t.Errorf("user = %+v, want 6, locked, bob@example.com", user)
 	}
 }
 

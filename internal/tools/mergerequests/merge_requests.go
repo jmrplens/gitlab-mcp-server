@@ -2118,29 +2118,6 @@ type CreateTodoOutput struct {
 	UpdatedAt   string                    `json:"updated_at,omitempty"`
 }
 
-// todoExtra is what lib/api/entities/todo.rb sends that client-go's Todo does
-// not model, read from the captured response (ADR-0021): when the to-do last
-// changed, and the two keys of the author's UserBasic that BasicUser lacks.
-// Both gaps are recorded in docs/development/upstream-bugs.md.
-type todoExtra struct {
-	UpdatedAt *time.Time              `json:"updated_at"`
-	Author    toolutil.UserBasicExtra `json:"author"`
-}
-
-// userBasicOutput converts a user client-go decodes into BasicUser to the
-// whole of lib/api/entities/user_basic.rb, with the two keys BasicUser does not
-// model taken from what the captured answer carried for the same user. It
-// returns nil for a user the answer did not carry.
-func userBasicOutput(u *gl.BasicUser, extra toolutil.UserBasicExtra) *toolutil.UserBasicOutput {
-	if u == nil {
-		return nil
-	}
-	return &toolutil.UserBasicOutput{
-		ID: u.ID, Username: u.Username, PublicEmail: extra.PublicEmail, Name: u.Name,
-		State: u.State, Locked: extra.Locked, AvatarURL: u.AvatarURL, WebURL: u.WebURL,
-	}
-}
-
 // CreateTodo creates a to-do item on the specified merge request for the
 // authenticated user. Returns the created to-do item details.
 func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTodoInput) (CreateTodoOutput, error) {
@@ -2164,8 +2141,8 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
-	var extra todoExtra
-	if err = captured.Decode(&extra); err != nil {
+	extra, err := toolutil.CapturedTodo(captured)
+	if err != nil {
 		return CreateTodoOutput{}, toolutil.WrapErr("mrCreateTodo", err)
 	}
 	out := CreateTodoOutput{
@@ -2173,7 +2150,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		ActionName: string(todo.ActionName),
 		TargetType: string(todo.TargetType),
 		TargetURL:  todo.TargetURL,
-		Author:     userBasicOutput(todo.Author, extra.Author),
+		Author:     toolutil.UserBasicFrom(todo.Author, extra.Author),
 		Body:       todo.Body,
 		State:      todo.State,
 		CreatedAt:  toolutil.RFC3339Ptr(todo.CreatedAt),

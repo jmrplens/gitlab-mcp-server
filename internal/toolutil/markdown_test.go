@@ -538,6 +538,21 @@ func TestFormatStorageMoveListMarkdown(t *testing.T) {
 	})
 }
 
+// TestFormatStorageMoveListMarkdown_EntityWithoutALink_AsksNoLinkPreserved
+// verifies a list whose only entity has no URL renders its name bare and does
+// not tell the reader to preserve links it does not carry.
+func TestFormatStorageMoveListMarkdown_EntityWithoutALink_AsksNoLinkPreserved(t *testing.T) {
+	md := formatStorageMoveListMarkdown([]StorageMoveMarkdown{
+		{ID: 3, State: "scheduled", Entity: &StorageMoveEntityMarkdown{Label: "Snippet", Name: "unlinked"}},
+	}, storageMoveListMarkdownOptions{Title: "Snippet Storage Moves", EntityColumn: "Snippet"})
+	if !strings.Contains(md, "| 3 | scheduled |  |  | unlinked |  |\n") {
+		t.Errorf("storage move list = %q, want the row with the bare entity name", md)
+	}
+	if strings.Contains(md, HintPreserveLinks) {
+		t.Errorf("storage move list = %q, want no link hint for a list with no links", md)
+	}
+}
+
 // TestNewStorageMoveEntityMarkdown verifies the constructor populates every
 // field of the optional entity view model used by storage move tools.
 func TestNewStorageMoveEntityMarkdown(t *testing.T) {
@@ -704,6 +719,29 @@ func TestFormatCICDVariableMarkdown_MaskedWithoutHiddenStillHidesTheValue(t *tes
 		"- **Value**: [masked]\n"
 	if md != want {
 		t.Errorf("masked variable card:\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatCICDVariableMarkdown_HiddenWithoutMaskedStillHidesTheValue is the
+// other half of the test above: a variable hidden and not masked withholds its
+// value too, which only this shape can tell from a guard reading Masked alone.
+func TestFormatCICDVariableMarkdown_HiddenWithoutMaskedStillHidesTheValue(t *testing.T) {
+	md := formatCICDVariableMarkdown(CICDVariableMarkdown{
+		Key:          "DEPLOY_TOKEN",
+		Value:        "glpat-not-for-the-transcript",
+		VariableType: "env_var",
+		Hidden:       true,
+	}, cicdVariableMarkdownOptions{Title: "Variable"})
+
+	want := "## Variable: DEPLOY_TOKEN\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + EmojiCross + "\n" +
+		"- **Masked**: " + EmojiCross + "\n" +
+		"- **Hidden**: " + EmojiSuccess + "\n" +
+		"- **Raw**: " + EmojiCross + "\n" +
+		"- **Value**: [masked]\n"
+	if md != want {
+		t.Errorf("hidden variable card:\n got %q\nwant %q", md, want)
 	}
 }
 

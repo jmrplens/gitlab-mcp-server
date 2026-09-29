@@ -118,10 +118,11 @@ func functionName(fn any) string {
 // registered for t, the served one where two were registered, or "" when
 // none is.
 func RegisteredMarkdownFormatterName(t reflect.Type) string {
+	// The three maps are written by this file alone and only ever with the
+	// type each comment above names, so a stored value always asserts.
 	if name, ok := formatterNames.Load(t); ok {
-		if s, isString := name.(string); isString {
-			return s
-		}
+		s, _ := name.(string)
+		return s
 	}
 	return ""
 }
@@ -173,7 +174,9 @@ func RegisterMarkdownResult[T any](fn func(T) *mcp.CallToolResult) {
 // a formatter up by an interface and the registration would sit under a key
 // no concrete value reaches.
 func registrable(t reflect.Type) bool {
-	if t == nil || t.Kind() == reflect.Interface {
+	// t comes from reflect.TypeFor of a type parameter, which is never nil:
+	// an interface argument yields the interface type, refused here.
+	if t.Kind() == reflect.Interface {
 		recordRegistrationProblem(fmt.Sprintf("Markdown formatter registered for the interface type %v: nothing looks a formatter up by an interface", t))
 		return false
 	}
@@ -220,15 +223,13 @@ func MarkdownForResult(result any) *mcp.CallToolResult {
 
 	// Result formatters take priority (e.g. uploads with image content).
 	if fn, ok := resultFormatters.Load(value.Type()); ok {
-		if f, fOK := fn.(func(any) *mcp.CallToolResult); fOK {
-			return f(result)
-		}
+		f, _ := fn.(func(any) *mcp.CallToolResult)
+		return f(result)
 	}
 
 	if fn, ok := stringFormatters.Load(value.Type()); ok {
-		if f, fOK := fn.(stringFormatter); fOK {
-			return wrapMarkdown(f.fn(result), f.ann)
-		}
+		f, _ := fn.(stringFormatter)
+		return wrapMarkdown(f.fn(result), f.ann)
 	}
 
 	return nil
@@ -286,20 +287,17 @@ func stripTrailingLineWhitespace(s string) string {
 // over them is deterministic. It is the seam the runtime structural gate
 // drives: a fixture can be built for a type where only a name could not.
 func RegisteredMarkdownTypes() []reflect.Type {
+	// Both maps are keyed by the reflect.Type the registration read, and by
+	// nothing else.
 	var types []reflect.Type
-	stringFormatters.Range(func(key, _ any) bool {
-		if t, ok := key.(reflect.Type); ok {
-			types = append(types, t)
-		}
+	collect := func(key, _ any) bool {
+		t, _ := key.(reflect.Type)
+		types = append(types, t)
 		return true
-	})
-	resultFormatters.Range(func(key, _ any) bool {
-		if t, ok := key.(reflect.Type); ok {
-			types = append(types, t)
-		}
-		return true
-	})
-	sort.Slice(types, func(i, j int) bool { return types[i].String() < types[j].String() })
+	}
+	stringFormatters.Range(collect)
+	resultFormatters.Range(collect)
+	slices.SortFunc(types, func(a, b reflect.Type) int { return strings.Compare(a.String(), b.String()) })
 	return types
 }
 

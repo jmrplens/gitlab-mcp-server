@@ -972,6 +972,65 @@ func TestValidateParameterAliasSpecs_NoSource(t *testing.T) {
 	}
 }
 
+// TestValidateParameterAliasSpecs_DeprecatedWithRemovalVersion_IsAccepted
+// verifies a deprecated parameter alias that names the version it goes away
+// in passes, the other half of the refusal of one that names none.
+func TestValidateParameterAliasSpecs_DeprecatedWithRemovalVersion_IsAccepted(t *testing.T) {
+	schema := testActionSpecSchema("project_id")
+	aliases := []ParameterAliasSpec{{
+		Alias: "p", Target: "project_id", Source: "dynamic", Reason: "r",
+		Deprecated: true, RemovalVersion: "4.0.0",
+	}}
+	if err := validateParameterAliasSpecs("get", schema, aliases); err != nil {
+		t.Fatalf("validateParameterAliasSpecs() = %v, want nil", err)
+	}
+}
+
+// TestIsScopeSuggestiveParameterName_EveryName verifies every name the scope
+// heuristic lists is recognized, the six generic ones in any case and the
+// seven identifier ones as spelled, and that another name is not.
+func TestIsScopeSuggestiveParameterName_EveryName(t *testing.T) {
+	for _, name := range []string{
+		"ref", "branch", "tag", "sha", "path", "iid", "BRANCH",
+		"project_id", "group_id", "user_id", "instance_id", "namespace_id", "milestone_id", "epic_id",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !isScopeSuggestiveParameterName(name) {
+				t.Errorf("isScopeSuggestiveParameterName(%q) = false, want true", name)
+			}
+		})
+	}
+	for _, name := range []string{"title", "PROJECT_ID"} {
+		t.Run(name, func(t *testing.T) {
+			if isScopeSuggestiveParameterName(name) {
+				t.Errorf("isScopeSuggestiveParameterName(%q) = true, want false", name)
+			}
+		})
+	}
+}
+
+// TestMergeActionSpecGuidance_KeepsWhatTheRouteAlreadySays verifies the spec's
+// guidance fills only what the route's own guidance leaves empty: a role, a
+// value source and an example binding the route states are kept, and the
+// confusions of both are merged.
+func TestMergeActionSpecGuidance_KeepsWhatTheRouteAlreadySays(t *testing.T) {
+	route := map[string]ParameterGuidance{"p": {
+		SemanticRole: "route role", ValueSource: "route source", ExampleBinding: "route example",
+		CommonConfusions: []string{"a"},
+	}}
+	spec := map[string]ParameterGuidance{"p": {
+		SemanticRole: "spec role", ValueSource: "spec source", ExampleBinding: "spec example",
+		CommonConfusions: []string{"b"},
+	}}
+	got := mergeActionSpecGuidance(route, spec)["p"]
+	if got.SemanticRole != "route role" || got.ValueSource != "route source" || got.ExampleBinding != "route example" {
+		t.Errorf("merged = %+v, want the route's role, source and example kept", got)
+	}
+	if !reflect.DeepEqual(got.CommonConfusions, []string{"a", "b"}) {
+		t.Errorf("CommonConfusions = %#v, want both merged", got.CommonConfusions)
+	}
+}
+
 // TestSchemaHasPropertyPath covers the direct helper: empty path, top-level
 // match, missing top-level, and nested match.
 func TestSchemaHasPropertyPath(t *testing.T) {
@@ -988,6 +1047,12 @@ func TestSchemaHasPropertyPath(t *testing.T) {
 					},
 				},
 			},
+			"owner": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name": map[string]any{"type": "string"},
+				},
+			},
 		},
 	}
 
@@ -1000,6 +1065,7 @@ func TestSchemaHasPropertyPath(t *testing.T) {
 		{"whitespace path", "  ", false},
 		{"top level match", "project_id", true},
 		{"nested match", "items.file_path", true},
+		{"nested object match", "owner.name", true},
 		{"missing top level", "missing", false},
 		{"missing nested", "items.missing", false},
 		{"no properties", "x", false},

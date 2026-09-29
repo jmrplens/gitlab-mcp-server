@@ -150,9 +150,10 @@ var canonicalParamFormats = map[string]string{
 }
 
 // canonicalParamRange is an inclusive integer bound for a numeric parameter.
-// A nil Min or Max leaves that bound unconstrained.
+// Every parameter the table bounds has a floor, since each is a page or a page
+// size, so Min is a value; a nil Max leaves the ceiling unconstrained.
 type canonicalParamRange struct {
-	Min *int
+	Min int
 	Max *int
 }
 
@@ -169,8 +170,8 @@ type canonicalParamRange struct {
 //
 // See https://docs.gitlab.com/api/rest/#offset-based-pagination.
 var canonicalParamRanges = map[string]canonicalParamRange{
-	"per_page": {Min: new(1), Max: new(100)},
-	"page":     {Min: new(1)},
+	"per_page": {Min: 1, Max: new(100)},
+	"page":     {Min: 1},
 }
 
 // applyCanonicalParamRanges injects [canonicalParamRanges] bounds into top-level
@@ -190,10 +191,8 @@ func applyCanonicalParamRanges(schema map[string]any) {
 		if !isMap || prop["type"] != "integer" {
 			continue
 		}
-		if bound.Min != nil {
-			if _, has := prop["minimum"]; !has {
-				prop["minimum"] = *bound.Min
-			}
+		if _, has := prop["minimum"]; !has {
+			prop["minimum"] = bound.Min
 		}
 		if bound.Max != nil {
 			if _, has := prop["maximum"]; !has {

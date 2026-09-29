@@ -207,6 +207,38 @@ func TestEnrichPaginationNode_RecursesAnyOfOneOfAllOf(t *testing.T) {
 	}
 }
 
+// TestEnrichPaginationNode_SkipsWhatItCannotBound verifies the walk leaves
+// alone what carries no bound: a per_page declared as a string, a property
+// schema written as a bare boolean, and a combinator branch that is one too.
+// Each is kept exactly as it was, and the walk does not stop at it.
+func TestEnrichPaginationNode_SkipsWhatItCannotBound(t *testing.T) {
+	t.Parallel()
+	perPage := map[string]any{"type": "string"}
+	page := map[string]any{"type": "integer"}
+	node := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"per_page": perPage,
+			"anything": true,
+		},
+		"anyOf": []any{false, map[string]any{"properties": map[string]any{"page": page}}},
+	}
+	enrichPaginationNode(node)
+
+	if _, bounded := perPage["maximum"]; bounded {
+		t.Errorf("string per_page = %v, want no bound", perPage)
+	}
+	if node["properties"].(map[string]any)["anything"] != true {
+		t.Error("boolean property schema was rewritten")
+	}
+	if node["anyOf"].([]any)[0] != false {
+		t.Error("boolean anyOf branch was rewritten")
+	}
+	if page["minimum"] != float64(1) {
+		t.Errorf("page after the boolean branch = %v, want minimum 1", page)
+	}
+}
+
 // TestIsIntegerLike_NonStringType verifies that isIntegerLike returns false
 // when the "type" field exists but is not a string (e.g. an integer or array).
 func TestIsIntegerLike_NonStringType(t *testing.T) {

@@ -2,8 +2,12 @@ package toolutil
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
@@ -198,7 +202,7 @@ func readTheSentPackage(v any) bool {
 // included, are the ones given.
 func readThePipeline(pipeline *PackagePipelineExtra, iid, projectID int64, source, email string, locked bool) bool {
 	return pipeline != nil && pipeline.IID == iid && pipeline.ProjectID == projectID && pipeline.Source == source &&
-		pipeline.User != nil && pipeline.User.PublicEmail == email && pipeline.User.Locked == locked
+		pipeline.User.PublicEmail == email && pipeline.User.Locked == locked
 }
 
 // tailReaderCases is the table itself, out here rather than inside the test, so
@@ -312,10 +316,12 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "todo",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedTodo(c) },
-			body: `{"id":1,"updated_at":"2026-04-07T00:00:00.000Z","group":{"id":4,"name":"Acme","path":"acme","kind":"group","full_path":"acme"}}`,
+			body: `{"id":1,"updated_at":"2026-04-07T00:00:00.000Z","group":{"id":4,"name":"Acme","path":"acme","kind":"group","full_path":"acme"},` +
+				`"author":{"id":2,"username":"ada","locked":true,"public_email":"ada@example.com"}}`,
 			want: func(v any) bool {
 				e, _ := v.(TodoExtra)
-				return e.UpdatedAt != nil && e.Group != nil && e.Group.FullPath == "acme" && e.Group.Kind == "group"
+				return e.UpdatedAt != nil && e.Group != nil && e.Group.FullPath == "acme" && e.Group.Kind == "group" &&
+					e.Author.Locked && e.Author.PublicEmail == "ada@example.com"
 			},
 		},
 		{
@@ -941,6 +947,43 @@ func TestCapturedUserListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 	if _, err = CapturedInstanceUsers(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2); err == nil ||
 		!strings.Contains(err.Error(), "holds 1 users and the SDK decoded 2") {
 		t.Errorf("CapturedInstanceUsers() with another count = %v, want the two numbers", err)
+	}
+}
+
+// TestUserBasicFrom_CompletesTheDecodedUserWithTheCapturedKeys verifies the
+// one conversion of a BasicUser to the whole UserBasic entity: the six keys
+// client-go decodes land on their own fields, the two the capture read beside
+// them come from the extra and from nowhere else, created_at is not published,
+// and a user the answer did not carry is nil whatever the extra holds. Every
+// value is distinct, so a key read from its neighbor is visible.
+func TestUserBasicFrom_CompletesTheDecodedUserWithTheCapturedKeys(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	decoded := &gl.BasicUser{
+		ID: 7, Username: "ada", Name: "Ada Lovelace", State: "blocked", CreatedAt: &created,
+		AvatarURL: "https://gitlab.example.com/a/7.png", WebURL: "https://gitlab.example.com/ada",
+	}
+	extra := UserBasicExtra{Locked: true, PublicEmail: "ada@example.com"}
+	for _, testCase := range []struct {
+		name  string
+		user  *gl.BasicUser
+		extra UserBasicExtra
+		want  *UserBasicOutput
+	}{
+		{name: "no user carried", user: nil, extra: extra, want: nil},
+		{name: "decoded and captured keys", user: decoded, extra: extra, want: &UserBasicOutput{
+			ID: 7, Username: "ada", PublicEmail: "ada@example.com", Name: "Ada Lovelace", State: "blocked",
+			Locked: true, AvatarURL: "https://gitlab.example.com/a/7.png", WebURL: "https://gitlab.example.com/ada",
+		}},
+		{name: "nothing captured beside the user", user: decoded, extra: UserBasicExtra{}, want: &UserBasicOutput{
+			ID: 7, Username: "ada", Name: "Ada Lovelace", State: "blocked",
+			AvatarURL: "https://gitlab.example.com/a/7.png", WebURL: "https://gitlab.example.com/ada",
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := UserBasicFrom(testCase.user, testCase.extra); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("UserBasicFrom() = %+v, want %+v", got, testCase.want)
+			}
+		})
 	}
 }
 

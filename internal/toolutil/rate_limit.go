@@ -862,12 +862,17 @@ func (s *JSONDepthScanner) Scan(chunk []byte) bool {
 	}
 	for _, c := range chunk {
 		if s.inString {
-			switch {
-			case s.escaped:
+			// The escape is read before the byte, as its own test, so the
+			// byte can be switched on: a tagless switch's case expressions
+			// are the one condition the mutation gate cannot run.
+			if s.escaped {
 				s.escaped = false
-			case c == '\\':
+				continue
+			}
+			switch c {
+			case '\\':
 				s.escaped = true
-			case c == '"':
+			case '"':
 				s.inString = false
 			}
 			continue

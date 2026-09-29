@@ -132,6 +132,24 @@ func TestFirstToolsListMiddleware_NilListing_DoesNotSpendTheVisit(t *testing.T) 
 	}
 }
 
+// TestFirstToolsListMiddleware_ListingOfAnotherType_DoesNotSpendTheVisit
+// verifies a tools/list answer that is not a listing at all is passed on and
+// leaves the one visit for the listing that follows it.
+func TestFirstToolsListMiddleware_ListingOfAnotherType_DoesNotSpendTheVisit(t *testing.T) {
+	listed := listedTools()
+	var visits int
+	handler := firstToolsListMiddleware(func([]*mcp.Tool) { visits++ })(answering(&mcp.CallToolResult{}, listed))
+
+	for range 2 {
+		if _, err := handler(context.Background(), "tools/list", nil); err != nil {
+			t.Fatalf("handler() error = %v, want nil", err)
+		}
+	}
+	if visits != 1 {
+		t.Errorf("visited %d times, want the one listing that was a listing", visits)
+	}
+}
+
 // TestOnFirstToolsList_NilServer verifies that registering the visit on no
 // server at all is a no-op rather than a panic, which is what lets the two
 // callers hand over whatever server they were given without checking it first.

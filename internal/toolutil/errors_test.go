@@ -349,6 +349,20 @@ func TestIsConnectionRefused_OpError(t *testing.T) {
 	}
 }
 
+// TestIsConnectionRefused_OpErrorOfAnotherCause verifies a dial error whose
+// cause is not ECONNREFUSED, and whose text does not say so either, is not
+// read as a refused connection.
+func TestIsConnectionRefused_OpErrorOfAnotherCause(t *testing.T) {
+	inner := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: &os.SyscallError{Syscall: "connect", Err: syscall.ETIMEDOUT},
+	}
+	if isConnectionRefused(inner) {
+		t.Error("expected false for OpError wrapping ETIMEDOUT")
+	}
+}
+
 // TestIsConnectionRefused_StringFallback verifies the string-match fallback
 // path when the error is not a typed net.OpError.
 func TestIsConnectionRefused_StringFallback(t *testing.T) {
@@ -538,6 +552,17 @@ func TestExtractGitLabMessage(t *testing.T) {
 				Message:  "{message: 405 Method Not Allowed}",
 			},
 			want: "",
+		},
+		{
+			// The status code appears, but not at the start of the wrapped
+			// message: GitLab said something about the status rather than
+			// echoing it, and that is kept.
+			name: "wrapped message naming the status mid-sentence is kept",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusMethodNotAllowed},
+				Message:  "{message: rejected with 405 by the route}",
+			},
+			want: "{message: rejected with 405 by the route}",
 		},
 		{
 			name: "empty message",
@@ -1905,6 +1930,30 @@ func TestClassifyError_DestinationRefused_IsNotAnUnreachableHost(t *testing.T) {
 				t.Errorf("ClassifyError() = %q, want %q", got, DestinationRefusedMessage)
 			}
 		})
+	}
+}
+
+// TestReplaceUnboundRendering_TextWithoutTheTransportRendering verifies a
+// text that does not carry the transport's own rendering of the unbound
+// request falls back to replacing the sentinel's words, which a text that
+// names neither leaves exactly as it was.
+func TestReplaceUnboundRendering_TextWithoutTheTransportRendering(t *testing.T) {
+	err := &url.Error{Op: "Get", URL: "https://gitlab.invalid/api/v4/user", Err: gitlabclient.ErrUnboundClient}
+	if got := replaceUnboundRendering("listing users failed", err); got != "listing users failed" {
+		t.Errorf("replaceUnboundRendering() = %q, want the text unchanged", got)
+	}
+}
+
+// TestDescribeGitLabResponse_RequestWithoutURL verifies a response whose
+// request carries no URL is described by its status and message alone, as a
+// response with no request at all is, rather than dereferencing the URL.
+func TestDescribeGitLabResponse_RequestWithoutURL(t *testing.T) {
+	glErr := &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusConflict, Request: &http.Request{}},
+		Message:  "branch is protected",
+	}
+	if got := describeGitLabResponse(glErr); got != "409 branch is protected" {
+		t.Errorf("describeGitLabResponse() = %q, want %q", got, "409 branch is protected")
 	}
 }
 
