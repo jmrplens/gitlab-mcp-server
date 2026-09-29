@@ -753,7 +753,11 @@ five things:
   [Requests held open at once](http-server-mode.md#requests-held-open-at-once)).
   `--pool-idle-timeout` reclaims unused ones, except an
   entry with a live subscription, which is not idle however long it has been
-  since it made a request. `--session-timeout` applies to stateful mode only.
+  since it made a request. `--session-timeout` applies to stateful mode only,
+  where the process also keeps at most half as many sessions as it may hold
+  calls (96 under a hard limit of 1024) and refuses the next `initialize` as
+  busy (see
+  [Stateful sessions kept at once](http-server-mode.md#stateful-sessions-kept-at-once)).
 - **The token passes through the box.** Every caller's GitLab token reaches this
   process, authenticates one request, and is never persisted. That is a property
   of the software. Whether the people whose tokens they are consider the machine

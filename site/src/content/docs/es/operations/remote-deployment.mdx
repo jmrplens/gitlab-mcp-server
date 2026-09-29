@@ -699,7 +699,9 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
   ni las peticiones que retienen; el proceso acota las llamadas retenidas a la vez
   en todas las credenciales según su límite de descriptores (192 bajo un límite
   duro de 1024), sin opción de configurarlo, y rechaza la siguiente como ocupado. `--pool-idle-timeout` recupera las que no se usan, y
-  `--session-timeout` solo se aplica al modo con estado.
+  `--session-timeout` solo se aplica al modo con estado, donde el proceso además
+  mantiene como mucho la mitad de sesiones que llamadas puede retener (96 bajo un
+  límite duro de 1024) y rechaza el siguiente `initialize` como ocupado.
 - **El token pasa por esta máquina.** El token de GitLab de cada cliente llega a
   este proceso, autentica una petición y nunca se persiste. Si las personas
   dueñas de esos tokens consideran de fiar esa máquina es una pregunta que el

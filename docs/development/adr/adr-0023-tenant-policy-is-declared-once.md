@@ -160,8 +160,9 @@ twice), and the gate holds the pinned literal equal to the register's.
   construction: code identity for a value, a verbatim oracle and fuzzing for a rule. The
   benchmark's held mode measures what the process pays per call it holds and what it does
   past a descriptor limit, which is what `HLD-011`'s derivation from the descriptor limit
-  was sized from, but it compares no two populations, and a switch that would let it
-  cannot exist for a bound no operator can turn off.
+  was sized from, and its sessions mode does the same for the stateful sessions `HLD-010`
+  bounds, but neither compares two populations, and a switch that would let them cannot
+  exist for a bound no operator can turn off.
 - **NEG-005**: The carried-channel matrix follows go-sdk; an SDK upgrade that changes what
   is carried edits it in the same change.
 - **NEG-006**: A promoted rule is a call where the code used to be written in place, and it
@@ -182,10 +183,11 @@ twice), and the gate holds the pinned literal equal to the register's.
   `ADM-014` (issue 950) is the same case with a wait in place of a count: a caller that
   presents one new token to an instance it knows to be healthy and is refused after the
   five-second slot wait learns that other callers are verifying. `HLD-011` (issue 951),
-  the ceiling on the calls the process holds open, has no per-caller ceiling beside it, so
-  any refusal of it tells its caller that the process is full, which is the same bit and
-  no more: its words say only that the server is busy, and name no bound, no count and no
-  caller. No wording closes it:
+  the ceiling on the calls the process holds open, and `HLD-010`, the ceiling on the
+  stateful sessions it keeps, have no per-caller ceiling beside them, so any refusal of
+  either tells its caller that the process is full, which is the same bit and no more:
+  both answer in the same words, which say only that the server is busy, and name no
+  bound, no count and no caller. No wording closes it:
   the caller's own count or its own wait supplies the bit whatever the refusal says,
   exactly as its own busyness does for `credential_evicted`. It is the price of bounding
   what every tenant shares, and the alternatives are worse: a share of the bound per

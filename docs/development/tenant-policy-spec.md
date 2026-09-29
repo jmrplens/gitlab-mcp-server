@@ -247,18 +247,19 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
   or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
   `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
-  (`HLD-002`, `HLD-004`, `HLD-011`, `RTC-007`, `ADM-014`), which tells a caller that has
-  not reached its own bound, or that knows the upstream to be healthy, that the process
-  has reached its one, and so that others are holding, spending or verifying against it
-  (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of what others hold or
-  an identity, and neither says more than a caller could infer from its own count or its
-  own wait: the stream ceilings name the scope that refused, which a caller counting its
-  own streams knows already, `RTC-007` answers in `RTC-003`'s words and `ADM-014` in the
-  words `ADM-002` uses for a verification with no verdict, so only the log line says
-  which bound refused. `HLD-011` has no per-caller ceiling beside it, so any refusal of it
-  says the process is full whatever its words, and they say only that the server is busy,
-  naming no bound, no figure and no caller; that it falls under this exception rather than
-  needing one of its own is put to the maintainer in its pull request.
+  (`HLD-002`, `HLD-004`, `HLD-010`, `HLD-011`, `RTC-007`, `ADM-014`), which tells a
+  caller that has not reached its own bound, or that knows the upstream to be healthy,
+  that the process has reached its one, and so that others are holding, spending or
+  verifying against it (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of
+  what others hold or an identity, and neither says more than a caller could infer from
+  its own count or its own wait: the stream ceilings name the scope that refused, which a
+  caller counting its own streams knows already, `RTC-007` answers in `RTC-003`'s words
+  and `ADM-014` in the words `ADM-002` uses for a verification with no verdict, so only
+  the log line says which bound refused. `HLD-010` and `HLD-011` have no per-caller
+  ceiling beside them, so any refusal of either says the process is full whatever its
+  words, and both use the same words, which say only that the server is busy, naming no
+  bound, no figure and no caller; that they fall under this exception rather than needing
+  one of their own is put to the maintainer in their pull requests.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -510,12 +511,12 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Five findings are answered, and stay in the list with their issues. F-03, the listing
+Six findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
-longer. The second of those changes answers half of F-31: `HLD-011` bounds the calls
-the process holds open across every credential, not configurable, a
+longer. The second and third of those changes answer F-31. The second, `HLD-011`, bounds
+the calls the process holds open across every credential, not configurable, a
 `subscriptions/listen` aside since `HLD-001` and `HLD-002` count it. Its value is derived
 from the descriptors the process may open, read once at startup: an eighth of the limit
 spare, one descriptor for each of the 512 listen streams, and two for each held call,
@@ -525,10 +526,12 @@ the soft limit to it before `main`; where the platform has no limit to read, the
 is the one a limit of 1024 gives. It counts the calls that reach GitLab, the methods
 `MeterFor` charges to the tool-call and completion buckets, where the SDK dispatches
 them, so each call of a JSON-RPC batch counts, a response the client sends to a request
-of the server's own never does, and neither does a listen on any revision. A POST on
-protocol 2026-07-28 or later, whose `Mcp-Method` header the SDK holds to the body, takes
-its slot in the gate instead and is refused there, a 503 `-50300` with `Retry-After` and
-the connection closed; a call on an older revision is refused where it is dispatched,
+of the server's own never does, and neither does a listen on any revision; a stateful
+session's standalone stream, the GET the SDK holds open for as long as the session
+lives, counts too, taking its slot in the gate. A POST on protocol 2026-07-28 or later,
+whose `Mcp-Method` header the SDK holds to the body, takes its slot in the gate instead
+and is refused there, a 503 `-50300` with `Retry-After` and the connection closed; a
+call on an older revision is refused where it is dispatched,
 the way `RTC-001` refuses the same method (a result flagged with `isError`, `-42900`, or
 an empty completion). Every refusal says `This server is busy. Retry later.` and is
 charged to nothing. The slot is taken after admission, which departs from what issue 951
@@ -545,9 +548,33 @@ set, linearly to 4000 calls (8010 descriptors, 873 MiB); under a hard limit of 1
 process held 503 and stopped accepting connections, `/health` among them. With the
 ceiling, under the same limit and 4000 calls offered, from one credential and from a
 hundred, it held 192 in 394 descriptors and refused the other 3808; with the limit
-inherited (1048576) it held all 4000, as it did without the ceiling. The stateful
-sessions are the half it does not answer, so F-31 stays on `HLD-010` and `IDN-010` for
-them and issue 951 stays open. F-19 and F-33 are answered by issue 959's decision
+inherited (1048576) it held all 4000, as it did without the ceiling. The third,
+`HLD-010`, bounds the stateful sessions the process keeps on `--stateless=false` across
+every credential, which the SDK keeps until the client deletes one, the pool evicts its
+credential or it sits idle for `--session-timeout`, and which nothing bounded while
+`initialize` is metered to no bucket (`RTC-004`). The gate takes a session slot for every
+POST that would open one, a POST carrying no `Mcp-Session-Id`, once the credential is
+admitted and before the SDK creates anything, and refuses it past the ceiling with
+`HLD-011`'s 503 in `HLD-011`'s words; the session keeps the slot from the first request
+the SDK dispatches on it until it ends, however it ends, and a POST whose session did not
+survive it gives the slot back as the gate returns. The ceiling is half of `HLD-011`'s,
+96 under a hard descriptor limit of 1024, rather than a figure of its own: with every
+standalone stream counted as a held call, the streams of every session the process keeps
+take at most half of the held slots, the descriptor budget `HLD-011` is sized from holds
+as it was, and a call on an open session is still served with every session slot taken.
+No flag moves it, for `HLD-011`'s reason. Measured through `cmd/bench_resources`'
+sessions mode, an idle session costs the process three goroutines, 10 to 17 KiB of live
+heap and no descriptor, and one holding its stream six goroutines, about 25 KiB and one
+descriptor; under a hard limit of 1024 the process kept every session it was offered
+until the streams had taken all 1024 descriptors, at 1012 to 1016 sessions, and from
+there `/health` went unanswered and opens failed at the connection. With the ceiling,
+under the same limit and 4000 sessions offered with their streams, from one credential
+and from a hundred, it kept 96 in 111 and 203 descriptors and refused the other 3904 in
+the gate, `/health` answering throughout; with the limit inherited it kept all 4000, as
+it did without the ceiling. The session's slot is given back by a goroutine of its own,
+which is one goroutine more per session, bounded by the ceiling. `IDN-010`, the owner
+record every stateful session carries, is bounded by the same count and no longer
+carries F-31, and neither does `HLD-010`. F-19 and F-33 are answered by issue 959's decision
 that what they recorded is the server's position, stated in
 [Two MCP clauses the server meets in part](#two-mcp-clauses-the-server-meets-in-part):
 `RTC-001` and `IDN-013` record that decision and carry neither any longer. F-29 and F-30

@@ -160,8 +160,9 @@ number of instances raises.
 | `--http-idle-timeout`                     | `0`         | Leave it disabled. A positive value cuts long-lived streams                                                                                                                                                                                                                                                                                                                                                                             |
 | `--drain-delay`                           | `0`         | Set it to at least one balancer detection interval                                                                                                                                                                                                                                                                                                                                                                                      |
 
-Two further limits are not configurable: ten resource watchers per credential
-and 512 across the process, and the calls held open at once across the process.
+Three further limits are not configurable: ten resource watchers per credential
+and 512 across the process, the calls held open at once across the process, and
+under `--stateless=false` the sessions the process keeps.
 The watcher ceilings refuse rather than evicting: a credential is one API call to
 mint, so a per-credential number multiplies by however many a caller holds and
 only the process-wide one bounds the process. The held-call ceiling follows the
@@ -177,6 +178,16 @@ under a hard limit of 1024, with 4000 calls offered from one credential or from
 a hundred, the process stayed at 394 descriptors and `/health` answered in a
 millisecond. Where the limit is large, memory runs out first, at about 190 KiB a
 held call, so the container's memory limit is the figure to size.
+
+The session ceiling is half the held-call one, 96 under a hard limit of 1024 and
+114560 under 524288, because each session's standalone stream counts as a held
+call: an idle session costs three goroutines and 10 to 17 KiB and holds no
+connection, and its stream costs one descriptor more. The next `initialize` is
+refused as busy in the same words. Under a hard limit of 1024, with 4000
+sessions offered with their streams, the process kept 96 in at most 203
+descriptors and kept answering `/health`; before the ceiling it kept every
+session until the streams had taken all 1024 descriptors and then stopped
+answering. A session nobody deletes keeps its slot until `--session-timeout`.
 
 The failed-authentication budget is configurable: ten failures a minute per
 client address by default (`--auth-failure-limit`, `--auth-failure-window`)
