@@ -13,12 +13,14 @@ coefficient of 3001 and a deadline of 95 hours per mutant. A parsed duration
 was wrong too, being the test binary's own run time without the build.
 
 These cases drive the real script against a stand-in `go` placed first on
-PATH, which answers the `go list`, `go mod download` and `go test` calls from
-what each case configures, records every call, and records the gremlins run
-instead of starting it. What is asserted is what reaches gremlins: the tags
-every go command before it carries, the command the baseline times, the
-coefficient derived from the printed base, the ceiling on the deadline, and
-the refusals that stop a run whose figures would mean nothing.
+PATH, which answers the `go env`, `go list`, `go mod download` and `go test`
+calls from what each case configures, records every call, and records the
+gremlins run instead of starting it. What is asserted is what reaches
+gremlins: the tags every go command before it carries, the command the
+baseline times, the per-mutant command run once to warm the cache, the
+-trimpath and GOROOT every command inherits (issue 1029), the coefficient
+derived from the printed base or the one the caller fixed, the ceiling on the
+deadline, and the refusals that stop a run whose figures would mean nothing.
 
 Run with:
 
@@ -29,9 +31,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -110,14 +114,16 @@ def import_paths(pattern):
     return found
 
 
-entry = {"argv": args, "cwd": os.getcwd(), "goflags": env.get("GOFLAGS", "")}
+entry = {"argv": args, "cwd": os.getcwd(), "goflags": env.get("GOFLAGS", ""), "goroot": env.get("GOROOT")}
 try:
     entry["stdout"] = os.readlink("/proc/self/fd/1")
 except OSError:
     entry["stdout"] = None
 
 status = 0
-if args[:2] == ["list", "-m"]:
+if args == ["env", "GOROOT"]:
+    print(env.get("STUB_GOROOT", "/stub/goroot"))
+elif args[:2] == ["list", "-m"]:
     print(render(args[args.index("-f") + 1], {"{{.Dir}}": env["STUB_ROOT"]}))
 elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.ImportPath}}":
     # The -coverpkg resolution: every pattern after the template. An empty
@@ -169,6 +175,8 @@ elif args[:1] == ["test"]:
     else:
         with open(env["STUB_LOG"], encoding="utf-8") as fh:
             run = 1 + sum(1 for line in fh if json.loads(line)["argv"][:1] == ["test"])
+        if env.get("STUB_STARTED_ON") == "test":
+            open(env["STUB_STARTED"], "w", encoding="utf-8").close()
         time.sleep(float(env.get("STUB_TEST_SLEEP", "0")))
         if "-coverprofile" in args:
             with open(args[args.index("-coverprofile") + 1], "w", encoding="utf-8") as fh:
@@ -181,7 +189,10 @@ elif args[:1] == ["test"]:
             print(env.get("STUB_TEST_LAST_LINE",
                           "ok  \t%s\t0.912s\tcoverage: 71.4%% of statements" % pattern))
 elif args[:2] == ["run", "github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0"]:
-    pass
+    entry["target_exists"] = os.path.isdir(os.path.join(os.getcwd(), args[-1]))
+    if env.get("STUB_STARTED_ON") == "run":
+        open(env["STUB_STARTED"], "w", encoding="utf-8").close()
+    time.sleep(float(env.get("STUB_GREMLINS_SLEEP", "0")))
 else:
     sys.stderr.write("stub go: unexpected call %r\n" % (args,))
     status = 2
@@ -288,6 +299,16 @@ class CoverageMutantsTest(unittest.TestCase):
         runs = self.of(calls, "run")
         self.assertEqual(len(runs), 1, proc.stdout + proc.stderr)
         return runs[0]
+
+    @staticmethod
+    def baselines(calls):
+        """The coverage runs: the untimed gate and the timed one."""
+        return [c for c in calls if c["argv"][:1] == ["test"] and "-coverprofile" in c["argv"]]
+
+    @staticmethod
+    def warmups(calls):
+        """The runs of the command gremlins runs against each mutant."""
+        return [c for c in calls if c["argv"][:1] == ["test"] and "-coverprofile" not in c["argv"]]
 
     def coefficient(self, proc, calls):
         argv = self.gremlins(proc, calls)["argv"]
@@ -613,30 +634,104 @@ class CoverageMutantsTest(unittest.TestCase):
         self.assert_refused_before_gremlins(proc, calls)
         self.assertIn("MUTANT_DEADLINE_MAX", proc.stderr)
 
+    def test_a_coefficient_the_caller_fixes_is_the_one_announced_and_passed(self):
+        # gremlins reads a --timeout-coefficient in GREMLINS_FLAGS in place of
+        # the derived one, so announcing the derived deadline printed one that
+        # was not in force, in exactly the mode the sweeps and issue 1029 ran
+        # in. The script hands gremlins only the caller's, and announces it as
+        # gremlins reads it: 0 is gremlins' own default of 3. The budget and
+        # the ceiling bound only a derived coefficient, so a ceiling that could
+        # not hold two runs refuses nothing here.
+        cases = [
+            ("--workers 2 --timeout-coefficient 20", (), 20),
+            ("--timeout-coefficient=20", (), 20),
+            ("--timeout_coefficient 20", (), 20),
+            ("--timeout-coefficient 5 --timeout-coefficient 40", (), 40),
+            ("--timeout-coefficient 0", (), 3),
+            ("--timeout-coefficient 20", ("30", "1", "1"), 20),
+        ]
+        for flags, knobs, applied in cases:
+            with self.subTest(flags=flags, knobs=knobs):
+                proc, calls = self.run_script("./internal/pkg", *knobs, flags=flags,
+                                              env={"STUB_TEST_SLEEP": "0.6" if knobs else str(SLEEP)})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                base = self.printed_base(proc)
+                self.assertIn("GREMLINS_FLAGS fixes -timeout-coefficient %d: about" % applied, proc.stdout)
+                self.assertAlmostEqual(self.printed_deadline(proc), base * applied, delta=0.06)
+                self.assertIn("which neither the", proc.stdout)
+                self.assertNotIn("so -timeout-coefficient", proc.stdout)
+                self.assertNotIn("ceiling holds the coefficient", proc.stdout)
+                # The caller's words follow the script's four directly: no
+                # derived coefficient is passed beside theirs.
+                argv = self.gremlins(proc, calls)["argv"]
+                self.assertEqual(argv[2:6], ["unleash", "--invert-logical", "--workers", "4"])
+                self.assertEqual(argv[6:-1], flags.split() + ["--exclude-files=/"])
+                self.assertEqual(argv[-1], "./internal/pkg")
+        # A value the script cannot read the way pflag and gremlins do is
+        # refused before the suite runs, rather than announced wrong.
+        for flags in ("--timeout-coefficient 020", "--timeout-coefficient x", "--timeout-coefficient=",
+                      "--timeout-coefficient -3"):
+            with self.subTest(flags=flags):
+                proc, calls = self.run_script("./internal/pkg", flags=flags)
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(self.of(calls, "test"), [])
+                self.assertIn("is not a whole number written without a leading zero", proc.stderr)
+
+    def test_a_callers_own_exclusion_warms_every_package_below_the_target(self):
+        # The default exclusion keeps every mutant in the target, whose own
+        # `go test <package>` is what the warm-up runs. A caller who states
+        # their own --exclude-files may leave packages below it to be mutated,
+        # each run as its own `go test <subpackage>`, whose plain build the
+        # coverage runs never compile, so the warm-up covers the subtree.
+        cases = [
+            ("", {}, "./internal/pkg"),
+            ("-E x", {}, "./internal/pkg/..."),
+            ("--exclude-files=x", {}, "./internal/pkg/..."),
+            ("", {"GREMLINS_UNLEASH_EXCLUDE_FILES": "x"}, "./internal/pkg/..."),
+            ("-i -E x", {}, "./..."),
+        ]
+        for flags, env, each in cases:
+            with self.subTest(flags=flags, env=env):
+                proc, calls = self.run_script("./internal/pkg", flags=flags, env=env)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual([c["argv"][-1] for c in self.warmups(calls)], [each])
+        with self.subTest("a staged copy"):
+            proc, calls = self.run_script("./cmd/tool", flags="-E x", env={"STUB_PKG_NAME": "main"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            warmups = self.warmups(calls)
+            self.assertEqual([c["argv"][-1] for c in warmups], ["./cmd/tool.mutants-main/..."])
+            self.assertTrue(warmups[0]["pattern_dir_exists"])
+
     def test_baseline_runs_the_command_gremlins_multiplies(self):
         # gremlins' coverage step, from the module root: go test [-tags T]
         # [-coverpkg P] -cover -coverprofile F <scan>, where scan is the
-        # package's subtree, or the whole module under --integration.
+        # package's subtree, or the whole module under --integration. Between
+        # the gate and the timed run, the command gremlins runs against each
+        # mutant: go test [-tags T] -failfast <each>, where each is the package
+        # itself, or the whole module under --integration, and never carries
+        # the -coverpkg, which gremlins passes only to its coverage step.
         pkg = "./internal/pkg/..."
+        tags = ["-tags", "e2e"]
         cases = [
-            ("--tags e2e", {}, ["-tags", "e2e"], pkg),
-            ("", {}, [], pkg),
-            ("--coverpkg ./internal/...", {}, ["-coverpkg", "./internal/..."], pkg),
-            ("", {"GREMLINS_UNLEASH_COVERPKG": "./..."}, ["-coverpkg", "./..."], pkg),
-            ("-i", {}, [], "./..."),
-            ("-di", {}, [], "./..."),
-            ("-i=false", {}, [], pkg),
-            ("-di=true", {}, [], "./..."),
-            ("--integration", {}, [], "./..."),
-            ("--integration=true", {}, [], "./..."),
+            ("--tags e2e", {}, tags, [], pkg),
+            ("", {}, [], [], pkg),
+            ("--coverpkg ./internal/...", {}, [], ["-coverpkg", "./internal/..."], pkg),
+            ("", {"GREMLINS_UNLEASH_COVERPKG": "./..."}, [], ["-coverpkg", "./..."], pkg),
+            ("--tags e2e --coverpkg ./internal/...", {}, tags, ["-coverpkg", "./internal/..."], pkg),
+            ("-i", {}, [], [], "./..."),
+            ("-di", {}, [], [], "./..."),
+            ("-i=false", {}, [], [], pkg),
+            ("-di=true", {}, [], [], "./..."),
+            ("--integration", {}, [], [], "./..."),
+            ("--integration=true", {}, [], [], "./..."),
             # gremlins v0.6.0 reads the variable back as a string and asserts
             # a bool, so it never widens gremlins' run and must not widen the
             # baseline's.
-            ("", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], pkg),
-            ("--integration=false", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], pkg),
-            ("-i", {"GREMLINS_UNLEASH_INTEGRATION": "false"}, [], "./..."),
+            ("", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], [], pkg),
+            ("--integration=false", {"GREMLINS_UNLEASH_INTEGRATION": "true"}, [], [], pkg),
+            ("-i", {"GREMLINS_UNLEASH_INTEGRATION": "false"}, [], [], "./..."),
         ]
-        for flags, env, extra, scan in cases:
+        for flags, env, tag_args, cover_args, scan in cases:
             with self.subTest(flags=flags, env=env):
                 proc, calls = self.run_script("./internal/pkg", flags=flags, env=env)
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -649,30 +744,39 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assertEqual("this is an integration run because GREMLINS_FLAGS asks for one" in proc.stdout,
                                  "GREMLINS_UNLEASH_INTEGRATION" in env and scan == "./...", proc.stdout)
                 sequence = [c["argv"][0] for c in calls if c["argv"][:1] != ["list"]]
-                # Downloads first and one untimed run, so the timed one finds
-                # the cache as warm as gremlins' own run will.
-                self.assertEqual(sequence, ["mod", "test", "test", "run"])
+                # The toolchain's root first, then downloads, the untimed gate,
+                # the per-mutant command, and the timed run, which finds the
+                # cache as warm as gremlins' own coverage run will.
+                self.assertEqual(sequence, ["env", "mod", "test", "test", "test", "run"])
                 mod = self.of(calls, "mod", "download")[0]
                 self.assertEqual(mod["cwd"], self.root)
                 tests = self.of(calls, "test")
-                for call in tests:
+                baselines = self.baselines(calls)
+                self.assertEqual([tests[0], tests[2]], baselines)
+                for call in baselines:
                     argv = call["argv"]
                     profile = argv[argv.index("-coverprofile") + 1]
-                    self.assertEqual(argv, ["test", "-count=1"] + extra + [
+                    self.assertEqual(argv, ["test", "-count=1"] + tag_args + cover_args + [
                         "-cover", "-coverprofile", profile, scan])
                     self.assertEqual(call["cwd"], self.root)
                     self.assertFalse(os.path.exists(profile), "the baseline's profile was left behind")
                     if call["stdout"] is not None:
                         self.assertFalse(os.path.exists(call["stdout"]), "the baseline's output was left behind")
-                self.assertEqual(tests[0]["argv"], tests[1]["argv"])
-        # gremlins scans ./... when it is pointed at the module root itself.
+                self.assertEqual(baselines[0]["argv"], baselines[1]["argv"])
+                each = "./..." if scan == "./..." else "./internal/pkg"
+                self.assertEqual([c["argv"] for c in self.warmups(calls)],
+                                 [["test", "-count=1"] + tag_args + ["-failfast", each]])
+                self.assertEqual(tests[1]["cwd"], self.root)
+        # gremlins scans ./... when it is pointed at the module root itself,
+        # and runs each mutant against the module's root package.
         with self.subTest("the module root"):
             proc, calls = self.run_script(".")
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-            tests = self.of(calls, "test")
-            self.assertEqual(len(tests), 2)
-            for call in tests:
+            baselines = self.baselines(calls)
+            self.assertEqual(len(baselines), 2)
+            for call in baselines:
                 self.assertEqual(call["argv"][-1], "./...")
+            self.assertEqual([c["argv"][-1] for c in self.warmups(calls)], ["."])
         # go list prints native paths, so on Windows the package directory
         # carries backslashes below the root, and the pattern must still be
         # the package's subtree written with slashes.
@@ -680,9 +784,9 @@ class CoverageMutantsTest(unittest.TestCase):
             proc, calls = self.run_script("./internal/pkg", env={"STUB_DIR_SEPARATOR": "\\"})
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             tests = self.of(calls, "test")
-            self.assertEqual(len(tests), 2)
+            self.assertEqual(len(tests), 3)
+            self.assertEqual([c["argv"][-1] for c in tests], [pkg, "./internal/pkg", pkg])
             for call in tests:
-                self.assertEqual(call["argv"][-1], pkg)
                 self.assertTrue(call["pattern_dir_exists"], call["argv"])
         # A staged package on Windows: the copy is made beside a directory go
         # listed with backslashes, and gremlins is handed its module-relative
@@ -692,11 +796,12 @@ class CoverageMutantsTest(unittest.TestCase):
                                                                   "STUB_PKG_NAME": "main"})
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             tests = self.of(calls, "test")
-            self.assertEqual(len(tests), 2)
+            self.assertEqual(len(tests), 3)
+            staged = "./internal/pkg.mutants-main"
+            self.assertEqual([c["argv"][-1] for c in tests], [staged + "/...", staged, staged + "/..."])
             for call in tests:
-                self.assertEqual(call["argv"][-1], "./internal/pkg.mutants-main/...")
                 self.assertTrue(call["pattern_dir_exists"], call["argv"])
-            self.assertEqual(self.gremlins(proc, calls)["argv"][-1], "./internal/pkg.mutants-main")
+            self.assertEqual(self.gremlins(proc, calls)["argv"][-1], staged)
             self.assertFalse(os.path.exists(os.path.join(self.root, "internal", "pkg.mutants-main")))
 
     def test_staged_package_main_baseline_carries_the_tags_and_is_removed(self):
@@ -705,28 +810,102 @@ class CoverageMutantsTest(unittest.TestCase):
             "STUB_PKG_NAME": "main", "STUB_NEEDS_TAG": "e2e", "STUB_TEST_SLEEP": str(SLEEP)})
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         tests = self.of(calls, "test")
-        self.assertEqual(len(tests), 2)
+        self.assertEqual(len(tests), 3)
+        # The copy is what gremlins runs each mutant against, so it is the
+        # copy the per-mutant command warms, not the original.
+        self.assertEqual([c["argv"][-1] for c in tests], [staged + "/...", staged, staged + "/..."])
         for call in tests:
-            self.assertEqual(call["argv"][-1], staged + "/...")
             self.assertEqual(self.tags_of(call["argv"]), "e2e")
             self.assertTrue(call["pattern_dir_exists"], "the baseline ran before the copy was staged")
         self.assertEqual(self.gremlins(proc, calls)["argv"][-1], staged)
         self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
         self.assertGreaterEqual(self.printed_base(proc), SLEEP)
 
-    def test_failing_baseline_is_refused(self):
+    def test_an_interrupt_ends_the_run_and_removes_the_staged_copy(self):
+        # `trap cleanup EXIT INT TERM` ran the cleanup and returned to the
+        # script, which carried on against the copy it had just removed: a
+        # signal during the baseline went on to start gremlins on a directory
+        # that was gone, and one during gremlins let the run exit 0. A signal
+        # sent to the script alone is what tells a returning handler from one
+        # that ends the run, since the child it waits for finishes normally.
         cases = [
-            ("the first run fails", "1", "does not pass its own tests"),
+            ("SIGTERM during the baseline", signal.SIGTERM, "test", 143),
+            ("SIGINT during gremlins", signal.SIGINT, "run", 130),
+        ]
+        staged = os.path.join(self.root, "cmd", "tool.mutants-main")
+        for name, signum, during, status in cases:
+            with self.subTest(name):
+                open(self.log, "w", encoding="utf-8").close()
+                started = os.path.join(self.scratch, "started")
+                if os.path.exists(started):
+                    os.remove(started)
+                run_env = {k: v for k, v in os.environ.items()
+                           if not k.startswith("GREMLINS_") and k != "GOFLAGS" and not k.startswith("STUB_")}
+                run_env.update({
+                    "PATH": self.bin + os.pathsep + os.environ.get("PATH", ""),
+                    "STUB_LOG": self.log,
+                    "STUB_ROOT": self.root,
+                    "STUB_PKG_NAME": "main",
+                    "STUB_STARTED": started,
+                    "STUB_STARTED_ON": during,
+                    "STUB_TEST_SLEEP" if during == "test" else "STUB_GREMLINS_SLEEP": "1",
+                })
+                proc = subprocess.Popen([SCRIPT, "./cmd/tool"], cwd=self.root, env=run_env,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                deadline = time.monotonic() + 60
+                while not os.path.exists(started) and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(os.path.exists(started), "the stand-in was never reached")
+                self.assertTrue(os.path.isdir(staged))
+                proc.send_signal(signum)
+                out, err = proc.communicate(timeout=60)
+                self.assertEqual(proc.returncode, status, out + err)
+                self.assertFalse(os.path.exists(staged), "the staged copy was left behind")
+                with open(self.log, encoding="utf-8") as fh:
+                    calls = [json.loads(line) for line in fh]
+                runs = self.of(calls, "run")
+                if during == "test":
+                    self.assertEqual(runs, [], "gremlins was started after the signal")
+                else:
+                    self.assertEqual(len(runs), 1)
+                    self.assertTrue(runs[0]["target_exists"])
+
+    @staticmethod
+    def trimpath_hint(proc):
+        """The one line of the refusal that offers a command to reproduce it."""
+        lines = [line for line in proc.stderr.splitlines()
+                 if line.startswith("gremlins: every go command here runs under -trimpath")]
+        return lines[0] if len(lines) == 1 else None
+
+    def test_failing_baseline_is_refused(self):
+        # The hint names -trimpath only where the suite failed in a run this
+        # script compiled, and names the command that reproduces it: the
+        # GOROOT and GOFLAGS the script ran under, and the pattern.
+        trimpath = "every go command here runs under -trimpath (issue 1029)"
+        run_as = "GOROOT=/stub/goroot GOFLAGS='-trimpath -count=1' go test "
+        cases = [
+            ("the first run fails", "1", "does not pass its own tests",
+             run_as + "./internal/pkg/..., run from the module root, shows"),
+            # gremlins reads a failing run of its per-mutant command as a
+            # killed mutant, and a suite can pass under -cover and fail
+            # without it.
+            ("the per-mutant command fails", "2",
+             "fails go test -failfast ./internal/pkg, the command gremlins runs against each mutant",
+             run_as + "./internal/pkg, run from the module root, shows"),
             # A suite that passes once and fails the next time decides
             # nothing: a mutant's verdict would be a coin toss.
-            ("the timed run fails", "2", "failed them on the timed second run"),
+            ("the timed run fails", "3", "failed them on the timed run", None),
         ]
-        for name, run, says in cases:
+        for name, run, says, hint in cases:
             with self.subTest(name):
                 proc, calls = self.run_script("./internal/pkg", env={"STUB_TEST_FAIL_RUN": run})
                 self.assert_refused_before_gremlins(proc, calls)
                 self.assertIn(says, proc.stderr)
                 self.assertIn("--- FAIL: TestPlanted", proc.stderr)
+                self.assertEqual(len(self.of(calls, "test")), int(run), "a run went on after the one that failed")
+                self.assertEqual(trimpath in proc.stderr, hint is not None, proc.stderr)
+                if hint is not None:
+                    self.assertIn(hint, proc.stderr)
         # A staged copy that fails where it was staged is refused with a
         # reason of its own, since the verdicts would be about the staging,
         # and the copy is removed all the same (issue 872).
@@ -735,7 +914,28 @@ class CoverageMutantsTest(unittest.TestCase):
             self.assert_refused_before_gremlins(proc, calls)
             self.assertIn("the staged copy of ./cmd/tool does not pass its own tests there", proc.stderr)
             self.assertIn("--- FAIL: TestPlanted", proc.stderr)
+            self.assertIn(trimpath, proc.stderr)
             self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
+        # The command offered to reproduce a failure is the one the script
+        # ran: the caller's GOFLAGS in front of its own, the toolchain root,
+        # the tags, and the package where it is. A staged copy is gone by the
+        # time anyone reads the hint, so the hint never names it.
+        with self.subTest("the hint carries the tags, GOROOT and GOFLAGS, and names the original package"):
+            proc, calls = self.run_script("./cmd/tool", flags="--tags e2e", env={
+                "STUB_PKG_NAME": "main", "STUB_NEEDS_TAG": "e2e", "STUB_TEST_FAIL_RUN": "1",
+                "STUB_GOROOT": "/toolchain/root", "GOFLAGS": "-mod=mod"})
+            self.assert_refused_before_gremlins(proc, calls)
+            self.assertEqual(
+                self.trimpath_hint(proc),
+                "gremlins: every go command here runs under -trimpath (issue 1029), which hands a test"
+                " that locates files through runtime.Caller a module-relative path;"
+                " GOROOT=/toolchain/root GOFLAGS='-mod=mod -trimpath -count=1' go test -tags e2e"
+                " ./cmd/tool/..., run from the module root, shows whether that is the cause")
+        with self.subTest("the per-mutant hint of a staged copy names the original package"):
+            proc, calls = self.run_script("./cmd/tool", env={"STUB_PKG_NAME": "main", "STUB_TEST_FAIL_RUN": "2"})
+            self.assert_refused_before_gremlins(proc, calls)
+            self.assertIn("fails go test -failfast ./cmd/tool.mutants-main,", proc.stderr)
+            self.assertIn(run_as + "./cmd/tool, run from the module root", self.trimpath_hint(proc))
 
     def test_gremlins_runs_under_count_1_with_invert_logical_and_the_default_exclusion(self):
         cases = [
@@ -767,12 +967,38 @@ class CoverageMutantsTest(unittest.TestCase):
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 run = self.gremlins(proc, calls)
                 self.assertIn("-count=1", run["goflags"].split())
+                self.assertIn("-trimpath", run["goflags"].split())
                 argv = run["argv"]
                 self.assertEqual(argv[2:6], ["unleash", "--invert-logical", "--workers", "4"])
                 self.assertEqual(argv[-1], "./internal/pkg")
                 self.assertEqual("--exclude-files=/" in argv, default, argv)
                 if flags:
                     self.assertEqual(argv[8:-1][:len(flags.split())], flags.split())
+
+    def test_every_go_command_runs_under_trimpath_with_the_toolchains_root(self):
+        # gremlins copies the module into a directory per worker, and without
+        # -trimpath the package's directory is part of every compile key, so
+        # nothing compiled here would be of use to a worker (issue 1029). The
+        # flag has to reach every go test here as well as gremlins, or the
+        # cache the per-mutant command leaves is keyed on the wrong flags; the
+        # caller's own GOFLAGS stay in front of it. -trimpath also erases the
+        # toolchain root a test binary falls back to, so GOROOT carries the
+        # one `go env GOROOT` names to everything after it.
+        cases = [
+            ("no GOFLAGS of the caller's", {}, []),
+            ("the caller's GOFLAGS", {"GOFLAGS": "-mod=mod"}, ["-mod=mod"]),
+        ]
+        for name, env, kept in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/pkg", env=dict(env, STUB_GOROOT="/toolchain/root"))
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(calls[0]["argv"], ["env", "GOROOT"], "the root was not the first thing asked")
+                later = calls[1:]
+                self.assertEqual(len(self.of(later, "test")), 3)
+                self.assertEqual(len(self.of(later, "run")), 1)
+                for call in later:
+                    self.assertEqual(call["goflags"].split(), kept + ["-trimpath", "-count=1"], call["argv"])
+                    self.assertEqual(call["goroot"], "/toolchain/root", call["argv"])
 
     def test_flags_the_script_cannot_read_are_refused(self):
         # A flag this reading does not know could be hiding a -t whose value

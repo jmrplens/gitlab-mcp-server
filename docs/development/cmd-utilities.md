@@ -1095,6 +1095,8 @@ Comprehensive metrics summary: individual/meta/dynamic tool counts, catalog acti
 go run ./cmd/audit_metrics/
 ```
 
+The file counts, the tool-package count and `VERSION` are read under the nearest directory at or above the working directory that holds a `go.mod`, so the command reads this repository from its root or from anywhere below it. The root is not derived from the command's own compiled source path, which a `-trimpath` build (as `make coverage-mutants` compiles) makes module-relative.
+
 #### Flags
 
 | Flag           | Type     | Default | Description                                                                                                       |

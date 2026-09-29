@@ -826,16 +826,21 @@ coverage-conditions:
 # package main, or one measured through a staged copy, is linked by no other
 # package's test, so it is refused whatever -i and -coverpkg say.
 #
-# The budget has to cover a compile as well as a run, which is why it is five
-# minutes. gremlins copies the module into a directory per worker, and Go keys
-# a compile on the package's directory, so the first mutant on each of the
-# four workers recompiles every package of this module its test imports, and
-# does it inside its own deadline. Measured on five cores after a content
-# edit: cmd/audit_dynamic_aliases, whose tests take half a second and which
-# imports all of internal/tools, needs 110 seconds for that first compile with
-# four workers at it at once, and 2 for every run after. At a 30-second budget
-# it reported 2 killed and 8 timed out; at 300 it reports all 10 killed, the
-# figure the parsed baseline's inflated deadline used to give it by accident.
+# The budget was set at five minutes to cover a compile as well as a run.
+# gremlins copies the module into a directory per worker, and without -trimpath
+# Go keys a compile on the package's directory, so the first mutant on each of
+# the four workers recompiled every package of this module its test imports,
+# inside its own deadline. Measured on five cores after a content edit:
+# cmd/audit_dynamic_aliases, whose tests take half a second and which imports
+# all of internal/tools, needed 110 seconds for that first compile with four
+# workers at it at once, and 2 for every run after. At a 30-second budget it
+# reported 2 killed and 8 timed out; at 300 it reported all 10 killed. The
+# script now runs every go command, and gremlins, under -trimpath, which leaves
+# the directory out of the key, and runs the per-mutant command once before
+# gremlins starts, so a worker's copy finds everything compiled and the first
+# mutant costs what every later one does (issue 1029). A fixed coefficient
+# passed through GREMLINS_FLAGS, which the 300-second budget never protected,
+# stopped reporting those first mutants TIMED OUT.
 #
 # A package that does not pass its own tests is refused rather than measured,
 # and so is one whose subtree does not, since the baseline runs the subtree as
@@ -875,9 +880,13 @@ coverage-conditions:
 # fraction of a second and derives a per-mutant budget from that fraction.
 # Measured here, ./cmd/server (44s of tests) had its coverage served from cache
 # in 0.65s and reported 0 killed with every mutant TIMED OUT, which reads
-# exactly like a package nothing tests. `go build` ignores a flag it does not
-# know, so the same GOFLAGS is safe for the compile gremlins runs around each
-# mutant.
+# exactly like a package nothing tests. The script exports it in GOFLAGS beside
+# -trimpath, and a go command ignores a GOFLAGS entry it does not know, so the
+# same setting is safe for every other go command it and gremlins run. Under
+# -trimpath a binary no longer records where the toolchain is installed, so the
+# script also exports GOROOT as `go env GOROOT` names it: without it the
+# commands that run the go command out of cmd/internal/golist failed their own
+# tests there.
 MUTANT_BUDGET ?= 300
 MUTANT_BUDGET_FLOOR ?= 10
 MUTANT_DEADLINE_MAX ?= 3600
