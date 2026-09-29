@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 19,991 |
-| Unit test functions                                   | 18,601 |
-| E2E test functions                                    |  1,390 |
-| cmd test functions                                    |  4,139 |
+| Total test functions                                  | 20,125 |
+| Unit test functions                                   | 18,726 |
+| E2E test functions                                    |  1,399 |
+| cmd test functions                                    |  4,240 |
 | Test files (internal/)                                |    681 |
-| Test files (cmd/)                                     |    259 |
-| Test files (test/e2e/)                                |    394 |
+| Test files (cmd/)                                     |    265 |
+| Test files (test/e2e/)                                |    397 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     31 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.8% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,906 | 64.6% |
-| `TestFunc` (no underscore)             |    913 |  4.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,172 | 30.9% |
+| `TestFunc_Scenario` (2-part)           | 12,979 | 64.5% |
+| `TestFunc` (no underscore)             |    913 |  4.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,233 | 31.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,581 |        210 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          3,605 |        210 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            380 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |         10,501 |        455 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,390 |        394 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,139 |        259 | server entry point and developer command utilities                                              |
-| **Total**               |     **19,991** |  **1,334** |                                                                                                 |
+| E2E integration         |          1,399 |        397 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,240 |        265 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,125** |  **1,343** |                                                                                                 |
 
 ### Core Packages
 
@@ -71,7 +71,7 @@
 | gitlab                   |       162 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        21 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
 | mcpotel                  |       113 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
-| oauth                    |        82 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
+| oauth                    |       100 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress                 |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
 | prompts                  |       372 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
 | resources                |       221 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
@@ -79,7 +79,7 @@
 | sourcewalk               |         9 |   100.0% | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
 | subscriptions            |       109 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       133 |    96.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
-| tenancy                  |        86 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
+| tenancy                  |        92 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
 | testutil                 |       155 |    99.8% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
 | testutil/e2ecalls        |        22 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                                                                                          |
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
@@ -89,7 +89,7 @@
 | testutil/serialtypecheck |         6 |      n/a | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,192 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **3,581** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **3,605** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
