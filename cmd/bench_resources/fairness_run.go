@@ -177,20 +177,28 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 
 	// The lead-in is discarded on purpose and both arms pay it: it drains the
 	// bound's burst, so the measured window reports the bound rather than the
-	// bucket it started full, and it warms a pool and a heap that a fresh
-	// process has neither of.
-	drive(ctx, plan, conns, call, plan.leadInTicks, newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...), present)
-
+	// bucket it started full, it lets a slot bound's queue form, and it warms a
+	// pool and a heap that a fresh process has neither of. The phase's window
+	// opens on the lead-in's clock, so what the process and the instance did
+	// is counted from that instant, requests the lead-in left waiting included.
 	tally := newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...)
-	server.resetPeak()
-	r.stub.resetUpstream()
-	serverStart, serverStartOK := sampleCPU(server)
-	driverStart, driverStartOK := sampleCPU(driver)
-	phaseStarted := time.Now()
-	drive(ctx, plan, conns, call, plan.ticks, tally, present)
+	var serverStart, driverStart cpuSample
+	var phaseStarted time.Time
+	leadInLanded := driveContinuously(ctx, plan, conns, call, present,
+		newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...), tally, func() {
+			server.resetPeak()
+			r.stub.resetUpstream()
+			serverStart.seconds, serverStart.ok = sampleCPU(server)
+			driverStart.seconds, driverStart.ok = sampleCPU(driver)
+			phaseStarted = time.Now()
+		})
 	phaseWall := time.Since(phaseStarted)
 	serverEnd, serverEndOK := sampleCPU(server)
 	driverEnd, driverEndOK := sampleCPU(driver)
+	// Waited for before the instance's count is read, so a lead-in request
+	// still in flight when the phase's last one landed is counted rather than
+	// arriving after the reading.
+	leadInLanded()
 
 	measured := FairnessArm{
 		Arm:         arm,
@@ -207,9 +215,9 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 		measured.Upstream = &upstream
 	}
 	measured.Process, measured.Notes = fairnessProcess(processInput{
-		serverStart: cpuSample{seconds: serverStart, ok: serverStartOK},
+		serverStart: serverStart,
 		serverEnd:   cpuSample{seconds: serverEnd, ok: serverEndOK},
-		driverStart: cpuSample{seconds: driverStart, ok: driverStartOK},
+		driverStart: driverStart,
 		driverEnd:   cpuSample{seconds: driverEnd, ok: driverEndOK},
 		wall:        phaseWall,
 		peakRSS:     server.peakRSS(),
@@ -292,15 +300,44 @@ func checkArm(plan fairnessPlan, arm FairnessArm) ([]string, error) {
 	return notes, nil
 }
 
+// driveContinuously runs the lead-in and the phase as one schedule: the
+// phase's first tick is where the lead-in's clock puts it, whether or not the
+// lead-in's requests have landed, and atPhase runs at that instant, before the
+// phase's first request is issued. It returns when the phase's last request
+// has landed, with a function that waits for the lead-in's.
+//
+// Run one after the other, the two windows had a pause between them: the
+// lead-in returned only once its last request landed, so a slot bound's queue
+// drained, up to its whole wait, and every phase opened on an empty one. Its
+// first seconds then served every new credential, the flood's earliest waiters
+// included, and the share the phase reported was that transient and not what
+// a sustained flood leaves. A bucket refilled in the same pause. The lead-in's
+// requests are filed in their own tally whenever they land, so the phase's
+// counts are still its own schedule and nothing else.
+func driveContinuously(ctx context.Context, plan fairnessPlan, conns []*clientConn, call toolCall,
+	present *presenter, leadIn, phase *fairTally, atPhase func(),
+) (leadInLanded func()) {
+	start := time.Now()
+	phaseStart := start.Add(plan.LeadIn)
+	var running sync.WaitGroup
+	running.Go(func() { drive(ctx, plan, conns, call, start, plan.leadInTicks, leadIn, present) })
+	// A cancelled run gives the phase nothing to wait for, and its drive then
+	// returns at once.
+	waitUntil(ctx, phaseStart)
+	atPhase()
+	drive(ctx, plan, conns, call, phaseStart, plan.ticks, phase, present)
+	return running.Wait
+}
+
 // drive runs one window: every credential of both populations follows its own
-// schedule, and the whole thing returns when the last request has landed.
+// schedule from start, and the whole thing returns when the last request has
+// landed.
 //
 // present hands out the credentials a verb presents in place of its lane's
 // own, and is nil for a plan whose verbs present none.
 func drive(ctx context.Context, plan fairnessPlan, conns []*clientConn, call toolCall,
-	ticksFor func(populationSpec) int, tally *fairTally, present *presenter,
+	start time.Time, ticksFor func(populationSpec) int, tally *fairTally, present *presenter,
 ) {
-	start := time.Now()
 	var wg sync.WaitGroup
 	for _, pop := range []populationSpec{plan.Quiet, plan.Noisy} {
 		first, last := plan.credentials(pop)

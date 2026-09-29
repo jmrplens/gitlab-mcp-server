@@ -279,8 +279,9 @@ type planDefaults struct {
 //
 // Held as numbers for the same reason bucketSpec is. A flood that the slots
 // can serve as fast as it arrives never fills them, and a lead-in shorter than
-// the wait measures a queue that has not formed yet; both follow from these
-// figures and the round trip the run puts in front of every verification.
+// the time the flood takes to settle into its queue measures the queue while
+// it is still forming; both follow from these figures and the round trip the
+// run puts in front of every verification.
 type slotSpec struct {
 	// Count and Wait are the ceiling itself.
 	Count int
@@ -600,9 +601,14 @@ var fairnessBounds = []boundSpec{
 		// second against slots that finish a hundred and sixty at a hundred
 		// milliseconds a round trip, which is a round trip GitLab.com answers
 		// the identity request in from a nearby region. The lead-in outlasts
-		// the wait, so the queue has formed before the phase begins, and the
+		// the eight and a third seconds that flood takes to settle into its
+		// queue, so the phase measures what a sustained flood costs rather
+		// than the seconds in which every newcomer is still served, and the
 		// deadline outlasts the wait, so a client that waits it out is not
-		// counted as one that gave up.
+		// counted as one that gave up. A shorter round trip settles later,
+		// since the slots then finish nearly what arrives: at fifty
+		// milliseconds it takes twenty-five seconds, and the plan refuses the
+		// default lead-in there.
 		Defaults: planDefaults{
 			Noisy: 8, NoisyRate: 50,
 			Phase: 30 * time.Second, LeadIn: 10 * time.Second, Deadline: 15 * time.Second,
@@ -664,8 +670,9 @@ type fairnessPlan struct {
 	Noisy   populationSpec
 	// Phase is the measured window; LeadIn is the unmeasured one before it,
 	// which drains the bound's burst so the refusal ratio is a property of the
-	// bound rather than of the phase length, and warms a heap that has never
-	// been collected. Both arms pay the same lead-in.
+	// bound rather than of the phase length, lets a slot bound's queue settle,
+	// and warms a heap that has never been collected. Both arms pay the same
+	// lead-in, and the phase follows it on one clock with no pause between.
 	Phase, LeadIn time.Duration
 	// Deadline is how long a request may take before a client would have given
 	// up, measured from its intended dispatch. What exceeds it is counted as
@@ -850,17 +857,18 @@ func (p fairnessPlan) quietIsQuiet() error {
 }
 
 // slotsFill refuses a plan that could not fill a slot bound, or that would
-// measure its queue before the queue had formed.
+// measure its queue before the queue had settled.
 //
 // Each check is the slot counterpart of one the bucket gets above. A flood the
 // slots finish as fast as it arrives is a noisy population the bound never
-// refuses; a lead-in shorter than the wait is a phase that begins before the
-// first waiter has been turned away; and two more are the slots' own. With no
-// round trip at the instance a slot frees in microseconds, so no rate this
-// driver can offer holds one. And a deadline shorter than a new credential's
-// wait and verification counts a client that waited the ceiling out as one
-// that gave up, which files the cost this bound imposes under the wrong
-// outcome.
+// refuses; a lead-in shorter than [fairnessPlan.queueSettles] is a phase that
+// opens while the queue is still forming, and counts the newcomers a forming
+// queue serves as what a sustained flood leaves; and two more are the slots'
+// own. With no round trip at the instance a slot
+// frees in microseconds, so no rate this driver can offer holds one. And a
+// deadline shorter than a new credential's wait and verification counts a
+// client that waited the ceiling out as one that gave up, which files the cost
+// this bound imposes under the wrong outcome.
 func (p fairnessPlan) slotsFill() error {
 	slots := p.Bound.Slots
 	if slots == nil {
@@ -878,9 +886,11 @@ func (p fairnessPlan) slotsFill() error {
 			"at a %s round trip: the slots would never all be held, and the run would spend both arms discovering that",
 			offered, slots.Count, capacity, p.UpstreamDelay)
 	}
-	if p.LeadIn < slots.Wait {
-		return fmt.Errorf("the lead-in of %s is shorter than the %s a request waits for a slot: the measured phase would "+
-			"begin before the first waiter was refused, and report a queue that had not formed", p.LeadIn, slots.Wait)
+	if settles := p.queueSettles(); p.LeadIn < settles {
+		return fmt.Errorf("the lead-in of %s is shorter than the %s a flood of %g requests a second takes to settle into "+
+			"its queue against %d slots that finish %g a second: the measured phase would open while the queue is "+
+			"still forming, and count the newcomers it serves as what a sustained flood leaves", p.LeadIn, settles.Round(time.Millisecond),
+			offered, slots.Count, capacity)
 	}
 	if floor := p.slotDeadlineFloor(); p.Deadline < floor {
 		return fmt.Errorf("the deadline of %s is shorter than the %s a new credential may take to wait for a slot and "+
@@ -897,6 +907,32 @@ func (p fairnessPlan) slotsFill() error {
 			newcomers, held, slots.Count, quietMaxShare*float64(slots.Count))
 	}
 	return nil
+}
+
+// queueSettles is how long a flood takes, from an empty queue, to settle into
+// the one it holds for as long as it lasts, which is the shortest lead-in that
+// leaves the phase nothing of the start.
+//
+// The flood's excess over what the slots finish piles up in front of them, so
+// a request arriving at t waits t x (offered - capacity) / capacity. Every
+// request until that reaches the wait is served, however late; the first one
+// past it is the first refused, a wait after it arrives, and from then on the
+// queue holds a wait's worth of arrivals, the refusals keep pace with the
+// excess, and the share served is the slots' share of what arrives. That
+// instant is the wait x offered / (offered - capacity). It is later the closer
+// the flood is to what the slots finish: four hundred invented tokens a second
+// settle in twenty-five seconds against the three hundred and twenty a second
+// that sixteen slots finish at fifty milliseconds a round trip, and in eight
+// and a third against the hundred and sixty they finish at a hundred.
+//
+// The flood alone is counted. The quiet population's new credentials hold
+// slots too, so the queue settles a little sooner than this and the lead-in it
+// asks for errs long.
+func (p fairnessPlan) queueSettles() time.Duration {
+	slots := p.Bound.Slots
+	offered := p.Bound.meteredOffered(p.Noisy) * float64(p.Noisy.Credentials)
+	capacity := slots.capacity(p.UpstreamDelay)
+	return time.Duration(float64(slots.Wait) * offered / (offered - capacity))
 }
 
 // slotDeadlineFloor is the least a request may take before its client gives up

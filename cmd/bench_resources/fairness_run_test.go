@@ -95,7 +95,7 @@ func TestDrive_KeepsServedAndRefusedApartPerPopulation(t *testing.T) {
 	// a schedule that has not landed them in ten seconds is not spacing them
 	// by the population's period.
 	finishWithin(t, 10*time.Second, "a 40 ms phase", func() {
-		drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, plan.ticks, tally, nil)
+		drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, time.Now(), plan.ticks, tally, nil)
 	})
 
 	populations := tally.populations(plan)
@@ -364,6 +364,70 @@ func TestWaitUntil_AnInstantThatIsNow_OnACancelledRun_SaysCancelled(t *testing.T
 	})
 }
 
+// TestDriveContinuously_OpensThePhaseOnTheLeadInsClock verifies the phase
+// opens where the lead-in's schedule ends rather than when its requests have
+// landed, and that each window's requests are filed in its own tally.
+//
+// The two windows used to run one after the other, so the lead-in returned
+// only once its last request had landed, and every phase of a slot bound
+// opened on the queue that drain had just emptied: its first seconds served
+// every new credential, and the share it reported was that transient. Each
+// request here takes five seconds, so a phase that waited for the lead-in's
+// last request would open at six seconds rather than at one and a half; on
+// the fake clock the instant it opens is exact.
+func TestDriveContinuously_OpensThePhaseOnTheLeadInsClock(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		plan := twoPopulationPlan(t)
+		plan.Quiet.Rate, plan.Noisy.Rate = 2, 2
+		plan.LeadIn, plan.Phase, plan.Deadline = 1500*time.Millisecond, time.Second, 10*time.Second
+		call, err := callFor(plan.Surface)
+		if err != nil {
+			t.Fatalf("callFor: %v", err)
+		}
+		conns := []*clientConn{
+			{rpc: &scriptedConn{delay: 5 * time.Second}, label: "q"},
+			{rpc: &scriptedConn{delay: 5 * time.Second}, label: "n"},
+		}
+		leadIn, phase := newFairTally(call, plan.Bound.Refusals), newFairTally(call, plan.Bound.Refusals)
+		start := time.Now()
+		var opened time.Duration
+		var offeredAtOpening, landedAtOpening int
+		leadInLanded := driveContinuously(t.Context(), plan, conns, call, nil, leadIn, phase, func() {
+			opened = time.Since(start)
+			offeredAtOpening, landedAtOpening = tallied(leadIn)
+		})
+		if opened != plan.LeadIn {
+			t.Errorf("the phase opened %s into the run, want the lead-in's %s", opened, plan.LeadIn)
+		}
+		// Three ticks a credential at two a second in a second and a half.
+		if offeredAtOpening != 6 || landedAtOpening != 0 {
+			t.Errorf("when the phase opened the lead-in had offered %d and landed %d, want 6 offered and none landed",
+				offeredAtOpening, landedAtOpening)
+		}
+		if offered, landed := tallied(phase); offered != 4 || landed != 4 {
+			t.Errorf("the phase offered %d and landed %d, want its own two ticks a credential, all landed", offered, landed)
+		}
+		leadInLanded()
+		if offered, landed := tallied(leadIn); offered != 6 || landed != 6 {
+			t.Errorf("the lead-in offered %d and landed %d, want its own three ticks a credential, all landed", offered, landed)
+		}
+	})
+}
+
+// tallied is how many requests a tally was offered and how many landed in it,
+// over every population and row.
+func tallied(tally *fairTally) (offered, landed int) {
+	tally.mu.Lock()
+	defer tally.mu.Unlock()
+	for _, byMethod := range tally.methods {
+		for _, entry := range byMethod {
+			offered += entry.intended
+			landed += len(entry.lateness)
+		}
+	}
+	return offered, landed
+}
+
 // TestFairTally_Record_FilesTheFirstFailureAndNothingAfterIt verifies a
 // failure is named once and that the outcomes stay four separate counters.
 func TestFairTally_Record_FilesTheFirstFailureAndNothingAfterIt(t *testing.T) {
@@ -608,7 +672,7 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
 	}
 	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
-		drive(t.Context(), plan, conns, call, plan.ticks, newFairTally(call, plan.Bound.Refusals), nil)
+		drive(t.Context(), plan, conns, call, time.Now(), plan.ticks, newFairTally(call, plan.Bound.Refusals), nil)
 	})
 
 	const period, half, slack = 400 * time.Millisecond, 200 * time.Millisecond, 80 * time.Millisecond

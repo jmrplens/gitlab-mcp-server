@@ -907,14 +907,17 @@ func TestFairnessPlanFor_TakesTheBoundsDefaultsWhereNoFlagWasTyped(t *testing.T)
 		flagFairnessLeadIn: true, flagFairnessDeadline: true, flagFairnessQuiet: true,
 	}
 	opts.fairnessNoisy, opts.fairnessNoisyRate = 20, 30
-	opts.fairnessPhase, opts.fairnessLeadIn, opts.fairnessDeadline = 5*time.Second, 6*time.Second, 9*time.Second
+	// Six hundred invented tokens a second against the three hundred and
+	// twenty the slots finish at fifty milliseconds settle in under eleven
+	// seconds, which the typed lead-in outlasts.
+	opts.fairnessPhase, opts.fairnessLeadIn, opts.fairnessDeadline = 5*time.Second, 12*time.Second, 9*time.Second
 	opts.fairnessUpstreamDelay = 50 * time.Millisecond
 	typed, err := fairnessPlanFor(opts)
 	if err != nil {
 		t.Fatalf("fairnessPlanFor: %v", err)
 	}
 	if typed.Noisy.Credentials != 20 || typed.Noisy.Rate != 30 || typed.Phase != 5*time.Second ||
-		typed.LeadIn != 6*time.Second || typed.Deadline != 9*time.Second || typed.UpstreamDelay != 50*time.Millisecond {
+		typed.LeadIn != 12*time.Second || typed.Deadline != 9*time.Second || typed.UpstreamDelay != 50*time.Millisecond {
 		t.Errorf("plan = %+v, want every typed flag to win", typed)
 	}
 }
@@ -952,7 +955,16 @@ func TestFairnessPlan_SlotsFill_RefusesAPlanThatCouldNotFillTheSlots(t *testing.
 		// Sixteen slots at a hundred milliseconds finish a hundred and sixty,
 		// which eight credentials at twenty a second offer exactly.
 		{name: "a flood the slots finish as it arrives", edit: func(p *fairnessPlan) { p.Noisy.Rate = 20 }, want: "never all be held"},
-		{name: "a lead-in shorter than the wait", edit: func(p *fairnessPlan) { p.LeadIn = 4 * time.Second }, want: "before the first waiter"},
+		// Four hundred invented tokens a second against the hundred and sixty
+		// the slots finish settle in five seconds times 400/240, so eight
+		// seconds, which outlasts the wait, is still too short.
+		{name: "a lead-in the queue has not settled in", edit: func(p *fairnessPlan) { p.LeadIn = 8 * time.Second }, want: "the 8.333s a flood of 400 requests a second takes to settle"},
+		// Four hundred and eighty against a hundred and sixty settle in five
+		// seconds times 480/320, seven and a half, so a millisecond under it
+		// is refused.
+		{name: "a lead-in a millisecond under the queue's settling", edit: func(p *fairnessPlan) {
+			p.Noisy.Rate, p.LeadIn = 60, 7499*time.Millisecond
+		}, want: "the 7.5s a flood of 480 requests"},
 		{name: "a deadline shorter than a waiter's", edit: func(p *fairnessPlan) { p.Deadline = 6 * time.Second }, want: "gave up"},
 		// The floor is the wait, four round trips of a hundred milliseconds
 		// and the second of margin, so a millisecond under it is refused.
@@ -977,7 +989,9 @@ func TestFairnessPlan_SlotsFill_RefusesAPlanThatCouldNotFillTheSlots(t *testing.
 		name string
 		edit func(*fairnessPlan)
 	}{
-		{name: "a lead-in exactly as long as the wait", edit: func(p *fairnessPlan) { p.LeadIn = 5 * time.Second }},
+		{name: "a lead-in exactly as long as the queue takes to settle", edit: func(p *fairnessPlan) {
+			p.Noisy.Rate, p.LeadIn = 60, 7500*time.Millisecond
+		}},
 		// The wait, four round trips of a hundred milliseconds and the second
 		// of margin.
 		{name: "a deadline exactly on its floor", edit: func(p *fairnessPlan) { p.Deadline = 6400 * time.Millisecond }},
