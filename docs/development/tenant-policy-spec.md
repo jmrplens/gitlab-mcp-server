@@ -617,11 +617,31 @@ with a gate 503 `-50300` and `Retry-After`, charged to no budget, in the words `
 uses for a verification with no verdict; a caller that knows the instance to be healthy
 can still infer from the refusal that others are verifying, the one bit `INV-019`
 accepts for a bound keyed on the process. A token the cache holds is answered before a
-slot is asked for. The cost falls on one population, and it is stated rather than
-measured with `make bench-fairness`, whose driver speaks no OAuth: a legitimate
-credential presented for the first time while a flood holds every slot is refused with
-the flood for as long as the flood lasts, which trades the admission of new credentials
-during a flood for the load the instance receives. Measured through the verifier
+slot is asked for. The cost falls on one population, and
+`make bench-fairness BOUND=oauth-verification` measures it (VAL-012): a legitimate
+credential presented for the first time while a flood holds every slot waits in the
+flood's queue and is served only when a slot frees before its five seconds do. On a
+sixteen-thread host with the run held to five cores, a stand-in GitLab answering each
+verification request in 100 ms, a flood of four hundred invented tokens a second from
+ninety-six transport sources, and eight quiet credentials presenting four new tokens a
+second between them beside twelve requests on credentials already cached, the ceiling
+served 50 of the 120 new tokens of a thirty-second phase in each of two repetitions,
+after 5.5 s at the median where they took 0.52 s without it, and refused the other 70;
+the 360 cached requests were served in both arms, at 14 ms at the median. The share
+served is the slots' share of the demand: 104 and 100 of 120 at 50 ms, 26 and 29 at
+200 ms, and 24 and 27 at 100 ms under a flood of a thousand a second. What the ceiling
+buys is the instance's load, which the slots and the round trip set whatever the flood:
+at 100 ms the instance received 5,638 requests under the flood of four hundred and 5,612
+under the flood of a thousand, never more than 19 at once, against 12,600 and 30,600 and
+up to 76 and 125 at once without it. The queue moves into the process instead, since
+each waiting request holds its connection for up to the five seconds: the server's
+resident set peaked at 273 MiB against 172 without the ceiling under the flood of four
+hundred, and at 434 against 194 under the flood of a thousand. Nothing bounds how many
+requests wait but the rate they arrive at, and their connections are descriptors outside
+the held calls `HLD-011` counts, since the wait comes before the gate admits a request;
+the runs had a descriptor limit of 1048576 and did not reach it. The ceiling trades the
+admission of new credentials during a flood for the load the instance receives.
+Measured through the verifier
 against a stand-in GitLab, a hundred thousand distinct credentials held a hundred
 thousand entries and sixty megabytes before, and hold ten thousand and seven megabytes
 now; two thousand invented tokens at once put two thousand verification requests in

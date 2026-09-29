@@ -155,14 +155,19 @@ twice), and the gate holds the pinned literal equal to the register's.
   the row says narrow it, and a reviewer still weighs it.
 - **NEG-003**: The gate's exemption table is a set of judgements, each with a category and
   a reason, and a wrong category is caught only by review.
-- **NEG-004**: The fairness benchmark can drive two bounds, the tool-call and the catalog
-  buckets, so every other decision's proof that a migration changed nothing is by
-  construction: code identity for a value, a verbatim oracle and fuzzing for a rule. The
-  benchmark's held mode measures what the process pays per call it holds and what it does
-  past a descriptor limit, which is what `HLD-011`'s derivation from the descriptor limit
-  was sized from, and its sessions mode does the same for the stateful sessions `HLD-010`
-  bounds, but neither compares two populations, and a switch that would let them cannot
-  exist for a bound no operator can turn off.
+- **NEG-004**: The fairness benchmark can drive four bounds, the tool-call and listing
+  buckets of a credential, the listing bucket of the process (`RTC-007`) and the OAuth
+  verification ceiling (`ADM-014`), so every other decision's proof that a migration
+  changed nothing is by construction: code identity for a value, a verbatim oracle and
+  fuzzing for a rule. The first three are put in force and taken out by the switches a
+  process starts with. `ADM-014` has no such switch and must not grow one, so the arm
+  without it runs a second build of the same checkout with the one declaration that sizes
+  its slots replaced through the go command's overlay (issue 950). The benchmark's held
+  mode measures what the process pays per call it holds and what it does past a
+  descriptor limit, which is what `HLD-011`'s derivation from the descriptor limit was
+  sized from, and its sessions mode does the same for the stateful sessions `HLD-010`
+  bounds, but neither compares two populations, which for a bound no operator can turn
+  off takes a variant build of the same kind.
 - **NEG-005**: The carried-channel matrix follows go-sdk; an SDK upgrade that changes what
   is carried edits it in the same change.
 - **NEG-006**: A promoted rule is a call where the code used to be written in place, and it
