@@ -36,9 +36,13 @@ const (
 	groupWikiAccessLevelPublic = "doc/api/groups.md documents wiki_access_level as disabled, private or enabled; public is the AccessControlValue constant only project Pages uses" //nolint:gosec // a documentation citation, not a credential
 	// deploymentCreated: a deployment is read in that state, never put in it.
 	deploymentCreated = "doc/api/deployments.md documents the status a deployment is created with or updated to as running, success, failed or canceled; created is a state a deployment is read in (and the list filter offers it)"
-	// The three SDK gaps below are recorded in docs/development/upstream-bugs.md.
-	eventActionApproved  = "approved is a documented contribution event action (doc/api/events.md links the contributions calendar page that lists it); client-go's EventTypeValue has no constant for it, see docs/development/upstream-bugs.md"
-	eventTargetEpic      = "epic is a documented target_type since GitLab 17.3 (doc/api/events.md); client-go's EventTargetTypeValue has no constant for it, see docs/development/upstream-bugs.md"
+	// The SDK gaps below are recorded in docs/development/upstream-bugs.md.
+	eventActionApproved = "approved is a documented contribution event action (doc/api/events.md links the contributions calendar page that lists it); client-go's EventTypeValue has no constant for it, see docs/development/upstream-bugs.md"
+	// eventFilterAccepted: the events routes filter on the model, not on
+	// doc/api/events.md, which lists epic (refused) and omits these three
+	// (filtered on). Grape validates target_type only: Event.actions is a
+	// Hash, which Grape 2.4 reads as an options hash with no value set.
+	eventFilterAccepted  = "the events routes filter action on Event.actions (EventsFinder#by_action) and validate target_type against Event.target_types (lib/api/helpers/events_helpers.rb, app/models/event.rb), which hold it although doc/api/events.md does not list it; client-go's EventTypeValue and EventTargetTypeValue have no constant for it, see docs/development/upstream-bugs.md"
 	todoActionUndeclared = "doc/api/todos.md#get-a-list-of-to-do-items lists it as a filter value; client-go's TodoAction has no constant for it, see docs/development/upstream-bugs.md"
 	// todoActionAccepted: the route validates action against the model's set,
 	// which is wider than the page's list; transfer_failed is the item a
@@ -149,9 +153,6 @@ func buildAcceptedEnumGaps() map[string]string {
 		"events.ListContributionEventsInput.action=approved":   eventActionApproved,
 		"events.ListProjectEventsInput.action=approved":        eventActionApproved,
 		"users.ListContributionEventsInput.action=approved":    eventActionApproved,
-		"events.ListContributionEventsInput.target_type=epic":  eventTargetEpic,
-		"events.ListProjectEventsInput.target_type=epic":       eventTargetEpic,
-		"users.ListContributionEventsInput.target_type=epic":   eventTargetEpic,
 		"todos.ListInput.action=member_access_requested":       todoActionUndeclared,
 		"todos.ListInput.action=merge_train_removed":           todoActionUndeclared,
 		"todos.ListInput.action=unmergeable":                   todoActionUndeclared,
@@ -166,6 +167,17 @@ func buildAcceptedEnumGaps() map[string]string {
 		"todos.ListInput.action=ssh_key_expired":               todoActionAccepted,
 		"todos.ListInput.action=ssh_key_expiring_soon":         todoActionAccepted,
 		"todos.ListInput.action=transfer_failed":               todoActionAccepted,
+
+		// --- Event filter values the model holds and the page omits (extras) ---
+		"events.ListContributionEventsInput.action=transferred": eventFilterAccepted,
+		"events.ListProjectEventsInput.action=transferred":      eventFilterAccepted,
+		"users.ListContributionEventsInput.action=transferred":  eventFilterAccepted,
+		"events.ListContributionEventsInput.target_type=wiki":   eventFilterAccepted,
+		"events.ListProjectEventsInput.target_type=wiki":        eventFilterAccepted,
+		"users.ListContributionEventsInput.target_type=wiki":    eventFilterAccepted,
+		"events.ListContributionEventsInput.target_type=design": eventFilterAccepted,
+		"events.ListProjectEventsInput.target_type=design":      eventFilterAccepted,
+		"users.ListContributionEventsInput.target_type=design":  eventFilterAccepted,
 	}
 	maps.Copy(table, projectFeatureAccessLevelExemptions())
 	return table

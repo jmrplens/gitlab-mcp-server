@@ -981,15 +981,29 @@ endpoint is a new method with its own result type, and would let a tool answer
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The handlers forward the string a caller passes, so the
-  schema enums offer the documented values whether or not a constant exists,
+  schema enums offer the accepted values whether or not a constant exists,
   and each such value is recorded in `acceptedEnumGaps` in
-  `cmd/audit_1to1/internal/enums/exemptions.go` so the enum rule can tell a
-  documented extra from an invented one. Each entry retires when the constant
-  lands upstream: the rule then reports the exemption as stale. One of them is
-  wrong, which the commit above established: the three event listings offer
-  `target_type=epic`, which GitLab refuses, and offer neither `wiki` nor
-  `design`, which it accepts, so their schema enums and the `epic` exemptions
-  want correcting in this repository whatever happens upstream.
+  `cmd/audit_1to1/internal/enums/exemptions.go` so the enum rule can tell an
+  accepted extra from an invented one. Each entry retires when the constant
+  lands upstream: the rule then reports the exemption as stale. The three
+  event listings (`user.event_list_project`, `user.event_list_contributions`
+  and `user.contribution_events`) serve one pair of value sets,
+  `events.FilterSchemaOverrides`, read off `Event.actions` and
+  `Event.target_types` at GitLab 19.4.1 rather than off the page: `epic`,
+  which they used to offer and GitLab refuses, is gone with its three
+  exemptions, and `wiki`, `design` and `transferred` are offered, with nine
+  exemptions citing the model
+  ([issue 1020](https://github.com/jmrplens/gitlab-mcp-server/issues/1020)).
+  GitLab validates only the second set: `event_filter_params` hands Grape
+  `Event.actions`, the Rails enum hash, and Grape 2.4 reads a Hash given to
+  `values:` as an options hash whose `:value` key it does not hold, so it
+  checks no action, and `EventsFinder#by_action` answers an action it does not
+  know with the whole feed. The three handlers therefore refuse an action
+  outside the set before the request (`events.CheckActionFilter`), since a
+  model that misspells one would otherwise read every event as filtered. A
+  unit test in `internal/tools/events` pins both sets, and the e2e scenario
+  `TestEvents_TargetTypeWiki_EveryListingAcceptsTheFilter` filters all three
+  listings on `wiki` against a real instance.
 
 **What**: four value types in `types.go` and `todos.go` declare fewer
 constants than the GitLab API documents for the parameters they type, and one
@@ -997,7 +1011,8 @@ parameter is typed with the wrong value type altogether.
 
 - `EventTypeValue` lacks `approved`, which
   [the user contribution events](https://docs.gitlab.com/user/profile/contributions_calendar/#user-contribution-events)
-  list among the action types the events API filters on.
+  list among the action types the events API filters on, and `transferred`,
+  which `Event.actions` holds beside it and no page lists.
 - `EventTargetTypeValue` lacks `wiki` and `design`, which the events routes
   accept. The [events API](https://docs.gitlab.com/api/events/) page also lists
   `epic` as a `target_type` since GitLab 17.3, but the routes validate against
@@ -1022,8 +1037,8 @@ parameter is typed with the wrong value type altogether.
 holds every schema enum to the constants of the SDK type behind the field and
 reported these as values offered that the SDK does not declare.
 
-**Effort**: small. Six constants across the four types (one on
-`EventTypeValue`, one on `EventTargetTypeValue`, three on `TodoAction`, one on
+**Effort**: small. Eight constants across the four types (two on
+`EventTypeValue`, two on `EventTargetTypeValue`, three on `TodoAction`, one on
 `DeploymentStatusValue`), and a dedicated value type for the cancellation role;
 none of them changes a signature.
 

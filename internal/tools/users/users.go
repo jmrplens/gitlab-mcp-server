@@ -490,6 +490,9 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 	if input.UserID == 0 {
 		return ContributionEventsOutput{}, errors.New("list_contribution_events: user_id is required")
 	}
+	if err := events.CheckActionFilter(input.Action); err != nil {
+		return ContributionEventsOutput{}, toolutil.WrapErrWithMessage("list_contribution_events", err)
+	}
 
 	opts := &gl.ListContributionEventsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)

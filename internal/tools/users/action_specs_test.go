@@ -4,6 +4,7 @@ package users
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -168,6 +170,26 @@ func TestActionSpecs_InputSchemaOverridesReachTheSpec(t *testing.T) {
 	}
 	if got := byTool["gitlab_get_user"].InputSchemaOverrides; len(got) != 0 {
 		t.Errorf("gitlab_get_user overrides = %+v, want none", got)
+	}
+}
+
+// TestActionSpecs_ContributionEvents_ServesTheEventFilterValues verifies that
+// user.contribution_events serves the same action and target_type overrides
+// as the two listings of the events package. Its route declares the same
+// event_filter_params and reaches the same EventsFinder, so GitLab filters it
+// on the same sets, and a copy of its own would drift from theirs: the served
+// enum must hold wiki, which GitLab accepts, and not epic, which it refuses.
+func TestActionSpecs_ContributionEvents_ServesTheEventFilterValues(t *testing.T) {
+	spec := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))["gitlab_list_user_contribution_events"]
+
+	if !reflect.DeepEqual(spec.InputSchemaOverrides, events.FilterSchemaOverrides()) {
+		t.Errorf("overrides = %+v, want events.FilterSchemaOverrides()", spec.InputSchemaOverrides)
+	}
+	properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	targetType, _ := properties["target_type"].(map[string]any)
+	enum, _ := targetType["enum"].([]any)
+	if !slices.Contains(enum, any("wiki")) || slices.Contains(enum, any("epic")) {
+		t.Errorf("served target_type enum = %v, want wiki and not epic", enum)
 	}
 }
 

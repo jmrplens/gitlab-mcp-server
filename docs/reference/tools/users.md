@@ -100,7 +100,7 @@ Set or replace the currently authenticated user's avatar image. Provide a `filen
 
 ### `gitlab_list_user_contribution_events`
 
-List contribution events for a specific GitLab user. Returns each event whole, in the shape the current user's contribution listing uses: action type, target information and link, project, author, timestamp, the push, note or wiki page the event concerns, and whether it was imported and from where. Supports filtering by action, target type, date range, and pagination.
+List contribution events for a specific GitLab user. Returns each event whole, in the shape the current user's contribution listing uses: action type, target information and link, project, author, timestamp, the push, note or wiki page the event concerns, and whether it was imported and from where. Supports filtering by action, target type, date range, and pagination. The `action` and `target_type` filters take the values listed under [Events](#events), the same the two event listings take.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -472,6 +472,11 @@ Mark ALL pending to-do items as done for the authenticated user. This affects al
 ---
 
 ## Events
+
+The three event listings (the two below and `gitlab_list_user_contribution_events`) take the `action` and `target_type` filters GitLab filters on through its `Event` model, which is not the list its events API page prints:
+
+- `action`: `created`, `updated`, `closed`, `reopened`, `pushed`, `commented`, `merged`, `joined`, `left`, `destroyed`, `expired`, `approved` or `transferred`. GitLab does not validate this filter: it ignores an action it does not know and answers with every event, as though it had filtered them. The server therefore refuses any other value before the request, with an error listing these.
+- `target_type`: `issue`, `milestone`, `merge_request`, `note`, `project`, `snippet`, `user`, `wiki` or `design`. The page also lists `epic`, which GitLab refuses with a 400, so it is not offered. A filter takes these lower-case names; a response spells the target type as GitLab's model class (`Issue`, `MergeRequest`, `WikiPage::Meta`, `DesignManagement::Design`), which a filter does not accept.
 
 ### `gitlab_project_event_list`
 
