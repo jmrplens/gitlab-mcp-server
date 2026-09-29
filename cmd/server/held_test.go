@@ -687,8 +687,16 @@ func TestMcpServerGate_Middleware_LeavesToTheSDKWhatItCannotReadAsACall(t *testi
 			if rec.Code != http.StatusOK {
 				t.Errorf("answered %d with every slot held, want it to reach the handler: %s", rec.Code, rec.Body.String())
 			}
-			if slotted := <-g.reached; slotted {
-				t.Error("the gate handed a slot to a POST it cannot read as a call")
+			// ServeHTTP has returned, so a handler that ran has already
+			// recorded it: waiting for a record that is not there would hang
+			// the test on a gate that refused the POST instead of failing it.
+			select {
+			case slotted := <-g.reached:
+				if slotted {
+					t.Error("the gate handed a slot to a POST it cannot read as a call")
+				}
+			default:
+				t.Error("the POST never reached the handler behind the gate")
 			}
 			if got := g.held.open.Load(); got != 1 {
 				t.Errorf("open = %d, want the count untouched", got)
@@ -795,10 +803,10 @@ func newHoldingGitLab(t *testing.T) *holdingGitLab {
 // SDK and the real server shape, counted on the process's own count. It
 // returns the server, the pool's binding, and a lookup of the owner a
 // credential's entry carries.
-func startHeldServer(t *testing.T, gitlab string, maxClients int) (*httptest.Server, poolBinding, func(token string) string) {
+func startHeldServer(t *testing.T, gitlab *holdingGitLab, maxClients int) (*httptest.Server, poolBinding, func(token string) string) {
 	t.Helper()
 	cfg := &config.Config{
-		GitLabURL: gitlab, Tier: edition.Free, TierExplicit: true, IgnoreScopes: true, Stateless: true,
+		GitLabURL: gitlab.url, Tier: edition.Free, TierExplicit: true, IgnoreScopes: true, Stateless: true,
 		ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceFull,
 		MaxHTTPClients: maxClients,
 	}
@@ -808,8 +816,12 @@ func startHeldServer(t *testing.T, gitlab string, maxClients int) (*httptest.Ser
 	registerLegacyMCPHandlers(t.Context(), cfg, pool, binding, mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
+	// Registered after the close, so it runs first: a call still held when
+	// the test stops early is let go before the server waits for it, which
+	// would otherwise wait for ever on a release registered before it.
+	t.Cleanup(gitlab.release)
 	owner := func(token string) string {
-		entry, err := pool.GetOrCreateEntry(token, gitlab, nil)
+		entry, err := pool.GetOrCreateEntry(token, gitlab.url, nil)
 		if err != nil {
 			t.Fatalf("GetOrCreateEntry: %v", err)
 		}
@@ -883,7 +895,7 @@ func fillProcessHeldRequests(t *testing.T, free int64) {
 // Not parallel: it fills the process-wide count.
 func TestHeldCeiling_CountsEachCallTheSDKDispatches(t *testing.T) {
 	gitlab := newHoldingGitLab(t)
-	srv, _, _ := startHeldServer(t, gitlab.url, config.DefaultMaxHTTPClients)
+	srv, _, _ := startHeldServer(t, gitlab, config.DefaultMaxHTTPClients)
 	fillProcessHeldRequests(t, 0)
 
 	const busy = "This server is busy. Retry later."
@@ -945,7 +957,7 @@ func TestHeldCeiling_CountsEachCallTheSDKDispatches(t *testing.T) {
 // Not parallel: it reads the process-wide count.
 func TestHeldCall_TakesOneSlotAndLeavesItsEntryEvictable(t *testing.T) {
 	gitlab := newHoldingGitLab(t)
-	srv, binding, owner := startHeldServer(t, gitlab.url, 1)
+	srv, binding, owner := startHeldServer(t, gitlab, 1)
 	before := processHeldRequests.open.Load()
 
 	type outcome struct {
