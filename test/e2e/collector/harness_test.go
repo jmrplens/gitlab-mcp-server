@@ -75,6 +75,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -250,6 +251,52 @@ func freePort(t *testing.T) int {
 	return port
 }
 
+// genericServerSettings are the retired names this server used to read, each
+// generic enough to belong to something else in the same shell. Nothing reads
+// them now, but one of them, EXCLUDE_TOOLS, stops the server starting (as the
+// retired GITLAB_READ_ONLY and GITLAB_SAFE_MODE do, which the GITLAB_ rule in
+// configFreeEnviron removes), so a developer who still has it exported would
+// see every test here fail to start a server.
+//
+// Listed rather than shared with test/e2e/http's copy, for the reason the
+// harness itself is duplicated: each module owns its own, so a name missing
+// from one list only weakens that module's isolation.
+var genericServerSettings = []string{
+	"AUTH_MODE", "CAPABILITY_SURFACE", "CLIENT_COMPAT", "EXCLUDE_TOOLS",
+	"LOG_LEVEL", "MAX_HTTP_CLIENTS", "META_PARAM_SCHEMA", "META_TOOLS",
+	"OAUTH_CACHE_TTL", "OAUTH_CLIENT_UID", "POOL_IDLE_TIMEOUT", "PUBLIC_URL",
+	"RATE_LIMIT_BURST", "RATE_LIMIT_RPS", "TOOL_SURFACE", "TRUSTED_ORIGINS",
+	"UPLOAD_MAX_FILE_SIZE",
+}
+
+// configFreeEnviron is the process environment with every variable that
+// configures this server removed, so a test's own environment decides what
+// the server exports and nothing inherited does.
+//
+// The server reads its settings, and the exporters theirs, from the
+// environment, and these tests start it as a child of whatever shell the
+// developer or the runner is using: an OTEL_SDK_DISABLED or a
+// GITLAB_MCP_TELEMETRY exported there would silently veto the telemetry every
+// test here asserts on, and a retired protection name refuses the start. The
+// variables a test passes are appended after this, so they still reach the
+// child. Filtered rather than replaced, because the child still needs PATH,
+// HOME and the rest of the machine to run at all.
+func configFreeEnviron() []string {
+	kept := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(name, "GITLAB_") || strings.HasPrefix(name, "OTEL_") ||
+			slices.Contains(genericServerSettings, name) {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
 // server is a running binary under test.
 type server struct {
 	baseURL string
@@ -267,9 +314,9 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 	args := append([]string{"--http", "--http-addr=" + addr}, flags...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(),
-		"LOG_LEVEL=info",
-		"TOOL_SURFACE=dynamic",
+	cmd.Env = append(configFreeEnviron(),
+		"GITLAB_MCP_LOG_LEVEL=info",
+		"GITLAB_MCP_TOOL_SURFACE=dynamic",
 	)
 	// Before the caller's own entries, so a test that needs to say something
 	// else about GORACE still can.
