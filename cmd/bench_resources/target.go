@@ -63,7 +63,7 @@ var errServerGone = errors.New("the server exited before it answered /health")
 // which is a minute against a binary that never serves it, and the port
 // reservation, whose failures the kernel does not produce on demand.
 var (
-	healthWait  = 60 * time.Second
+	healthWait  = time.Minute
 	reservePort = func(ctx context.Context) (net.Listener, error) {
 		return (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	}
@@ -217,11 +217,10 @@ func configFreeEnviron() []string {
 // list of the test's own, including the entry without an "=" that execve
 // permits and os.Environ never hands a Go program in practice.
 func withoutConfig(environ []string) []string {
-	legacy := make([]string, 0, len(config.PrefixedEnvNames())+1)
+	legacy := []string{"AUTOPILOT"}
 	for _, name := range config.PrefixedEnvNames() {
 		legacy = append(legacy, config.RetiredEnvName(name))
 	}
-	legacy = append(legacy, "AUTOPILOT")
 	kept := make([]string, 0, len(environ))
 	for _, entry := range environ {
 		name, _, ok := strings.Cut(entry, "=")

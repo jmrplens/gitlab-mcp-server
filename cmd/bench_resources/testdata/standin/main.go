@@ -72,7 +72,7 @@ const (
 	// heldLimitEnv caps the POSTs served at once, as the real held ceiling
 	// does, and heldRefusal is the first line of the answer past it.
 	heldLimitEnv = "STANDIN_HELD_LIMIT"
-	heldRefusal  = "This server is holding as many requests as it serves at once. Retry later."
+	heldRefusal  = "This server is busy. Retry later."
 	// The one tool and action whose call reaches the instance.
 	executeTool   = "gitlab_execute_action"
 	projectAction = "project.get"

@@ -156,6 +156,16 @@ func TestNofileLabel_NamesTheLimitOrItsAbsence(t *testing.T) {
 	}
 }
 
+// TestHeldWaits_AreThePausesARealRunWaitsFor pins the pauses the variables
+// start from, which every other test replaces before it runs: a poll of 50 ms,
+// three quiet seconds, a two-minute deadline and a five-second /health probe.
+func TestHeldWaits_AreThePausesARealRunWaitsFor(t *testing.T) {
+	poll, quiet, deadline, health := heldWaits()
+	if poll != 50*time.Millisecond || quiet != 3*time.Second || deadline != 2*time.Minute || health != 5*time.Second {
+		t.Errorf("heldWaits = %s, %s, %s, %s; want 50ms, 3s, 2m0s, 5s", poll, quiet, deadline, health)
+	}
+}
+
 // heldClock is a clock only a pause moves, so a step's wait can be driven to
 // the instant it ends and no further.
 type heldClock struct{ now time.Time }
@@ -496,7 +506,7 @@ func assertHeldSteps(t *testing.T, under, over HeldStep) {
 		over.Served != 3 || over.Refused != 1 || over.Failed != 0 {
 		t.Errorf("second step = %s, want three held and served and one refused", over.summary())
 	}
-	if !strings.Contains(over.FirstRefusal, "holding as many requests") {
+	if !strings.Contains(over.FirstRefusal, "This server is busy.") {
 		t.Errorf("first refusal = %q, want the ceiling's text", over.FirstRefusal)
 	}
 	if under.PerHeld == nil || over.PerHeld == nil {

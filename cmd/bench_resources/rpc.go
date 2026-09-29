@@ -318,7 +318,10 @@ func (c *httpRPC) close() { c.client.CloseIdleConnections() }
 // answers in SSE by default, which is the shape a real client receives.
 func eventStreamPayload(body []byte) ([]byte, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(body))
-	scanner.Buffer(make([]byte, 0, 64*1024), 32*1024*1024)
+	// No starting buffer of its own: the scanner grows one to the longest
+	// line it meets, and a capacity chosen here would change nothing but the
+	// first allocation.
+	scanner.Buffer(nil, 32*1024*1024)
 	for scanner.Scan() {
 		if data, ok := strings.CutPrefix(scanner.Text(), "data: "); ok {
 			return []byte(data), nil
@@ -332,14 +335,8 @@ func eventStreamPayload(body []byte) ([]byte, error) {
 
 // firstLine trims a body for an error message.
 func firstLine(body []byte) string {
-	text := strings.TrimSpace(string(body))
-	if index := strings.IndexByte(text, '\n'); index >= 0 {
-		text = text[:index]
-	}
-	if len(text) > 200 {
-		text = text[:200]
-	}
-	return text
+	text, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
+	return text[:min(len(text), 200)]
 }
 
 // stdioRPC talks to one server process over its pipes.
@@ -374,7 +371,7 @@ func newStdioRPC(stdin io.WriteCloser, stdout io.Reader) *stdioRPC {
 func (c *stdioRPC) read(stdout io.Reader) {
 	defer close(c.done)
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
+	scanner.Buffer(nil, 64*1024*1024)
 	for scanner.Scan() {
 		line := append([]byte(nil), scanner.Bytes()...)
 		var envelope struct {

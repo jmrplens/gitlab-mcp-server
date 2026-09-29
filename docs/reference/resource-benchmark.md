@@ -585,3 +585,51 @@ in flight each the open-file limit has to allow several thousand descriptors
 figure to check); and the budget is read from the host's available memory
 when the run starts, so stop whatever else is using it first, or pass
 `-memory-budget` explicitly.
+
+### The held mode
+
+`-held <counts>` measures the other shape of request: one the server holds open
+because GitLab has not answered. Every other mode drives requests the server
+answers as fast as it can, so none of them sees what a held call costs or what a
+process holding too many does. The stand-in GitLab holds every project read a
+step sends it, headers first (the server gives GitLab a minute to answer with
+headers and would abandon and resend a read held before them), so each step is
+a known number of `gitlab_execute_action` calls running `project.get`, spread
+round robin across `-held-credentials`, held at once and sampled while they are
+held.
+
+A step is sampled once every call it offered is either held at the stand-in or
+has come back, or once that count has stopped moving for three seconds (a
+process out of descriptors accepts no more connections, so some calls are
+neither), or after two minutes. The sample is the process's open descriptors
+(Linux only, from `/proc/<pid>/fd`; elsewhere recorded as unknown with a note),
+its goroutines and live heap from the profiling listener, its resident set, and
+a `/health` probe on a connection of its own, since a probe riding an old
+keep-alive connection would answer for a process that no longer accepts one.
+Each step then releases the hold and files every call as served, refused (a
+`503`, the status the held-call ceiling answers a 2026-07-28 client with, its
+first text kept) or failed, and prices one held call as the step's growth over
+the idle process divided by the calls held.
+
+`-held-nofile <n>` starts the server through `/bin/sh -c 'ulimit -n "$0" &&
+exec "$@"'`, which sets the soft and the hard limit together and puts the
+server in the shell's place, so the pid sampled is the server's. Setting the
+hard limit is the point: the Go runtime raises the soft limit to the hard one
+before `main`, so lowering only the soft limit would measure nothing. The server
+sizes its held-call ceiling from that limit (register row `HLD-011`), 192 under
+1024. It writes `bench/held.json`, which is not committed, draws nothing, and is
+refused if `-held-json` names the published record. `make bench-held` runs the
+ladder the ceiling was measured with, under a limit of 1024.
+
+| Flag                | Type     | Default           | Description                                                                             |
+| ------------------- | -------- | ----------------- | --------------------------------------------------------------------------------------- |
+| `-held`             | `string` | `""`              | Comma-separated counts of calls held open at once, ascending; empty runs the matrix     |
+| `-held-credentials` | `int`    | `1`               | Credentials the calls are spread across                                                 |
+| `-held-nofile`      | `int`    | `0`               | Descriptor limit the server is started under; `0` inherits this process's (not Windows) |
+| `-held-json`        | `string` | `bench/held.json` | Document to write; refused if it names the published record                             |
+
+```bash
+# What a held call costs, and what the process does past a descriptor limit
+go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024
+go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024 -held-credentials 100
+```

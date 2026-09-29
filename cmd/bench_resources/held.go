@@ -58,11 +58,17 @@ const healthUnanswered = "unanswered"
 // descriptors does. heldQuiet is how long the counts may stay unchanged before
 // the step is sampled as it stands, and heldDeadline bounds the whole wait.
 // Variables so a test can settle in milliseconds.
-var (
-	heldPoll     = 50 * time.Millisecond
-	heldQuiet    = 3 * time.Second
-	heldDeadline = 2 * time.Minute
-)
+var heldPoll, heldQuiet, heldDeadline, healthTimeout = heldWaits()
+
+// heldWaits are the pauses a real run waits for, in the order the variables
+// above take them. healthTimeout bounds the /health probe a sample takes: five
+// seconds is far beyond what the handler takes to answer, so a probe that runs
+// out of it is a process that did not accept the connection. They are returned
+// from a function rather than written into the declaration so a test can hold
+// them to their figures before any test replaces them.
+func heldWaits() (poll, quiet, deadline, health time.Duration) {
+	return 50 * time.Millisecond, 3 * time.Second, 2 * time.Minute, 5 * time.Second
+}
 
 // heldNow and heldSleep are the clock a step's wait reads and the pause between
 // its reads, so a test can drive the wait on a clock of its own and say exactly
@@ -71,11 +77,6 @@ var (
 	heldNow   = time.Now
 	heldSleep = time.Sleep
 )
-
-// healthTimeout bounds the /health probe a sample takes. Five seconds is far
-// beyond what the handler takes to answer, so a probe that runs out of it is
-// a process that did not accept the connection.
-var healthTimeout = 5 * time.Second
 
 // How a step's wait ended.
 const (
