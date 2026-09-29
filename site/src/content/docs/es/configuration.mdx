@@ -52,19 +52,30 @@ genéricos como `LOG_LEVEL`, `AUTH_MODE` o `RATE_LIMIT_RPS` pueden pertenecer ya
 a otra cosa, y la colisión es silenciosa: el servidor lee un valor que nadie le
 dio y se comporta como nadie configuró.
 
-La grafía sin prefijo sigue funcionando y se elimina en la v3. Cuando ambas
-están definidas gana la prefijada, y un aviso al arrancar nombra la que se
-ignora.
+Las grafías anteriores a la 2.8.0 se eliminaron en la 3.1.0 y nada las lee: los
+nombres genéricos sin prefijo (`TOOL_SURFACE`, `LOG_LEVEL` y el resto), los
+interruptores que ya empezaban por `GITLAB_` (`GITLAB_TIER`,
+`GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,
+`GITLAB_SKIP_TLS_VERIFY`) y `YOLO_MODE`. Si queda alguna definida, en el
+entorno o en un fichero dotenv que el servidor carga, se nombra al arrancar
+junto con la variable a la que hay que renombrarla.
+
+Tres de ellas impiden el arranque en lugar de avisar: `GITLAB_READ_ONLY`,
+`GITLAB_SAFE_MODE` y `EXCLUDE_TOOLS`. Retiran parte de lo que sirve un
+despliegue, así que una versión que ignorase una en silencio serviría
+escrituras, o las acciones que el operador quitó. El rechazo mira el nombre y
+nunca su valor. `EXCLUDE_TOOLS` es lo bastante genérico como para que lo use
+otra herramienta de la misma shell: renómbralo a `GITLAB_MCP_EXCLUDE_TOOLS`, o
+quítalo del entorno de este servidor si pertenece a otra.
 
 Algunos nombres se mantienen sin prefijo a propósito:
 
-| Nombres                                                                                                                     | Por qué no se renombraron                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`, `GITLAB_TOKEN`                                                                                                | Son la convención de GitLab. Toda configuración existente las define, y son las dos que más probablemente se escriban de memoria en un cliente                                                                          |
-| `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` | Ya llevan el espacio de nombres `GITLAB_`. Un segundo prefijo rompería toda configuración existente sin proteger de nada                                                                                                |
-| `OTEL_*`                                                                                                                    | Pertenecen a la especificación de OpenTelemetry. Los exportadores leen esos nombres directamente y nunca verían una grafía prefijada                                                                                    |
-| `GITLAB_MCP_YOLO_MODE`, `AUTOPILOT`                                                                                         | Convenciones que fija otra herramienta de agentes. Respetar el nombre que ya usa esa herramienta es justamente el motivo de leerlas                                                                                     |
-| `MODELEVAL_*`                                                                                                               | Variables de la evaluación con modelos, fijadas por objetivos `make` de este repositorio. Configuran un arnés de pruebas que el servidor no enlaza, así que nunca aparecen junto a las de otra herramienta en una shell |
+| Nombres                      | Por qué no se renombraron                                                                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN` | Son la convención de GitLab. Toda configuración existente las define, y son las dos que más probablemente se escriban de memoria en un cliente                                                                          |
+| `OTEL_*`                     | Pertenecen a la especificación de OpenTelemetry. Los exportadores leen esos nombres directamente y nunca verían una grafía prefijada                                                                                    |
+| `AUTOPILOT`                  | Convención que fija otra herramienta de agentes, respetada como alias de `GITLAB_MCP_YOLO_MODE` y sin aviso. El ajuste en sí es nuestro y lleva el prefijo; su grafía antigua `YOLO_MODE` se eliminó en la 3.1.0        |
+| `MODELEVAL_*`                | Variables de la evaluación con modelos, fijadas por objetivos `make` de este repositorio. Configuran un arnés de pruebas que el servidor no enlaza, así que nunca aparecen junto a las de otra herramienta en una shell |
 
 Las tablas siguientes siempre dan el nombre que hay que definir, así que
 léelo en lugar de deducirlo.
