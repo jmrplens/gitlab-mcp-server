@@ -2,13 +2,15 @@
 
 // commits_test.go covers a commit through the server: the reads of one and
 // of the branch it is on, the comments and the statuses a commit carries,
-// the signature an unsigned commit has none of, the two writes that make a
-// new commit out of an existing one, and the merge requests GitLab
-// associates a commit with once one is opened from its branch.
+// the trailers a listing parses out of its message, the signature an
+// unsigned commit has none of, the two writes that make a new commit out of
+// an existing one, and the merge requests GitLab associates a commit with
+// once one is opened from its branch.
 
 package common
 
 import (
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -104,6 +106,52 @@ func TestCommit_Inspect_ListGetDiffRefsCommentsStatusesAndSignature(t *testing.T
 
 		refused := harness.Refused(s, actionRepositoryCommitSignature, bySHA, harness.FailureNotFound)
 		assertMentions(e, "the signature read of an unsigned commit", refused, "unsigned")
+	})
+}
+
+// TestCommit_Trailers_ListWithTrailersReadsEveryValueOfEachTrailer makes one
+// commit per surface whose message ends in two Signed-off-by trailers and a
+// Reviewed-by, and lists its branch with trailers set, the one route GitLab
+// parses trailers on today. GitLab answers extended_trailers as each trailer
+// mapped to the list of its values, which client-go's Commit cannot decode,
+// so the listing used to fail as a whole (issue 1026); it now carries the
+// commit with both Signed-off-by values in the order they were written.
+func TestCommit_Trailers_ListWithTrailersReadsEveryValueOfEachTrailer(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("trailers"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+		message := "docs: sign the " + string(surface) + " notes\n\n" +
+			"Signed-off-by: Ada Lovelace <ada@example.com>\n" +
+			"Signed-off-by: Grace Hopper <grace@example.com>\n" +
+			"Reviewed-by: Alan Turing <alan@example.com>\n"
+		created := harness.Do[commits.Output](s, actionRepositoryCommitCreate, withParams(params, map[string]any{
+			"branch": project.DefaultBranch, "commit_message": message,
+			"actions": []map[string]any{{
+				"action": "create", "file_path": "signed-" + string(surface) + ".md",
+				"content": "# signed\n",
+			}},
+		}))
+		if created.ID == "" {
+			e.T.Fatalf("commit create answered %+v, want a commit", created)
+		}
+
+		listed := harness.Do[commits.ListOutput](s, actionRepositoryCommitList,
+			withParams(params, map[string]any{"ref_name": project.DefaultBranch, "trailers": true}))
+		at := slices.IndexFunc(listed.Commits, func(c commits.Output) bool { return c.ID == created.ID })
+		if at < 0 {
+			e.T.Fatalf("the commit listing of %s does not hold %s: %v", project.DefaultBranch, created.ShortID, commitIDs(listed.Commits))
+		}
+		want := map[string][]string{
+			"Signed-off-by": {"Ada Lovelace <ada@example.com>", "Grace Hopper <grace@example.com>"},
+			"Reviewed-by":   {"Alan Turing <alan@example.com>"},
+		}
+		if got := listed.Commits[at].ExtendedTrailers; !maps.EqualFunc(got, want, slices.Equal[[]string]) {
+			e.T.Errorf("extended_trailers of %s = %v, want %v", created.ShortID, got, want)
+		}
 	})
 }
 

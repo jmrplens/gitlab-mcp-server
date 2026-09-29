@@ -207,7 +207,7 @@ List all diff versions (historical snapshots) of a merge request. Returns each v
 
 ### `gitlab_mr_diff_version_get`
 
-Get a single merge request diff version by `version_id`, including its commits and per-file diffs. Set `unidiff=true` to render diffs in unified-diff format. Returns the version with `id`, SHAs, `state`, `real_size`, the full commit list, and the file diffs.
+Get a single merge request diff version by `version_id`, including its commits and per-file diffs. Set `unidiff=true` to render diffs in unified-diff format. Returns the version with `id`, SHAs, `state`, `real_size`, the full commit list, and the file diffs. Each commit carries `extended_trailers` as GitLab sends it, each trailer mapped to the list of its values; client-go's commit type cannot decode that list, so the version is read from GitLab's own answer.
 
 | Annotation | **Read** |
 | ---------- | -------- |

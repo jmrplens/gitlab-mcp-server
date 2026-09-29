@@ -7,8 +7,11 @@ package branches
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1898,7 +1901,7 @@ func TestBranchGet_FullCommitMirror(t *testing.T) {
 		`"id":"abc123","short_id":"abc","title":"feat: x","message":"feat: x\n","author_name":"Ada","author_email":"ada@x.io",` +
 		`"authored_date":"2024-01-01T10:00:00Z","committer_name":"Bob","committer_email":"bob@x.io","committed_date":"2024-01-02T10:00:00Z",` +
 		`"created_at":"2024-01-03T11:30:00Z","web_url":"https://gl/-/commit/abc123","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
-		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Reviewed-by":"Bob"},` +
+		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Reviewed-by":["Bob","Carol"]},` +
 		`"stats":{"additions":5,"deletions":2,"total":7},` +
 		`"last_pipeline":{"id":9,"iid":3,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc123","name":"build","web_url":"https://gl/pipelines/9","created_at":"2024-01-02T10:00:00Z","updated_at":"2024-01-02T11:00:00Z"}}}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1963,8 +1966,8 @@ func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 	if len(c.Trailers) != 1 || c.Trailers["Signed-off-by"] != "Ada" {
 		t.Errorf("commit trailers = %v, want Signed-off-by from Ada", c.Trailers)
 	}
-	if len(c.ExtendedTrailers) != 1 || c.ExtendedTrailers["Reviewed-by"] != "Bob" {
-		t.Errorf("commit extended_trailers = %v, want Reviewed-by from Bob", c.ExtendedTrailers)
+	if len(c.ExtendedTrailers) != 1 || !slices.Equal(c.ExtendedTrailers["Reviewed-by"], []string{"Bob", "Carol"}) {
+		t.Errorf("commit extended_trailers = %v, want Reviewed-by from Bob and from Carol", c.ExtendedTrailers)
 	}
 	assertCommitStats(t, c.Stats)
 	assertCommitLastPipeline(t, c.LastPipeline)
@@ -2706,5 +2709,184 @@ func TestBranchSpec_DestructiveRouteThatIsNotIdempotent(t *testing.T) {
 	}
 	if spec.ReadOnly {
 		t.Error("ReadOnly = true, want false for a destructive route")
+	}
+}
+
+// trailedBranchJSON is a branch whose commit GitLab sent with its trailers
+// parsed: extended_trailers maps each trailer to the list of its values,
+// which client-go's Commit cannot decode.
+const trailedBranchJSON = `{"name":"main","default":true,"web_url":"https://gl/-/tree/main","commit":{"id":"abc123","short_id":"abc",` +
+	`"trailers":{"Signed-off-by":"Bob"},"extended_trailers":{"Signed-off-by":["Ada","Bob"]}}}`
+
+// trailedBranchesClient answers the three branch routes that carry a commit
+// with [trailedBranchJSON]; the list adds a branch sent with no commit and a
+// next page.
+func trailedBranchesClient(t *testing.T) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathRepoBranches:
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+trailedBranchJSON+`,{"name":"orphan","commit":null}]`,
+				testutil.PaginationHeaders{Page: "1", PerPage: "2", NextPage: "2"})
+		case r.Method == http.MethodGet && r.URL.Path == pathRepoBranches+"/main":
+			testutil.RespondJSON(w, http.StatusOK, trailedBranchJSON)
+		case r.Method == http.MethodPost && r.URL.Path == pathRepoBranches:
+			testutil.RespondJSON(w, http.StatusCreated, trailedBranchJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+// TestBranchList_PageClientGoCannotDecode_KeepsItsPaginationAndACommitlessBranch
+// holds the rest of the list read off the captured response: the pagination
+// headers of the answer client-go failed to decode still reach the output,
+// and a branch GitLab sent with a null commit keeps none.
+func TestBranchList_PageClientGoCannotDecode_KeepsItsPaginationAndACommitlessBranch(t *testing.T) {
+	out, err := List(context.Background(), trailedBranchesClient(t), ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtBranchListErr, err)
+	}
+	if len(out.Branches) != 2 || out.Branches[1].Name != "orphan" || out.Branches[1].Commit != nil {
+		t.Errorf("branches = %+v, want main and an orphan with no commit", out.Branches)
+	}
+	if out.Pagination.NextPage != 2 {
+		t.Errorf("pagination = %+v, want the answer's next page", out.Pagination)
+	}
+}
+
+// TestBranchHandlers_CommitWithTrailers_PublishTheListsGitLabSent holds the
+// three handlers that answer with a branch to the reading issue 1026 asked
+// for: the branch's commit carries extended_trailers as lists, client-go fails
+// to decode the whole answer, and the handler still returns the branch with
+// every value of each trailer.
+func TestBranchHandlers_CommitWithTrailers_PublishTheListsGitLabSent(t *testing.T) {
+	want := map[string][]string{"Signed-off-by": {"Ada", "Bob"}}
+	client := trailedBranchesClient(t)
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name string
+		call func() (Output, error)
+	}{
+		{name: "create", call: func() (Output, error) {
+			return Create(ctx, client, CreateInput{ProjectID: "42", BranchName: "main", Ref: "abc123"})
+		}},
+		{name: "get", call: func() (Output, error) {
+			return Get(ctx, client, GetInput{ProjectID: "42", BranchName: "main"})
+		}},
+		{name: "list", call: func() (Output, error) {
+			out, err := List(ctx, client, ListInput{ProjectID: "42"})
+			if err != nil || len(out.Branches) == 0 {
+				return Output{}, fmt.Errorf("list answered %+v: %w", out, err)
+			}
+			return out.Branches[0], nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tc.call()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.Name != "main" || !out.Default || out.Commit == nil || out.Commit.ID != "abc123" {
+				t.Fatalf("branch = %+v, want main with commit abc123", out)
+			}
+			if !mapsOfListsEqual(out.Commit.ExtendedTrailers, want) {
+				t.Errorf("ExtendedTrailers = %v, want %v", out.Commit.ExtendedTrailers, want)
+			}
+			if out.Commit.Trailers["Signed-off-by"] != "Bob" {
+				t.Errorf("Trailers = %v, want the last Signed-off-by value", out.Commit.Trailers)
+			}
+		})
+	}
+}
+
+// mapsOfListsEqual reports whether two trailer maps hold the same keys with
+// the same values in the same order.
+func mapsOfListsEqual(got, want map[string][]string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for key, values := range want {
+		if !slices.Equal(got[key], values) {
+			return false
+		}
+	}
+	return true
+}
+
+// TestBranchHandlers_AnswerNoBranchTypeHolds_ReportTheDecodeFailure pins the
+// other side of passing over client-go's decode failure: an answer that fits
+// neither client-go's Branch nor this server's type (a name that is a number)
+// is not published as an empty branch; every handler reports the decode
+// failure of the capture instead.
+func TestBranchHandlers_AnswerNoBranchTypeHolds_ReportTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathRepoBranches:
+			testutil.RespondJSON(w, http.StatusOK, `[{"name":5}]`)
+		case r.Method == http.MethodGet:
+			testutil.RespondJSON(w, http.StatusOK, `{"name":5}`)
+		default:
+			testutil.RespondJSON(w, http.StatusCreated, `{"name":5}`)
+		}
+	}))
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "create", call: func() error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: "42", BranchName: "main", Ref: "abc123"})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := Get(ctx, client, GetInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{name: "list", call: func() error {
+			_, err := List(ctx, client, ListInput{ProjectID: "42"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("expected the decode failure, got nil")
+			}
+			if !strings.Contains(err.Error(), "decode the captured response") {
+				t.Errorf("error = %v, want the capture's decode failure", err)
+			}
+		})
+	}
+}
+
+// TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError holds the
+// predicate the branch handlers pass client-go's error through: only a JSON
+// type mismatch, bare or wrapped, is client-go failing to read an answer
+// GitLab gave.
+func TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError(t *testing.T) {
+	decodeErr := json.Unmarshal([]byte(`{"a":["x"]}`), &map[string]string{})
+	if decodeErr == nil {
+		t.Fatal("the fixture decoded, want a type mismatch")
+	}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "other error", err: errors.New("connection reset"), want: false},
+		{name: "api refusal", err: &gl.ErrorResponse{StatusCode: http.StatusNotFound, Message: "404 Branch Not Found"}, want: false},
+		{name: "type mismatch", err: decodeErr, want: true},
+		{name: "wrapped type mismatch", err: fmt.Errorf("decoding: %w", decodeErr), want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := misreadByClientGo(tc.err); got != tc.want {
+				t.Errorf("misreadByClientGo(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }

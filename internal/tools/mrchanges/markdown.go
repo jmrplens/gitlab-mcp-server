@@ -118,12 +118,12 @@ func FormatDiffVersionsListMarkdown(out DiffVersionsListOutput) string {
 }
 
 // shortSHA abbreviates a commit SHA to the eight characters GitLab shows, and
-// leaves a shorter one alone.
+// leaves a shorter one alone. It slices to the shorter of the two lengths
+// rather than comparing them, since a comparison of len(sha) with 8 reads the
+// same whether it is strict or not: an eight-character SHA sliced to eight is
+// itself, and a mutation test could never tell the two apart.
 func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return sha[:min(len(sha), 8)]
 }
 
 // FormatDiffVersionGetMarkdown renders one diff version as the card of one

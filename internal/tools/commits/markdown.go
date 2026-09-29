@@ -1,6 +1,8 @@
 package commits
 
 import (
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -59,6 +61,23 @@ func pipelineSummary(status string, p *LastPipelineOutput) string {
 	return summary + " " + link
 }
 
+// trailersSummary renders a commit's Git trailers the way GitLab sends them in
+// extended_trailers, each trailer with every value it holds
+// ("Reviewed-by: Alice, Bob / Signed-off-by: Carol"), in key order so the text
+// is the same on every call, and nothing when GitLab parsed none. Trailer
+// keys and values are what whoever wrote the commit message typed.
+func trailersSummary(extended map[string][]string) string {
+	entries := make([]string, 0, len(extended))
+	for _, key := range slices.Sorted(maps.Keys(extended)) {
+		values := make([]string, len(extended[key]))
+		for i, value := range extended[key] {
+			values[i] = toolutil.EscapeMdTableCell(value)
+		}
+		entries = append(entries, toolutil.EscapeMdTableCell(key)+": "+strings.Join(values, ", "))
+	}
+	return strings.Join(entries, " / ")
+}
+
 // commitIdent renders the person a commit names: their name, and the address
 // beside it in parentheses rather than in angle brackets, which GFM turns
 // into a mailto autolink to an address nobody chose to publish.
@@ -93,6 +112,7 @@ func FormatOutputMarkdown(c Output) string {
 	card.Markdown("Author", commitIdent(c.AuthorName, c.AuthorEmail))
 	card.Time("Date", c.CommittedDate)
 	card.Markdown("Pipeline", pipelineSummary(c.Status, c.LastPipeline))
+	card.Markdown("Trailers", trailersSummary(c.ExtendedTrailers))
 	card.URL(c.WebURL)
 	card.End(
 		toolutil.HintAction(actionCommitGet, "see this commit's full details and stats"),
@@ -122,15 +142,27 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Commits", len(out.Commits), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Short ID", "Title", "Author", "Date", "Pipeline"))
+	// The Trailers column appears only on a page where GitLab parsed some,
+	// which is a listing asked for with trailers; every other page would
+	// carry a column of empty cells.
+	withTrailers := slices.ContainsFunc(out.Commits, func(c Output) bool { return len(c.ExtendedTrailers) > 0 })
+	columns := []string{"Short ID", "Title", "Author", "Date", "Pipeline"}
+	if withTrailers {
+		columns = append(columns, "Trailers")
+	}
+	b.WriteString(toolutil.MarkdownTableHeader(columns...))
 	for _, c := range out.Commits {
-		b.WriteString(toolutil.MarkdownTableRow(
+		cells := []string{
 			toolutil.MdTitleLink(c.ShortID, c.WebURL),
 			toolutil.EscapeMdTableCell(c.Title),
 			toolutil.EscapeMdTableCell(c.AuthorName),
 			toolutil.FormatTime(c.CommittedDate),
 			pipelineSummary(c.Status, c.LastPipeline),
-		))
+		}
+		if withTrailers {
+			cells = append(cells, trailersSummary(c.ExtendedTrailers))
+		}
+		b.WriteString(toolutil.MarkdownTableRow(cells...))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionCommitGet, "see one commit in full"),
@@ -157,6 +189,7 @@ func FormatDetailMarkdown(c DetailOutput) string {
 			" ("+strconv.FormatInt(c.Stats.Total, 10)+" total)")
 	}
 	card.Markdown("Pipeline", pipelineSummary(c.Status, c.LastPipeline))
+	card.Markdown("Trailers", trailersSummary(c.ExtendedTrailers))
 	card.URL(c.WebURL)
 	if c.Message != "" && c.Message != c.Title {
 		card.Text("Message", c.Message)

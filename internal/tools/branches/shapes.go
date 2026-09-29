@@ -1,8 +1,12 @@
 package branches
 
 import (
+	"encoding/json"
+	"errors"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -18,7 +22,9 @@ import (
 //   - BranchAccessDescriptionOutput (gl.BranchAccessDescription), surfaced on
 //     ProtectedOutput.{push,merge,unprotect}_access_levels;
 //   - BranchPermissionInput (gl.BranchPermissionOptions), the nested
-//     allowed_to_{push,merge,unprotect} permission input.
+//     allowed_to_{push,merge,unprotect} permission input;
+//   - capturedBranch and capturedCommit, a branch and its commit read off the
+//     captured response, which is what the branch handlers convert.
 
 // CommitStatsOutput mirrors gl.CommitStats: line additions/deletions/total for
 // a commit.
@@ -33,7 +39,11 @@ type CommitStatsOutput struct {
 type LastPipelineOutput = toolutil.LastPipelineOutput
 
 // CommitOutput mirrors gl.Commit, the full commit object embedded on a branch
-// payload as commit.
+// payload as commit. extended_trailers maps each trailer to the list of its
+// values, which is how Gitlab::Git::Commit#parse_commit_trailers builds it and
+// how lib/api/entities/commit.rb documents it; client-go's Commit declares it
+// a map of strings, so it is read off the captured response
+// ([capturedCommit]).
 type CommitOutput struct {
 	ID               string              `json:"id"`
 	ShortID          string              `json:"short_id"`
@@ -51,13 +61,71 @@ type CommitOutput struct {
 	Status           string              `json:"status,omitempty"`
 	ProjectID        int64               `json:"project_id,omitempty"`
 	Trailers         map[string]string   `json:"trailers,omitempty"`
-	ExtendedTrailers map[string]string   `json:"extended_trailers,omitempty"`
+	ExtendedTrailers map[string][]string `json:"extended_trailers,omitempty"`
 	LastPipeline     *LastPipelineOutput `json:"last_pipeline,omitempty"`
 	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
 }
 
+// capturedBranch is a branch as GitLab sends it, read off the captured
+// response (ADR-0021) as client-go's Branch reads it, except for its commit,
+// which the field here takes over so that the commit's extended_trailers can
+// be read as GitLab sends them. encoding/json decodes a key into the
+// shallowest field that names it, so the embedded Branch's own commit stays
+// empty.
+type capturedBranch struct {
+	gl.Branch
+	Commit *capturedCommit `json:"commit"`
+}
+
+// capturedCommit is a branch's commit as GitLab sends it: client-go's Commit,
+// with extended_trailers taken over. lib/api/entities/commit.rb exposes it as
+// each trailer mapped to the list of its values, and client-go's Commit
+// declares it a map of strings, so a commit carrying a trailer fails in
+// client-go's decoder, which then returns no branch at all, and a page holding
+// one such branch fails as a whole. commits.Captured is the same type for the
+// commit routes; it is mirrored here rather than imported (C-IMPORTS).
+type capturedCommit struct {
+	gl.Commit
+	ExtendedTrailers map[string][]string `json:"extended_trailers"`
+}
+
+// misreadByClientGo reports whether err is client-go failing to decode an
+// answer GitLab gave successfully into a struct of its own that cannot hold
+// it, which is what a branch whose commit carries a trailer produces (see
+// [capturedCommit]). Such an answer is read from the capture by a type that
+// can hold it, so the failure is not the handler's; any other error is. When
+// the answer does not fit that type either, decoding the capture fails and
+// the handler reports that instead. commits.MisreadByClientGo is the same
+// predicate for the commit routes.
+func misreadByClientGo(err error) bool {
+	var typeErr *json.UnmarshalTypeError
+	return errors.As(err, &typeErr)
+}
+
+// outputFromCaptured converts a branch read off the captured response, its
+// commit's extended_trailers included.
+func outputFromCaptured(b *capturedBranch) Output {
+	out := ToOutput(&b.Branch)
+	if b.Commit != nil {
+		out.Commit = commitToOutput(&b.Commit.Commit)
+		out.Commit.ExtendedTrailers = b.Commit.ExtendedTrailers
+	}
+	return out
+}
+
+// capturedOutput decodes the one branch a route answered with from the
+// captured response.
+func capturedOutput(captured *gitlabclient.ResponseCapture) (Output, error) {
+	var b capturedBranch
+	if err := captured.Decode(&b); err != nil {
+		return Output{}, err
+	}
+	return outputFromCaptured(&b), nil
+}
+
 // commitToOutput maps gl.Commit to *CommitOutput, or nil when the branch has no
-// embedded commit.
+// embedded commit. extended_trailers is not mapped: a Commit client-go decoded
+// cannot hold it and so carried none; [outputFromCaptured] adds it.
 //
 // The three timestamps go out in RFC 3339, the form every other date this
 // server publishes takes and the one toolutil.FormatTime reads back. They used
@@ -70,23 +138,22 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 		return nil
 	}
 	out := &CommitOutput{
-		ID:               c.ID,
-		ShortID:          c.ShortID,
-		Title:            c.Title,
-		Message:          c.Message,
-		AuthorName:       c.AuthorName,
-		AuthorEmail:      c.AuthorEmail,
-		AuthoredDate:     toolutil.RFC3339Ptr(c.AuthoredDate),
-		CommitterName:    c.CommitterName,
-		CommitterEmail:   c.CommitterEmail,
-		CommittedDate:    toolutil.RFC3339Ptr(c.CommittedDate),
-		CreatedAt:        toolutil.RFC3339Ptr(c.CreatedAt),
-		WebURL:           c.WebURL,
-		ParentIDs:        c.ParentIDs,
-		ProjectID:        c.ProjectID,
-		Trailers:         c.Trailers,
-		ExtendedTrailers: c.ExtendedTrailers,
-		LastPipeline:     pipelineInfoToOutput(c.LastPipeline),
+		ID:             c.ID,
+		ShortID:        c.ShortID,
+		Title:          c.Title,
+		Message:        c.Message,
+		AuthorName:     c.AuthorName,
+		AuthorEmail:    c.AuthorEmail,
+		AuthoredDate:   toolutil.RFC3339Ptr(c.AuthoredDate),
+		CommitterName:  c.CommitterName,
+		CommitterEmail: c.CommitterEmail,
+		CommittedDate:  toolutil.RFC3339Ptr(c.CommittedDate),
+		CreatedAt:      toolutil.RFC3339Ptr(c.CreatedAt),
+		WebURL:         c.WebURL,
+		ParentIDs:      c.ParentIDs,
+		ProjectID:      c.ProjectID,
+		Trailers:       c.Trailers,
+		LastPipeline:   pipelineInfoToOutput(c.LastPipeline),
 	}
 	if c.Status != nil {
 		out.Status = string(*c.Status)

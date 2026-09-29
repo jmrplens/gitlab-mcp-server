@@ -50,7 +50,7 @@ List the files and directories (tree) of a GitLab repository at a given path and
 
 ### `gitlab_repository_compare`
 
-Compare two branches, tags, or commits in a GitLab repository. Supports `from_project_id` for cross-project comparisons (compare a ref from a different project). Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text.
+Compare two branches, tags, or commits in a GitLab repository. Supports `from_project_id` for cross-project comparisons (compare a ref from a different project). Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text. Each commit carries `extended_trailers` as GitLab sends it, each trailer mapped to the list of its values (see Commits below).
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -64,7 +64,7 @@ List repository contributors with commit, addition, and deletion counts. Support
 
 ### `gitlab_repository_merge_base`
 
-Find the common ancestor (merge base) commit of two or more branches, tags, or commits.
+Find the common ancestor (merge base) commit of two or more branches, tags, or commits. The commit carries `extended_trailers` as GitLab sends it, each trailer mapped to the list of its values.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -170,9 +170,11 @@ Get file metadata via HEAD request to the raw file endpoint. Returns size, encod
 
 ## Commits
 
+A commit these actions return can carry two trailer keys: `trailers`, the last value of each Git trailer in the message, and `extended_trailers`, each trailer mapped to the list of all its values (two `Signed-off-by` lines give a list of two), which is how GitLab sends it. GitLab fills them only where it parses the message's trailers, which today is `gitlab_commit_list` with `trailers` set; a single commit read, a tree entry's last commit and the listing without `trailers` get an empty map from GitLab, and the answer then leaves both keys out. Where a commit carries trailers, the text answer shows them too: a Trailers column in the listing, and a Trailers row on a commit's card, each trailer with every value it holds. client-go's commit type declares `extended_trailers` a map of strings and cannot decode a list, so the commit is read from GitLab's own answer ([entry 69 of the upstream register](../../development/upstream-bugs.md#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)): a listing that used to fail as a whole on the first commit carrying a trailer now returns it.
+
 ### `gitlab_commit_list`
 
-List commits in a GitLab repository. Supports filtering by branch/tag (ref_name), date range (since/until in ISO 8601), file path, and author. Optionally includes commit stats (additions/deletions). Returns commit ID, title, author, date, and web URL with pagination.
+List commits in a GitLab repository. Supports filtering by branch/tag (ref_name), date range (since/until in ISO 8601), file path, and author. Optionally includes commit stats (additions/deletions). Set `trailers` to have GitLab parse each commit's Git trailers into `trailers` and `extended_trailers`. Returns commit ID, title, author, date, and web URL with pagination.
 
 | Annotation | **Read** |
 | ---------- | -------- |

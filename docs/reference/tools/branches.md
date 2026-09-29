@@ -42,7 +42,7 @@ Tools marked **Delete** require user confirmation before execution.
 
 ### `gitlab_branch_get`
 
-Retrieve detailed information about a single branch in a GitLab project. Returns branch name, merged/protected/default status, web URL, and latest commit ID.
+Retrieve detailed information about a single branch in a GitLab project. Returns branch name, merged/protected/default status, web URL, and latest commit. The commit carries `extended_trailers` as GitLab sends it, each trailer mapped to the list of its values; client-go's commit type cannot decode that list, so the branch is read from GitLab's own answer, on `gitlab_branch_list` and `gitlab_branch_create` too.
 
 | Annotation | **Read** |
 | ---------- | -------- |

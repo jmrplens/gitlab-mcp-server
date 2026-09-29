@@ -255,19 +255,24 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	cmp, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
+	_, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil && !commits.MisreadByClientGo(err) {
 		return CompareOutput{}, toolutil.WrapErrWithStatusHint("repositoryCompare", err, http.StatusNotFound,
 			"verify both 'from' and 'to' refs exist (branch name, tag name, or commit SHA) using branch.list or tag.list")
 	}
+	var answer capturedCompare
+	if err = captured.Decode(&answer); err != nil {
+		return CompareOutput{}, toolutil.WrapErr("repositoryCompare", err)
+	}
+	cmp := &answer.Compare
 	extras, err := toolutil.CapturedCompareDiffs(captured, len(cmp.Diffs))
 	if err != nil {
 		return CompareOutput{}, toolutil.WrapErr("repositoryCompare", err)
 	}
 
-	commitList := make([]commits.Output, len(cmp.Commits))
-	for i, c := range cmp.Commits {
-		commitList[i] = commits.ToOutput(c)
+	commitList := make([]commits.Output, len(answer.Commits))
+	for i := range answer.Commits {
+		commitList[i] = commits.OutputFromCaptured(&answer.Commits[i])
 	}
 
 	diffs := make([]toolutil.DiffOutput, len(cmp.Diffs))
@@ -276,8 +281,8 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 	}
 
 	var baseCommit *commits.Output
-	if cmp.Commit != nil {
-		c := commits.ToOutput(cmp.Commit)
+	if answer.Commit != nil {
+		c := commits.OutputFromCaptured(answer.Commit)
 		baseCommit = &c
 	}
 
@@ -289,6 +294,17 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 		CompareSameRef: cmp.CompareSameRef,
 		WebURL:         cmp.WebURL,
 	}, nil
+}
+
+// capturedCompare is a comparison as GitLab sends it, read off the captured
+// response. Its two commit keys are taken over from client-go's Compare,
+// whose Commit cannot hold extended_trailers as GitLab sends them (see
+// [commits.Captured]); encoding/json decodes a key into the shallowest field
+// that names it, so the embedded Compare's own commits stay empty.
+type capturedCompare struct {
+	gl.Compare
+	Commit  *commits.Captured  `json:"commit"`
+	Commits []commits.Captured `json:"commits"`
 }
 
 // ---------------------------------------------------------------------------
@@ -378,12 +394,17 @@ func MergeBase(ctx context.Context, client *gitlabclient.Client, input MergeBase
 	opts := &gl.MergeBaseOptions{
 		Ref: new(input.Refs),
 	}
-	c, _, err := client.GL().Repositories.MergeBase(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, _, err := client.GL().Repositories.MergeBase(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil && !commits.MisreadByClientGo(err) {
 		return commits.Output{}, toolutil.WrapErrWithStatusHint("repositoryMergeBase", err, http.StatusNotFound,
 			"verify all refs exist and share common history; refs must be branch/tag names or commit SHAs")
 	}
-	return commits.ToOutput(c), nil
+	out, err := commits.CapturedOutput(captured)
+	if err != nil {
+		return commits.Output{}, toolutil.WrapErr("repositoryMergeBase", err)
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------
