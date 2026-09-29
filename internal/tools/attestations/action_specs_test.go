@@ -43,7 +43,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case r.Method == http.MethodGet && strings.Contains(path, "sha256:abc123"):
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/attestations/"+testDigest):
 			testutil.RespondJSON(w, http.StatusOK, registerAttestationsJSON)
 		case r.Method == http.MethodGet && strings.Contains(path, "/attestations/"):
 			w.WriteHeader(http.StatusOK)
@@ -63,7 +63,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_list_attestations", map[string]any{"project_id": "42", "subject_digest": "sha256:abc123"}},
+		{"gitlab_list_attestations", map[string]any{"project_id": "42", "subject_digest": testDigest}},
 		{"gitlab_download_attestation", map[string]any{"project_id": "42", "attestation_iid": float64(1)}},
 	}
 	for _, tt := range tools {

@@ -388,10 +388,10 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		description: "Read an issue's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_issue_time_estimate_set, gitlab_issue_spent_time_add.",
 	},
 	"gitlab_issue_participants": {
-		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers).",
+		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers), one page at a time with page and per_page.",
 		aliases:     []string{"list issue participants", "who is on this issue", "show issue participants", "issue participant list"},
 		related:     []string{actionIssueGet, actionIssueNoteList},
-		description: "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL. See also: gitlab_issue_get, gitlab_issue_note_list.",
+		description: "List an issue's participants. Returns: participating users with ID, username, name, state, locked flag, public email, avatar and profile URL, with pagination metadata. See also: gitlab_issue_get, gitlab_issue_note_list.",
 	},
 	"gitlab_issue_mrs_closing": {
 		usage:       "List merge requests that will close this issue when merged (those referencing it with a closing keyword).",

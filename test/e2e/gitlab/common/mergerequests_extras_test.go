@@ -20,6 +20,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrcontextcommits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -148,6 +149,36 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 		related := harness.Eventually(s, actionMergeRequestRelatedIssues, params, relatedIssuesInterval, relatedIssuesWait,
 			func(out mergerequests.RelatedIssuesOutput) bool { return relatedIssueListed(out, f.issue.IID) })
 		e.T.Logf("issue #%d is among the %d related issue(s)", f.issue.IID, len(related.Issues))
+	})
+}
+
+// TestMergeRequestContextCommits_List_PagesOneCommitAtATime pins two
+// commits of an unrelated branch to one merge request and pages through
+// them one at a time on every surface. GitLab pages the context commits
+// although the route declares neither page nor per_page, and the action used
+// to read the first twenty and head its Markdown as though they were all.
+//
+// The two are pinned through client-go while the fixture is built, since the
+// scenario is the listing's and neither commit carries a trailer, which is the
+// one thing client-go cannot decode on that route.
+func TestMergeRequestContextCommits_List_PagesOneCommitAtATime(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) mergeRequestFixture {
+		f := newMergeRequestFixture(e, "mrcontextpage")
+		branch := fixture.NewBranch(e, f.project, e.Name("context"))
+		first := fixture.CommitFile(e, f.project, branch.Name, "context-a.txt", "first context payload\n", "first context commit")
+		second := fixture.CommitFile(e, f.project, branch.Name, "context-b.txt", "second context payload\n", "second context commit")
+		if _, _, err := e.Client().GL().MergeRequestContextCommits.CreateMergeRequestContextCommits(f.project.ID, f.mr.IID,
+			&gl.CreateMergeRequestContextCommitsOptions{Commits: &[]string{first.SHA, second.SHA}}, gl.WithContext(e.Ctx)); err != nil {
+			e.T.Fatalf("pinning %s and %s to request !%d: %v", first.ShortID, second.ShortID, f.mr.IID, err)
+		}
+		return f
+	}, func(e *harness.Env, surface harness.Surface, f mergeRequestFixture) {
+		assertPagesOneAtATime(e, e.On(surface), actionMergeRequestContextCommitsList, f.params(),
+			func(out mrcontextcommits.ListOutput) ([]string, toolutil.PaginationOutput) {
+				return contextCommitIDs(out), out.Pagination
+			})
 	})
 }
 

@@ -66,6 +66,89 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_PageAndPerPage_ReachTheRequest holds that the page a caller asks
+// for is the page GitLab is asked for. GitLab pages the context commits
+// although the route declares neither page nor per_page, and client-go's
+// ListMergeRequestContextCommits takes no options struct, so until the input
+// carried the two this action could only ever read the first twenty.
+func TestList_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathMRContextCommits)
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"def456","short_id":"def4","title":"Second commit"}]`)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{
+		ProjectID: "1", MergeRequest: 10,
+		Page: 2, PerPage: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Commits) != 1 || out.Commits[0].ID != "def456" {
+		t.Errorf("commits = %+v, want the one of page 2", out.Commits)
+	}
+}
+
+// TestList_NoPageAsked_SendsNeither holds that a caller who asks for no page
+// leaves the choice to GitLab rather than sending a zero.
+func TestList_NoPageAsked_SendsNeither(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("page") || r.URL.Query().Has("per_page") {
+			t.Errorf("query = %q, want neither page nor per_page", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	if _, err := List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// firstOfTwoPages is the pagination block of the first page of a two-commit
+// list read one commit at a time.
+var firstOfTwoPages = toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+
+// firstOfTwoPagesHeaders are the headers GitLab answers that page with.
+var firstOfTwoPagesHeaders = testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"}
+
+// TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
+// GitLab answers is published as a page, whether or not client-go could read
+// its commits. The commits are read from the captured body and the capture
+// keeps no headers, so the block has to come from the response client-go
+// returns; a commit carrying a trailer makes client-go's own decode fail, and
+// the block must survive that too, since that is the failure List passes over.
+func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	cases := []struct {
+		name   string
+		commit string
+		wantID string
+	}{
+		{"client-go reads the page", `{"id":"abc123","short_id":"abc1","title":"Initial commit"}`, testCommitSHA},
+		{"client-go misreads a trailer", fullCommitJSON, fullCommitItem.ID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathMRContextCommits)
+				testutil.RespondJSONWithPagination(w, http.StatusOK, "["+tc.commit+"]", firstOfTwoPagesHeaders)
+			}))
+
+			out, err := List(t.Context(), client, ListInput{ProjectID: "1", MergeRequest: 10})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.Commits) != 1 || out.Commits[0].ID != tc.wantID {
+				t.Errorf("commits = %+v, want the one commit %s", out.Commits, tc.wantID)
+			}
+			if out.Pagination != firstOfTwoPages {
+				t.Errorf("pagination = %+v, want %+v", out.Pagination, firstOfTwoPages)
+			}
+		})
+	}
+}
+
 // TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -204,6 +287,30 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	text := fmt.Sprintf("%v", result.Content[0])
 	if text == "" {
 		t.Fatal("expected non-empty text")
+	}
+}
+
+// TestFormatListMarkdown_APageOfALongerList verifies that a page which is not
+// the whole list says so: the total in the heading, the page between the
+// heading and the table, and the pagination line before the next steps. The
+// heading used to be handed an empty block, so a page read as the whole list.
+func TestFormatListMarkdown_APageOfALongerList(t *testing.T) {
+	got := FormatListMarkdownString(ListOutput{
+		Commits:    []CommitItem{{ID: testCommitSHA, ShortID: "abc1", Title: "Fix bug", AuthorName: "Dev"}},
+		Pagination: firstOfTwoPages,
+	})
+	want := "## MR Context Commits (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| SHA | Title | Author | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `abc1` | Fix bug | Dev |  |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to read one of these commits in full\n" +
+		"- Use action 'merge_request.context_commits_create' to pin another commit to this review\n" +
+		"- Use action 'merge_request.context_commits_delete' to unpin one of these commits\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

@@ -262,3 +262,40 @@ func TestMRDependencies_Lifecycle_BlocksThenUnblocksARequest(t *testing.T) {
 		}
 	})
 }
+
+// TestMRReviewers_List_PagesOneReviewerAtATime gives one request two
+// reviewers, the run's own user and a fixture user, and pages through them
+// one at a time on every surface. GitLab pages the reviewers although the
+// route declares neither page nor per_page, and the action used to read the
+// first twenty with no pagination block. It is here rather than in common
+// because two reviewers on one request is a licensed feature: Community
+// Edition keeps the first.
+func TestMRReviewers_List_PagesOneReviewerAtATime(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) approvalFixture {
+		f := newApprovalFixture(e, "mrreviewerpage")
+		reviewer := fixture.NewUser(e, "mrreviewerpage")
+		fixture.AddProjectMember(e, f.project, reviewer, gl.DeveloperPermissions)
+		reviewers := []int64{e.Runtime().UserID, reviewer.ID}
+		updated, _, err := e.Client().GL().MergeRequests.UpdateMergeRequest(f.project.ID, f.mr.IID,
+			&gl.UpdateMergeRequestOptions{ReviewerIDs: &reviewers}, gl.WithContext(e.Ctx))
+		if err != nil {
+			e.T.Fatalf("asking %v to review request !%d: %v", reviewers, f.mr.IID, err)
+		}
+		if len(updated.Reviewers) != len(reviewers) {
+			e.T.Fatalf("request !%d kept %d reviewer(s) of the %d asked for, want a licensed instance keeping both", f.mr.IID, len(updated.Reviewers), len(reviewers))
+		}
+		return f
+	}, func(e *harness.Env, surface harness.Surface, f approvalFixture) {
+		params := map[string]any{"project_id": f.project.IDParam(), "merge_request_iid": f.mr.IID}
+		assertPagesOneAtATime(e, e.On(surface), actionMRReviewers, params,
+			func(out mergerequests.ReviewersOutput) ([]string, toolutil.PaginationOutput) {
+				ids := make([]int64, 0, len(out.Reviewers))
+				for _, reviewer := range out.Reviewers {
+					ids = append(ids, reviewer.ID)
+				}
+				return idKeys(ids), out.Pagination
+			})
+	})
+}

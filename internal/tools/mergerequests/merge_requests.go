@@ -1038,19 +1038,25 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		})
 }
 
-// PipelinesInput defines parameters for listing pipelines of a merge request.
+// PipelinesInput defines parameters for listing pipelines of a merge request,
+// and the page of them to list. client-go's ListMergeRequestPipelines takes no
+// options struct, so the page travels as a request option.
 type PipelinesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	toolutil.PaginationInput
 }
 
-// PipelinesOutput holds the list of pipelines for a merge request.
+// PipelinesOutput holds one page of the pipelines of a merge request.
 type PipelinesOutput struct {
 	toolutil.HintableOutput
-	Pipelines []pipelines.Output `json:"pipelines"`
+	Pipelines  []pipelines.Output        `json:"pipelines"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// Pipelines retrieves the list of pipelines for a merge request.
+// Pipelines retrieves one page of the pipelines of a merge request. GitLab
+// pages the list whether or not the route declares page and per_page, which
+// it does not.
 func Pipelines(ctx context.Context, client *gitlabclient.Client, input PipelinesInput) (PipelinesOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return PipelinesOutput{}, err
@@ -1062,7 +1068,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 		return PipelinesOutput{}, toolutil.ErrRequiredInt64("mrPipelines", "merge_request_iid")
 	}
 
-	pipelineList, _, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	pipelineList, resp, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return PipelinesOutput{}, toolutil.WrapErrWithStatusHint("mrPipelines", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with merge_request.get. The MR may have no pipelines yet (use merge_request.create_pipeline to trigger one)")
@@ -1072,7 +1078,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 	for i, p := range pipelineList {
 		out[i] = pipelines.ToOutput(p)
 	}
-	return PipelinesOutput{Pipelines: out}, nil
+	return PipelinesOutput{Pipelines: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // DeleteInput defines parameters for deleting a merge request.
@@ -1465,10 +1471,17 @@ func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRe
 // Participants & Reviewers
 // ---------------------------------------------------------------------------.
 
-// ParticipantsInput defines parameters for listing MR participants.
+// ParticipantsInput defines parameters for listing the participants or the
+// reviewers of a merge request, and the page of them to list.
+//
+// GitLab pages both lists: each route presents paginate(...), which reads page
+// and per_page from the request although neither route declares them. The
+// client-go methods take no options struct, so the page travels as a request
+// option.
 type ParticipantsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	toolutil.PaginationInput
 }
 
 // ParticipantOutput represents a single MR participant: the whole of
@@ -1487,13 +1500,15 @@ type ParticipantOutput struct {
 	WebURL      string `json:"web_url,omitempty"`
 }
 
-// ParticipantsOutput holds the list of participants for a merge request.
+// ParticipantsOutput holds one page of the participants of a merge request.
 type ParticipantsOutput struct {
 	toolutil.HintableOutput
-	Participants []ParticipantOutput `json:"participants"`
+	Participants []ParticipantOutput       `json:"participants"`
+	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
-// Participants retrieves the list of users who participated in a merge request.
+// Participants retrieves one page of the users who participated in a merge
+// request.
 func Participants(ctx context.Context, client *gitlabclient.Client, input ParticipantsInput) (ParticipantsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ParticipantsOutput{}, err
@@ -1505,7 +1520,7 @@ func Participants(ctx context.Context, client *gitlabclient.Client, input Partic
 		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("mrParticipants", "merge_request_iid")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	users, _, err := client.GL().MergeRequests.GetMergeRequestParticipants(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	users, resp, err := client.GL().MergeRequests.GetMergeRequestParticipants(string(input.ProjectID), input.MRIID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("mrParticipants", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -1527,7 +1542,7 @@ func Participants(ctx context.Context, client *gitlabclient.Client, input Partic
 			WebURL:      u.WebURL,
 		}
 	}
-	return ParticipantsOutput{Participants: out}, nil
+	return ParticipantsOutput{Participants: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ReviewerOutput represents a single MR reviewer with review state.
@@ -1552,13 +1567,14 @@ type ReviewerOutput struct {
 	CreatedAt   string `json:"created_at,omitempty"`
 }
 
-// ReviewersOutput holds the list of reviewers for a merge request.
+// ReviewersOutput holds one page of the reviewers of a merge request.
 type ReviewersOutput struct {
 	toolutil.HintableOutput
-	Reviewers []ReviewerOutput `json:"reviewers"`
+	Reviewers  []ReviewerOutput          `json:"reviewers"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// Reviewers retrieves the list of reviewers assigned to a merge request.
+// Reviewers retrieves one page of the reviewers assigned to a merge request.
 func Reviewers(ctx context.Context, client *gitlabclient.Client, input ParticipantsInput) (ReviewersOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ReviewersOutput{}, err
@@ -1570,7 +1586,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 		return ReviewersOutput{}, toolutil.ErrRequiredInt64("mrReviewers", "merge_request_iid")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	reviewers, resp, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with merge_request.get. Use merge_request.update with reviewer_ids to assign reviewers")
@@ -1599,7 +1615,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 		}
 		out[i] = ro
 	}
-	return ReviewersOutput{Reviewers: out}, nil
+	return ReviewersOutput{Reviewers: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------

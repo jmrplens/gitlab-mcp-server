@@ -1269,7 +1269,7 @@ func TestGetParticipants_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
 	if err != nil {
 		t.Fatalf("GetParticipants() unexpected error: %v", err)
 	}
@@ -1284,12 +1284,72 @@ func TestGetParticipants_Success(t *testing.T) {
 	}
 }
 
+// TestGetParticipants_PageAndPerPage_ReachTheRequest holds that the page a
+// caller asks for is the page GitLab is asked for. GitLab pages an issue's
+// participants although the route declares neither page nor per_page, and
+// client-go's GetParticipants takes no options struct, so until the input
+// carried the two this action could only ever read the first twenty.
+func TestGetParticipants_PageAndPerPage_ReachTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathIssue10+"/participants")
+		testutil.AssertQueryParam(t, r, "page", "2")
+		testutil.AssertQueryParam(t, r, "per_page", "1")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":2,"username":"bob","locked":false,"public_email":""}]`)
+	}))
+
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		Page: 2, PerPage: 1,
+	})
+	if err != nil {
+		t.Fatalf("GetParticipants() unexpected error: %v", err)
+	}
+	if len(out.Participants) != 1 || out.Participants[0].Username != "bob" {
+		t.Errorf("participants = %+v, want the one of page 2", out.Participants)
+	}
+}
+
+// TestGetParticipants_NoPageAsked_SendsNeither holds that a caller who asks
+// for no page leaves the choice to GitLab rather than sending a zero.
+func TestGetParticipants_NoPageAsked_SendsNeither(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("page") || r.URL.Query().Has("per_page") {
+			t.Errorf("query = %q, want neither page nor per_page", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, participantsResponse)
+	}))
+
+	if _, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10}); err != nil {
+		t.Fatalf("GetParticipants() unexpected error: %v", err)
+	}
+}
+
+// TestGetParticipants_NextPageHeader_PublishesThePaginationBlock holds that
+// the page GitLab answers is published as a page, so a caller holding the
+// first page of participants can tell more exist and which page to ask for.
+func TestGetParticipants_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathIssue10+"/participants")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"username":"alice","locked":false,"public_email":""}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"})
+	}))
+
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("GetParticipants() unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
 // TestGetParticipants_MissingProject verifies GetParticipants when missing project.
 func TestGetParticipants_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	_, err := GetParticipants(context.Background(), client, GetInput{IssueIID: 10})
+	_, err := GetParticipants(context.Background(), client, ParticipantsInput{IssueIID: 10})
 	if err == nil {
 		t.Fatal("GetParticipants() expected error for missing project_id")
 	}
@@ -1313,7 +1373,7 @@ func TestGetParticipants_EveryUserBasicKey_LandsOnItsOwnField(t *testing.T) {
 				"avatar_url":"https://gitlab.example.com/a/25","web_url":"https://gitlab.example.com/u/26"}]`)
 	}))
 
-	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
 	if err != nil {
 		t.Fatalf("GetParticipants() unexpected error: %v", err)
 	}
@@ -1338,7 +1398,7 @@ func TestGetParticipants_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","locked":"yes"}]`)
 	}))
 
-	_, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	_, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
 	if err == nil || !strings.Contains(err.Error(), "issueGetParticipants") {
 		t.Fatalf("GetParticipants() error = %v, want the operation's error for an undecodable answer", err)
 	}
@@ -1601,7 +1661,10 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 		}},
 		{"ResetSpentTime", func() error { _, e := ResetSpentTime(ctx, client, GetInput{ProjectID: pid, IssueIID: 0}); return e }},
 		{"GetTimeStats", func() error { _, e := GetTimeStats(ctx, client, GetInput{ProjectID: pid, IssueIID: 0}); return e }},
-		{"GetParticipants", func() error { _, e := GetParticipants(ctx, client, GetInput{ProjectID: pid, IssueIID: 0}); return e }},
+		{"GetParticipants", func() error {
+			_, e := GetParticipants(ctx, client, ParticipantsInput{ProjectID: pid, IssueIID: 0})
+			return e
+		}},
 		{"ListMRsClosing", func() error {
 			_, e := ListMRsClosing(ctx, client, ListMRsClosingInput{ProjectID: pid, IssueIID: 0})
 			return e
@@ -2154,6 +2217,29 @@ func TestFormatParticipantsMarkdown_NoProfileLinks_NoPreserveHint(t *testing.T) 
 		"| Username | Name | State | Locked |\n" +
 		"| --- | --- | --- | --- |\n" +
 		"| @bob | Bob B | active | ❌ |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.get' to view the issue details\n" +
+		"- Use action 'issue.note_create' to notify participants\n"
+	if md != want {
+		t.Errorf("FormatParticipantsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatParticipantsMarkdown_APageOfALongerList verifies that a page of
+// participants which is not the whole list says so: the total in the heading,
+// the page between the heading and the table, and the pagination line before
+// the next steps.
+func TestFormatParticipantsMarkdown_APageOfALongerList(t *testing.T) {
+	md := FormatParticipantsMarkdown(ParticipantsOutput{
+		Participants: []ParticipantOutput{{ID: 2, Username: "bob", Name: "Bob B", State: "active"}},
+		Pagination:   toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 2, TotalPages: 2, NextPage: 2, HasMore: true},
+	})
+	want := "## Participants (2)\n\n" +
+		"Showing 1 of 2 results (page 1 of 2)\n\n" +
+		"| Username | Name | State | Locked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| @bob | Bob B | active | ❌ |\n" +
+		"\nPage 1 of 2 | 2 items total | 1 per page\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'issue.get' to view the issue details\n" +
 		"- Use action 'issue.note_create' to notify participants\n"
@@ -3059,7 +3145,7 @@ func TestGetTimeStats_CancelledContext(t *testing.T) {
 
 // TestGetParticipants_CancelledContext verifies GetParticipants when cancelled context.
 func TestGetParticipants_CancelledContext(t *testing.T) {
-	if _, err := GetParticipants(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := GetParticipants(testutil.CancelledCtx(t), nopClient(t), ParticipantsInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("GetParticipants: expected error for canceled context")
 	}
 }
@@ -3141,7 +3227,7 @@ func TestResetSpentTime_MissingProject(t *testing.T) {
 
 // TestGetParticipants_MissingProject2 verifies GetParticipants when missing project 2.
 func TestGetParticipants_MissingProject2(t *testing.T) {
-	_, err := GetParticipants(context.Background(), nopClient(t), GetInput{IssueIID: 10})
+	_, err := GetParticipants(context.Background(), nopClient(t), ParticipantsInput{IssueIID: 10})
 	if err == nil {
 		t.Fatal("GetParticipants: expected error for empty project_id")
 	}
@@ -3622,7 +3708,7 @@ func TestGetTimeStats_SuccessCov(t *testing.T) {
 // TestGetParticipants_SuccessCov verifies GetParticipants when success cov.
 func TestGetParticipants_SuccessCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
-	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
 	if err != nil {
 		t.Fatalf("GetParticipants: %v", err)
 	}
@@ -4440,7 +4526,7 @@ func TestGetParticipants_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
 	}))
-	_, err := GetParticipants(context.Background(), client, GetInput{
+	_, err := GetParticipants(context.Background(), client, ParticipantsInput{
 		ProjectID: testProjectID, IssueIID: 10,
 	})
 	if err == nil {
@@ -5866,7 +5952,7 @@ func TestGetParticipants_EveryField_LandsOnItsOwnField(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":201,"username":"handle-202","name":"Name 203","web_url":"https://gitlab.example.com/u/204"}]`)
 	}))
-	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	out, err := GetParticipants(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, IssueIID: 10})
 	if err != nil {
 		t.Fatalf("GetParticipants() unexpected error: %v", err)
 	}
@@ -6028,7 +6114,7 @@ func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 			return err
 		}},
 		{"GetParticipants/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetParticipants(ctx, c, get)
+			_, err := GetParticipants(ctx, c, ParticipantsInput{ProjectID: get.ProjectID, IssueIID: get.IssueIID})
 			return err
 		}},
 		{"ListMRsClosing/404", http.StatusNotFound, "only MRs that include 'Closes #N'", func(ctx context.Context, c *gitlabclient.Client) error {

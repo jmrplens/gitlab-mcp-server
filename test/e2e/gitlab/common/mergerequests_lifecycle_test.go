@@ -13,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -138,6 +141,35 @@ func commitListed(out mergerequests.CommitsOutput, sha string) bool {
 		}
 	}
 	return false
+}
+
+// TestMergeRequestParticipants_List_PagesOneParticipantAtATime gives one
+// merge request two participants, its author and a fixture user it is
+// assigned to, and pages through them one at a time on every surface. GitLab
+// pages the list although the route declares neither page nor per_page, and
+// the action used to read the first twenty with no pagination block.
+func TestMergeRequestParticipants_List_PagesOneParticipantAtATime(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) mergeRequestFixture {
+		f := newMergeRequestFixture(e, "mrparticipantpage")
+		assignee := fixture.NewUser(e, "mrparticipantpage")
+		fixture.AddProjectMember(e, f.project, assignee, gl.DeveloperPermissions)
+		if _, _, err := e.Client().GL().MergeRequests.UpdateMergeRequest(f.project.ID, f.mr.IID,
+			&gl.UpdateMergeRequestOptions{AssigneeIDs: &[]int64{assignee.ID}}, gl.WithContext(e.Ctx)); err != nil {
+			e.T.Fatalf("assigning request !%d to %s: %v", f.mr.IID, assignee.Username, err)
+		}
+		return f
+	}, func(e *harness.Env, surface harness.Surface, f mergeRequestFixture) {
+		assertPagesOneAtATime(e, e.On(surface), actionMergeRequestParticipants, f.params(),
+			func(out mergerequests.ParticipantsOutput) ([]string, toolutil.PaginationOutput) {
+				usernames := make([]string, 0, len(out.Participants))
+				for _, participant := range out.Participants {
+					usernames = append(usernames, participant.Username)
+				}
+				return usernames, out.Pagination
+			})
+	})
 }
 
 // participantListed reports whether a participant listing holds the user.

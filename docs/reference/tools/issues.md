@@ -179,7 +179,7 @@ Get time tracking statistics for an issue (estimate and spent time).
 
 ### `gitlab_issue_participants`
 
-List all participants (users who engaged) in an issue. Returns each user's ID, username, name, state, locked flag, public email, avatar and profile URL.
+List the participants (users who engaged) in an issue, one page at a time. Returns each user's ID, username, name, state, locked flag, public email, avatar and profile URL, with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter.
 
 | Annotation | **Read** |
 | ---------- | -------- |

@@ -358,6 +358,11 @@ const (
 	actionMRDependencyDelete            harness.ActionID = "merge_request.dependency_delete"
 )
 
+// The reviewers of a merge request, Free in the catalog and paged here
+// because a list of two reviewers is a licensed one: Community Edition keeps
+// a single reviewer per request.
+const actionMRReviewers harness.ActionID = "merge_request.reviewers"
+
 // The licensed reads of the issue tool.
 const (
 	actionIssueWeightEventList    harness.ActionID = "issue.event_issue_weight_list"

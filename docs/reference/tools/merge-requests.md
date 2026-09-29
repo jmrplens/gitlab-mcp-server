@@ -153,7 +153,7 @@ List all commits in a GitLab merge request. Returns commit ID, title, author, da
 
 ### `gitlab_mr_pipelines`
 
-List all pipelines associated with a GitLab merge request. Returns pipeline ID, status, source, ref, SHA, and web URL.
+List the pipelines associated with a GitLab merge request, one page at a time. Returns pipeline ID, status, source, ref, SHA, and web URL, with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter, twenty pipelines unless asked otherwise.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -171,14 +171,14 @@ Create a new pipeline for a GitLab merge request. Triggers a CI/CD pipeline run 
 
 ### `gitlab_mr_participants`
 
-List all participants (users who have interacted) in a GitLab merge request. Returns user ID, username, name, state, locked flag, public email, avatar and profile URL.
+List the participants (users who have interacted) in a GitLab merge request, one page at a time. Returns user ID, username, name, state, locked flag, public email, avatar and profile URL, with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_mr_reviewers`
 
-List all reviewers assigned to a GitLab merge request. Returns reviewer user details (locked flag and public email included) plus review state and assignment date.
+List the reviewers assigned to a GitLab merge request, one page at a time. Returns reviewer user details (locked flag and public email included) plus review state and assignment date, with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -391,7 +391,7 @@ Update the merge request approval settings of a project. Set only the fields you
 
 ### `gitlab_list_mr_context_commits`
 
-List context commits associated with a merge request. Returns each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL, the short SHA linked to the commit in the table. `extended_trailers` maps each trailer to the list of its values, as GitLab sends it; the commits are read from GitLab's answer in that shape, since client-go's commit type cannot decode a trailer. GitLab keeps no parents for a pinned commit, so `parent_ids` is empty here and filled on the answer to `gitlab_create_mr_context_commits`.
+List context commits associated with a merge request, one page at a time with pagination metadata. Standard pagination (`page`, `per_page`): GitLab pages this list although its route declares neither parameter. Returns each commit's full and short SHA, title and message, author and committer with their dates, trailers and web URL, the short SHA linked to the commit in the table. `extended_trailers` maps each trailer to the list of its values, as GitLab sends it; the commits are read from GitLab's answer in that shape, since client-go's commit type cannot decode a trailer. GitLab keeps no parents for a pinned commit, so `parent_ids` is empty here and filled on the answer to `gitlab_create_mr_context_commits`.
 
 | Annotation | **Read** |
 | ---------- | -------- |

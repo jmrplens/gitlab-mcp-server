@@ -110,19 +110,39 @@ func toCommitItems(rows []capturedCommit) []CommitItem {
 
 // List.
 
-// ListInput is the input for listing MR context commits.
+// ListInput is the input for listing MR context commits, and the page of them
+// to list.
+//
+// GitLab pages the list: the route builds
+// paginate(merge_request.merge_request_context_commits), which reads page and
+// per_page from the request although the route declares neither.
+// client-go's ListMergeRequestContextCommits takes no options struct, so the
+// page travels as a request option.
 type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MergeRequest int64                `json:"merge_request_iid"     jsonschema:"Merge request IID,required"`
+	toolutil.PaginationInput
 }
 
-// ListOutput is the output for listing MR context commits.
+// ListOutput is the output for listing MR context commits, and for pinning
+// them.
+//
+// The list answers one page, and Pagination is where that page sits in the
+// whole. create_context_commits answers with the commits it pinned rather than
+// a page, and GitLab sends no pagination headers with it, so its block stays
+// at zero.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Commits []CommitItem `json:"commits"`
+	Commits    []CommitItem              `json:"commits"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List returns the context commits for a merge request.
+// List returns one page of the context commits of a merge request.
+//
+// The page is read from the captured body, since client-go's own decode fails
+// on a commit carrying a trailer (see [capturedCommit]). The capture keeps no
+// headers, so the pagination block comes from the response client-go returns,
+// which it returns on that decode failure too.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -134,7 +154,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("list_mr_context_commits", "merge_request_iid")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx))
+	_, resp, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil && !misreadByClientGo(err) {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and merge_request_iid with merge_request.list")
 	}
@@ -142,7 +162,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErr("list_mr_context_commits", err)
 	}
-	return ListOutput{Commits: items}, nil
+	return ListOutput{Commits: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Create.

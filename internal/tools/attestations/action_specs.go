@@ -54,7 +54,7 @@ type attestationActionMetaEntry struct {
 // individual-tool description.
 var attestationActionMeta = map[string]attestationActionMetaEntry{
 	"gitlab_list_attestations": {
-		usage: "List SLSA build provenance attestations for a project artifact identified by its subject digest. Use this to discover which signed attestations exist for a built image or package before downloading one, and to obtain each attestation's IID, predicate type, and status. Requires an Ultimate license. Provide the project plus the OCI-style subject digest of the artifact.",
+		usage: "List SLSA build provenance attestations for a project artifact identified by its subject digest, one page at a time with page and per_page. Use this to discover which signed attestations exist for a built image or package before downloading one, and to obtain each attestation's IID, predicate type, and status. Requires an Ultimate license, and GitLab serves it only where the slsa_provenance_statement feature flag is enabled for the project, which it is not by default: a refusal on a project that exists says so rather than answering an empty list. Provide the project plus the artifact's SHA-256 digest, its 64 hex characters in either case, with or without a sha256: prefix.",
 		aliases: []string{
 			"list build attestations",
 			"list slsa provenance",
@@ -72,15 +72,15 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 			},
 			"subject_digest": {
 				SemanticRole:     "artifact_digest",
-				ValueSource:      "OCI-style content digest of the attested artifact (algorithm-prefixed hash).",
-				ExampleBinding:   `params.subject_digest:"sha256:abc123"`,
-				CommonConfusions: []string{"Use the artifact's content digest (for example sha256:...), not a Git commit SHA, package version, or attestation IID."},
+				ValueSource:      "Hex-encoded SHA-256 digest of the attested artifact: its 64 hex characters, in either case. An OCI-style sha256: prefix is accepted and removed, and the hex is lowered, before the request.",
+				ExampleBinding:   `params.subject_digest:"5db1fee4b5703808c48078a76768b155b421b210c0761cd6a5d223f4d99f1eaa"`,
+				CommonConfusions: []string{"Use the artifact's SHA-256 content digest, not a Git commit SHA (40 hex characters), a package version, or an attestation IID."},
 			},
 		},
-		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
+		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
 	},
 	"gitlab_download_attestation": {
-		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after attestation.list identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
+		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after attestation.list identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license, and the slsa_provenance_statement feature flag enabled for the project, which it is not by default.",
 		aliases: []string{
 			"download build attestation",
 			"download slsa provenance bundle",

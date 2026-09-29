@@ -1300,14 +1300,28 @@ type ParticipantOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
-// ParticipantsOutput holds a list of issue participants.
-type ParticipantsOutput struct {
-	toolutil.HintableOutput
-	Participants []ParticipantOutput `json:"participants"`
+// ParticipantsInput defines parameters for listing an issue's participants,
+// and the page of them to list.
+//
+// GitLab pages the list: the route presents paginate(participants), which
+// reads page and per_page from the request whether or not the route declares
+// them, and it declares neither. client-go's GetParticipants takes no options
+// struct either, so the page travels as a request option.
+type ParticipantsInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IssueIID  int64                `json:"issue_iid"  jsonschema:"Issue IID (project-scoped internal ID, not 'issue_id'),required"`
+	toolutil.PaginationInput
 }
 
-// GetParticipants retrieves the list of participants in an issue.
-func GetParticipants(ctx context.Context, client *gitlabclient.Client, input GetInput) (ParticipantsOutput, error) {
+// ParticipantsOutput holds one page of an issue's participants.
+type ParticipantsOutput struct {
+	toolutil.HintableOutput
+	Participants []ParticipantOutput       `json:"participants"`
+	Pagination   toolutil.PaginationOutput `json:"pagination"`
+}
+
+// GetParticipants retrieves one page of the participants in an issue.
+func GetParticipants(ctx context.Context, client *gitlabclient.Client, input ParticipantsInput) (ParticipantsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ParticipantsOutput{}, err
 	}
@@ -1318,7 +1332,7 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("issueGetParticipants", "issue_iid")
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	users, _, err := client.GL().Issues.GetParticipants(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
+	users, resp, err := client.GL().Issues.GetParticipants(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("issueGetParticipants", err, http.StatusNotFound,
 			hintVerifyIssue)
@@ -1340,7 +1354,7 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 			WebURL:      u.WebURL,
 		}
 	}
-	return ParticipantsOutput{Participants: out}, nil
+	return ParticipantsOutput{Participants: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // RelatedMROutput mirrors gl.BasicMergeRequest, the merge-request object
