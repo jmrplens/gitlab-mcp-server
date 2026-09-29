@@ -223,9 +223,9 @@ func childEnv(plan scenarioPlan, stubURL, otlpURL string, stdio bool) []string {
 // other agent tooling sets for the yolo mode.
 //
 // Stripping the retired names matters more since 3.1.0 stopped reading them,
-// not less: the server refuses to start when it finds GITLAB_READ_ONLY or
-// GITLAB_SAFE_MODE set, so a developer who has one exported would measure
-// nothing at all rather than measure the wrong configuration.
+// not less: the server refuses to start when it finds GITLAB_READ_ONLY,
+// GITLAB_SAFE_MODE or EXCLUDE_TOOLS set, so a developer who has one exported
+// would measure nothing at all rather than measure the wrong configuration.
 func configFreeEnviron() []string {
 	return withoutConfig(os.Environ())
 }

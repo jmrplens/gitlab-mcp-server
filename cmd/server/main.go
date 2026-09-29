@@ -3727,12 +3727,13 @@ func reportStartupConfiguration(choice transportDecision, hcfg *httpConfig) bool
 // exactly as much as one exported in the shell, and a check placed above that
 // load would see neither.
 //
-// Refusing is reserved for the two that take capability away. A deployment
-// carrying GITLAB_READ_ONLY=true and nothing else asked to serve reads, and
-// starting anyway would serve writes on the strength of a variable this
-// version stopped reading. The rest are reported and start, because being
-// configured with a tier or a log level nobody chose is worth a line and not
-// an outage.
+// Refusing is reserved for the three that withhold part of what the server
+// serves: GITLAB_READ_ONLY, GITLAB_SAFE_MODE and EXCLUDE_TOOLS. A deployment
+// carrying GITLAB_READ_ONLY=true, or EXCLUDE_TOOLS=project.delete, and nothing
+// else asked not to be served writes, or that action, and starting anyway
+// would serve them on the strength of a variable this version stopped reading.
+// The rest are reported and start, because being configured with a tier or a
+// log level nobody chose is worth a line and not an outage.
 func reportRetiredEnvNames() bool {
 	refuse, warn := config.RetiredEnvUses()
 	for _, line := range warn {

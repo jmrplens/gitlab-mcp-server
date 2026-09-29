@@ -97,19 +97,28 @@ func RetiredEnvName(name string) string {
 	return name
 }
 
-// protectionNames are the settings an operator sets to take capability away
-// from a deployment, and the reason [RetiredEnvUses] splits its answer.
+// protectionNames are the settings an operator sets to withhold part of what a
+// deployment serves, the three register row AUT-004 decides together, and the
+// reason [RetiredEnvUses] splits its answer.
 //
 // Ignoring any retired name reconfigures a deployment that did not ask to be
-// reconfigured, but these two decide whether a tool call may write. A
-// deployment carrying GITLAB_READ_ONLY=true and nothing else has asked to serve
-// reads, and a version that silently stops reading that variable serves writes
-// instead. There is no warning quiet enough to be the right answer to that,
-// because the deployments most likely to be running unattended are exactly the
-// ones nobody is reading stderr for.
+// reconfigured, but ignoring one of these serves what the operator took away.
+// A deployment carrying GITLAB_READ_ONLY=true and nothing else has asked to
+// serve reads, one carrying EXCLUDE_TOOLS=project.delete has asked for that
+// action not to exist, and a version that silently stops reading the variable
+// serves the writes, or the action, instead. There is no warning quiet enough
+// to be the right answer to that, because the deployments most likely to be
+// running unattended are exactly the ones nobody is reading stderr for.
+//
+// EXCLUDE_TOOLS is the one bare name of the three, generic enough that another
+// tool in the same shell could own it. It refuses all the same: the server
+// cannot tell whose it is, the guess that it belongs to somebody else is the
+// one that serves what an operator removed, and the refusal costs whoever set
+// it one variable renamed, or unset in this server's environment.
 var protectionNames = map[string]struct{}{
-	"READ_ONLY": {},
-	"SAFE_MODE": {},
+	"EXCLUDE_TOOLS": {},
+	"READ_ONLY":     {},
+	"SAFE_MODE":     {},
 }
 
 // RetiredEnvUses reports the retired spellings present in this environment,

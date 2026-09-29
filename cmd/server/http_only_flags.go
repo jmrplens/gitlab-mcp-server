@@ -36,8 +36,8 @@ import (
 //   - A flag withholding part of what the server serves: --read-only,
 //     --safe-mode and --exclude-tools, the three settings register row
 //     AUT-004 decides together. Ignoring one serves what the operator asked
-//     not to be served. The first two are the settings RetiredEnvUses refuses
-//     a retired spelling of for that reason.
+//     not to be served. RetiredEnvUses refuses a retired spelling of each of
+//     the three for that reason.
 //   - --gitlab-url naming instances none of which is the one a stdio run
 //     connects to. Ignoring it sends GITLAB_TOKEN to an instance this command
 //     line did not name, https://gitlab.com when GITLAB_URL is unset. It is

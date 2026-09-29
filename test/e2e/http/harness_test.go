@@ -749,8 +749,10 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 // generic enough to belong to something else in the same shell. 3.1.0 stopped
 // reading them and the prefixed spellings are covered by the GITLAB_ rule
 // below, so nothing here configures the child any more: the list stays because
-// two of these retired names now stop the server starting, and a developer who
-// still has one exported would measure nothing at all.
+// one of these retired names, EXCLUDE_TOOLS, now stops the server starting (as
+// the retired GITLAB_READ_ONLY and GITLAB_SAFE_MODE do, which the GITLAB_ rule
+// removes), and a developer who still has it exported would see every test
+// here fail to start a server.
 //
 // They are listed rather than imported because this module builds the binary
 // rather than linking it, so the list is duplicated on purpose and a name

@@ -127,7 +127,14 @@ func TestGetenv_UnlistedName_IsReadVerbatim(t *testing.T) {
 
 // TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost verifies that a retired
 // name present in the environment is reported, that it names the replacement,
-// and that the two which take capability away are reported apart from the rest.
+// and that the three which withhold part of what a deployment serves are
+// reported apart from the rest.
+//
+// The retired exclusion is held twice. It is the one bare name among the
+// three, so it is the one a reader would expect to have been left a warning,
+// and a refusal decided by presence alone is what makes the retired
+// GITLAB_READ_ONLY=false refuse too: the value is never read, so nothing
+// about it can make ignoring the variable safe.
 //
 // It reports what is **set**, which is the opposite of the warning it replaces.
 // That one could report only what had been read, because reading was still
@@ -169,6 +176,22 @@ func TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost(t *testing.T) {
 			name:       "a retired safe-mode switch refuses",
 			env:        map[string]string{"GITLAB_SAFE_MODE": "true"},
 			wantRefuse: 1,
+		},
+		{
+			name:        "a retired exclusion refuses",
+			env:         map[string]string{"EXCLUDE_TOOLS": "project.delete"},
+			wantRefuse:  1,
+			wantMention: []string{"EXCLUDE_TOOLS is no longer read", EnvPrefix + "EXCLUDE_TOOLS"},
+		},
+		{
+			name:       "a retired exclusion naming nothing refuses too, since its value is never read",
+			env:        map[string]string{"EXCLUDE_TOOLS": ""},
+			wantRefuse: 1,
+		},
+		{
+			name:       "the prefixed spelling of an exclusion is not a retired name",
+			env:        map[string]string{EnvPrefix + "EXCLUDE_TOOLS": "project.delete"},
+			wantRefuse: 0,
 		},
 		{
 			name:       "the prefixed spelling of a protection is not a retired name",
