@@ -458,9 +458,9 @@ Every request that cannot be served is classified before it reaches the MCP hand
 | ------------------------------------------------------------ | ------ | ------------- | ------------------ |
 | No `PRIVATE-TOKEN` and no `Authorization: Bearer`            | `401`  | `-40100`      | `WWW-Authenticate` |
 | GitLab answered `401`/`403` to the credential                | `401`  | `-40100`      | `WWW-Authenticate` |
-| `GITLAB-URL` header is not a parseable URL                   | `400`  | `-32600`      | —                  |
+| `GITLAB-URL` header is not a parseable URL                   | `400`  | `-32600`      | none               |
 | More than 10 auth failures from one IP within a minute       | `429`  | `-42900`      | `Retry-After`      |
-| GitLab session could not be built for the token              | `503`  | `-50300`      | —                  |
+| GitLab session could not be built for the token              | `503`  | `-50300`      | none               |
 | `--auth-mode=oauth`: no verification slot came free          | `503`  | `-50300`      | `Retry-After`      |
 | Every held-call slot is taken (protocol 2026-07-28 or later) | `503`  | `-50300`      | `Retry-After`      |
 
