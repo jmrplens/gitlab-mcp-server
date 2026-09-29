@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // afterThePin is a day later than the committed provenance record, so the age

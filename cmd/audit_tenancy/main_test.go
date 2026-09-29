@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // fixtureDir is where the in-memory fixture program pretends to live. Nothing

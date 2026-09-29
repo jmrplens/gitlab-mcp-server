@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live

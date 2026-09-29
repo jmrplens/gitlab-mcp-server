@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // auditedPattern is a small, real package to run the whole command over. The

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // selfPattern is the package this test loads: loading the front end with

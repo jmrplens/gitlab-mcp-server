@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // corpusPath is this package, as an import path. The boundary test asks the

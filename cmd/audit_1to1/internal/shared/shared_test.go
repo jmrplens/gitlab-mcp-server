@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // writeModule creates a Go module under a temp dir with the given files

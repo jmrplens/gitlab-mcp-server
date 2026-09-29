@@ -14843,17 +14843,22 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // cmd/audit_e2e_coverage reads, internal/testutil/shardio is the shard
 // mechanism under it, internal/testutil/modelrecord is the record the model
 // evaluation run writes and cmd/gen_model_results reads,
-// internal/testutil/modelcorpus is the corpus that run is driven from, and
+// internal/testutil/modelcorpus is the corpus that run is driven from,
 // internal/testutil/modelscore is the scorer that reads a record back against
-// that corpus; each is named here in its own right because this list matches
-// exact import paths, so internal/testutil does not cover a subpackage of it.
+// that corpus, and internal/testutil/serialtypecheck is the blank import that
+// serializes go/packages under the race detector; each is named here in its
+// own right because this list matches exact import paths, so
+// internal/testutil does not cover a subpackage of it.
 //
 // The scorer is the one of them that would cost nothing to link and still
 // belongs out: it imports internal/tools for the action catalog, which the
 // binary already carries, so its arrival would be invisible in a binary size
-// and would mean that scoring code had become part of the server.
+// and would mean that scoring code had become part of the server. The
+// serializer would cost nothing in size either, and would change behavior
+// instead: it sets GOMAXPROCS to one when a race build initializes it, so the
+// race-built server the transport modules drive would run on one processor.
 //
-// Today all eight stay out by accident, because nothing in the server's import
+// Today all nine stay out by accident, because nothing in the server's import
 // graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
@@ -14866,6 +14871,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		"internal/testutil/modelrecord",
 		"internal/testutil/modelcorpus",
 		"internal/testutil/modelscore",
+		"internal/testutil/serialtypecheck",
 		"internal/graphqlschema",
 		"internal/freshness",
 	}
