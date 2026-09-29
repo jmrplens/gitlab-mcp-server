@@ -38,11 +38,12 @@ import (
 // of 1024.
 //
 // What it bounds is descriptors, and memory only where the limit is small. An
-// idle session costs four goroutines and 56 to 110 KiB of resident set,
-// measured through cmd/bench_resources' sessions mode, and the descriptor limit
-// raises none of that: under the 524288 a systemd service gets, the ceiling is
-// 114560 sessions, six to twelve GiB of them idle, and there the memory the
-// process is given is what bounds the sessions. Whether a fixed cap should
+// idle session costs four goroutines and 88 to 110 KiB of resident set,
+// measured through cmd/bench_resources' sessions mode at 500 to 4000 sessions,
+// and the descriptor limit raises none of that: under the 524288 a systemd
+// service gets, the ceiling is 114560 sessions, about ten to twelve GiB of
+// them idle, and there the memory the process is given is what bounds the
+// sessions. Whether a fixed cap should
 // stand beside the derived one is put to the maintainer (issue 951).
 const sessionHeldDivisor = tenancy.SessionHeldDivisor // register row HLD-010
 

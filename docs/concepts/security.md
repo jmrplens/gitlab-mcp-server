@@ -754,7 +754,7 @@ it, the pool evicts its credential, or it has sat idle for `--session-timeout`,
 half an hour by default. `initialize` is metered to no bucket, so before this
 ceiling a caller could open sessions as fast as it could post. Measured through
 `cmd/bench_resources`' sessions mode before the ceiling existed, an idle session
-cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 106 KiB of
+cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 119 KiB of
 resident memory and no descriptor, and one holding its standalone stream six
 goroutines, about 25 KiB of live heap and one descriptor. A process whose hard
 descriptor limit was 1024 kept every session it was offered until those streams
@@ -784,10 +784,11 @@ and kept answering `/health`; with the limit inherited it kept all 4000.
 
 What the figure bounds is descriptors, and memory only where the hard limit is
 small: the descriptor limit raises none of what an idle session costs in memory,
-56 to 110 KiB of resident set across the runs, so the 114560 sessions a hard
-limit of 524288 allows come to six to twelve GiB idle, and on such a host the
-container's memory limit bounds the sessions before this ceiling does. Whether a fixed cap should stand beside the derived
-figure is put to the maintainer on issue 951.
+88 to 110 KiB of resident set with the ceiling at 500 to 4000 sessions, so the
+114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
+idle, and on such a host the container's memory limit bounds the sessions before
+this ceiling does. Whether a fixed cap should stand beside the derived figure is
+put to the maintainer on issue 951.
 
 It is keyed on the process and not configurable for the held-call ceiling's
 reason, and it discloses the same one bit: its refusal says only that the

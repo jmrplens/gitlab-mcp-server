@@ -569,7 +569,7 @@ as it was, a call on an open session is still served with every session slot tak
 a session the process keeps is never refused its stream, which the SDK's own client,
 refused it, gives up without asking again. No flag moves it, for `HLD-011`'s reason.
 Measured through `cmd/bench_resources`' sessions mode before the ceiling, an idle session
-cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 106 KiB of resident
+cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 119 KiB of resident
 set and no descriptor, and one holding its stream six goroutines, about 25 KiB of live
 heap and one descriptor; under a hard limit of 1024 the process kept every session it
 was offered until the streams had taken all 1024 descriptors, at 1012 to 1016 sessions,
@@ -580,9 +580,10 @@ other 3904 in the gate, `/health` answering throughout; with the limit inherited
 all 4000, as it did without the ceiling. The session's slots are given back by a
 goroutine of its own, which is one goroutine more per session, four idle and seven with
 its stream, bounded by the ceiling. What the ceiling bounds is descriptors, and memory
-only where the limit is small: an idle session's resident set is not something the
-descriptor limit raises, so the 114560 sessions a hard limit of 524288 allows come to six
-to twelve GiB idle, and there the process's memory limit bounds them first. Standing
+only where the limit is small: an idle session's 88 to 110 KiB of resident set, measured
+with the ceiling at 500 to 4000 sessions, is not something the descriptor limit raises,
+so the 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
+idle, and there the process's memory limit bounds them first. Standing
 alone, it is also cheap to fill: `initialize` spends no rate and an idle session holds no
 connection, so one credential can take every slot, and a session nobody deletes holds its
 slot for `--session-timeout`, half an hour by default and a day at most, and with a

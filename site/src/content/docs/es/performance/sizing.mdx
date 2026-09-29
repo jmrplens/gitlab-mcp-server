@@ -188,7 +188,7 @@ dimensionar es el límite de memoria del contenedor.
 El techo de sesiones es la mitad del de llamadas retenidas, 96 bajo un límite
 duro de 1024 y 114560 bajo 524288, porque cada sesión ocupa al abrirse una plaza
 de llamada retenida para su flujo independiente: una sesión inactiva cuesta
-cuatro goroutines, entre 10 y 17 KiB de heap vivo y entre 56 y 110 KiB de
+cuatro goroutines, entre 10 y 20 KiB de heap vivo y entre 88 y 110 KiB de
 memoria residente y no ocupa ninguna conexión, y su flujo cuesta un descriptor
 y tres goroutines más. El siguiente `initialize` se rechaza como ocupado con las
 mismas palabras. Bajo un límite duro de 1024, con 4000 sesiones ofrecidas con
@@ -196,10 +196,10 @@ sus flujos, el proceso mantuvo 96 en como mucho 183 descriptores y siguió
 respondiendo a `/health`; antes del techo mantenía cada sesión hasta que los
 flujos ocupaban los 1024 descriptores y entonces dejaba de responder. Donde el
 límite es grande el techo acota descriptores y no memoria: 114560 sesiones
-inactivas ocuparían entre seis y doce GiB, así que la cifra a dimensionar vuelve
-a ser el límite de memoria del contenedor. Una sesión que nadie borra conserva
-su plaza hasta `--session-timeout`, y con `--session-timeout=0` hasta que el
-pool desaloja su credencial.
+inactivas ocuparían entre unos diez y doce GiB, así que la cifra a dimensionar
+vuelve a ser el límite de memoria del contenedor. Una sesión que nadie borra
+conserva su plaza hasta `--session-timeout`, y con `--session-timeout=0` hasta
+que el pool desaloja su credencial.
 
 El presupuesto de autenticaciones fallidas sí es configurable: diez fallos por
 minuto y dirección de cliente por defecto (`--auth-failure-limit`,

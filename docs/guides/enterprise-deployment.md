@@ -219,8 +219,8 @@ rate they connect, and one credential can fill it at no cost, since
 `initialize` spends no rate-limit token; shorten the timeout, raise the
 descriptor limit, or move the clients to the default stateless transport, which
 keeps no sessions. Where the descriptor limit is large the figure bounds
-descriptors and not memory: 114560 idle sessions would take six to twelve GiB,
-so the container's memory limit is the bound to size. See
+descriptors and not memory: 114560 idle sessions would take about ten to twelve
+GiB, so the container's memory limit is the bound to size. See
 [Stateful sessions kept at once](http-server-mode.md#stateful-sessions-kept-at-once).
 
 The failed-authentication budget is configurable, and worth knowing too: ten

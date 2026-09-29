@@ -421,10 +421,10 @@ func allowDecisions() []Decision {
 			// descriptor budget HLD-011 is sized from holds as it was, and a
 			// session the process keeps is never refused its stream. It bounds
 			// descriptors, and memory only where the limit is small: an idle
-			// session costs 56 to 110 KiB of resident set and four goroutines,
+			// session costs 88 to 110 KiB of resident set and four goroutines,
 			// which the descriptor limit does not raise, so under the 524288 a
-			// systemd service gets, 114560 idle sessions come to six to twelve
-			// GiB, and there the process's memory limit bounds them.
+			// systemd service gets, 114560 idle sessions come to about ten to
+			// twelve GiB, and there the process's memory limit bounds them.
 			// Whether a fixed cap should stand beside the derived one is put
 			// to the maintainer with the rest.
 			//
