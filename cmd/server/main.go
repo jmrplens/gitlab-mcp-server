@@ -424,14 +424,10 @@ func main() {
 	})
 	slog.SetDefault(slog.New(baseLogHandler))
 
-	if !reportRetiredEnvNames() {
+	if !reportStartupConfiguration(transportChoice, &hcfg) {
 		exitProcess(1)
 		return
 	}
-
-	// Held back until here: the transport had to be settled before the handler
-	// that formats this could be built, and the operator asked for JSON.
-	transportChoice.explain()
 
 	health.SetServerInfo(health.ServerInfo{
 		Version:    version,
@@ -473,6 +469,13 @@ FLAGS
   Grouped by what they configure. A flag with an environment variable below
   reads its value from it when the flag is not passed; the transport and
   listener flags have none. See ENVIRONMENT VARIABLES below.
+
+  A stdio server takes its configuration from the environment. Of these flags
+  it reads the General ones, -transport, -http, the ones that set a variable
+  (-upload-max-file-size, -client-compat, -yolo-mode) and the Telemetry group.
+  Every other flag is read in HTTP mode only, and a stdio run given one names
+  it at startup with the variable to set instead; -read-only or -safe-mode
+  asking to hold back writes refuses to start one, since it would serve them.
 
  General
   -h, -help                 Show this help message
@@ -3678,12 +3681,32 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	)
 }
 
+// reportStartupConfiguration writes what startup has to say about how this
+// process was configured, once the logger the operator asked for is in place,
+// and reports whether startup may continue.
+//
+// The order is the log's: the retired variable names first, since a refusal
+// there ends the run before anything else is worth saying; then the transport,
+// whose choice could not be logged before this handler existed; then the flags
+// a stdio run ignores, after the transport because the line written under
+// --transport=auto refers to that choice. See http_only_flags.go.
+//
+// One function rather than three statements in main, whose body is at the
+// limit of what the maintainability check accepts.
+func reportStartupConfiguration(choice transportDecision, hcfg *httpConfig) bool {
+	if !reportRetiredEnvNames() {
+		return false
+	}
+	choice.explain()
+	return reportStdioIgnoredFlags(choice, hcfg)
+}
+
 // reportRetiredEnvNames says what this environment still sets under a name
 // 3.1.0 removed, and reports whether startup may continue.
 //
-// It runs once, early, from main alone. Its predecessor warned about what had
-// been read and so had to run as late as startup allowed, when the last
-// configuration read was done. Nothing reads these names now, so the answer is
+// It runs once, early, from main alone (through [reportStartupConfiguration]).
+// Its predecessor warned about what had been read and so had to run as late as
+// startup allowed, when the last configuration read was done. Nothing reads these names now, so the answer is
 // the same at any moment and the earliest one is the useful one: a deployment
 // that is about to be refused should be refused before it builds a catalog.
 //

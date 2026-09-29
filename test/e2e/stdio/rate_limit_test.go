@@ -44,9 +44,9 @@ func refusedAsToolError(got map[string]any) bool {
 // for: MCP's one mandatory limit ("Rate limit tool invocations") is switched
 // on for stdio by GITLAB_MCP_RATE_LIMIT_RPS, and a tool call beyond the bucket
 // is refused in the shape register row RTC-001 declares. The flag
-// --rate-limit-rps is read in HTTP mode alone (stdio accepts it and ignores
-// it), so on stdio the variable is the whole switch, and nothing drove it
-// against a binary before this.
+// --rate-limit-rps is read in HTTP mode alone (stdio names it at startup and
+// ignores it, which http_only_flags_test.go holds), so on stdio the variable
+// is the whole switch, and nothing drove it against a binary before this.
 //
 // A bucket of one that refills once every thousand seconds is spent by the
 // first call and stays empty for the rest of the test, so the second tool call
