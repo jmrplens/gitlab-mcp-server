@@ -249,6 +249,26 @@ func shareGroupIDGuidance(valueSource string) toolutil.ParameterGuidance {
 	}
 }
 
+// The member_role_id guidance the add and edit actions share: a membership's
+// custom role is Premium or Ultimate and matches its access_level.
+const (
+	memberRoleIDValueSource = "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level."
+	memberRoleIDConfusion   = "member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."
+)
+
+// memberRoleIDGuidance returns parameter guidance for the member_role_id
+// argument the add, edit and share actions take. The access level the role
+// must match and the tier that honors it differ between a membership and a
+// share, so both sentences are the caller's.
+func memberRoleIDGuidance(valueSource, confusion string) toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		SemanticRole:     "member_role_id",
+		ValueSource:      valueSource,
+		ExampleBinding:   "params.member_role_id:7",
+		CommonConfusions: []string{confusion},
+	}
+}
+
 // groupMemberActionMeta maps each individual group-member tool to its discovery
 // metadata.
 var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
@@ -277,15 +297,10 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		aliases: []string{"add group member", "add existing user to group", "grant group access"},
 		related: []string{actionGroupMembers, actionMemberEdit, actionMemberGet},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"group_id":     groupIDGuidance(),
-			"user_id":      userIDGuidance("Numeric user ID to add as a member (alternative to username)."),
-			"access_level": accessLevelGuidance(),
-			"member_role_id": {
-				SemanticRole:     "member_role_id",
-				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level.",
-				ExampleBinding:   "params.member_role_id:7",
-				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."},
-			},
+			"group_id":       groupIDGuidance(),
+			"user_id":        userIDGuidance("Numeric user ID to add as a member (alternative to username)."),
+			"access_level":   accessLevelGuidance(),
+			"member_role_id": memberRoleIDGuidance(memberRoleIDValueSource, memberRoleIDConfusion),
 		},
 		description: "Add a user as a direct member of a group. Returns: the created membership with access level, custom member role, expiry, and seat usage. See also: gitlab_group_members_list, gitlab_group_member_edit, gitlab_group_member_get.",
 	},
@@ -294,15 +309,10 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		aliases: []string{"edit group member", "change group member access level", "update group role"},
 		related: []string{actionGroupMembers, actionMemberGet, actionMemberRemove},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"group_id":     groupIDGuidance(),
-			"user_id":      userIDGuidance("Numeric user ID of the direct member to edit."),
-			"access_level": accessLevelGuidance(),
-			"member_role_id": {
-				SemanticRole:     "member_role_id",
-				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level.",
-				ExampleBinding:   "params.member_role_id:7",
-				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."},
-			},
+			"group_id":       groupIDGuidance(),
+			"user_id":        userIDGuidance("Numeric user ID of the direct member to edit."),
+			"access_level":   accessLevelGuidance(),
+			"member_role_id": memberRoleIDGuidance(memberRoleIDValueSource, memberRoleIDConfusion),
 		},
 		description: "Edit a direct group member's access level, expiry, or custom member role. Returns: the updated membership. See also: gitlab_group_members_list, gitlab_group_member_get, gitlab_group_member_remove.",
 	},
@@ -329,12 +339,10 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 				ExampleBinding:   "params.group_access:30",
 				CommonConfusions: []string{"60 (Admin) is not a share level and is rejected. With member_role_id, group_access must equal the custom role's base access level."},
 			},
-			"member_role_id": {
-				SemanticRole:     "member_role_id",
-				ValueSource:      "ID of a custom member role the share grants (Ultimate). Its base access level must equal group_access.",
-				ExampleBinding:   "params.member_role_id:7",
-				CommonConfusions: []string{"member_role_id references a custom role definition, not group_access. Without Ultimate custom roles GitLab records the share without it."},
-			},
+			"member_role_id": memberRoleIDGuidance(
+				"ID of a custom member role the share grants (Ultimate). Its base access level must equal group_access.",
+				"member_role_id references a custom role definition, not group_access. Without Ultimate custom roles GitLab records the share without it.",
+			),
 		},
 		description: "Share a group with another group at a chosen access level, optionally granting a custom member role. Returns: the shared group's id, names, paths, visibility and web URL, and every group it is now shared with, the new share among them with its access level, expiry and custom role. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
 	},
