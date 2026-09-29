@@ -114,10 +114,7 @@ func TestIssueParticipants_List_PagesOneParticipantAtATime(t *testing.T) {
 		f := newIssueFixture(e, "issueparticipantpage")
 		assignee := fixture.NewUser(e, "issueparticipantpage")
 		fixture.AddProjectMember(e, f.project, assignee, gl.DeveloperPermissions)
-		if _, _, err := e.Client().GL().Issues.UpdateIssue(f.project.ID, f.issue.IID,
-			&gl.UpdateIssueOptions{AssigneeIDs: &[]int64{assignee.ID}}, gl.WithContext(e.Ctx)); err != nil {
-			e.T.Fatalf("assigning issue #%d to %s: %v", f.issue.IID, assignee.Username, err)
-		}
+		fixture.AssignIssue(e, f.project, f.issue.IID, assignee)
 		return f
 	}, func(e *harness.Env, surface harness.Surface, f issueFixture) {
 		assertPagesOneAtATime(e, e.On(surface), actionIssueParticipants, f.params(),

@@ -35,6 +35,12 @@ const (
 	// commitRetries is how often a commit is attempted while a fresh branch
 	// is still becoming visible to the commits API.
 	commitRetries = 8
+	// assignRetries is how often an assignment or a review request is
+	// attempted while a user it names was made a member too recently for
+	// GitLab to keep them. Eight attempts wait up to 28 seconds between them,
+	// against the fifteen it took on a GitLab 19.4.1-ee under the suite's
+	// load.
+	assignRetries = 8
 	// retryBaseDelay is the delay after the first failed attempt; each later
 	// wait grows by one more of it.
 	retryBaseDelay = time.Second

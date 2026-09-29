@@ -277,15 +277,7 @@ func TestMRReviewers_List_PagesOneReviewerAtATime(t *testing.T) {
 		f := newApprovalFixture(e, "mrreviewerpage")
 		reviewer := fixture.NewUser(e, "mrreviewerpage")
 		fixture.AddProjectMember(e, f.project, reviewer, gl.DeveloperPermissions)
-		reviewers := []int64{e.Runtime().UserID, reviewer.ID}
-		updated, _, err := e.Client().GL().MergeRequests.UpdateMergeRequest(f.project.ID, f.mr.IID,
-			&gl.UpdateMergeRequestOptions{ReviewerIDs: &reviewers}, gl.WithContext(e.Ctx))
-		if err != nil {
-			e.T.Fatalf("asking %v to review request !%d: %v", reviewers, f.mr.IID, err)
-		}
-		if len(updated.Reviewers) != len(reviewers) {
-			e.T.Fatalf("request !%d kept %d reviewer(s) of the %d asked for, want a licensed instance keeping both", f.mr.IID, len(updated.Reviewers), len(reviewers))
-		}
+		fixture.ReviewMergeRequest(e, f.project, f.mr.IID, e.Runtime().UserID, reviewer.ID)
 		return f
 	}, func(e *harness.Env, surface harness.Surface, f approvalFixture) {
 		params := map[string]any{"project_id": f.project.IDParam(), "merge_request_iid": f.mr.IID}
