@@ -21,7 +21,11 @@ const userNamespaceKind = "user"
 // namespaces on every surface, and finds the run user's personal namespace
 // through each: the listing narrowed to its name holds it, the search finds
 // it, the existence check reports its path taken, and the read by path
-// answers with a user namespace of that path.
+// answers with a user namespace of that path. A read or an existence check
+// with an empty id, and a search with an empty query, are refused rather than
+// sent: the read's path would be the namespace listing, whose first namespace
+// it used to answer with as though it had been asked for, and a search with no
+// query is that listing too.
 //
 // Replaces: TestMeta_UserNamespacesNotifications
 func TestNamespaces_Reads_FindTheRunUsersOwn(t *testing.T) {
@@ -50,6 +54,10 @@ func TestNamespaces_Reads_FindTheRunUsersOwn(t *testing.T) {
 		if got.ID == 0 || got.Path != rt.Username || got.Kind != userNamespaceKind {
 			e.T.Errorf("namespace_get(%q) answered id %d path %q kind %q, want the user namespace of that path", rt.Username, got.ID, got.Path, got.Kind)
 		}
+
+		harness.ExpectToolError(s, actionUserNamespaceGet, map[string]any{"id": ""}, "id is required")
+		harness.ExpectToolError(s, actionUserNamespaceExists, map[string]any{"id": ""}, "id is required")
+		harness.ExpectToolError(s, actionUserNamespaceSearch, map[string]any{"query": ""}, "query is required")
 	})
 }
 

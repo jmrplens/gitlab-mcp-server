@@ -2,7 +2,6 @@ package namespaces
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -140,19 +139,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 }
 
 // Get retrieves a single namespace by ID or path.
-// Uses a raw HTTP request to work around upstream client-go issue where
-// GetNamespace expects a single JSON object but some GitLab versions
-// return an array for path-based lookups. Tracked, unreported so far, in
-// docs/development/upstream-bugs.md.
+//
+// A blank id is refused before any request. The schema's required does not
+// refuse an empty string, and GitLab's router folds the path namespaces/ onto
+// the listing route, so an empty id would be answered with the caller's list
+// of namespaces rather than with the one namespace this action promises.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	if strings.TrimSpace(input.ID) == "" {
+		return Output{}, toolutil.ErrFieldRequired("id")
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ns, _, err := client.GL().Namespaces.GetNamespace(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		if !strings.Contains(err.Error(), "cannot unmarshal array") {
-			return Output{}, toolutil.WrapErrWithStatusHint("namespace_get", err, http.StatusNotFound,
-				"verify id (numeric) or path (URL-encoded full path) with user.namespace_list or user.namespace_search")
-		}
-		return getFromArray(ctx, client, input.ID)
+		return Output{}, toolutil.WrapErrWithStatusHint("namespace_get", err, http.StatusNotFound,
+			"verify id (numeric) or path (URL-encoded full path) with user.namespace_list or user.namespace_search")
 	}
 	extra, err := toolutil.CapturedNamespace(captured)
 	if err != nil {
@@ -161,36 +161,16 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return toOutput(ns, extra), nil
 }
 
-// newRequest builds the fallback lookup's request. It is a test seam: for the
-// fixed GET and a path gl.PathEscape built, client-go's NewRequest has no input
-// it can refuse.
-var newRequest = (*gl.Client).NewRequest
-
-// getFromArray asks for the namespace again and reads the answer as the array
-// some GitLab versions send for a path lookup, taking the first entry.
-func getFromArray(ctx context.Context, client *gitlabclient.Client, id string) (Output, error) {
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	req, reqErr := newRequest(client.GL(), http.MethodGet, "namespaces/"+gl.PathEscape(id), nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
-	if reqErr != nil {
-		return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
-	}
-
-	var nsList []*gl.Namespace
-	if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
-		return Output{}, toolutil.WrapErrWithMessage("namespace_get", doErr)
-	}
-	if len(nsList) == 0 {
-		return Output{}, toolutil.WrapErrWithMessage("namespace_get", fmt.Errorf("namespace %q not found", id))
-	}
-	extras, listErr := toolutil.CapturedNamespaces(captured, len(nsList))
-	if listErr != nil {
-		return Output{}, toolutil.WrapErr("namespace_get", listErr)
-	}
-	return toOutput(nsList[0], extras[0]), nil
-}
-
 // Exists checks whether a namespace path is available.
+//
+// A blank id is refused before any request, as Get refuses one. An empty id
+// leaves an empty segment where the path belongs in namespaces/:id/exists,
+// and a path of whitespace is one no namespace can take, so GitLab's answer
+// for it, that nothing holds the path, would read as the path being free.
 func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput) (ExistsOutput, error) {
+	if strings.TrimSpace(input.ID) == "" {
+		return ExistsOutput{}, toolutil.ErrFieldRequired("id")
+	}
 	opts := &gl.NamespaceExistsOptions{}
 	if input.ParentID > 0 {
 		opts.ParentID = new(input.ParentID)
@@ -208,12 +188,20 @@ func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput)
 }
 
 // Search searches namespaces by query string.
+//
+// A blank query is refused before any request. client-go leaves an empty
+// search parameter off the request, and GitLab filters by one only when it
+// is present, so either would be answered with every namespace the caller can
+// see, presented as the ones matching a search.
 func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput) (ListOutput, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return ListOutput{}, toolutil.ErrFieldRequired("query")
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	nss, resp, err := client.GL().Namespaces.SearchNamespace(input.Query, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_search", err, http.StatusForbidden,
-			"query is required; only namespaces visible to the authenticated user are returned")
+			"the credential was refused the namespace listing: a fine-grained personal access token needs the read_namespace permission, and the search only returns namespaces the authenticated user can see")
 	}
 	extras, err := toolutil.CapturedNamespaces(captured, len(nss))
 	if err != nil {
