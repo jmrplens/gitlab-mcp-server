@@ -14,6 +14,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // stubInputs replaces the four inputs with fixtures, so a case can describe a

@@ -17,6 +17,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // TestRun_MarshalFailure_IsReported reaches the encoding branch through the
