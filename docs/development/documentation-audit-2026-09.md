@@ -698,11 +698,15 @@ HTTP-only flag is passed to a stdio run is a code decision.
 
 **Resolved by issue 1045.** A stdio run given a flag that lands in the HTTP
 configuration says so once at startup, at `WARN`, naming each flag with the
-variable stdio reads instead, and at `INFO` under `--transport=auto`, whose
-command line serves either transport. `--read-only` or `--safe-mode` asking to
-hold back writes refuses the start instead, since ignoring it would serve them.
-The set of flags is `httpOnlyFlags` in `cmd/server/http_only_flags.go`, held to
-the registrations into `httpConfig` by a test that reads the source.
+variable stdio reads instead. Under `--transport=auto`, whose command line
+serves either transport, a flag stdio has no setting for at all is named at
+`INFO` instead. Two kinds refuse the start rather than being named, because
+ignoring them costs more than a setting: `--read-only`, `--safe-mode` or
+`--exclude-tools` asking to withhold something, which stdio would then serve,
+and a `--gitlab-url` naming no instance the stdio run connects to, which would
+send `GITLAB_TOKEN` to one the flag did not name. The set of flags is
+`httpOnlyFlags` in `cmd/server/http_only_flags.go`, held to the registrations
+into `httpConfig` by a test that reads the source.
 
 ### D9: the SDK's plain-text 403 is the one refusal that is not JSON-RPC
 

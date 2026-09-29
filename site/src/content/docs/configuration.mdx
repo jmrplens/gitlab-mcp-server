@@ -306,7 +306,7 @@ Alternatively, create `.idea/mcp.json` in the project root with the same JSON sh
 
 ## HTTP mode flags
 
-A stdio server reads none of the flags in the first table below but `--http` itself, since its configuration comes from the environment. Given one, it ignores it and says so once at startup, naming each flag with the variable to set instead (at `WARN`, or at `INFO` when `--transport=auto` chose stdio). `--read-only` or `--safe-mode` set to `true` is the exception: ignoring it would serve the writes it asks to hold back, so a stdio server given one refuses to start and names `GITLAB_MCP_READ_ONLY` or `GITLAB_MCP_SAFE_MODE` instead.
+A stdio server reads none of the flags in the first table below but `--http` itself, since its configuration comes from the environment. Given one, it ignores it and says so once at startup, naming each flag with the variable to set instead, at `WARN` (or at `INFO` when `--transport=auto` chose stdio and stdio has no such setting at all, like the listener). Where ignoring the flag would cost more than a setting, a stdio server refuses to start and names the variable to set instead, even when that variable already asks for the same thing: `--read-only`, `--safe-mode` or `--exclude-tools` asking to withhold something it would then serve, and a `--gitlab-url` naming no instance it connects to, since it would send `GITLAB_TOKEN` to the one `GITLAB_URL` names, `https://gitlab.com` when that is unset.
 
 In HTTP mode (`--http`), settings resolve in three layers, highest first: a CLI flag passed explicitly, then the matching environment variable, then the built-in default. A few flags — the listener ones below among them — have no environment counterpart:
 

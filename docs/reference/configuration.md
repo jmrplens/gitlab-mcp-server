@@ -28,6 +28,8 @@ The switches that already began with `GITLAB_` were renamed as well, so that eve
 
 A retired name left in the environment is reported at startup, naming what to rename it to, and for two of them the server **refuses to start**: `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` are how an operator takes capability away, so a version that ignored one in silence would serve writes on a deployment whose whole configuration was the request not to. Every other retired name is a warning and the server starts.
 
+A flag a stdio server does not read is handled by the same rule, what ignoring it would cost (see [HTTP Server Mode](#http-server-mode) below). A stdio server given `--read-only`, `--safe-mode` or `--exclude-tools` asking to withhold something, or a `--gitlab-url` naming an instance other than the one `GITLAB_URL` sends the token to, **refuses to start** with exit code 1 and names the variable to set instead; any other flag only HTTP mode reads is named at startup and ignored.
+
 Some names stay bare on purpose:
 
 | Names                        | Why they were not renamed                                                                                                                                                                                           |
@@ -263,7 +265,9 @@ Measured startup context is the reason this setting keeps only two modes for now
 
 ### HTTP Server Mode
 
-When running the server for multiple users, use HTTP mode. Configuration is resolved in three layers: an explicitly passed flag, then the environment variable with the same meaning, then the built-in default. A variable exported without its flag is therefore honored, and a value the overlay cannot parse fails startup rather than being dropped in silence:
+When running the server for multiple users, use HTTP mode. Configuration is resolved in three layers: an explicitly passed flag, then the environment variable with the same meaning, then the built-in default. A variable exported without its flag is therefore honored, and a value the overlay cannot parse fails startup rather than being dropped in silence.
+
+A stdio server reads none of these flags but `--http` itself, since it takes its configuration from the environment. Given one, it names it at startup with the variable to set instead, at `WARN`, or at `INFO` when `--transport=auto` chose stdio and stdio has no such setting at all. It refuses to start where ignoring the flag would cost more than a setting: `--read-only`, `--safe-mode` or `--exclude-tools` asking to withhold something it would then serve, and a `--gitlab-url` naming no instance it connects to, since it would send `GITLAB_TOKEN` to the one `GITLAB_URL` names, `https://gitlab.com` when it is unset. The [CLI reference](cli.md#http-transport-mode) has the details:
 
 | Flag                       | Default        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | -------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -350,7 +354,7 @@ See [Output Format](output-format.md) for details.
 
 Configuration is loaded by `internal/config/` in this order, highest priority first:
 
-1. Command-line flags (`--http`, `--http-addr`)
+1. Command-line flags the transport reads: in HTTP mode the whole HTTP table (`--http-addr`, `--gitlab-url` and the rest); on stdio only the general and telemetry flags and the ones that set a variable, since a stdio server names every HTTP flag it was given and ignores it, or refuses to start (see [HTTP Server Mode](#http-server-mode))
 2. Environment variables, which is what the MCP client passed to the server
 3. The dotenv file `GITLAB_MCP_ENV_FILE` names, if the process environment names one
 4. `~/.gitlab-mcp-server.env` in the user's home directory
