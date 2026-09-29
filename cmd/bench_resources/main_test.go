@@ -499,6 +499,20 @@ func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 				rounds: 3, sampleInterval: good, stepDuration: step,
 			}, "",
 		},
+		// So is a sessions run.
+		{"sessions with check", options{check: true, sessions: "1", sessionsCredentials: 1}, "-check"},
+		{"sessions with render", options{render: true, sessions: "1", sessionsCredentials: 1}, "-render"},
+		{"sessions with fairness", options{sessions: "1", sessionsCredentials: 1, fairness: "tools-call-rps"}, "-fairness"},
+		{"sessions with held", options{sessions: "1", sessionsCredentials: 1, held: "1", heldCredentials: 1}, "-held"},
+		{"sessions counts that descend", options{sessions: "5,2", sessionsCredentials: 1}, "-sessions:"},
+		{"sessions with no credential", options{sessions: "1", sessionsCredentials: 0}, "-sessions-credentials"},
+		{"sessions under a negative limit", options{sessions: "1", sessionsCredentials: 1, sessionsNoFile: -1}, "-sessions-nofile"},
+		{
+			"sessions that measures", options{
+				sessions: "1,2", sessionsCredentials: 2, sessionsNoFile: 256, sessionsStream: true,
+				rounds: 3, sampleInterval: good, stepDuration: step,
+			}, "",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -861,6 +875,17 @@ func TestLocateRoot_MeasureOnlyRunNeedsNoRepository(t *testing.T) {
 	})
 	t.Run("a held run that must build one", func(t *testing.T) {
 		if _, err := locateRoot(options{held: "1"}); err == nil {
+			t.Error("locateRoot found a root to build the server in where there is none")
+		}
+	})
+	// And so is a sessions run.
+	t.Run("a sessions run with a binary", func(t *testing.T) {
+		if _, err := locateRoot(options{sessions: "1", binary: "/somewhere/server"}); err != nil {
+			t.Errorf("locateRoot = %v, want a sessions run to need no checkout", err)
+		}
+	})
+	t.Run("a sessions run that must build one", func(t *testing.T) {
+		if _, err := locateRoot(options{sessions: "1"}); err == nil {
 			t.Error("locateRoot found a root to build the server in where there is none")
 		}
 	})

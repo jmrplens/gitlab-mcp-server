@@ -633,3 +633,49 @@ ladder the ceiling was measured with, under a limit of 1024.
 go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024
 go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024 -held-credentials 100
 ```
+
+### The sessions mode
+
+`-sessions <counts>` measures what the stateful transport keeps: a session. The
+server is started with `--stateless=false`, and each step opens a known number
+of sessions at once, spread round robin across `-sessions-credentials`, each an
+`initialize` on protocol 2025-11-25 followed by `notifications/initialized`.
+With `-sessions-stream`, every session also opens its standalone stream, the
+`GET` a stateful client holds open for the server's notifications, and keeps it
+open for the step. Before the first step each credential opens a session, lists
+its tools and deletes it, so the pool holds a built entry for every credential
+and the entry is not priced as part of the sessions.
+
+A step is sampled the way a held step is (the same settling rule, the same
+figures, the same `/health` probe on a connection of its own), while every
+session it opened sits idle. It then pings every session the server gave an id,
+each ping waiting no longer than the `/health` probe does, and counts the ones
+that answered: that is the number of sessions the server holds, seen from
+outside, and the count stops at the first ping that got no answer at all, since
+a process that accepted no connection will not accept the next. Every open is
+filed as opened, refused (a `503`, the status the session ceiling answers with,
+its first text kept) or failed, one session is priced as the step's growth over
+the idle process divided by the sessions open at the sample, and every stream
+is closed and every session deleted before the next step.
+
+`-sessions-nofile <n>` starts the server under a descriptor limit exactly as
+`-held-nofile` does. The server sizes its session ceiling from the held-call
+ceiling that limit gives it (register row `HLD-010`), 96 under 1024. It writes
+`bench/sessions.json`, which is not committed, draws nothing, and is refused if
+`-sessions-json` names the published record; it cannot be combined with
+`-held` or `-fairness`. `make bench-sessions` runs the ladder the ceiling was
+measured with, under a limit of 1024 and with every session's stream open.
+
+| Flag                    | Type     | Default               | Description                                                                             |
+| ----------------------- | -------- | --------------------- | --------------------------------------------------------------------------------------- |
+| `-sessions`             | `string` | `""`                  | Comma-separated counts of sessions open at once, ascending; empty runs the matrix       |
+| `-sessions-credentials` | `int`    | `1`                   | Credentials the sessions are spread across                                              |
+| `-sessions-nofile`      | `int`    | `0`                   | Descriptor limit the server is started under; `0` inherits this process's (not Windows) |
+| `-sessions-stream`      | `bool`   | `false`               | Open each session's standalone stream and hold it open for the step                     |
+| `-sessions-json`        | `string` | `bench/sessions.json` | Document to write; refused if it names the published record                             |
+
+```bash
+# What a stateful session costs, with and without its standalone stream
+go run ./cmd/bench_resources/ -sessions 100,500,1000,2000,4000
+go run ./cmd/bench_resources/ -sessions 50,96,100,500,1000,2000,4000 -sessions-nofile 1024 -sessions-stream
+```

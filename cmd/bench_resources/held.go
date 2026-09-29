@@ -462,17 +462,25 @@ func probeHealth(ctx context.Context, addr string) (string, time.Duration) {
 // costOver is what one held call cost over the idle process, or nil when the
 // step held nothing to divide by.
 func (s HeldStep) costOver(idle HeldSample) *HeldCost {
-	if s.Held <= 0 {
+	return costPer(s.Sample, idle, s.Held)
+}
+
+// costPer is a sample's growth over the idle process divided by the count of
+// what it holds, or nil when it holds nothing to divide by. The held and the
+// session modes price what they hold the same way, so each figure means the
+// same thing in both documents.
+func costPer(sample, idle HeldSample, count int) *HeldCost {
+	if count <= 0 {
 		return nil
 	}
-	held := float64(s.Held)
+	held := float64(count)
 	cost := &HeldCost{
-		Goroutines: round(float64(s.Sample.Goroutines-idle.Goroutines) / held),
-		HeapKiB:    round((float64(s.Sample.HeapBytes) - float64(idle.HeapBytes)) / 1024 / held),
-		RSSKiB:     round((float64(s.Sample.RSSBytes) - float64(idle.RSSBytes)) / 1024 / held),
+		Goroutines: round(float64(sample.Goroutines-idle.Goroutines) / held),
+		HeapKiB:    round((float64(sample.HeapBytes) - float64(idle.HeapBytes)) / 1024 / held),
+		RSSKiB:     round((float64(sample.RSSBytes) - float64(idle.RSSBytes)) / 1024 / held),
 	}
-	if s.Sample.Descriptors >= 0 && idle.Descriptors >= 0 {
-		cost.Descriptors = round(float64(s.Sample.Descriptors-idle.Descriptors) / held)
+	if sample.Descriptors >= 0 && idle.Descriptors >= 0 {
+		cost.Descriptors = round(float64(sample.Descriptors-idle.Descriptors) / held)
 	}
 	return cost
 }

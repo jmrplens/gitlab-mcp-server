@@ -30,6 +30,14 @@
 // real transport demands. STANDIN_HELD_LIMIT, when positive, answers every
 // POST past that many in flight with a 503, the shape the real server's held
 // ceiling refuses with.
+//
+// --stateless=false serves the stateful transport the sessions mode drives: an
+// initialize posted with no Mcp-Session-Id opens a session and answers with
+// its id, a request on an id the stand-in does not hold is answered 404, a GET
+// on a held id opens that session's standalone stream and keeps it open, and
+// a DELETE ends the session. STANDIN_SESSION_LIMIT, when positive, answers an
+// initialize past that many sessions with a 503, the shape the real server's
+// session ceiling refuses with.
 package main
 
 import (
@@ -73,6 +81,10 @@ const (
 	// does, and heldRefusal is the first line of the answer past it.
 	heldLimitEnv = "STANDIN_HELD_LIMIT"
 	heldRefusal  = "This server is busy. Retry later."
+	// sessionLimitEnv caps the sessions held at once, as the real session
+	// ceiling does, and refuses past it with the same words.
+	sessionLimitEnv = "STANDIN_SESSION_LIMIT"
+	sessionHeader   = "Mcp-Session-Id"
 	// The one tool and action whose call reaches the instance.
 	executeTool   = "gitlab_execute_action"
 	projectAction = "project.get"
@@ -105,6 +117,17 @@ var (
 	inFlight  atomic.Int64
 	heldLimit int64
 )
+
+// sessions are what --stateless=false holds: every id the stand-in gave out and
+// has not seen deleted, each with a channel closed when it ends, so a
+// standalone stream open on it ends with it.
+var sessions = struct {
+	sync.Mutex
+	stateful bool
+	limit    int
+	next     int
+	open     map[string]chan struct{}
+}{open: map[string]chan struct{}{}}
 
 // bound is the per-credential limit a positive --rate-limit-rps turns on.
 //
@@ -157,6 +180,7 @@ func main() {
 	rps := flag.Float64("rate-limit-rps", 0, "positive turns on the crude per-credential bound below")
 	burst := flag.Int("rate-limit-burst", 1, "requests of the metered method served per credential before the bound refuses")
 	flag.Int("max-http-clients", 0, "accepted and ignored")
+	stateless := flag.Bool("stateless", true, "false serves the stateful transport, with sessions")
 	telemetry := flag.Bool("telemetry", false, "send one export to OTEL_EXPORTER_OTLP_ENDPOINT, as the real server's exporters would")
 	pprofAddr := flag.String("pprof-addr", "", "serve net/http/pprof on this address, on a listener of its own, as the real server does")
 	flag.Parse()
@@ -175,6 +199,15 @@ func main() {
 			os.Exit(1)
 		}
 		heldLimit = parsed
+	}
+	sessions.stateful = !*stateless
+	if raw := os.Getenv(sessionLimitEnv); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			fmt.Fprintln(os.Stderr, "standin: "+sessionLimitEnv+" must be a positive count")
+			os.Exit(1)
+		}
+		sessions.limit = parsed
 	}
 
 	if *telemetry {
@@ -263,6 +296,10 @@ func serveHTTP(addr string) error {
 		})
 	})
 	mux.HandleFunc("POST /mcp", handleMCP)
+	if sessions.stateful {
+		mux.HandleFunc("GET /mcp", handleStream)
+		mux.HandleFunc("DELETE /mcp", handleDelete)
+	}
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	return server.Serve(listener)
 }
@@ -302,8 +339,95 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	req.credential = r.Header.Get("PRIVATE-TOKEN")
 	req.tool = r.Header.Get("Mcp-Name")
+	if sessions.stateful && !servesSession(w, r, &req) {
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	fmt.Fprintf(w, "event: message\ndata: %s\n\n", respond(req))
+}
+
+// servesSession applies the stateful transport to a POST, and reports whether
+// the request is left to be answered: an initialize with no id opens a session
+// and names it in the answer's header, a notification on a held id is taken
+// with 202 and nothing else, and anything on an id the stand-in does not hold,
+// or anything but an initialize on none, is refused.
+func servesSession(w http.ResponseWriter, r *http.Request, req *request) bool {
+	id := r.Header.Get(sessionHeader)
+	if id == "" {
+		if req.Method != "initialize" {
+			http.Error(w, "only initialize opens a session", http.StatusBadRequest)
+			return false
+		}
+		opened, ok := openSession()
+		if !ok {
+			http.Error(w, heldRefusal, http.StatusServiceUnavailable)
+			return false
+		}
+		w.Header().Set(sessionHeader, opened)
+		return true
+	}
+	if sessionEnded(id) == nil {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return false
+	}
+	if len(req.ID) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return false
+	}
+	return true
+}
+
+// openSession gives out a new session id, or reports that the limit is reached.
+func openSession() (string, bool) {
+	sessions.Lock()
+	defer sessions.Unlock()
+	if sessions.limit > 0 && len(sessions.open) >= sessions.limit {
+		return "", false
+	}
+	sessions.next++
+	id := "standin-session-" + strconv.Itoa(sessions.next)
+	sessions.open[id] = make(chan struct{})
+	return id, true
+}
+
+// sessionEnded is the channel closed when a held session ends, or nil for an
+// id the stand-in does not hold.
+func sessionEnded(id string) chan struct{} {
+	sessions.Lock()
+	defer sessions.Unlock()
+	return sessions.open[id]
+}
+
+// handleStream opens a session's standalone stream and holds it until the
+// client leaves or the session ends.
+func handleStream(w http.ResponseWriter, r *http.Request) {
+	ended := sessionEnded(r.Header.Get(sessionHeader))
+	if ended == nil {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(http.StatusOK)
+	_ = http.NewResponseController(w).Flush()
+	select {
+	case <-r.Context().Done():
+	case <-ended:
+	}
+}
+
+// handleDelete ends a session.
+func handleDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.Header.Get(sessionHeader)
+	sessions.Lock()
+	ended, ok := sessions.open[id]
+	delete(sessions.open, id)
+	sessions.Unlock()
+	if !ok {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+	close(ended)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // serveStdio answers one newline-delimited request per line until the input
@@ -343,6 +467,14 @@ func respond(req request) []byte {
 		}}
 	case req.Method == "resources/list":
 		result = map[string]any{"resources": []any{}}
+	case req.Method == "initialize":
+		result = map[string]any{
+			"protocolVersion": "2025-11-25",
+			"capabilities":    map[string]any{},
+			"serverInfo":      map[string]any{"name": "standin", "version": version},
+		}
+	case req.Method == "ping":
+		result = map[string]any{}
 	case req.Method == "tools/call":
 		if err := readProjectFor(req); err != nil {
 			failure = &rpcError{Code: -32603, Message: err.Error()}
