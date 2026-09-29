@@ -526,9 +526,10 @@ the soft limit to it before `main`; where the platform has no limit to read, the
 is the one a limit of 1024 gives. It counts the calls that reach GitLab, the methods
 `MeterFor` charges to the tool-call and completion buckets, where the SDK dispatches
 them, so each call of a JSON-RPC batch counts, a response the client sends to a request
-of the server's own never does, and neither does a listen on any revision; a stateful
-session's standalone stream, the GET the SDK holds open for as long as the session
-lives, counts too, taking its slot in the gate. A POST on protocol 2026-07-28 or later,
+of the server's own never does, and neither does a listen on any revision; each stateful
+session the process keeps holds one slot for its standalone stream, the GET the SDK holds
+open for as long as the session lives, taken with the session's own when the session
+opens and kept until it ends, so the GET takes none. A POST on protocol 2026-07-28 or later,
 whose `Mcp-Method` header the SDK holds to the body, takes its slot in the gate instead
 and is refused there, a 503 `-50300` with `Retry-After` and the connection closed; a
 call on an older revision is refused where it is dispatched,
@@ -553,28 +554,49 @@ inherited (1048576) it held all 4000, as it did without the ceiling. The third,
 every credential, which the SDK keeps until the client deletes one, the pool evicts its
 credential or it sits idle for `--session-timeout`, and which nothing bounded while
 `initialize` is metered to no bucket (`RTC-004`). The gate takes a session slot for every
-POST that would open one, a POST carrying no `Mcp-Session-Id`, once the credential is
-admitted and before the SDK creates anything, and refuses it past the ceiling with
-`HLD-011`'s 503 in `HLD-011`'s words; the session keeps the slot from the first request
-the SDK dispatches on it until it ends, however it ends, and a POST whose session did not
-survive it gives the slot back as the gate returns. The ceiling is half of `HLD-011`'s,
-96 under a hard descriptor limit of 1024, rather than a figure of its own: with every
-standalone stream counted as a held call, the streams of every session the process keeps
+POST that would open one, a POST carrying no `Mcp-Session-Id` on a revision before
+2026-07-28, once the credential is admitted and before the SDK creates anything, with a
+held-call slot for the session's standalone stream beside it, and refuses it past either
+ceiling with `HLD-011`'s 503 in `HLD-011`'s words; the session keeps both slots from the
+first request the SDK dispatches on it until it ends, however it ends, and a POST whose
+session did not survive it gives them back as the gate returns. A POST on 2026-07-28 or
+later is left to the SDK, which answers it, `server/discover` included, with the
+revisions the stateful transport serves, so the client falls back, and keeps no session
+for it. The ceiling is half of `HLD-011`'s, 96 under a hard descriptor limit of 1024,
+rather than a figure of its own: with a held slot taken for every session, the sessions
 take at most half of the held slots, the descriptor budget `HLD-011` is sized from holds
-as it was, and a call on an open session is still served with every session slot taken.
-No flag moves it, for `HLD-011`'s reason. Measured through `cmd/bench_resources`'
-sessions mode, an idle session costs the process three goroutines, 10 to 17 KiB of live
-heap and no descriptor, and one holding its stream six goroutines, about 25 KiB and one
-descriptor; under a hard limit of 1024 the process kept every session it was offered
-until the streams had taken all 1024 descriptors, at 1012 to 1016 sessions, and from
-there `/health` went unanswered and opens failed at the connection. With the ceiling,
-under the same limit and 4000 sessions offered with their streams, from one credential
-and from a hundred, it kept 96 in 111 and 203 descriptors and refused the other 3904 in
-the gate, `/health` answering throughout; with the limit inherited it kept all 4000, as
-it did without the ceiling. The session's slot is given back by a goroutine of its own,
-which is one goroutine more per session, bounded by the ceiling. `IDN-010`, the owner
-record every stateful session carries, is bounded by the same count and no longer
-carries F-31, and neither does `HLD-010`. F-19 and F-33 are answered by issue 959's decision
+as it was, a call on an open session is still served with every session slot taken, and
+a session the process keeps is never refused its stream, which the SDK's own client,
+refused it, gives up without asking again. No flag moves it, for `HLD-011`'s reason.
+Measured through `cmd/bench_resources`' sessions mode before the ceiling, an idle session
+cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 106 KiB of resident
+set and no descriptor, and one holding its stream six goroutines, about 25 KiB of live
+heap and one descriptor; under a hard limit of 1024 the process kept every session it
+was offered until the streams had taken all 1024 descriptors, at 1012 to 1016 sessions,
+and from there `/health` went unanswered and opens failed at the connection. With the
+ceiling, under the same limit and 4000 sessions offered with their streams, from one
+credential and from a hundred, it kept 96 in 112 and 183 descriptors and refused the
+other 3904 in the gate, `/health` answering throughout; with the limit inherited it kept
+all 4000, as it did without the ceiling. The session's slots are given back by a
+goroutine of its own, which is one goroutine more per session, four idle and seven with
+its stream, bounded by the ceiling. What the ceiling bounds is descriptors, and memory
+only where the limit is small: an idle session's resident set is not something the
+descriptor limit raises, so the 114560 sessions a hard limit of 524288 allows come to six
+to twelve GiB idle, and there the process's memory limit bounds them first. Standing
+alone, it is also cheap to fill: `initialize` spends no rate and an idle session holds no
+connection, so one credential can take every slot, and a session nobody deletes holds its
+slot for `--session-timeout`, half an hour by default and a day at most, and with a
+timeout of zero (`END-005`) until the pool evicts its credential, while every other
+tenant's `initialize` is refused. Before this ceiling an idle session refused nobody. A
+per-credential partner beside it, metering `initialize`, and a fixed cap for memory are
+put to the maintainer, and issue 951 stays open for them. The slot is taken after
+admission, the departure `HLD-011` records, and it costs more here: at the pool's bound a
+newcomer's admission evicts another credential's quiet entry (`POL-002`), an entry
+holding only stateful sessions is quiet (`POL-003`), and evicting it ends those sessions,
+so a newcomer this row then refuses has taken from another key what the row counts.
+`IDN-010`, the owner record every stateful session carries, is bounded by the same count
+and no longer carries F-31, and neither does `HLD-010`; that bound is stated on the row
+and nowhere the register can hold it. F-19 and F-33 are answered by issue 959's decision
 that what they recorded is the server's position, stated in
 [Two MCP clauses the server meets in part](#two-mcp-clauses-the-server-meets-in-part):
 `RTC-001` and `IDN-013` record that decision and carry neither any longer. F-29 and F-30
