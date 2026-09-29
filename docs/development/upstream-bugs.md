@@ -333,6 +333,16 @@ the class of rows 38 and 39, read from a 19.5.0-pre checkout and not yet from a
 running instance, and nothing has been raised upstream for it; its section
 says what a merge request would carry.
 
+Re-verified on 2026-09-29 against the GitLab.com trackers and the tags, for
+every merge request and issue this project's account has open or closed since
+the last pass; the GitHub trackers were not read again. Two rows moved:
+[gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
+merged on 2026-09-28 and is in **v3.15.0**, so row 34 reads 14 of 14, and
+[gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699)
+merged at 23:59 UTC the same day and is in no tag yet. The pin stays at
+v3.14.0 until the Dependabot cooldown for a Go minor ends on 2026-10-12. Rows
+22, 46, 72, 75 and 76 each moved a step, recorded in their sections.
+
 ## GitLab (`gitlab-org/gitlab`)
 
 ### No endpoint reports the instance plan to a non-administrator
@@ -543,21 +553,21 @@ example needs to stay reachable for callers still using it.
 ### Two project group listings are annotated with the whole Group entity
 
 - **Reported**: yes.
-- **In review**: no longer;
-  [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699)
-  was approved by a technical writer, by a reviewer, and on 2026-09-15 by
-  the backend maintainer @hustewart, who set auto-merge the same day. It has
-  not merged because the pipelines since have failed on breaks from `master`
+- **In review**: yes,
+  [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699),
+  now merged. It was approved by a technical writer, by a reviewer, and on
+  2026-09-15 by the backend maintainer @hustewart, who set auto-merge the same
+  day. It did not merge then because the pipelines that followed failed on breaks from `master`
   rather than on the change, the last of them the fork pipeline of the
   2026-09-22 rebase, whose one blocking failure was
   `generate-apollo-graphql-schema` on a schema clash that `master` fixed
   twelve minutes later, when gitlab-org/gitlab!256904 merged, after the rebase
-  had landed on `e52599d0`. Auto-merge is no longer set. A follow-up of 2026-09-24 said so and
+  had landed on `e52599d0`. Auto-merge was then no longer set. A follow-up of 2026-09-24 said so and
   asked @hustewart for a fresh pipeline and auto-merge; posted as a reply
   under our own note of 2026-09-22, it turned that note into an unresolved
   thread and so added a `DISCUSSIONS_NOT_RESOLVED` blocker to a merge request
-  that had none, and we resolved the thread an hour later. It now fails only
-  `CI_MUST_PASS`, and waits on @hustewart to start a pipeline in the canonical
+  that had none, and we resolved the thread an hour later. It then failed only
+  `CI_MUST_PASS`, and waited on @hustewart to start a pipeline in the canonical
   project and set auto-merge again. Read on 2026-09-27 nothing has moved: head
   `1b339299`, the approvals of @hustewart for `/lib/` and @z_painter for
   `/doc/` standing with none left to give, no unresolved thread, and one
@@ -1561,7 +1571,7 @@ of change whose test is one assertion on the built URL.
   Every one of those merge requests references it with a non-closing
   `Related to`, so the first merge does not close the umbrella; the joint one
   that follows them closes it.
-- **In review**: none of the fourteen now. The last to merge was
+- **In review**: yes, all fourteen, every one now merged. The last to merge was
   [gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
   (the seven `Hook` fields), whose history follows: a reviewer approved it
   on 2026-09-14 and again on 2026-09-16, after the test push that reset the
@@ -1575,8 +1585,8 @@ of change whose test is one assertion on the built URL.
   2026-09-26 asked @PatrickRice to take it over instead, and on 2026-09-27 at
   16:12 UTC @heidi.berry, a code owner, started the merged-results pipeline in
   the canonical project on `934b97ac`, which passed at 16:22; a code owner
-  running that pipeline is usually the step before a merge. Its head is still
-  `fb2e5110`, it has no conflicts, and the project merges with a merge commit,
+  running that pipeline is usually the step before a merge. Its head was then
+  `fb2e5110`, it had no conflicts, and the project merges with a merge commit,
   so being behind `main` needs no rebase. On 2026-09-28 @PatrickRice took the
   maintainer review over (16:05 UTC) and left one finding, "otherwise LGTM":
   `CustomHeaders` on the `Hook` response struct should be
@@ -1588,9 +1598,9 @@ of change whose test is one assertion on the built URL.
   struct's tags with `gofmt`, since the suggestion alone left both, and
   `go test -run SystemHook` and `go vet` pass on it. The thread was answered
   and resolved, as was the answered handover thread, so no discussion is open
-  and the merge request waits on @PatrickRice's approval, which the new
-  commits require. He approved and merged it at 18:55 UTC on 2026-09-28
-  (merge commit `5f0e219a`), and it was tagged ten minutes later in
+  and the merge request waited on @PatrickRice's approval, which the new
+  commits required. He approved it at 18:34 UTC on 2026-09-28 and put it on
+  the merge train, which merged it at 18:55 (merge commit `5f0e219a`), and it was tagged ten minutes later in
   **v3.15.0**, so none of the fourteen is open any longer.
   The rest of this entry, the gaps held back below, went out on 2026-09-27 in
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
@@ -1641,8 +1651,10 @@ of change whose test is one assertion on the built URL.
   zero. It is only sent to a caller allowed `:update_subscription_limit`, who
   is reading the namespace to set those limits rather than to enforce one.
 - **Blocking**: no.
-- **Workaround**: retired for all thirteen that merged: twelve at the
-  **v3.12.0** pin and the thirteenth, `packages`, at **v3.14.0**.
+- **Workaround**: retired for thirteen of the fourteen: twelve at the
+  **v3.12.0** pin and the thirteenth, `packages`, at **v3.14.0**; the
+  fourteenth, `systemhooks`, retires when the pin reaches **v3.15.0**, as the
+  end of this bullet says.
   Each field was read from the captured response beside the SDK's decode,
   through the readers in `internal/toolutil/sent_shapes.go`; the pin was
   deliberately not moved once per merge, since these landed in quick
@@ -1929,7 +1941,8 @@ fields of `DetailedStatus` that
 records one level inside the pipeline, which need a type of their own; and
 [entry 5](#getnamespace-cannot-decode-a-path-based-lookup), which could not be
 reproduced. No exported name is removed or renamed and no field type or method
-signature changes: where the right fix would, the commit adds a `V2` or
+signature changes (commit 37, added after the first review, changes the
+cancellation role fields' type; see below): where the right fix would, the commit adds a `V2` or
 `WithOptions` sibling, an `UnmarshalJSON` or a deprecation note instead, and
 the description lists the breaking halves for 4.0. It asks the maintainers for
 four decisions: that a nil options pointer now sends no body at all (entry
@@ -1976,8 +1989,7 @@ which argues for making the new type distinct now instead of an alias of the
 old. The four decisions the description asks for are not answered yet, there
 is no approval, and @heidi.berry has not replied.
 
-**Answered, 2026-09-29.** Both requests were taken up the same day, each text
-reviewed by a second agent before it went out:
+**Answered, 2026-09-29.** Both requests were taken up the same day:
 
 - [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
   tracks the 4.0 halves, with the review's additions: the `WithOptions`
@@ -4733,8 +4745,10 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   [gitlab-org/gitlab!254189](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254189)
   and
   [gitlab-org/gitlab!256404](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256404)
-  are still open and the label is not applied, so the check would still fail
-  on the two Orbit templates.
+  are still open, so the check would still fail on their route templates. At
+  10:02 UTC @egrieff applied `pipeline:skip-router-sync`, and at 10:04 a new
+  merged-results pipeline, 2892780713, started; no thread blocks the merge,
+  and it waits on that pipeline.
 
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
@@ -5012,15 +5026,20 @@ being refused; and completing the `action` and `type` lists of
   opened 2026-09-28 from the community fork. The maintainer's first review the
   same day changed the fix (below), the change was pushed as a second commit,
   and the merge request waits on the reviewers again. Read on 2026-09-29: the
-  reviewer @jannik_lehmann has approved it and asked @c_fons (19:41 UTC) to
-  take the maintainer review, with two approvals still required; the thread
-  @alipniagov opened on `KnownSignIn` is answered by that second commit and has
-  no reply yet. The pipeline on `5436dc9a` is red on one blocking job only,
-  the downstream `rspec:predictive:system-full` pipeline, all fifteen of
-  whose shards stopped before running a spec: the runner skipped the git
-  checkout and `scripts/utils.sh` was not there to source. That is the
-  infrastructure, not the change; the job `pajamas_adoption`, also red, is
-  allowed to fail. Nothing is retried from our side.
+  reviewer @jannik_lehmann, who approved it at 08:49 UTC on 2026-09-28, asked
+  @c_fons at 19:41 UTC that day to take the maintainer review, and @c_fons
+  approved it at 10:19 UTC on 2026-09-29, which gives it both required
+  approvals. He resolved the `KnownSignIn` thread @alipniagov had opened,
+  which the second commit answers, and opened one proposing a reworded squash
+  commit message and asking whether it reads right to us; that thread blocks
+  the merge, so it now waits on our answer. The fork pipeline on `5436dc9a`
+  passed; the merged-results pipeline 2889991113 was red on one blocking job
+  only, the downstream `rspec:predictive:system-full` pipeline, whose reruns
+  of 2026-09-29 stopped every shard before running a spec because the runner
+  skipped the git checkout and `scripts/utils.sh` was not there to source.
+  That is the infrastructure, not the change; the job `pajamas_adoption`,
+  also red, is allowed to fail. A new merged-results pipeline, 2892863818,
+  started at 10:27 UTC. Nothing is retried from our side.
 - **Merged**: no.
 - **Blocking**: yes, for `issue.work_item_saved_view_create` and
   `issue.work_item_saved_view_subscribe` from any client authenticated with a
@@ -5278,13 +5297,18 @@ rebases to `0.32.4`.
   [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650),
   opened the same day from the community fork, which closes the issue; the
   issue was then edited to name it. Read on 2026-09-29 it has no reviewer but
-  GitLab Duo, no approval and no comment, and its fork pipeline is red on
-  three jobs the change does not reach: `lint:prose` and
-  `pinned-version-check` stop before running because the fork's clone cannot
-  resolve the diff base, and `unit-test` fails three `orbit-server` skills
-  tests, while the change touches the DSL schema's documentation only. The
-  same three fail on
-  [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651).
+  GitLab Duo, no approval and no comment from a person, and its fork pipeline
+  is red on three jobs. `lint:prose` and `pinned-version-check` stop before
+  running because the fork's clone cannot resolve the diff base. The third,
+  `unit-test`, is ours: three `orbit-server` tests pin the skill version at
+  `0.32.2` (lines 22 and 74 of
+  `crates/orbit-server/src/grpc/service/tests/skills.rs` and one in
+  `crates/orbit-server/src/skills/mod.rs`, added on `main` by `bf510a5d` on
+  2026-09-28, which the branch is based on), and the change bumps
+  `skills/orbit/SKILL.md` to `0.32.3`, so the branch owes those assertions
+  the new version. The same three fail on
+  [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651),
+  for the same reasons.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
@@ -5329,7 +5353,9 @@ while rewriting `orbit.query` for issue 1031.
   opened the same day from the community fork, which closes the issue; the
   issue was then edited to name it. Read on 2026-09-29 it is in the state row
   75's merge request is in: no reviewer but GitLab Duo, and a fork pipeline
-  red on the same three jobs, none of them reached by the change.
+  red on the same three jobs, `unit-test` among them because its own bump of
+  `skills/orbit/SKILL.md` to `0.32.3` breaks the three tests that pin
+  `0.32.2`.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
