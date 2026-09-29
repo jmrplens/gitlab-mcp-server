@@ -123,7 +123,7 @@ readable without opening the tracker:
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No issue; named as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
-| 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None taken |
+| 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Partly | Partial |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
@@ -916,9 +916,13 @@ both approximated, and Rails writes the sign in front (`-1,234`).
   describes.
 - **In review**: yes, open. The commit makes all eight return a
   `*GraphQLResponseError` carrying the top-level errors, as the work item and
-  saved view methods already do. A caller matching `ErrNotFound` sees a
-  different error, which is one of the four decisions the merge request asks
-  the maintainers for.
+  saved view methods already do. A caller matching `ErrNotFound` on the three
+  that returned it sees a different error, which is the one of the four
+  decisions the merge request asked the maintainers for that is still open.
+  On 2026-09-29 the maintainer asked whether the eight now return that error
+  and did not before; the reply says yes, since five of them returned success
+  for a refused mutation and three a bare `ErrNotFound`, and waits on the
+  answer.
 - **Merged**: no.
 - **Blocking**: no. It is why the eight mutations stay on raw GraphQL, not a
   fix we need to ship.
@@ -938,9 +942,12 @@ of `CreateSecurityAttributes`, `UpdateSecurityAttribute`,
 and then never reads it. Only the mutation payload's own `errors` field is
 checked. `GraphQL.Do` returns an error solely for a non-2xx status, and GitLab
 answers a query-level failure with HTTP 200 and a top-level `errors` array, so
-a refused mutation reaches the caller as a success: `DestroySecurityAttribute`
-and `BulkUpdateSecurityAttributes` return a nil error, `CreateSecurityAttributes`
-returns an empty slice with no error, and the update methods degrade to a bare
+a refused mutation reaches the caller of five of them as a success:
+`DestroySecurityAttribute`, `DestroySecurityCategory` and
+`BulkUpdateSecurityAttributes` return a nil error, `CreateSecurityAttributes`
+returns an empty slice with no error, and `ProjectUpdateSecurityAttribute`
+returns zero counts. The other three, `UpdateSecurityAttribute`,
+`CreateSecurityCategory` and `UpdateSecurityCategory`, degrade to a bare
 `ErrNotFound` that throws GitLab's message away.
 
 **Root cause**: an omission rather than a design choice, and the same file set
@@ -1010,7 +1017,7 @@ endpoint is a new method with its own result type, and would let a tool answer
   so, and `DeploymentStatusValue` `skipped` beside `blocked`. The cancellation
   role gets `CIRestrictPipelineCancellationRoleValue` with its three values,
   declared at first as an alias of `AccessControlValue` so no caller broke.
-  After the review read the old typing as a bug, commit 37 (`a4b189e7`, added
+  After the review read the old typing as a bug, commit 37 (`7899ad70`, added
   2026-09-29) makes it a type of its own, which stops compiling code that holds
   the role in an `AccessControlValue`; GitLab's Terraform provider is such code
   (see the review of the joint merge request below).
@@ -1287,7 +1294,9 @@ or a second `LabelDetails` field beside the names.
   and marks the four phantom `Note` fields and the author and resolver
   `Email` deprecated rather than removing them, which is left for 4.0.
   `Note` gaining a slice and a map stops it being comparable with `==`, one of
-  the four decisions the merge request asks the maintainers for.
+  the four decisions the merge request asked the maintainers for. On
+  2026-09-29 the maintainer answered that the library does not count
+  comparability as part of its compatibility, so the fields stay.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. The missing fields are read from the captured response
@@ -1962,13 +1971,14 @@ reproduced. No exported name is removed or renamed and no field type or method
 signature changes (commit 37, added after the first review, changes the
 cancellation role fields' type; see below): where the right fix would, the commit adds a `V2` or
 `WithOptions` sibling, an `UnmarshalJSON` or a deprecation note instead, and
-the description lists the breaking halves for 4.0. It asks the maintainers for
-four decisions: that a nil options pointer now sends no body at all (entry
-51), that the eight security mutations return `*GraphQLResponseError` (entry
-19), that `Deployment`, `Note` and `PlanLimit` stop being comparable with
-`==`, and whether the work item documents' default selection should become
-safe for Community Edition (entry 45). Its last line is `Closes #2300`, so the
-umbrella closes when it merges.
+the description lists the breaking halves for 4.0. It asked the maintainers for
+four decisions, three of them answered on 2026-09-29 (below): whether a nil
+options pointer may stop sending a body for every caller (entry 51), that the
+eight security mutations return `*GraphQLResponseError` (entry 19), that
+`Deployment`, `Note` and `PlanLimit` stop being comparable with `==`, and
+whether the work item documents' default selection should become safe for
+Community Edition (entry 45). Its last line is `Closes #2300`, so the umbrella
+closes when it merges.
 
 **Where it stands on 2026-09-27.** Its fork pipeline on `a1a4b996` passed and
 it has no conflicts. It has not been readied: it sits at `workflow::in dev`,
@@ -2031,8 +2041,69 @@ is no approval, and @heidi.berry has not replied.
   5.0. The description gained the "Is this a breaking change?" and "How was
   this tested?" headings the project's merge requests use.
 
-It now waits on the maintainers for the four decisions, the `WithOptions`
-schedule and whether commit 37 stays.
+**The maintainer's answers, 2026-09-29.** At 15:21 UTC @PatrickRice answered
+three of the four decisions, and asked about the fourth, in the thread that
+reply opened
+([note 3924608467](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063#note_3924608467)):
+
+- **The nil options pointer (commit 2)** cannot be changed for every caller,
+  since nobody can know who calls the library. It has to be a feature toggle:
+  opt-in now, the default in 4.0 and removed in 5.0, so that users have time
+  to report what it breaks and update their code.
+- **The security mutations (commit 4)** are not decided: the note asks
+  whether the eight "now" return the response error and did not before, since
+  the question's tense left that unclear.
+- **Comparability (commits 12, 16 and 31)** is not something the library
+  counts as part of its compatibility, since a response struct can gain a
+  field that is not comparable at any time. Nobody has reported it as a
+  problem, and if somebody did, the structs would gain a comparison function.
+  The fields stay.
+- **The work item default selection (commit 10)** stays Enterprise. Either
+  default confuses somebody: an Enterprise caller given a Community default
+  gets a partly filled object, while a Community caller given the Enterprise
+  one at least gets "a sane error". It was decided with the upstream product
+  team that added the API for the glab CLI.
+
+The note leaves the `WithOptions` schedule and commit 37 unanswered. What
+followed the same afternoon:
+
+- Commit 2 was rewritten as `feat(client): add option to treat nil options
+  pointers as no options` (`1db14637`). `WithNilOptionsOmitted()` is a client
+  option, off by default and modelled on `WithOnlyIdempotentRetries`. With it,
+  a nil options pointer means no options. Without it, a POST, PUT or PATCH
+  given one still sends the JSON literal `null`, and a request with any other
+  method still has the query already on the URL given to `NewRequestToURL`
+  replaced with an empty one. The tests pin both sides,
+  `TestPublishAllDraftNotes` is back to its original pin of the `null` body,
+  and a further test holds that real options are still sent with the option
+  on.
+- The branch was force-pushed from `a4b189e7` to `7899ad70` at 16:43 UTC:
+  still 37 commits, every one PGP-verified on GitLab, and commits 3 to 37
+  unchanged apart from their hashes (`git range-diff` marks each `=`).
+  Commits 2 to 37 were each built, vetted and tested again, and the head
+  also passed `-race`, ten shuffled runs and golangci-lint v2.13.2. Its fork
+  pipeline, 2894203711, passed at 16:50 UTC, and the merge request has no
+  conflicts.
+- [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
+  gained a sentence in its summary saying the nil options change is opt-in in
+  `gitlab-org/api/client-go!3063` and its default follows in 4.0, "changes
+  what a request sends by default" among the reasons in "Why deferred", and a
+  section 6: 4.0 makes the option's behavior the default, where the option
+  has no effect, and 5.0 removes the option. The merge request's description
+  records each answer, commit 2's new title, and a 4.0 bullet saying a nil
+  options pointer still sends `null` by default.
+- The [reply](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063#note_3925107778),
+  posted in the same thread at 16:44 UTC, explains the toggle and answers the
+  tense: yes, now, since before this merge request five of the eight returned
+  success for a refused mutation and three returned a bare `ErrNotFound`. It
+  thanks the maintainer for the answers on comparability and the work item
+  default, and asks again about the two open items: whether the five
+  `WithOptions` siblings keep their `Deprecated` notes now, reworded to say
+  5.0, or lose them until 4.0 deprecates them, and whether commit 37 stays or
+  is dropped and its item put back on the 4.0 list.
+
+It now waits on the maintainers for the answer on commit 4, the `WithOptions`
+schedule and whether commit 37 stays, and on its one required approval.
 
 **The umbrella's description is behind again**, read on 2026-09-27, in four
 places: its table still reads `gitlab-org/api/client-go!3052` as in review,
@@ -2989,10 +3060,14 @@ entity before surfacing anything.
   on `CreateWorkItemOptions` and `UpdateWorkItemOptions`, and through a new
   `GetWorkItemWithOptions`, since `GetWorkItem` takes no options. Left unset,
   it still selects every field, as before, so a caller on Community Edition
-  has to pass `WorkItemDefaultListFields()`; making the default safe there is
-  one of the four decisions the merge request asks the maintainers for. Once
-  a release carries it, the three actions here can pass the CE-safe set on a
-  Free instance.
+  has to pass `WorkItemDefaultListFields()`. Making the default safe there
+  was one of the four decisions the merge request asked the maintainers for,
+  and on 2026-09-29 the maintainer kept it Enterprise, as decided with the
+  upstream product team that added the API for the glab CLI: a Community
+  caller given that default at least gets a clear refusal, where an
+  Enterprise caller given a Community one would get a partly filled object.
+  Once a release carries it, the three actions here can pass the CE-safe set
+  on a Free instance, which is then the only way they answer there.
 - **Merged**: no.
 - **Blocking**: yes, on Community Edition. `issue.work_item_get`,
   `issue.work_item_create` and `issue.work_item_update` cannot answer there:
@@ -3010,7 +3085,7 @@ entity before surfacing anything.
   refused calls answer, and that scenario fails saying to run the whole
   lifecycle on Community Edition again and to record this entry as merged,
   the day the three actions here also pass `WorkItemDefaultListFields()` on
-  a Free instance, or a release makes the default safe there.
+  a Free instance.
 
 **Where**: `workitems.go`, `workItemTemplate`, which `getWorkItemTemplate`,
 `createWorkItemTemplate` and `updateWorkItemTemplate` clone.
@@ -3191,7 +3266,9 @@ integers for the usage, and three option fields with `url` and `json` tags.
   `LimitsHistory` to `PlanLimit`, and the twenty-one limits to
   `ChangePlanLimitOptions` as pointers, so a limit set to 0 is still sent.
   `PlanLimit` gaining a map stops it being comparable with `==`, one of the
-  four decisions the merge request asks the maintainers for.
+  four decisions the merge request asked the maintainers for. On 2026-09-29
+  the maintainer answered that the library does not count comparability as
+  part of its compatibility, so the fields stay.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes for the response, whose twenty-one other limits and
@@ -3351,8 +3428,10 @@ in `merge_requests.go` already carries all three.
   method in its favour, and gives `Deployment` the approval count, the
   approvals and the approval summary the Enterprise Edition adds to the
   single deployment routes. `Deployment` gaining a slice stops it being
-  comparable with `==`, one of the four decisions the merge request asks the
-  maintainers for.
+  comparable with `==`, one of the four decisions the merge request asked the
+  maintainers for. On 2026-09-29 the maintainer answered that the library
+  does not count comparability as part of its compatibility, so the fields
+  stay.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `environment.deployment_approve_or_reject` reads the
@@ -5561,9 +5640,9 @@ interface is not equal to `nil`, so any caller that reaches it with a nil
 `*SomeOptions` marshals that pointer instead of sending nothing, and
 `json.Marshal` of a nil pointer is the four bytes `null`.
 
-v3.12.0 reached it from inside the SDK for the first time. It gave two methods
-a `WithOptions` sibling and made the old name delegate to it with a nil options
-pointer:
+The SDK reaches it on its own wherever a method delegates to its `WithOptions`
+sibling with a nil options pointer, as `CancelJob` has since v2.32.0,
+`GetJobArtifacts` since v3.8.0 and `PublishAllDraftNotes` since v3.12.0:
 
 ```go
 func (s *DraftNotesService) PublishAllDraftNotes(pid any, mergeRequest int64, options ...RequestOptionFunc) (*Response, error) {
@@ -5579,12 +5658,15 @@ Measured against an `httptest` server with both versions:
 | Method                            | v3.0.0                         | v3.12.0                            |
 | --------------------------------- | ------------------------------ | ---------------------------------- |
 | `DraftNotes.PublishAllDraftNotes` | body `""`, `Content-Length: 0` | body `"null"`, `Content-Length: 4` |
-| `Jobs.GetJobArtifactsWithOptions` | query `""`                     | query `""`                         |
+| `Jobs.GetJobArtifacts`            | query `""`                     | query `""`                         |
 
-`GetJobArtifacts` took the same delegation and is unharmed only by accident:
+`GetJobArtifacts` takes the same delegation and is unharmed only by accident:
 its request is a GET, so the nil goes to `query.Values`, which returns early on
-a nil pointer, and the empty `RawQuery` adds no `?`. The defect is confined to
-the methods whose verb makes `NewRequestToURL` take the marshalling branch.
+a nil pointer, and the empty `RawQuery` adds no `?`. That empty `RawQuery` does
+replace a query already on the URL handed to `NewRequestToURL`, which is the
+query branch's half of the defect, but `NewRequest` adds none to the URL it
+builds, so among the SDK's own delegations the defect is confined to the
+methods whose verb makes `NewRequestToURL` take the marshalling branch.
 
 Nothing is expected to break at GitLab, which is why it is not blocking:
 `Grape::Middleware::Formatter` sets the form hash only `if body.is_a?(Hash)`,
@@ -5596,32 +5678,49 @@ will reach any future delegation of the same shape on a POST, PUT or PATCH.
 
 The fix is a nil-pointer check where the decision is made, in
 `NewRequestToURL`, rather than at each delegation, since the next one will be
-written the same way.
+written the same way. It changes what every caller passing a nil options
+pointer sends, so v3 takes it behind an opt-in client option and 4.0 makes it
+the default.
 
 - **Reported**: yes, as commit 2 of
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
   opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, open. The commit is that check: a nil pointer in the
-  options now means no options, in the query branch as well as the body
-  branch, so `CancelJob` and `PublishAllDraftNotes` send no body at all. It
-  changes what every caller passing a nil options pointer sends, so it is the
-  first of the four decisions the merge request asks the maintainers for.
+- **In review**: yes, open. Commit 2 first applied that check to every caller,
+  and on 2026-09-29 the maintainer answered that it has to be a toggle, since
+  nobody can know whether a caller relies on the `null`. It is now
+  `feat(client): add option to treat nil options pointers as no options`:
+  `WithNilOptionsOmitted()`, a client option off by default and modelled on
+  `WithOnlyIdempotentRetries`, makes a nil pointer in the options mean no
+  options, in the query branch as well as the body branch, so with it
+  `CancelJob` and `PublishAllDraftNotes` send no body at all. Without it no
+  request changes, and the tests pin both sides.
+  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
+  carries the rest in its section 6: 4.0 makes the option's behavior the
+  default, where the option has no effect, and 5.0 removes the option.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: no longer reached from this repository, as a side effect
-  rather than a workaround. `mr_review.draft_note_publish_all` offers the
-  route's `note`, `internal` and `reviewer_state`, and only
-  `PublishAllDraftNotesWithOptions` carries them, so the handler calls it with
-  a non-nil options value and a call naming none of the three sends `{}`. The
-  call carries a `//nolint:staticcheck` for SA1019, because client-go marks the
-  method `Deprecated:` only until v4 folds the options into
-  `PublishAllDraftNotes`, and says to use it meanwhile when the options are
-  needed. `TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven`
-  in `internal/tools/mrdraftnotes` pins the body for each combination. The
-  defect itself is untouched and still reaches any other delegation of the
-  same shape on a POST, PUT or PATCH.
+- **Workaround**: yes, and neither route the SDK sends it on is reached from
+  this repository, because both handlers call the `WithOptions` sibling with
+  a non-nil options value. `job.cancel` passes a `CancelJobOptions` whether
+  or not the caller asks for force, so a call without force sends `{}`; until
+  2026-09-29 it called `CancelJob` whenever force was not asked for and sent
+  `null`, which this entry had missed.
+  `TestJobCancel_Body_CarriesForceOnlyWhenAsked` in `internal/tools/jobs`
+  pins the body with and without force. `mr_review.draft_note_publish_all`
+  offers the route's `note`, `internal` and `reviewer_state`, which only
+  `PublishAllDraftNotesWithOptions` carries, so it passes a non-nil options
+  value as before and a call naming none of the three sends `{}`;
+  `TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven` in
+  `internal/tools/mrdraftnotes` pins the body for each combination. Both
+  calls carry a `//nolint:staticcheck` for SA1019, because client-go marks
+  the two methods `Deprecated:` only until v4 folds the options into
+  `CancelJob` and `PublishAllDraftNotes`, and says to use them meanwhile when
+  the options are needed. 4.0, which makes that fold and makes a nil pointer
+  send no body, retires the workaround. The defect itself is untouched and
+  still reaches any other delegation of the same shape on a POST, PUT or
+  PATCH.
 
 ### Seven more option structs send an optional param on every call
 
