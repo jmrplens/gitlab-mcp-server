@@ -752,6 +752,30 @@ func TestWalkSteps_LatencyCeiling_MakesTheStepTheLast(t *testing.T) {
 	}
 }
 
+// TestCrossesLatencyCeiling_ATailAtTheCeilingHasNotCrossedIt pins the edge of
+// the latency stop: a tail below the ceiling and a tail exactly at it keep the
+// series going, and only one past it ends the series, as the stop sentence
+// says ("above the ceiling"). A measured tail cannot be steered onto the edge,
+// so the rule is asked directly, against the ceiling a run uses.
+func TestCrossesLatencyCeiling_ATailAtTheCeilingHasNotCrossedIt(t *testing.T) {
+	ceiling := float64(latencyCeiling.Milliseconds())
+	for _, tc := range []struct {
+		name  string
+		p99Ms float64
+		want  bool
+	}{
+		{name: "below the ceiling", p99Ms: ceiling - 0.001, want: false},
+		{name: "exactly at the ceiling", p99Ms: ceiling, want: false},
+		{name: "past the ceiling", p99Ms: ceiling + 0.001, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := crossesLatencyCeiling(tc.p99Ms); got != tc.want {
+				t.Errorf("crossesLatencyCeiling(%v) = %v, want %v against a %v ms ceiling", tc.p99Ms, got, tc.want, ceiling)
+			}
+		})
+	}
+}
+
 // settledShare is the share of a step's peak resident set under load that its
 // settled live heap has to stay under for the reading to be the tenancy figure
 // it claims to be.

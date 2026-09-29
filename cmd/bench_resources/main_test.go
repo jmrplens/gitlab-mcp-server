@@ -549,8 +549,17 @@ func runWithStandin(m *testing.M) int {
 		}
 		standinPath = path
 	}
+	// Every warm-up here is against the stand-in, which answers at once, so a
+	// warm-up still asking after this long is a retry rule that no longer
+	// takes the answer it was given. Held to seconds, it fails the test that
+	// admitted rather than holding the package until the runner gives up.
+	warmUpTimeout = testWarmUpTimeout
 	return m.Run()
 }
+
+// testWarmUpTimeout is the warm-up ceiling the tests run under: far above
+// what a stand-in listing takes, and far below the five minutes a run allows.
+const testWarmUpTimeout = 15 * time.Second
 
 // standinBinary returns the stand-in server, skipping where nothing can be
 // measured.

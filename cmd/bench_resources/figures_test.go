@@ -230,7 +230,11 @@ func TestMsLabel_PrecisionFollowsMagnitude(t *testing.T) {
 	}{
 		{value: 0, want: "0"},
 		{value: 0.573, want: "0.57"},
+		// Each band starts at its own figure: one millisecond is already a
+		// one-decimal figure and ten a whole one.
+		{value: 1, want: "1.0"},
 		{value: 3.14, want: "3.1"},
+		{value: 10, want: "10"},
 		{value: 2841.7, want: "2842"},
 	}
 	for _, tc := range tests {

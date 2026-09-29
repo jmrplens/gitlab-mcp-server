@@ -25,6 +25,15 @@ import (
 // it exists to fail a wedged run rather than to police latency.
 const callTimeout = 5 * time.Minute
 
+// warmUpTimeout bounds one credential's warm-up in [runner.admit], a listing a
+// rate bound refused and asked for again included. It is callTimeout in a run.
+// A variable so the tests, whose stand-in answers at once, can hold a warm-up
+// that never stops asking to seconds: a retry rule that asked again after an
+// answer it should have taken would otherwise hold every test that admits
+// against a refusing stand-in for five minutes, and the suite would time out
+// rather than fail.
+var warmUpTimeout = callTimeout
+
 // settleCeiling bounds the wait for a resident set to stop growing. A
 // variable so a test can reach the ceiling without spending three seconds
 // on a process that never settles.
