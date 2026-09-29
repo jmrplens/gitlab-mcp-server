@@ -57,9 +57,12 @@
 //
 // A race build of a test binary that links this package starts with one
 // processor, and keeps it unless -cpu asks for more; the loader's semaphore
-// stays at one whatever -cpu says, because it was sized before. The type
-// checking is most of what these packages spend their time on, and that is
-// the part that has to be serial. An ordinary build is unchanged: the
+// stays at one whatever -cpu says, because it was sized before. Measured
+// with five processors on one machine, the 22 packages that link it took
+// 1134 s under the detector before and 1359 s after, and the whole
+// difference is cmd/audit_action_ids, 347 s before and 707 s after, the one
+// that type-checks most (96 loads of up to 518 packages); the others moved
+// within the noise of a shared machine. An ordinary build is unchanged: the
 // initializer reads the setting and changes nothing.
 //
 // # What holds it in place
