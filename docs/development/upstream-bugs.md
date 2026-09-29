@@ -153,7 +153,7 @@ readable without opening the tracker:
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | No | No | No | No | Yes |
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | No | No | No | No | Yes |
 | 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
-| 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another reporter, [golang/go#81122](https://github.com/golang/go/issues/81122); our reproducer not yet | No | No | No; it fails race runs of the tooling tests at random | Yes |
+| 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another user, [golang/go#81122](https://github.com/golang/go/issues/81122) | Yes, [golang/go#81871](https://github.com/golang/go/pull/81871), imported as [go.dev/cl/841585](https://go.dev/cl/841585), open | No | No; without the workaround it fails race runs of the tooling tests at random | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -361,8 +361,11 @@ claim about the transports that reach it to be too wide.
 
 Row 81 was added on 2026-09-29 as well, and is the register's first entry
 against the Go toolchain itself. It was found from this codebase, by the race
-gate of a release rehearsal, and it costs the server nothing: only the tests of
-the commands that type-check this repository's source are exposed.
+gate of a release rehearsal, and it costs the server nothing, since the server
+type-checks nothing. The commands under `cmd/` that type-check this
+repository's source are exposed in every build; the race detector is what turns
+that into failures of their tests, and the entry says why it changes no answer
+outside it.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -6209,13 +6212,14 @@ reproducing the panic outside this repository showed where it comes from.
 
 ### go/types reads an imported generic instance another checker is expanding
 
-- **Reported**: yes, by another reporter, as
+- **Reported**: yes, by another user, as
   [golang/go#81122](https://github.com/golang/go/issues/81122) on 2026-08-26.
   Read on 2026-09-29 it was open, labelled NeedsInvestigation, with no
-  milestone and no change linked. Not yet by us: a comment with a minimal
-  reproducer is drafted, carrying the measurements and the change below, and
-  has not been posted.
-- **In review**: no. Nothing is linked to the issue.
+  milestone; its reporter added that it reproduces with every package loaded
+  from source too. Our reproducer is the test in the change below.
+- **In review**: yes, [golang/go#81871](https://github.com/golang/go/pull/81871),
+  opened on 2026-09-29 and imported to Gerrit as
+  [go.dev/cl/841585](https://go.dev/cl/841585), open.
 - **Merged**: no. No Go release carries a fix, and `master` still reads the
   field the same way.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
@@ -6236,7 +6240,16 @@ reproducing the panic outside this repository showed where it comes from.
   base raced in 13 of 80 and the workaround in 0 of 80. It retires when the Go
   release `go.mod` pins carries the fix: the package, its blank imports and
   its line in `TestDependencies_TestSupport_NeverReachesTheServerBinary` go
-  together.
+  together. Outside the detector the commands and their tests still
+  type-check in parallel, and the read still races, with no effect on this
+  tree. An instance expands from its origin's RHS, which for a type read from
+  export data is its underlying type, and for every generic type this module
+  and client-go v3.14.0 declare is a type literal. So `isComplete` returns
+  true whichever value it reads (nil, the new type, or a torn pair of the
+  two), which is its answer for any type no checker owns. What would change
+  that is a generic type loaded from source whose RHS is another defined
+  type, such as `type A[T any] B[T]`: a torn read of its instance
+  dereferences a nil `*Named` and the command panics.
 
 **Where**: `go/types` in go1.27.1, and its copy
 `cmd/compile/internal/types2`. `(*Checker).isComplete` reads `t.fromRHS` of a
@@ -6266,30 +6279,33 @@ concurrently against one imported `strings`, says it is: 30 of 30 runs
 reported the race on go1.27.1, 10 of 30 on go1.26.8, and 0 of 30 on
 go1.25.14.
 
-**Fix upstream**: not yet proposed. Unpacking in `isComplete` only a type the
-checker does not own, which also means it cannot be on this checker's object
-path, removes it:
+**Fix upstream**: [golang/go#81871](https://github.com/golang/go/pull/81871)
+([go.dev/cl/841585](https://go.dev/cl/841585)). `isComplete` returns true for
+a `*Named` that no checker owns (`t.check == nil`) without reading its
+`fromRHS`. Such a type comes from an importer, from the API or from a pass
+that has finished, and its RHS cannot lead back to an object on this
+checker's path, so the walk from it always ended in true:
 
 ```diff
  	case *Named:
- 		obj = t.obj
--		rhs = t.fromRHS
 +		if t.check == nil {
-+			// A type this Checker does not own may be unpacked concurrently
-+			// by another Checker, so unpack it first, as hasVarSize does.
-+			t.unpack()
++			return true
 +		}
-+		rhs = t.fromRHS
+ 		obj = t.obj
+ 		rhs = t.fromRHS
 ```
 
-Applied to both copies of `cycles.go` on go1.27.1, the reproducer went from
-20 of 20 runs racing to 0 of 20, the test that failed here from about 3 in 40
-to 0 in 40, and `go test -short go/types cmd/compile/internal/types2` passed.
-Unpacking unconditionally is wrong: it expands instances whose origin is
-still being checked, and `TestFixedbugs/issue57522.go` panics with "nil typ"
-in `subst`. Whether `t.check == nil` is the right ownership test, and
-whether the other direct reads of the field can see a foreign type the same
-way, is for the maintainers to say.
+On a toolchain built from `master` with the change, its test raced in none of
+200 runs in each of `go/types` and `types2`, where it raced in all 100
+without it. The reproducer went from 20 of 20 runs racing to none. A
+temporary assertion that the old walk returns true for every such type held
+through `go build -a std cmd`, `go vet std cmd` and both packages' tests.
+Unpacking such a type first also removes the race: applied to both copies of
+`cycles.go` on go1.27.1, it took the reproducer from 20 of 20 to 0 of 20 and
+the test that failed here from about 3 in 40 to 0 in 40. But it expands the
+instance only to reach an answer already known. Unpacking every named type
+is wrong: it expands instances whose origin is still being checked, and
+`TestFixedbugs/issue57522.go` panics with "nil typ" in `subst`.
 
 **How we found it**: the race gate of a release rehearsal
 (`.github/workflows/race.yml`, called by `release.yml`) failed in

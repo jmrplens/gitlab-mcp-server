@@ -34,8 +34,9 @@ const packageName = "serialtypecheck"
 // analysisTags are the build tags the consumer guard lists the module under:
 // GO_ANALYSIS_TAGS in the Makefile, the set golangci-lint reads, so that a
 // test binary that exists only behind one of the end-to-end tags is held to
-// the rule too. No file in the module is constrained on a negated tag, so a
-// listing under all of them sees every file the untagged build sees.
+// the rule too. No file in the module is constrained on the negation of one
+// of these tags, so a listing under all of them sees every file the untagged
+// build sees.
 const analysisTags = "e2e,collectore2e,httpe2e,orbitlive,stdioe2e"
 
 // companyWait is how long the first file the probe sees being parsed waits for

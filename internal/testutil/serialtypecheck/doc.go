@@ -14,8 +14,9 @@
 // this repository can build with. (*Checker).isComplete reads the Named.fromRHS
 // field of a named type without calling unpack first, while another Checker
 // may be expanding the same type through unpack. The type is shared whenever
-// two checkers import one package from export data and both reach one of its
-// generic instances: iter.Seq[string], the result type of strings.SplitSeq, is
+// two checkers import one package, read from export data or checked from
+// source earlier in the same load, and both reach one of its generic
+// instances: iter.Seq[string], the result type of strings.SplitSeq, is
 // the one this repository's tests hit. go/packages type-checks every package
 // it loads from source in parallel, so any load that type-checks two or more
 // of them can race, and under the detector a test that does so fails at
@@ -63,7 +64,10 @@
 // difference is cmd/audit_action_ids, 347 s before and 707 s after, the one
 // that type-checks most (96 loads of up to 518 packages); the others moved
 // within the noise of a shared machine. An ordinary build is unchanged: the
-// initializer reads the setting and changes nothing.
+// initializer reads the setting and changes nothing. An ordinary build keeps
+// the parallel loads and the unguarded read with them, in the commands and in
+// their tests alike; docs/development/upstream-bugs.md says why that read
+// changes no answer on this tree, and what would make it.
 //
 // # What holds it in place
 //
@@ -81,10 +85,10 @@
 //
 // # When it goes
 //
-// The upstream fix is a guarded unpack in isComplete for a type the checker
-// does not own, the same unpack hasVarSize already does before reading the
-// field. When the Go release go.mod pins carries it, this package, its blank
-// imports and its entry in the cmd/server dependency test are deleted
-// together. docs/development/upstream-bugs.md records the entry and that
-// condition.
+// The upstream change, golang/go#81871
+// (https://github.com/golang/go/pull/81871), has isComplete return true for a
+// named type no checker owns without reading the field. When the Go release
+// go.mod pins carries it, this package, its blank imports and its entry in the
+// cmd/server dependency test are deleted together.
+// docs/development/upstream-bugs.md records the entry and that condition.
 package serialtypecheck
