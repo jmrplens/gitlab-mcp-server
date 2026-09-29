@@ -122,9 +122,12 @@ var protectionNames = map[string]struct{}{
 }
 
 // RetiredEnvUses reports the retired spellings present in this environment,
-// split by what ignoring one would cost: refuse names a setting whose absence
-// would leave the deployment able to do more than it was configured for, and
-// warn names the rest.
+// split by what ignoring one would cost. refuse names the three settings
+// register row AUT-004 decides together, which withhold part of what the
+// deployment serves ([protectionNames]); warn names the rest. A retired bound
+// among the rest, UPLOAD_MAX_FILE_SIZE or RATE_LIMIT_RPS say, warns too:
+// ignoring it puts the setting back to its default, which may be looser than
+// the value the retired name carried.
 //
 // It reads the environment rather than what was consulted, which is the
 // opposite of what the deprecation warning it replaces did. That warning could
