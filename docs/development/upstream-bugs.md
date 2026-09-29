@@ -106,12 +106,12 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 1 of the 14 open, and the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | **13 of 14; all 13 released, v3.1.0 to v3.14.0** | No | Retired for all 13 at the v3.14.0 pin; the open one keeps its own |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for 13 at the v3.14.0 pin; `systemhooks` keeps its own until the pin reaches v3.15.0 |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), merged | **Yes, 19.4.0** | No | No, retired when the live record was taken from 19.4.1-ee |
-| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), open and approved | No | No | Yes |
+| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699), merged | **Yes, unreleased** | No | Yes |
 | 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Not needed |
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
@@ -543,9 +543,9 @@ example needs to stay reachable for callers still using it.
 ### Two project group listings are annotated with the whole Group entity
 
 - **Reported**: yes.
-- **In review**: yes,
-  [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699),
-  open and approved: by a technical writer, by a reviewer, and on 2026-09-15 by
+- **In review**: no longer;
+  [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699)
+  was approved by a technical writer, by a reviewer, and on 2026-09-15 by
   the backend maintainer @hustewart, who set auto-merge the same day. It has
   not merged because the pipelines since have failed on breaks from `master`
   rather than on the change, the last of them the fork pipeline of the
@@ -580,9 +580,12 @@ example needs to stay reachable for callers still using it.
   offered two ways through: a pipeline on the merged result, whose ref was
   regenerated at 17:17 UTC on a `master` that carries !256904, or a rebase onto
   current `master`, held back because the push would reset the two approvals.
-  It waits on @hustewart's choice.
-- **Merged**: no. Its milestone still says 19.4, which was released without
-  it, so 19.5 is the earliest release that can carry it.
+  It waited on @hustewart's choice, and the rebase was the way through: the
+  branch went onto current `master` as `fb3ecfdc`, the merge train pipeline
+  2891419980 passed, and @hustewart merged it.
+- **Merged**: yes, at 23:59 UTC on 2026-09-28 (merge commit `3cbc103f`). No
+  release tag carries it yet; its milestone still says 19.4, which was released
+  without it, so 19.5 is the first release that will.
 - **Blocking**: no. Our output type is already the right shape; only the audit
   was misled.
 - **Workaround**: yes, a declaration. `cmd/audit_1to1/internal/paths/sent_declarations.go`
@@ -1555,9 +1558,9 @@ of change whose test is one assertion on the built URL.
   Every one of those merge requests references it with a non-closing
   `Related to`, so the first merge does not close the umbrella; the joint one
   that follows them closes it.
-- **In review**: one is open, with a green pipeline and no conflicts.
+- **In review**: none of the fourteen now. The last to merge was
   [gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
-  (the seven `Hook` fields) is approved and mergeable: a reviewer approved it
+  (the seven `Hook` fields), whose history follows: a reviewer approved it
   on 2026-09-14 and again on 2026-09-16, after the test push that reset the
   first approval, both of its threads are answered and resolved, one of them
   by adding the `custom_webhook_template` assertion to the edit test, and the
@@ -1583,7 +1586,9 @@ of change whose test is one assertion on the built URL.
   `go test -run SystemHook` and `go vet` pass on it. The thread was answered
   and resolved, as was the answered handover thread, so no discussion is open
   and the merge request waits on @PatrickRice's approval, which the new
-  commits require.
+  commits require. He approved and merged it at 18:55 UTC on 2026-09-28
+  (merge commit `5f0e219a`), and it was tagged ten minutes later in
+  **v3.15.0**, so none of the fourteen is open any longer.
   The rest of this entry, the gaps held back below, went out on 2026-09-27 in
   [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
   described further down, which does not touch `system_hooks.go` and so does
@@ -1609,7 +1614,9 @@ of change whose test is one assertion on the built URL.
   `gitlab-org/api/client-go!3052` (`ConanPackageName`, `CreatorID` and
   `Versions` on `Package`) in **v3.14.0**, merged by @PatrickRice at 18:46 UTC
   on 2026-09-24 and tagged thirteen minutes later. v3.13.1, cut at 18:23 the
-  same day, does not carry it.
+  same day, does not carry it. Last, `gitlab-org/api/client-go!3048` (the
+  seven `Hook` fields) in **v3.15.0**, merged by @PatrickRice at 18:55 UTC on
+  2026-09-28 and tagged at 19:05.
   `gitlab-org/api/client-go!3051` was merged on the 14th, nineteen minutes
   after v3.10.0 was cut, and this register recorded it as in no tag until the
   next release carried it. Do not read a merge as a release:
@@ -1678,9 +1685,11 @@ of change whose test is one assertion on the built URL.
   publishes no such key.
 
   `systemhooks` keeps its workaround whole: it still reads the seven `Hook`
-  fields of `gitlab-org/api/client-go!3048`, which is open, off the capture,
-  checked against the v3.14.0 source rather than against the tracker, and the
-  struct does not carry them.
+  fields of `gitlab-org/api/client-go!3048` off the capture, checked against
+  the v3.14.0 source rather than against the tracker, and the struct it pins
+  does not carry them. The merge request is merged and released in v3.15.0
+  (2026-09-28), so the capture retires when the pin moves there, which the
+  Dependabot cooldown for a Go minor holds until 2026-10-12.
   `projectserviceaccounts` keeps its read of `public_email` too, since
   `gitlab-org/api/client-go!3047` added the pair to `GroupServiceAccount` and
   `ProjectServiceAccount` was outside it.
@@ -1846,7 +1855,9 @@ technical accuracy, and its one finding, an `expires_at` older than the
 As of 2026-09-24 it needs no further approval and waits on the writer. Read
 again on 2026-09-27 it is where that left it: head `b2b900f7`, its pipeline
 green, every thread resolved, and the writer still to approve and merge it.
-Nothing is owed on it from here.
+Nothing is owed on it from here. Read on 2026-09-29, unchanged: untouched
+since 2026-09-24, three working days now, with no approval required and none
+given.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -1944,6 +1955,25 @@ review, and at 00:12 UTC on 2026-09-28 it added its own labels
 (`workflow::ready for review`, `backend`, `linked-issue`) beside
 `type::feature`. As of 2026-09-28 it waits on that review, still on head
 `a1a4b996` with 36 commits, and nothing is owed on it from here.
+
+**The first review, 2026-09-29.** At 00:13 UTC @PatrickRice answered the list
+of breaking halves held for 4.0, addressed to @heidi.berry and copying us. He
+agrees with each deferral: the six `V2` siblings, the two `WithOptions`
+siblings (which he would deprecate in 4.0 and remove in 5.0), the two
+narrow-typed fields kept beside their object fields, and the dead fields kept
+deprecated until 4.0. He reads the structs that decode several entities as
+routes that should move to their `Basic` struct in 4.0, and would leave the two
+deprecated methods alone, since a deprecated GitLab route lives a long time and
+older instances still serve it. He asks for an issue tracking the 4.0 halves
+against the v4 release, which is how the project keeps such decisions. One
+point goes further than the merge request: he calls
+`CIRestrictPipelineCancellationRole` a bug rather than a breaking change,
+because none of `AccessControlValue`'s four values is one the setting accepts,
+which argues for making the new type distinct now instead of an alias of the
+old. The four decisions the description asks for are not answered yet, there
+is no approval, and @heidi.berry has not replied. Owed from here, once agreed
+with the maintainer of this repository: a reply taking up both requests, the
+tracking issue and the distinct type as a commit on the merge request.
 
 **The umbrella's description is behind again**, read on 2026-09-27, in four
 places: its table still reads `gitlab-org/api/client-go!3052` as in review,
@@ -4668,6 +4698,14 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   a merged-results pipeline, and named `pipeline:skip-router-sync` as the
   documented way through if the reviewer would rather not wait. It is approved, has no
   unresolved thread, and waits on those merge requests or on that label.
+  Read on 2026-09-29:
+  [gitlab-org/gitlab!255555](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255555)
+  merged at 08:51 UTC, so the invite search template is on `master` now;
+  [gitlab-org/gitlab!254189](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254189)
+  and
+  [gitlab-org/gitlab!256404](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256404)
+  are still open and the label is not applied, so the check would still fail
+  on the two Orbit templates.
 
   `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
   `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
@@ -4944,7 +4982,16 @@ being refused; and completing the `action` and `type` lists of
   [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074),
   opened 2026-09-28 from the community fork. The maintainer's first review the
   same day changed the fix (below), the change was pushed as a second commit,
-  and the merge request waits on the reviewers again.
+  and the merge request waits on the reviewers again. Read on 2026-09-29: the
+  reviewer @jannik_lehmann has approved it and asked @c_fons (19:41 UTC) to
+  take the maintainer review, with two approvals still required; the thread
+  @alipniagov opened on `KnownSignIn` is answered by that second commit and has
+  no reply yet. The pipeline on `5436dc9a` is red on one blocking job only,
+  the downstream `rspec:predictive:system-full` pipeline, all fifteen of
+  whose shards stopped before running a spec: the runner skipped the git
+  checkout and `scripts/utils.sh` was not there to source. That is the
+  infrastructure, not the change; the job `pajamas_adoption`, also red, is
+  allowed to fail. Nothing is retried from our side.
 - **Merged**: no.
 - **Blocking**: yes, for `issue.work_item_saved_view_create` and
   `issue.work_item_saved_view_subscribe` from any client authenticated with a
@@ -5201,7 +5248,14 @@ rebases to `0.32.4`.
 - **In review**: yes,
   [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650),
   opened the same day from the community fork, which closes the issue; the
-  issue was then edited to name it.
+  issue was then edited to name it. Read on 2026-09-29 it has no reviewer but
+  GitLab Duo, no approval and no comment, and its fork pipeline is red on
+  three jobs the change does not reach: `lint:prose` and
+  `pinned-version-check` stop before running because the fork's clone cannot
+  resolve the diff base, and `unit-test` fails three `orbit-server` skills
+  tests, while the change touches the DSL schema's documentation only. The
+  same three fail on
+  [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651).
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
@@ -5244,7 +5298,9 @@ while rewriting `orbit.query` for issue 1031.
 - **In review**: yes,
   [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651),
   opened the same day from the community fork, which closes the issue; the
-  issue was then edited to name it.
+  issue was then edited to name it. Read on 2026-09-29 it is in the state row
+  75's merge request is in: no reviewer but GitLab Duo, and a fork pipeline
+  red on the same three jobs, none of them reached by the change.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
