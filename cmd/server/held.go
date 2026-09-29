@@ -79,10 +79,16 @@ func heldRequestsCeiling(limit func() (uint64, bool)) int64 {
 	return heldRequestsFor(descriptors)
 }
 
-// heldRequests counts the calls the process holds open against a ceiling.
-type heldRequests struct {
+// processSlots counts what the process holds against a ceiling of its own: the
+// calls it holds open (HLD-011), and the stateful sessions it keeps (HLD-010).
+type processSlots struct {
 	open  atomic.Int64
 	limit int64
+	// contend, when set, runs between acquire's read of the count and the
+	// swap that takes a slot, which is the one moment another acquire can
+	// change the count under it. Only the tests set it, so that the retry
+	// that follows is taken on purpose rather than by the scheduler's luck.
+	contend func()
 }
 
 // processHeldRequests is the one count every server and gate of this process
@@ -94,17 +100,21 @@ type heldRequests struct {
 // who could raise it could undo the bound (INV-004, INV-018). Raising the
 // descriptor limit the process runs under raises it, which is the one lever
 // that also raises what it protects.
-var processHeldRequests = &heldRequests{limit: heldRequestsCeiling(descriptorLimit)}
+var processHeldRequests = &processSlots{limit: heldRequestsCeiling(descriptorLimit)}
 
 // acquire takes a slot, or reports that every slot is taken. It never takes
 // more than the limit, even for a moment: a count that went over and came back
 // would refuse a call that arrived while it was over, for a slot that was
-// never used.
-func (h *heldRequests) acquire() bool {
+// never used. So the count is read, compared and swapped, and read again when
+// another acquire or release changed it in between.
+func (h *processSlots) acquire() bool {
 	for {
 		held := h.open.Load()
 		if held >= h.limit {
 			return false
+		}
+		if h.contend != nil {
+			h.contend()
 		}
 		if h.open.CompareAndSwap(held, held+1) {
 			return true
@@ -113,7 +123,7 @@ func (h *heldRequests) acquire() bool {
 }
 
 // release gives back a slot acquire took.
-func (h *heldRequests) release() {
+func (h *processSlots) release() {
 	h.open.Add(-1)
 }
 
@@ -200,7 +210,7 @@ func claimGateSlot(token string) bool {
 //
 // It runs before the rate limit, so a call it refuses spends none of its
 // credential's bucket.
-func heldRequestsMiddleware(held *heldRequests) mcp.Middleware {
+func heldRequestsMiddleware(held *processSlots) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			token := carrierTokenOf(req)
@@ -249,9 +259,10 @@ const heldRefusalCode = tenancy.CodeTooManyRequests // register row HLD-011
 
 // processBusyFailure is the refusal a request the gate counted meets when a
 // ceiling on what the process holds is full: 503, in the gate, before the SDK
-// has read anything. The held calls and the standalone streams meet it at this
-// ceiling, and a POST that would open a stateful session at the session
-// ceiling (register row HLD-010).
+// has read anything. A POST naming one held call meets it at this ceiling, and
+// a POST that would open a stateful session at either: at the session ceiling
+// (register row HLD-010), or at this one when no slot is left for the
+// standalone stream the session may hold open for its whole life.
 //
 // It says what heldRefusalText says. Retry-After is the register's fixed
 // pause, the one the other ceiling on the process's own work answers with

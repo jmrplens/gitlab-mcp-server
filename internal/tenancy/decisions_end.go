@@ -61,6 +61,14 @@ func endDecisions() []Decision {
 			// read by the parser every positive duration shares, which refuses
 			// a zero at startup. That second half is an INV-015 departure of
 			// the kind issue 958 records.
+			//
+			// Off costs more beside HLD-010 (issue 951). A session no client
+			// deletes then holds its slot of the session ceiling until the
+			// pool evicts its credential's entry, which is never while that
+			// credential stays active or with --pool-idle-timeout=0, so a
+			// client that opens sessions and deletes none takes the slots one
+			// by one until no tenant can open another. Zero keeps its meaning,
+			// and the server says what it costs at startup.
 			ID: "END-005", Question: End, Kind: Lifetime, Class: ClassQ, Disposition: Valued,
 			Resource: "how long a stateful session may sit idle",
 			Key:      KeySession, StdioKey: KeyNone,
@@ -79,6 +87,7 @@ func endDecisions() []Decision {
 				alias(pkgConfig, "MaxSessionTimeout", "SessionIdleTimeoutMax"),
 				enforce(pkgServer, "streamableHTTPOptions"),
 				enforce(pkgServer, "validateHTTPDurationConfig"),
+				enforce(pkgServer, "warnStatefulSessions"),
 			},
 		},
 		{

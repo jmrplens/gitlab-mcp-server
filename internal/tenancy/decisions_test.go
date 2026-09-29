@@ -182,8 +182,8 @@ func TestDecisions_ListingBucket_HasAProcessPartnerThatFollowsIt(t *testing.T) {
 // and standing alone, refusing the newcomer on every channel its methods carry
 // with words that say to retry later and charge nothing, and existing only
 // over HTTP. Its gate refusal holds in both eras, since it answers a POST of
-// 2026-07-28 and a stateful session's standalone stream, which only an earlier
-// revision opens.
+// 2026-07-28 and a POST that would open a stateful session with no slot left
+// for its standalone stream, which only an earlier revision sends.
 func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 	held, _ := Lookup("HLD-011")
 	if !heldIsDecidedByIssue951(held) {
@@ -221,7 +221,7 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 		})
 	}
 	if gate := held.Refusals[0]; gate.Era != EraAny {
-		t.Errorf("HLD-011's gate refusal holds in era %d, want both: a modern POST and a stateful session's stream", gate.Era)
+		t.Errorf("HLD-011's gate refusal holds in era %d, want both: a modern POST and a POST opening a stateful session", gate.Era)
 	}
 }
 
@@ -230,7 +230,8 @@ func TestDecisions_HeldRequests_AreBoundedOnTheProcessByIssue951(t *testing.T) {
 // HLD-010 is no longer the decision by absence that carried the finding but a
 // ceiling of the same shape as HLD-011's, derived from it by the one value it
 // names, refusing the newcomer in the gate with HLD-011's own refusal in the
-// only era that has sessions, charging nothing. The owner records the sessions
+// only era that has sessions, charging nothing: a POST of 2026-07-28 is left to
+// the SDK, which closes its session with it. The owner records the sessions
 // grow (IDN-010) carry the finding no longer either, since a session past the
 // ceiling is refused before it is recorded, and no row carries F-31 now while
 // it stays filed as issue 951's.

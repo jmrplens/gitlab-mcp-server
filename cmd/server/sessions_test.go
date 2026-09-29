@@ -54,8 +54,11 @@ func TestProcessStatefulSessions_IsHalfThisProcessHeldCeiling(t *testing.T) {
 	}
 }
 
-// TestMcpServerGate_OpensSession covers which requests open a session: a POST
-// with no session id, and only on a deployment that keeps sessions.
+// TestMcpServerGate_OpensSession covers which requests open a session that can
+// outlive them: a POST with no session id, only on a deployment that keeps
+// sessions, and only on a revision that has them. A POST on 2026-07-28 or
+// later gets a session the SDK closes with it, whether it is the discover a
+// client probes with or a call the transport refuses.
 func TestMcpServerGate_OpensSession(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -63,9 +66,13 @@ func TestMcpServerGate_OpensSession(t *testing.T) {
 		stateless bool
 		method    string
 		session   string
+		revision  string
 		want      bool
 	}{
 		{name: "a POST with no session id", method: http.MethodPost, want: true},
+		{name: "a POST of 2025-11-25", method: http.MethodPost, revision: "2025-11-25", want: true},
+		{name: "a POST of 2026-07-28", method: http.MethodPost, revision: "2026-07-28"},
+		{name: "a POST of a later revision", method: http.MethodPost, revision: "2027-01-01"},
 		{name: "a POST on a session", method: http.MethodPost, session: "abc"},
 		{name: "a POST on the sessionless transport", stateless: true, method: http.MethodPost},
 		{name: "a GET", method: http.MethodGet},
@@ -76,6 +83,9 @@ func TestMcpServerGate_OpensSession(t *testing.T) {
 			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/mcp", http.NoBody)
 			if tc.session != "" {
 				req.Header.Set(mcpSessionIDHeader, tc.session)
+			}
+			if tc.revision != "" {
+				req.Header.Set("MCP-Protocol-Version", tc.revision)
 			}
 			g := &mcpServerGate{stateless: tc.stateless}
 			if got := g.opensSession(req); got != tc.want {
@@ -92,7 +102,7 @@ func TestSessionSlot_IsGivenBackOnce(t *testing.T) {
 	t.Parallel()
 	t.Run("kept by a session", func(t *testing.T) {
 		t.Parallel()
-		sessions := &heldRequests{limit: 1}
+		sessions := &processSlots{limit: 1}
 		sessions.open.Store(1)
 		slot := &sessionSlot{sessions: sessions}
 		if !slot.keep() {
@@ -108,7 +118,7 @@ func TestSessionSlot_IsGivenBackOnce(t *testing.T) {
 	})
 	t.Run("kept by none", func(t *testing.T) {
 		t.Parallel()
-		sessions := &heldRequests{limit: 1}
+		sessions := &processSlots{limit: 1}
 		sessions.open.Store(1)
 		slot := &sessionSlot{sessions: sessions}
 		slot.releaseUnkept()
@@ -118,6 +128,19 @@ func TestSessionSlot_IsGivenBackOnce(t *testing.T) {
 		}
 		if slot.keep() {
 			t.Error("a slot given back was kept afterwards")
+		}
+	})
+	t.Run("with its stream's slot", func(t *testing.T) {
+		t.Parallel()
+		sessions, stream := &processSlots{limit: 1}, &processSlots{limit: 2}
+		sessions.open.Store(1)
+		stream.open.Store(2)
+		slot := &sessionSlot{sessions: sessions, stream: stream}
+		slot.releaseUnkept()
+		slot.releaseUnkept()
+		if sessions.open.Load() != 0 || stream.open.Load() != 1 {
+			t.Errorf("open = %d sessions and %d held after the POST ended twice, want one of each given back once",
+				sessions.open.Load(), stream.open.Load())
 		}
 	})
 }
@@ -133,7 +156,7 @@ func TestClaimSessionSlot_HandsTheSlotToOneRequest(t *testing.T) {
 	if claimSessionSlot(registeredCarrier(t, t.Context())) != nil {
 		t.Error("a request on a POST the gate took no slot for claimed one")
 	}
-	slot := &sessionSlot{sessions: &heldRequests{limit: 1}}
+	slot := &sessionSlot{sessions: &processSlots{limit: 1}}
 	slotted := registeredCarrier(t, context.WithValue(t.Context(), sessionSlotKey{}, slot))
 	if got := claimSessionSlot(slotted); got != slot {
 		t.Errorf("the first request on the POST claimed %v, want the gate's slot", got)
@@ -182,7 +205,7 @@ func runSessionsMiddleware(t *testing.T, req mcp.Request) bool {
 
 // waitOpen waits until the count holds want, and fails the test if it never
 // does: a session gives its slot back from a goroutine of its own once it ends.
-func waitOpen(t *testing.T, count *heldRequests, want int64) {
+func waitOpen(t *testing.T, count *processSlots, want int64) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for count.open.Load() != want && time.Now().Before(deadline) {
@@ -195,13 +218,14 @@ func waitOpen(t *testing.T, count *heldRequests, want int64) {
 
 // TestStatefulSessionsMiddleware_TheSessionKeepsTheSlotUntilItEnds covers the
 // handover on a real session: the first request on the POST that opened it
-// keeps the gate's slot, the request is served, and the slot is given back only
-// once the session ends.
+// keeps the gate's slot, its stream's held slot with it, the request is
+// served, and both are given back only once the session ends.
 func TestStatefulSessionsMiddleware_TheSessionKeepsTheSlotUntilItEnds(t *testing.T) {
 	t.Parallel()
-	sessions := &heldRequests{limit: 1}
+	sessions, stream := &processSlots{limit: 1}, &processSlots{limit: 1}
 	sessions.open.Store(1)
-	slot := &sessionSlot{sessions: sessions}
+	stream.open.Store(1)
+	slot := &sessionSlot{sessions: sessions, stream: stream}
 	session, _ := connectedServerSession(t)
 	req := &mcp.CallToolRequest{
 		Session: session,
@@ -215,13 +239,15 @@ func TestStatefulSessionsMiddleware_TheSessionKeepsTheSlotUntilItEnds(t *testing
 		t.Fatal("the session did not keep the gate's slot")
 	}
 	slot.releaseUnkept()
-	if got := sessions.open.Load(); got != 1 {
-		t.Fatalf("open = %d once the POST ended, want the session's slot held while it lives", got)
+	if sessions.open.Load() != 1 || stream.open.Load() != 1 {
+		t.Fatalf("open = %d sessions and %d held once the POST ended, want the session's slots held while it lives",
+			sessions.open.Load(), stream.open.Load())
 	}
 	if err := session.Close(); err != nil {
 		t.Fatalf("close the session: %v", err)
 	}
 	waitOpen(t, sessions, 0)
+	waitOpen(t, stream, 0)
 }
 
 // TestStatefulSessionsMiddleware_LeavesWhatOpenedNoSession covers the requests
@@ -248,7 +274,7 @@ func TestStatefulSessionsMiddleware_LeavesWhatOpenedNoSession(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			slot := &sessionSlot{sessions: &heldRequests{limit: 1}}
+			slot := &sessionSlot{sessions: &processSlots{limit: 1}}
 			carrier := t.Context()
 			if tc.slotted {
 				carrier = context.WithValue(carrier, sessionSlotKey{}, slot)
@@ -268,19 +294,22 @@ func TestStatefulSessionsMiddleware_LeavesWhatOpenedNoSession(t *testing.T) {
 // the gate handed it a slot and keeps the slot when told to, as a session
 // whose initialize completed does.
 type sessionsGate struct {
+	gate     *mcpServerGate
 	handler  http.Handler
-	sessions *heldRequests
+	sessions *processSlots
 	keep     bool
 	slotted  bool
 }
 
-// newSessionsGate builds the gate and the recording handler.
+// newSessionsGate builds the gate and the recording handler. The gate counts
+// no held call until a test gives it a count to.
 func newSessionsGate(t *testing.T, stateless bool) *sessionsGate {
 	t.Helper()
-	g := &sessionsGate{sessions: &heldRequests{limit: 1}}
+	g := &sessionsGate{sessions: &processSlots{limit: 1}}
 	gate := newGate(t, okFactory)
 	gate.statefulSessions = g.sessions
 	gate.stateless = stateless
+	g.gate = gate
 	g.handler = gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slot, slotted := r.Context().Value(sessionSlotKey{}).(*sessionSlot)
 		g.slotted = slotted
@@ -395,38 +424,61 @@ func TestMcpServerGate_Middleware_CountsOnlyWhatOpensASession(t *testing.T) {
 	})
 }
 
-// TestMcpServerGate_Middleware_CountsAStandaloneStreamAsAHeldRequest covers the
-// one request a stateful session holds open that is not a call: its GET takes a
-// held slot for as long as it is open and gives it back when it ends, and with
-// every slot taken it is refused in the gate with the held ceiling's 503.
-func TestMcpServerGate_Middleware_CountsAStandaloneStreamAsAHeldRequest(t *testing.T) {
-	t.Parallel()
-	held := &heldRequests{limit: 1}
-	gate := newGate(t, okFactory)
-	gate.held = held
-	var during int64
-	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		during = held.open.Load()
-		w.WriteHeader(http.StatusOK)
-	}))
-	stream := func() *http.Request {
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/mcp", http.NoBody)
-		req.Header.Set("PRIVATE-TOKEN", gateTestToken)
-		req.Header.Set(mcpSessionIDHeader, "an-open-session")
-		return req
+// TestMcpServerGate_Middleware_TakesTheStreamsSlotWithTheSession covers the one
+// request a stateful session holds open that is not a call, its standalone
+// stream. The POST that opens the session takes a held slot for it beside the
+// session's, and the session keeps both; the stream's GET then takes no slot
+// of its own, so it is served with every held slot taken, where a refused one
+// would leave the session without it for its whole life. With no held slot
+// left, the POST that would open a session is refused in the gate instead, with
+// the held ceiling's 503 and its log line, and gives back the session slot it
+// had taken.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestMcpServerGate_Middleware_TakesTheStreamsSlotWithTheSession(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	forgetRefusalLines()
+
+	g := newSessionsGate(t, false)
+	g.sessions.limit = 2
+	held := &processSlots{limit: 1}
+	g.gate.held = held
+	g.keep = true
+
+	opened := httptest.NewRecorder()
+	g.handler.ServeHTTP(opened, heldPost(t, "1", "initialize", "2025-11-25"))
+	if opened.Code != http.StatusOK || g.sessions.open.Load() != 1 || held.open.Load() != 1 {
+		t.Fatalf("status %d, open %d sessions and %d held; want the session kept with its stream's slot",
+			opened.Code, g.sessions.open.Load(), held.open.Load())
 	}
 
+	stream := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/mcp", http.NoBody)
+	stream.Header.Set("PRIVATE-TOKEN", gateTestToken)
+	stream.Header.Set(mcpSessionIDHeader, "an-open-session")
 	served := httptest.NewRecorder()
-	handler.ServeHTTP(served, stream())
-	if served.Code != http.StatusOK || during != 1 || held.open.Load() != 0 {
-		t.Errorf("status %d, open %d while the stream ran and %d after; want it served under one slot, given back",
-			served.Code, during, held.open.Load())
+	g.handler.ServeHTTP(served, stream)
+	if served.Code != http.StatusOK || held.open.Load() != 1 {
+		t.Errorf("the stream with every held slot taken = %d, open %d held; want it served on the session's slot",
+			served.Code, held.open.Load())
 	}
-	held.open.Store(1)
+
+	g.slotted = false
 	refused := httptest.NewRecorder()
-	handler.ServeHTTP(refused, stream())
-	if refused.Code != http.StatusServiceUnavailable || !strings.Contains(refused.Body.String(), heldRefusalText) {
-		t.Errorf("status %d, body %s; want the held ceiling's 503", refused.Code, refused.Body.String())
+	g.handler.ServeHTTP(refused, heldPost(t, "2", "initialize", "2025-11-25"))
+	if refused.Code != http.StatusServiceUnavailable || g.slotted || !strings.Contains(refused.Body.String(), heldRefusalText) {
+		t.Fatalf("status %d, reached the handler %v: %s; want the held ceiling's 503 before the SDK",
+			refused.Code, g.slotted, refused.Body.String())
+	}
+	if g.sessions.open.Load() != 1 || held.open.Load() != 1 {
+		t.Errorf("open %d sessions and %d held after the refusal, want the kept session's slots and no other",
+			g.sessions.open.Load(), held.open.Load())
+	}
+	if line := logged.String(); !strings.Contains(line, "too many requests held across the process") ||
+		!strings.Contains(line, `"limit_held_requests":1`) {
+		t.Errorf("the refusal left no line naming the held ceiling: %s", line)
 	}
 }
 
@@ -435,6 +487,13 @@ func TestMcpServerGate_Middleware_CountsAStandaloneStreamAsAHeldRequest(t *testi
 // through the gate, the carrier, the SDK and the real server shape, counted on
 // the process's own counts.
 func startSessionsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return startSessionsServerWith(t, func(h http.Handler) http.Handler { return h })
+}
+
+// startSessionsServerWith is startSessionsServer with wrap around the whole
+// chain, for a test that watches what the chain answers.
+func startSessionsServerWith(t *testing.T, wrap func(http.Handler) http.Handler) *httptest.Server {
 	t.Helper()
 	gitlab := newHoldingGitLab(t)
 	cfg := &config.Config{
@@ -446,7 +505,7 @@ func startSessionsServer(t *testing.T) *httptest.Server {
 	t.Cleanup(pool.Close)
 	mux := http.NewServeMux()
 	registerLegacyMCPHandlers(t.Context(), cfg, pool, binding, mux)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(wrap(mux))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -484,22 +543,25 @@ func deleteSession(t *testing.T, srv *httptest.Server, id string) int {
 
 // TestStatefulSessions_EachSessionHoldsASlotUntilItEnds drives the whole chain
 // with one session slot of the process free: an initialize opens a session
-// that keeps the slot, the next initialize is refused in the gate with the
-// 503, the session's DELETE gives the slot back, and a new session opens.
+// that keeps the slot, and a held slot for its stream, the next initialize is
+// refused in the gate with the 503, the session's DELETE gives both slots
+// back, and a new session opens.
 //
 // Not parallel: it fills the process-wide count.
 func TestStatefulSessions_EachSessionHoldsASlotUntilItEnds(t *testing.T) {
 	srv := startSessionsServer(t)
 	fillProcessStatefulSessions(t, 1)
 	full := processStatefulSessions.limit
+	held := processHeldRequests.open.Load()
 
 	status, header, got := postHeld(t, srv, gateTestToken, initializeBody(1), legacyHeader("2025-11-25"))
 	session := header.Get(mcpSessionIDHeader)
 	if status != http.StatusOK || session == "" {
 		t.Fatalf("initialize = %d with session %q: %s", status, session, got)
 	}
-	if got := processStatefulSessions.open.Load(); got != full {
-		t.Fatalf("open = %d with the session open, want %d", got, full)
+	if processStatefulSessions.open.Load() != full || processHeldRequests.open.Load() != held+1 {
+		t.Fatalf("open = %d sessions and %d held with the session open, want %d and %d",
+			processStatefulSessions.open.Load(), processHeldRequests.open.Load(), full, held+1)
 	}
 
 	status, header, got = postHeld(t, srv, gateTestToken, initializeBody(2), legacyHeader("2025-11-25"))
@@ -514,6 +576,7 @@ func TestStatefulSessions_EachSessionHoldsASlotUntilItEnds(t *testing.T) {
 		t.Fatalf("DELETE = %d, want 204", code)
 	}
 	waitOpen(t, processStatefulSessions, full-1)
+	waitOpen(t, processHeldRequests, held)
 	status, header, got = postHeld(t, srv, gateTestToken, initializeBody(3), legacyHeader("2025-11-25"))
 	if status != http.StatusOK || header.Get(mcpSessionIDHeader) == "" {
 		t.Errorf("initialize once the slot was given back = %d: %s; want a new session", status, got)
@@ -549,6 +612,116 @@ func TestStatefulSessions_APOSTWhoseSessionDiesWithItGivesItsSlotBack(t *testing
 			waitOpen(t, processStatefulSessions, free)
 		})
 	}
+}
+
+// TestStatefulSessions_AModernPOST_IsAnsweredByTheSDKWithEverySlotTaken covers a
+// 2026-07-28 client probing a stateful deployment whose every session slot is
+// taken: its server/discover, and any call, is told the revision is not served
+// here and which ones are, so the client learns to fall back, as it is with
+// slots free. Neither is refused as busy, which would tell the client to retry
+// what it should instead downgrade, and neither takes a slot, since the SDK
+// closes the session of each with its POST.
+//
+// Not parallel: it fills the process-wide count.
+func TestStatefulSessions_AModernPOST_IsAnsweredByTheSDKWithEverySlotTaken(t *testing.T) {
+	srv := startSessionsServer(t)
+	fillProcessStatefulSessions(t, 0)
+	const meta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}`
+	for _, method := range []string{"server/discover", "ping"} {
+		t.Run(method, func(t *testing.T) {
+			body := `{"jsonrpc":"2.0","id":1,"method":"` + method + `","params":{` + meta + `}}`
+			header := http.Header{"Mcp-Protocol-Version": {"2026-07-28"}, "Mcp-Method": {method}}
+			status, _, got := postHeld(t, srv, gateTestToken, body, header)
+			if status != http.StatusBadRequest || !strings.Contains(got, "-32022") || !strings.Contains(got, `"2025-11-25"`) {
+				t.Errorf("%s with every session slot taken = %d: %s; want the SDK's 400 with -32022 naming 2025-11-25",
+					method, status, got)
+			}
+			if got := processStatefulSessions.open.Load(); got != processStatefulSessions.limit {
+				t.Errorf("open = %d sessions, want the %d the test holds and none taken", got, processStatefulSessions.limit)
+			}
+		})
+	}
+}
+
+// streamStatuses reports the status the chain answers each GET with, which is
+// a stateful session's standalone stream. It unwraps to the writer it wraps,
+// so the stream can still be flushed as it is written.
+type streamStatuses struct {
+	http.ResponseWriter
+	statuses chan<- int
+}
+
+// WriteHeader records a GET's status and passes it on.
+func (s *streamStatuses) WriteHeader(status int) {
+	select {
+	case s.statuses <- status:
+	default:
+	}
+	s.ResponseWriter.WriteHeader(status)
+}
+
+// Unwrap is the writer the chain's own flushes reach.
+func (s *streamStatuses) Unwrap() http.ResponseWriter {
+	return s.ResponseWriter
+}
+
+// TestStatefulSessions_AGoSDKClientKeepsItsStreamWithEveryHeldSlotTaken drives
+// the SDK's own client against the whole chain with one held slot of the
+// process left. Its initialize takes that slot for the session's standalone
+// stream, so the stream the client opens next is served although every held
+// slot is then taken; the SDK's client does not ask again for a stream it was
+// refused, and a session that lost it would carry on without any message the
+// server sends outside a response. With no held slot left, the next client's
+// initialize is refused instead, which the client reports as the connection
+// failing.
+//
+// Not parallel: it fills the process-wide counts.
+func TestStatefulSessions_AGoSDKClientKeepsItsStreamWithEveryHeldSlotTaken(t *testing.T) {
+	statuses := make(chan int, 16)
+	srv := startSessionsServerWith(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				w = &streamStatuses{ResponseWriter: w, statuses: statuses}
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	fillProcessHeldRequests(t, 1)
+	sessions := processStatefulSessions.open.Load()
+	transport := func() *mcp.StreamableClientTransport {
+		return &mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{
+			Transport: headerRoundTripper{base: http.DefaultTransport, header: http.Header{"PRIVATE-TOKEN": {gateTestToken}}},
+		}}
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "sessions-client", Version: "0"}, nil)
+
+	clientSession, err := client.Connect(t.Context(), transport(), nil)
+	if err != nil {
+		t.Fatalf("the client with one held slot left could not connect: %v", err)
+	}
+	select {
+	case status := <-statuses:
+		if status != http.StatusOK {
+			t.Errorf("the session's standalone stream = %d, want it served on the slot its initialize took", status)
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("the client opened no standalone stream")
+	}
+	if got := processHeldRequests.open.Load(); got != processHeldRequests.limit {
+		t.Errorf("open = %d held with the session and its stream open, want every one of %d taken",
+			got, processHeldRequests.limit)
+	}
+
+	if refused, connectErr := client.Connect(t.Context(), transport(), nil); connectErr == nil {
+		_ = refused.Close()
+		t.Error("a second client connected with no held slot left for its stream")
+	}
+
+	if closeErr := clientSession.Close(); closeErr != nil {
+		t.Errorf("closing the session: %v", closeErr)
+	}
+	waitOpen(t, processHeldRequests, processHeldRequests.limit-1)
+	waitOpen(t, processStatefulSessions, sessions)
 }
 
 // TestRegisterOAuthMCPHandlers_RefusesPastTheProcessSessionCeiling holds the

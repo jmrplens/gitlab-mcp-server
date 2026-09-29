@@ -216,10 +216,11 @@ func (o *openSessions) awaitOpen(ctx context.Context, t *testing.T, client *http
 // session: a 503 whose JSON-RPC body echoes its id and carries -50300, with
 // the register's fixed Retry-After, the connection closed, the words the held
 // ceiling uses, and a line in the log naming the process as the scope. A call
-// on a session already open is still served, since the streams of every
-// session hold at most half of the held-call slots. Six hundred more
-// initializes at once are refused too, and /health answers. Once a session is
-// deleted its slot comes back, and a new session opens.
+// on a session already open is still served, since the sessions, each holding
+// a held-call slot for its stream, hold at most half of them. Six hundred more
+// initializes at once are refused too, and /health answers while they are
+// offered. Once a session is deleted its slot comes back, and a new session
+// opens.
 //
 // The rate limit is off so one credential can open every session: initialize
 // is metered to no bucket anyway, and the calls are not what is measured.
@@ -260,12 +261,24 @@ func TestLimit_ProcessBoundsStatefulSessions(t *testing.T) {
 	}
 
 	const extra = 600
-	if got := offerSessionsPastTheCeiling(ctx, srv.baseURL, extra); got != extra {
-		t.Errorf("%d of the %d initializes offered past the ceiling were refused with 503, want every one", got, extra)
+	flooded := make(chan int, 1)
+	go func() { flooded <- offerSessionsPastTheCeiling(ctx, srv.baseURL, extra) }()
+	probes := 0
+	for refusedPastTheCeiling := -1; refusedPastTheCeiling < 0; {
+		if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
+			t.Errorf("/health = %d while %d initializes were offered past the ceiling, want 200", health.status, extra)
+		}
+		probes++
+		select {
+		case refusedPastTheCeiling = <-flooded:
+			if refusedPastTheCeiling != extra {
+				t.Errorf("%d of the %d initializes offered past the ceiling were refused with 503, want every one",
+					refusedPastTheCeiling, extra)
+			}
+		default:
+		}
 	}
-	if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
-		t.Errorf("/health = %d after %d initializes were offered past the ceiling, want 200", health.status, extra)
-	}
+	t.Logf("/health answered 200 to %d probes while the initializes were offered", probes)
 
 	opened.endFirst(ctx, t, client, srv.baseURL)
 	opened.awaitOpen(ctx, t, client, srv.baseURL)

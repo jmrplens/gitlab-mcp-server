@@ -15,9 +15,9 @@ import "time"
 // Holdings (HLD-001 to HLD-004, HLD-007, HLD-010, HLD-011, RTC-005).
 const (
 	// SessionHeldDivisor is the share of the held-request ceiling the
-	// stateful sessions may number, as its reciprocal: a half, so the
-	// standalone streams of every session, each one a held request, can take
-	// at most half of the held slots (HLD-010).
+	// stateful sessions may number, as its reciprocal: a half, so the held
+	// slot each session takes for its standalone stream leaves at least half
+	// of the held slots to calls (HLD-010).
 	SessionHeldDivisor = 2
 	// HeldRequestDescriptors is how many file descriptors one request the
 	// process holds open costs it: the caller's connection and the one to
