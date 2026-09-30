@@ -46,9 +46,14 @@ This server read such a token through its scopes, which say nothing about it:
   version again once per thirty seconds of activity for the life of the process.
 - **Every mode** described a call GitLab refused outside the grant with the generic 403
   sentence (a missing scope, a project role, an admin setting), none of which is what is
-  missing. Only a write's error carried GitLab's own sentence, in client-go's flattening,
-  and a GraphQL refusal a handler returned without wrapping it read as an unexpected
-  error; the vulnerability state mutations read one as a change that had happened.
+  missing, and a handler's hint written for that 403 (a role, a license, an owner) was
+  appended to it. Only a write's error carried GitLab's own sentence, in client-go's
+  flattening, and a GraphQL refusal a handler returned without wrapping it read as an
+  unexpected error. Three raw GraphQL domains never read the refusal at all, since a
+  refused mutation answers with its payload `null` and they decoded the payload alone:
+  the vulnerability state mutations, the custom emoji delete and the epic issue link,
+  unlink and reorder reported a change that had not happened, and the custom emoji
+  create dropped GitLab's reason.
 
 The tenant register records the misreading as finding F-17, filed under issue 952 and
 carried by the rows that decide the read-only surface (`AUT-001`) and the door's
@@ -219,7 +224,16 @@ shape.
   `TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts`,
   `TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry` and
   `TestSanitizeError_FineGrainedRefusal_IsDescribedOnce` in `internal/toolutil` hold what
-  a model is told of each, whichever route the error took.
+  a model is told of each, whichever route the error took, and
+  `TestWrapErrWithHint_FineGrainedRefusal_DropsTheHandlersHint` there and
+  `TestPackageDelete403_FineGrainedRefusal_NamesThePermissionAndNoRole` in
+  `internal/tools/packages` that no handler's hint follows it.
+- `TestDismiss_RefusedMutation_IsAnErrorNamingGitLabsReason` in
+  `internal/tools/vulnerabilities`, `TestMutations_Refused_IsAnErrorNamingGitLabsReason`
+  in `internal/tools/customemoji` and
+  `TestEpicIssueMutations_Refused_IsAnErrorNamingGitLabsReason` in
+  `internal/tools/epicissues` hold a GraphQL mutation GitLab refused to an error carrying
+  its reason rather than a success.
 - `TestInitialize_FineGrainedVersionRefusal_IsReachableWithTheVersionUnknown`,
   `TestDetectEnterprise_VersionRefused_UsesTheFallbackWithoutAsking` and
   `TestVersion_OnlyAVersionGitLabCouldSend_IsKept` in `internal/gitlab`,
