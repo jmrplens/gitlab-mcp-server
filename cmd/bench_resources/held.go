@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -310,7 +311,7 @@ func (r *runner) runHeldLadder(ctx context.Context, opts options, steps []int, d
 	if err != nil {
 		return err
 	}
-	in := heldInput{tgt: tgt, profiler: newPprofClient("http://" + tgt.pprofAddr), conns: conns}
+	in := heldInput{tgt: tgt, profiler: newPprofClient(loopbackURL(tgt.pprofAddr, "")), conns: conns}
 	doc.Idle = r.sampleHeld(ctx, in)
 	fmt.Printf("  idle: %s\n", doc.Idle.summary())
 	for _, offered := range steps {
@@ -428,6 +429,13 @@ func countDescriptors(pid int) (int, error) {
 	return len(entries), nil
 }
 
+// loopbackURL is the address of path on the server this benchmark started. That
+// server is the process under measurement: it listens on the loopback interface
+// and serves plain HTTP, and nothing outside this host ever reaches it.
+func loopbackURL(addr, path string) string {
+	return (&url.URL{Scheme: "http", Host: addr, Path: path}).String()
+}
+
 // probeHealth asks /health once, on a connection of its own, and reports the
 // status it answered with and how long that took.
 //
@@ -438,7 +446,7 @@ func probeHealth(ctx context.Context, addr string) (string, time.Duration) {
 	ctx, cancel := context.WithTimeout(ctx, healthTimeout)
 	defer cancel()
 	started := time.Now()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/health", http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, loopbackURL(addr, "/health"), http.NoBody)
 	if err != nil {
 		return healthUnanswered, time.Since(started)
 	}
