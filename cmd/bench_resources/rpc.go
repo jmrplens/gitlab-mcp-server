@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -126,11 +127,38 @@ type httpStatusError struct {
 	Method  string
 	Status  int
 	Snippet string
+	// RPC is the JSON-RPC error the refusal carried in its body, when it
+	// carried one. The gate answers every refusal of its own that way, so a
+	// 503 from the verification ceiling and a 503 from anything else in front
+	// of the server are told apart by the code and words inside it.
+	RPC *rpcError
 }
 
 // Error renders the refused response.
 func (e *httpStatusError) Error() string {
 	return fmt.Sprintf("%s: HTTP %d: %s", e.Method, e.Status, e.Snippet)
+}
+
+// Unwrap exposes the JSON-RPC error inside the refusal, so a refusal shape
+// that names a code reads it the way it reads one carried at HTTP 200.
+func (e *httpStatusError) Unwrap() error {
+	if e.RPC == nil {
+		return nil
+	}
+	return *e.RPC
+}
+
+// statusError builds the error a response other than 200 is, keeping the
+// JSON-RPC error its body carried when it carried one.
+func statusError(method string, status int, payload []byte) *httpStatusError {
+	refused := &httpStatusError{Method: method, Status: status, Snippet: firstLine(payload)}
+	var envelope struct {
+		Error *rpcError `json:"error"`
+	}
+	if json.Unmarshal(payload, &envelope) == nil {
+		refused.RPC = envelope.Error
+	}
+	return refused
 }
 
 // checkResponse rejects a payload carrying a JSON-RPC error, and a tool result
@@ -190,8 +218,18 @@ func firstResultText(payload []byte) string {
 type httpRPC struct {
 	endpoint string
 	token    string
-	client   *http.Client
-	ids      atomic.Int64
+	// bearer presents the credential as an OAuth bearer token rather than as
+	// a personal access token, which is what a server in OAuth mode reads.
+	bearer bool
+	client *http.Client
+	ids    atomic.Int64
+}
+
+// credential is what one request presents: a token, and the client address a
+// trusted proxy would name for it, empty when the request names none.
+type credential struct {
+	token        string
+	forwardedFor string
 }
 
 // newHTTPRPC builds a client for one credential.
@@ -207,6 +245,22 @@ func newHTTPRPC(endpoint, token string) *httpRPC {
 			Transport: &http.Transport{MaxIdleConnsPerHost: 8},
 		},
 	}
+}
+
+// newSourcedHTTPRPC builds a client whose connections leave from one local
+// address, which is the transport source the server charges its failures to.
+//
+// A pool of its own per source rather than one pool choosing a source per
+// request, because an idle keep-alive connection is reused whatever it was
+// dialed from: one pool would send a request from whichever source its idle
+// connection happened to have, and the budget the sources exist to stay under
+// would be charged to the wrong one.
+func newSourcedHTTPRPC(endpoint, source string, bearer bool) *httpRPC {
+	dialer := &net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(source)}}
+	client := newHTTPRPC(endpoint, "")
+	client.bearer = bearer
+	client.client.Transport = &http.Transport{MaxIdleConnsPerHost: 8, DialContext: dialer.DialContext}
+	return client
 }
 
 // headerNameFor returns what the Mcp-Name header carries for a method.
@@ -255,8 +309,15 @@ func paramHeaderFor(method string, params map[string]any) (name, value string) {
 	return executeActionHeader, action
 }
 
-// call posts one request and reads the answer.
+// call posts one request with the client's own credential and reads the
+// answer.
 func (c *httpRPC) call(ctx context.Context, method string, params map[string]any) ([]byte, error) {
+	return c.callAs(ctx, method, params, credential{token: c.token})
+}
+
+// callAs posts one request presenting the credential given rather than the
+// client's own, over the client's own connections.
+func (c *httpRPC) callAs(ctx context.Context, method string, params map[string]any, cred credential) ([]byte, error) {
 	body, err := requestBody(c.ids.Add(1), method, params)
 	if err != nil {
 		return nil, err
@@ -277,7 +338,14 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	if header, value := paramHeaderFor(method, params); header != "" {
 		req.Header.Set(header, value)
 	}
-	req.Header.Set("PRIVATE-TOKEN", c.token)
+	if c.bearer {
+		req.Header.Set("Authorization", "Bearer "+cred.token)
+	} else {
+		req.Header.Set("PRIVATE-TOKEN", cred.token)
+	}
+	if cred.forwardedFor != "" {
+		req.Header.Set(headerForwardedFor, cred.forwardedFor)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -296,7 +364,7 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	// alongside it as an answer and put its timing into a published
 	// percentile.
 	if resp.StatusCode != http.StatusOK {
-		return nil, &httpStatusError{Method: method, Status: resp.StatusCode, Snippet: firstLine(payload)}
+		return nil, statusError(method, resp.StatusCode, payload)
 	}
 	message := payload
 	if strings.HasPrefix(resp.Header.Get(headerContentType), mediaEventStream) {

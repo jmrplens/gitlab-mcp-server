@@ -68,17 +68,21 @@ type options struct {
 	// its arms are two processes started with different switches, which no
 	// scenarioPlan describes, and keeping it out of the matrix is what keeps
 	// the published record and its byte-compared charts untouched.
-	fairness          string
-	fairnessJSON      string
-	fairnessSurface   string
-	fairnessQuiet     int
-	fairnessNoisy     int
-	fairnessQuietRate float64
-	fairnessNoisyRate float64
-	fairnessPhase     time.Duration
-	fairnessLeadIn    time.Duration
-	fairnessDeadline  time.Duration
-	fairnessRepeats   int
+	fairness              string
+	fairnessJSON          string
+	fairnessSurface       string
+	fairnessQuiet         int
+	fairnessNoisy         int
+	fairnessQuietRate     float64
+	fairnessNoisyRate     float64
+	fairnessPhase         time.Duration
+	fairnessLeadIn        time.Duration
+	fairnessDeadline      time.Duration
+	fairnessRepeats       int
+	fairnessUpstreamDelay time.Duration
+	// fairnessSet names the fairness flags the caller typed, which is what
+	// lets a bound's own defaults stand wherever the caller named nothing.
+	fairnessSet map[string]bool
 	// The held-request mode (held.go): a mode of its own for the same reason
 	// the fairness one is, since it writes a document of its own and draws
 	// nothing.
@@ -135,15 +139,22 @@ func parseFlags() options {
 		"measure a fairness comparison for the named bound instead of the matrix, one of: "+strings.Join(boundIDs(), ", "))
 	flag.StringVar(&opts.fairnessJSON, "fairness-json", defaultFairnessRecord, "document a fairness run writes; never the published record")
 	flag.StringVar(&opts.fairnessSurface, "fairness-surface", surfaceDynamic, "tool surface a fairness run drives")
-	flag.IntVar(&opts.fairnessQuiet, "fairness-quiet", defaultQuietCredentials, "credentials in the quiet population")
-	flag.IntVar(&opts.fairnessNoisy, "fairness-noisy", defaultNoisyCredentials, "credentials in the noisy population")
+	flag.IntVar(&opts.fairnessQuiet, flagFairnessQuiet, defaultQuietCredentials,
+		"credentials in the quiet population"+boundDefaultNote)
+	flag.IntVar(&opts.fairnessNoisy, flagFairnessNoisy, defaultNoisyCredentials,
+		"credentials in the noisy population"+boundDefaultNote)
 	flag.Float64Var(&opts.fairnessQuietRate, "fairness-quiet-rate", 0,
 		"requests per second each quiet credential offers; 0 takes a quarter of what the bound meters, capped at 2")
-	flag.Float64Var(&opts.fairnessNoisyRate, "fairness-noisy-rate", defaultNoisyRate, "requests per second each noisy credential offers")
-	flag.DurationVar(&opts.fairnessPhase, "fairness-phase", defaultFairnessPhase, "measured window per arm")
-	flag.DurationVar(&opts.fairnessLeadIn, "fairness-lead-in", defaultFairnessLeadIn, "unmeasured window before each arm's phase, which drains the bound's burst")
-	flag.DurationVar(&opts.fairnessDeadline, "fairness-deadline", defaultFairnessDeadline, "how long a request may take from its intended dispatch before a client would have given up")
+	flag.Float64Var(&opts.fairnessNoisyRate, flagFairnessNoisyRate, defaultNoisyRate,
+		"requests per second each noisy credential offers"+boundDefaultNote)
+	flag.DurationVar(&opts.fairnessPhase, flagFairnessPhase, defaultFairnessPhase, "measured window per arm"+boundDefaultNote)
+	flag.DurationVar(&opts.fairnessLeadIn, flagFairnessLeadIn, defaultFairnessLeadIn,
+		"unmeasured window before each arm's phase, which drains the bound's burst"+boundDefaultNote)
+	flag.DurationVar(&opts.fairnessDeadline, flagFairnessDeadline, defaultFairnessDeadline,
+		"how long a request may take from its intended dispatch before a client would have given up"+boundDefaultNote)
 	flag.IntVar(&opts.fairnessRepeats, "fairness-repeats", defaultFairnessRepeats, "how many times the pair of arms is run, alternating their order")
+	flag.DurationVar(&opts.fairnessUpstreamDelay, "fairness-upstream-delay", 0,
+		"how long the stand-in GitLab takes to answer each token verification request; 0 takes the bound's own, or none")
 	flag.StringVar(&opts.held, "held", "",
 		"measure what held requests cost instead of the matrix: comma-separated counts of tools/call held open at once, ascending")
 	flag.IntVar(&opts.heldCredentials, "held-credentials", 1, "credentials a -held run spreads its calls across")
@@ -157,6 +168,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.sessionsJSON, "sessions-json", defaultSessionsRecord, "document a -sessions run writes; never the published record")
 	flag.Parse()
 
+	opts.fairnessSet = map[string]bool{}
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "json":
@@ -166,9 +178,26 @@ func parseFlags() options {
 		case "step-duration":
 			opts.stepDurationSet = true
 		}
+		if strings.HasPrefix(f.Name, "fairness-") {
+			opts.fairnessSet[f.Name] = true
+		}
 	})
 	return opts
 }
+
+// The fairness flags a bound may have a default of its own for, named once so
+// the flag and the lookup that asks whether it was typed cannot drift apart.
+const (
+	flagFairnessQuiet     = "fairness-quiet"
+	flagFairnessNoisy     = "fairness-noisy"
+	flagFairnessNoisyRate = "fairness-noisy-rate"
+	flagFairnessPhase     = "fairness-phase"
+	flagFairnessLeadIn    = "fairness-lead-in"
+	flagFairnessDeadline  = "fairness-deadline"
+)
+
+// boundDefaultNote ends the help of every flag a bound may default.
+const boundDefaultNote = "; a bound may default it otherwise"
 
 // validate refuses the flag values that would produce a record rather than an
 // error.
@@ -452,18 +481,27 @@ func buildServer(root string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create a build directory: %w", err)
 	}
-	out := filepath.Join(dir, "server")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
+	out := filepath.Join(dir, serverExecutable())
 	fmt.Println("building ./cmd/server")
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
-	cmd.Dir = root
-	if output, runErr := cmd.CombinedOutput(); runErr != nil {
+	if buildErr := goBuild(root, out); buildErr != nil {
 		_ = os.RemoveAll(dir)
-		return "", fmt.Errorf("build ./cmd/server: %w\n%s", runErr, output)
+		return "", buildErr
 	}
 	return out, nil
+}
+
+// goBuild compiles ./cmd/server from root into out, with whatever the build
+// needs beyond that, such as a variant's overlay.
+func goBuild(root, out string, extra ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	args := append(append([]string{"build"}, extra...), "-o", out, "./cmd/server")
+	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd.Dir = root
+	if output, runErr := cmd.CombinedOutput(); runErr != nil {
+		return fmt.Errorf("build ./cmd/server: %w\n%s", runErr, output)
+	}
+	return nil
 }
 
 // progressFunc returns the per-client and per-round reporter, silent unless

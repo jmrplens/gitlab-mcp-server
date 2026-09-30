@@ -967,3 +967,37 @@ func assertStartedWith(t *testing.T, args, want, absent []string) {
 		}
 	}
 }
+
+// TestHTTPTarget_AddClient_PresentsAsTheServerReads verifies a target a bound
+// starts in OAuth mode hands out clients that present bearer tokens, to the
+// endpoint the process serves.
+func TestHTTPTarget_AddClient_PresentsAsTheServerReads(t *testing.T) {
+	for _, bearer := range []bool{false, true} {
+		t.Run(strconv.FormatBool(bearer), func(t *testing.T) {
+			target := &httpTarget{addr: "127.0.0.1:1", bearer: bearer}
+			conn, _, err := target.addClient(t.Context(), 3)
+			if err != nil {
+				t.Fatalf("addClient: %v", err)
+			}
+			client, ok := conn.rpc.(*httpRPC)
+			if !ok || client.bearer != bearer || client.endpoint != "http://127.0.0.1:1/mcp" || client.token != benchToken+"3" {
+				t.Errorf("client = %+v, want the credential for index 3 at the target's endpoint", conn.rpc)
+			}
+		})
+	}
+}
+
+// TestClientConn_Adopt_ReplacesTheCredentialItPresents verifies a client
+// presents its own credential until it adopts another, and that one from then
+// on.
+func TestClientConn_Adopt_ReplacesTheCredentialItPresents(t *testing.T) {
+	conn := &clientConn{}
+	if got := conn.current(); got != "" {
+		t.Errorf("current = %q before anything was adopted, want the client's own", got)
+	}
+	conn.adopt("bench-new-1")
+	conn.adopt("bench-new-2")
+	if got := conn.current(); got != "bench-new-2" {
+		t.Errorf("current = %q, want the one adopted last", got)
+	}
+}

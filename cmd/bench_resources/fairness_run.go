@@ -49,11 +49,28 @@ func runFairness(opts options, root string) error {
 		}
 	}
 
+	// A bound with no switch compares two builds of this checkout, and a
+	// binary named by the flag would be one build of something else: the two
+	// arms would then differ in whatever separates that binary from the tree,
+	// not in the one declaration the variant replaces.
+	if plan.Bound.Variant != nil && opts.binary != "" {
+		return fmt.Errorf("-binary names one build, and %s is measured against a second one, this checkout with %s: "+
+			"leave -binary out so both arms are built from the same tree", plan.Bound.Label, plan.Bound.Variant.describe())
+	}
+
 	r, cleanup, err := newHarness(opts, root)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+	if plan.Bound.Variant != nil {
+		variant, buildErr := buildVariantBinary(root, *plan.Bound.Variant)
+		if buildErr != nil {
+			return buildErr
+		}
+		defer func() { _ = os.RemoveAll(filepath.Dir(variant)) }()
+		r.variant = variant
+	}
 
 	fmt.Printf("%s: %s\n", plan.ID, plan.describe())
 	// The header is taken before the run rather than during it, because none of
@@ -114,15 +131,22 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	if err != nil {
 		return FairnessArm{}, err
 	}
+	binary, err := r.binaryFor(plan, arm)
+	if err != nil {
+		return FairnessArm{}, err
+	}
+	r.stub.setDelay(plan.UpstreamDelay)
 	tgt := &httpTarget{
-		binary:  r.binary,
+		binary:  binary,
 		plan:    scenarioPlan{ID: plan.ID, Transport: transportHTTP, Surface: plan.Surface},
 		stubURL: r.stub.url, otlpURL: r.otlp.url,
-		// Sized to both populations so nothing admitted is evicted under the
-		// pool's own default while the phase is running.
-		maxClients: plan.totalCredentials(),
+		// Sized to every credential the arm presents, the new ones included,
+		// so nothing admitted is evicted under the pool's own default while
+		// the phase is running.
+		maxClients: plan.poolEntries(),
 		boundArgs:  plan.armArgs(arm),
 		boundEnv:   plan.armEnv(arm),
+		bearer:     plan.Bound.OAuth,
 	}
 	defer tgt.close()
 
@@ -148,22 +172,33 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	if admitErr != nil {
 		return FairnessArm{}, admitErr
 	}
+	present := newPresenter(plan, tgt.endpoint(), plan.Bound.OAuth)
+	defer present.close()
 
 	// The lead-in is discarded on purpose and both arms pay it: it drains the
 	// bound's burst, so the measured window reports the bound rather than the
-	// bucket it started full, and it warms a pool and a heap that a fresh
-	// process has neither of.
-	drive(ctx, plan, conns, call, plan.leadInTicks, newFairTally(call, plan.Bound.Refusals))
-
-	tally := newFairTally(call, plan.Bound.Refusals)
-	server.resetPeak()
-	serverStart, serverStartOK := sampleCPU(server)
-	driverStart, driverStartOK := sampleCPU(driver)
-	phaseStarted := time.Now()
-	drive(ctx, plan, conns, call, plan.ticks, tally)
+	// bucket it started full, it lets a slot bound's queue form, and it warms a
+	// pool and a heap that a fresh process has neither of. The phase's window
+	// opens on the lead-in's clock, so what the process and the instance did
+	// is counted from that instant, requests the lead-in left waiting included.
+	tally := newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...)
+	var serverStart, driverStart cpuSample
+	var phaseStarted time.Time
+	leadInLanded := driveContinuously(ctx, driveInput{plan: plan, conns: conns, call: call, present: present},
+		newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...), tally, func() {
+			server.resetPeak()
+			r.stub.resetUpstream()
+			serverStart.seconds, serverStart.ok = sampleCPU(server)
+			driverStart.seconds, driverStart.ok = sampleCPU(driver)
+			phaseStarted = time.Now()
+		})
 	phaseWall := time.Since(phaseStarted)
 	serverEnd, serverEndOK := sampleCPU(server)
 	driverEnd, driverEndOK := sampleCPU(driver)
+	// Waited for before the instance's count is read, so a lead-in request
+	// still in flight when the phase's last one landed is counted rather than
+	// arriving after the reading.
+	leadInLanded()
 
 	measured := FairnessArm{
 		Arm:         arm,
@@ -171,10 +206,18 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 		Env:         plan.armEnv(arm),
 		Populations: tally.populations(plan),
 	}
+	// What the instance saw is the half of a verification bound's answer the
+	// quiet population cannot give: the bound exists for it, so an arm of such
+	// a bound says how many verification requests reached it and how many at
+	// once.
+	if plan.Bound.OAuth {
+		upstream := r.stub.upstream()
+		measured.Upstream = &upstream
+	}
 	measured.Process, measured.Notes = fairnessProcess(processInput{
-		serverStart: cpuSample{seconds: serverStart, ok: serverStartOK},
+		serverStart: serverStart,
 		serverEnd:   cpuSample{seconds: serverEnd, ok: serverEndOK},
-		driverStart: cpuSample{seconds: driverStart, ok: driverStartOK},
+		driverStart: driverStart,
 		driverEnd:   cpuSample{seconds: driverEnd, ok: driverEndOK},
 		wall:        phaseWall,
 		peakRSS:     server.peakRSS(),
@@ -185,6 +228,19 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	measured.Notes = append(measured.Notes, notes...)
 	measured.Comparable = len(notes) == 0
 	return measured, err
+}
+
+// binaryFor is the binary one arm runs: the one under test, or for the arm
+// without a bound that has no switch, the variant built for it.
+func (r *runner) binaryFor(plan fairnessPlan, arm string) (string, error) {
+	if arm != armOff || plan.Bound.Variant == nil {
+		return r.binary, nil
+	}
+	if r.variant == "" {
+		return "", fmt.Errorf("the arm without %s runs a build of its own, %s, and none was made",
+			plan.Bound.Label, plan.Bound.Variant.describe())
+	}
+	return r.variant, nil
 }
 
 // refusalFloor is the fewest refusals an arm with the bound in force may
@@ -219,12 +275,12 @@ func checkArm(plan fairnessPlan, arm FairnessArm) ([]string, error) {
 			if got, want := method.Dispatched, method.Intended-method.Dropped; got != want {
 				notes = append(notes, fmt.Sprintf(
 					"%s %s: %d dispatched against %d offered less %d dropped; the schedule did not run to its end",
-					pop.Name, method.Method, got, method.Intended, method.Dropped,
+					pop.Name, method.label(), got, method.Intended, method.Dropped,
 				))
 			}
 			if method.Failed > 0 {
 				notes = append(notes, fmt.Sprintf("%s %s: %d requests failed for a reason that is not this bound: %s",
-					pop.Name, method.Method, method.Failed, method.FirstFailure))
+					pop.Name, method.label(), method.Failed, method.FirstFailure))
 			}
 		}
 	}
@@ -244,12 +300,50 @@ func checkArm(plan fairnessPlan, arm FairnessArm) ([]string, error) {
 	return notes, nil
 }
 
-// drive runs one window: every credential of both populations follows its own
-// schedule, and the whole thing returns when the last request has landed.
-func drive(ctx context.Context, plan fairnessPlan, conns []*clientConn, call toolCall,
-	ticksFor func(populationSpec) int, tally *fairTally,
-) {
+// driveContinuously runs the lead-in and the phase as one schedule: the
+// phase's first tick is where the lead-in's clock puts it, whether or not the
+// lead-in's requests have landed, and atPhase runs at that instant, before the
+// phase's first request is issued. It returns when the phase's last request
+// has landed, with a function that waits for the lead-in's.
+//
+// Run one after the other, the two windows had a pause between them: the
+// lead-in returned only once its last request landed, so a slot bound's queue
+// drained, up to its whole wait, and every phase opened on an empty one. Its
+// first seconds then served every new credential, the flood's earliest waiters
+// included, and the share the phase reported was that transient and not what
+// a sustained flood leaves. A bucket refilled in the same pause. The lead-in's
+// requests are filed in their own tally whenever they land, so the phase's
+// counts are still its own schedule and nothing else.
+func driveContinuously(ctx context.Context, in driveInput, leadIn, phase *fairTally, atPhase func()) (leadInLanded func()) {
 	start := time.Now()
+	phaseStart := start.Add(in.plan.LeadIn)
+	var running sync.WaitGroup
+	running.Go(func() { drive(ctx, in, start, in.plan.leadInTicks, leadIn) })
+	// A cancelled run gives the phase nothing to wait for, and its drive then
+	// returns at once.
+	waitUntil(ctx, phaseStart)
+	atPhase()
+	drive(ctx, in, phaseStart, in.plan.ticks, phase)
+	return running.Wait
+}
+
+// driveInput is what every window of one run drives with.
+type driveInput struct {
+	plan fairnessPlan
+	// conns holds one connection per credential, both populations' in the
+	// order plan.credentials numbers them.
+	conns []*clientConn
+	call  toolCall
+	// present hands out the credentials a verb presents in place of its lane's
+	// own, and is nil for a plan whose verbs present none.
+	present *presenter
+}
+
+// drive runs one window: every credential of both populations follows its own
+// schedule from start, and the whole thing returns when the last request has
+// landed.
+func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(populationSpec) int, tally *fairTally) {
+	plan, conns, call, present := in.plan, in.conns, in.call, in.present
 	var wg sync.WaitGroup
 	for _, pop := range []populationSpec{plan.Quiet, plan.Noisy} {
 		first, last := plan.credentials(pop)
@@ -273,6 +367,7 @@ func drive(ctx context.Context, plan fairnessPlan, conns []*clientConn, call too
 					deadline: plan.Deadline,
 					inFlight: plan.inFlight(pop),
 					tally:    tally,
+					present:  present,
 				})
 			}(conns[index], index-first)
 		}
@@ -292,6 +387,7 @@ type paceInput struct {
 	deadline       time.Duration
 	inFlight       int
 	tally          *fairTally
+	present        *presenter
 }
 
 // paceCredential issues one credential's requests at their intended instants.
@@ -345,7 +441,7 @@ func issue(ctx context.Context, in paceInput, verb verbSpec, intended time.Time)
 	// held up by the driver is given up on when a client would have given up
 	// rather than being granted a fresh deadline the moment it leaves.
 	callCtx, cancel := context.WithDeadline(ctx, giveUp)
-	_, err := in.conn.rpc.call(callCtx, verb.Method, verb.params(in.call))
+	err := present(callCtx, in, verb)
 	cancel()
 	in.tally.record(in.pop, verb, observation{
 		latency:  time.Since(intended),
@@ -380,12 +476,15 @@ type observation struct {
 	err      error
 }
 
-// fairTally collects a window's outcomes, per population and per method.
+// fairTally collects a window's outcomes, per population and per row: a
+// method, and the credential it presented when that was not the lane's own.
 type fairTally struct {
 	mu       sync.Mutex
 	call     toolCall
 	refusals []refusalSpec
-	methods  map[string]map[string]*methodTally
+	// otherwise are the refusals the run expects that are not the bound's.
+	otherwise []refusalSpec
+	methods   map[string]map[string]*methodTally
 }
 
 // methodTally is one population's record for one method.
@@ -406,22 +505,22 @@ type methodTally struct {
 }
 
 // newFairTally builds a tally for one window.
-func newFairTally(call toolCall, refusals []refusalSpec) *fairTally {
-	return &fairTally{call: call, refusals: refusals, methods: map[string]map[string]*methodTally{}}
+func newFairTally(call toolCall, refusals []refusalSpec, otherwise ...refusalSpec) *fairTally {
+	return &fairTally{call: call, refusals: refusals, otherwise: otherwise, methods: map[string]map[string]*methodTally{}}
 }
 
-// entry returns the record for one population and method, creating it on first
-// use so a method with no requests never appears at all.
+// entry returns the record for one population and row, creating it on first
+// use so a row with no requests never appears at all.
 func (t *fairTally) entry(pop string, verb verbSpec) *methodTally {
 	byMethod, ok := t.methods[pop]
 	if !ok {
 		byMethod = map[string]*methodTally{}
 		t.methods[pop] = byMethod
 	}
-	entry, ok := byMethod[verb.Method]
+	entry, ok := byMethod[verb.key()]
 	if !ok {
 		entry = &methodTally{detail: verb.detail(t.call), counts: map[string]int{}}
-		byMethod[verb.Method] = entry
+		byMethod[verb.key()] = entry
 	}
 	return entry
 }
@@ -444,8 +543,19 @@ func (t *fairTally) dropped(pop string, verb verbSpec) {
 }
 
 // record files one completed request under its outcome.
+//
+// The refusals the run expects that are not the bound's are asked of an
+// invented credential alone. They are the 401 a token no GitLab issued earns,
+// and the same answer to a credential the stand-in accepts, the quiet
+// population's own or a new one, is the server failing: counted as refused
+// otherwise, it would leave the arm comparable and its percentiles computed
+// over the requests that survived.
 func (t *fairTally) record(pop string, verb verbSpec, obs observation) {
-	kind := classifyOutcome(verb.Method, obs.err, t.refusals)
+	otherwise := t.otherwise
+	if verb.Credential != credentialInvented {
+		otherwise = nil
+	}
+	kind := classifyExpecting(verb.Method, obs.err, t.refusals, otherwise)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	entry := t.entry(pop, verb)
@@ -473,12 +583,16 @@ func (t *fairTally) populations(plan fairnessPlan) []FairnessPopulation {
 		population := FairnessPopulation{
 			Name: spec.Name, Credentials: spec.Credentials, RatePerCredential: spec.Rate,
 		}
+		// A cycle may name one verb several times, which weights it, and its
+		// row is published once.
+		var seen []string
 		for _, id := range spec.Verbs {
 			verb := verbs[id]
-			entry, ok := t.methods[spec.Name][verb.Method]
-			if !ok {
+			entry, ok := t.methods[spec.Name][verb.key()]
+			if !ok || slices.Contains(seen, verb.key()) {
 				continue
 			}
+			seen = append(seen, verb.key())
 			population.Methods = append(population.Methods, entry.render(verb))
 		}
 		out = append(out, population)
@@ -489,15 +603,16 @@ func (t *fairTally) populations(plan fairnessPlan) []FairnessPopulation {
 // render turns one method's record into what the document publishes.
 func (m *methodTally) render(verb verbSpec) FairnessMethod {
 	out := FairnessMethod{
-		Method: verb.Method, Detail: m.detail,
+		Method: verb.Method, Credential: verb.Credential, Detail: m.detail,
 		Intended: m.intended, Dropped: m.dropped,
 		Served: m.counts[outcomeServed], Refused: m.counts[outcomeRefused],
-		Failed: m.counts[outcomeFailed], TimedOut: m.counts[outcomeTimedOut],
+		RefusedOther: m.counts[outcomeRefusedOther],
+		Failed:       m.counts[outcomeFailed], TimedOut: m.counts[outcomeTimedOut],
 		ServedLatency:  percentiles(verb.Method, m.detail, m.served),
 		RefusedLatency: percentiles(verb.Method, m.detail, m.refused),
 		Lateness:       percentiles(verb.Method, m.detail, m.lateness),
 	}
-	out.Dispatched = out.Served + out.Refused + out.Failed + out.TimedOut
+	out.Dispatched = out.Served + out.Refused + out.RefusedOther + out.Failed + out.TimedOut
 	if m.firstFailure != nil {
 		out.FirstFailure = m.firstFailure.Error()
 	}

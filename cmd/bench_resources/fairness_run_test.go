@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -94,7 +95,8 @@ func TestDrive_KeepsServedAndRefusedApartPerPopulation(t *testing.T) {
 	// a schedule that has not landed them in ten seconds is not spacing them
 	// by the population's period.
 	finishWithin(t, 10*time.Second, "a 40 ms phase", func() {
-		drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, plan.ticks, tally)
+		conns := []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}
+		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, time.Now(), plan.ticks, tally)
 	})
 
 	populations := tally.populations(plan)
@@ -168,6 +170,70 @@ func TestDrive_MeasuresLatencyFromTheIntendedInstant(t *testing.T) {
 	if len(entry.lateness) == 1 && entry.served[0]-entry.lateness[0] < 40*time.Millisecond {
 		t.Errorf("latency %s against lateness %s, want the call's %s in the one and not in the other",
 			entry.served[0], entry.lateness[0], 40*time.Millisecond)
+	}
+}
+
+// TestMethodTally_Render_CountsEveryOutcomeAsDispatched verifies a row's
+// dispatched count is the sum of its five outcomes, each counted once and with
+// its own sign.
+//
+// The counts are distinct powers of two, so a sum that dropped an outcome,
+// counted one twice or subtracted it lands on a number no other combination
+// makes.
+func TestMethodTally_Render_CountsEveryOutcomeAsDispatched(t *testing.T) {
+	tally := &methodTally{counts: map[string]int{
+		outcomeServed: 1, outcomeRefused: 2, outcomeRefusedOther: 4, outcomeFailed: 8, outcomeTimedOut: 16,
+	}}
+	got := tally.render(verbs[verbListInvented])
+	if got.Served != 1 || got.Refused != 2 || got.RefusedOther != 4 || got.Failed != 8 || got.TimedOut != 16 {
+		t.Errorf("outcomes = %+v, want each count where it was recorded", got)
+	}
+	if got.Dispatched != 31 {
+		t.Errorf("dispatched = %d, want 31, the five outcomes together", got.Dispatched)
+	}
+	if got.Credential != credentialInvented {
+		t.Errorf("credential = %q, want the verb's", got.Credential)
+	}
+}
+
+// TestFairTally_Record_TakesTheRunsOwnRefusalsFromAnInventedCredentialAlone
+// verifies the 401 an invented token earns is refused otherwise on the flood's
+// row and a failure on every row presenting a credential the stand-in accepts.
+//
+// Asked of every row, the shape matched the quiet population's calls too, so a
+// server answering a valid credential 401 filed it beside the flood's expected
+// rejections: the arm stayed comparable and its served percentiles were
+// computed over whatever survived, which is a broken server counted as a fair
+// one.
+func TestFairTally_Record_TakesTheRunsOwnRefusalsFromAnInventedCredentialAlone(t *testing.T) {
+	bound := oauthPlan(t).Bound
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	rejected := bound.Otherwise[0]
+	cases := []struct {
+		verb        string
+		wantFailed  int
+		wantRefused int
+	}{
+		{verb: verbCall, wantFailed: 1},
+		{verb: verbCallNew, wantFailed: 1},
+		{verb: verbListInvented, wantRefused: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.verb, func(t *testing.T) {
+			verb := verbs[tc.verb]
+			tally := newFairTally(call, bound.Refusals, bound.Otherwise...)
+			tally.record(populationQuiet, verb, observation{err: fmt.Errorf("%s: %w", verb.Method, &httpStatusError{
+				Method: verb.Method, Status: rejected.Status,
+				RPC: &rpcError{Code: rejected.Code, Message: rejected.TextPrefix + " Check that it is valid."},
+			})})
+			row := tally.methods[populationQuiet][verb.key()].render(verb)
+			if row.Failed != tc.wantFailed || row.RefusedOther != tc.wantRefused {
+				t.Errorf("row = %+v, want %d failed and %d refused otherwise", row, tc.wantFailed, tc.wantRefused)
+			}
+		})
 	}
 }
 
@@ -297,6 +363,70 @@ func TestWaitUntil_AnInstantThatIsNow_OnACancelledRun_SaysCancelled(t *testing.T
 			}
 		}
 	})
+}
+
+// TestDriveContinuously_OpensThePhaseOnTheLeadInsClock verifies the phase
+// opens where the lead-in's schedule ends rather than when its requests have
+// landed, and that each window's requests are filed in its own tally.
+//
+// The two windows used to run one after the other, so the lead-in returned
+// only once its last request had landed, and every phase of a slot bound
+// opened on the queue that drain had just emptied: its first seconds served
+// every new credential, and the share it reported was that transient. Each
+// request here takes five seconds, so a phase that waited for the lead-in's
+// last request would open at six seconds rather than at one and a half; on
+// the fake clock the instant it opens is exact.
+func TestDriveContinuously_OpensThePhaseOnTheLeadInsClock(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		plan := twoPopulationPlan(t)
+		plan.Quiet.Rate, plan.Noisy.Rate = 2, 2
+		plan.LeadIn, plan.Phase, plan.Deadline = 1500*time.Millisecond, time.Second, 10*time.Second
+		call, err := callFor(plan.Surface)
+		if err != nil {
+			t.Fatalf("callFor: %v", err)
+		}
+		conns := []*clientConn{
+			{rpc: &scriptedConn{delay: 5 * time.Second}, label: "q"},
+			{rpc: &scriptedConn{delay: 5 * time.Second}, label: "n"},
+		}
+		leadIn, phase := newFairTally(call, plan.Bound.Refusals), newFairTally(call, plan.Bound.Refusals)
+		start := time.Now()
+		var opened time.Duration
+		var offeredAtOpening, landedAtOpening int
+		leadInLanded := driveContinuously(t.Context(), driveInput{plan: plan, conns: conns, call: call}, leadIn, phase, func() {
+			opened = time.Since(start)
+			offeredAtOpening, landedAtOpening = tallied(leadIn)
+		})
+		if opened != plan.LeadIn {
+			t.Errorf("the phase opened %s into the run, want the lead-in's %s", opened, plan.LeadIn)
+		}
+		// Three ticks a credential at two a second in a second and a half.
+		if offeredAtOpening != 6 || landedAtOpening != 0 {
+			t.Errorf("when the phase opened the lead-in had offered %d and landed %d, want 6 offered and none landed",
+				offeredAtOpening, landedAtOpening)
+		}
+		if offered, landed := tallied(phase); offered != 4 || landed != 4 {
+			t.Errorf("the phase offered %d and landed %d, want its own two ticks a credential, all landed", offered, landed)
+		}
+		leadInLanded()
+		if offered, landed := tallied(leadIn); offered != 6 || landed != 6 {
+			t.Errorf("the lead-in offered %d and landed %d, want its own three ticks a credential, all landed", offered, landed)
+		}
+	})
+}
+
+// tallied is how many requests a tally was offered and how many landed in it,
+// over every population and row.
+func tallied(tally *fairTally) (offered, landed int) {
+	tally.mu.Lock()
+	defer tally.mu.Unlock()
+	for _, byMethod := range tally.methods {
+		for _, entry := range byMethod {
+			offered += entry.intended
+			landed += len(entry.lateness)
+		}
+	}
+	return offered, landed
 }
 
 // TestFairTally_Record_FilesTheFirstFailureAndNothingAfterIt verifies a
@@ -543,7 +673,7 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
 	}
 	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
-		drive(t.Context(), plan, conns, call, plan.ticks, newFairTally(call, plan.Bound.Refusals))
+		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, time.Now(), plan.ticks, newFairTally(call, plan.Bound.Refusals))
 	})
 
 	const period, half, slack = 400 * time.Millisecond, 200 * time.Millisecond, 80 * time.Millisecond
@@ -1153,5 +1283,250 @@ func TestDrive_IsSafeUnderConcurrentPopulations(t *testing.T) {
 				t.Errorf("dropped = %d, want every drop counted", got)
 			}
 		})
+	}
+}
+
+// wrappedStandin writes a script that starts the stand-in under env, in a
+// directory of its own, and returns the script's path.
+//
+// A directory of its own because the harness removes a binary's directory
+// once it built one, and the stand-in itself is shared by every test. The
+// script execs the stand-in in its own place, so the process the harness
+// samples and signals is the stand-in's.
+func wrappedStandin(t *testing.T, env string) string {
+	t.Helper()
+	standin := standinBinary(t)
+	script := filepath.Join(t.TempDir(), "server")
+	content := "#!/bin/sh\n" + env + " exec '" + standin + "' \"$@\"\n"
+	//#nosec G306 -- a script the harness has to be able to execute, in this test's own directory
+	if err := os.WriteFile(script, []byte(content), 0o700); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	return script
+}
+
+// withBound replaces one declared bound for the rest of a test.
+func withBound(t *testing.T, id string, edit func(*boundSpec)) {
+	t.Helper()
+	original := fairnessBounds
+	t.Cleanup(func() { fairnessBounds = original })
+	replaced := slices.Clone(original)
+	for index := range replaced {
+		if replaced[index].ID == id {
+			edit(&replaced[index])
+		}
+	}
+	fairnessBounds = replaced
+}
+
+// smallOAuthOptions are the flags of an OAuth verification run sized for a
+// test, against a stand-in whose ceiling is one slot and a tenth of a second
+// of wait.
+//
+// The bound's own figures are the register's sixteen slots and five seconds,
+// which a test cannot wait for, so they are replaced for the test by the
+// stand-in's, and the plan is validated against those. Three hundred invented
+// tokens a second against one slot held for twenty milliseconds leave the
+// slot serving about one in six of them, so the six new credentials the quiet
+// population presents are all served only once in fifty thousand runs.
+func smallOAuthOptions(t *testing.T, out string) options {
+	t.Helper()
+	withBound(t, "oauth-verification", func(b *boundSpec) {
+		b.Slots = &slotSpec{Count: 1, Wait: 100 * time.Millisecond, InventedRoundTrips: 1, NewRoundTrips: 3}
+		b.Defaults = planDefaults{
+			Noisy: 1, NoisyRate: 300,
+			Phase: time.Second, LeadIn: 200 * time.Millisecond, Deadline: 2 * time.Second,
+			UpstreamDelay: 20 * time.Millisecond,
+		}
+	})
+	t.Setenv("STANDIN_VERIFY_SLOTS", "1")
+	t.Setenv("STANDIN_VERIFY_WAIT", "100ms")
+	return options{
+		record:          "site/src/data/resource-benchmark.json",
+		sampleInterval:  20 * time.Millisecond,
+		fairness:        "oauth-verification",
+		fairnessJSON:    out,
+		fairnessSurface: surfaceDynamic,
+		fairnessQuiet:   1, fairnessQuietRate: 24,
+		fairnessRepeats: 1,
+	}
+}
+
+// TestRunFairness_OAuthVerification_MeasuresTheCeilingAgainstABuildWithout
+// drives the verification bound's whole run against the stand-in: two builds,
+// a flood of invented tokens from sources of their own, new credentials and
+// cached ones, and the instance's view of it all.
+//
+// It is the end-to-end pin of the answer the bound was built to give: with the
+// ceiling the instance never has more verifications of invented tokens in
+// flight than there are slots, and the price is new credentials refused beside
+// the flood; without it the flood reaches the instance at its own rate and
+// nobody is refused anything but the 401 an invented token earns.
+func TestRunFairness_OAuthVerification_MeasuresTheCeilingAgainstABuildWithout(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the flood leaves from 127.2.0.0/16, which only Linux answers on its loopback without setup")
+	}
+	root := t.TempDir()
+	opts := smallOAuthOptions(t, filepath.Join(root, "fairness.json"))
+	originalBuild, originalVariant := buildServerBinary, buildVariantBinary
+	t.Cleanup(func() { buildServerBinary, buildVariantBinary = originalBuild, originalVariant })
+	// Both scripts are written here, on the test goroutine: the seams are
+	// called by runFairness on the goroutine finishWithin starts, where a
+	// t.Fatalf would end that goroutine and leave the test running on.
+	serverScript := wrappedStandin(t, "")
+	variantScript := wrappedStandin(t, "STANDIN_VERIFY_SLOTS=0")
+	buildServerBinary = func(string) (string, error) { return serverScript, nil }
+	buildVariantBinary = func(string, buildVariant) (string, error) { return variantScript, nil }
+
+	var runErr error
+	captureStdout(t, func() {
+		finishWithin(t, 2*time.Minute, "a two-arm verification run", func() { runErr = runFairness(opts, root) })
+	})
+	if runErr != nil {
+		t.Fatalf("runFairness: %v", runErr)
+	}
+	doc, err := readFairness(opts.fairnessJSON)
+	if err != nil {
+		t.Fatalf("readFairness: %v", err)
+	}
+	if !strings.Contains(doc.Bound.VariantOff, "verificationSlots") || doc.Settings.UpstreamDelayMs != 20 || doc.Settings.FloodSources != 72 {
+		t.Errorf("bound %+v and settings %+v, want the variant, the round trip and the sources recorded", doc.Bound, doc.Settings)
+	}
+	off, _ := doc.Repeats[0].arm(armOff)
+	on, _ := doc.Repeats[0].arm(armOn)
+	t.Run("without the ceiling the flood reaches the instance and only its tokens are refused", func(t *testing.T) {
+		assertArmWithoutCeiling(t, off)
+	})
+	t.Run("with the ceiling the instance sees one slot's worth and new credentials pay for it", func(t *testing.T) {
+		assertArmWithCeiling(t, on)
+	})
+	if doc.Verdict.Direction != directionWorse || !strings.Contains(doc.Verdict.Reason, "protects the GitLab instance") {
+		t.Errorf("verdict = %+v, want worse, naming what the ceiling protects instead", doc.Verdict)
+	}
+}
+
+// assertArmWithoutCeiling holds the arm that ran the variant: nothing refused
+// by the bound, every invented token refused the way GitLab refuses it, and
+// the flood's verifications in flight at the instance together.
+func assertArmWithoutCeiling(t *testing.T, arm FairnessArm) {
+	t.Helper()
+	if arm.refusedAnything() {
+		t.Errorf("the arm without the ceiling refused: %s", arm.summary())
+	}
+	noisy, _ := arm.population(populationNoisy)
+	if row, ok := noisy.method(rowKey(methodToolsList, credentialInvented)); !ok || row.RefusedOther == 0 {
+		t.Errorf("noisy %+v, want the invented tokens refused otherwise", noisy)
+	}
+	if arm.Upstream == nil || arm.Upstream.InventedPeakInFlight < 2 {
+		t.Errorf("upstream = %+v, want the flood's verifications in flight together", arm.Upstream)
+	}
+}
+
+// assertArmWithCeiling holds the arm that ran the binary under test: invented
+// tokens refused for want of a slot, never more of them at the instance than
+// there are slots, and the cached credentials served throughout.
+func assertArmWithCeiling(t *testing.T, arm FairnessArm) {
+	t.Helper()
+	noisy, _ := arm.population(populationNoisy)
+	if row, ok := noisy.method(rowKey(methodToolsList, credentialInvented)); !ok || row.Refused == 0 {
+		t.Errorf("noisy %+v, want invented tokens refused for want of a slot", noisy)
+	}
+	if arm.Upstream == nil || arm.Upstream.InventedPeakInFlight != 1 {
+		t.Errorf("upstream = %+v, want never more than the one slot in flight", arm.Upstream)
+	}
+	quiet, _ := arm.population(populationQuiet)
+	if cached, ok := quiet.method(methodToolsCall); !ok || cached.Refused != 0 || cached.Served == 0 {
+		t.Errorf("cached row %+v, want every cached credential served", cached)
+	}
+}
+
+// TestRunFairness_AVariantBound_BuildsBothArmsFromTheTree verifies the two
+// ways a run of a bound measured against a variant stops before it measures:
+// a binary named by the flag, which would compare two different trees, and a
+// variant that could not be built.
+func TestRunFairness_AVariantBound_BuildsBothArmsFromTheTree(t *testing.T) {
+	t.Run("a binary named by the flag", func(t *testing.T) {
+		root := t.TempDir()
+		opts := smallOAuthOptions(t, filepath.Join(root, "fairness.json"))
+		opts.binary = "/somewhere/server"
+		if err := runFairness(opts, root); err == nil || !strings.Contains(err.Error(), "-binary names one build") {
+			t.Errorf("runFairness = %v, want the flag refused", err)
+		}
+	})
+	t.Run("a variant that could not be built", func(t *testing.T) {
+		root := t.TempDir()
+		opts := smallOAuthOptions(t, filepath.Join(root, "fairness.json"))
+		originalBuild, originalVariant := buildServerBinary, buildVariantBinary
+		t.Cleanup(func() { buildServerBinary, buildVariantBinary = originalBuild, originalVariant })
+		buildServerBinary = func(string) (string, error) { return wrappedStandin(t, ""), nil }
+		buildVariantBinary = func(string, buildVariant) (string, error) { return "", errors.New("no overlay") }
+		if err := runFairness(opts, root); err == nil || !strings.Contains(err.Error(), "no overlay") {
+			t.Errorf("runFairness = %v, want the variant's build failure", err)
+		}
+	})
+}
+
+// TestRunner_BinaryFor_RunsTheVariantOnlyWithoutTheBound verifies which build
+// each arm runs, and that an arm whose build was never made says so rather
+// than quietly running the binary under test in both arms.
+func TestRunner_BinaryFor_RunsTheVariantOnlyWithoutTheBound(t *testing.T) {
+	plan := twoPopulationPlan(t)
+	variantPlan := plan
+	variantPlan.Bound.Variant = &buildVariant{File: "a.go", Replacement: "const x = 1"}
+	r := &runner{binary: "under-test"}
+	cases := []struct {
+		name, arm, want string
+		plan            fairnessPlan
+	}{
+		{name: "a bound with switches, arm off", plan: plan, arm: armOff, want: "under-test"},
+		{name: "a variant bound, arm on", plan: variantPlan, arm: armOn, want: "under-test"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := r.binaryFor(tc.plan, tc.arm); err != nil || got != tc.want {
+				t.Errorf("binaryFor = %q, %v, want %q", got, err, tc.want)
+			}
+		})
+	}
+	if _, err := r.binaryFor(variantPlan, armOff); err == nil || !strings.Contains(err.Error(), "none was made") {
+		t.Errorf("binaryFor = %v, want the missing build named", err)
+	}
+	r.variant = "variant"
+	if got, err := r.binaryFor(variantPlan, armOff); err != nil || got != "variant" {
+		t.Errorf("binaryFor = %q, %v, want the variant", got, err)
+	}
+	r.variant = ""
+	if _, err := r.runFairnessArm(t.Context(), variantPlan, armOff); err == nil || !strings.Contains(err.Error(), "none was made") {
+		t.Errorf("runFairnessArm = %v, want the missing build named before anything starts", err)
+	}
+}
+
+// TestFairTally_Populations_PublishesAWeightedVerbOnce verifies a verb a cycle
+// names several times, which is how a population weights it, is still one row
+// in the record, counting every tick it had.
+func TestFairTally_Populations_PublishesAWeightedVerbOnce(t *testing.T) {
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	plan := fairnessPlan{
+		Quiet: populationSpec{Name: populationQuiet, Credentials: 1, Rate: 1, Verbs: []string{verbCallNew, verbCall, verbCall, verbCall}},
+		Noisy: populationSpec{Name: populationNoisy, Credentials: 1, Rate: 1, Verbs: []string{verbListInvented}},
+	}
+	tally := newFairTally(call, nil)
+	for _, id := range plan.Quiet.Verbs {
+		tally.offered(populationQuiet, verbs[id])
+		tally.record(populationQuiet, verbs[id], observation{latency: time.Millisecond})
+	}
+	quiet := tally.populations(plan)[0]
+	if len(quiet.Methods) != 2 {
+		t.Fatalf("rows = %+v, want one per row and not one per tick", quiet.Methods)
+	}
+	fresh, cached := quiet.Methods[0], quiet.Methods[1]
+	if fresh.label() != "tools/call (new credential)" || fresh.Intended != 1 || fresh.Credential != credentialNew {
+		t.Errorf("first row = %+v, want the new credential's one tick", fresh)
+	}
+	if cached.label() != methodToolsCall || cached.Intended != 3 || cached.Dispatched != 3 {
+		t.Errorf("second row = %+v, want the cached credential's three ticks", cached)
 	}
 }

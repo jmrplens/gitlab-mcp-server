@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -78,6 +79,22 @@ type clientConn struct {
 	rpc rpcClient
 	// label distinguishes clients in error messages; nothing else reads it.
 	label string
+	// adopted is the credential this client presents in place of its own,
+	// once a new one it presented was served: a client given a new token uses
+	// it from then on. Nil until then.
+	adopted atomic.Pointer[string]
+}
+
+// adopt makes a credential the one this client presents from now on.
+func (c *clientConn) adopt(token string) { c.adopted.Store(&token) }
+
+// current is the credential this client presents in place of its own, or the
+// empty string while it presents its own.
+func (c *clientConn) current() string {
+	if token := c.adopted.Load(); token != nil {
+		return *token
+	}
+	return ""
 }
 
 // target is a running server under measurement, on one transport.
@@ -280,6 +297,9 @@ type httpTarget struct {
 	// stateful starts the server on the transport that keeps sessions
 	// (--stateless=false), which only the sessions mode asks for.
 	stateful bool
+	// bearer presents every client's credential as an OAuth bearer token,
+	// for a server a bound starts in OAuth mode.
+	bearer bool
 
 	addr string
 	// mu guards cmd and the reaper watching it, which the sampler reads from a
@@ -432,7 +452,7 @@ func (t *httpTarget) waitHealthy(ctx context.Context, gone <-chan struct{}) (Ser
 	deadline := time.Now().Add(healthWait)
 	client := &http.Client{Timeout: 5 * time.Second}
 	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+t.addr+"/health", http.NoBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, loopbackURL(t.addr, "/health"), http.NoBody)
 		if err != nil {
 			return ServerInfo{}, fmt.Errorf("build health request: %w", err)
 		}
@@ -460,9 +480,13 @@ func (t *httpTarget) waitHealthy(ctx context.Context, gone <-chan struct{}) (Ser
 // addClient connects a client carrying its own credential, which is what makes
 // the pool build one entry per client.
 func (t *httpTarget) addClient(_ context.Context, index int) (*clientConn, time.Duration, error) {
-	client := newHTTPRPC("http://"+t.addr+"/mcp", benchToken+strconv.Itoa(index))
+	client := newHTTPRPC(t.endpoint(), benchToken+strconv.Itoa(index))
+	client.bearer = t.bearer
 	return &clientConn{rpc: client, label: "client " + strconv.Itoa(index)}, 0, nil
 }
+
+// endpoint is the MCP endpoint of the running process.
+func (t *httpTarget) endpoint() string { return loopbackURL(t.addr, "/mcp") }
 
 // setCommand publishes the started process, and the reaper watching it, to
 // whoever is watching them.

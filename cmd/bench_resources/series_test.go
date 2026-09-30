@@ -419,14 +419,23 @@ func answering(script []error) func(string, int) error {
 // process shares refuses a herd of credentials past its burst and says to retry
 // after a short backoff, so that refusal is asked again until the listing is
 // served, the way a client asks; any other refusal or failure is returned at
-// once, and so is the rate refusal when the context has ended.
+// once, the authentication lockout carrying the same code at 429 among them,
+// and so is the rate refusal when the context has ended.
 func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
 	t.Parallel()
 	refused := fmt.Errorf("tools/list: %w", rpcError{Code: rateLimitCode, Message: "rate limit exceeded for tools/list; retry after a short backoff"})
 	busy := fmt.Errorf("tools/list: %w", rpcError{Code: serverBusyCode, Message: "busy"})
 	broken := errors.New("connection reset")
+	lockout := &httpStatusError{Method: methodToolsList, Status: httpTooManyRequests, RPC: &rpcError{Code: rateLimitCode, Message: "blocked"}}
 	ended, cancel := context.WithCancel(t.Context())
 	cancel()
+	// Every case the context does not end runs under a bound no answer here
+	// comes near, so a coldList that asked again an answer it should have
+	// returned (a listing served, another refusal) fails within seconds
+	// instead of looping until the binary's own timeout. t.Cleanup rather than
+	// defer, since the cases run in parallel after this function has returned.
+	bounded, stop := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(stop)
 	for _, tc := range []struct {
 		name      string
 		ctx       context.Context
@@ -434,10 +443,11 @@ func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
 		wantErr   error
 		wantCalls int64
 	}{
-		{name: "served at once", ctx: t.Context(), wantCalls: 1},
-		{name: "a rate refusal is asked again until served", ctx: t.Context(), script: []error{refused, refused}, wantCalls: 3},
-		{name: "another refusal stands", ctx: t.Context(), script: []error{busy}, wantErr: busy, wantCalls: 1},
-		{name: "a failure stands", ctx: t.Context(), script: []error{broken}, wantErr: broken, wantCalls: 1},
+		{name: "served at once", ctx: bounded, wantCalls: 1},
+		{name: "a rate refusal is asked again until served", ctx: bounded, script: []error{refused, refused}, wantCalls: 3},
+		{name: "another refusal stands", ctx: bounded, script: []error{busy}, wantErr: busy, wantCalls: 1},
+		{name: "a failure stands", ctx: bounded, script: []error{broken}, wantErr: broken, wantCalls: 1},
+		{name: "a lockout carrying the same code at 429 stands", ctx: bounded, script: []error{lockout}, wantErr: lockout, wantCalls: 1},
 		{name: "a rate refusal stands once the context has ended", ctx: ended, script: []error{refused}, wantErr: refused, wantCalls: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -40,15 +40,17 @@ func readFairness(path string) (*FairnessDoc, error) {
 // methodFixture is one population's record for one method, spelled so a test
 // can state only the number it is about.
 type methodFixture struct {
-	method      string
-	intended    int
-	dropped     int
-	served      int
-	refused     int
-	failed      int
-	timedOut    int
-	p50, p99    float64
-	latenessP99 float64
+	method       string
+	credential   string
+	intended     int
+	dropped      int
+	served       int
+	refused      int
+	refusedOther int
+	failed       int
+	timedOut     int
+	p50, p99     float64
+	latenessP99  float64
 }
 
 // quietAt is a quiet record with enough served samples for a p99 and nothing
@@ -66,13 +68,13 @@ func noisyAt(served, refused int) methodFixture {
 // build renders a fixture as the record the verdict reads.
 func (f methodFixture) build() FairnessMethod {
 	out := FairnessMethod{
-		Method: f.method, Intended: f.intended, Dropped: f.dropped,
-		Served: f.served, Refused: f.refused, Failed: f.failed, TimedOut: f.timedOut,
+		Method: f.method, Credential: f.credential, Intended: f.intended, Dropped: f.dropped,
+		Served: f.served, Refused: f.refused, RefusedOther: f.refusedOther, Failed: f.failed, TimedOut: f.timedOut,
 		ServedLatency:  MethodLatency{Method: f.method, Count: f.served, P50: f.p50, P99: f.p99},
 		RefusedLatency: MethodLatency{Method: f.method, Count: f.refused},
 		Lateness:       MethodLatency{Method: f.method, Count: f.served, P99: f.latenessP99},
 	}
-	out.Dispatched = out.Served + out.Refused + out.Failed + out.TimedOut
+	out.Dispatched = out.Served + out.Refused + out.RefusedOther + out.Failed + out.TimedOut
 	return out
 }
 
@@ -1240,5 +1242,115 @@ func TestSettingsFor_AndBoundRecord_RecordWhatWasActuallyInForce(t *testing.T) {
 	record := boundRecord(plan)
 	if record.ID != "tools-call-rps" || len(record.ArgsOn) == 0 || len(record.ArgsOff) == 0 {
 		t.Errorf("bound record = %+v, want the switches of both arms", record)
+	}
+	if record.VariantOff != "" || record.Protects != "" || record.Shared != "" {
+		t.Errorf("bound record = %+v, want nothing said a switch-driven bound does not have", record)
+	}
+
+	// A bound no switch reaches says what its arm without it ran instead, and
+	// the stand-in's round trip and the flood's sources are part of the run.
+	oauth := oauthPlan(t)
+	if got := settingsFor(oauth); got.UpstreamDelayMs != 100 || got.FloodSources != 96 {
+		t.Errorf("settings = %+v, want the round trip and the sources recorded", got)
+	}
+	record = boundRecord(oauth)
+	if !strings.Contains(record.VariantOff, "internal/oauth/verifier.go: const verificationSlots = 1 << 20") ||
+		record.Protects == "" || record.Shared == "" {
+		t.Errorf("bound record = %+v, want the variant, what it protects and what is shared", record)
+	}
+}
+
+// TestJudgeFairness_ABoundThatProtectsSomethingElse_NamesItsCost verifies a
+// bound that never claimed to protect the quiet tenant is still judged worse
+// for turning it away, in a sentence that says what the bound protects instead.
+//
+// The verification ceiling protects the instance its verifications reach, and
+// what it does to a legitimate new credential during a flood is its price.
+// Calling that price a contradiction would misreport the bound; calling it
+// anything but worse would misreport the tenant.
+func TestJudgeFairness_ABoundThatProtectsSomethingElse_NamesItsCost(t *testing.T) {
+	newcomers := methodFixture{
+		method: methodToolsCall, credential: credentialNew, intended: 60, served: 20, refused: 40, p50: 5000, p99: 5100,
+	}
+	on := saturated(armOn, 10)
+	on.quiet = append(on.quiet, newcomers)
+	doc := fairnessDocOf(8, []armFixture{saturated(armOff, 10), on})
+	doc.Bound = FairnessBound{Protects: "the instance"}
+
+	_, verdict := judgeFairness(doc)
+	if verdict.Direction != directionWorse {
+		t.Fatalf("verdict = %+v, want worse", verdict)
+	}
+	for _, want := range []string{"refused 40 of the quiet population's 60 tools/call (new credential) requests", "protects the instance"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(verdict.Reason, want) {
+				t.Errorf("reason = %q, want it to say %q", verdict.Reason, want)
+			}
+		})
+	}
+	if strings.Contains(verdict.Reason, "exists to protect was the one") {
+		t.Errorf("reason = %q, want no claim the bound was meant to protect the tenant", verdict.Reason)
+	}
+}
+
+// TestSaturationFailure_AsksOnlyABoundWhoseTenantsShareTheMachine verifies an
+// idle host is a reason to decline a comparison of a per-credential bound and
+// not of a bound whose populations contend for its own slots.
+func TestSaturationFailure_AsksOnlyABoundWhoseTenantsShareTheMachine(t *testing.T) {
+	idle := fairnessDocOf(8, []armFixture{atLoad(armOff, 1, 20), atLoad(armOn, 1, 10)})
+	if saturationFailure(idle) == "" {
+		t.Fatal("an idle host went unremarked for a bound whose tenants share the machine")
+	}
+	idle.Bound.Shared = "the verification slots"
+	if got := saturationFailure(idle); got != "" {
+		t.Errorf("saturationFailure = %q, want nothing asked of a bound whose tenants share its slots", got)
+	}
+}
+
+// TestCompareMethod_CarriesTheRowsCredential verifies a comparison of a row
+// that presented another credential says which, beside the method, so two
+// rows of one method are never read as one.
+func TestCompareMethod_CarriesTheRowsCredential(t *testing.T) {
+	row := func(arm string, p99 float64) armFixture {
+		fixture := saturated(arm, p99)
+		fixture.quiet = []methodFixture{{
+			method: methodToolsCall, credential: credentialNew, intended: 200, served: 200, p50: p99 / 2, p99: p99,
+		}}
+		return fixture
+	}
+	doc := fairnessDocOf(8, []armFixture{row(armOff, 20), row(armOn, 10)}, []armFixture{row(armOn, 10), row(armOff, 20)})
+	comparisons, verdict := judgeFairness(doc)
+	if len(comparisons) != 1 {
+		t.Fatalf("comparisons = %+v, want one", comparisons)
+	}
+	if got := comparisons[0]; got.Method != methodToolsCall || got.Credential != credentialNew {
+		t.Errorf("comparison = %+v, want the method and the credential apart", got)
+	}
+	if !strings.HasPrefix(verdict.Reason, "tools/call (new credential): ") {
+		t.Errorf("reason = %q, want the row named by its label", verdict.Reason)
+	}
+}
+
+// TestFairnessArm_Summary_NamesTheOtherRefusalsAndTheInstance verifies an
+// arm's line says how many requests were refused the run's own way, and what
+// the instance saw, where there was any of either.
+func TestFairnessArm_Summary_NamesTheOtherRefusalsAndTheInstance(t *testing.T) {
+	noisy := methodFixture{method: methodToolsList, credential: credentialInvented, intended: 900, served: 0, refused: 600, refusedOther: 300}
+	arm := armFixture{arm: armOn, quiet: []methodFixture{quietAt(methodToolsCall, 12)}, noisy: []methodFixture{noisy}}.build()
+	arm.Upstream = &FairnessUpstream{Requests: 350, PeakInFlight: 18, InventedRequests: 300, InventedPeakInFlight: 16}
+	line := arm.summary()
+	for _, want := range []string{
+		"noisy tools/list (invented credential) served 0 refused 600 refused otherwise 300 failed 0",
+		"the instance answered 350 verification requests, at most 18 at once, " +
+			"300 of them for invented tokens, at most 16 of those at once",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(line, want) {
+				t.Errorf("summary = %q, want %q", line, want)
+			}
+		})
+	}
+	if strings.Contains(line, "quiet tools/call served 200 refused 0 refused otherwise") {
+		t.Errorf("summary = %q, want no count of other refusals on a row that had none", line)
 	}
 }

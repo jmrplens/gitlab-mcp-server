@@ -38,6 +38,15 @@
 // a DELETE ends the session. STANDIN_SESSION_LIMIT, when positive, answers an
 // initialize past that many sessions with a 503, the shape the real server's
 // session ceiling refuses with.
+//
+// --auth-mode=oauth admits a bearer token the way the real bearer guard does:
+// one it has verified before at once, and any other only once the instance
+// --gitlab-url names has answered GET /api/v4/user for it, with at most
+// STANDIN_VERIFY_SLOTS of those verifications at once when that is positive.
+// A token that waits STANDIN_VERIFY_WAIT (100ms unless set) for a slot is
+// refused 503, one the instance refuses is refused 401, both in the real
+// guard's codes and words, which is what the verification bound's fairness
+// run has to tell apart.
 package main
 
 import (
@@ -88,6 +97,17 @@ const (
 	// The one tool and action whose call reaches the instance.
 	executeTool   = "gitlab_execute_action"
 	projectAction = "project.get"
+	// verifySlotsEnv caps the verifications run at once in OAuth mode, and
+	// verifyWaitEnv is how long a token waits for one of them.
+	verifySlotsEnv = "STANDIN_VERIFY_SLOTS"
+	verifyWaitEnv  = "STANDIN_VERIFY_WAIT"
+	// The real guard's refusals of a token it could not verify and of one the
+	// instance refused, in its codes and its leading words.
+	busyCode     = -50300
+	busyRefusal  = "GitLab could not verify this token right now. Retry shortly. The token itself has not been rejected."
+	upstreamLost = "GitLab could not verify this token right now; the instance is unreachable or throttling."
+	rejectedCode = -40100
+	rejected     = "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance."
 )
 
 // request is the subset of a JSON-RPC request the stand-in reads.
@@ -166,6 +186,88 @@ func (b *bound) allow(req request) bool {
 // limit is the process-wide bound, built from the flags in main.
 var limit = &bound{buckets: map[string]*rate.Limiter{}}
 
+// oauthGate admits bearer tokens in OAuth mode, verifying each one the first
+// time it is seen under a ceiling on how many are verified at once.
+type oauthGate struct {
+	on bool
+	// slots is the ceiling, nil for none; wait is how long a token waits for
+	// a slot before it is refused.
+	slots chan struct{}
+	wait  time.Duration
+
+	mu       sync.Mutex
+	verified map[string]bool
+}
+
+// gate is the process's OAuth gate, built from the flags in main.
+var gate = &oauthGate{verified: map[string]bool{}}
+
+// admit answers whether a token may be served, with the status and the error a
+// refusal carries.
+func (g *oauthGate) admit(ctx context.Context, token string) (int, *rpcError) {
+	if token == "" {
+		return http.StatusUnauthorized, &rpcError{Code: rejectedCode, Message: "Authentication required: send an OAuth access token"}
+	}
+	if g.known(token) {
+		return http.StatusOK, nil
+	}
+	if g.slots != nil {
+		timer := time.NewTimer(g.wait)
+		defer timer.Stop()
+		select {
+		case g.slots <- struct{}{}:
+			defer func() { <-g.slots }()
+		case <-timer.C:
+			return http.StatusServiceUnavailable, &rpcError{Code: busyCode, Message: busyRefusal}
+		case <-ctx.Done():
+			return http.StatusServiceUnavailable, &rpcError{Code: busyCode, Message: busyRefusal}
+		}
+	}
+	valid, err := askUser(ctx, token)
+	switch {
+	case err != nil:
+		return http.StatusServiceUnavailable, &rpcError{Code: busyCode, Message: upstreamLost}
+	case !valid:
+		return http.StatusUnauthorized, &rpcError{Code: rejectedCode, Message: rejected}
+	}
+	g.mu.Lock()
+	g.verified[token] = true
+	g.mu.Unlock()
+	return http.StatusOK, nil
+}
+
+// known reports a token verified before.
+func (g *oauthGate) known(token string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.verified[token]
+}
+
+// askUser asks the instance who a token belongs to, and reports whether it
+// answered with anybody.
+func askUser(ctx context.Context, token string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(gitlabURL, "/")+"/api/v4/user", http.NoBody)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode == http.StatusOK, nil
+}
+
+// writeGateRefusal answers a request the gate refused, the way the real gate
+// does: the status, and a JSON-RPC error in the body.
+func writeGateRefusal(w http.ResponseWriter, status int, failure *rpcError) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": nil, "error": failure})
+}
+
 // rpcError is a JSON-RPC error object.
 type rpcError struct {
 	Code    int    `json:"code"`
@@ -183,7 +285,32 @@ func main() {
 	stateless := flag.Bool("stateless", true, "false serves the stateful transport, with sessions")
 	telemetry := flag.Bool("telemetry", false, "send one export to OTEL_EXPORTER_OTLP_ENDPOINT, as the real server's exporters would")
 	pprofAddr := flag.String("pprof-addr", "", "serve net/http/pprof on this address, on a listener of its own, as the real server does")
+	authMode := flag.String("auth-mode", "legacy", "oauth admits bearer tokens through the gate above")
+	flag.String("public-url", "", "accepted and ignored")
+	flag.String("trusted-proxies", "", "accepted and ignored")
+	flag.String("trusted-proxy-header", "", "accepted and ignored")
 	flag.Parse()
+
+	gate.on = *authMode == "oauth"
+	gate.wait = 100 * time.Millisecond
+	if raw := os.Getenv(verifyWaitEnv); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			fmt.Fprintln(os.Stderr, "standin: "+verifyWaitEnv+" must be a positive duration")
+			os.Exit(1)
+		}
+		gate.wait = parsed
+	}
+	if raw := os.Getenv(verifySlotsEnv); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			fmt.Fprintln(os.Stderr, "standin: "+verifySlotsEnv+" must be a count, zero for no ceiling")
+			os.Exit(1)
+		}
+		if parsed > 0 {
+			gate.slots = make(chan struct{}, parsed)
+		}
+	}
 
 	limit.on = *rps > 0
 	limit.rps = *rps
@@ -315,7 +442,15 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.Header.Get("PRIVATE-TOKEN") == "" {
+	credential := r.Header.Get("PRIVATE-TOKEN")
+	if gate.on {
+		credential, _ = strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if status, failure := gate.admit(r.Context(), credential); failure != nil {
+			writeGateRefusal(w, status, failure)
+			return
+		}
+	}
+	if credential == "" {
 		http.Error(w, "missing credential", http.StatusUnauthorized)
 		return
 	}
@@ -337,7 +472,7 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Mcp-Param-Action does not name the call's action", http.StatusBadRequest)
 		return
 	}
-	req.credential = r.Header.Get("PRIVATE-TOKEN")
+	req.credential = credential
 	req.tool = r.Header.Get("Mcp-Name")
 	if sessions.stateful && !servesSession(w, r, &req) {
 		return

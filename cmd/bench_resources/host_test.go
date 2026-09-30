@@ -238,6 +238,28 @@ func TestHostFacts_OtherPlatforms(t *testing.T) {
 	})
 }
 
+// TestServerExecutable_Windows_NamesAFileItCanStart verifies the server is
+// built under a name Windows will run, and under the bare name everywhere
+// else. Both variant builds and the plain one start the file they wrote, so
+// without the extension every run on Windows stopped at the first exec.
+func TestServerExecutable_Windows_NamesAFileItCanStart(t *testing.T) {
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	cases := []struct{ goos, want string }{
+		{goos: "windows", want: "server.exe"},
+		{goos: "linux", want: "server"},
+		{goos: "darwin", want: "server"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.goos, func(t *testing.T) {
+			runtimeGOOS = tc.goos
+			if got := serverExecutable(); got != tc.want {
+				t.Errorf("serverExecutable() on %s = %q, want %q", tc.goos, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestHostFacts_Linux_EachFigureFromItsProcFile verifies each figure is held
 // to the file it is read from, in the unit it is published in, so a divisor
 // that is off by a factor of 1024 shows. Off Linux the files are absent and
