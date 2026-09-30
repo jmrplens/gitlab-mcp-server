@@ -275,11 +275,16 @@ const coldListBackoff = 500 * time.Millisecond
 // and a client retries it, so admission does too: failing on it would leave
 // the fairness scenario unable to put more credentials against the bound than
 // it lets list at once. Any other answer stands, and ctx bounds the asking.
+//
+// The refusal asked again is the one answered at HTTP 200. The authentication
+// gate's per-address lockout carries the same JSON-RPC code at 429, and an
+// [httpStatusError] unwraps to the code it carries, so the status is what
+// keeps a lockout from being asked again every backoff until ctx ends.
 func coldList(ctx context.Context, rpc rpcClient) error {
 	for {
 		_, err := rpc.call(ctx, methodToolsList, nil)
 		var refused rpcError
-		if !errors.As(err, &refused) || refused.Code != rateLimitCode {
+		if !errors.As(err, &refused) || refused.Code != rateLimitCode || responseStatus(err) != httpOK {
 			return err
 		}
 		select {
