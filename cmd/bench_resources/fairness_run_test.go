@@ -1369,12 +1369,17 @@ func TestRunFairness_OAuthVerification_MeasuresTheCeilingAgainstABuildWithout(t 
 	opts := smallOAuthOptions(t, filepath.Join(root, "fairness.json"))
 	originalBuild, originalVariant := buildServerBinary, buildVariantBinary
 	t.Cleanup(func() { buildServerBinary, buildVariantBinary = originalBuild, originalVariant })
-	buildServerBinary = func(string) (string, error) { return wrappedStandin(t, ""), nil }
-	buildVariantBinary = func(string, buildVariant) (string, error) { return wrappedStandin(t, "STANDIN_VERIFY_SLOTS=0"), nil }
+	// Both scripts are written here, on the test goroutine: the seams are
+	// called by runFairness on the goroutine finishWithin starts, where a
+	// t.Fatalf would end that goroutine and leave the test running on.
+	serverScript := wrappedStandin(t, "")
+	variantScript := wrappedStandin(t, "STANDIN_VERIFY_SLOTS=0")
+	buildServerBinary = func(string) (string, error) { return serverScript, nil }
+	buildVariantBinary = func(string, buildVariant) (string, error) { return variantScript, nil }
 
 	var runErr error
-	finishWithin(t, 2*time.Minute, "a two-arm verification run", func() {
-		captureStdout(t, func() { runErr = runFairness(opts, root) })
+	captureStdout(t, func() {
+		finishWithin(t, 2*time.Minute, "a two-arm verification run", func() { runErr = runFairness(opts, root) })
 	})
 	if runErr != nil {
 		t.Fatalf("runFairness: %v", runErr)
