@@ -43,8 +43,9 @@ This server read such a token through its scopes, which say nothing about it:
 
 The tenant register records the misreading as finding F-17, filed under issue 952 and
 carried by the rows that decide the read-only surface (`AUT-001`) and the door's
-admission (`ADM-001`, `ADM-002`). This record answers it for `AUT-001`; the door's rows
-keep it until their own change.
+admission (`ADM-001`, `ADM-002`). The first stage answers it for `AUT-001`, and the
+second, the door's uncharged answer and the OAuth minimum a fine-grained token meets,
+answers it for `ADM-001` and `ADM-002`, so no row carries it any longer.
 
 ## Decision
 
@@ -92,7 +93,11 @@ published on each catalog action.
    `gitlab://tools/{id}` and a generated reference page, with the author's intent as
    call-site directives, and never as a hand-written field of `ActionSpec`. The door's
    uncharged 403 for a token lacking User: Read is cached in the rejected-token cache of
-   `ADM-006` in both modes, since nothing edits a grant after creation at 19.4.1.
+   `ADM-006` in both modes, since nothing edits a grant after creation at 19.4.1. A
+   deployment pinned to its OAuth applications (`--oauth-client-uid`, `ADM-004`) answers
+   the same token with its recipient refusal instead, uncharged and cached as well: only
+   a personal access token is refused a fine-grained grant, and a pinned deployment
+   admits none, so the 403's advice would name two credentials it refuses.
 
 **ADR-0018's asymmetry holds on REST, and is replaced on GraphQL.** On REST a wrong "yes"
 surfaces as GitLab's own 403 on the one call that needed the permission, so reading
@@ -182,8 +187,24 @@ shape.
   fine-grained token is listed exactly the tools a token whose scopes are unknown is
   listed, every write and the `admin_mode` groups among them, with no log line saying it
   cannot write, and on the default surface its write reaches the instance.
+- `TestCheckCredential_FourAnswers_KeepsEachApart`,
+  `TestCheckCredentialDetail_FineGrainedRefusal_CarriesGitLabsSentence` and the two
+  `TestPermissionRefusal` tests in `internal/gitlab`,
+  `TestGetOrCreate_FineGrainedTokenWithoutUserRead_IsRefusedAsAccepted` and
+  `TestConfirmUnexplainedRefusal_ProbeRefusedAFineGrainedPermission_KeepsTheEntry` in
+  `internal/serverpool`, and `TestNewGitLabVerifier_ForbiddenDistinguishesScope`,
+  `TestIntrospectToken_FineGrainedRefusalOfSelf_AnswersWithoutTokenInfo` and
+  `TestGitLabVerifier_PinnedDeployment_AnswersAMissingUserPermissionAsAnUnacceptedRecipient`
+  in `internal/oauth` hold the door's reading of a missing User: Read.
+- `TestMCPServerGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged`,
+  `TestBearerGuard_FineGrainedTokenWithoutUserRead_IsForbiddenUnchargedAndRemembered` and
+  the two `PermissionMissing_QuotesAHostileSentenceOnlyFilteredAndCut` tests in
+  `cmd/server` hold both doors to an uncharged, remembered 403 that quotes GitLab only
+  filtered and cut; `test/e2e/http` holds the binary to it at both doors, and to
+  admitting a fine-grained token that can read its own user.
 - `make check-tenancy` holds the register rows `AUT-001` and `AUT-002` to the sites that
-  read the token kind.
+  read the token kind, and `ADM-001` to `ADM-004`, `ADM-006` and the failure table to
+  the door's refusal, its sites and its charges.
 
 ## Related
 
@@ -192,8 +213,8 @@ shape.
 - [ADR-0020](adr-0020-one-server-per-configuration-shape.md) (one server per
   configuration shape), whose shape key the grant never enters.
 - [ADR-0023](adr-0023-tenant-policy-is-declared-once.md) (the tenant policy register),
-  whose rows `AUT-001`, `AUT-002`, `ADM-001`, `ADM-002`, `ADM-003` and `ADM-006` this
-  record amends, and beside which it adds the rows for what a fine-grained session is
+  whose rows `AUT-001`, `AUT-002`, `ADM-001` to `ADM-004` and `ADM-006` this record
+  amends, and beside which it adds the rows for what a fine-grained session is
   withheld and the bound on reading its grant.
 - Issues [952](https://github.com/jmrplens/gitlab-mcp-server/issues/952),
   [1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) and
