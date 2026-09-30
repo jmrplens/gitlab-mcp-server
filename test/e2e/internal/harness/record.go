@@ -279,7 +279,7 @@ func (r *envRecorder) flush() {
 // so that the whole of this can be driven from a test of its own: a cleanup
 // that fails its own test cannot be asserted on, because a failing subtest
 // fails its parent.
-func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecalls.Line {
+func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecalls.Enveloper {
 	r.mu.Lock()
 	if r.flushed {
 		r.mu.Unlock()
@@ -292,7 +292,7 @@ func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecal
 
 	awaitDispatch(calls)
 
-	lines := make([]e2ecalls.Line, 0, len(calls)+len(skips))
+	lines := make([]e2ecalls.Enveloper, 0, len(calls)+len(skips))
 	for _, call := range calls {
 		call.line.TestStatus = status
 		// A dispatch line only for a span that named the tool or the action
@@ -922,7 +922,7 @@ func flushRunRecords() {
 		return
 	}
 
-	lines := []e2ecalls.Line{runLine(&state)}
+	lines := []e2ecalls.Enveloper{runLine(&state)}
 	lines = append(lines, sessionLines()...)
 	lines = append(lines, lateDispatchLines()...)
 	writer.Write(logReporter{}, lines...)
@@ -994,8 +994,8 @@ func seedNames(configured string) []string {
 // The served sets are the denominator of the whole report: an action no
 // session served is absent rather than untested, and those are different
 // findings about different things.
-func sessionLines() []e2ecalls.Line {
-	var lines []e2ecalls.Line
+func sessionLines() []e2ecalls.Enveloper {
+	var lines []e2ecalls.Enveloper
 	sessions.Range(func(_, value any) bool {
 		entry, isEntry := value.(*sessionEntry)
 		if !isEntry || entry.conn == nil {
@@ -1036,7 +1036,7 @@ func sessionLines() []e2ecalls.Line {
 // keeps the one that saw the most requests — so the correction is what a reader
 // sees. A diagnostic that counts lines rather than traces counts both, which is
 // why the coverage command's own is called DispatchLines.
-func lateDispatchLines() []e2ecalls.Line {
+func lateDispatchLines() []e2ecalls.Enveloper {
 	received := receiverIfStarted()
 	if received == nil {
 		return nil
@@ -1064,8 +1064,8 @@ func lateDispatchLines() []e2ecalls.Line {
 // It is a function of the map rather than a loop inside its caller so that the
 // skip can be tested: its caller reads a package-level receiver that only a
 // started suite has.
-func dispatchLinesOf(all map[string]traceSpans) []e2ecalls.Line {
-	lines := make([]e2ecalls.Line, 0, len(all))
+func dispatchLinesOf(all map[string]traceSpans) []e2ecalls.Enveloper {
+	lines := make([]e2ecalls.Enveloper, 0, len(all))
 	for traceID, kept := range all {
 		if !kept.dispatch.namesCall() {
 			continue

@@ -131,7 +131,7 @@ func Release() {
 // and skipped, and the lines offered after it are still written. A nil writer
 // writes nothing, and neither does a writer whose directory or file has already
 // failed.
-func (w *Writer) Write(reporter Reporter, lines ...Line) {
+func (w *Writer) Write(reporter Reporter, lines ...Enveloper) {
 	if w == nil {
 		return
 	}
@@ -154,7 +154,7 @@ func (w *Writer) Write(reporter Reporter, lines ...Line) {
 // line is written from an exit hook and is the only thing that joins a shard to
 // its commit, its instance and its tier, so losing it makes everything before it
 // unpublishable too.
-func (w *Writer) writeLine(reporter Reporter, line Line) {
+func (w *Writer) writeLine(reporter Reporter, line Enveloper) {
 	if w.stopped {
 		return
 	}

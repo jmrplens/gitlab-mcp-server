@@ -91,7 +91,7 @@ func TestRunIDStampLayout_FormatsAndParsesBack(t *testing.T) {
 func TestLineRecord_WrapsEachLineInItsOwnEnvelope(t *testing.T) {
 	cases := []struct {
 		name     string
-		line     Line
+		line     Enveloper
 		wantType string
 	}{
 		{name: "run", line: &Run{Package: "common", Status: RunStarted}, wantType: TypeRun},
@@ -406,7 +406,7 @@ func TestVocabulary_SpellsEachValueAShardCarries(t *testing.T) {
 
 // encodedRecord marshals a line in its envelope and returns the envelope and
 // the payload object found under key, failing when there is none.
-func encodedRecord(t *testing.T, line Line, key string) (map[string]any, map[string]any) {
+func encodedRecord(t *testing.T, line Enveloper, key string) (map[string]any, map[string]any) {
 	t.Helper()
 
 	encoded, err := json.Marshal(line.record())
@@ -442,7 +442,7 @@ func TestRecordJSON_SpellsEveryKeyAndValueAShardCarries(t *testing.T) {
 	// other right.
 	cases := []struct {
 		name     string
-		line     Line
+		line     Enveloper
 		wantType string
 		wantKey  string
 		want     map[string]any

@@ -229,7 +229,7 @@ func (r *recorder) writeAttempt(
 	calls []*modelrecord.Call,
 	checks []*modelrecord.Verify,
 ) {
-	lines := make([]modelrecord.Line, 0, 1+len(turns)+len(calls)+len(checks))
+	lines := make([]modelrecord.Enveloper, 0, 1+len(turns)+len(calls)+len(checks))
 	lines = append(lines, attempt)
 	for _, turn := range turns {
 		lines = append(lines, turn)
@@ -256,7 +256,7 @@ func (r *recorder) flush() error {
 		return nil
 	}
 	reporter := &exitReporter{}
-	lines := make([]modelrecord.Line, 0, 1+len(r.order))
+	lines := make([]modelrecord.Enveloper, 0, 1+len(r.order))
 	run := r.run
 	lines = append(lines, &run)
 	for _, label := range r.order {

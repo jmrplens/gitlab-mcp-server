@@ -39,8 +39,9 @@ type fixtureRecord struct {
 	Carrier *carrier `json:"carrier,omitempty"`
 }
 
-// fixtureLine is one thing a fixture shard can hold.
-type fixtureLine interface {
+// fixtureEnveloper is one thing a fixture shard can hold: a line that knows the
+// envelope it is written in.
+type fixtureEnveloper interface {
 	record() fixtureRecord
 }
 
@@ -92,14 +93,14 @@ func validateFixture(r fixtureRecord) error {
 // plainSpec is the shape of a record carrying nothing the writer must inspect
 // before encoding: no Check and no hints, which is the arm every branch those
 // two fields open has to be taken with as well.
-func plainSpec() Spec[fixtureRecord, fixtureLine] {
-	return Spec[fixtureRecord, fixtureLine]{
+func plainSpec() Spec[fixtureRecord, fixtureEnveloper] {
+	return Spec[fixtureRecord, fixtureEnveloper]{
 		DirEnv:   fixtureDirEnv,
 		Prefix:   fixturePrefix,
 		Ext:      fixtureExt,
 		Noun:     "a fixture",
 		TypeOf:   func(r fixtureRecord) string { return r.Type },
-		Envelope: func(l fixtureLine) fixtureRecord { return l.record() },
+		Envelope: func(l fixtureEnveloper) fixtureRecord { return l.record() },
 		Validate: validateFixture,
 	}
 }
@@ -107,7 +108,7 @@ func plainSpec() Spec[fixtureRecord, fixtureLine] {
 // checkedSpec is the shape of a record filled from somebody else's output: a
 // pre-encode check on its raw field, and a hint on each refusal that is about
 // one line.
-func checkedSpec() Spec[fixtureRecord, fixtureLine] {
+func checkedSpec() Spec[fixtureRecord, fixtureEnveloper] {
 	spec := plainSpec()
 	spec.Check = func(r fixtureRecord) string {
 		if r.Carrier != nil && len(r.Carrier.Raw) != 0 && !json.Valid(r.Carrier.Raw) {
@@ -127,7 +128,7 @@ func checkedSpec() Spec[fixtureRecord, fixtureLine] {
 // directory is made by the caller before this is called, so its removal is
 // registered first and therefore runs after the release: a shard left open is a
 // directory Windows refuses to remove.
-func newFixture(t *testing.T, spec Spec[fixtureRecord, fixtureLine]) *Shards[fixtureRecord, fixtureLine] {
+func newFixture(t *testing.T, spec Spec[fixtureRecord, fixtureEnveloper]) *Shards[fixtureRecord, fixtureEnveloper] {
 	t.Helper()
 
 	shards := New(spec)
@@ -181,13 +182,13 @@ func TestIsShard_MatchesThePrefixAndTheExtensionOfTheSpec(t *testing.T) {
 func TestNew_KeepsOneRegistryPerRecord(t *testing.T) {
 	dir := t.TempDir()
 	first := newFixture(t, plainSpec())
-	second := New(Spec[fixtureRecord, fixtureLine]{
+	second := New(Spec[fixtureRecord, fixtureEnveloper]{
 		DirEnv:   "GITLAB_MCP_TEST_SHARDIO_OTHER_DIR",
 		Prefix:   "other-",
 		Ext:      fixtureExt,
 		Noun:     "another fixture",
 		TypeOf:   func(r fixtureRecord) string { return r.Type },
-		Envelope: func(l fixtureLine) fixtureRecord { return l.record() },
+		Envelope: func(l fixtureEnveloper) fixtureRecord { return l.record() },
 		Validate: validateFixture,
 	})
 	t.Cleanup(second.Release)
@@ -271,7 +272,7 @@ func TestCreateShard_NamesTheFileAfterThePattern(t *testing.T) {
 
 // probeLine returns the encoded length of one fixture line, so a test can pad a
 // line to exactly the length the reader's scanner accepts.
-func probeLine(t *testing.T, line fixtureLine) int {
+func probeLine(t *testing.T, line fixtureEnveloper) int {
 	t.Helper()
 
 	encoded, err := json.Marshal(line.record())

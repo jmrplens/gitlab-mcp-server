@@ -45,9 +45,9 @@ func writeShard(t *testing.T, dir, name string, lines ...string) string {
 // written, each of them a line a real run would produce, and the fields are
 // covered across them rather than by contorting one line into a shape the runner
 // never writes.
-func populatedLines() (time.Time, []Line) {
+func populatedLines() (time.Time, []Enveloper) {
 	startedAt := time.Date(2026, 9, 15, 11, 22, 33, 0, time.UTC)
-	return startedAt, []Line{
+	return startedAt, []Enveloper{
 		&Run{
 			Package:        "modeleval",
 			RunID:          "20260915t112233z-9f1c2d-ce",

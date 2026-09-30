@@ -486,7 +486,7 @@ func TestRegisteredMarkdownFormatterName_Registrations_NameTheFunctionServed(t *
 	}{
 		{name: "the named function", typ: reflect.TypeFor[mdNamedOutput](), want: "toolutil.formatMdNamedOutput"},
 		{name: "the result formatter of a type with both", typ: reflect.TypeFor[mdPointerOutput](), want: "toolutil.formatMdPointerResult"},
-		{name: "a type nobody registered", typ: reflect.TypeFor[mdInterfaceOutput](), want: ""},
+		{name: "a type nobody registered", typ: reflect.TypeFor[mdRenderer](), want: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -507,8 +507,8 @@ type mdHintedOutput struct {
 	Name string `json:"name"`
 }
 
-// mdInterfaceOutput is a test-only interface a registration must refuse.
-type mdInterfaceOutput interface{ Render() string }
+// mdRenderer is a test-only interface a registration must refuse.
+type mdRenderer interface{ Render() string }
 
 // TestMarkdownForResult_PointerToRegisteredType_IsDereferenced verifies the
 // runtime lookup answers the same question the coverage predicate answers: a
@@ -595,10 +595,10 @@ func TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept(t *testing.T) 
 	RegisterMarkdown(func(mdPointerOutput) string { return "first" })
 	RegisterMarkdown(func(mdPointerOutput) string { return "second" })
 	RegisterMarkdownResult(func(mdPointerOutput) *mcp.CallToolResult { return nil })
-	RegisterMarkdown(func(mdInterfaceOutput) string { return "interface" })
+	RegisterMarkdown(func(mdRenderer) string { return "interface" })
 
 	want := []string{
-		"Markdown formatter registered for the interface type toolutil.mdInterfaceOutput: nothing looks a formatter up by an interface",
+		"Markdown formatter registered for the interface type toolutil.mdRenderer: nothing looks a formatter up by an interface",
 		"duplicate Markdown formatter for toolutil.mdPointerOutput: the first registration is kept",
 		"toolutil.mdPointerOutput has a string and a result formatter: the result formatter is served",
 	}
@@ -608,7 +608,7 @@ func TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept(t *testing.T) 
 	if entry, ok := stringFormatters.Load(reflect.TypeFor[mdPointerOutput]()); !ok || entry.(stringFormatter).fn(mdPointerOutput{}) != "first" {
 		t.Errorf("the first registration did not survive the second")
 	}
-	if _, ok := stringFormatters.Load(reflect.TypeFor[mdInterfaceOutput]()); ok {
+	if _, ok := stringFormatters.Load(reflect.TypeFor[mdRenderer]()); ok {
 		t.Error("the interface-typed registration was stored")
 	}
 }
@@ -630,11 +630,11 @@ func TestRegisterMarkdownResult_Collisions_AreRecordedAndTheFirstIsKept(t *testi
 	RegisterMarkdownResult(func(mdResultFirstOutput) *mcp.CallToolResult { return SuccessResult("first") })
 	RegisterMarkdownResult(func(mdResultFirstOutput) *mcp.CallToolResult { return SuccessResult("second") })
 	RegisterMarkdown(func(mdResultFirstOutput) string { return "string" })
-	RegisterMarkdownResult(func(mdInterfaceOutput) *mcp.CallToolResult { return SuccessResult("interface") })
+	RegisterMarkdownResult(func(mdRenderer) *mcp.CallToolResult { return SuccessResult("interface") })
 
 	// Sorted, as MarkdownRegistrationProblems returns them.
 	want := []string{
-		"Markdown formatter registered for the interface type toolutil.mdInterfaceOutput: nothing looks a formatter up by an interface",
+		"Markdown formatter registered for the interface type toolutil.mdRenderer: nothing looks a formatter up by an interface",
 		"duplicate Markdown result formatter for toolutil.mdResultFirstOutput: the first registration is kept",
 		"toolutil.mdResultFirstOutput has a string and a result formatter: the result formatter is served",
 	}
@@ -644,7 +644,7 @@ func TestRegisterMarkdownResult_Collisions_AreRecordedAndTheFirstIsKept(t *testi
 	if got := extractText(MarkdownForResult(mdResultFirstOutput{})); got != "first" {
 		t.Errorf("served result = %q, want the first registration's", got)
 	}
-	if _, ok := resultFormatters.Load(reflect.TypeFor[mdInterfaceOutput]()); ok {
+	if _, ok := resultFormatters.Load(reflect.TypeFor[mdRenderer]()); ok {
 		t.Error("the interface-typed result registration was stored")
 	}
 }

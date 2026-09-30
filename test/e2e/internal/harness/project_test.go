@@ -813,7 +813,7 @@ func assertStandaloneRecord(t *testing.T, env *Env, surface Surface) {
 
 // recordedElicitation reports whether the record holds an elicitation that
 // asked for the given property.
-func recordedElicitation(lines []e2ecalls.Line, property string) bool {
+func recordedElicitation(lines []e2ecalls.Enveloper, property string) bool {
 	for _, line := range lines {
 		call, isCall := line.(*e2ecalls.Call)
 		if isCall && call.Method == methodElicit && slices.Contains(call.Arguments, property) {

@@ -509,9 +509,9 @@ type gqlBranchRuleNode struct {
 // shape, each knowing how to become the one output item. It is named for the
 // role it fills rather than for the shape it admits, which is the convention
 // the rest of this repository follows for an interface with one method
-// (promptAdder, errorReporter, modelProvider); the previous spelling named the
-// shape, and a reader met a constraint whose name did not say what the generic
-// code was going to do with it.
+// (promptAdder, errorReporter, credentialCaller); the previous spelling named
+// the shape, and a reader met a constraint whose name did not say what the
+// generic code was going to do with it.
 type branchRuleConverter interface {
 	item() BranchRuleItem
 }
