@@ -1238,6 +1238,10 @@ func WrapErrWithMessage(operation string, err error) error {
 // branch.list to verify the branch name"), and names an action by its
 // canonical ID rather than by a tool name, which only one surface of three
 // registers; cmd/audit_action_ids fails on one.
+//
+// The hint is left out where it cannot be right: for a request this server
+// never sent or declined to send, and for a refusal of a fine-grained token's
+// grant, whose description already says what is missing.
 func WrapErrWithHint(operation string, err error, hint string) error {
 	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
 		return unattributed
@@ -1248,6 +1252,18 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	// suggestion that can change this outcome is the flag.
 	if refused := wrapDestinationRefused(operation, err); refused != nil {
 		return refused
+	}
+	// A refusal under GitLab's fine-grained token rules drops the hint too,
+	// and the composition is [WrapErrWithMessage]'s. What [ClassifyError]
+	// says of it names what the token's grant lacks and the way out, which no
+	// handler's hint knows: a hint is written for GitLab's ordinary refusal,
+	// and one keyed on a 403, which this is, names a role, a license, an owner
+	// or an administrator, so keeping it would tell a model that is missing as
+	// well. [IsPermissionRefusal] is false for such a refusal, which keeps the
+	// hints keyed on it away; this keeps away the ones keyed on the status or
+	// on nothing.
+	if _, refused := fineGrainedRefusalOf(err); refused {
+		return WrapErrWithMessage(operation, err)
 	}
 	return hintedError(operation, err, hint)
 }

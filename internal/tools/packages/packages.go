@@ -842,7 +842,8 @@ func Delete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclient.Cl
 	_, err = client.GL().Packages.DeleteProjectPackage(string(input.ProjectID), pkgID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return fmt.Errorf("packageDelete: package deletion requires Maintainer role or higher. Your current role may only allow publishing. Contact a project Maintainer to delete packages: %w", err)
+			return toolutil.WrapErrWithHint("packageDelete", err,
+				"package deletion requires Maintainer role or higher; your current role may only allow publishing, so ask a project Maintainer to delete the package")
 		}
 		return toolutil.WrapErrWithStatusHint("packageDelete", err, http.StatusNotFound,
 			"verify package_id with package.list; the package may already have been deleted")

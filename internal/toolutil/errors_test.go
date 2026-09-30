@@ -3568,6 +3568,55 @@ func TestClassifyError_FineGrainedRefusal_BoundsWhatItQuotes(t *testing.T) {
 	}
 }
 
+// TestWrapErrWithHint_FineGrainedRefusal_DropsTheHandlersHint verifies a
+// handler's hint does not follow a refusal of a fine-grained token's grant,
+// through WrapErrWithHint and through WrapErrWithStatusHint keyed on the 403
+// GitLab answers it with, over REST and over GraphQL. A hint keyed on a 403
+// names a role, a license or an administrator, and the model would be told
+// that is missing beside the permission the description names. The
+// composition is WrapErrWithMessage's, exactly. A 403 that is no
+// fine-grained refusal keeps the hint, which is the control.
+func TestWrapErrWithHint_FineGrainedRefusal_DropsTheHandlersHint(t *testing.T) {
+	const roleHint = "approving requires the Developer role or higher"
+	description := "access denied: this call needs the fine-grained project permission [Merge Request: Approve]"
+	_, restRefusal := restAnswer(t, http.MethodPost, "projects/1/merge_requests/2/approve", http.StatusForbidden, granularRefusalBody(t, approveRefusalSentence))
+	graphQLRefusal := GraphQLTopLevelError("mergeRequestAccept", []GraphQLError{{Message: approveRefusalSentence}})
+	tests := []struct {
+		name string
+		wrap func(err error) error
+	}{
+		{name: "WrapErrWithHint", wrap: func(err error) error { return WrapErrWithHint("approveMR", err, roleHint) }},
+		{name: "WrapErrWithStatusHint on 403", wrap: func(err error) error {
+			return WrapErrWithStatusHint("approveMR", err, http.StatusForbidden, roleHint)
+		}},
+	}
+	for _, tt := range tests {
+		for _, refusal := range []struct {
+			name string
+			err  error
+		}{{name: "over REST", err: restRefusal}, {name: "over GraphQL", err: graphQLRefusal}} {
+			t.Run(tt.name+" "+refusal.name, func(t *testing.T) {
+				got := tt.wrap(refusal.err).Error()
+				if strings.Contains(got, roleHint) || strings.Contains(got, "Suggestion:") {
+					t.Errorf("%s() = %q, want no hint after a fine-grained refusal", tt.name, got)
+				}
+				if !strings.Contains(got, description) {
+					t.Errorf("%s() = %q, want it to carry %q", tt.name, got, description)
+				}
+				if want := WrapErrWithMessage("approveMR", refusal.err).Error(); got != want {
+					t.Errorf("%s() = %q, want WrapErrWithMessage's %q", tt.name, got, want)
+				}
+			})
+		}
+	}
+	t.Run("a 403 that is no fine-grained refusal keeps the hint", func(t *testing.T) {
+		_, plain := restAnswer(t, http.MethodPost, "projects/1/merge_requests/2/approve", http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		if got := WrapErrWithStatusHint("approveMR", plain, http.StatusForbidden, roleHint).Error(); !strings.Contains(got, "Suggestion: "+roleHint) {
+			t.Errorf("WrapErrWithStatusHint() = %q, want the hint", got)
+		}
+	})
+}
+
 // TestSanitizeError_FineGrainedRefusal_IsDescribedOnce verifies the
 // description reaches a model whatever route the error took to the
 // dispatcher: a GraphQL refusal a handler returns straight from

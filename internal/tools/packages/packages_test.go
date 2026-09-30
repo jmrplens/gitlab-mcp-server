@@ -1033,6 +1033,29 @@ func TestPackageDelete403_Maintainer(t *testing.T) {
 	}
 }
 
+// TestPackageDelete403_FineGrainedRefusal_NamesThePermissionAndNoRole holds
+// the one handler whose role hint is keyed on the 403 status to the rule the
+// errors layer applies: a fine-grained token refused for want of Package:
+// Delete (the permission GitLab declares for the route in
+// lib/api/project_packages.rb at v19.4.1-ee) is told that permission, and not
+// that it needs the Maintainer role, which a grant cannot supply.
+func TestPackageDelete403_FineGrainedRefusal_NamesThePermissionAndNoRole(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Package: Delete]."}`)
+	}))
+
+	err := Delete(context.Background(), nil, client, DeleteInput{ProjectID: "42", PackageID: "10"})
+	if err == nil {
+		t.Fatal("Delete() = nil, want the refusal")
+	}
+	if !strings.Contains(err.Error(), "access denied: this call needs the fine-grained project permission [Package: Delete]") {
+		t.Errorf("Delete() error = %q, want it to name the missing permission", err)
+	}
+	if strings.Contains(err.Error(), "Maintainer") {
+		t.Errorf("Delete() error = %q, want no role hint after a fine-grained refusal", err)
+	}
+}
+
 // TestPtrString verifies PtrString.
 func TestPtrString(t *testing.T) {
 	if ptrString("") != nil {
