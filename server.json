@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "Go MCP server for GitLab: 2 dynamic tools reach 1000+ REST/GraphQL actions. Free/CE, no paid tier.",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -29,9 +29,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.0.0/gitlab-mcp-server.mcpb",
-      "version": "3.0.0",
-      "fileSha256": "61b2603175eac1be89070c945ee4330071a9fffb9e37d8fe7171323a4d0a20d2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.1.0/gitlab-mcp-server.mcpb",
+      "version": "3.1.0",
+      "fileSha256": "0e1f4feb06533b25cf06493ac843ab68aba7ba149457205d659d5914d4a05ca4",
       "transport": {
         "type": "stdio"
       },
@@ -176,7 +176,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.0.0@sha256:80990c658d2ac1b95c98540fbd8fc2bcf300a86a9b18c73483ed7412441b2c04",
+      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc",
       "transport": {
         "type": "stdio"
       },
@@ -321,7 +321,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.0.0@sha256:80990c658d2ac1b95c98540fbd8fc2bcf300a86a9b18c73483ed7412441b2c04",
+      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc",
       "transport": {
         "type": "stdio"
       },
@@ -467,7 +467,7 @@
     {
       "registryType": "npm",
       "identifier": "@jmrp.io/gitlab-mcp-server",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -615,7 +615,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jmrplens-gitlab-mcp-server",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -763,7 +763,7 @@
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "gitlab-mcp-server",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "runtimeHint": "dnx",
       "transport": {
         "type": "stdio"
