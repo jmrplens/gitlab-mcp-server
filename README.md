@@ -474,10 +474,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,378 |       318,041 |
+| Source (`.go`, non-test) |     1,378 |       318,042 |
 | Unit tests (`_test.go`)  |       949 |       634,000 |
 | End-to-end tests         |       504 |       107,259 |
-| **Total**                | **2,831** | **1,059,300** |
+| **Total**                | **2,831** | **1,059,301** |
 
 ### Functions
 
@@ -530,7 +530,7 @@ and the workaround this server carries until it ships.
 | Fact                                 | Value                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~5,782 pages of A4                                                                                      |
-| Source lines mentioning `"gitlab"`   | 14,916 (impossible to avoid)                                                                            |
+| Source lines mentioning `"gitlab"`   | 14,917 (impossible to avoid)                                                                            |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                        |
 | Longest test function name           | `TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor` (90 chars) |
 
