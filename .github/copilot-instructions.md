@@ -8,7 +8,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 - **Language**: Go 1.27.1
 - **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0
-- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
+- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v3.14.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 
@@ -16,7 +16,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ```text
 gitlab-mcp-server/
-├── cmd/                    # server + 31 dev utility binaries — see docs/development/cmd-utilities.md for the full reference
+├── cmd/                    # server + 42 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
 │   ├── server/             # MCP server entry point (+ --shutdown, --probe flags)
 │   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk; -validate-docs)
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
@@ -66,7 +66,7 @@ gitlab-mcp-server/
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schema (SDL embedded as text + provenance) and Validate()
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema
-│   ├── tools/              # Tool orchestration layer + 177 internal/tools packages
+│   ├── tools/              # Tool orchestration layer + 179 internal/tools packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
@@ -78,7 +78,7 @@ gitlab-mcp-server/
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 177 internal/tools packages total
+│   │   └── ...             # 179 internal/tools packages total
 │   ├── resources/          # MCP resource implementations
 │   ├── prompts/            # MCP prompt implementations
 │   ├── completions/        # Argument completion handler
