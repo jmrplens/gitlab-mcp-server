@@ -64,8 +64,15 @@ func allowDecisions() []Decision {
 			// on stdio, where the process serves one caller and has no
 			// co-tenant to protect, and switched on there by the variable,
 			// since stdio accepts the flag and ignores it.
-			Decided:  []string{"issue 959"},
-			Findings: []string{"F-01", "F-02", "F-20", "F-21", "F-32", "F-34"},
+			//
+			// The tools/call refusal carries the resultType its revision
+			// requires, which go-sdk v1.8.0 adds only to what its own
+			// dispatcher answers: the middleware labels it
+			// (toolutil.LabelForRevision), which answers F-20 as part of
+			// issue 961's work while that issue stays open for F-21, F-22
+			// and F-24.
+			Decided:  []string{"issue 959", "issue 961"},
+			Findings: []string{"F-01", "F-02", "F-21", "F-32", "F-34"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: "rate limit exceeded for ",

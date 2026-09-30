@@ -348,6 +348,23 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 	}
 }
 
+// TestDecisions_ToolCallRefusal_AnswersF20UnderIssue961 pins what the work of
+// issue 961 answered on RTC-001: the tools/call refusal a middleware makes now
+// carries the resultType its revision requires, so the row records the issue
+// and no longer carries F-20. F-21, which the same issue tracks, is still
+// carried, since the issue stays open for it, and F-20 stays in the register's
+// list, filed as issue 961's.
+func TestDecisions_ToolCallRefusal_AnswersF20UnderIssue961(t *testing.T) {
+	d, _ := Lookup("RTC-001")
+	if !slices.Contains(d.Decided, "issue 961") || d.Carries("F-20") || !d.Carries("F-21") {
+		t.Errorf("RTC-001: decided %v, findings %v; want issue 961 recorded, F-20 no longer carried and F-21 still carried",
+			d.Decided, d.Findings)
+	}
+	if FindingIssue("F-20") != 961 {
+		t.Errorf("F-20 is filed as issue %d, want it kept as issue 961's", FindingIssue("F-20"))
+	}
+}
+
 // TestDecisions_OAuthVerification_IsBoundedByIssue950 pins what issue 950
 // decided for the two things on the OAuth admission path that grew with what
 // callers send. The identity cache (ADM-005) has a constant capacity and takes
@@ -443,7 +460,9 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // answered only F-03 on RTC-007) would pass its subtest if it were dropped;
 // the next finding answered joins that list in the change that answers it, as
 // F-29 and F-30 did when issue 950 bounded the OAuth identity cache and
-// verification, and F-31 did when issue 951 bounded the stateful sessions.
+// verification, F-31 did when issue 951 bounded the stateful sessions, and
+// F-20 did when the tool-call refusal was given its resultType under issue
+// 961.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -471,7 +490,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-19,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

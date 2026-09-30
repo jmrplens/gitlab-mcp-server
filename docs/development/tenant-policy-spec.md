@@ -520,7 +520,7 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Six findings are answered, and stay in the list with their issues. F-03, the listing
+Seven findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -691,11 +691,29 @@ against a stand-in GitLab, a hundred thousand distinct credentials held a hundre
 thousand entries and sixty megabytes before, and hold ten thousand and seven megabytes
 now; two thousand invented tokens at once put two thousand verification requests in
 flight before, and sixteen now. `ADM-002`, `ADM-005` and `POL-006` carry neither finding
-any longer, and `ADM-005` and `ADM-014` record the decision. Four more
-have been carried by no row since the register landed, because each records something no
-row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
-message the SDK gives the server no way to send, and F-23 and F-27 stale statements.
+any longer, and `ADM-005` and `ADM-014` record the decision. F-20 is answered by a change
+of code made under [issue 961](https://github.com/jmrplens/gitlab-mcp-server/issues/961),
+which stays open for F-21, F-22 and F-24. go-sdk v1.8.0 labels a `tools/call` result with
+the `resultType` 2026-07-28 requires only inside its own tool dispatcher, so `RTC-001`'s
+refusal of a `tools/call`, a tool error its middleware returns in the dispatcher's place,
+reached a 2026-07-28 client without the field. The middleware now labels it
+(`toolutil.LabelForRevision`, row 66 of `docs/development/upstream-bugs.md`): a request
+naming 2026-07-28 or later in its `_meta` is refused with `resultType: "complete"`, as a
+call the dispatcher serves is answered, and one of an earlier revision with no
+`resultType`. That is the test go-sdk v1.8.0 applies to the results it labels once the
+middleware chain returns, and the one its fix applies to every result; its tool
+dispatcher reads instead the revision the session recorded when it began, and the two
+differ only where that revision and a request's `_meta` disagree: a client negotiated
+down from 2026-07-28 gets the dispatcher's label and not this one, which its revision
+does not require, and a client that negotiated an earlier revision and then names
+2026-07-28 in a request's `_meta`, which v1.8.0 accepts over stdio, gets this label and
+not the dispatcher's, which is what that revision requires and what the fix sends. The
+refusal keeps its channel, its text and its error flag, and
+`HLD-011`'s refusal of a `tools/call` is labeled the same way. `RTC-001` records the
+issue and no longer carries F-20. Four more have been carried by no row since the
+register landed, because each records something no row decides: F-18 a budget GitLab.com
+keeps that the process does not account for, F-24 a message the SDK gives the server no
+way to send, and F-23 and F-27 stale statements.
 `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue` holds both sets: a finding no
-row carries fails unless it is one of those four or a row records its issue in
-`Decided`, and the answered set is named, so a finding dropped from a row by mistake
-fails too.
+row carries fails unless it is one of those four or a row records its issue in `Decided`,
+and the answered set is named, so a finding dropped from a row by mistake fails too.
