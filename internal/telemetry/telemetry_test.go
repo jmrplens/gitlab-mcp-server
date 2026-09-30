@@ -3,17 +3,25 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"io"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
+	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // TestBuildResource_ServiceNameFromEnv_WinsOverTheDefault asserts the promise
@@ -1306,4 +1314,200 @@ func TestEnvHasServiceName_OnlyTheServiceNameAttributeCounts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStart_AnExporterThatRefusesItsConfiguration_StopsTheStart covers each
+// signal's exporter refusing to be built, which is the one failure Start meets
+// after the protocol and the TLS material have both been accepted.
+//
+// The configuration is a real one an operator can write: a CA file beside an
+// http:// endpoint. The CA file reads and parses, so the TLS check passes it,
+// and every OTLP/HTTP exporter then refuses a plaintext endpoint that carries
+// TLS settings. Start has to hand that refusal back naming the exporter, and
+// report itself disabled, rather than announce a signal that will never export.
+// Each signal is started on its own so the refusal is the one being asked
+// about and not the first of three.
+func TestStart_AnExporterThatRefusesItsConfiguration_StopsTheStart(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		signals Signals
+		want    string
+	}{
+		{name: "traces", signals: Signals{Traces: true}, want: "otlp trace exporter"},
+		{name: "metrics", signals: Signals{Metrics: true}, want: "otlp metric exporter"},
+		{name: "logs", signals: Signals{Logs: true}, want: "otlp log exporter"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			certPath, _ := writeKeyPair(t)
+			t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", ProtocolHTTP)
+			t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+			t.Setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", certPath)
+			for _, signal := range []string{"TRACES", "METRICS", "LOGS"} {
+				t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_PROTOCOL", "")
+				t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_ENDPOINT", "")
+				t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_CERTIFICATE", "")
+			}
+
+			provider, err := Start(context.Background(), Config{Enabled: true, Signals: tc.signals})
+			if err == nil {
+				t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
+				t.Fatal("Start accepted an http:// endpoint carrying a CA file; the exporter refuses that combination")
+			}
+			if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "insecure") {
+				t.Errorf("Start refused with %q, want the %s's refusal of an insecure endpoint with TLS settings", err, tc.want)
+			}
+			if provider.Enabled() {
+				t.Error("the returned provider reports itself enabled after a refused start")
+			}
+		})
+	}
+}
+
+// TestStart_AMalformedResourceVariable_StopsTheStart covers the resource the
+// provider is built on failing to assemble.
+//
+// OTEL_RESOURCE_ATTRIBUTES is a list of key=value pairs, and a pair without a
+// value is refused by the SDK's detector. Start turns that into a named
+// refusal before any exporter exists, so an operator whose attributes would
+// have been partly dropped hears about it at startup instead of finding the
+// missing dimension in a dashboard later.
+func TestStart_AMalformedResourceVariable_StopsTheStart(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+
+	provider, err := Start(context.Background(), Config{Enabled: true, Signals: Signals{Traces: true}})
+	if err == nil {
+		t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
+		t.Fatal("Start accepted an OTEL_RESOURCE_ATTRIBUTES pair with no value")
+	}
+	if !strings.Contains(err.Error(), "telemetry resource") {
+		t.Errorf("Start refused with %q, want it to say the resource could not be built", err)
+	}
+	if provider.Enabled() {
+		t.Error("the returned provider reports itself enabled after a refused start")
+	}
+}
+
+// TestStart_DropToolNameFromMetrics_ReachesWhatIsExported covers the wiring
+// between the setting and the view, which the view's own tests cannot see:
+// they install it on a provider they build themselves.
+//
+// The measurement goes out through the exporter Start builds, to a collector
+// on loopback that decodes the OTLP request, and the attributes it arrives
+// with are what is compared. With the setting on, the tool name is gone and an
+// unrelated attribute is still there; with it off, the tool name arrives. The
+// second half is what makes the first mean something: a collector that never
+// saw the attribute at all would pass it too.
+func TestStart_DropToolNameFromMetrics_ReachesWhatIsExported(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		drop     bool
+		wantTool bool
+	}{
+		{name: "dropped", drop: true, wantTool: false},
+		{name: "kept", drop: false, wantTool: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := startMetricsCollector(t)
+
+			provider, err := Start(context.Background(), Config{
+				Enabled:                 true,
+				Signals:                 Signals{Metrics: true},
+				DropToolNameFromMetrics: tc.drop,
+			})
+			if err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+
+			counter, err := otel.GetMeterProvider().Meter("telemetry-test").Int64Counter("gitlab_mcp.test.calls")
+			if err != nil {
+				t.Fatalf("creating the instrument: %v", err)
+			}
+			counter.Add(context.Background(), 1, metric.WithAttributes(
+				attribute.String(attrGenAIToolName, "gitlab_issue_list"),
+				attribute.String("mcp.method.name", "tools/call"),
+			))
+			// Shutdown flushes the periodic reader, which is the export this
+			// test waits for.
+			if shutdownErr := provider.Shutdown(boundedShutdown(t)); shutdownErr != nil {
+				t.Fatalf("Shutdown: %v", shutdownErr)
+			}
+
+			keys := collector.attributeKeys()
+			if !keys["mcp.method.name"] {
+				t.Fatalf("the collector received no data point carrying the unrelated attribute; got keys %v", keys)
+			}
+			if keys[attrGenAIToolName] != tc.wantTool {
+				t.Errorf("%s exported = %v with DropToolNameFromMetrics=%v, want %v",
+					attrGenAIToolName, keys[attrGenAIToolName], tc.drop, tc.wantTool)
+			}
+		})
+	}
+}
+
+// metricsCollector is an OTLP/HTTP metrics receiver on loopback that keeps
+// the attribute keys of every data point it is sent.
+type metricsCollector struct {
+	mu   sync.Mutex
+	keys map[string]bool
+}
+
+// startMetricsCollector starts the receiver and points the metrics exporter at
+// it over http/protobuf, clearing any per-signal setting the environment
+// already had.
+func startMetricsCollector(t *testing.T) *metricsCollector {
+	t.Helper()
+
+	collector := &metricsCollector{keys: map[string]bool{}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading the export: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var request colmetricspb.ExportMetricsServiceRequest
+		if decodeErr := proto.Unmarshal(body, &request); decodeErr != nil {
+			t.Errorf("decoding the export: %v", decodeErr)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		collector.record(&request)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", ProtocolHTTP)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", server.URL)
+	t.Setenv("OTEL_EXPORTER_OTLP_COMPRESSION", "none")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "2000")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_COMPRESSION", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_TIMEOUT", "")
+	return collector
+}
+
+// record keeps the attribute keys of every data point in one export.
+func (c *metricsCollector) record(request *colmetricspb.ExportMetricsServiceRequest) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, rm := range request.GetResourceMetrics() {
+		for _, sm := range rm.GetScopeMetrics() {
+			for _, m := range sm.GetMetrics() {
+				for _, point := range m.GetSum().GetDataPoints() {
+					for _, kv := range point.GetAttributes() {
+						c.keys[kv.GetKey()] = true
+					}
+				}
+			}
+		}
+	}
+}
+
+// attributeKeys is a copy of the keys seen so far.
+func (c *metricsCollector) attributeKeys() map[string]bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return maps.Clone(c.keys)
 }
