@@ -1649,6 +1649,10 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		{entry: "Department:", want: strings.TrimSpace("Department:   " + projectDepartment)},
 		{entry: "Repository:", want: "Repository:   " + projectRepository},
 		{entry: "-session-timeout duration", want: fmt.Sprintf("(default %s)", config.DefaultSessionTimeout)},
+		{entry: "-session-timeout duration", want: "keeps one of the process's session slots until it expires, and with 0 until"},
+		{entry: "-max-http-clients int", want: fmt.Sprintf("at %d here, and with -stateless=false", processHeldRequests.limit)},
+		{entry: "-max-http-clients int", want: fmt.Sprintf("sessions kept at half of that, %d here", processStatefulSessions.limit)},
+		{entry: "GITLAB_MCP_SESSION_TIMEOUT", want: "keeps one of the process's session slots until it expires"},
 		{entry: "-oauth-cache-ttl duration", want: fmt.Sprintf("(default %s, min %s, max %s)", config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL)},
 		{entry: "-revalidate-interval dur", want: fmt.Sprintf("(default %s; 0 stops", config.DefaultRevalidateInterval)},
 		{entry: "-revalidate-interval dur", want: fmt.Sprintf("older than %s is still rebuilt", serverpool.DefaultMaxCredentialAge)},
@@ -15121,4 +15125,79 @@ func registeredFlagNames(t *testing.T) []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// TestHTTPStartupAttrs_AnnounceTheSessionCeilingOnlyWhereSessionsAreKept holds
+// what the startup line tells an operator about the process's own ceilings:
+// the held-call figure on every deployment, and the session figure only on one
+// that keeps sessions, since on the stateless transport it bounds nothing.
+func TestHTTPStartupAttrs_AnnounceTheSessionCeilingOnlyWhereSessionsAreKept(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		stateless bool
+	}{
+		{name: "stateless", stateless: true},
+		{name: "stateful"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			announced := map[string]any{}
+			attrs := httpStartupAttrs(&config.Config{Stateless: tc.stateless}, ":8080")
+			for i := 0; i+1 < len(attrs); i += 2 {
+				announced[attrs[i].(string)] = attrs[i+1]
+			}
+			if got := announced["held_requests_per_process"]; got != processHeldRequests.limit {
+				t.Errorf("held_requests_per_process = %v, want %d", got, processHeldRequests.limit)
+			}
+			sessions, ok := announced["stateful_sessions_per_process"]
+			if ok == tc.stateless || (ok && sessions != processStatefulSessions.limit) {
+				t.Errorf("stateful_sessions_per_process = %v (announced %v) on a deployment stateless %v, "+
+					"want %d announced only where sessions are kept", sessions, ok, tc.stateless, processStatefulSessions.limit)
+			}
+			if got := announced["config_digest"]; got == nil || got == "" {
+				t.Error("the line lost the attributes after the session figure")
+			}
+		})
+	}
+}
+
+// TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost holds the
+// startup warnings of a deployment that keeps sessions: the transport is a
+// legacy mode, and with --session-timeout=0 a session no client deletes keeps
+// its slot of the ceiling until its credential is evicted. A stateless
+// deployment is told neither.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost(t *testing.T) {
+	const legacy, zero = "legacy compatibility mode", "--session-timeout=0"
+	for _, tc := range []struct {
+		name      string
+		stateless bool
+		timeout   time.Duration
+		want      []string
+	}{
+		{name: "stateless", stateless: true, timeout: config.DefaultSessionTimeout},
+		{name: "stateless with no timeout", stateless: true},
+		{name: "stateful", timeout: config.DefaultSessionTimeout, want: []string{legacy}},
+		{name: "stateful with no timeout", want: []string{legacy, zero}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+			warnStatefulSessions(t.Context(), &config.Config{Stateless: tc.stateless, SessionTimeout: tc.timeout})
+			for _, line := range []string{legacy, zero} {
+				if got, want := strings.Contains(logged.String(), line), slices.Contains(tc.want, line); got != want {
+					t.Errorf("warned %q = %v, want %v: %s", line, got, want, logged.String())
+				}
+			}
+			if slices.Contains(tc.want, zero) &&
+				!strings.Contains(logged.String(), fmt.Sprintf(`"stateful_sessions_per_process":%d`, processStatefulSessions.limit)) {
+				t.Errorf("the zero-timeout warning does not name the ceiling: %s", logged.String())
+			}
+		})
+	}
 }

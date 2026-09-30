@@ -183,8 +183,18 @@ func heldCeilingOf(t *testing.T, srv *server) int {
 // figure.
 func assertHeldGateRefusal(t *testing.T, srv *server, refused response, ceiling int) {
 	t.Helper()
+	assertBusyGateRefusal(t, srv, refused, "1", heldRefusalLine, "limit_held_requests", ceiling)
+}
+
+// assertBusyGateRefusal checks a refusal the gate makes for a ceiling on what
+// the process holds: a 503 with the register's fixed Retry-After and the
+// connection closed, a JSON-RPC body echoing the request's id with -50300 and
+// the busy words, and the operator's log line, which alone names the ceiling,
+// carrying the process as the scope and the figure under field.
+func assertBusyGateRefusal(t *testing.T, srv *server, refused response, id, line, field string, ceiling int) {
+	t.Helper()
 	if refused.status != http.StatusServiceUnavailable {
-		t.Fatalf("the call past the ceiling = %d, want 503: %s", refused.status, truncate(refused.body))
+		t.Fatalf("the request past the ceiling = %d, want 503: %s", refused.status, truncate(refused.body))
 	}
 	if got, want := refused.header.Get("Retry-After"), strconv.Itoa(int(tenancy.UpstreamRetryAfter.Seconds())); got != want {
 		t.Errorf("Retry-After = %q, want %q", got, want)
@@ -202,13 +212,13 @@ func assertHeldGateRefusal(t *testing.T, srv *server, refused response, ceiling 
 	if decodeErr := json.Unmarshal([]byte(refused.body), &rpc); decodeErr != nil {
 		t.Fatalf("the refusal is not a JSON-RPC body: %v: %s", decodeErr, truncate(refused.body))
 	}
-	if string(rpc.ID) != "1" || rpc.Error.Code != tenancy.CodeUnavailable || rpc.Error.Message != heldBusy {
-		t.Errorf("refusal id %s, code %d, message %q; want the request's id, %d and %q",
-			rpc.ID, rpc.Error.Code, rpc.Error.Message, tenancy.CodeUnavailable, heldBusy)
+	if string(rpc.ID) != id || rpc.Error.Code != tenancy.CodeUnavailable || rpc.Error.Message != heldBusy {
+		t.Errorf("refusal id %s, code %d, message %q; want the request's id %s, %d and %q",
+			rpc.ID, rpc.Error.Code, rpc.Error.Message, id, tenancy.CodeUnavailable, heldBusy)
 	}
-	line := awaitLogLine(t, srv, heldRefusalLine)
-	if !strings.Contains(line, `"scope":"process"`) || !strings.Contains(line, `"limit_held_requests":`+strconv.Itoa(ceiling)) {
-		t.Errorf("the refusal line does not name its scope and figure: %q", line)
+	logged := awaitLogLine(t, srv, line)
+	if !strings.Contains(logged, `"scope":"process"`) || !strings.Contains(logged, `"`+field+`":`+strconv.Itoa(ceiling)) {
+		t.Errorf("the refusal line does not name its scope and figure: %q", logged)
 	}
 }
 

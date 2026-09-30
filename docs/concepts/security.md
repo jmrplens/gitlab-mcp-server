@@ -738,8 +738,81 @@ nothing more; the log line is the one place that names the scope and the figure:
 It bounds calls, not connections: a client that keeps idle connections open
 holds a descriptor for each whatever this counts, and `--http-idle-timeout` is
 what closes those; the gate's refusal closes its own connection so that refused
-callers do not accumulate them. Stateful sessions are not bounded yet either;
-that is the part of issue 951 still open.
+callers do not accumulate them. The one connection a stateful session holds
+open by design, its standalone stream, is counted here: under
+`--stateless=false` the `POST` that opens a session takes a held-call slot for
+the stream together with the session's own, and the session keeps it until it
+ends, whether the stream is open or not. The stream's `GET` takes none, so a
+session the process keeps is never refused its stream, which the SDK's own
+client, refused it, would not ask for again.
+
+### Stateful sessions kept at once
+
+Under `--stateless=false` the server keeps every session a client opens, with
+the goroutines serving it and the record of its owner, until the client deletes
+it, the pool evicts its credential, or it has sat idle for `--session-timeout`,
+half an hour by default. `initialize` is metered to no bucket, so before this
+ceiling a caller could open sessions as fast as it could post. Measured through
+`cmd/bench_resources`' sessions mode before the ceiling existed, an idle session
+cost the process three goroutines, 10 to 17 KiB of live heap, 56 to 119 KiB of
+resident memory and no descriptor, and one holding its standalone stream six
+goroutines, about 25 KiB of live heap and one descriptor. A process whose hard
+descriptor limit was 1024 kept every session it was offered until those streams
+had taken all 1024 descriptors, at 1012 to 1016 sessions, and from there
+`/health` went unanswered and further opens failed at the connection.
+
+So the process keeps at most **half as many stateful sessions as it may hold
+calls** (register row `HLD-010`): 96 under a hard limit of 1024, 114560 under
+524288. The gate takes a session slot for every `POST` that carries no
+`Mcp-Session-Id` on a revision before 2026-07-28, which is what opens a
+session, once the credential is admitted and before the SDK creates anything,
+and a held-call slot for the session's standalone stream with it, and refuses
+it past either ceiling with the held-call ceiling's `503`, word for word. A
+`POST` on 2026-07-28 or later is not counted: the stateful transport answers it
+with the revisions it serves, so the client falls back, and keeps no session
+for it. The session keeps both slots from the first request the SDK dispatches
+on it until it ends, however it ends, and a goroutine waiting on the session
+gives them back, one goroutine more per session than before, four idle and
+seven with its stream; a `POST` whose session did not survive it gives them back
+as the gate returns. With a held-call slot taken for every session, the sessions
+take at most half of those slots, so the descriptor budget above holds as it
+was sized, a call on an open session is still served when every session slot is
+taken, and a session the process keeps is never refused its stream. Measured
+under a hard limit of 1024 with 4000 sessions offered with their streams, from
+one credential and from a hundred, the process kept 96, refused the other 3904
+and kept answering `/health`; with the limit inherited it kept all 4000.
+
+What the figure bounds is descriptors, and memory only where the hard limit is
+small: the descriptor limit raises none of what an idle session costs in memory,
+88 to 110 KiB of resident set with the ceiling at 500 to 4000 sessions, so the
+114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
+idle, and on such a host the container's memory limit bounds the sessions before
+this ceiling does. Whether a fixed cap should stand beside the derived figure is
+put to the maintainer on issue 951.
+
+It is keyed on the process and not configurable for the held-call ceiling's
+reason, and it discloses the same one bit: its refusal says only that the
+server is busy, and the log line alone names the ceiling:
+
+```json
+{"level":"WARN","msg":"request refused: too many stateful sessions across the process","scope":"process","limit_stateful_sessions":96}
+```
+
+It promises no caller a share, and filling it costs a caller nothing:
+`initialize` spends no rate-limit token and an idle session holds no
+connection, so one credential can open every session, and a session no client
+deletes holds its slot until `--session-timeout` ends it, half an hour by
+default and a day at most, while every other tenant's `initialize` is refused.
+Before this ceiling an idle session refused nobody; what exhausted the process
+was a thousand held streams. With `--session-timeout=0` a session nobody deletes
+holds its slot until the pool evicts its credential, after
+`--pool-idle-timeout` without a request or to make room at `--max-http-clients`,
+and startup warns about that combination. Whether a per-credential ceiling
+should stand beside this one, or `initialize` be metered, is put to the
+maintainer on issue 951. A deployment that needs more
+stateful clients at once shortens that timeout, raises the descriptor limit, or
+moves its clients to the default stateless transport, which keeps no sessions
+at all.
 
 ### Defense-in-depth
 

@@ -108,7 +108,9 @@ type Source uint8
 
 // The value sources.
 const (
-	// SourceNone is a decision with no value, or one nothing bounds (HLD-010).
+	// SourceNone is a decision with no value, or a ceiling nothing bounds,
+	// which checkProcessAbsent holds to a finding. HLD-010 was that ceiling
+	// until issue 951 bounded the stateful sessions.
 	SourceNone Source = iota
 	// Constant is a value no operator can change.
 	Constant
@@ -120,8 +122,8 @@ const (
 	// reach.
 	OptionOnly
 	// Derived is a value computed from another decision's, or from a limit
-	// the process is started under (HLD-011, from its descriptor limit). No
-	// operator sets it, as none sets a constant.
+	// the process is started under (HLD-011, from its descriptor limit, and
+	// HLD-010, from HLD-011's). No operator sets it, as none sets a constant.
 	Derived
 )
 

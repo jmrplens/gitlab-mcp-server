@@ -277,6 +277,9 @@ type httpTarget struct {
 	// nofile, when positive, is the descriptor limit the process is started
 	// under (see [nofileScript]); zero inherits this process's.
 	nofile int
+	// stateful starts the server on the transport that keeps sessions
+	// (--stateless=false), which only the sessions mode asks for.
+	stateful bool
 
 	addr string
 	// mu guards cmd and the reaper watching it, which the sampler reads from a
@@ -362,6 +365,9 @@ func (t *httpTarget) startOnce(ctx context.Context) (time.Duration, error) {
 	}
 	if t.maxClients > 0 {
 		args = append(args, "--max-http-clients="+strconv.Itoa(t.maxClients))
+	}
+	if t.stateful {
+		args = append(args, "--stateless=false")
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)

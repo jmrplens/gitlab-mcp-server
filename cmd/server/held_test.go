@@ -92,7 +92,7 @@ func TestProcessHeldRequests_IsSizedFromThisProcessLimit(t *testing.T) {
 // again once a slot is given back.
 func TestHeldRequests_Acquire_RefusesAtTheLimitAndGivesTheSlotBack(t *testing.T) {
 	t.Parallel()
-	held := &heldRequests{limit: 2}
+	held := &processSlots{limit: 2}
 
 	first, second := held.acquire(), held.acquire()
 	if !first || !second {
@@ -121,7 +121,7 @@ func TestHeldRequests_Acquire_RefusesAtTheLimitAndGivesTheSlotBack(t *testing.T)
 func TestHeldRequests_Acquire_NeverAdmitsMoreThanTheLimit(t *testing.T) {
 	t.Parallel()
 	const limit, callers = 10, 64
-	held := &heldRequests{limit: limit}
+	held := &processSlots{limit: limit}
 
 	var admitted atomic.Int64
 	var start sync.WaitGroup
@@ -156,7 +156,7 @@ func TestHeldRequests_Acquire_NeverAdmitsMoreThanTheLimit(t *testing.T) {
 func TestHeldRequests_Acquire_UnderChurn_NeverHoldsMoreThanTheLimit(t *testing.T) {
 	t.Parallel()
 	const limit, callers, rounds = 8, 32, 2000
-	held := &heldRequests{limit: limit}
+	held := &processSlots{limit: limit}
 
 	var inside, most, admitted atomic.Int64
 	var start sync.WaitGroup
@@ -187,6 +187,43 @@ func TestHeldRequests_Acquire_UnderChurn_NeverHoldsMoreThanTheLimit(t *testing.T
 	}
 	if got := held.open.Load(); got != 0 {
 		t.Errorf("open = %d once every slot was given back, want 0", got)
+	}
+}
+
+// TestProcessSlots_Acquire_ReadsTheCountAgainWhenItMovesUnderIt takes the
+// retry on purpose: another acquire takes a slot between this one's read of the
+// count and its swap, the swap fails, and the count is read again. With room
+// left the slot is taken on the second pass, beside the other's; with none
+// left it is refused, and the count is never taken past the limit.
+func TestProcessSlots_Acquire_ReadsTheCountAgainWhenItMovesUnderIt(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		limit int64
+		want  bool
+	}{
+		{name: "room left after the other's slot", limit: 2, want: true},
+		{name: "the other took the last slot", limit: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			slots := &processSlots{limit: tc.limit}
+			var interleaved atomic.Int64
+			slots.contend = func() {
+				if interleaved.Add(1) == 1 {
+					slots.open.Add(1)
+				}
+			}
+			if got := slots.acquire(); got != tc.want {
+				t.Fatalf("acquire = %v with another acquire interleaved, want %v", got, tc.want)
+			}
+			if got := interleaved.Load(); got < 1 || (tc.want && got != 2) {
+				t.Errorf("the count was read %d times before the swap, want a second read after the first swap failed", got)
+			}
+			if got, want := slots.open.Load(), tc.limit; got != want {
+				t.Errorf("open = %d, want %d: the other's slot and, with room, this one's", got, want)
+			}
+		})
 	}
 }
 
@@ -322,7 +359,7 @@ type heldMiddlewareRun struct {
 
 // runHeldMiddleware passes req through the middleware counting on held, with a
 // handler that records the count it runs under.
-func runHeldMiddleware(held *heldRequests, method string, req mcp.Request) heldMiddlewareRun {
+func runHeldMiddleware(held *processSlots, method string, req mcp.Request) heldMiddlewareRun {
 	var run heldMiddlewareRun
 	next := func(context.Context, string, mcp.Request) (mcp.Result, error) {
 		run.reached = true
@@ -338,7 +375,7 @@ func runHeldMiddleware(held *heldRequests, method string, req mcp.Request) heldM
 // handler runs and gives it back when the handler returns.
 func TestHeldRequestsMiddleware_CountsACarriedCallWhileItRuns(t *testing.T) {
 	t.Parallel()
-	held := &heldRequests{limit: 2}
+	held := &processSlots{limit: 2}
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "t"}, Extra: carriedExtra(t, t.Context())}
 
 	run := runHeldMiddleware(held, "tools/call", req)
@@ -375,7 +412,7 @@ func TestHeldRequestsMiddleware_LeavesWhatItDoesNotCount(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			held := &heldRequests{limit: 1}
+			held := &processSlots{limit: 1}
 			held.open.Store(1)
 			run := runHeldMiddleware(held, tc.method, tc.req)
 			if !run.reached || run.err != nil {
@@ -395,7 +432,7 @@ func TestHeldRequestsMiddleware_LeavesWhatItDoesNotCount(t *testing.T) {
 // only a batch the SDK let through could carry, is counted on its own.
 func TestHeldRequestsMiddleware_ClaimsTheSlotTheGateTook(t *testing.T) {
 	t.Parallel()
-	held := &heldRequests{limit: 1}
+	held := &processSlots{limit: 1}
 	held.open.Store(1)
 	carrier := context.WithValue(t.Context(), gateHeldSlotKey{}, &gateHeldSlot{})
 	extra := carriedExtra(t, carrier)
@@ -468,7 +505,7 @@ func TestHeldRequestsMiddleware_RefusesEachMethodTheWayItsBucketDoes(t *testing.
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			held := &heldRequests{limit: 1}
+			held := &processSlots{limit: 1}
 			held.open.Store(1)
 			run := runHeldMiddleware(held, tc.method, tc.req)
 			if run.reached {
@@ -510,7 +547,7 @@ func TestHeldRequestsRefusal_NamesTheBoundOnlyInTheLog(t *testing.T) {
 // caller does not keep a descriptor of the limit the ceiling protects.
 func TestHeldRequestsFailure_IsAGate503ThatSaysToRetryAndCloses(t *testing.T) {
 	t.Parallel()
-	failure := heldRequestsFailure()
+	failure := processBusyFailure()
 	if failure.status != http.StatusServiceUnavailable || failure.code != tenancy.CodeUnavailable {
 		t.Errorf("status %d, code %d; want 503 and %d", failure.status, failure.code, tenancy.CodeUnavailable)
 	}
@@ -532,7 +569,7 @@ func TestHeldRequestsFailure_IsAGate503ThatSaysToRetryAndCloses(t *testing.T) {
 // handed it a slot of its own.
 type heldGate struct {
 	handler http.Handler
-	held    *heldRequests
+	held    *processSlots
 	reached chan bool
 	release chan struct{}
 	opened  sync.Once
@@ -547,7 +584,7 @@ func (g *heldGate) open() { g.opened.Do(func() { close(g.release) }) }
 func newHeldGate(t *testing.T) *heldGate {
 	t.Helper()
 	g := &heldGate{
-		held:    &heldRequests{limit: 1},
+		held:    &processSlots{limit: 1},
 		reached: make(chan bool, 8),
 		release: make(chan struct{}),
 	}

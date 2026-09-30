@@ -276,7 +276,7 @@ func main() {
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface")
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or the requests they hold, which the process bounds on its own")
-	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
+	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response). A session no client deletes keeps one of the process's session slots until it expires, and with 0 until its credential's pool entry is evicted")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL credential entry after this long unused, except one with a live subscription (0 to disable)")
 	flag.DurationVar(&hcfg.actionTimeout, "action-timeout", config.DefaultActionTimeout, "Cancel an action still running after this long (0 to disable)")
@@ -507,7 +507,9 @@ FLAGS
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28)
   -json-response            Return application/json responses instead of SSE (default false)
   -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
-  -session-timeout duration Idle MCP session timeout; -stateless=false only (default %s)
+  -session-timeout duration Idle MCP session timeout; -stateless=false only (default %s). A session no client
+                            deletes keeps one of the process's session slots until it expires, and with 0
+                            until its credential's pool entry is evicted
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure
 
  GitLab connection
@@ -556,7 +558,8 @@ FLAGS
  Limits and pooling (HTTP mode)
   -max-http-clients int     Maximum unique (token, GitLab URL) pool entries, not sessions (default %d). The
                             calls held open at once are bounded across the process by its descriptor limit,
-                            at %d here, and no flag moves it
+                            at %d here, and with -stateless=false the sessions kept at half of that, %d
+                            here; no flag moves either
   -pool-idle-timeout dur    Reclaim a pooled credential entry after this long unused, except one with a live subscription (default %s, 0 to disable)
   -action-timeout dur       Cancel an action still running after this long (default 65m, 0 to disable)
   -drain-delay dur          After SIGTERM, answer /health with 503 draining for this long before closing the
@@ -663,7 +666,8 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     admitted (default: any)
   GITLAB_MCP_MAX_HTTP_CLIENTS       Maximum unique (token, GitLab URL) pool entries; not sessions
                                     (default 100)
-  GITLAB_MCP_SESSION_TIMEOUT        Idle MCP session timeout; --stateless=false only (default 30m)
+  GITLAB_MCP_SESSION_TIMEOUT        Idle MCP session timeout; --stateless=false only (default 30m). A session
+                                    no client deletes keeps one of the process's session slots until it expires
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
   GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
                                     (default 65m, 0 disables)
@@ -728,7 +732,8 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
-		config.DefaultMaxHTTPClients, processHeldRequests.limit, config.DefaultPoolIdleTimeout,
+		config.DefaultMaxHTTPClients, processHeldRequests.limit, processStatefulSessions.limit,
+		config.DefaultPoolIdleTimeout,
 		tenancy.CatalogProcessRate, tenancy.CatalogProcessBurst,
 		config.DefaultRateLimitBurst,
 		config.DefaultAuthFailureLimit, config.DefaultAuthFailureWindow,
@@ -1986,6 +1991,12 @@ func newServerShell(
 	// counts nothing.
 	server.AddReceivingMiddleware(heldRequestsMiddleware(processHeldRequests))
 
+	// The stateful session a POST opened keeps the slot the gate took for it
+	// from the first request dispatched on it until it ends (register row
+	// HLD-010). Only a POST the gate reserved a slot for carries one, so a
+	// stateless or stdio server carries it and claims nothing.
+	server.AddReceivingMiddleware(statefulSessionsMiddleware)
+
 	identifier := attachIdentityMiddlewares(server, settings, toolSurface)
 
 	shell.server = server
@@ -2686,12 +2697,11 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 	return serveHTTPOn(ctx, cfg, httpAddr, nil, httpIdleTimeout)
 }
 
-// serveHTTPOn is serveHTTP with an optional pre-bound listener. When
-// listener is non-nil it is served directly and httpAddr is used only for
-// logging and host validation; when nil, the server binds httpAddr itself.
-func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
-	slog.InfoContext(ctx,
-		"starting MCP server in HTTP mode",
+// httpStartupAttrs is what the HTTP mode's startup line announces: the
+// address, the settings an operator comparing two instances reads first, and
+// the process-wide figures no flag moves.
+func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
+	attrs := []any{
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
@@ -2700,6 +2710,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// bounds that, derived from the descriptor limit this process runs
 		// under, and no flag moves it (HLD-011).
 		"held_requests_per_process", processHeldRequests.limit,
+	}
+	// Half of the figure above, and counted only on --stateless=false, the one
+	// transport that keeps sessions (HLD-010), so only a deployment that keeps
+	// them is told a figure that bounds them.
+	if !cfg.Stateless {
+		attrs = append(attrs, "stateful_sessions_per_process", processStatefulSessions.limit)
+	}
+	return append(attrs,
 		"session_timeout", cfg.SessionTimeout,
 		"stateless", cfg.Stateless,
 		"json_response", cfg.JSONResponse,
@@ -2711,10 +2729,37 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		"build", buildIdentifier(version, commit),
 		"config_digest", configDigest(cfg),
 	)
+}
 
-	if !cfg.Stateless {
-		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
+// warnStatefulSessions tells the operator of a deployment that keeps sessions
+// what that costs.
+//
+// The transport itself is a legacy mode. And with --session-timeout=0 the SDK
+// never closes an idle session, so one no client deletes keeps its slot of the
+// session ceiling (HLD-010) until the pool evicts its credential's entry: after
+// --pool-idle-timeout without a request (never with 0), or to make room at
+// --max-http-clients. A client that opens sessions, deletes none and keeps its
+// credential in use then takes the slots one by one until no tenant can open
+// another. Zero still means off (END-005); the line is
+// what tells the operator who chose it.
+func warnStatefulSessions(ctx context.Context, cfg *config.Config) {
+	if cfg.Stateless {
+		return
 	}
+	slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
+	if cfg.SessionTimeout == 0 {
+		slog.WarnContext(ctx, "--session-timeout=0: a stateful session no client deletes never expires, and keeps one of the "+
+			"process's session slots until its credential's pool entry is evicted",
+			"stateful_sessions_per_process", processStatefulSessions.limit)
+	}
+}
+
+// serveHTTPOn is serveHTTP with an optional pre-bound listener. When
+// listener is non-nil it is served directly and httpAddr is used only for
+// logging and host validation; when nil, the server binds httpAddr itself.
+func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
+	slog.InfoContext(ctx, "starting MCP server in HTTP mode", httpStartupAttrs(cfg, httpAddr)...)
+	warnStatefulSessions(ctx, cfg)
 	// A JSON body carries one response and nothing else, so a notification
 	// raised while a call is running has no frame to travel in: the SDK routes
 	// it to the standalone SSE stream, which a stateless deployment never
@@ -3420,11 +3465,12 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		// parameters: a gate rejection is a pool failure, not a verdict on
 		// the credential, but a client reaching it must still be told the
 		// scope and where the metadata lives.
-		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
-		bearerOnly: true,
-		oauthMode:  true,
-		held:       processHeldRequests,
-		stateless:  cfg.Stateless,
+		challenge:        oauthChallenge(requiredScope, resourceMetadataURL),
+		bearerOnly:       true,
+		oauthMode:        true,
+		held:             processHeldRequests,
+		statefulSessions: processStatefulSessions,
+		stateless:        cfg.Stateless,
 	}
 
 	tokenCache := oauth.NewTokenCache()
@@ -3582,6 +3628,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		credentials:        binding.credentials,
 		challenge:          legacyAuthChallenge,
 		held:               processHeldRequests,
+		statefulSessions:   processStatefulSessions,
 		stateless:          cfg.Stateless,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))

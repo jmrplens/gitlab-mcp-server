@@ -682,7 +682,9 @@ a proxy should still be deliberate about five things:
   credential by its descriptor limit (192 under a hard limit of 1024), not
   configurable, and refuses the next one as busy.
   `--pool-idle-timeout` reclaims unused ones, and `--session-timeout` applies to
-  stateful mode only.
+  stateful mode only, where the process also keeps at most half as many
+  sessions as it may hold calls (96 under a hard limit of 1024) and refuses the
+  next `initialize` as busy.
 - **The token passes through the box.** Every caller's GitLab token reaches this
   process, authenticates one request, and is never persisted. Whether the people
   whose tokens they are consider the machine trustworthy is a question the

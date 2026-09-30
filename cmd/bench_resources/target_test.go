@@ -858,20 +858,25 @@ func TestHTTPTarget_Arguments_SwitchTheLimiterAndSizeThePoolOnlyWhenAsked(t *tes
 		name       string
 		boundArgs  []string
 		maxClients int
+		stateful   bool
 		want       []string
 		absent     []string
 	}{
-		{name: "a point scenario", want: []string{limiterOffArg}, absent: []string{"--max-http-clients"}},
+		{
+			name: "a point scenario", want: []string{limiterOffArg},
+			absent: []string{"--max-http-clients", "--stateless=false"},
+		},
 		{
 			name: "a bound in force and a sized pool", boundArgs: []string{"--rate-limit-rps=5"}, maxClients: 3,
 			want: []string{"--rate-limit-rps=5", "--max-http-clients=3"}, absent: []string{limiterOffArg},
 		},
+		{name: "the stateful transport", stateful: true, want: []string{limiterOffArg, "--stateless=false"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tgt := &httpTarget{
 				binary: standinBinary(t), plan: standinPlan(transportHTTP), stubURL: stub.url,
-				boundArgs: tc.boundArgs, maxClients: tc.maxClients,
+				boundArgs: tc.boundArgs, maxClients: tc.maxClients, stateful: tc.stateful,
 			}
 			t.Cleanup(tgt.close)
 			if _, err := tgt.start(t.Context()); err != nil {

@@ -86,6 +86,13 @@ type options struct {
 	heldCredentials int
 	heldNoFile      int
 	heldJSON        string
+	// The stateful-session mode (sessions.go), a mode of its own for the
+	// same reason.
+	sessions            string
+	sessionsCredentials int
+	sessionsNoFile      int
+	sessionsStream      bool
+	sessionsJSON        string
 }
 
 // exitProcess is the exit main takes on failure, so a test can drive main
@@ -142,6 +149,12 @@ func parseFlags() options {
 	flag.IntVar(&opts.heldCredentials, "held-credentials", 1, "credentials a -held run spreads its calls across")
 	flag.IntVar(&opts.heldNoFile, "held-nofile", 0, "descriptor limit a -held run starts the server under; 0 inherits this process's")
 	flag.StringVar(&opts.heldJSON, "held-json", defaultHeldRecord, "document a -held run writes; never the published record")
+	flag.StringVar(&opts.sessions, "sessions", "",
+		"measure what stateful sessions cost instead of the matrix: comma-separated counts of sessions open at once, ascending")
+	flag.IntVar(&opts.sessionsCredentials, "sessions-credentials", 1, "credentials a -sessions run spreads its sessions across")
+	flag.IntVar(&opts.sessionsNoFile, "sessions-nofile", 0, "descriptor limit a -sessions run starts the server under; 0 inherits this process's")
+	flag.BoolVar(&opts.sessionsStream, "sessions-stream", false, "open each session's standalone stream and hold it open")
+	flag.StringVar(&opts.sessionsJSON, "sessions-json", defaultSessionsRecord, "document a -sessions run writes; never the published record")
 	flag.Parse()
 
 	flag.Visit(func(f *flag.Flag) {
@@ -175,6 +188,9 @@ func (o options) validate() error {
 			"which draws the committed artifacts and measures nothing", renderFlagName(o))
 	}
 	if err := o.validateHeld(); err != nil {
+		return err
+	}
+	if err := o.validateSessions(); err != nil {
 		return err
 	}
 	if o.render || o.check {
@@ -242,7 +258,7 @@ func locateRoot(opts options) (string, error) {
 	if err == nil {
 		return root, nil
 	}
-	if (opts.noRender || opts.fairness != "" || opts.held != "") && opts.binary != "" {
+	if (opts.noRender || opts.fairness != "" || opts.held != "" || opts.sessions != "") && opts.binary != "" {
 		cwd, wdErr := getwd()
 		if wdErr != nil {
 			return "", fmt.Errorf("get working directory: %w", wdErr)
@@ -269,6 +285,9 @@ func execute(opts options) error {
 	}
 	if opts.held != "" {
 		return runHeld(opts, root)
+	}
+	if opts.sessions != "" {
+		return runSessions(opts, root)
 	}
 
 	recordPath := resolve(root, opts.record)

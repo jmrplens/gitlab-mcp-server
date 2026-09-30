@@ -134,12 +134,26 @@ func identifyDecisions() []Decision {
 			},
 		},
 		{
+			// The records grow with the sessions they name, and a session is
+			// refused before it is ever recorded once the process holds its
+			// ceiling of them (issue 951, which answered F-31 here): a stateful
+			// session at HLD-010's, and on the stateless transport, where each
+			// POST's session ends with it, the one kind of session recorded
+			// there, a listen's, at HLD-002's. A session the SDK gives an id on
+			// the stateless transport, which its allowsessionsinstateless
+			// setting does, is recorded as well and forgotten when its POST
+			// ends, so it is bounded by the requests in flight.
+			//
+			// That bound is stated here and nowhere the register can hold it:
+			// no field of this row names the ceilings, so neither Validate nor
+			// check-tenancy would notice a change that let a session be
+			// recorded without passing one of them.
 			ID: "IDN-010", Question: Identify, Kind: Rule, Class: ClassC, Disposition: Mechanism,
 			Resource: "which owner each session belongs to",
 			Key:      KeySession, StdioKey: KeyNone, Table: true,
-			Decided:  []string{"ADR-0020"},
-			Findings: []string{"F-31"},
-			Sites:    []Site{enforce(pkgServer, "sessionOwners.record")},
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"ADR-0020", "issue 951"},
+			Sites:      []Site{enforce(pkgServer, "sessionOwners.record")},
 		},
 		{
 			ID: "ADM-011", Question: Identify, Kind: Rule, Class: ClassQ, Disposition: Ruled,
