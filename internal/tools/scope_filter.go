@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
@@ -86,10 +87,17 @@ var MetaToolScopes = map[string][]string{
 // could not safely evaluate the scope filter and should propagate the
 // failure. A nil input catalog returns an empty catalog; nil token
 // scopes return a defensive clone of the source catalog.
+//
+// The list is read through [gitlabclient.CatalogScopes] first, the one reading
+// [CatalogFilterKey] applies too, so a fine-grained token, whose list is the
+// single scope granular, is filtered as a token whose scopes are unknown: its
+// list names no legacy scope a group requirement could be met by, and its
+// authority is a grant GitLab judges per call, so no group is removed for it.
 func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []string) (*actioncatalog.Catalog, error) {
 	if catalog == nil {
 		return actioncatalog.NewCatalog(), nil
 	}
+	tokenScopes = gitlabclient.CatalogScopes(tokenScopes)
 	if tokenScopes == nil {
 		// Return a defensive clone because callers may further filter the returned
 		// catalog; nil scopes mean detection was unavailable, not that the source
@@ -162,6 +170,16 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 //     does not read at all;
 //   - admin detection from anything other than the scope list, such as an
 //     instance probe, which would make two equal lists filter differently.
+//
+// One rule of that kind exists and is safe, because it runs before this on
+// both sides: [gitlabclient.CatalogScopes] reads a fine-grained token's list,
+// exactly the single scope granular, as unknown. It is keyed on the whole
+// list, which is what the third item above warns about, and it holds only
+// because the filter and [scopeCatalogKey] both apply it first, so the
+// fine-grained list and the unknown one reach this function and the filter as
+// the same nil. Without it the fine-grained list and an empty one would share
+// the key scopes=|scopesKnown=true while the first must remove nothing and the
+// second removes every admin_mode group.
 //
 // [TestCatalogRelevantScopes_EqualComponentsFilterIdentically] runs the
 // filter over the equivalence rather than asserting it, so a change of that

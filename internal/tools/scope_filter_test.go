@@ -94,6 +94,11 @@ func TestFilterScopeFilteredCatalog_AdminActionsRemovedOnEverySurface(t *testing
 // Told apart because the wrong answer is silent in one direction: treating an
 // unknown list as empty would remove five domains from a deployment whose
 // token detection failed, with nothing said about why.
+//
+// A fine-grained token's list, the single scope granular, is the fourth shape
+// and takes the first answer: its authority is a grant GitLab judges per call,
+// so it removes nothing, whereas read literally it would take the second and
+// lose every admin_mode group for want of a scope such a token cannot carry.
 func TestFilterScopeFilteredCatalog_ScopeCombinations_DecideRemoval(t *testing.T) {
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
 	gated := slices.Sorted(maps.Keys(MetaToolScopes))
@@ -108,6 +113,8 @@ func TestFilterScopeFilteredCatalog_ScopeCombinations_DecideRemoval(t *testing.T
 		{name: "a token with no scopes at all loses every gated group", scopes: []string{}, wantRemoved: gated},
 		{name: "a read_api token loses every gated group", scopes: []string{"read_api"}, wantRemoved: gated},
 		{name: "an api token without admin_mode loses every gated group", scopes: []string{"api", "read_api"}, wantRemoved: gated},
+		{name: "a fine-grained token removes nothing", scopes: []string{"granular"}},
+		{name: "granular beside a classic scope is judged as the classic list", scopes: []string{"granular", "read_api"}, wantRemoved: gated},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -373,6 +380,14 @@ func TestFilterScopeFilteredCatalog_RebuildFails_ReportsWhichGroup(t *testing.T)
 // looking exactly as they do now. The list of them is beside
 // [catalogRelevantScopes].
 //
+// Each pair is first held to one scope component of the cache key
+// ([scopeCatalogKey]), which is what shares a catalog, rather than to the
+// canonical list alone: the single scope granular and an empty list have the
+// same canonical list and must still be keyed apart
+// ([TestCatalogRelevantScopes_FineGrainedIsKeyedAndFilteredApartFromNoScope]).
+// A fine-grained token and a classic token whose scopes are unknown are one key,
+// and are held here to one catalog.
+//
 // The last case is what keeps the rest from being vacuous: a list carrying
 // none of the required scopes must filter differently from one carrying them
 // all, or the filter would be removing nothing and every list would agree.
@@ -406,12 +421,15 @@ func TestCatalogRelevantScopes_EqualComponentsFilterIdentically(t *testing.T) {
 			left:  []string{},
 			right: noise,
 		},
+		{
+			name:  "a fine-grained token and a classic token whose scopes are unknown",
+			left:  []string{"granular"},
+			right: nil,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if left, right := catalogRelevantScopes(tc.left), catalogRelevantScopes(tc.right); !slices.Equal(left, right) {
-				t.Fatalf("the two lists have components %v and %v, so this case is not about the equivalence", left, right)
-			}
+			requireOneScopeKey(t, tc.left, tc.right)
 			leftActions, leftWithheld := filterByTokenScopes(t, catalog, tc.left)
 			rightActions, rightWithheld := filterByTokenScopes(t, catalog, tc.right)
 			if !slices.Equal(leftActions, rightActions) {
@@ -442,6 +460,43 @@ func TestCatalogRelevantScopes_EqualComponentsFilterIdentically(t *testing.T) {
 			t.Error("nothing was reported withheld by token scope, so the equivalence above compares two catalogs the filter never narrowed")
 		}
 	})
+}
+
+// requireOneScopeKey stops a case of the equivalence whose two lists do not
+// name one shared catalog: their canonical components and the scope component
+// of the cache key must both agree, or the case would compare two catalogs the
+// cache never shares and prove nothing about the equivalence.
+func requireOneScopeKey(t *testing.T, left, right []string) {
+	t.Helper()
+	if l, r := catalogRelevantScopes(left), catalogRelevantScopes(right); !slices.Equal(l, r) {
+		t.Fatalf("the two lists have components %v and %v, so this case is not about the equivalence", l, r)
+	}
+	if l, r := scopeCatalogKey(left), scopeCatalogKey(right); l != r {
+		t.Fatalf("the two lists are keyed %q and %q, so this case is not about the equivalence", l, r)
+	}
+}
+
+// TestCatalogRelevantScopes_FineGrainedIsKeyedAndFilteredApartFromNoScope is
+// the other side of the fine-grained case above: the single scope granular has
+// the canonical components of an empty list, and the two used to share the key
+// scopes=|scopesKnown=true while they must be filtered in opposite ways. The
+// fine-grained token is unknown authority and keeps every gated group; the
+// token with no scope loses them all.
+func TestCatalogRelevantScopes_FineGrainedIsKeyedAndFilteredApartFromNoScope(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
+	fineGrained := []string{"granular"}
+
+	if left, right := scopeCatalogKey(fineGrained), scopeCatalogKey([]string{}); left == right {
+		t.Errorf("a fine-grained token and a token with no scope share the key %q, and one of them would be served the other's catalog", left)
+	}
+	withGrant, grantWithheld := filterByTokenScopes(t, catalog, fineGrained)
+	withNone, _ := filterByTokenScopes(t, catalog, []string{})
+	if len(withGrant) <= len(withNone) {
+		t.Errorf("a fine-grained token kept %d actions and one with no scope kept %d, want strictly more: its authority is unknown, not empty", len(withGrant), len(withNone))
+	}
+	if len(grantWithheld.ByTokenScope) != 0 {
+		t.Errorf("a fine-grained token had %d keys withheld by token scope, want none: no legacy scope says what it may reach", len(grantWithheld.ByTokenScope))
+	}
 }
 
 // requiredScopeUniverse returns every scope MetaToolScopes requires, sorted

@@ -295,6 +295,27 @@ func TestCatalogFilterKey_ScopeComponentIsBoundedByTheFilter(t *testing.T) {
 	}
 }
 
+// TestCatalogFilterKey_FineGrainedTokenIsKeyedAsUnknownScopes verifies the key
+// a fine-grained token's configuration names its catalog by: the key of a
+// classic token whose scopes are unknown, since both are served the catalog the
+// scope filter leaves whole, and never the key of a token with no scope, which
+// loses every admin_mode group. Keyed as the empty list, which is how its single
+// scope granular canonicalizes when read literally, the two would share one
+// cached catalog, and whichever was built first would serve the other.
+func TestCatalogFilterKey_FineGrainedTokenIsKeyedAsUnknownScopes(t *testing.T) {
+	t.Parallel()
+	fineGrained := config.ServerConfig{TokenScopes: []string{"granular"}}
+	unknown := config.ServerConfig{}
+	empty := config.ServerConfig{TokenScopes: []string{}}
+
+	if got, want := CatalogFilterKey(&fineGrained), CatalogFilterKey(&unknown); got != want {
+		t.Errorf("CatalogFilterKey(fine-grained) = %q, want the key of unknown scopes, %q", got, want)
+	}
+	if got, other := CatalogFilterKey(&fineGrained), CatalogFilterKey(&empty); got == other {
+		t.Errorf("CatalogFilterKey(fine-grained) = %q, the key of a token with no scope", got)
+	}
+}
+
 // TestSharedMetaCatalog_ScopeSubsetsDoNotEachPinACatalog is the same bound
 // through the cache itself: two credentials whose scope lists differ only in
 // scopes the filter never reads get one catalog, while a credential missing an
@@ -360,6 +381,11 @@ func TestSharedIndividualCatalog_ScopesNarrowTheCatalogAndKeyIt(t *testing.T) {
 	admin := build(t, withScopes("api", "admin_mode"))
 	adminPlusNoise := build(t, withScopes("read_api", "k8s_proxy", "admin_mode", "ai_features"))
 	narrow := build(t, withScopes("read_api"))
+	// No arguments leave the list nil: scopes unknown, the case a fine-grained
+	// token is filtered and keyed as.
+	unknown := build(t, withScopes())
+	fineGrained := build(t, withScopes("granular"))
+	empty := build(t, withScopes([]string{}...))
 
 	if _, kept := admin.Action("admin.settings_get"); !kept {
 		t.Fatal("admin.settings_get is absent from the admin_mode catalog, so the removal below proves nothing")
@@ -372,6 +398,15 @@ func TestSharedIndividualCatalog_ScopesNarrowTheCatalogAndKeyIt(t *testing.T) {
 	}
 	if narrow.SharedOrigin() == admin.SharedOrigin() {
 		t.Error("a credential without admin_mode shared the catalog of one that has it")
+	}
+	if _, kept := fineGrained.Action("admin.settings_get"); !kept {
+		t.Error("the admin group was removed for a fine-grained token, whose single scope says nothing about admin_mode")
+	}
+	if fineGrained.SharedOrigin() != unknown.SharedOrigin() {
+		t.Error("a fine-grained token did not share the catalog of a token whose scopes are unknown")
+	}
+	if fineGrained.SharedOrigin() == empty.SharedOrigin() {
+		t.Error("a fine-grained token shared the catalog of a token with no scope")
 	}
 }
 
