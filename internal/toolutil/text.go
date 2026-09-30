@@ -175,9 +175,13 @@ var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", 
 // EscapeMdLinkDestination renders url as the destination of a Markdown link.
 // It contains the delimiters and nothing else: whether the value may be a
 // destination at all is [LinkableDestination]'s question, asked by the
-// callers that decide to write a link.
+// callers that decide to write a link. The whitespace around the value is
+// dropped first, as [LinkableDestination] drops it before judging, so the
+// address written is the one that was judged: encoded instead, a leading
+// space made " https://host/x" the relative destination "%20https://host/x".
+// A space inside the value is still encoded.
 func EscapeMdLinkDestination(url string) string {
-	return mdLinkDestEscaper.Replace(StripControlBytes(url))
+	return mdLinkDestEscaper.Replace(strings.TrimSpace(StripControlBytes(url)))
 }
 
 // LinkableDestination reports whether url may be written as the destination

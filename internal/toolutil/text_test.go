@@ -872,6 +872,22 @@ func TestEscapeMdLinkDestination_PipeCannotSplitTheCell(t *testing.T) {
 	}
 }
 
+// TestEscapeMdLinkDestination_SurroundingSpace_IsDropped verifies that the
+// destination written is the address LinkableDestination judged: the space
+// around it is trimmed rather than encoded, since an encoded leading space
+// turns an absolute address into a relative one, while a space inside the
+// address is still encoded so it cannot end the destination.
+func TestEscapeMdLinkDestination_SurroundingSpace_IsDropped(t *testing.T) {
+	const url = " \thttps://gitlab.example.com/a b\n "
+	if got, want := EscapeMdLinkDestination(url), "https://gitlab.example.com/a%20b"; got != want {
+		t.Errorf("EscapeMdLinkDestination(%q) = %q, want %q", url, got, want)
+	}
+	got := MdTitleLink("file", url)
+	if dest := linkDestinations(got); len(dest) != 1 || dest[0] != "https://gitlab.example.com/a%20b" {
+		t.Errorf("MdTitleLink(%q) = %q, destinations %v, want exactly [https://gitlab.example.com/a%%20b]", url, got, dest)
+	}
+}
+
 // TestFormatTarget_EscapesTheTitleOnce verifies that a title reaches the link
 // helper raw and is escaped there exactly once: the bracket is the entity the
 // cell escaper writes, the closing bracket the backslash the label escaper
