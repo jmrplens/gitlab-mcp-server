@@ -18,8 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -120,24 +118,12 @@ func announcedFigure(t *testing.T, srv *server, field string) int {
 	return figure
 }
 
-// offerSessionsPastTheCeiling sends count initializes at once, each on a
-// connection of its own, and reports how many were refused with the gate's
-// 503. It touches no *testing.T, since the requests run on goroutines of their
-// own.
-func offerSessionsPastTheCeiling(ctx context.Context, baseURL string, count int) int {
-	flood := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-	var refused atomic.Int64
-	var wait sync.WaitGroup
-	for i := range count {
-		wait.Go(func() {
-			resp, err := heldPost(ctx, flood, baseURL, sessionInitialize(5000+i), sessionHeader(""))
-			if err == nil && resp.status == http.StatusServiceUnavailable {
-				refused.Add(1)
-			}
-		})
-	}
-	wait.Wait()
-	return int(refused.Load())
+// offerSessionsPastTheCeiling sends count initializes through a flood and
+// reports how they ended.
+func offerSessionsPastTheCeiling(ctx context.Context, baseURL string, count int) floodResult {
+	return flood(count, func(client *http.Client, i int) (response, error) {
+		return heldPost(ctx, client, baseURL, sessionInitialize(5000+i), sessionHeader(""))
+	})
 }
 
 // openSessions is the sessions a test opened and the streams it holds open on
@@ -218,7 +204,8 @@ func (o *openSessions) awaitOpen(ctx context.Context, t *testing.T, client *http
 // ceiling uses, and a line in the log naming the process as the scope. A call
 // on a session already open is still served, since the sessions, each holding
 // a held-call slot for its stream, hold at most half of them. Six hundred more
-// initializes at once are refused too, and /health answers while they are
+// initializes, offered all at once where the descriptor limit is set and in
+// waves on Windows, are refused too, and /health answers while they are
 // offered. Once a session is deleted its slot comes back, and a new session
 // opens.
 //
@@ -261,19 +248,20 @@ func TestLimit_ProcessBoundsStatefulSessions(t *testing.T) {
 	}
 
 	const extra = 600
-	flooded := make(chan int, 1)
+	flooded := make(chan floodResult, 1)
 	go func() { flooded <- offerSessionsPastTheCeiling(ctx, srv.baseURL, extra) }()
 	probes := 0
-	for refusedPastTheCeiling := -1; refusedPastTheCeiling < 0; {
+	for done := false; !done; {
 		if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
 			t.Errorf("/health = %d while %d initializes were offered past the ceiling, want 200", health.status, extra)
 		}
 		probes++
 		select {
-		case refusedPastTheCeiling = <-flooded:
-			if refusedPastTheCeiling != extra {
-				t.Errorf("%d of the %d initializes offered past the ceiling were refused with 503, want every one",
-					refusedPastTheCeiling, extra)
+		case got := <-flooded:
+			done = true
+			if got.refused != extra {
+				t.Errorf("%d of the %d initializes offered past the ceiling were refused with 503, want every one; the rest: %s",
+					got.refused, extra, got)
 			}
 		default:
 		}
