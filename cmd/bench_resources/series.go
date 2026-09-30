@@ -92,7 +92,7 @@ func (r *runner) runSeries(ctx context.Context, plan scenarioPlan) (SeriesScenar
 	var conns []*clientConn
 	defer func() { closeConns(conns) }()
 	r.walkSteps(ctx, seriesInput{
-		plan: plan, tgt: tgt, profiler: newPprofClient("http://" + tgt.pprofAddr), sampler: s, call: call,
+		plan: plan, tgt: tgt, profiler: newPprofClient(loopbackURL(tgt.pprofAddr, "")), sampler: s, call: call,
 	}, &result, &conns)
 
 	if len(result.Steps) == 0 {

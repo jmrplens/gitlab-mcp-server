@@ -452,7 +452,7 @@ func (t *httpTarget) waitHealthy(ctx context.Context, gone <-chan struct{}) (Ser
 	deadline := time.Now().Add(healthWait)
 	client := &http.Client{Timeout: 5 * time.Second}
 	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+t.addr+"/health", http.NoBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, loopbackURL(t.addr, "/health"), http.NoBody)
 		if err != nil {
 			return ServerInfo{}, fmt.Errorf("build health request: %w", err)
 		}
@@ -486,7 +486,7 @@ func (t *httpTarget) addClient(_ context.Context, index int) (*clientConn, time.
 }
 
 // endpoint is the MCP endpoint of the running process.
-func (t *httpTarget) endpoint() string { return "http://" + t.addr + "/mcp" }
+func (t *httpTarget) endpoint() string { return loopbackURL(t.addr, "/mcp") }
 
 // setCommand publishes the started process, and the reaper watching it, to
 // whoever is watching them.
