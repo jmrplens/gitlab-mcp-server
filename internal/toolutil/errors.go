@@ -202,6 +202,13 @@ func ClassifyError(err error) string {
 		return DestinationRefusedMessage
 	}
 
+	// GitLab refused the call under its fine-grained token rules. Checked
+	// before the status, because the 403 sentence below names a missing scope
+	// or role, and neither is what is missing: see [fineGrainedRefusalOf].
+	if refusal, refused := fineGrainedRefusalOf(err); refused {
+		return describeFineGrainedRefusal(refusal)
+	}
+
 	// GitLab answered, over REST or over GraphQL. A 404 is among the answers
 	// although it carries no response, which is what [answeredStatus] is for.
 	if glErr, ok := gitLabResponseOf(err); ok {
@@ -373,6 +380,139 @@ var httpStatusDescriptions = map[int]string{
 	500: "GitLab internal server error: the server encountered an unexpected condition",
 	502: "GitLab is temporarily unavailable (bad gateway): try again shortly",
 	503: "GitLab is under maintenance or overloaded (service unavailable): try again shortly",
+}
+
+// fineGrainedRefusalOf reports whether GitLab refused err's call under its
+// fine-grained token rules, and which of its refusals it was.
+//
+// GitLab writes those refusals in one service (Authz::Tokens::
+// AuthorizeGranularScopesService at v19.4.1-ee), which [gitlabclient.
+// ParseGranularRefusal] reads, and they reach a handler three ways, each read
+// here as GitLab wrote it and never searched for inside other text:
+//
+//   - Over REST, as a 403 whose body carries [gitlabclient.
+//     GranularScopeRefusalCode] ([gitlabclient.PermissionRefusal]). The code
+//     is the evidence, so a sentence this server cannot read is still a
+//     refusal, described as one ([gitlabclient.GranularRefusalUnrecognized]).
+//   - Over GraphQL, as the message of one errors[] entry of a mutation,
+//     answered with HTTP 200: in [GraphQLTopLevelError]'s error, which every
+//     handler of this repository that decodes the entries builds, and in
+//     client-go's *gl.GraphQLResponseError, which its work item and saved
+//     view services build. There "404 Not Found" is the service's too.
+//   - Over GraphQL through client-go's achievement and scan profile services,
+//     which join the entries' messages with "; " into an error of their own.
+//     That error is the innermost of the chain, and each of its parts is read
+//     whole; "404 Not Found" is not read there, since client-go's 404 sentinel
+//     is that same text.
+//
+// The error from an undeclared GraphQL mutation (GitLab's generic "The
+// resource that you are attempting to access does not exist or you don't have
+// permission to perform this action") is none of these: GitLab answers every
+// token with those words wherever a permission is missing, so only a reader
+// that knows the action reaches such a mutation can say more, and this one
+// does not.
+func fineGrainedRefusalOf(err error) (gitlabclient.GranularRefusal, bool) {
+	if glErr, ok := gitLabResponseOf(err); ok && answeredStatus(glErr) == http.StatusForbidden {
+		if sentence, refused := gitlabclient.PermissionRefusal(glErr.Body); refused {
+			return gitlabclient.ParseGranularRefusal(sentence), true
+		}
+	}
+	for _, message := range graphQLErrorMessages(err) {
+		if refusal := gitlabclient.ParseGraphQLGranularRefusal(message); refusal.Kind != gitlabclient.GranularRefusalUnrecognized {
+			return refusal, true
+		}
+	}
+	return joinedGraphQLRefusal(err)
+}
+
+// graphQLErrorMessages returns the messages of the GraphQL errors[] entries
+// err carries whole: those [GraphQLTopLevelError] kept, then those client-go's
+// *gl.GraphQLResponseError decoded.
+func graphQLErrorMessages(err error) []string {
+	var messages []string
+	if topLevel, ok := errors.AsType[*topLevelGraphQLError](err); ok {
+		messages = append(messages, topLevel.messages...)
+	}
+	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
+		for _, entry := range gqlErr.Errors.Errors {
+			messages = append(messages, entry.Message)
+		}
+	}
+	return messages
+}
+
+// joinedGraphQLRefusal reads the innermost error of err's chain as client-go's
+// achievement and scan profile services build one from a response's errors[]
+// entries, their messages joined with "; ", and reports the first part that is
+// one of GitLab's fine-grained refusal sentences.
+//
+// A GitLab response is never read this way: its refusal is judged by its body.
+func joinedGraphQLRefusal(err error) (gitlabclient.GranularRefusal, bool) {
+	leaf := err
+	for next := errors.Unwrap(leaf); next != nil; next = errors.Unwrap(leaf) {
+		leaf = next
+	}
+	if _, answered := errors.AsType[*gl.ErrorResponse](leaf); answered {
+		return gitlabclient.GranularRefusal{}, false
+	}
+	for part := range strings.SplitSeq(recoveredErrorText(leaf), "; ") {
+		if refusal := gitlabclient.ParseGranularRefusal(part); refusal.Kind != gitlabclient.GranularRefusalUnrecognized {
+			return refusal, true
+		}
+	}
+	return gitlabclient.GranularRefusal{}, false
+}
+
+// classicTokenWayOut is how every fine-grained refusal's description ends
+// when a classic token can call what the fine-grained one could not. It is
+// qualified for both of GitLab's enforcement forms: on GitLab.com a top-level
+// group can refuse classic tokens under it, and on a self-managed instance
+// enforcement blocks creating or rotating classic tokens after its date while
+// existing ones keep working (doc/auth/tokens/fine_grained_access_tokens.md at
+// v19.4.1-ee).
+const classicTokenWayOut = "use a classic token with the api scope, or read_api for a read " +
+	"(an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens"
+
+// describeFineGrainedRefusal is what [ClassifyError] says about a refusal
+// [fineGrainedRefusalOf] found: which refusal it is and the way out of each,
+// which differ. The way out of a missing permission is a new token, since a
+// token's grant cannot be changed after it is created, and the description
+// says that a classic token is refused the same way under a group that
+// requires fine-grained tokens, because this layer does not know which kind
+// of token the call carried.
+//
+// What it quotes of GitLab's sentence is bounded: the two labels by
+// [gitlabclient.ParseGranularRefusal], and the permission list as a GitLab
+// message is ([boundedGitLabMessage]), since both are the instance's text.
+func describeFineGrainedRefusal(refusal gitlabclient.GranularRefusal) string {
+	switch refusal.Kind {
+	case gitlabclient.GranularRefusalMissingPermissions:
+		noun, pronoun := "permission", "it"
+		if len(refusal.Permissions) > 1 {
+			noun, pronoun = "permissions", "them"
+		}
+		list := "[" + boundedGitLabMessage(strings.Join(refusal.Permissions, ", ")) + "]"
+		return "access denied: this call needs the fine-grained " + refusal.Boundary + " " + noun + " " + list +
+			", which the token was not granted. A token's grant cannot be changed after it is created, so create a fine-grained " +
+			refusal.TokenType + " that grants " + pronoun + ", or " + classicTokenWayOut +
+			". A classic token refused this way is under a group that requires fine-grained tokens, where only a fine-grained token that grants " +
+			pronoun + " will do"
+	case gitlabclient.GranularRefusalUnsupported:
+		return "access denied: GitLab declares no fine-grained permission for this operation, so no fine-grained " +
+			refusal.TokenType + " can call it on this instance. Instead, " + classicTokenWayOut
+	case gitlabclient.GranularRefusalDisabled:
+		return "access denied: fine-grained " + refusal.TokenType + " are not enabled for this token's user on this instance " +
+			"(GitLab's granular_personal_access_tokens feature flag), so GitLab refuses every call the token makes. " +
+			"Use a classic token with the api scope, or read_api for reads, or ask the instance's administrator to enable them"
+	case gitlabclient.GranularRefusalNotFound:
+		return "not found: GitLab could not find what this call names, or the token may not see it: a fine-grained token " +
+			"sees only the projects and groups its grant covers, and GitLab answers one outside it the same way. " +
+			"Verify the ID or path, and that the token's grant covers its project or group"
+	default:
+		return "access denied: GitLab refused this call under its fine-grained token rules (insufficient_granular_scope), " +
+			"in words this server does not recognize, which follow. A token's grant cannot be changed after it is created, " +
+			"so a permission it lacks needs a new token that grants it, or " + classicTokenWayOut
+	}
 }
 
 // ClassifyHTTPStatus returns a semantic description for common HTTP status codes.
@@ -954,7 +1094,33 @@ func renderRecovering(v any) string { return fmt.Sprint(v) }
 // the body. Calling this at the dispatchers, where every action's error passes
 // on its way to the model and to the "tool call failed" log line, makes the
 // wrapping helpers defense in depth rather than the only gate.
-func SanitizeError(err error) error { return sanitize(err) }
+//
+// The same holds for what a fine-grained refusal means, which the wrapping
+// helpers say through [ClassifyError]: an error that carries one and reaches
+// a dispatcher without that description, as a GraphQL refusal a handler
+// returns straight from [GraphQLTopLevelError] does, gets it here.
+func SanitizeError(err error) error { return describedFineGrainedRefusal(sanitize(err)) }
+
+// describedFineGrainedRefusal returns err with the description
+// [ClassifyError] gives a fine-grained refusal in front of its text, when err
+// carries one ([fineGrainedRefusalOf]) and its text does not already say it.
+// The text already says it when one of the wrapping helpers composed it, so
+// no error is described twice. The chain is kept.
+func describedFineGrainedRefusal(err error) error {
+	if err == nil {
+		return nil
+	}
+	refusal, refused := fineGrainedRefusalOf(err)
+	if !refused {
+		return err
+	}
+	description := describeFineGrainedRefusal(refusal)
+	text := renderRecovering(err)
+	if strings.Contains(text, description) {
+		return err
+	}
+	return &sanitizedCauseError{text: description + ": " + text, cause: err}
+}
 
 // renderGitLabResponse returns client-go's own rendering of a GitLab error
 // response and the bounded rendering that replaces it. The first is recovered

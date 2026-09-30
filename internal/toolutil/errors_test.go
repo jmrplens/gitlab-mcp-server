@@ -3371,3 +3371,227 @@ func TestClassifyError_ErrorResponseRecordingNoStatus_IsNotAnAnswer(t *testing.T
 		t.Errorf("Markdown() = %q, want no HTTP Status row", md)
 	}
 }
+
+// The sentences GitLab's fine-grained authorization writes
+// (authorize_granular_scopes_service.rb at v19.4.1-ee), as a personal access
+// token is refused them, and the body the REST API guard wraps them in.
+const (
+	approveRefusalSentence     = "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Merge Request: Approve]."
+	twoPermissionsSentence     = "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Issue: Create, Merge Request: Approve]."
+	bulkImportRefusalSentence  = "Access denied: This operation requires a fine-grained personal access token with the following instance permissions: [Bulk Import: Read]."
+	unsupportedRefusalSentence = "Access denied: This operation doesn't support fine-grained personal access tokens."
+	disabledRefusalSentence    = "Access denied: Fine-grained personal access tokens are not yet supported."
+	resourceAccessMessage      = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+)
+
+// granularRefusalBody is the 403 body GitLab's API guard writes for sentence.
+func granularRefusalBody(t *testing.T, sentence string) string {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": sentence})
+	if err != nil {
+		t.Fatalf("encoding the refusal body: %v", err)
+	}
+	return string(body)
+}
+
+// TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts
+// verifies the description of each refusal GitLab's REST API answers a
+// fine-grained token's call with, a real 403 through a real client: the
+// missing permissions quoted as GitLab listed them, with the way out that
+// fits each (a new token, since a grant cannot be changed after it is
+// created; a classic token where no fine-grained permission reaches the
+// operation; a classic token or the administrator where fine-grained tokens
+// are not enabled), and a sentence this server cannot read still described as
+// the fine-grained refusal its code says it is. The bulk-import row is GitLab
+// naming a permission by its deprecated first match, which is read as GitLab
+// wrote it. Each row holds WrapErr and WrapErrWithMessage alike, since both
+// classify through ClassifyError.
+func TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts(t *testing.T) {
+	tests := []struct {
+		name     string
+		sentence string
+		want     []string
+		unwanted []string
+	}{
+		{
+			name:     "one missing permission",
+			sentence: approveRefusalSentence,
+			want: []string{
+				"access denied: this call needs the fine-grained project permission [Merge Request: Approve], which the token was not granted",
+				"create a fine-grained personal access token that grants it, or use a classic token with the api scope",
+				"where only a fine-grained token that grants it will do",
+			},
+			unwanted: []string{"insufficient project role", "missing API scope"},
+		},
+		{
+			name:     "two missing permissions",
+			sentence: twoPermissionsSentence,
+			want:     []string{"the fine-grained project permissions [Issue: Create, Merge Request: Approve]", "that grants them, or", "that grants them will do"},
+		},
+		{
+			name:     "a deprecated first match",
+			sentence: bulkImportRefusalSentence,
+			want:     []string{"the fine-grained instance permission [Bulk Import: Read]"},
+		},
+		{
+			name:     "no fine-grained permission reaches the operation",
+			sentence: unsupportedRefusalSentence,
+			want:     []string{"GitLab declares no fine-grained permission for this operation, so no fine-grained personal access tokens can call it", "Instead, use a classic token"},
+			unwanted: []string{"create a fine-grained"},
+		},
+		{
+			name:     "fine-grained tokens not enabled",
+			sentence: disabledRefusalSentence,
+			want:     []string{"fine-grained personal access tokens are not enabled for this token's user", "granular_personal_access_tokens", "ask the instance's administrator"},
+		},
+		{
+			name:     "a sentence this server cannot read",
+			sentence: "Access denied: tokens of this kind are refused here.",
+			want:     []string{"under its fine-grained token rules (insufficient_granular_scope)", "a permission it lacks needs a new token"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := restAnswer(t, http.MethodPost, "projects/1/merge_requests/2/approve", http.StatusForbidden, granularRefusalBody(t, tt.sentence))
+			assertFineGrainedWording(t, "WrapErr", WrapErr("approveMR", err).Error(), tt.want, tt.unwanted)
+			assertFineGrainedWording(t, "WrapErrWithMessage", WrapErrWithMessage("approveMR", err).Error(), tt.want, tt.unwanted)
+			if IsPermissionRefusal(err) {
+				t.Error("IsPermissionRefusal() = true: a role hint would follow a refusal of the token's grant")
+			}
+		})
+	}
+}
+
+// assertFineGrainedWording checks that the text a wrapper produced carries
+// every phrase in want and none in unwanted.
+func assertFineGrainedWording(t *testing.T, wrapper, got string, want, unwanted []string) {
+	t.Helper()
+	for _, phrase := range want {
+		if !strings.Contains(got, phrase) {
+			t.Errorf("%s = %q, want it to contain %q", wrapper, got, phrase)
+		}
+	}
+	for _, phrase := range unwanted {
+		if strings.Contains(got, phrase) {
+			t.Errorf("%s = %q, must not contain %q", wrapper, got, phrase)
+		}
+	}
+}
+
+// TestClassifyError_OtherRefusalsOverREST_KeepTheirStatusDescription is the
+// negative half: a 403 without GitLab's fine-grained code, a classic token's
+// missing scope, and the fine-grained code on a status other than 403 are
+// described as before. GitLab renders every fine-grained refusal as a 403, so
+// the code on another status is not one.
+func TestClassifyError_OtherRefusalsOverREST_KeepTheirStatusDescription(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{name: "a plain 403", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, want: ClassifyHTTPStatus(http.StatusForbidden)},
+		{name: "a missing classic scope", status: http.StatusForbidden, body: `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, want: ClassifyHTTPStatus(http.StatusForbidden)},
+		{name: "the fine-grained code on a 404", status: http.StatusNotFound, body: granularRefusalBody(t, approveRefusalSentence), want: ClassifyHTTPStatus(http.StatusNotFound)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := restAnswer(t, http.MethodGet, "projects/1", tt.status, tt.body)
+			if got := ClassifyError(err); got != tt.want {
+				t.Errorf("ClassifyError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry
+// verifies the three ways a GraphQL refusal of a fine-grained token reaches a
+// handler, each read whole: the entries [GraphQLTopLevelError] keeps, the
+// entries client-go's work item and saved view services keep in a
+// *gl.GraphQLResponseError, and the messages client-go's achievement and scan
+// profile services join with "; " into an error of their own. GitLab's
+// "404 Not Found" is the service's answer in an entry, and is described as
+// the object named being unknown or out of the token's sight; it is not read
+// from a joined message, where client-go's own 404 sentinel carries the same
+// words. The generic refusal of an undeclared mutation is described as before,
+// since GitLab answers every token with those words.
+func TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry(t *testing.T) {
+	missing := "access denied: this call needs the fine-grained project permission [Merge Request: Approve]"
+	notFound := "not found: GitLab could not find what this call names, or the token may not see it"
+	workItemRefusal := func(messages ...string) error {
+		refusal := &gl.GraphQLResponseError{Err: errors.New("Mutation.workItemCreate failed")}
+		for _, message := range messages {
+			refusal.Errors.Errors = append(refusal.Errors.Errors, struct {
+				Message string `json:"message"`
+			}{Message: message})
+		}
+		return refusal
+	}
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "a top-level entry", err: GraphQLTopLevelError("mergeRequestAccept", []GraphQLError{{Message: approveRefusalSentence}}), want: missing},
+		{name: "the second top-level entry", err: GraphQLTopLevelError("mergeRequestAccept", []GraphQLError{{Message: "something else"}, {Message: approveRefusalSentence}}), want: missing},
+		{name: "a top-level not found", err: GraphQLTopLevelError("workItemUpdate", []GraphQLError{{Message: "404 Not Found"}}), want: notFound},
+		{name: "a wrapped top-level entry", err: fmt.Errorf("list_branch_rules: %w", GraphQLTopLevelError("list_branch_rules", []GraphQLError{{Message: disabledRefusalSentence}})), want: "access denied: fine-grained personal access tokens are not enabled"},
+		{name: "a client-go entry", err: workItemRefusal(approveRefusalSentence), want: missing},
+		{name: "a client-go not found", err: workItemRefusal("404 Not Found"), want: notFound},
+		{name: "a joined client-go message", err: fmt.Errorf("creating achievement: %w", errors.New("first; "+unsupportedRefusalSentence)), want: "access denied: GitLab declares no fine-grained permission for this operation"},
+		{name: "an undeclared mutation's generic refusal", err: GraphQLTopLevelError("bulkUpdateSecurityAttributes", []GraphQLError{{Message: resourceAccessMessage}}), want: msgUnexpectedErr},
+		{name: "a joined not found", err: fmt.Errorf("reading achievement: %w", errors.New("404 Not Found")), want: msgUnexpectedErr},
+		{name: "client-go's own not found", err: fmt.Errorf("reading achievement: %w", gl.ErrNotFound), want: ClassifyHTTPStatus(http.StatusNotFound)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyError(tt.err); !strings.HasPrefix(got, tt.want) {
+				t.Errorf("ClassifyError() = %q, want it to begin %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestClassifyError_FineGrainedRefusal_BoundsWhatItQuotes verifies the list of
+// permissions is quoted the way a GitLab message is: flattened onto one line
+// and cut at the same length, since it is the instance's text.
+func TestClassifyError_FineGrainedRefusal_BoundsWhatItQuotes(t *testing.T) {
+	long := strings.Repeat("Resource: Read, ", 40) + "Last: Read"
+	sentence := "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [" + long + "]."
+	got := ClassifyError(GraphQLTopLevelError("op", []GraphQLError{{Message: sentence}}))
+	if strings.Contains(got, "Last: Read") || !strings.Contains(got, "...]") {
+		t.Errorf("ClassifyError() = %q, want the list cut at %d bytes", got, maxGitLabMessageLen)
+	}
+}
+
+// TestSanitizeError_FineGrainedRefusal_IsDescribedOnce verifies the
+// description reaches a model whatever route the error took to the
+// dispatcher: a GraphQL refusal a handler returns straight from
+// [GraphQLTopLevelError] gets it in front of its own text, one a wrapping
+// helper already described is not described twice, an error that is no
+// fine-grained refusal is returned as it came, and the chain is kept.
+func TestSanitizeError_FineGrainedRefusal_IsDescribedOnce(t *testing.T) {
+	description := "access denied: this call needs the fine-grained project permission [Merge Request: Approve]"
+	raw := GraphQLTopLevelError("vulnerabilityDismiss", []GraphQLError{{Message: approveRefusalSentence}})
+
+	got := SanitizeError(raw)
+	if !strings.HasPrefix(got.Error(), description) || !strings.HasSuffix(got.Error(), raw.Error()) {
+		t.Errorf("SanitizeError(unwrapped) = %q, want the description then %q", got, raw)
+	}
+	if !errors.Is(got, raw) {
+		t.Error("SanitizeError(unwrapped) broke the chain")
+	}
+
+	wrapped := WrapErr("vulnerabilityDismiss", raw)
+	if again := SanitizeError(wrapped).Error(); strings.Count(again, description) != 1 {
+		t.Errorf("SanitizeError(wrapped) = %q, want the description exactly once", again)
+	}
+
+	plain := errors.New("nothing fine-grained here")
+	if kept := SanitizeError(plain); !errors.Is(kept, plain) || kept.Error() != plain.Error() {
+		t.Errorf("SanitizeError() = %q, want an error that is no fine-grained refusal returned as it came", kept)
+	}
+	if SanitizeError(nil) != nil {
+		t.Error("SanitizeError(nil) is not nil")
+	}
+}
