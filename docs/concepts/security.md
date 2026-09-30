@@ -562,8 +562,8 @@ It names no unit, no value and no refusal shape, so this is what the server clai
 - **How to switch it on for stdio.** Set `GITLAB_MCP_RATE_LIMIT_RPS` above zero in the
   client's `env` block, and `GITLAB_MCP_RATE_LIMIT_BURST` if 40 in hand is not what you
   want. `--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio
-  accepts them and ignores them without a warning, so on stdio the variables are the
-  whole switch. The bucket then belongs to the process and
+  ignores them and says so at startup, naming these variables, so on stdio the
+  variables are the whole switch. The bucket then belongs to the process and
   refuses in the shapes described under [Behavior on excess](#behavior-on-excess).
 
 ```json

@@ -276,7 +276,7 @@ Servers "MUST [...] Rate limit tool invocations" ([server/tools](https://modelco
 
 The bucket counts requests, refills at the configured rate per second, and is drawn on by `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get`. A refused tool call comes back as a tool result flagged `isError` that begins `rate limit exceeded for <tool>`; the other methods are refused in-band with JSON-RPC `-42900`.
 
-To rate limit tool invocations on stdio as well, set the variable in the client's `env` block. `--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio accepts them and ignores them without a warning, so on stdio the variables are the whole switch:
+To rate limit tool invocations on stdio as well, set the variable in the client's `env` block. `--rate-limit-rps` and `--rate-limit-burst` are read in HTTP mode only: stdio ignores them and says so at startup, naming these variables, so on stdio the variables are the whole switch:
 
 ```json
 "env": {

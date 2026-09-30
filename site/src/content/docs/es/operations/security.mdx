@@ -276,7 +276,7 @@ Los servidores "MUST [...] Rate limit tool invocations" ([server/tools](https://
 
 El bucket cuenta peticiones, se rellena al ritmo configurado por segundo y lo consumen `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` y `prompts/get`. Una llamada a herramienta rechazada vuelve como un resultado de herramienta marcado con `isError` que empieza por `rate limit exceeded for <herramienta>`; los demás métodos se rechazan dentro del protocolo con el código JSON-RPC `-42900`.
 
-Para limitar también la invocación de herramientas en stdio, fija la variable en el bloque `env` del cliente. `--rate-limit-rps` y `--rate-limit-burst` solo se leen en modo HTTP: stdio los acepta y los ignora sin avisar, así que en stdio las variables son el único interruptor:
+Para limitar también la invocación de herramientas en stdio, fija la variable en el bloque `env` del cliente. `--rate-limit-rps` y `--rate-limit-burst` solo se leen en modo HTTP: stdio los ignora y lo dice al arrancar, nombrando estas variables, así que en stdio las variables son el único interruptor:
 
 ```json
 "env": {

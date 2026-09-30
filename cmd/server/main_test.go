@@ -1511,10 +1511,15 @@ func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
 // block carry neither between them: handed GITLAB_MCP_EXCLUDE_TOOLS it
 // returned that row and every row after it down to the end of the block, so an
 // assertion about the one row could be satisfied by another.
+//
+// An entry is a line that starts with the name, not one that mentions it: the
+// paragraph above the flag groups names the flags a stdio run refuses to start
+// with, and a match anywhere in a line returned that paragraph as the entry of
+// -exclude-tools.
 func helpEntry(help, flagName string) string {
 	lines := strings.Split(help, "\n")
 	for i, candidate := range lines {
-		if !strings.Contains(candidate, flagName) {
+		if !strings.HasPrefix(strings.TrimSpace(candidate), flagName) {
 			continue
 		}
 		depth := helpIndent(candidate)
@@ -1541,9 +1546,11 @@ func helpIndent(line string) int {
 // depth, for a flag row and for an environment row.
 //
 // The environment rows are the case that matters: nothing but their indent
-// separates one from the next, and the helper used to run on past them.
+// separates one from the next, and the helper used to run on past them. The
+// prose line above the rows names two of them, and is not their entry.
 func TestHelpEntry_SiblingRows_EndTheEntry(t *testing.T) {
 	help := strings.Join([]string{
+		"  Prose that names -second and SECOND_VAR in passing, above both rows.",
 		" Section",
 		"  -first string    first flag",
 		"                   continues here",
@@ -10206,18 +10213,6 @@ func TestProtocolVersions_MatchTheSDK(t *testing.T) {
 	}
 }
 
-// TestRateLimit_DefaultsDifferByTransport pins that tool-call limiting is on by
-// default in HTTP mode and off in stdio.
-//
-// The specification requires a server exposing tools to rate limit their
-// invocation. The mechanism existed and was correct, but shipped disabled, so an
-// out-of-the-box HTTP deployment registered no limiter at all — and an HTTP
-// deployment is the shared one, where a looping client's volume is charged to
-// the server's own egress address and lands on every other tenant.
-//
-// Stdio stays at zero deliberately: a single-user local process has no co-tenant
-// to protect, and a limiter there only costs latency. Both keep an explicit 0 as
-// the opt-out.
 // TestRateLimit_HTTPModeLimitsToolCallsByDefault pins that an HTTP deployment
 // bounds tool invocations without being asked.
 //
@@ -10247,7 +10242,10 @@ func TestRateLimit_HTTPModeLimitsToolCallsByDefault(t *testing.T) {
 
 // TestRateLimit_StdioLeavesItOffUnlessAsked pins the other half of that
 // decision. A single-user local process has no co-tenant to protect, so a
-// limiter there only costs latency; the env var stays at zero.
+// limiter there would only refuse its one user's own calls (it refuses and
+// never delays), while GitLab's own per-user limits still apply to every call
+// it forwards; the env var stays at zero, and an explicit 0 remains the opt-out
+// in both transports.
 //
 // Not parallel: it sets environment variables.
 func TestRateLimit_StdioLeavesItOffUnlessAsked(t *testing.T) {
@@ -14214,6 +14212,51 @@ func TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired(t *testing.T) {
 	}
 }
 
+// TestReportStartupConfiguration_ReportsInTheLogsOrder pins the order and the
+// stops of what startup says about its configuration: a retired protection
+// refuses before the transport is explained, and otherwise the transport is
+// explained and the flags a stdio run ignores decide whether startup goes on.
+//
+// Not parallel: it sets environment variables and replaces the default logger.
+func TestReportStartupConfiguration_ReportsInTheLogsOrder(t *testing.T) {
+	auto := transportDecision{Inference: "stdin is a pipe"}
+	cases := []struct {
+		name          string
+		retired       string
+		hcfg          httpConfig
+		wantStart     bool
+		wantExplained bool
+	}{
+		{name: "a retired protection stops it before the transport", retired: "true", wantExplained: false},
+		{name: "a clean start explains the transport and goes on", wantStart: true, wantExplained: true},
+		{
+			name:          "a stdio run asked to hold back writes stops after the transport",
+			hcfg:          httpConfig{setFlags: map[string]bool{"read-only": true}, readOnly: true},
+			wantExplained: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_READ_ONLY", tc.retired)
+			if tc.retired == "" {
+				os.Unsetenv("GITLAB_READ_ONLY")
+			}
+
+			var logged bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+			if got := reportStartupConfiguration(auto, &tc.hcfg); got != tc.wantStart {
+				t.Errorf("reportStartupConfiguration() = %v, want %v\n%s", got, tc.wantStart, logged.String())
+			}
+			if explained := strings.Contains(logged.String(), "transport inferred from stdin"); explained != tc.wantExplained {
+				t.Errorf("transport explained = %v, want %v\n%s", explained, tc.wantExplained, logged.String())
+			}
+		})
+	}
+}
+
 // TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
 // pins that a connection which has not gone idle when the process context is
 // cancelled costs a forced close, not a failed shutdown.
@@ -15039,14 +15082,21 @@ var undocumentedFlags = map[string]string{
 //
 // The names come from the source rather than from flag.CommandLine, because
 // they are registered in main() and a test cannot call that. Reading the calls
-// is what the audit commands in cmd/ do for the same reason.
+// is what the audit commands in cmd/ do for the same reason. The flags
+// env_flags.go registers are named by its table instead, which that source
+// read does not see: -allow-private-instances and -description-substitutions
+// were missing from the help until the table was read here too.
 func TestPrintHelp_DocumentsEveryFlag(t *testing.T) {
 	stdout := captureStdout(t)
 	printHelp()
 	help := stdout()
 
+	names := registeredFlagNames(t)
+	for _, entry := range envBackedFlags {
+		names = append(names, entry.flagName)
+	}
 	var missing []string
-	for _, name := range registeredFlagNames(t) {
+	for _, name := range names {
 		if _, declared := undocumentedFlags[name]; declared {
 			continue
 		}
