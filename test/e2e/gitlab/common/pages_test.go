@@ -185,9 +185,18 @@ func TestPages_Unpublish_RemovesTheDeployment(t *testing.T) {
 // deployPages commits the Pages CI configuration to the project's default
 // branch and runs a pipeline on it to success, so the project has a live
 // deployment to unpublish.
+//
+// The commit asks GitLab not to start a pipeline on its push, so the one
+// created here is the only one. With the push's pipeline beside it, two pages
+// jobs deploy the site: the wait for a deployment can be met by the first
+// while the second is still being processed, and the second then lands after
+// the unpublish and is what the read that follows lists. A CE run on GitLab
+// 19.4.1 read exactly that on one surface, a deployment created in the same
+// second as the unpublish. A pipeline created through the API runs whatever
+// the commit message says.
 func deployPages(e *harness.Env, project fixture.Project) {
 	e.T.Helper()
-	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, pagesCIYAML, "ci: publish a pages site")
+	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, pagesCIYAML, "ci: publish a pages site [skip ci]")
 	pipeline := fixture.NewPipeline(e, project, project.DefaultBranch)
 	if pipeline.Status != "success" {
 		e.T.Fatalf("the pages pipeline %d ended in %q, want success", pipeline.ID, pipeline.Status)

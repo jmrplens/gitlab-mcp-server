@@ -288,7 +288,7 @@ This table is the subset an assistant meets most often. Every variable, its boun
 
 ## AI Assistance Infrastructure
 
-This project includes 7 agents, 19 skills, and 8 instruction files in `.github/` for AI-assisted development. See `CLAUDE.md` at the project root for a comprehensive catalog of all agents, skills, workflows, and when to use each one.
+This project includes 7 agents, 18 skills, and 8 instruction files in `.github/` for AI-assisted development. See `CLAUDE.md` at the project root for a comprehensive catalog of all agents, skills, workflows, and when to use each one.
 
 Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, false-pass detection), `plan-expert` (strategic planning), `debug` (debugging), `se-reviewer` (OWASP + architecture), `documentation-writer` (project docs with Context7 + web research).
 

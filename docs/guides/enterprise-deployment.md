@@ -204,7 +204,10 @@ number multiplies with every token a caller mints. Where the limit is large,
 memory runs out before the ceiling does, at about 190 KiB a held call, and the
 memory limit the process runs under is the bound to size, a memory limit on the
 container or `MemoryMax` on the systemd unit, since the server keeps no memory
-cap of its own and a unit without `MemoryMax` is bounded only by the host. See
+cap of its own. A unit without a `MemoryMax` of its own is bounded by the
+slices above it where one of them sets one, and otherwise only by the host;
+`systemctl show -p EffectiveMemoryMax <unit>` reports the tightest of those
+limits on systemd 256 and later, and prints nothing on earlier versions. See
 [Requests held open at once](http-server-mode.md#requests-held-open-at-once).
 
 The session ceiling applies only under `--stateless=false`, and caps the

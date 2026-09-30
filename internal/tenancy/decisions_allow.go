@@ -436,7 +436,9 @@ func allowDecisions() []Decision {
 			// systemd service gets, 114560 idle sessions come to about ten to
 			// twelve GiB, and there the memory limit the process runs under (a
 			// container's, or a systemd unit's MemoryMax) bounds them where one
-			// is set; a unit without MemoryMax is bounded only by the host.
+			// is set; a unit without a MemoryMax of its own is bounded by the
+			// slices above it where one of them sets one, and otherwise only
+			// by the host.
 			// Issue 951 decided that no fixed cap stands beside the derived
 			// one: the memory limit the process runs under bounds that memory
 			// where one is set, which is the case the decision accepts, and a
@@ -517,7 +519,8 @@ func allowDecisions() []Decision {
 			// memory limit the process runs under (a container's, or a systemd
 			// unit's MemoryMax) bounds where one is set: issue 951 also decided
 			// that the server keeps no memory cap of its own, and a unit
-			// without MemoryMax is bounded only by the host.
+			// without a MemoryMax of its own is bounded by the slices above it
+			// where one of them sets one, and otherwise only by the host.
 			//
 			// Its value is derived rather than written: the descriptors the
 			// process may open, read once at startup, less an eighth spare and

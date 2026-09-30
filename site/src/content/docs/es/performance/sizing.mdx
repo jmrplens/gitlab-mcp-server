@@ -184,8 +184,11 @@ llamadas ofrecidas desde una credencial o desde cien, el proceso se quedó en 39
 descriptores y `/health` respondió en un milisegundo. Donde el límite es grande
 se agota antes la memoria, unos 190 KiB por llamada retenida, así que la cifra a
 dimensionar es el límite de memoria con el que corre el proceso, un límite de
-memoria al contenedor o `MemoryMax` en la unidad de systemd (una unidad sin
-`MemoryMax` solo la acota el host): el servidor no tiene un tope de memoria
+memoria al contenedor o `MemoryMax` en la unidad de systemd (a una unidad sin
+`MemoryMax` propio la acotan las slices que la contienen, si alguna lo fija, y,
+si no, solo el host; `systemctl show -p EffectiveMemoryMax <unidad>` muestra
+desde systemd 256 el más estricto de esos límites, y en versiones anteriores no
+imprime nada): el servidor no tiene un tope de memoria
 propio, por decisión (issue 951). No hay un techo por credencial a
 su lado, por la misma decisión y por la razón que se da más arriba: un número
 por credencial se multiplica por cuantas tenga quien llame. Por eso una sola
