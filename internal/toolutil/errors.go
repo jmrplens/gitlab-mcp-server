@@ -448,10 +448,7 @@ func graphQLErrorMessages(err error) []string {
 //
 // A GitLab response is never read this way: its refusal is judged by its body.
 func joinedGraphQLRefusal(err error) (gitlabclient.GranularRefusal, bool) {
-	leaf := err
-	for next := errors.Unwrap(leaf); next != nil; next = errors.Unwrap(leaf) {
-		leaf = next
-	}
+	leaf := innermostError(err)
 	if _, answered := errors.AsType[*gl.ErrorResponse](leaf); answered {
 		return gitlabclient.GranularRefusal{}, false
 	}
@@ -463,6 +460,20 @@ func joinedGraphQLRefusal(err error) (gitlabclient.GranularRefusal, bool) {
 	return gitlabclient.GranularRefusal{}, false
 }
 
+// innermostError returns the last error of err's chain of single wraps: err
+// itself when it wraps nothing.
+//
+// It recurses rather than loops so that a mistake in its one condition ends
+// the run instead of hanging it: a condition that never lets go of a nil
+// error exhausts the stack at once, where a loop would spin forever, which
+// the mutation gate can only report as timed out.
+func innermostError(err error) error {
+	if next := errors.Unwrap(err); next != nil {
+		return innermostError(next)
+	}
+	return err
+}
+
 // classicTokenWayOut is how every fine-grained refusal's description ends
 // when a classic token can call what the fine-grained one could not. It is
 // qualified for both of GitLab's enforcement forms: on GitLab.com a top-level
@@ -470,8 +481,11 @@ func joinedGraphQLRefusal(err error) (gitlabclient.GranularRefusal, bool) {
 // enforcement blocks creating or rotating classic tokens after its date while
 // existing ones keep working (doc/auth/tokens/fine_grained_access_tokens.md at
 // v19.4.1-ee).
-const classicTokenWayOut = "use a classic token with the api scope, or read_api for a read " +
-	"(an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens"
+//
+// It is one literal rather than a concatenation: a constant has no statement
+// to cover, so the mutation gate reports every operator of a concatenation as
+// a mutant nothing can reach.
+const classicTokenWayOut = "use a classic token with the api scope, or read_api for a read (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens"
 
 // describeFineGrainedRefusal is what [ClassifyError] says about a refusal
 // [fineGrainedRefusalOf] found: which refusal it is and the way out of each,
@@ -502,8 +516,8 @@ func describeFineGrainedRefusal(refusal gitlabclient.GranularRefusal) string {
 			refusal.TokenType + " can call it on this instance. Instead, " + classicTokenWayOut
 	case gitlabclient.GranularRefusalDisabled:
 		return "access denied: fine-grained " + refusal.TokenType + " are not enabled for this token's user on this instance " +
-			"(GitLab's granular_personal_access_tokens feature flag), so GitLab refuses every call the token makes. " +
-			"Use a classic token with the api scope, or read_api for reads, or ask the instance's administrator to enable them"
+			"(GitLab's granular_personal_access_tokens feature flag), so GitLab refuses every call the token makes. Instead, " +
+			classicTokenWayOut + ", or ask the instance's administrator to enable them"
 	case gitlabclient.GranularRefusalNotFound:
 		return "not found: GitLab could not find what this call names, or the token may not see it: a fine-grained token " +
 			"sees only the projects and groups its grant covers, and GitLab answers one outside it the same way. " +

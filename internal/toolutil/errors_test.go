@@ -3442,7 +3442,10 @@ func TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts(t 
 		{
 			name:     "fine-grained tokens not enabled",
 			sentence: disabledRefusalSentence,
-			want:     []string{"fine-grained personal access tokens are not enabled for this token's user", "granular_personal_access_tokens", "ask the instance's administrator"},
+			want: []string{
+				"fine-grained personal access tokens are not enabled for this token's user", "granular_personal_access_tokens",
+				"Instead, " + classicTokenWayOut + ", or ask the instance's administrator",
+			},
 		},
 		{
 			name:     "a sentence this server cannot read",
@@ -3539,6 +3542,7 @@ func TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry(t *test
 		{name: "a client-go entry", err: workItemRefusal(approveRefusalSentence), want: missing},
 		{name: "a client-go not found", err: workItemRefusal("404 Not Found"), want: notFound},
 		{name: "a joined client-go message", err: fmt.Errorf("creating achievement: %w", errors.New("first; "+unsupportedRefusalSentence)), want: "access denied: GitLab declares no fine-grained permission for this operation"},
+		{name: "a joined client-go message led by the refusal", err: fmt.Errorf("creating achievement: %w", fmt.Errorf("mutation: %w", errors.New(unsupportedRefusalSentence+"; second"))), want: "access denied: GitLab declares no fine-grained permission for this operation"},
 		{name: "an undeclared mutation's generic refusal", err: GraphQLTopLevelError("bulkUpdateSecurityAttributes", []GraphQLError{{Message: resourceAccessMessage}}), want: msgUnexpectedErr},
 		{name: "a joined not found", err: fmt.Errorf("reading achievement: %w", errors.New("404 Not Found")), want: msgUnexpectedErr},
 		{name: "client-go's own not found", err: fmt.Errorf("reading achievement: %w", gl.ErrNotFound), want: ClassifyHTTPStatus(http.StatusNotFound)},

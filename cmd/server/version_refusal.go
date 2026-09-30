@@ -22,17 +22,18 @@ import (
 // lost is the version, and with it the edition the version endpoint reports,
 // which is what tells a licensed enterprise build the license could not be
 // read from a CE build where Free is the truth.
-const versionRefusedMessage = "GitLab refused this token GET /api/v4/version, which a fine-grained personal access token reads only when it grants Metadata: Read, " +
-	"so the server runs without the instance version and edition: a tier the license and the namespace plans do not settle is Free " +
-	"(set GITLAB_MCP_TIER if this instance is licensed). A token's grant cannot be changed after it is created: create one that also grants Metadata: Read"
+//
+// It is one literal rather than a concatenation, as is the message below: a
+// constant has no statement to cover, so the mutation gate reports every
+// operator of a concatenation as a mutant nothing can reach.
+const versionRefusedMessage = "GitLab refused this token GET /api/v4/version, which a fine-grained personal access token reads only when it grants Metadata: Read, so the server runs without the instance version and edition: a tier the license and the namespace plans do not settle is Free (set GITLAB_MCP_TIER if this instance is licensed). A token's grant cannot be changed after it is created: create one that also grants Metadata: Read"
 
 // fineGrainedDisabledMessage is the same line when GitLab's sentence says
 // fine-grained tokens are not enabled for the token's user at all
 // ([gitlabclient.GranularRefusalDisabled]): no permission is missing, and
 // every call the token makes will be refused the same way until an
 // administrator enables them.
-const fineGrainedDisabledMessage = "GitLab answered that fine-grained personal access tokens are not yet enabled for this token's user on this instance, " +
-	"so it will refuse every call this token makes: use a classic token, or ask the instance's administrator to enable them"
+const fineGrainedDisabledMessage = "GitLab answered that fine-grained personal access tokens are not yet enabled for this token's user on this instance, so it will refuse every call this token makes: use a classic token, or ask the instance's administrator to enable them"
 
 // warnVersionRefused writes the one warning a stdio start gives when GitLab
 // refused its token the instance version for a fine-grained permission
