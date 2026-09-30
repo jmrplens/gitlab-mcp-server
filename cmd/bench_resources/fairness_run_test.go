@@ -95,7 +95,8 @@ func TestDrive_KeepsServedAndRefusedApartPerPopulation(t *testing.T) {
 	// a schedule that has not landed them in ten seconds is not spacing them
 	// by the population's period.
 	finishWithin(t, 10*time.Second, "a 40 ms phase", func() {
-		drive(t.Context(), plan, []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}, call, time.Now(), plan.ticks, tally, nil)
+		conns := []*clientConn{{rpc: quiet, label: "q"}, {rpc: noisy, label: "n"}}
+		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, time.Now(), plan.ticks, tally)
 	})
 
 	populations := tally.populations(plan)
@@ -392,7 +393,7 @@ func TestDriveContinuously_OpensThePhaseOnTheLeadInsClock(t *testing.T) {
 		start := time.Now()
 		var opened time.Duration
 		var offeredAtOpening, landedAtOpening int
-		leadInLanded := driveContinuously(t.Context(), plan, conns, call, nil, leadIn, phase, func() {
+		leadInLanded := driveContinuously(t.Context(), driveInput{plan: plan, conns: conns, call: call}, leadIn, phase, func() {
 			opened = time.Since(start)
 			offeredAtOpening, landedAtOpening = tallied(leadIn)
 		})
@@ -672,7 +673,7 @@ func TestDrive_SpreadsEachPopulationAcrossOnePeriod(t *testing.T) {
 		conns = append(conns, &clientConn{rpc: conn, label: "client " + strconv.Itoa(i)})
 	}
 	finishWithin(t, 10*time.Second, "a 1.25 s phase", func() {
-		drive(t.Context(), plan, conns, call, time.Now(), plan.ticks, newFairTally(call, plan.Bound.Refusals), nil)
+		drive(t.Context(), driveInput{plan: plan, conns: conns, call: call}, time.Now(), plan.ticks, newFairTally(call, plan.Bound.Refusals))
 	})
 
 	const period, half, slack = 400 * time.Millisecond, 200 * time.Millisecond, 80 * time.Millisecond

@@ -1047,7 +1047,7 @@ func TestFairnessPlan_Validate_RefusesAFloodNoLoopbackRangeCanCarry(t *testing.T
 				t.Fatalf("floodSources = %d, want %d", got, tc.sources)
 			}
 			err := edge.validate()
-			if refused := err != nil && strings.Contains(err.Error(), "127.2.0.0/16"); refused != tc.refused {
+			if (err != nil && strings.Contains(err.Error(), "127.2.0.0/16")) != tc.refused {
 				t.Errorf("validate = %v, want refused for its sources: %t", err, tc.refused)
 			}
 		})

@@ -184,7 +184,7 @@ func (r *runner) runFairnessArm(ctx context.Context, plan fairnessPlan, arm stri
 	tally := newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...)
 	var serverStart, driverStart cpuSample
 	var phaseStarted time.Time
-	leadInLanded := driveContinuously(ctx, plan, conns, call, present,
+	leadInLanded := driveContinuously(ctx, driveInput{plan: plan, conns: conns, call: call, present: present},
 		newFairTally(call, plan.Bound.Refusals, plan.Bound.Otherwise...), tally, func() {
 			server.resetPeak()
 			r.stub.resetUpstream()
@@ -314,30 +314,36 @@ func checkArm(plan fairnessPlan, arm FairnessArm) ([]string, error) {
 // a sustained flood leaves. A bucket refilled in the same pause. The lead-in's
 // requests are filed in their own tally whenever they land, so the phase's
 // counts are still its own schedule and nothing else.
-func driveContinuously(ctx context.Context, plan fairnessPlan, conns []*clientConn, call toolCall,
-	present *presenter, leadIn, phase *fairTally, atPhase func(),
-) (leadInLanded func()) {
+func driveContinuously(ctx context.Context, in driveInput, leadIn, phase *fairTally, atPhase func()) (leadInLanded func()) {
 	start := time.Now()
-	phaseStart := start.Add(plan.LeadIn)
+	phaseStart := start.Add(in.plan.LeadIn)
 	var running sync.WaitGroup
-	running.Go(func() { drive(ctx, plan, conns, call, start, plan.leadInTicks, leadIn, present) })
+	running.Go(func() { drive(ctx, in, start, in.plan.leadInTicks, leadIn) })
 	// A cancelled run gives the phase nothing to wait for, and its drive then
 	// returns at once.
 	waitUntil(ctx, phaseStart)
 	atPhase()
-	drive(ctx, plan, conns, call, phaseStart, plan.ticks, phase, present)
+	drive(ctx, in, phaseStart, in.plan.ticks, phase)
 	return running.Wait
+}
+
+// driveInput is what every window of one run drives with.
+type driveInput struct {
+	plan fairnessPlan
+	// conns holds one connection per credential, both populations' in the
+	// order plan.credentials numbers them.
+	conns []*clientConn
+	call  toolCall
+	// present hands out the credentials a verb presents in place of its lane's
+	// own, and is nil for a plan whose verbs present none.
+	present *presenter
 }
 
 // drive runs one window: every credential of both populations follows its own
 // schedule from start, and the whole thing returns when the last request has
 // landed.
-//
-// present hands out the credentials a verb presents in place of its lane's
-// own, and is nil for a plan whose verbs present none.
-func drive(ctx context.Context, plan fairnessPlan, conns []*clientConn, call toolCall,
-	start time.Time, ticksFor func(populationSpec) int, tally *fairTally, present *presenter,
-) {
+func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(populationSpec) int, tally *fairTally) {
+	plan, conns, call, present := in.plan, in.conns, in.call, in.present
 	var wg sync.WaitGroup
 	for _, pop := range []populationSpec{plan.Quiet, plan.Noisy} {
 		first, last := plan.credentials(pop)
