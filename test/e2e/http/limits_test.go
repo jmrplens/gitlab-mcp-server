@@ -710,11 +710,19 @@ func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
 		// Listed until the tools served exceed what the process's bucket would
 		// have granted in the time taken, so that a bucket left on would have
 		// refused something. A host too slow to outlist the refill runs out of
-		// time instead, and says so.
+		// time instead, and says so. The two figures are read at one instant
+		// and the verdict is kept from there: compared again once the drive
+		// has returned, the budget also counts the time the workers took to
+		// stop, and on windows-latest, which outlists the refill by a narrow
+		// margin, that alone failed a run 77 tools short of a crossing it had
+		// already made.
 		started := time.Now()
+		var outlisted atomic.Bool
 		d := drive(ctx, srv, 4, func(d *listingDrive) bool {
-			outlisted := float64(d.servedTools.Load()) > processBudget(time.Since(started))
-			return outlisted || d.failed.Load() > 0 || d.refused.Load() > 0
+			if float64(d.servedTools.Load()) > processBudget(time.Since(started)) {
+				outlisted.Store(true)
+			}
+			return outlisted.Load() || d.failed.Load() > 0 || d.refused.Load() > 0
 		})
 		elapsed := time.Since(started)
 		t.Logf("%d listings served (%d tools) in %s with nothing refused",
@@ -726,9 +734,9 @@ func TestLimit_ProcessBoundsListingAcrossCredentials(t *testing.T) {
 		if refused := d.refused.Load(); refused > 0 {
 			t.Fatalf("%d listings were refused with the rate limit off", refused)
 		}
-		if budget := processBudget(elapsed); float64(d.servedTools.Load()) <= budget {
-			t.Fatalf("only %d tools listed in %s, within the %.0f the process's bucket would have granted: "+
-				"this host cannot list fast enough for the test to show the bucket is off", d.servedTools.Load(), elapsed, budget)
+		if !outlisted.Load() {
+			t.Fatalf("only %d tools listed in %s, never more than the process's bucket would have granted by then: "+
+				"this host cannot list fast enough for the test to show the bucket is off", d.servedTools.Load(), elapsed)
 		}
 	})
 }
