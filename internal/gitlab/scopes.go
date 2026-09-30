@@ -33,6 +33,42 @@ func DetectScopes(ctx context.Context, client *gl.Client) []string {
 // in step with GitLab.
 const ScopeAPI = "api"
 
+// ScopeGranular is the one legacy scope GitLab gives a fine-grained personal
+// access token. Its authority is not a scope at all but a grant of named
+// permissions per namespace, which the scope list does not carry.
+//
+// It is named here, beside the write scope, for the same reason: it changes the
+// answer to whether a token can write, and to which scopes the catalog filter
+// may read.
+const ScopeGranular = "granular"
+
+// FineGrained reports whether a scope list is the one a fine-grained personal
+// access token presents: exactly ScopeGranular and nothing else.
+//
+// GitLab creates such a token with that single legacy scope
+// (app/services/authn/personal_access_tokens/create_granular_service.rb at
+// v19.4.1-ee, the one service both the REST and the GraphQL creation paths
+// call), and the list is the only place the kind shows in what client-go
+// decodes of the PAT self endpoint this server already asks. GitLab sends the
+// kind there too, as granular: true on every token
+// (lib/api/entities/personal_access_token.rb), but client-go's
+// PersonalAccessToken does not model that field (row 32 of
+// docs/development/upstream-bugs.md); a reader that needs it takes it from the
+// captured response (ADR-0021). For every token GitLab can mint the two agree,
+// since the service that sets granular also sets this list. The RFC 6750 code
+// insufficient_granular_scope does not prove the kind: GitLab answers a classic
+// token with the same code under a root namespace that enforces fine-grained
+// tokens. A list that carries the scope beside others is not this shape, and is
+// read as the classic scopes it spells.
+//
+// The list reaches this predicate only when the token may read itself: the
+// self endpoint requires Personal Access Token: Read of a fine-grained token,
+// and without it GitLab answers 403, DetectScopes returns nil, and the token is
+// unknown authority by that route instead.
+func FineGrained(scopes []string) bool {
+	return len(scopes) == 1 && scopes[0] == ScopeGranular
+}
+
 // WriteCapable reports whether a token's scopes permit mutating GitLab.
 //
 // Unknown scopes (nil: detection failed, was disabled, or the instance is
@@ -41,11 +77,40 @@ const ScopeAPI = "api"
 // perfectly able to use them, and a wrong "no" is invisible — the tools are
 // simply not there — while a wrong "yes" surfaces as GitLab's own 403 on the
 // call that actually tried to write.
+//
+// A fine-grained token counts as write-capable for the same reason: its scope
+// list is the single value ScopeGranular, which says nothing about what it may
+// do, so it is unknown authority and not a read-only token. GitLab judges each
+// call against the permissions the token was granted, and a write outside them
+// is refused there, with GitLab's own 403 naming the missing permission.
 func WriteCapable(scopes []string) bool {
-	if scopes == nil {
+	if scopes == nil || FineGrained(scopes) {
 		return true
 	}
 	return slices.Contains(scopes, ScopeAPI)
+}
+
+// CatalogScopes returns the scope list the catalog's scope filter and its cache
+// key read for a token: the token's own list, or nil when that list says
+// nothing about what the token may reach.
+//
+// A fine-grained token is the one case that maps to nil. Its list carries no
+// legacy scope a group requirement can name, so reading it literally would
+// remove every group that requires one (the admin_mode groups) on the strength
+// of a scope the token cannot carry, and would key its catalog exactly as an
+// empty list keys one while it must be filtered as unknown. Mapped to nil, it
+// shares the filter and the key of a classic token whose scopes are unknown,
+// which is what both are: served the unfiltered catalog, with GitLab deciding
+// each call.
+//
+// It is one function because the filter and the key must read the same list:
+// a key that told the two cases apart while the filter did not, or the reverse,
+// would serve one of them a catalog it did not earn.
+func CatalogScopes(scopes []string) []string {
+	if FineGrained(scopes) {
+		return nil
+	}
+	return scopes
 }
 
 // NarrowToTokenScope marks a server configuration read-only when the token
@@ -73,8 +138,10 @@ func NarrowToTokenScope(cfg *config.ServerConfig) bool {
 // ScopeSatisfied checks whether requiredScopes are all present in the
 // detected tokenScopes. If tokenScopes is nil (detection failed or disabled),
 // returns true (allow all). If requiredScopes is empty, returns true (no
-// requirement).
+// requirement). A fine-grained token's list is read through [CatalogScopes],
+// so it is unknown authority here too and satisfies every requirement.
 func ScopeSatisfied(tokenScopes, requiredScopes []string) bool {
+	tokenScopes = CatalogScopes(tokenScopes)
 	if tokenScopes == nil || len(requiredScopes) == 0 {
 		return true
 	}

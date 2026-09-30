@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -74,6 +75,8 @@ func TestScopeSatisfied_Scenarios_CorrectResult(t *testing.T) {
 		{"partial match fails", []string{"api"}, []string{"api", "sudo"}, false},
 		{"both empty", []string{}, []string{}, true},
 		{"empty token with requirement", []string{}, []string{"api"}, false},
+		{"fine-grained token is unknown authority", []string{ScopeGranular}, []string{"api", "admin_mode"}, true},
+		{"granular beside classic scopes is read as the classic list", []string{ScopeGranular, "read_api"}, []string{"api"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,6 +106,7 @@ func TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite(t *testing.T) {
 		{name: "api stays writable", cfg: &config.ServerConfig{TokenScopes: []string{"api", "read_user"}}},
 		{name: "unknown scopes stay writable", cfg: &config.ServerConfig{}},
 		{name: "empty scopes narrow", cfg: &config.ServerConfig{TokenScopes: []string{}}, wantNarrowed: true, wantReadOnly: true, wantFromScope: true},
+		{name: "a fine-grained token is not read-only", cfg: &config.ServerConfig{TokenScopes: []string{ScopeGranular}}},
 		{name: "the operator's read-only is not the token's", cfg: &config.ServerConfig{ReadOnly: true, TokenScopes: []string{"read_api"}}, wantReadOnly: true},
 		{name: "nil configuration", cfg: nil},
 	}
@@ -119,5 +123,123 @@ func TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite(t *testing.T) {
 				t.Errorf("ReadOnly = %v (from scope %v), want %v (from scope %v)", tt.cfg.ReadOnly, tt.cfg.ReadOnlyFromTokenScope, tt.wantReadOnly, tt.wantFromScope)
 			}
 		})
+	}
+}
+
+// TestFineGrained_OnlyTheSingleGranularScopeIsTheShape verifies the predicate
+// the rest of this file reads the token kind through: the one list GitLab gives
+// a fine-grained token, exactly ["granular"], and no other. A list carrying the
+// scope beside a classic one is read as the classic list it spells, and the
+// unknown and empty lists are not fine-grained either, since they are the two
+// cases the fine-grained list used to be confused with.
+func TestFineGrained_OnlyTheSingleGranularScopeIsTheShape(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{name: "the fine-grained list", scopes: []string{"granular"}, want: true},
+		{name: "unknown scopes", scopes: nil},
+		{name: "no scope at all", scopes: []string{}},
+		{name: "a classic write token", scopes: []string{"api"}},
+		{name: "a classic read token", scopes: []string{"read_api"}},
+		{name: "granular beside a classic scope", scopes: []string{"granular", "read_api"}},
+		{name: "a classic scope before granular", scopes: []string{"api", "granular"}},
+		{name: "granular repeated", scopes: []string{"granular", "granular"}},
+		{name: "a different spelling", scopes: []string{"Granular"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := FineGrained(tt.scopes); got != tt.want {
+				t.Errorf("FineGrained(%#v) = %v, want %v", tt.scopes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWriteCapable_FineGrainedIsUnknownAuthority verifies that a token whose
+// scopes say nothing about what it may do is served as able to write, the
+// unknown list and the fine-grained one alike, while a classic list is read
+// literally: only the api scope writes.
+func TestWriteCapable_FineGrainedIsUnknownAuthority(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{name: "unknown scopes", scopes: nil, want: true},
+		{name: "a fine-grained token", scopes: []string{"granular"}, want: true},
+		{name: "api", scopes: []string{"api"}, want: true},
+		{name: "api among others", scopes: []string{"read_user", "api", "read_repository"}, want: true},
+		{name: "read_api", scopes: []string{"read_api"}},
+		{name: "no scope at all", scopes: []string{}},
+		{name: "granular beside read_api is the read_api token it spells", scopes: []string{"granular", "read_api"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := WriteCapable(tt.scopes); got != tt.want {
+				t.Errorf("WriteCapable(%#v) = %v, want %v", tt.scopes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCatalogScopes_FineGrainedReadsAsUnknown verifies the list the catalog's
+// scope filter and its cache key read: a fine-grained token's list becomes nil,
+// the list of a token whose scopes are unknown, and every other list is handed
+// back as it came. Nil and empty stay apart, since the filter treats them in
+// opposite ways.
+func TestCatalogScopes_FineGrainedReadsAsUnknown(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		scopes []string
+		want   []string
+	}{
+		{name: "a fine-grained token", scopes: []string{"granular"}, want: nil},
+		{name: "unknown scopes", scopes: nil, want: nil},
+		{name: "no scope at all", scopes: []string{}, want: []string{}},
+		{name: "a classic list", scopes: []string{"read_api", "admin_mode"}, want: []string{"read_api", "admin_mode"}},
+		{name: "granular beside a classic scope", scopes: []string{"granular", "admin_mode"}, want: []string{"granular", "admin_mode"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := CatalogScopes(tt.scopes)
+			if (got == nil) != (tt.want == nil) || !slices.Equal(got, tt.want) {
+				t.Errorf("CatalogScopes(%#v) = %#v, want %#v", tt.scopes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDetectScopes_FineGrainedTokenReportsItsSingleScope verifies that a
+// fine-grained token's list reaches the callers as GitLab reports it, so the
+// predicates above see the shape they are written for: detection names the
+// scopes and never interprets them.
+func TestDetectScopes_FineGrainedTokenReportsItsSingleScope(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":     1,
+			"scopes": []string{ScopeGranular},
+			"active": true,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	scopes := DetectScopes(context.Background(), client.GL())
+	if !FineGrained(scopes) {
+		t.Errorf("DetectScopes() = %#v, want the fine-grained list", scopes)
 	}
 }
