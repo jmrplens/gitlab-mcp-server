@@ -40,6 +40,15 @@ This server read such a token through its scopes, which say nothing about it:
   address.
 - **HTTP in OAuth mode** refused every fine-grained token at the door, since
   `oauth.SatisfiesMinimum` does not count `granular` as meeting `read_api`.
+- **stdio** read GitLab's refusal of `GET /version`, which a fine-grained token reaches
+  only when it grants Metadata: Read, as an unreachable instance: it never resolved the
+  identity or detected the tier, and armed a lazy re-initialization that asked the
+  version again once per thirty seconds of activity for the life of the process.
+- **Every mode** described a call GitLab refused outside the grant with the generic 403
+  sentence (a missing scope, a project role, an admin setting), none of which is what is
+  missing. Only a write's error carried GitLab's own sentence, in client-go's flattening,
+  and a GraphQL refusal a handler returned without wrapping it read as an unexpected
+  error; the vulnerability state mutations read one as a change that had happened.
 
 The tenant register records the misreading as finding F-17, filed under issue 952 and
 carried by the rows that decide the read-only surface (`AUT-001`) and the door's
@@ -202,6 +211,22 @@ shape.
   `cmd/server` hold both doors to an uncharged, remembered 403 that quotes GitLab only
   filtered and cut; `test/e2e/http` holds the binary to it at both doors, and to
   admitting a fine-grained token that can read its own user.
+- `TestParseGranularRefusal_GitLabsSentences_AreReadIntoTheirParts`,
+  `TestParseGranularRefusal_AnythingElse_IsUnrecognized` and
+  `TestParseGraphQLGranularRefusal_NotFound_IsTheServicesFourthAnswer` in
+  `internal/gitlab` hold the reading of GitLab's four refusal texts, a permission named
+  by its deprecated first match among them, and
+  `TestClassifyError_FineGrainedRefusalOverREST_DescribesEachOfGitLabsTexts`,
+  `TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry` and
+  `TestSanitizeError_FineGrainedRefusal_IsDescribedOnce` in `internal/toolutil` hold what
+  a model is told of each, whichever route the error took.
+- `TestInitialize_FineGrainedVersionRefusal_IsReachableWithTheVersionUnknown`,
+  `TestDetectEnterprise_VersionRefused_UsesTheFallbackWithoutAsking` and
+  `TestVersion_OnlyAVersionGitLabCouldSend_IsKept` in `internal/gitlab`,
+  `TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole` in `cmd/server`
+  and `TestTokenScope_FineGrainedTokenWithoutMetadataRead_StartsWhole` in
+  `test/e2e/stdio` hold a start without Metadata: Read to a reachable instance: one
+  warning, the version asked once over twenty calls, and the tier still detected.
 - `make check-tenancy` holds the register rows `AUT-001` and `AUT-002` to the sites that
   read the token kind, and `ADM-001` to `ADM-004`, `ADM-006` and the failure table to
   the door's refusal, its sites and its charges.
