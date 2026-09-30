@@ -33,19 +33,33 @@ const versionRefusedMessage = "GitLab refused this token GET /api/v4/version, wh
 // ([gitlabclient.GranularRefusalDisabled]): no permission is missing, and
 // every call the token makes will be refused the same way until an
 // administrator enables them.
-const fineGrainedDisabledMessage = "GitLab answered that fine-grained personal access tokens are not yet enabled for this token's user on this instance, so it will refuse every call this token makes: use a classic token, or ask the instance's administrator to enable them"
+const fineGrainedDisabledMessage = "GitLab answered that fine-grained personal access tokens are not yet enabled for this token's user on this instance, so it will refuse every call this token makes: use a classic token (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens, or ask the instance's administrator to enable them"
+
+// versionUnsupportedMessage is the same line when GitLab's sentence says no
+// fine-grained permission reaches the version endpoint on this instance
+// ([gitlabclient.GranularRefusalUnsupported]), which is what a release that
+// declares none for the route answers. No grant can satisfy it, so the way
+// out is a classic token, which the route admits with read_user, read_api or
+// api (lib/api/metadata.rb at v19.4.1-ee).
+const versionUnsupportedMessage = "GitLab refused this token GET /api/v4/version because no fine-grained permission reaches it on this instance, so no fine-grained personal access token can read the instance version and the server runs without it and the edition: a tier the license and the namespace plans do not settle is Free (set GITLAB_MCP_TIER if this instance is licensed). A classic token with the read_api or api scope reads it (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens"
 
 // warnVersionRefused writes the one warning a stdio start gives when GitLab
 // refused its token the instance version for a fine-grained permission
-// ([gitlabclient.Client.VersionRefusal]). It names the permissions GitLab
-// listed the way a door's log line does, a count and at most three names cut
-// short ([sentencePermissions]), and never the sentence itself, which is the
+// ([gitlabclient.Client.VersionRefusal]). Each of GitLab's sentences has a
+// line of its own, since their ways out differ: a sentence that lists missing
+// permissions, or one this server cannot read, gets the line that asks for a
+// token granting Metadata: Read and names the permissions GitLab listed the
+// way a door's log line does, a count and at most three names cut short
+// ([sentencePermissions]), and never the sentence itself, which is the
 // instance's text.
 func warnVersionRefused(ctx context.Context, sentence string) {
-	if gitlabclient.ParseGranularRefusal(sentence).Kind == gitlabclient.GranularRefusalDisabled {
+	switch gitlabclient.ParseGranularRefusal(sentence).Kind {
+	case gitlabclient.GranularRefusalDisabled:
 		slog.WarnContext(ctx, fineGrainedDisabledMessage)
-		return
+	case gitlabclient.GranularRefusalUnsupported:
+		slog.WarnContext(ctx, versionUnsupportedMessage)
+	default:
+		count, named := sentencePermissions(oauth.QuotedDescription(sentence))
+		slog.WarnContext(ctx, versionRefusedMessage, "permissions", count, "named", strings.Join(named, "; "))
 	}
-	count, named := sentencePermissions(oauth.QuotedDescription(sentence))
-	slog.WarnContext(ctx, versionRefusedMessage, "permissions", count, "named", strings.Join(named, "; "))
 }

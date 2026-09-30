@@ -12,9 +12,10 @@ import (
 // stdio start writes when GitLab refused its token the instance version: one
 // warning, the missing-permission line naming what GitLab listed as a count
 // and the names, the not-yet-supported line when fine-grained tokens are
-// disabled for the user (no permission is missing then), and the
-// missing-permission line with nothing named for a sentence this server cannot
-// read. A sentence carrying control characters is named only as the door's
+// disabled for the user and the classic-token line when no fine-grained
+// permission reaches the endpoint (no permission is missing in either), and
+// the missing-permission line with nothing named for a sentence this server
+// cannot read. A sentence carrying control characters is named only as the door's
 // log line names it, filtered and cut, so the instance's text cannot forge a
 // second line.
 func TestWarnVersionRefused_EachSentence_GivesItsOneWarning(t *testing.T) {
@@ -36,6 +37,11 @@ func TestWarnVersionRefused_EachSentence_GivesItsOneWarning(t *testing.T) {
 			name:     "fine-grained tokens not yet supported",
 			sentence: "Access denied: Fine-grained personal access tokens are not yet supported.",
 			want:     fineGrainedDisabledMessage,
+		},
+		{
+			name:     "no fine-grained permission reaches the version",
+			sentence: "Access denied: This operation doesn't support fine-grained personal access tokens.",
+			want:     versionUnsupportedMessage,
 		},
 		{
 			name:     "a sentence this server cannot read",
@@ -70,9 +76,9 @@ func TestWarnVersionRefused_EachSentence_GivesItsOneWarning(t *testing.T) {
 			if record["level"] != "WARN" || record["msg"] != tt.want {
 				t.Errorf("logged %v %q, want WARN %q", record["level"], record["msg"], tt.want)
 			}
-			if tt.want == fineGrainedDisabledMessage {
+			if tt.want != versionRefusedMessage {
 				if _, named := record["permissions"]; named {
-					t.Errorf("the disabled line names permissions: %v", record)
+					t.Errorf("a line with no permission missing names permissions: %v", record)
 				}
 				return
 			}
