@@ -119,6 +119,27 @@ type gqlDestroyCustomEmojiPayload struct {
 	Errors []string `json:"errors"`
 }
 
+// mutationRefusal is the error for a mutation GitLab answered with no
+// payload under payloadKey: GitLab's own reason when it gave one, and an error
+// naming the missing payload when it gave none.
+//
+// GitLab answers a mutation it refuses with HTTP 200, the mutation's field
+// null and the reason as one top-level errors[] entry, which client-go does
+// not turn into an error. Both mutations here are refused that way: a token
+// without the role through authorized_find!, and a fine-grained token whose
+// grant lacks Custom Emoji: Create or Custom Emoji: Delete through
+// authorize_granular_token (app/graphql/mutations/custom_emoji at
+// v19.4.1-ee), whose sentence names the permission. So each handler decodes
+// its payload as a pointer beside the top-level entries: a payload read as a
+// value decodes null as its zero, and a refused delete used to be reported as
+// done and a refused create as an emoji GitLab did not return.
+func mutationRefusal(operation, payloadKey string, responseErrors []toolutil.GraphQLError) error {
+	if graphQLErr := toolutil.GraphQLTopLevelError(operation, responseErrors); graphQLErr != nil {
+		return graphQLErr
+	}
+	return errors.New(operation + ": GitLab answered with no " + payloadKey + " payload")
+}
+
 // List.
 
 // ListInput is the input for listing custom emoji.
@@ -217,8 +238,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	var resp struct {
 		Data struct {
-			CreateCustomEmoji gqlCreateCustomEmojiPayload `json:"createCustomEmoji"`
+			CreateCustomEmoji *gqlCreateCustomEmojiPayload `json:"createCustomEmoji"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
@@ -229,16 +251,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_custom_emoji", err, http.StatusBadRequest, "verify group_path, name is unique, and url points to a valid image")
 	}
 
-	if len(resp.Data.CreateCustomEmoji.Errors) > 0 {
-		return CreateOutput{}, fmt.Errorf("create_custom_emoji: %s", resp.Data.CreateCustomEmoji.Errors[0])
+	payload := resp.Data.CreateCustomEmoji
+	if payload == nil {
+		return CreateOutput{}, mutationRefusal("create_custom_emoji", "createCustomEmoji", resp.Errors)
 	}
 
-	if resp.Data.CreateCustomEmoji.CustomEmoji == nil {
+	if len(payload.Errors) > 0 {
+		return CreateOutput{}, fmt.Errorf("create_custom_emoji: %s", payload.Errors[0])
+	}
+
+	if payload.CustomEmoji == nil {
 		return CreateOutput{}, errors.New("create_custom_emoji: no emoji returned")
 	}
 
 	return CreateOutput{
-		Emoji: nodeToItem(*resp.Data.CreateCustomEmoji.CustomEmoji),
+		Emoji: nodeToItem(*payload.CustomEmoji),
 	}, nil
 }
 
@@ -261,8 +288,9 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	var resp struct {
 		Data struct {
-			DestroyCustomEmoji gqlDestroyCustomEmojiPayload `json:"destroyCustomEmoji"`
+			DestroyCustomEmoji *gqlDestroyCustomEmojiPayload `json:"destroyCustomEmoji"`
 		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
 	}
 
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
@@ -273,8 +301,13 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound, "verify id with custom_emoji.list")
 	}
 
-	if len(resp.Data.DestroyCustomEmoji.Errors) > 0 {
-		return fmt.Errorf("delete_custom_emoji: %s", resp.Data.DestroyCustomEmoji.Errors[0])
+	payload := resp.Data.DestroyCustomEmoji
+	if payload == nil {
+		return mutationRefusal("delete_custom_emoji", "destroyCustomEmoji", resp.Errors)
+	}
+
+	if len(payload.Errors) > 0 {
+		return fmt.Errorf("delete_custom_emoji: %s", payload.Errors[0])
 	}
 
 	return nil
