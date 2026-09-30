@@ -928,6 +928,120 @@ func startScopedFakeGitLab(t *testing.T, scopesFor map[string][]string) *fakeGit
 	}
 }
 
+// fineGrainedToken is how the stand-in of [startFineGrainedFakeGitLab] answers
+// one fine-grained personal access token, in GitLab 19.4's words.
+type fineGrainedToken struct {
+	// userRefusal, when set, is the sentence GET /api/v4/user refuses the
+	// token with, 403 insufficient_granular_scope: a grant without User: Read.
+	// Empty answers the user.
+	userRefusal string
+	// selfRefusal, when set, is the sentence GET
+	// /api/v4/personal_access_tokens/self refuses the token with: a grant
+	// without Personal Access Token: Read. Empty answers the token's one
+	// scope, granular.
+	selfRefusal string
+}
+
+// fineGrainedGitLab is the stand-in of [startFineGrainedFakeGitLab] with what
+// it was asked.
+type fineGrainedGitLab struct {
+	url string
+	// userCalls counts GET /api/v4/user per token, and tokenInfoCalls every
+	// request to /oauth/token/info, which a fine-grained token's refused self
+	// description must spare.
+	userCalls      func(token string) int
+	tokenInfoCalls func() int
+}
+
+// userReadSentence is GitLab's refusal of GET /api/v4/user for a fine-grained
+// token granted no User: Read, as Authz::Tokens::AuthorizeGranularScopesService
+// writes it at v19.4.1-ee.
+const userReadSentence = "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read]."
+
+// startFineGrainedFakeGitLab serves a GitLab that answers each token as a
+// fine-grained one the way GitLab 19.4 does: the API guard authenticates it and
+// then judges its grant, refusing a missing permission with 403 and the RFC
+// 6750 code insufficient_granular_scope carrying the sentence. A token not in
+// tokens is refused 401 everywhere.
+func startFineGrainedFakeGitLab(t *testing.T, tokens map[string]fineGrainedToken) *fineGrainedGitLab {
+	t.Helper()
+
+	var mu sync.Mutex
+	userCalls := map[string]int{}
+	tokenInfoCalls := 0
+	bearer := func(r *http.Request) string {
+		if token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+			return token
+		}
+		return r.Header.Get("PRIVATE-TOKEN")
+	}
+	refuse := func(w http.ResponseWriter, sentence string) {
+		body, err := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": sentence})
+		if err != nil {
+			t.Errorf("marshaling the refusal: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write(body)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := bearer(r)
+		mu.Lock()
+		userCalls[token]++
+		mu.Unlock()
+		grant, known := tokens[token]
+		switch {
+		case !known:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		case grant.userRefusal != "":
+			refuse(w, grant.userRefusal)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":1,"username":"fine-grained"}`))
+		}
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		grant, known := tokens[bearer(r)]
+		switch {
+		case !known:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		case grant.selfRefusal != "":
+			refuse(w, grant.selfRefusal)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":1,"scopes":["granular"],"active":true}`))
+		}
+	})
+	mux.HandleFunc("/oauth/token/info", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		tokenInfoCalls++
+		mu.Unlock()
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	return &fineGrainedGitLab{
+		url: srv.URL,
+		userCalls: func(token string) int {
+			mu.Lock()
+			defer mu.Unlock()
+			return userCalls[token]
+		},
+		tokenInfoCalls: func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return tokenInfoCalls
+		},
+	}
+}
+
 // startHangingGitLab serves an instance that accepts connections and never
 // answers, for testing that upstream probes are bounded.
 func startHangingGitLab(t *testing.T) string {
