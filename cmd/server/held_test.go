@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -519,6 +520,62 @@ func TestHeldRequestsMiddleware_RefusesEachMethodTheWayItsBucketDoes(t *testing.
 	}
 }
 
+// TestHeldRequestsMiddleware_ToolRefusal_CarriesTheResultTypeOfItsRevision
+// covers the one field of the tools/call refusal the call's revision decides:
+// resultType "complete" for a call naming 2026-07-28 in its _meta, which that
+// revision requires on every result and the SDK adds only to what its own
+// dispatcher answers, and no resultType for a call of an earlier revision, as
+// the SDK sends that client from its dispatcher. The words and the error flag
+// are the same in both.
+func TestHeldRequestsMiddleware_ToolRefusal_CarriesTheResultTypeOfItsRevision(t *testing.T) {
+	t.Parallel()
+	extra := carriedExtra(t, t.Context())
+	cases := []struct {
+		name    string
+		meta    mcp.Meta
+		labeled bool
+	}{
+		{name: "2026-07-28", meta: mcp.Meta{mcp.MetaKeyProtocolVersion: "2026-07-28"}, labeled: true},
+		{name: "an earlier revision", meta: nil, labeled: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			held := &processSlots{limit: 1}
+			held.open.Store(1)
+			params := &mcp.CallToolParamsRaw{Name: "t"}
+			params.SetMeta(tc.meta)
+			run := runHeldMiddleware(held, "tools/call", &mcp.CallToolRequest{Params: params, Extra: extra})
+			if run.reached || run.err != nil {
+				t.Fatalf("the call was not refused: reached %v, error %v", run.reached, run.err)
+			}
+			wire, err := json.Marshal(run.result)
+			if err != nil {
+				t.Fatalf("the refusal does not marshal: %v", err)
+			}
+			var fields struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+				IsError    bool    `json:"isError"`
+				ResultType *string `json:"resultType"`
+			}
+			if err = json.Unmarshal(wire, &fields); err != nil {
+				t.Fatalf("the refusal is not a JSON object: %v (%s)", err, wire)
+			}
+			if !fields.IsError || len(fields.Content) != 1 || fields.Content[0].Text != heldRefusalText {
+				t.Errorf("the refusal is %s, want one text block saying %q with isError", wire, heldRefusalText)
+			}
+			switch {
+			case tc.labeled && (fields.ResultType == nil || *fields.ResultType != "complete"):
+				t.Errorf("the refusal at 2026-07-28 is %s, want resultType \"complete\"", wire)
+			case !tc.labeled && fields.ResultType != nil:
+				t.Errorf("the refusal of an earlier revision is %s, want no resultType", wire)
+			}
+		})
+	}
+}
+
 // TestHeldRequestsRefusal_NamesTheBoundOnlyInTheLog covers the operator's
 // line an in-band refusal leaves: the scope and the figure, which the caller's
 // words leave out.
@@ -531,7 +588,7 @@ func TestHeldRequestsRefusal_NamesTheBoundOnlyInTheLog(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 	forgetRefusalLines()
 
-	if _, err := heldRequestsRefusal(t.Context(), "prompts/get", 7); err == nil || strings.Contains(err.Error(), "7") {
+	if _, err := heldRequestsRefusal(t.Context(), &mcp.GetPromptRequest{}, "prompts/get", 7); err == nil || strings.Contains(err.Error(), "7") {
 		t.Errorf("error %v; want the busy words with no figure", err)
 	}
 	line := logged.String()

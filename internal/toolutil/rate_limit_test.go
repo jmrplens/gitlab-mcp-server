@@ -118,6 +118,57 @@ func TestRateLimitedResult_UnnamedTool_NamesTheMethod(t *testing.T) {
 	}
 }
 
+// TestAttachRateLimit_ToolRefusal_CarriesTheResultTypeOfItsRevision covers the
+// one field of a refused tools/call the call's revision decides, as the
+// middleware returns it: resultType "complete" for a call naming 2026-07-28 in
+// its _meta, which that revision requires on every result and the SDK adds only
+// to what its own dispatcher answers, and none for a call of an earlier
+// revision, as the SDK sends that client from its dispatcher. The refusal says
+// the same in both, and the handler behind the middleware runs in neither.
+// test/e2e/http drives the same refusal through the real binary.
+func TestAttachRateLimit_ToolRefusal_CarriesTheResultTypeOfItsRevision(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		req     mcp.Request
+		labeled bool
+	}{
+		{name: "2026-07-28", req: callNaming("2026-07-28"), labeled: true},
+		{name: "an earlier revision", req: callNaming(nil), labeled: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			// A burst of one spent below, and a refill no run is slow enough
+			// to see.
+			limiter := NewRateLimiter(1e-9, 1)
+			limiter.allow()
+			handler, served := rateLimitMiddlewareUnderTest(t, limiter)
+
+			result, err := handler(t.Context(), methodToolsCall, tc.req)
+			if err != nil || result == served {
+				t.Fatalf("result %#v, error %v; want the limiter's refusal", result, err)
+			}
+			fields := wireFields(t, result)
+			content, _ := fields["content"].([]any)
+			var block map[string]any
+			if len(content) == 1 {
+				block, _ = content[0].(map[string]any)
+			}
+			if fields["isError"] != true || block["text"] != RateLimitRefusalPrefix+"search"+rateLimitRetrySuffix {
+				t.Errorf("the refusal is %v, want isError true and the limiter's words naming the tool", fields)
+			}
+			got, present := fields["resultType"]
+			switch {
+			case tc.labeled && got != completeResultType:
+				t.Errorf("resultType = %v (present: %t), want %q: revision 2026-07-28 requires it on every result", got, present, completeResultType)
+			case !tc.labeled && present:
+				t.Errorf("resultType = %v on a call of an earlier revision, which the SDK leaves unlabeled", got)
+			}
+		})
+	}
+}
+
 // TestAttachArgumentLimits_NothingToJudge_LeavesTheRequestAlone verifies the
 // two ways the argument guard has nothing to judge: no server to install on,
 // and a tools/call that carries no raw arguments, which is handed on as it

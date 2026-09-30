@@ -492,7 +492,8 @@ func (l *catalogListing) serve(
 // doors open to the same upstream. They are refused differently because they
 // fail differently. A refused tool call is reported as an MCP tool error
 // result (IsError: true) rather than a JSON-RPC error, so the model receives a
-// structured, retryable diagnostic and the agent loop can back off. A refused
+// structured, retryable diagnostic and the agent loop can back off, carrying
+// the resultType its revision requires ([LabelForRevision]). A refused
 // resource or prompt request is a JSON-RPC error carrying the code that
 // mirrors HTTP 429, since those results have no error flag of their own. A
 // refused completion returns an empty completion instead: the documented
@@ -567,7 +568,9 @@ func attachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
 					limiter.reportRefusal(ctx, extractToolName(req))
-					return result, nil
+					// Labeled where it leaves the middleware: the SDK labels
+					// only the tool results its own dispatcher answers.
+					return LabelForRevision(req, result), nil
 				}
 			case tenancy.MeterToolRPC:
 				if !limiter.allow() {
