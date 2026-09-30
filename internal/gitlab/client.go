@@ -603,8 +603,13 @@ func (c *Client) pingDirect(ctx context.Context) error {
 // A token GitLab refuses the version endpoint for a fine-grained permission
 // ([Client.VersionRefusal]) is not asked again, and its refusal is logged at
 // debug rather than as a failed detection: the refusal is a fact about the
-// token's grant, which cannot change, and whoever starts the client says so
-// once where the operator reads it.
+// token's grant, which cannot change. Who reports it depends on the mode. A
+// stdio start warns once, since its token is the operator's own
+// (cmd/server's warnVersionRefused, from [Client.VersionRefusal]). An HTTP
+// pool entry reaches this through [Client.DetectTier] with a caller's token,
+// and there nothing above the debug line reports it: the refusal describes
+// that caller's grant rather than the deployment, and the entry takes the
+// fallback edition.
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	if _, refused := c.VersionRefusal(); refused {
 		return c.editionUnreadable(ctx, fallback)
@@ -814,8 +819,10 @@ func namespacePlanAnswers(plan string) bool {
 //
 // A token GitLab refuses the version endpoint for a fine-grained permission
 // leaves the edition unknown, so neither holds: the tier is Free and the reason
-// is logged at debug, because whoever started the client has already said,
-// once, that the edition could not be read and what settles the tier.
+// is logged at debug. A stdio start has already said once, at warning, that
+// the edition could not be read and what settles the tier; in HTTP mode the
+// refusal is a fact about one caller's grant, and [Client.DetectEnterprise]
+// says why nothing above debug reports it there.
 func (c *Client) warnUnresolvedTier(ctx context.Context) {
 	if !c.DetectEnterprise(ctx, false) {
 		if _, refused := c.VersionRefusal(); refused {
