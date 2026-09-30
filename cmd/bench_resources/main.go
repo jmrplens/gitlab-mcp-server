@@ -481,7 +481,7 @@ func buildServer(root string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create a build directory: %w", err)
 	}
-	out := filepath.Join(dir, "server")
+	out := filepath.Join(dir, serverExecutable())
 	fmt.Println("building ./cmd/server")
 	if buildErr := goBuild(root, out); buildErr != nil {
 		_ = os.RemoveAll(dir)

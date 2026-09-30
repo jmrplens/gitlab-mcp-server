@@ -105,7 +105,7 @@ func buildVariantServer(root string, v buildVariant) (string, error) {
 	}
 	overlay, err := v.overlay(root, dir)
 	if err == nil {
-		out := filepath.Join(dir, "server")
+		out := filepath.Join(dir, serverExecutable())
 		fmt.Printf("building ./cmd/server with %s\n", v.describe())
 		if err = goBuild(root, out, "-overlay", overlay); err == nil {
 			return out, nil

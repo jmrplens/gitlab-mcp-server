@@ -27,6 +27,17 @@ import (
 // nobody had run.
 var runtimeGOOS = runtime.GOOS
 
+// serverExecutable is the file name this command builds the server under.
+// os/exec on Windows runs a file only by an extension PATHEXT lists, and the
+// go command writes -o's name as given, so a binary called server there is
+// one this command cannot start.
+func serverExecutable() string {
+	if runtimeGOOS == "windows" {
+		return "server.exe"
+	}
+	return "server"
+}
+
 // hostInfo collects what the running machine will admit to.
 func hostInfo() HostInfo {
 	info := HostInfo{
