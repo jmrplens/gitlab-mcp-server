@@ -2,27 +2,36 @@ packages:
   - .
 
 overrides:
-  esbuild: 0.28.1
-  lodash: 4.18.1
-  # lodash-es is the same code under another name and carries the same two
+  # esbuild's development server reads arbitrary files on Windows on every
+  # release from 0.27.3 up to 0.28.0 (GHSA-g7r4-m6w7-qqqr), and astro asks for
+  # ^0.28.0, which admits 0.28.0. The pin is the last 0.28.x release, and it
+  # also holds vite, whose ^0.27.0 || ^0.28.0 would admit the rest of the range.
+  esbuild: 0.28.2
+  # lodash-es is lodash's code under another name and carries lodash's two
   # advisories: code injection through _.template (GHSA-r5fr-rjxr-66jc, high)
   # and prototype pollution through _.unset (GHSA-f23m-r3pf-42rh), both
   # patched in 4.18.0. It arrived with mermaid 12, which reaches it through
   # chevrotain, and mermaid 11 pulled neither: the audit went from zero
   # advisories to two on that bump alone. Pinned rather than the bump reverted,
   # because the fix is a version that exists and the alternative is holding a
-  # rendering dependency back for a transitive parser's dependency.
+  # rendering dependency back for a transitive parser's dependency. chevrotain
+  # 11.1.2 still asks for exactly 4.17.23, so the pin is still what keeps it
+  # off the vulnerable release. lodash itself needs no pin any more: its one
+  # consumer, pa11y-ci, asks for ~4.18.1.
   lodash-es: 4.18.1
-  yaml: 2.9.0
-  yaml-language-server@1.20.0>yaml: 2.9.0
   # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp) and unbounded-expansion DoS
   # (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895); dev/build deps only.
-  # The 1.x line now has a fixed release on the maintenance-v1 tag (1.1.18), so
-  # both branches can be pinned to a patched version and neither needs an audit
+  # Both branches can be pinned to a patched version and neither needs an audit
   # exception. Do not force 5.x onto a 1.x consumer: v1 exported the expand
-  # function directly where v5 exports an object.
-  "brace-expansion@<1.1.18": 1.1.18
-  "brace-expansion@>=3.0.0 <5.0.9": 5.0.9
+  # function directly where v5 exports an object. 1.1.18 and 5.0.9 then became
+  # vulnerable themselves: stack exhaustion through uncontrolled recursion in
+  # parseCommaParts (GHSA-6j4f-fj2g-mc7p, fixed in 1.1.19 and 5.0.10) and on
+  # nested brace groups (GHSA-qhr7-859c-m2p7, fixed in 1.1.20 and 5.0.11), and
+  # quadratic-time expansion of the `{a},b}` rewrite (GHSA-q2hr-2g5m-vwhr,
+  # fixed in 1.1.21 and 5.0.12), so both pins move to 1.1.21 on the 1.x tag
+  # and 5.0.12, the last release of each line.
+  "brace-expansion@<1.1.21": 1.1.21
+  "brace-expansion@>=3.0.0 <5.0.12": 5.0.12
   # fast-uri host confusion via failed IDN / backslash authority
   # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx, GHSA-6q2v-7v5f-6qmw), and via
   # percent-encoded scheme normalization (GHSA-jqff-g426-hqxp, which the 3.1.5
@@ -39,8 +48,13 @@ overrides:
   # ip-address Address4 decodes leading-zero octets as decimal (GHSA-8gjw-6f7c-jmc4),
   # and then two advisories on every release up to 10.5.0 (GHSA-2vr4-cq9g-pvrc,
   # GHSA-rpw4-54j3-4h4q), both fixed in 10.5.1; dev/build deps only
-  # (pa11y-ci > puppeteer > socks-proxy-agent > socks).
-  "ip-address@<10.5.1": 10.5.1
+  # (pa11y-ci > puppeteer > socks-proxy-agent > socks). 10.5.1 then became
+  # vulnerable itself: isInSubnet comparing addresses of different families
+  # as one address space (GHSA-j6r3-76f7-8jcv) and an Address6 parse
+  # diagnostic with no length bound (GHSA-h3mg-xc3c-68pw), both on every
+  # release up to 10.7.0 and fixed in 10.7.1, so the pin moves to 10.7.2, the
+  # last 10.x release. socks asks for ^10.1.1, so this stays inside its range.
+  "ip-address@<10.7.2": 10.7.2
   # undici GHSA-3wwx-pv8p-q78v, which reaches two majors here: 8.x through
   # the build (astro > unifont) and 6.x through the dev tooling
   # (pa11y-ci > cheerio), fixed in 8.10.2 and 6.28.1.
