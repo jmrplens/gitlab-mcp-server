@@ -38,7 +38,7 @@ func (r *recordingReporter) joined() string {
 
 // shardLines returns the non-empty lines of the one shard written into dir,
 // failing when the number of shards is not one.
-func shardLines(t *testing.T, shards *Shards[fixtureRecord, fixtureLine], dir string) []string {
+func shardLines(t *testing.T, shards *Shards[fixtureRecord, fixtureEnveloper], dir string) []string {
 	t.Helper()
 
 	entries, err := os.ReadDir(dir)
@@ -140,7 +140,7 @@ func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
 	}
 	for _, spelling := range []string{dir + "/.", dir + "/", dir + "/sub/..", " " + dir + " "} {
 		t.Run(spelling, func(t *testing.T) {
-			if got := shards.OpenDir(spelling); got != canonical {
+			if shards.OpenDir(spelling) != canonical {
 				t.Errorf("OpenDir(%q) returned a second writer for one directory", spelling)
 			}
 		})
@@ -168,7 +168,7 @@ func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
 // package as a type alias: a wrapper struct around it would need a nil check of
 // its own, and the day somebody forgot it the panic would be in the harness.
 func TestWriterWrite_NilWriterWritesNothing(t *testing.T) {
-	var writer *Writer[fixtureRecord, fixtureLine]
+	var writer *Writer[fixtureRecord, fixtureEnveloper]
 	reporter := &recordingReporter{}
 
 	writer.Write(reporter, &note{Text: "nothing to record"})

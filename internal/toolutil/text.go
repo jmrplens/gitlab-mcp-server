@@ -164,20 +164,25 @@ func EscapeMdLinkLabel(s string) string {
 
 // mdLinkDestEscaper percent-encodes the characters that would end a link
 // destination early or split it in two. Each encoding resolves to the same
-// resource, so the link still works.
+// resource, so the link still works. A tab ends a destination as a space
+// does, and what followed it was read as the link's title.
 //
 // The pipe and the line endings are encoded for the cell the link sits in
 // rather than for the link: a destination is not escaped by
 // [EscapeMdTableCell], so a URL carrying a pipe used to end the cell in the
 // middle of the link, and one carrying a line break ended the row.
-var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
+var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", "\t", "%09", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
 
 // EscapeMdLinkDestination renders url as the destination of a Markdown link.
-// It contains the delimiters and nothing else: whether the value may be a
+// It contains the delimiters and judges nothing: whether the value may be a
 // destination at all is [LinkableDestination]'s question, asked by the
-// callers that decide to write a link.
+// callers that decide to write a link. The whitespace around the value is
+// dropped first, as [LinkableDestination] drops it before judging, so the
+// address written is the one that was judged: encoded instead, a leading
+// space made " https://host/x" the relative destination "%20https://host/x".
+// A space inside the value is still encoded.
 func EscapeMdLinkDestination(url string) string {
-	return mdLinkDestEscaper.Replace(StripControlBytes(url))
+	return mdLinkDestEscaper.Replace(strings.TrimSpace(StripControlBytes(url)))
 }
 
 // LinkableDestination reports whether url may be written as the destination
@@ -192,15 +197,17 @@ func EscapeMdLinkDestination(url string) string {
 // origin, so the allow list costs nothing legitimate. The check runs on the
 // value with its control bytes gone, because "java\x00script:" is the escaped
 // destination "javascript:" and would pass a check made on the bytes as sent.
+//
+// Plain http is admitted on purpose: a self-managed instance served without
+// TLS builds every address it sends on that scheme, and refusing it would
+// unlink every row such an instance answers with. The scheme is read as the
+// text before the first "://" and compared whole, so "xhttp" and "httpx" are
+// refused, and an address is only linked when something follows the
+// separator. A value with no separator at all has nothing following one,
+// which is the same refusal.
 func LinkableDestination(url string) bool {
-	s := strings.TrimSpace(StripControlBytes(url))
-	lower := strings.ToLower(s)
-	for _, scheme := range []string{"http://", "https://"} {
-		if strings.HasPrefix(lower, scheme) && len(s) > len(scheme) {
-			return true
-		}
-	}
-	return false
+	scheme, rest, _ := strings.Cut(strings.ToLower(strings.TrimSpace(StripControlBytes(url))), "://")
+	return rest != "" && (scheme == "http" || scheme == "https")
 }
 
 // MdTitleLink returns the title as a Markdown link if url is non-empty,

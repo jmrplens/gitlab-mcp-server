@@ -91,7 +91,7 @@ func TestFilterSchemaOverrides_EachCallReturnsItsOwnValues(t *testing.T) {
 	if got := second[0].Values["enum"].([]any)[0]; got != "created" {
 		t.Errorf("second call's first action = %v, want created", got)
 	}
-	if got := second[1].Values["description"]; got == "mutated" {
+	if second[1].Values["description"] == "mutated" {
 		t.Error("second call's target_type description was changed through the first call's")
 	}
 	if eventActions[0] != "created" {

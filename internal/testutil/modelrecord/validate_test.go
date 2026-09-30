@@ -66,7 +66,7 @@ func validVerify() *Verify {
 // builders above have to pass, or every test that uses them is asserting
 // against a fixture the reader would refuse.
 func TestValidatePayload_AcceptsTheMinimalPayloadOfEveryType(t *testing.T) {
-	for _, line := range []Line{validRun(), validSession(), validAttempt(), validTurn(), validCall(), validVerify()} {
+	for _, line := range []Enveloper{validRun(), validSession(), validAttempt(), validTurn(), validCall(), validVerify()} {
 		record := line.record()
 		t.Run(record.Type, func(t *testing.T) {
 			if err := record.validate(); err != nil {
@@ -79,7 +79,7 @@ func TestValidatePayload_AcceptsTheMinimalPayloadOfEveryType(t *testing.T) {
 // TestValidatePayload_RefusesAPayloadThatDescribesNothing is the finding this
 // file answers, stated as a test: an envelope can be perfect and carry nothing.
 func TestValidatePayload_RefusesAPayloadThatDescribesNothing(t *testing.T) {
-	for _, line := range []Line{&Run{}, &Session{}, &Attempt{}, &Turn{}, &Call{}, &Verify{}} {
+	for _, line := range []Enveloper{&Run{}, &Session{}, &Attempt{}, &Turn{}, &Call{}, &Verify{}} {
 		record := line.record()
 		t.Run(record.Type, func(t *testing.T) {
 			err := record.validate()
@@ -331,7 +331,7 @@ func TestValidateTurn_RefusesAPositionNobodyWrote(t *testing.T) {
 func TestPositive_RefusesTheZeroOnEveryLineThatCountsFromOne(t *testing.T) {
 	for _, testCase := range []struct {
 		name  string
-		line  Line
+		line  Enveloper
 		field string
 	}{
 		{name: "a run that repeated nothing", line: runWithRepeat(0), field: "repeat"},

@@ -20,17 +20,17 @@ var shards = newShards(Record.validate)
 // every writer comes from; [callShards] admits the older schemas
 // [ReadShardsForCalls] reads and is never written through, so the two differ
 // in that rule alone and cannot come to disagree about a shard's name.
-func newShards(validate func(Record) error) *shardio.Shards[Record, Line] {
-	return shardio.New(shardio.Spec[Record, Line]{
+func newShards(validate func(Record) error) *shardio.Shards[Record, Enveloper] {
+	return shardio.New(shardio.Spec[Record, Enveloper]{
 		DirEnv: DirEnv,
 		Prefix: shardPrefix,
 		Ext:    shardExt,
 		Noun:   "an e2e call",
 		TypeOf: func(r Record) string { return r.Type },
 		// Envelope is a closure over the unexported method, so the closed set
-		// of line types argued at [Line] stays closed: nothing is exported to
-		// make the shared mechanism generic over this record.
-		Envelope: func(l Line) Record { return l.record() },
+		// of line types argued at [Enveloper] stays closed: nothing is exported
+		// to make the shared mechanism generic over this record.
+		Envelope: func(l Enveloper) Record { return l.record() },
 		Validate: validate,
 		// Check is nil and CapHint empty on purpose. Every field of this
 		// record is a string, a bool, an int, a string slice or one float the
@@ -50,7 +50,7 @@ type Reporter = shardio.Reporter
 // The zero value is not usable: [Open] and [OpenDir] make one. A nil *Writer is
 // usable and does nothing, which is what recording being off looks like to a
 // caller, so the harness has no branch of its own to get wrong.
-type Writer = shardio.Writer[Record, Line]
+type Writer = shardio.Writer[Record, Enveloper]
 
 // Open returns the writer for the directory [DirEnv] names, or nil when
 // recording is off.

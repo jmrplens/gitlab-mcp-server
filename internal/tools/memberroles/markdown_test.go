@@ -182,7 +182,7 @@ func TestFormatListMarkdown(t *testing.T) {
 func TestMarkdownInit_Registry(t *testing.T) {
 	for _, result := range []any{ListOutput{}, Output{ID: 1}} {
 		t.Run(fmt.Sprintf("%T", result), func(t *testing.T) {
-			if out := toolutil.MarkdownForResult(result); out == nil {
+			if toolutil.MarkdownForResult(result) == nil {
 				t.Fatalf("no registered formatter answered for %T", result)
 			}
 		})

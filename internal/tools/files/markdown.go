@@ -20,6 +20,16 @@ const (
 	actionCommitList   = "repository.commit_list"
 )
 
+// The row labels every file card shares, worded once so the cards for a file,
+// its metadata, its raw bytes and an image cannot come to name one value two
+// ways.
+const (
+	labelSizeBytes    = "Size (bytes)"
+	labelCommitID     = "Commit ID"
+	labelLastCommitID = "Last Commit ID"
+	labelContentType  = "Content Type"
+)
+
 // imageNote is the sentence a card writes where the bytes themselves are
 // attached to the result rather than printed.
 const imageNote = "\U0001F5BC️ Image content is attached below as ImageContent for multimodal viewing."
@@ -50,20 +60,20 @@ func FormatOutputMarkdown(f Output) string {
 	// forbids only NUL and the separator inside a path component.
 	c := toolutil.NewCard(&b, "File: "+f.FilePath)
 	c.Field("Name", f.FileName)
-	c.Int("Size (bytes)", f.Size)
+	c.Int(labelSizeBytes, f.Size)
 	c.Field("Ref", f.Ref)
 	c.Field("Encoding", f.Encoding)
 	c.Code("Blob ID", f.BlobID)
-	c.Code("Commit ID", f.CommitID)
-	c.Code("Last Commit ID", f.LastCommitID)
+	c.Code(labelCommitID, f.CommitID)
+	c.Code(labelLastCommitID, f.LastCommitID)
 	c.Code("SHA-256", f.SHA256)
 	c.Bool("Executable", f.ExecuteFilemode)
 	switch f.ContentCategory {
 	case "image":
-		c.Field("Content Type", "image ("+f.ImageMIMEType+")")
+		c.Field(labelContentType, "image ("+f.ImageMIMEType+")")
 		c.Note(imageNote)
 	case "binary":
-		c.Field("Content Type", "binary (content omitted, not viewable as text)")
+		c.Field(labelContentType, "binary (content omitted, not viewable as text)")
 	default:
 		c.Fence("Content", langFromPath(f.FilePath), f.Content)
 	}
@@ -90,8 +100,8 @@ func FormatFileInfoMarkdown(out FileInfoOutput) string {
 	c := toolutil.NewCard(&b, "File Operation Result")
 	c.Field("File", out.FilePath)
 	c.Field("Branch", out.Branch)
-	c.Code("Commit ID", out.CommitID)
-	c.Code("Last Commit ID", out.LastCommitID)
+	c.Code(labelCommitID, out.CommitID)
+	c.Code(labelLastCommitID, out.LastCommitID)
 	c.End(
 		toolutil.HintAction(actionFileGet, "verify the file content"),
 		toolutil.HintAction(actionCommitList, "see the commit history"),
@@ -143,12 +153,12 @@ func FormatMetaDataMarkdown(out MetaDataOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "File Metadata: "+out.FilePath)
 	c.Field("Name", out.FileName)
-	c.Int("Size (bytes)", out.Size)
+	c.Int(labelSizeBytes, out.Size)
 	c.Field("Ref", out.Ref)
 	c.Field("Encoding", out.Encoding)
 	c.Code("Blob ID", out.BlobID)
-	c.Code("Commit ID", out.CommitID)
-	c.Code("Last Commit ID", out.LastCommitID)
+	c.Code(labelCommitID, out.CommitID)
+	c.Code(labelLastCommitID, out.LastCommitID)
 	c.Code("SHA-256", out.SHA256)
 	c.Bool("Executable", out.ExecuteFilemode)
 	c.End(
@@ -162,7 +172,7 @@ func FormatMetaDataMarkdown(out MetaDataOutput) string {
 func FormatRawMarkdown(out RawOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Raw File: "+out.FilePath)
-	c.Int("Size (bytes)", int64(out.Size))
+	c.Int(labelSizeBytes, int64(out.Size))
 	c.Fence("", langFromPath(out.FilePath), out.Content)
 	c.End(
 		toolutil.HintAction(actionFileUpdate, "modify this file"),
@@ -176,8 +186,8 @@ func FormatRawMarkdown(out RawOutput) string {
 func FormatRawImageMarkdown(out RawOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Image File: "+out.FilePath)
-	c.Int("Size (bytes)", int64(out.Size))
-	c.Field("Content Type", out.ImageMIMEType)
+	c.Int(labelSizeBytes, int64(out.Size))
+	c.Field(labelContentType, out.ImageMIMEType)
 	c.Note(imageNote)
 	c.End(toolutil.HintAction(actionFileMetadata, "get additional file properties"))
 	return b.String()
@@ -188,8 +198,8 @@ func FormatRawImageMarkdown(out RawOutput) string {
 func FormatRawBinaryMarkdown(out RawOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Binary File: "+out.FilePath)
-	c.Int("Size (bytes)", int64(out.Size))
-	c.Field("Content Type", "binary (content omitted, not viewable as text)")
+	c.Int(labelSizeBytes, int64(out.Size))
+	c.Field(labelContentType, "binary (content omitted, not viewable as text)")
 	c.End(toolutil.HintAction(actionFileMetadata, "get additional file properties"))
 	return b.String()
 }

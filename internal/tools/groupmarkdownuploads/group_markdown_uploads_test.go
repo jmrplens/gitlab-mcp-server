@@ -603,7 +603,7 @@ func TestList_CreatedAt_IsTheWireFormTheDisplayHelperReads(t *testing.T) {
 	// FormatTime hands back its own argument when it cannot parse it, so a
 	// rendering that differs from the stored value is the proof that the
 	// display helper read the timestamp rather than gave up on it.
-	if display := toolutil.FormatTime(published); display == published {
+	if toolutil.FormatTime(published) == published {
 		t.Errorf("FormatTime(%q) returned it unchanged, so the Created column shows the wire form", published)
 	}
 	if undated := out.Uploads[1].CreatedAt; undated != "" {

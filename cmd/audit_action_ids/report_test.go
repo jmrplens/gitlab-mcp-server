@@ -302,7 +302,7 @@ func TestClassify_NarrowedRun_LeavesTheDeclarationsUnjudged(t *testing.T) {
 // that assert !Clean over a realistic run could not tell the four apart: what
 // separates them is a report in which exactly one is non-zero.
 func TestClean_OneBucketAtATime_FailsTheRun(t *testing.T) {
-	if clean := (&Report{}).Clean(); !clean {
+	if !(&Report{}).Clean() {
 		t.Error("a report with nothing in any bucket reported itself unclean")
 	}
 	for name, summary := range map[string]Summary{

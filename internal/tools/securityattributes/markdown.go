@@ -16,6 +16,10 @@ import (
 // does not offer to.
 const editableStateLocked = "LOCKED"
 
+// labelEditableState is the label an attribute and its category both carry for
+// how much of them GitLab lets a caller change.
+const labelEditableState = "Editable state"
+
 // FormatOutputMarkdown renders a security attribute as the card of one object:
 // its identity and color, how much of it GitLab allows changing, and the
 // category it belongs to as a nested object.
@@ -35,7 +39,7 @@ func FormatCreateMarkdown(out CreateOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Security Attributes Created", len(out.Attributes), toolutil.PaginationOutput{})
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Color", "Description", "Category", "Editable state"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Color", "Description", "Category", labelEditableState))
 	for _, attribute := range out.Attributes {
 		category := ""
 		if attribute.SecurityCategory != nil {
@@ -100,14 +104,14 @@ func writeAttributeRows(c *toolutil.Card, out Output) {
 	c.Field("Name", out.Name)
 	c.Code("Color", out.Color)
 	c.Text("Description", out.Description)
-	c.Code("Editable state", out.EditableState)
+	c.Code(labelEditableState, out.EditableState)
 	if out.SecurityCategory != nil {
 		category := c.Sub("Category")
 		category.Int("ID", out.SecurityCategory.ID)
 		category.Field("Name", out.SecurityCategory.Name)
 		category.Text("Description", out.SecurityCategory.Description)
 		category.Bool("Multiple selection", out.SecurityCategory.MultipleSelection)
-		category.Code("Editable state", out.SecurityCategory.EditableState)
+		category.Code(labelEditableState, out.SecurityCategory.EditableState)
 		category.Code("Template type", out.SecurityCategory.TemplateType)
 	}
 }

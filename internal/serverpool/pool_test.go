@@ -471,7 +471,7 @@ func TestGetOrCreate_AnUnexplained401AfterTheCooldown_IsConfirmedAgain(t *testin
 
 	approve(t, entry)
 	awaitCondition(t, "the second refusal being confirmed", func() bool { return pool.Stats().UnauthorizedKept == 2 })
-	if got := entry.lastConfirmProbe.Load(); got == first {
+	if entry.lastConfirmProbe.Load() == first {
 		t.Error("a refusal after the window did not claim it again")
 	}
 	if got := g.userCalls.Load(); got != 2 {

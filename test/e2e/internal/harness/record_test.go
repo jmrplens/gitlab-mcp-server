@@ -179,7 +179,7 @@ func TestRecorder_MetaAliasRewrite_RecordsTheRouteThatRanAndFailsAnUndeclaredCal
 
 // callLineFor returns the one call line naming an action, failing when the
 // record holds no such call.
-func callLineFor(t *testing.T, lines []e2ecalls.Line, action string) *e2ecalls.Call {
+func callLineFor(t *testing.T, lines []e2ecalls.Enveloper, action string) *e2ecalls.Call {
 	t.Helper()
 
 	for _, line := range lines {
@@ -193,7 +193,7 @@ func callLineFor(t *testing.T, lines []e2ecalls.Line, action string) *e2ecalls.C
 }
 
 // describeLines summarizes a record for a failure message.
-func describeLines(lines []e2ecalls.Line) string {
+func describeLines(lines []e2ecalls.Enveloper) string {
 	described := make([]string, 0, len(lines))
 	for _, line := range lines {
 		switch typed := line.(type) {
@@ -247,7 +247,7 @@ func TestRecorder_IndividualSafeMode_RecordsAPreviewAndTheServersRefusal(t *test
 
 // dispatchReasonFor returns the refusal reason the server reported for one
 // trace, or the empty string when no span carried one.
-func dispatchReasonFor(lines []e2ecalls.Line, traceID string) string {
+func dispatchReasonFor(lines []e2ecalls.Enveloper, traceID string) string {
 	for _, line := range lines {
 		dispatch, isDispatch := line.(*e2ecalls.Dispatch)
 		if isDispatch && dispatch.TraceID == traceID {

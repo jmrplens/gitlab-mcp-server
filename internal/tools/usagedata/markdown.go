@@ -26,13 +26,17 @@ const maxRenderedMetrics = 20
 // multi-byte character leaves a replacement glyph at the end of the fence.
 const maxRenderedYAMLBytes = 10000
 
+// labelRecordedAt is the row each Service Ping card writes for when the report
+// was recorded.
+const labelRecordedAt = "Recorded At"
+
 // FormatServicePingMarkdown renders the Service Ping payload as a card: when it
 // was recorded, then the license attributes and the metric counts as nested
 // collections.
 func FormatServicePingMarkdown(out GetServicePingOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Service Ping Data")
-	c.Time("Recorded At", out.RecordedAt)
+	c.Time(labelRecordedAt, out.RecordedAt)
 
 	if len(out.License) > 0 {
 		table := c.Table("License", "Key", "Value")
@@ -71,7 +75,7 @@ func FormatNonSQLMetricsMarkdown(out NonSQLMetricsOutput) string {
 	c.Int("Active Users", out.ActiveUserCount)
 	c.Int("Historical Max Users", out.HistoricalMaxUsers)
 	c.Field("License Plan", out.LicensePlan)
-	c.Time("Recorded At", out.RecordedAt)
+	c.Time(labelRecordedAt, out.RecordedAt)
 	c.End(toolutil.HintAction(actionServicePing, "read the full Service Ping report"))
 	return b.String()
 }
@@ -88,7 +92,7 @@ func FormatQueriesMarkdown(out QueriesOutput) string {
 	c := toolutil.NewCard(&b, "Service Ping Queries")
 	c.Field("Version", out.Version)
 	c.Field("Edition", out.Edition)
-	c.Time("Recorded At", out.RecordedAt)
+	c.Time(labelRecordedAt, out.RecordedAt)
 
 	keys := sortedKeys(out.Counts)
 	if len(keys) > 0 {

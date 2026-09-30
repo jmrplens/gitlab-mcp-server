@@ -8,6 +8,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// labelExpiresAt is the label the file card, its metadata section and the list
+// column all carry.
+const labelExpiresAt = "Expires At"
+
 // expiryOrDash formats an optional expiry timestamp in the display form every
 // other table in this server shows, or "-" when GitLab sent none. The dash is
 // used in table cells to signal "no expiry set" rather than an empty cell.
@@ -28,7 +32,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, "Secure Files", len(out.Files), out.Pagination)
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Checksum Algorithm", "Expires At"))
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Checksum Algorithm", labelExpiresAt))
 	for _, f := range out.Files {
 		sb.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(f.ID, 10),
@@ -63,7 +67,7 @@ func FormatShowMarkdown(f SecureFileItem) string {
 	c.Code("Checksum", f.Checksum)
 	c.Field("Algorithm", f.ChecksumAlgorithm)
 	c.Time("Created At", toolutil.RFC3339Ptr(f.CreatedAt))
-	c.Time("Expires At", toolutil.RFC3339Ptr(f.ExpiresAt))
+	c.Time(labelExpiresAt, toolutil.RFC3339Ptr(f.ExpiresAt))
 	if f.FileExtension != "" {
 		// GitLab derives the extension from the uploaded file's name.
 		c.Field("File Extension", f.FileExtension)
@@ -90,7 +94,7 @@ func writeMetadataSection(c *toolutil.Card, f SecureFileItem) {
 	// file supplied, so its common names are whatever they put in it.
 	s := c.Section(metadataSectionTitle(f.FileExtension))
 	s.Field("ID", m.ID)
-	s.Time("Expires At", toolutil.RFC3339Ptr(m.ExpiresAt))
+	s.Time(labelExpiresAt, toolutil.RFC3339Ptr(m.ExpiresAt))
 	s.Field("Issuer CN", m.Issuer.CN)
 	s.Field("Subject CN", m.Subject.CN)
 }

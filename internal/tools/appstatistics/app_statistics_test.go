@@ -333,21 +333,23 @@ func TestGet_ErrorStatus_HintsAdministratorAccessOnlyOnAPermissionRefusal(t *tes
 	}
 }
 
-// statisticsCard renders the eleven rows in the order the card writes them,
-// so a test states the counts it cares about and the rest read zero.
-func statisticsCard(activeUsers, users, projects, groups, issues, mergeRequests, notes, forks, snippets, sshKeys, milestones int64) string {
+// statisticsCard renders the eleven rows of counts in the order the card writes
+// them, so a test states the counts it cares about and the rest read zero. It
+// takes the output the card is rendered from, with each row spelled out here,
+// so a card that put one count under another's label still fails.
+func statisticsCard(counts GetOutput) string {
 	return "## Application Statistics\n\n" +
-		fmt.Sprintf("- **Active Users**: %d\n", activeUsers) +
-		fmt.Sprintf("- **Users**: %d\n", users) +
-		fmt.Sprintf("- **Projects**: %d\n", projects) +
-		fmt.Sprintf("- **Groups**: %d\n", groups) +
-		fmt.Sprintf("- **Issues**: %d\n", issues) +
-		fmt.Sprintf("- **Merge Requests**: %d\n", mergeRequests) +
-		fmt.Sprintf("- **Notes**: %d\n", notes) +
-		fmt.Sprintf("- **Forks**: %d\n", forks) +
-		fmt.Sprintf("- **Snippets**: %d\n", snippets) +
-		fmt.Sprintf("- **SSH Keys**: %d\n", sshKeys) +
-		fmt.Sprintf("- **Milestones**: %d\n", milestones) +
+		fmt.Sprintf("- **Active Users**: %d\n", counts.ActiveUsers) +
+		fmt.Sprintf("- **Users**: %d\n", counts.Users) +
+		fmt.Sprintf("- **Projects**: %d\n", counts.Projects) +
+		fmt.Sprintf("- **Groups**: %d\n", counts.Groups) +
+		fmt.Sprintf("- **Issues**: %d\n", counts.Issues) +
+		fmt.Sprintf("- **Merge Requests**: %d\n", counts.MergeRequests) +
+		fmt.Sprintf("- **Notes**: %d\n", counts.Notes) +
+		fmt.Sprintf("- **Forks**: %d\n", counts.Forks) +
+		fmt.Sprintf("- **Snippets**: %d\n", counts.Snippets) +
+		fmt.Sprintf("- **SSH Keys**: %d\n", counts.SSHKeys) +
+		fmt.Sprintf("- **Milestones**: %d\n", counts.Milestones) +
 		"\n" + approximationNote + "\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use individual resource tools to explore specific statistics\n"
@@ -358,7 +360,7 @@ func statisticsCard(activeUsers, users, projects, groups, issues, mergeRequests,
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{ActiveUsers: 80, Projects: 45, Issues: 200}
 	got := FormatGetMarkdown(out)
-	want := statisticsCard(80, 0, 45, 0, 200, 0, 0, 0, 0, 0, 0)
+	want := statisticsCard(out)
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
@@ -417,7 +419,7 @@ func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 		SSHKeys: 3, Milestones: 7, Users: 100, Groups: 15, Projects: 50, ActiveUsers: 80,
 	}
 	got := FormatGetMarkdown(out)
-	want := statisticsCard(80, 100, 50, 15, 20, 30, 40, 10, 5, 3, 7)
+	want := statisticsCard(out)
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}

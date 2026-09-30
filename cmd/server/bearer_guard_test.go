@@ -215,7 +215,7 @@ func TestBearerGuard_BlockedAddress_StillServesATokenAlreadyVerified(t *testing.
 	// The sprayer spends the shared address's budget. Distinct tokens, so the
 	// rejection cache cannot absorb them and only the limiter can.
 	for i := range 4 {
-		if failure := g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))); failure == nil {
+		if g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))) == nil {
 			t.Fatalf("spray attempt %d was admitted", i)
 		}
 	}
@@ -342,7 +342,7 @@ func TestBearerGuard_BlockedAddress_RefusesARequestCarryingNoToken(t *testing.T)
 	}
 
 	for i := range 4 {
-		if failure := g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))); failure == nil {
+		if g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))) == nil {
 			t.Fatalf("spray attempt %d was admitted", i)
 		}
 	}

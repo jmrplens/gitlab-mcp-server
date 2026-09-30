@@ -16,6 +16,12 @@ const (
 	actionRetryProjectMRCheck = "external_status_check.retry_project"
 )
 
+// The two labels a card row and a table column both carry.
+const (
+	labelExternalURL       = "External URL"
+	labelProtectedBranches = "Protected Branches"
+)
+
 // allBranches is what an empty protected-branch list means: GitLab scopes a
 // status check to the branches it names, and a check that names none applies
 // everywhere. Rendering the empty list as nothing, or as a count of zero, read
@@ -31,7 +37,7 @@ func FormatMergeCheckMarkdown(out MergeStatusCheckOutput) string {
 	c.Field("Name", out.Name)
 	c.Field("Status", out.Status)
 	// The external URL is whatever the maintainer who added the check typed.
-	c.Link("External URL", out.ExternalURL, out.ExternalURL)
+	c.Link(labelExternalURL, out.ExternalURL, out.ExternalURL)
 	c.End(
 		toolutil.HintAction(actionSetProjectMRStatus, "record this check's result on the merge request"),
 		toolutil.HintAction(actionRetryProjectMRCheck, "retry a failed check"),
@@ -49,12 +55,12 @@ func FormatProjectCheckMarkdown(out ProjectStatusCheckOutput) string {
 	c.Field("Name", out.Name)
 	c.Int("Project ID", out.ProjectID)
 	// The external URL is whatever the maintainer who added the check typed.
-	c.Link("External URL", out.ExternalURL, out.ExternalURL)
+	c.Link(labelExternalURL, out.ExternalURL, out.ExternalURL)
 	c.Bool("HMAC", out.HMAC)
 	if len(out.ProtectedBranches) == 0 {
-		c.Field("Protected Branches", allBranches)
+		c.Field(labelProtectedBranches, allBranches)
 	} else {
-		branches := c.Table("Protected Branches", "ID", "Name", "Code Owner Approval")
+		branches := c.Table(labelProtectedBranches, "ID", "Name", "Code Owner Approval")
 		for _, pb := range out.ProtectedBranches {
 			branches.Row(
 				strconv.FormatInt(pb.ID, 10),
@@ -81,7 +87,7 @@ func FormatListMergeMarkdown(out ListMergeStatusCheckOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Merge Status Checks", len(out.Items), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "External URL", "Status"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", labelExternalURL, "Status"))
 	for _, c := range out.Items {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(c.ID, 10),
@@ -109,7 +115,7 @@ func FormatListProjectMarkdown(out ListProjectStatusCheckOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Project External Status Checks", len(out.Items), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "External URL", "HMAC", "Protected Branches"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", labelExternalURL, "HMAC", labelProtectedBranches))
 	for _, c := range out.Items {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(c.ID, 10),

@@ -404,10 +404,10 @@ func TestImportsTesting_ImportWithoutAPath_IsSkipped(t *testing.T) {
 	pathless := &ast.ImportSpec{}
 	testingImport := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"testing"`}}
 
-	if got := importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless}}); got {
+	if importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless}}) {
 		t.Errorf("importsTesting(one pathless import) = true, want false")
 	}
-	if got := importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless, testingImport}}); !got {
+	if !importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless, testingImport}}) {
 		t.Errorf("importsTesting(pathless import before testing) = false, want true")
 	}
 }

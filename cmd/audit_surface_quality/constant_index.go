@@ -200,7 +200,7 @@ func applyConstantIndexDeclarations(vs []violation) []violation {
 	answered := make(map[string]bool, len(constantIndexDeclarations))
 	kept := make([]violation, 0, len(vs))
 	for _, v := range vs {
-		if reason := constantIndexDeclarations[v.tool]; reason != "" {
+		if constantIndexDeclarations[v.tool] != "" {
 			answered[v.tool] = true
 			continue
 		}

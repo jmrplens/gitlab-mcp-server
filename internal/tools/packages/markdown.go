@@ -19,6 +19,10 @@ const shortDigestLength = 12
 // serves, and so the one whose files package.download can fetch.
 const packageTypeGeneric = "generic"
 
+// labelFileName is the label a package file carries on the publish card, in the
+// file list and in the package section of the publish-and-link card.
+const labelFileName = "File Name"
+
 // packageNotFoundOutput is the answer to a package GitLab answered 404 for,
 // naming the package and its project as the caller gave them.
 type packageNotFoundOutput struct {
@@ -116,7 +120,7 @@ func FormatPublishMarkdown(out PublishOutput) string {
 	c.Int("Package ID", out.PackageID)
 	// The only validation on a package file name refuses a space and a leading
 	// tilde or at-sign, so a pipe and a '<' both survive.
-	c.Field("File Name", out.FileName)
+	c.Field(labelFileName, out.FileName)
 	c.Field("Size", fmt.Sprintf("%d bytes", out.Size))
 	// A digest is a value a reader compares character by character, so it is a
 	// code span sized to its content rather than a raw interpolation.
@@ -253,7 +257,7 @@ func FormatFileListMarkdown(out FileListOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Package Files", len(out.Files), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "File Name", "Size (bytes)", "SHA256", "Pipelines"))
+	b.WriteString(toolutil.MarkdownTableHeader("ID", labelFileName, "Size (bytes)", "SHA256", "Pipelines"))
 	linked := false
 	for _, f := range out.Files {
 		cells := make([]string, 0, len(f.Pipelines))
@@ -295,7 +299,7 @@ func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	c := toolutil.NewCard(&b, "Package Published & Linked")
 	pkg := c.Section("Package")
 	pkg.Int("Package File ID", out.Package.PackageFileID)
-	pkg.Field("File Name", out.Package.FileName)
+	pkg.Field(labelFileName, out.Package.FileName)
 	pkg.Field("Size", fmt.Sprintf("%d bytes", out.Package.Size))
 	pkg.URL(out.Package.URL)
 	link := c.Section("Release Link")

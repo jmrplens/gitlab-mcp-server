@@ -522,7 +522,7 @@ func TestFormatExportDownloadMarkdown(t *testing.T) {
 	if want := "Export archive downloaded: 1024 bytes (base64-encoded in content_base64 field)"; md != want {
 		t.Errorf("FormatExportDownloadMarkdown()\n got: %q\nwant: %q", md, want)
 	}
-	if result := FormatExportDownloadMarkdown(ExportDownloadOutput{}); result != nil {
+	if FormatExportDownloadMarkdown(ExportDownloadOutput{}) != nil {
 		t.Error("expected nil result for empty output")
 	}
 }

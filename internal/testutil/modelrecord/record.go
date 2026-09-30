@@ -258,11 +258,12 @@ func CapText(text string) (string, bool) {
 	return text[:MaxTextBytes], true
 }
 
-// Line is one thing a shard can hold. The set is closed on purpose: [Run],
-// [Session], [Attempt], [Turn], [Call] and [Verify] are the only
-// implementations, because the reader dispatches on [Record.Type] and a seventh
-// shape it has never heard of would be dropped or guessed at.
-type Line interface {
+// Enveloper is one thing a shard can hold: a line that knows the envelope it is
+// written in. The set is closed on purpose: [Run], [Session], [Attempt],
+// [Turn], [Call] and [Verify] are the only implementations, because the reader
+// dispatches on [Record.Type] and a seventh shape it has never heard of would
+// be dropped or guessed at.
+type Enveloper interface {
 	// record wraps the line in the envelope it is written as.
 	record() Record
 }

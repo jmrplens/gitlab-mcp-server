@@ -201,9 +201,10 @@ const tableHead = "| IID | Title | State | Author | Source -> Target |\n| --- | 
 
 // TestFormatListMarkdown_Empty verifies that a deployment with no merge
 // requests renders the one-sentence empty message and nothing else: no
-// heading counting zero and no table header above an empty body.
+// heading counting zero and no table header above an empty body. The list is
+// empty rather than nil, which is what GitLab's `[]` decodes to.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	got := FormatListMarkdownString(ListOutput{})
+	got := FormatListMarkdownString(ListOutput{MergeRequests: []Output{}})
 	want := "No merge requests for this deployment found.\n"
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
@@ -767,9 +768,10 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NilSlice verifies the ListMarkdown_NilSlice Markdown formatter for a representative list_nilslice input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_NilSlice verifies that an output whose list was never
+// set, the zero value, renders the same empty message as an empty list, so the
+// formatter asks for the length and never tells nil and empty apart.
+// [TestFormatListMarkdown_Empty] holds the empty list GitLab's `[]` decodes to.
 func TestFormatListMarkdown_NilSlice(t *testing.T) {
 	got := FormatListMarkdownString(ListOutput{})
 	want := "No merge requests for this deployment found.\n"

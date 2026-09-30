@@ -257,7 +257,7 @@ func TestRecordInvalidRawField_KnowsEveryRawFieldOfTheRecord(t *testing.T) {
 func TestLineRecord_EachLineWrapsItselfInItsOwnEnvelope(t *testing.T) {
 	cases := []struct {
 		name string
-		line Line
+		line Enveloper
 		want string
 	}{
 		{name: TypeRun, line: validRun(), want: TypeRun},
@@ -412,7 +412,7 @@ func payloadTypes(t *testing.T) map[string]reflect.Type {
 	t.Helper()
 
 	types := map[string]reflect.Type{}
-	for _, line := range []Line{&Run{}, &Session{}, &Attempt{}, &Turn{}, &Call{}, &Verify{}} {
+	for _, line := range []Enveloper{&Run{}, &Session{}, &Attempt{}, &Turn{}, &Call{}, &Verify{}} {
 		types[line.record().Type] = reflect.TypeOf(line).Elem()
 	}
 	if len(types) != len(payloadPresent) {

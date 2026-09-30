@@ -8,22 +8,37 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// runnerSummary is what a runner carries wherever it is rendered. [Output] and
+// [DetailsOutput] each hold it under the same field names without sharing a
+// type, so the two cards copy it into this one rather than pass eight values
+// in an order nothing checks.
+type runnerSummary struct {
+	name        string
+	description string
+	runnerType  string
+	status      string
+	jobStatus   string
+	shared      bool
+	online      bool
+	paused      bool
+}
+
 // writeRunnerSummary writes the fields a runner carries wherever it is
 // rendered, so the summary and the detail card cannot drift apart.
-func writeRunnerSummary(c *toolutil.Card, name, description, runnerType, status, jobStatus string, shared, online, paused bool) {
-	c.Field("Name", name)
-	c.Field("Description", description)
+func writeRunnerSummary(c *toolutil.Card, s runnerSummary) {
+	c.Field("Name", s.name)
+	c.Field("Description", s.description)
 	// A runner type GitLab picks from a fixed set (instance_type, group_type,
 	// project_type) and a status it derives from when the runner last
 	// contacted it (online, offline, stale, never_contacted).
-	c.Field("Type", runnerType)
-	c.Field("Status", status)
-	c.Field("Job Execution Status", jobStatus)
-	c.Bool("Shared", shared)
-	c.Bool("Online", online)
+	c.Field("Type", s.runnerType)
+	c.Field("Status", s.status)
+	c.Field("Job Execution Status", s.jobStatus)
+	c.Bool("Shared", s.shared)
+	c.Bool("Online", s.online)
 	// Paused is the one negative-polarity flag here: a tick against "Paused"
 	// reads as a runner in good order, which is the opposite of what it means.
-	c.Warn("Paused", paused)
+	c.Warn("Paused", s.paused)
 }
 
 // FormatOutputMarkdown renders one runner as the card of a single object.
@@ -38,8 +53,11 @@ func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, fmt.Sprintf("Runner #%d", out.ID))
 	c.Int("ID", out.ID)
-	writeRunnerSummary(c, out.Name, out.Description, out.RunnerType, out.Status, out.JobExecutionStatus,
-		out.IsShared, out.Online, out.Paused)
+	writeRunnerSummary(c, runnerSummary{
+		name: out.Name, description: out.Description, runnerType: out.RunnerType,
+		status: out.Status, jobStatus: out.JobExecutionStatus,
+		shared: out.IsShared, online: out.Online, paused: out.Paused,
+	})
 	c.Code("IP Address", out.IPAddress)
 	c.Time("Created", out.CreatedAt)
 	if out.CreatedBy != nil {
@@ -60,8 +78,11 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, fmt.Sprintf("Runner #%d: Details", out.ID))
 	c.Int("ID", out.ID)
-	writeRunnerSummary(c, out.Name, out.Description, out.RunnerType, out.Status, out.JobExecutionStatus,
-		out.IsShared, out.Online, out.Paused)
+	writeRunnerSummary(c, runnerSummary{
+		name: out.Name, description: out.Description, runnerType: out.RunnerType,
+		status: out.Status, jobStatus: out.JobExecutionStatus,
+		shared: out.IsShared, online: out.Online, paused: out.Paused,
+	})
 	c.Bool("Locked", out.Locked)
 	// A runner access level GitLab picks from a fixed set (not_protected,
 	// ref_protected), and refuses any other value on register and update.

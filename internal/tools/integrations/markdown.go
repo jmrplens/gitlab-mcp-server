@@ -28,6 +28,10 @@ const (
 // it is active, and never with the properties a caller set.
 const hintWhatAReadReturns = "A read returns the integration's identity and whether it is active, not the values configured on it; credentials are write-only and are never returned"
 
+// hintReadBack is the next step the upsert confirmations offer, at project and
+// at group scope alike.
+const hintReadBack = "read the integration back"
+
 // fallback returns def when s is empty.
 func fallback(s, def string) string {
 	if s == "" {
@@ -124,7 +128,7 @@ func formatGetMarkdownString(out GetOutput) string {
 // upsert response.
 func formatSetIntegrationMarkdownString(out SetIntegrationOutput) string {
 	return formatIntegrationItemString("Integration Updated", out.Integration,
-		toolutil.HintAction(actionGet, "read the integration back"),
+		toolutil.HintAction(actionGet, hintReadBack),
 		hintWhatAReadReturns,
 	)
 }
@@ -132,7 +136,7 @@ func formatSetIntegrationMarkdownString(out SetIntegrationOutput) string {
 // formatSetJiraMarkdownString renders the Jira integration upsert response.
 func formatSetJiraMarkdownString(out SetJiraOutput) string {
 	return formatIntegrationItemString("Jira Integration Updated", out.Integration,
-		toolutil.HintAction(actionGet, "read the integration back"),
+		toolutil.HintAction(actionGet, hintReadBack),
 		"Jira credentials (username and password, or the API token) are write-only and are never returned",
 	)
 }
@@ -150,7 +154,7 @@ func formatGetGroupIntegrationString(out GetGroupIntegrationOutput) string {
 // response.
 func formatSetGroupIntegrationString(out SetGroupIntegrationOutput) string {
 	return formatIntegrationItemString("Group Integration Updated", out.Integration,
-		toolutil.HintAction(actionGetGroup, "read the integration back"),
+		toolutil.HintAction(actionGetGroup, hintReadBack),
 		hintWhatAReadReturns,
 	)
 }
