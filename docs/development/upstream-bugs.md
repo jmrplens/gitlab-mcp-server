@@ -5474,12 +5474,22 @@ commit that updated each branch's tests (below) says so in its message.
 - **In review**: yes,
   [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650),
   opened the same day from the community fork, which closes the issue; the
-  issue was then edited to name it. Read on 2026-09-29 it has no reviewer but
-  GitLab Duo, no approval and no comment from a person, and its fork pipeline
-  is red on three jobs. `lint:prose` and `pinned-version-check` stop before
-  running because the fork's clone cannot resolve the diff base. The third,
-  `unit-test`, is ours: three `orbit-server` tests pin the skill version at
-  `0.32.2` (lines 22 and 74 of
+  issue was then edited to name it. Read on the morning of 2026-09-29 it has
+  no reviewer but GitLab Duo, no approval and no comment from a person, and
+  its fork pipeline is red on three jobs. `lint:prose` and
+  `pinned-version-check` stop before checking anything in the change.
+  `pinned-version-check` exits on
+  `fatal: origin/main...HEAD: no merge base`: it fetches `main` at depth 1,
+  and in the fork `main` had moved past `74d4a4cb`, where the branch starts,
+  so the shallow clone holds no commit the two share. `lint:prose` reports
+  `diff base ... is unreachable`, but the git error under it is about an
+  empty revision: `prose_lint.py` diffs the base against
+  `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`, which is empty outside merged results
+  pipelines, and since `b7bce6fb` (2026-09-28) it passes that variable to
+  `git diff` as a revision of its own instead of after `base...`, where an
+  empty one meant `HEAD`. Every fork pipeline since has failed it this way.
+  The third, `unit-test`, is ours: three `orbit-server` tests pin the skill
+  version at `0.32.2` (lines 22 and 74 of
   `crates/orbit-server/src/grpc/service/tests/skills.rs` and one in
   `crates/orbit-server/src/skills/mod.rs`, set to `0.32.2` on `main` by
   `bf510a5d` on 2026-09-28 in the same commit that bumped the skill, which the
@@ -5503,7 +5513,9 @@ commit that updated each branch's tests (below) says so in its message.
   collapsed details block, where the project's description lint does not count
   it and the 2700 characters a pipeline reads of a description still hold it,
   with an offer of a patch bump instead; the Files list also names the test
-  pins now.
+  pins now. At 22:37 UTC the same day `@gitlab-bot ready` went up with a note
+  giving the two jobs' real causes, and the bot requested review from
+  `kerrizor`, a merge request coach, and set `workflow::ready for review`.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
@@ -5546,8 +5558,9 @@ while rewriting `orbit.query` for issue 1031.
 - **In review**: yes,
   [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651),
   opened the same day from the community fork, which closes the issue; the
-  issue was then edited to name it. Read on 2026-09-29 it is in the state row
-  75's merge request is in: no reviewer but GitLab Duo, and a fork pipeline
+  issue was then edited to name it. Read on the morning of 2026-09-29 it is in
+  the state row 75's merge request is in: no reviewer but GitLab Duo, and a
+  fork pipeline
   red on the same three jobs, `unit-test` among them because its own bump of
   `skills/orbit/SKILL.md` to `0.32.3` breaks the three tests that pin
   `0.32.2`. `639f3d11`, pushed at 11:21 UTC with `0acf02c0` and carrying
@@ -5559,7 +5572,10 @@ while rewriting `orbit.query` for issue 1031.
   applies, so no query is accepted, rejected or answered differently. Its
   description gained the marker at the same time and in the same place as row
   75's, with an offer of a `query_dsl` bump should the maintainers read the
-  declared default as part of the contract.
+  declared default as part of the contract. At 22:37 UTC `@gitlab-bot ready`
+  went up with a note giving the same two causes as row 75's, and the bot
+  requested review from `ms.mondrian`, a merge request coach, and set
+  `workflow::ready for review`.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
@@ -6216,10 +6232,16 @@ reproducing the panic outside this repository showed where it comes from.
   [golang/go#81122](https://github.com/golang/go/issues/81122) on 2026-08-26.
   Read on 2026-09-29 it was open, labelled NeedsInvestigation, with no
   milestone; its reporter added that it reproduces with every package loaded
-  from source too. Our reproducer is the test in the change below.
+  from source too. Our
+  [comment of 2026-09-30](https://github.com/golang/go/issues/81122#issuecomment-5901488429)
+  adds a reproducer that needs no x/tools, the go1.26 read, and the change
+  below with the source-loaded case it also covers.
 - **In review**: yes, [golang/go#81871](https://github.com/golang/go/pull/81871),
   opened on 2026-09-29 and imported to Gerrit as
-  [go.dev/cl/841585](https://go.dev/cl/841585), open.
+  [go.dev/cl/841585](https://go.dev/cl/841585), open. Patch set 2
+  (2026-09-30) holds both constructions in its test, the importer's and a
+  package checked from source. Read on 2026-09-30 its reviewers are Robert
+  Griesemer and Mark Freeman, with no vote or comment yet.
 - **Merged**: no. No Go release carries a fix, and `master` still reads the
   field the same way.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
@@ -6295,11 +6317,15 @@ checker's path, so the walk from it always ended in true:
  		rhs = t.fromRHS
 ```
 
-On a toolchain built from `master` with the change, its test raced in none of
-200 runs in each of `go/types` and `types2`, where it raced in all 100
-without it. The reproducer went from 20 of 20 runs racing to none. A
-temporary assertion that the old walk returns true for every such type held
-through `go build -a std cmd`, `go vet std cmd` and both packages' tests.
+On a toolchain built from `master` with the change, each of its test's two
+subtests, run on its own, raced in none of 200 runs in each of `go/types`
+and `types2`, where it raced in at least 99 of 100 without it. An instance
+written as a type in the source is expanded before `Check` returns and does
+not race; the source subtest uses one created by substitution
+(`var F = Of[string]`), which stays unexpanded and unowned. The reproducer
+went from 20 of 20 runs racing to none. A temporary assertion that the old
+walk returns true for every such type held through `go build -a std cmd`,
+`go vet std cmd` and both packages' tests.
 Unpacking such a type first also removes the race: applied to both copies of
 `cycles.go` on go1.27.1, it took the reproducer from 20 of 20 to 0 of 20 and
 the test that failed here from about 3 in 40 to 0 in 40. But it expands the
