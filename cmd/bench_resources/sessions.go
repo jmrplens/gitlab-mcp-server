@@ -196,12 +196,12 @@ func (r *runner) runSessionsLadder(ctx context.Context, opts options, steps []in
 
 	clients := make([]*sessionClient, opts.sessionsCredentials)
 	for i := range clients {
-		clients[i] = newSessionClient("http://"+tgt.addr+"/mcp", benchToken+strconv.Itoa(i))
+		clients[i] = newSessionClient(loopbackURL(tgt.addr, "/mcp"), benchToken+strconv.Itoa(i))
 	}
 	if err := admitSessions(ctx, clients); err != nil {
 		return err
 	}
-	in := heldInput{tgt: tgt, profiler: newPprofClient("http://" + tgt.pprofAddr)}
+	in := heldInput{tgt: tgt, profiler: newPprofClient(loopbackURL(tgt.pprofAddr, ""))}
 	doc.Idle = r.sampleHeld(ctx, in)
 	fmt.Printf("  idle: %s\n", doc.Idle.summary())
 	for _, offered := range steps {
