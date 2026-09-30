@@ -255,3 +255,60 @@ func TestRefusalMayBePermission_CredentialVerdict_NeverAPermission(t *testing.T)
 		})
 	}
 }
+
+// GitLab's refusal of GET /api/v4/user for a fine-grained token granted no
+// User: Read, as rack-oauth2 renders it: the code and the sentence
+// Authz::Tokens::AuthorizeGranularScopesService#access_denied_error writes at
+// v19.4.1-ee.
+const (
+	granularRefusalSentence = "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read]."
+	granularRefusalBody     = `{"error":"insufficient_granular_scope","error_description":"` + granularRefusalSentence + `"}`
+)
+
+// TestPermissionRefusal_GitLabsFineGrainedRefusal_CarriesItsSentence verifies
+// the one body the credential probe reads as an accepted credential, and each
+// of GitLab's four sentences for it, returned as sent.
+func TestPermissionRefusal_GitLabsFineGrainedRefusal_CarriesItsSentence(t *testing.T) {
+	for name, sentence := range map[string]string{
+		"a missing permission":                          granularRefusalSentence,
+		"an operation fine-grained tokens cannot reach": "Access denied: This operation doesn't support fine-grained personal access tokens.",
+		"fine-grained tokens turned off for the user":   "Access denied: Fine-grained personal access tokens are not yet supported.",
+		"no sentence at all":                            "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := `{"error":"insufficient_granular_scope","error_description":"` + sentence + `"}`
+			got, ok := PermissionRefusal([]byte(body))
+			if !ok || got != sentence {
+				t.Errorf("PermissionRefusal(%s) = %q, %v; want %q, true", body, got, ok, sentence)
+			}
+		})
+	}
+}
+
+// TestPermissionRefusal_EveryOtherBody_IsNotOne verifies that no other refusal
+// reads as a fine-grained one: the classic scope refusal, a credential
+// refusal, a plain permission refusal, no body, a body that is not JSON, the
+// code in the wrong member, and a document naming a member twice, which is
+// refused whichever copy carries the code, since two readers of it could
+// disagree about whether it is one.
+func TestPermissionRefusal_EveryOtherBody_IsNotOne(t *testing.T) {
+	for name, body := range map[string]string{
+		"a classic scope refusal":         insufficientScopeBody,
+		"a credential refusal":            expiredTokenBody,
+		"a plain permission refusal":      plainForbiddenBody,
+		"no body":                         "",
+		"a body that is not JSON":         "403 Forbidden",
+		"the code as the message":         `{"message":"insufficient_granular_scope"}`,
+		"the code named twice, last":      `{"error":"insufficient_scope","error":"insufficient_granular_scope"}`,
+		"the code named twice, first":     `{"error":"insufficient_granular_scope","error":"insufficient_scope"}`,
+		"the sentence named twice":        `{"error":"insufficient_granular_scope","error_description":"a","error_description":"b"}`,
+		"a second document after it":      granularRefusalBody + `{}`,
+		"the code in the wrong JSON type": `{"error":["insufficient_granular_scope"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, ok := PermissionRefusal([]byte(body)); ok {
+				t.Errorf("PermissionRefusal(%s) = %q, true; want false", body, got)
+			}
+		})
+	}
+}
