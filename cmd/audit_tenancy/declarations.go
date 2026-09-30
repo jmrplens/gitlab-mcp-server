@@ -266,6 +266,7 @@ var notADecision = map[string]exemption{
 	"internal/config:maxAnnouncedKeys":           {categoryParsing, "how many of those keys the warning names"},
 	"internal/config:maxAnnouncedKeyRunes":       {categoryParsing, "how long a named key may be in the warning"},
 	"internal/oauth:insufficientScopeLimit":      {categoryParsing, "how much of a 403 body is read to name its error code"},
+	"internal/oauth:maxQuotedDescriptionBytes":   {categoryParsing, "how much of GitLab's refusal sentence a door quotes, and the rejected-token cache keeps beside the refusal"},
 	"internal/oauth:verificationBodyLimit":       {categoryParsing, "how much of a verification response is read"},
 	"internal/toolutil:minInt64AsFloat":          {categoryParsing, "the lowest float that converts to an int64 exactly"},
 	"internal/toolutil:maxInt64AsFloatExclusive": {categoryParsing, "the first float above the int64 range"},

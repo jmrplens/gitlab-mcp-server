@@ -4,6 +4,7 @@ package oauth
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -339,6 +340,90 @@ func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 			}
 			if got := tt.cache.Len(); got != tt.wantLen {
 				t.Errorf("Len = %d, want %d entries left behind", got, tt.wantLen)
+			}
+		})
+	}
+}
+
+// TestRejectedTokens_PermissionMissing_IsServedWithItsSentence verifies the
+// third kind a refusal is cached as: a token GitLab accepted and refused the
+// permission to read its own user. The door answers it again from here, so the
+// cache keeps GitLab's sentence beside it, bounded and filtered the way the
+// door quotes it, and hands it back with the kind; every other kind carries no
+// sentence, and a token nothing is known about neither.
+func TestRejectedTokens_PermissionMissing_IsServedWithItsSentence(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com"
+	cache := NewRejectedTokens(8, time.Hour)
+	cache.RecordPermissionMissing(instance, "fine-grained-token", "Access denied:\n\tUser: Read.")
+	cache.Record(instance, "invalid-token")
+
+	tests := []struct {
+		name            string
+		token           string
+		wantKind        RejectionKind
+		wantDescription string
+		wantKnown       bool
+	}{
+		{
+			name: "a token refused the permission to read its user", token: "fine-grained-token",
+			wantKind: RejectionPermissionMissing, wantDescription: "Access denied: User: Read.", wantKnown: true,
+		},
+		{name: "a token GitLab itself refused", token: "invalid-token", wantKind: RejectionInvalid, wantKnown: true},
+		{name: "a token nothing is known about", token: "unseen-token", wantKind: RejectionInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			kind, description, known := cache.LookupRefusal(instance, tt.token)
+			if kind != tt.wantKind || description != tt.wantDescription || known != tt.wantKnown {
+				t.Errorf("LookupRefusal() = %v, %q, %v; want %v, %q, %v",
+					kind, description, known, tt.wantKind, tt.wantDescription, tt.wantKnown)
+			}
+			if lookedUp, found := cache.Lookup(instance, tt.token); lookedUp != tt.wantKind || found != tt.wantKnown {
+				t.Errorf("Lookup() = %v, %v; want %v, %v", lookedUp, found, tt.wantKind, tt.wantKnown)
+			}
+		})
+	}
+	t.Run("another instance knows nothing of it", func(t *testing.T) {
+		t.Parallel()
+		if _, _, known := cache.LookupRefusal("https://other.example.com", "fine-grained-token"); known {
+			t.Error("a refusal recorded for one instance was served for another")
+		}
+	})
+}
+
+// TestQuotedDescription_KeepsPrintableASCIIWithinTheBound verifies what a door
+// may quote of GitLab's sentence: printable ASCII only, every other rune a
+// single space, runs of spaces collapsed and none at either end, and at most
+// 512 bytes, cut with no space left dangling. The sentence is the instance's,
+// which under --allow-any-gitlab-url is the caller's own, so each of these is
+// a way a hostile instance could shape what another reader sees.
+func TestQuotedDescription_KeepsPrintableASCIIWithinTheBound(t *testing.T) {
+	t.Parallel()
+
+	long := strings.Repeat("a", maxQuotedDescriptionBytes-1) + " bbbb"
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "GitLab's sentence as sent", raw: "Access denied: [User: Read].", want: "Access denied: [User: Read]."},
+		{name: "quotes and backslashes are printable", raw: `say "no" \ twice`, want: `say "no" \ twice`},
+		{name: "control characters become one space", raw: "a\r\n\x00\x1bb", want: "a b"},
+		{name: "runs of spaces collapse and the ends are trimmed", raw: "  a   b  ", want: "a b"},
+		{name: "other scripts and DEL become a space", raw: "café\x7fend", want: "caf end"},
+		{name: "the printable range runs from ! to ~, both kept", raw: "!~\x7f \x1f!", want: "!~ !"},
+		{name: "nothing printable is nothing", raw: "\n\t ", want: ""},
+		{name: "cut at the bound", raw: strings.Repeat("x", 2*maxQuotedDescriptionBytes), want: strings.Repeat("x", maxQuotedDescriptionBytes)},
+		{name: "a cut that ends on a space drops it", raw: long, want: strings.Repeat("a", maxQuotedDescriptionBytes-1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := QuotedDescription(tt.raw); got != tt.want {
+				t.Errorf("QuotedDescription(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
 	}

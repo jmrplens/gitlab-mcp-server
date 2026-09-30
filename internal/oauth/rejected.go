@@ -3,6 +3,7 @@ package oauth
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 )
@@ -43,12 +44,22 @@ const (
 	// RejectionUnaccepted is this deployment's: the instance accepts the
 	// token, but it was not issued to an admitted OAuth application.
 	RejectionUnaccepted
+	// RejectionPermissionMissing is GitLab's verdict that the token is
+	// genuine and its fine-grained grant cannot read its own user, which
+	// every door here needs (GET /api/v4/user answered 403 with
+	// insufficient_granular_scope). It is cached, uncharged like the fresh
+	// answer, because nothing at this release changes a grant after its token
+	// is created, so the verdict holds for the token's life; the entry's TTL
+	// bounds how long a feature flag an administrator turns on stays unseen.
+	RejectionPermissionMissing
 )
 
-// rejection is one cached refusal: when it stops applying, and what it was.
+// rejection is one cached refusal: when it stops applying, what it was, and,
+// for a missing permission, GitLab's sentence as the door quoted it.
 type rejection struct {
-	expiresAt time.Time
-	kind      RejectionKind
+	expiresAt   time.Time
+	kind        RejectionKind
+	description string
 }
 
 // NewRejectedTokens returns a cache holding at most capacity rejections, each for
@@ -84,6 +95,23 @@ func (r *RejectedTokens) Record(gitlabURL, token string) {
 // RecordKind notes a refusal and why, so [RejectedTokens.Lookup] can reproduce
 // it rather than collapsing every cached refusal into GitLab's verdict.
 func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind) {
+	r.record(gitlabURL, token, rejection{kind: kind})
+}
+
+// RecordPermissionMissing notes that GitLab accepted this token and refused it
+// the permission to read its own user, keeping the sentence GitLab gave as a
+// door quotes it ([QuotedDescription]), so the refusal served from here is the
+// one the round trip produced, word for word.
+//
+// The sentence is bounded before it is stored, because the cache holds up to
+// its capacity of them and the text is the instance's, which under
+// --allow-any-gitlab-url is the caller's own.
+func (r *RejectedTokens) RecordPermissionMissing(gitlabURL, token, description string) {
+	r.record(gitlabURL, token, rejection{kind: RejectionPermissionMissing, description: QuotedDescription(description)})
+}
+
+// record stores one refusal, its expiry set from the cache's TTL.
+func (r *RejectedTokens) record(gitlabURL, token string, refusal rejection) {
 	// The cache's one "disabled" check, and the only one it needs: this is the
 	// only place an entry is stored, so a disabled cache stays empty and every
 	// read misses because there is nothing to find.
@@ -105,17 +133,26 @@ func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind)
 	// live, skip the insert") describing a case the eviction had already
 	// handled. The bound it seemed to add is the one
 	// TestRejectedTokens_AtCapacity_StaysBounded pins.
-	r.entries[key] = rejection{expiresAt: time.Now().Add(r.ttl), kind: kind}
+	refusal.expiresAt = time.Now().Add(r.ttl)
+	r.entries[key] = refusal
 }
 
 // Lookup returns why a token was refused, and whether the refusal still
 // applies. An expired entry is dropped on the way out.
+func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
+	kind, _, ok := r.LookupRefusal(gitlabURL, token)
+	return kind, ok
+}
+
+// LookupRefusal is [RejectedTokens.Lookup] with the sentence a
+// [RejectionPermissionMissing] refusal was recorded with, already bounded and
+// filtered as [QuotedDescription] leaves it, and empty for every other kind.
 //
 // There is no "disabled" check here. One used to sit at the top of this method
 // and of Contains, repeating the one in [RejectedTokens.RecordKind]; since a
 // disabled cache never stores anything, the lookup below misses on it anyway,
 // and the copies could change no answer.
-func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
+func (r *RejectedTokens) LookupRefusal(gitlabURL, token string) (RejectionKind, string, bool) {
 	key := rejectedKey(gitlabURL, token)
 
 	r.mu.Lock()
@@ -123,7 +160,7 @@ func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
 
 	entry, ok := r.entries[key]
 	if !ok {
-		return RejectionInvalid, false
+		return RejectionInvalid, "", false
 	}
 	// expired, not time.Now().After: the other deadline checks in this file
 	// already treat the instant of the deadline as reached, and this one
@@ -131,9 +168,33 @@ func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
 	// Windows is long enough to be observable.
 	if expired(entry.expiresAt) {
 		delete(r.entries, key)
-		return RejectionInvalid, false
+		return RejectionInvalid, "", false
 	}
-	return entry.kind, true
+	return entry.kind, entry.description, true
+}
+
+// maxQuotedDescriptionBytes is how much of GitLab's refusal sentence a door
+// quotes, and the rejected-token cache keeps beside a refusal. GitLab's own
+// sentence for a missing permission is a few hundred bytes at most.
+const maxQuotedDescriptionBytes = 512
+
+// QuotedDescription returns GitLab's sentence as a door may quote it to a
+// caller: printable ASCII only, every other rune (a control character, a
+// quote's lookalike, a byte of another script) written as one space, runs of
+// spaces collapsed, and cut at 512 bytes.
+//
+// The sentence comes from whichever instance the request selected, which under
+// --allow-any-gitlab-url is the caller's own, and a caller is told it in a
+// JSON-RPC message body. The challenge a door sends never carries it: RFC 6749
+// section 5.2 allows error_description a narrower set than this, and the
+// challenge's text is the door's own constant.
+func QuotedDescription(raw string) string {
+	// Every field holds only the runes from '!' to '~', one byte each, so the
+	// joined text is ASCII and cutting it at a byte never splits a rune. The
+	// joined text neither starts nor ends with a space, so trimming the right
+	// end changes only a text the cut left ending on one.
+	quoted := strings.Join(strings.FieldsFunc(raw, func(r rune) bool { return r <= ' ' || r > '~' }), " ")
+	return strings.TrimRight(quoted[:min(len(quoted), maxQuotedDescriptionBytes)], " ")
 }
 
 // evictLocked frees space by dropping expired entries, falling back to the

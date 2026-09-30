@@ -316,7 +316,7 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 	for name, want := range map[string]string{
 		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
 		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
-		"verdict":             "; 0 findings, 56 declarations exempted\n",
+		"verdict":             "; 0 findings, 57 declarations exempted\n",
 		"what the rules read": "(21 refusal returns, 81 refusals, 14 reasons and 31 settings read)",
 	} {
 		t.Run(name, func(t *testing.T) {
