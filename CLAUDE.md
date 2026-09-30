@@ -198,7 +198,7 @@ gitlab-mcp-server/
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
 │   ├── agents/                  # 7 specialized AI agents
-│   ├── skills/                  # 19 reusable skill templates
+│   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 8 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
 └── VERSION                      # Semantic version (3.1.0)
@@ -738,7 +738,7 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 | ---------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
 | **SE: Reviewer** | `se-reviewer.agent.md`  | Security review (OWASP Top 10, LLM security, Zero Trust) and architecture review (Well-Architected frameworks, ADRs). Two modes in one agent. |
 
-### Skills (19 Reusable Task Templates)
+### Skills (18 Reusable Task Templates)
 
 Skills are task templates that can be invoked by any agent or directly. They define structured workflows:
 
@@ -916,7 +916,7 @@ Plus enterprise-only routes injected into 3 base meta-tools:
 
 ### OAuth admission, per-action write gating, and HTTP routing
 
-Nine invariants of HTTP mode that are easy to break by touching the wrong layer:
+Eight invariants of HTTP mode that are easy to break by touching the wrong layer:
 
 - **One `mcp.Server` per configuration shape, not per credential** (ADR-0020). `serverShapeKey` in `cmd/server/shape.go` names what a server is built for: tool surface, capability surface, meta parameter-schema mode, tier and whether it was pinned, GitLab.com or self-managed, read-only including the token-scope narrowing, safe mode, excluded tools, token scopes, statelessness. The instance URL is deliberately **not** in it, because the client is per credential regardless and two instances of one tier share a catalog. What is per credential is `serverpool.Entry`: its client, its configuration, its rate-limit bucket, its resource watchers, its listen-stream ceiling and an opaque `Owner()` token minted from `crypto/rand.Text`. A shape server registers with `gitlabclient.NewUnboundClient`, which refuses every request, and each request's own client is installed on the context by `credentialStates.bindCredential` and read back by `(*gitlab.Client).For(ctx)` in `toolutil.WrapAction` and its three siblings, the 38 resource closures, the 37 prompt closures, the completion handler and the elicitation flows. **The binding middleware is added after the telemetry, rate-limit, listen-ceiling and subscription middlewares so that it runs before them**, and it reads the entry out of the per-POST carrier, which is why `carriedMCPHandler` wraps the SDK handler **inside** the gate: with the carrier outside it, the registry recorded the request context as it arrived, before the gate had resolved anything, and every call failed with `ErrUnboundClient` while every stateful session was refused as somebody else's. Watchers stay per credential because ADR-0015 makes the first read the authorization check; delivery is filtered by `sessionOwners.sendingMiddleware`, which drops anything untagged or addressed to a session with no recorded owner and forwards the rest with the private owner key removed from `_meta`. Two things about that middleware are not obvious and both were bugs first: it must read the **params**, never the request, because the SDK's legacy and 2026-07-28 delivery paths instantiate `ServerRequest[P]` differently and a type assertion on the request matches one and silently drops the other; and it must put the key **back** after the send, because the legacy path hands one params value to every subscriber in turn. The `_meta` map is never mutated: the stripped one is a new map, and the shared one is where the SDK stamps its subscription id. Session ownership is recorded rather than derived, because `ServerOptions.GetSessionID` takes no request and a per-server tag stops meaning anything once a server serves many credentials. Eviction is the other end of that: an entry whose credential still holds watchers or open `subscriptions/listen` streams is **not** idle-evicted (`serverpool.WithInUse`, consulted on the idle sweep alone, because `lastUsed` is refreshed by pool hits and a subscription produces none), and an entry evicted anyway has its own streams closed by owner, since `Manager.Close` fires no `OnStop` and the client would otherwise be left holding a stream that never speaks again.
 
