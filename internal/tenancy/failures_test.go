@@ -49,6 +49,32 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 	}
 }
 
+// TestFailures_SaturatedVerificationSharesAnUnchargedReturn holds the refusal
+// issue 950 gave classify: a request that waited in vain for a verification
+// slot sent its token nowhere, so nothing was judged and nothing is charged
+// (INV-007), whoever sent it. It is answered from the return a verification
+// with no verdict already has, in the same words, so the table lists that one
+// return, uncharged, and ADM-014's refusal names exactly its status and text.
+func TestFailures_SaturatedVerificationSharesAnUnchargedReturn(t *testing.T) {
+	slots, _ := Lookup("ADM-014")
+	if len(slots.Refusals) != 1 {
+		t.Fatalf("ADM-014 declares %d refusals, want one", len(slots.Refusals))
+	}
+	refusal := slots.Refusals[0]
+	var shared []Failure
+	for _, f := range Failures() {
+		if f.At.Name == "bearerGuard.classify" && f.Status == refusal.Status && f.Prefix == refusal.Prefix {
+			shared = append(shared, f)
+		}
+	}
+	if len(shared) != 1 {
+		t.Fatalf("classify lists %d returns with ADM-014's status and text, want exactly one: %+v", len(shared), shared)
+	}
+	if f := shared[0]; f.Charged || f.Attributable || f.Status != 503 || f.Decision != "ADM-002" {
+		t.Errorf("the return ADM-014 answers from: %+v; want ADM-002's uncharged 503", f)
+	}
+}
+
 // TestFailures_ChargedAreExactlyTheCallersOwn names the five charged failures:
 // a missing credential and a credential GitLab refused, at each door, and the
 // cached refusal the bearer guard answers from memory.

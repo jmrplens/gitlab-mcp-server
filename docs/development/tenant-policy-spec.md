@@ -197,9 +197,13 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   with `RTC-007`). The pool size (`POL-001`) is not such a partner: it bounds memory the
   operator provisions.
 - **INV-005 Across keys, refuse; never take.** A holding that belongs to one key is not
-  evicted to admit another key. The pool entry is the one thing taken across keys, the
-  quiet one first, never growing past the bound, and the newcomer is never refused
-  (`POL-001`, `POL-002`, ADR-0020).
+  evicted to admit another key. Two things are taken across keys, each by a recorded
+  decision, never growing past its bound and never refusing the newcomer: the pool
+  entry, the quiet one first (`POL-001`, `POL-002`, ADR-0020), and the verified OAuth
+  identity, the one used least recently first (`ADM-005`, issue 950). Refusing a
+  newcomer there would refuse a credential GitLab has just accepted; what the identity
+  taken costs its credential is one more verification, which `ADM-014` bounds, and
+  while its address is blocked the exemption a cached identity gives it.
 - **INV-006 A refusal costs nothing already held.** Refusing a request never releases,
   evicts or demotes anything the caller already holds.
 - **INV-007 What was not judged is not charged.** A failure the server could not
@@ -243,13 +247,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
   or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
   `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
-  (`HLD-002`, `HLD-004`, `RTC-007`), which tells a caller that has not reached its own
-  bound that the process has reached its one, and so that others are holding or spending
-  it (issue 951, ADR-0023 NEG-007). Neither carries a count of what others hold or an
-  identity, and neither says more than a caller could infer from its own count: the
-  stream ceilings name the scope that refused, which a caller counting its own streams
-  knows already, and `RTC-007` answers in `RTC-003`'s words, so only the log line says
-  which bucket refused.
+  (`HLD-002`, `HLD-004`, `RTC-007`, `ADM-014`), which tells a caller that has not
+  reached its own bound, or that knows the upstream to be healthy, that the process has
+  reached its one, and so that others are holding, spending or verifying against it
+  (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of what others hold or
+  an identity, and neither says more than a caller could infer from its own count or its
+  own wait: the stream ceilings name the scope that refused, which a caller counting its
+  own streams knows already, `RTC-007` answers in `RTC-003`'s words and `ADM-014` in the
+  words `ADM-002` uses for a verification with no verdict, so only the log line says
+  which bound refused.
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -367,15 +373,15 @@ Every refusal names one class of next action (`tenancy.Answer`). The table gives
 every channel a row of the register declares with it; `tenancy.Decisions()` is the list
 itself, and a row that adds a channel adds it here.
 
-| Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                            |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
-| Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                           |
-| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                   |
-| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                           |
-| Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                               |
-| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                            |
-| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                  |
+| Answer           | Channels the rows declare                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed or no verification slot came free; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
+| Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                                                             |
+| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                                                     |
+| Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                             |
+| Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                                                                 |
+| Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                                                              |
+| None given       | A tier narrowing, answered as an unknown action; a failure a full tracking table stops counting; a watch's notifications delayed after GitLab's 429                                                                                                                                                                                                    |
 
 ## The five questions
 
@@ -501,14 +507,40 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Three findings are answered, and stay in the list with their issues. F-03, the listing
+Five findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
 longer. Issue 951 stays open for F-31. F-19 and F-33 are answered by issue 959's decision
 that what they recorded is the server's position, stated in
 [Two MCP clauses the server meets in part](#two-mcp-clauses-the-server-meets-in-part):
-`RTC-001` and `IDN-013` record that decision and carry neither any longer. Four more
+`RTC-001` and `IDN-013` record that decision and carry neither any longer. F-29 and F-30
+are answered by issue 950. The OAuth identity cache (`ADM-005`) holds at most ten
+thousand identities, the largest pool an operator may configure, and a full cache drops
+an expired identity or, when none has expired, the one used least recently, to hold the
+one GitLab has just verified. What pushes a live identity out is ten thousand other
+distinct credentials used since its last request, so on a deployment serving close to
+that many, every new verification does. The verification's round trips to GitLab run
+under a ceiling of their own keyed on the process (`ADM-014`): sixteen verifications at
+once, not configurable, with slots that are not the pool's probe slots (`POL-006`), so
+neither kind of work occupies the other's slots. It bounds concurrency and not rate,
+about three hundred and twenty requests a second at fifty milliseconds a round trip,
+which is above GitLab.com's allowance for unauthenticated traffic from one address. A
+token the cache does not hold waits at most five seconds for a slot and is then refused
+with a gate 503 `-50300` and `Retry-After`, charged to no budget, in the words `ADM-002`
+uses for a verification with no verdict; a caller that knows the instance to be healthy
+can still infer from the refusal that others are verifying, the one bit `INV-019`
+accepts for a bound keyed on the process. A token the cache holds is answered before a
+slot is asked for. The cost falls on one population, and it is stated rather than
+measured with `make bench-fairness`, whose driver speaks no OAuth: a legitimate
+credential presented for the first time while a flood holds every slot is refused with
+the flood for as long as the flood lasts, which trades the admission of new credentials
+during a flood for the load the instance receives. Measured through the verifier
+against a stand-in GitLab, a hundred thousand distinct credentials held a hundred
+thousand entries and sixty megabytes before, and hold ten thousand and seven megabytes
+now; two thousand invented tokens at once put two thousand verification requests in
+flight before, and sixteen now. `ADM-002`, `ADM-005` and `POL-006` carry neither finding
+any longer, and `ADM-005` and `ADM-014` record the decision. Four more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
 message the SDK gives the server no way to send, and F-23 and F-27 stale statements.

@@ -51,8 +51,10 @@ func admitDecisions() []Decision {
 			Resource: "admission of an OAuth token at the read_api minimum",
 			Key:      KeyVerified, StdioKey: KeyNone,
 			Values: []string{"UpstreamRetryAfter"}, Source: Constant, Zero: ZeroNotApplicable,
-			Decided:  []string{"ADR-0018"},
-			Findings: []string{"F-08", "F-17", "F-30"},
+			Decided: []string{"ADR-0018"},
+			// The verification's round trips to GitLab run under ADM-014's
+			// slots, which answered F-30 (issue 950).
+			Findings: []string{"F-08", "F-17"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
@@ -81,6 +83,8 @@ func admitDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgServer, "upstreamRetryAfter", "UpstreamRetryAfter"),
 				enforce(pkgOAuth, "NewGitLabVerifierFor"),
+				enforce(pkgOAuth, "newGitLabVerifier"),
+				enforce(pkgOAuth, "askIdentity"),
 				classify, invalidToken, check,
 			},
 		},
@@ -114,24 +118,38 @@ func admitDecisions() []Decision {
 		},
 		{
 			ID: "ADM-005", Question: Admit, Kind: Lifetime, Class: ClassC, Disposition: Valued,
-			Resource: "how long a verified OAuth token is reused",
+			Resource: "how long, and how many, verified OAuth tokens are reused",
 			Key:      KeyVerified, StdioKey: KeyNone, Table: true,
 			Values: []string{
 				"OAuthCacheTTL", "OAuthCacheTTLFloor", "OAuthCacheTTLMax", "OAuthCacheSweepDivisor", "OAuthCacheSweepFloor",
+				"OAuthCacheCapacity",
 			},
 			Source: Configurable, Flags: []string{"--oauth-cache-ttl"}, Envs: []string{"GITLAB_MCP_OAUTH_CACHE_TTL"},
 			Config: []string{"OAuthCacheTTL"}, Malformed: RefuseStartup, Zero: ZeroSelectsDefault,
-			AtCapacity: CapacityNone,
-			Findings:   []string{"F-29", "F-34"},
+			// Full, the cache drops an expired identity or, when none has
+			// expired, the one used least recently, to hold the one GitLab has
+			// just verified, which issue 950 decided (answering F-29): refusing
+			// the newcomer would refuse a credential GitLab accepted. The
+			// identity taken costs its credential one more verification, which
+			// ADM-014 bounds, and while its address is blocked the exemption a
+			// cached identity gives it; the capacity is a constant, the largest
+			// pool an operator may configure (POL-001's PoolSizeMax, held equal
+			// by the values test).
+			AtCapacity: EvictAcrossKeys,
+			Decided:    []string{"issue 950"},
+			Findings:   []string{"F-34"},
 			Sites: []Site{
 				alias(pkgConfig, "DefaultOAuthCacheTTL", "OAuthCacheTTL"),
 				alias(pkgConfig, "MinOAuthCacheTTL", "OAuthCacheTTLFloor"),
 				alias(pkgConfig, "MaxOAuthCacheTTL", "OAuthCacheTTLMax"),
 				alias(pkgServer, "tokenCacheSweepDivisor", "OAuthCacheSweepDivisor"),
 				alias(pkgServer, "tokenCacheSweepMinInterval", "OAuthCacheSweepFloor"),
+				alias(pkgOAuth, "identityCacheCapacity", "OAuthCacheCapacity"),
 				enforce(pkgOAuth, "effectiveCacheTTL"),
 				enforce(pkgServer, "oauthCacheTTL"),
+				enforce(pkgOAuth, "NewTokenCache"),
 				enforce(pkgOAuth, "TokenCache.Put"),
+				enforce(pkgOAuth, "TokenCache.Get"),
 			},
 		},
 		{
@@ -250,6 +268,43 @@ func admitDecisions() []Decision {
 				enforce(pkgServer, "hostGuard.permits"),
 				enforce(pkgServer, "allowedHosts"),
 				refuse(pkgServer, "hostValidationMiddleware"),
+			},
+		},
+		{
+			// The verifier's own slots, not POL-006's, so neither kind of work
+			// takes the other's slots (issue 950, answering F-30).
+			//
+			// Its refusal is ADM-002's for a verification that produced no
+			// verdict, word for word and from the same return: the next action
+			// is the same, and a sentence of its own would tell a caller that
+			// others are verifying. A caller refused after the slot wait while
+			// it knows the instance to be healthy can infer that much from being
+			// refused at all, which is the one bit INV-019 accepts for a bound
+			// keyed on the process; the wording adds nothing to it. The log line
+			// it writes is where an operator tells the two apart.
+			ID: "ADM-014", Question: Admit, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+			Resource: "OAuth token verifications the process runs at once",
+			Key:      KeyProcess, StdioKey: KeyNone,
+			Reason:     "counting work rather than callers",
+			ReasonAt:   reasonAt(pkgOAuth, "verificationSlots"),
+			ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Values: []string{"OAuthVerifications", "OAuthVerificationWait"}, Source: Constant, Zero: ZeroNotApplicable,
+			AtCapacity: WaitThenRefuse,
+			Decided:    []string{"issue 950"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnavailable, Status: 503,
+					RetryAfter: RetryAfterFixed, Prefix: "GitLab could not verify this token right now.",
+					Answer: RetryLater, At: classify,
+				},
+			},
+			Sites: []Site{
+				alias(pkgOAuth, "verificationSlots", "OAuthVerifications"),
+				alias(pkgOAuth, "verificationWait", "OAuthVerificationWait"),
+				enforce(pkgOAuth, "NewGitLabVerifierFor"),
+				enforce(pkgOAuth, "newGitLabVerifier"),
+				enforce(pkgOAuth, "verificationGate.acquire"),
+				classify,
 			},
 		},
 		{
@@ -381,7 +436,10 @@ func admitDecisions() []Decision {
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Values: []string{"CredentialProbes", "CredentialProbeWait"}, Source: Constant, Zero: ZeroNotApplicable,
 			AtCapacity: WaitThenRefuse,
-			Findings:   []string{"F-16", "F-30"},
+			// In oauth mode its probe is the second GET /user; the verifier's
+			// round trips before it run under ADM-014's slots (F-30, answered
+			// by issue 950).
+			Findings: []string{"F-16"},
 			Refusals: []Refusal{
 				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, resolve),
 			},

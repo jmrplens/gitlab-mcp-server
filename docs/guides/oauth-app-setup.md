@@ -303,15 +303,16 @@ A personal access token used as Bearer has none of this: it lives until its own 
 
 ### Server-side identity cache
 
-| Event                            | Behavior                                                    |
-| -------------------------------- | ----------------------------------------------------------- |
-| First request                    | Token verified against GitLab `/api/v4/user`, result cached |
-| Subsequent requests (within TTL) | Token served from SHA-256 hashed cache — no GitLab API call |
-| Cache TTL expires                | Token re-verified on next request                           |
-| Token revoked on GitLab          | Next request after cache expiry returns 401                 |
-| Background cleanup               | Expired cache entries evicted periodically                  |
+| Event                            | Behavior                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| First request                    | Token verified against GitLab `/api/v4/user`, result cached                         |
+| Subsequent requests (within TTL) | Token served from SHA-256 hashed cache, with no GitLab API call                     |
+| Cache TTL expires                | Token re-verified on next request                                                   |
+| Token revoked on GitLab          | Next request after cache expiry returns 401                                         |
+| Background cleanup               | Expired cache entries evicted periodically                                          |
+| Cache full (10,000 identities)   | An expired identity makes room for the new one, or else the one used least recently |
 
-The cache stores only successful verifications, keyed by a SHA-256 digest of instance and token, and the cached identity holds no token material. `--oauth-cache-ttl` (default 15m, range 1m–2h) bounds how long a revoked token keeps working, and the token's own expiry shortens it further when the instance reports one.
+The cache stores only successful verifications, keyed by a SHA-256 digest of instance and token, and the cached identity holds no token material. `--oauth-cache-ttl` (default 15m, range 1m–2h) bounds how long a revoked token keeps working, and the token's own expiry shortens it further when the instance reports one. The cache holds at most 10,000 identities, and a token whose identity was dropped to make room is simply verified again the next time it is presented. At most 16 tokens the cache does not hold are verified at once; a new token that finds every slot taken for five seconds is answered `503` with `Retry-After` and should be retried, since its token was never judged.
 
 ---
 

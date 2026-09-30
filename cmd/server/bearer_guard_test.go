@@ -618,6 +618,87 @@ func TestBearerGuard_UpstreamFailure_IsNotBlamedOnTheToken(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_SaturatedVerification_IsARetryThatCostsNothing pins the
+// refusal of a request that waited in vain for a verification slot (ADM-014):
+// 503 with Retry-After, no challenge sending the client back through
+// authorization, no entry in the rejection cache, and nothing charged to any
+// of the three budgets however often it happens. Its text is the one a
+// verification with no verdict is always answered with, word for word, so the
+// wording tells a caller nothing the refusal itself does not (INV-019). A wait
+// the request's own end cut short is answered the same way.
+func TestBearerGuard_SaturatedVerification_IsARetryThatCostsNothing(t *testing.T) {
+	t.Parallel()
+
+	unverdicted := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, errors.New("decode GitLab user response: unexpected EOF")
+	}).check(guardRequest(t, "gloas-undecodable"))
+
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "the wait ran out", err: oauth.ErrVerificationBusy},
+		{name: "the request ended while it waited", err: fmt.Errorf("token verification abandoned, the request ended first: %w", context.Canceled)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			g := newGuardWithEveryBudget(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, tc.err
+			})
+			failure := g.check(guardRequest(t, "gloas-waiting"))
+			if failure == nil || failure.status != http.StatusServiceUnavailable || failure.code != errCodeUpstreamUnavailable {
+				t.Fatalf("want 503 with %d, got %+v", errCodeUpstreamUnavailable, failure)
+			}
+			if challenge := failure.header.Get(headerWWWAuthenticate); challenge != "" {
+				t.Errorf("a saturated verifier must not challenge the client to reauthorize, got %q", challenge)
+			}
+			if failure.message != unverdicted.message || failure.header.Get(headerRetryAfter) != unverdicted.header.Get(headerRetryAfter) {
+				t.Errorf("refusal = %q with Retry-After %q; want a verification with no verdict's own, %q with %q, so the words add nothing",
+					failure.message, failure.header.Get(headerRetryAfter), unverdicted.message, unverdicted.header.Get(headerRetryAfter))
+			}
+			if g.rejected.Len() != 0 {
+				t.Errorf("rejection cache holds %d entries; a token nobody judged must not be remembered as refused", g.rejected.Len())
+			}
+			assertSpendsNoBudgetOfThree(t, g)
+		})
+	}
+}
+
+// newGuardWithEveryBudget is [newTestGuard] with all three authentication
+// budgets in place and each set to block on its first charge: the per-address
+// failure budget, the transport-source budget a trusted proxy header brings,
+// and the distinct-credential budget.
+func newGuardWithEveryBudget(verify auth.TokenVerifier) *bearerGuard {
+	g := newProxiedGuard(verify)
+	g.limiter = serverpool.NewAuthRateLimiter(1, time.Minute)
+	g.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(1, time.Minute), time.Minute)
+	g.spray = serverpool.NewDistinctTokenBudget(1, time.Minute, time.Minute)
+	return g
+}
+
+// assertSpendsNoBudgetOfThree repeats the refusal from five forwarded
+// addresses behind one trusted proxy, twice from each and with a new token
+// every time, the shape of a flood spread over many sources. Every budget of
+// [newGuardWithEveryBudget] blocks on its first charge, so a charge to any of
+// them would answer a later request 429: the per-address and distinct-token
+// budgets the second request from the same address, the transport-source
+// budget the next request through the proxy.
+func assertSpendsNoBudgetOfThree(t *testing.T, g *bearerGuard) {
+	t.Helper()
+	for i := range 5 {
+		for j := range 2 {
+			got := g.check(proxiedRequest(t, "198.51.100."+strconv.Itoa(i+1), "gloas-spread-"+strconv.Itoa(i)+"-"+strconv.Itoa(j)))
+			if got == nil {
+				t.Fatal("the refusal must be repeatable")
+			}
+			if got.status == http.StatusTooManyRequests {
+				t.Fatalf("request %d from address %d was answered 429: this refusal charged a budget", j, i)
+			}
+		}
+	}
+}
+
 // TestBearerGuard_UpstreamFailureWithoutHint_UsesItsOwnDelay verifies that a
 // 503 always carries a Retry-After, even when GitLab did not say when to
 // return.
@@ -1615,6 +1696,15 @@ func TestBearerGuard_EachRefusal_CarriesItsOwnStatusCodeAndChallenge(t *testing.
 			token: "gloas-good",
 			want:  guardRefusal{status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault, says: []string{"has not been rejected"}},
 		},
+		{
+			name:  "every verification slot busy",
+			guard: func() *bearerGuard { return newTestGuard(failing(oauth.ErrVerificationBusy)) },
+			token: "gloas-good",
+			want: guardRefusal{
+				status: http.StatusServiceUnavailable, code: errCodeUpstreamUnavailable, retryAfter: upstreamDefault,
+				says: []string{"GitLab could not verify this token right now.", "has not been rejected"},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -1800,5 +1890,66 @@ func TestOAuthChallenge_EscapesEveryQuotedValue(t *testing.T) {
 	want := `Bearer realm="gitlab-mcp-server", error_description="a \"quoted\" \\ value", scope="sco\"pe", resource_metadata="https://x.example/m\"d"`
 	if got != want {
 		t.Errorf("oauthChallenge =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestLogUnverified_EachCause_WritesItsOwnLine pins the operator's half of a
+// refusal the caller is told about in one set of words (ADM-014 and ADM-002).
+// Saturation is a warning, whether or not the request's context ended in the
+// same instant, since the slots were what refused it; a wait the request's own
+// end cut short is information and says so, because naming it saturation would
+// give the operator a cause that was not there; and a round trip that went
+// wrong is the error it always was. Neither slot line names the token.
+//
+// Not parallel: it replaces the process-wide default logger.
+func TestLogUnverified_EachCause_WritesItsOwnLine(t *testing.T) {
+	ended, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	for _, tc := range []struct {
+		name  string
+		ctx   context.Context
+		err   error
+		level string
+		msg   string
+	}{
+		{
+			name: "the slots stayed taken", ctx: t.Context(), err: oauth.ErrVerificationBusy,
+			level: "WARN", msg: "token verification refused: every verification slot stayed busy",
+		},
+		{
+			name: "the slots stayed taken as the request ended", ctx: ended, err: oauth.ErrVerificationBusy,
+			level: "WARN", msg: "token verification refused: every verification slot stayed busy",
+		},
+		{
+			name: "the request ended while it waited", ctx: ended,
+			err:   fmt.Errorf("token verification abandoned, the request ended first: %w", context.Canceled),
+			level: "INFO", msg: "token verification abandoned: the request ended before it was verified",
+		},
+		{
+			name: "the round trip went wrong", ctx: t.Context(), err: errors.New("decode GitLab user response: unexpected EOF"),
+			level: "ERROR", msg: "token verification failed",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			forgetRefusalLines()
+
+			logUnverified(tc.ctx, tc.err)
+
+			var line struct {
+				Level string `json:"level"`
+				Msg   string `json:"msg"`
+			}
+			if err := json.Unmarshal(logged.Bytes(), &line); err != nil {
+				t.Fatalf("one JSON line expected, got %q: %v", logged.String(), err)
+			}
+			if line.Level != tc.level || line.Msg != tc.msg {
+				t.Errorf("logged %s %q, want %s %q", line.Level, line.Msg, tc.level, tc.msg)
+			}
+		})
 	}
 }

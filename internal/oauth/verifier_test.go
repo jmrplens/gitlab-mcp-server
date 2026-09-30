@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // TestNewGitLabVerifier_ValidToken verifies that a successful GitLab /user
@@ -2022,5 +2025,447 @@ func TestUpstreamError_NamesTheStatusWhenGitLabAnswered(t *testing.T) {
 	unreachable := &UpstreamError{Err: errors.New("dial refused")}
 	if !strings.Contains(unreachable.Error(), "unreachable") {
 		t.Errorf("Error() = %q, want it to say the instance was unreachable", unreachable.Error())
+	}
+}
+
+// heldInstance is a stand-in GitLab whose answers on one path wait until the
+// test lets them go. Every other path answers at once: /api/v4/user with an
+// identity and the personal access token endpoint with the api scope.
+//
+// It counts arrivals rather than requests in flight. A request held on the
+// path cannot finish before the release, so while the hold lasts the arrivals
+// there are exactly the requests in flight; a count of requests in flight
+// taken anywhere else would race the handler's own bookkeeping against the
+// client's next request, since a response reaches the client before the
+// handler that wrote it has returned.
+type heldInstance struct {
+	url     string
+	release func()
+	// arrived counts the requests that reached the held path, and identity
+	// those that reached /api/v4/user, held or not.
+	arrived  atomic.Int64
+	identity atomic.Int64
+}
+
+// startHeldInstance serves a heldInstance holding held. The hold ends when the
+// test calls release or ends, whichever comes first, so no handler outlives
+// the server.
+func startHeldInstance(t *testing.T, held string) *heldInstance {
+	t.Helper()
+
+	instance := &heldInstance{}
+	gate := make(chan struct{})
+	var once atomic.Bool
+	instance.release = func() {
+		if once.CompareAndSwap(false, true) {
+			close(gate)
+		}
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/user" {
+			instance.identity.Add(1)
+		}
+		if r.URL.Path == held {
+			instance.arrived.Add(1)
+			select {
+			case <-gate:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v4/user":
+			_ = json.NewEncoder(w).Encode(gitlabUserResponse{ID: 7, Username: "held"})
+		case "/api/v4/personal_access_tokens/self":
+			_, _ = w.Write([]byte(`{"scopes":["api"]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	// Registered after the server's close, so it runs first: a handler still
+	// holding when the test ends is let go before the server waits for it.
+	t.Cleanup(srv.Close)
+	t.Cleanup(instance.release)
+	instance.url = srv.URL
+	return instance
+}
+
+// awaitCount waits until read reports want, failing the test after a bound,
+// or at once when a verification that should still be held ends first: that
+// is the failure, and waiting out the bound for it would only make a broken
+// verifier slow to report.
+func awaitCount(t *testing.T, what string, read func() int64, want int64, ended <-chan error) {
+	t.Helper()
+	deadline := time.After(10 * time.Second)
+	for read() != want {
+		select {
+		case err := <-ended:
+			t.Fatalf("a verification ended (%v) while %s was %d, before it reached %d", err, what, read(), want)
+		case <-deadline:
+			t.Fatalf("%s = %d, never reached %d", what, read(), want)
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+// verificationRequest is the request a verifier resolves its instance from;
+// the resolvers here ignore it.
+func verificationRequest() *http.Request {
+	return httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", http.NoBody)
+}
+
+// TestVerificationGate_Acquire pins the ways a wait for a slot ends: a free
+// slot is taken and handed back by the function returned with it, even by a
+// request whose context has already ended, a full gate refuses once its wait
+// is over, and a request that ends while it waits is refused at once with its
+// own cause and not as saturation.
+func TestVerificationGate_Acquire(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a free slot is taken and given back", func(t *testing.T) {
+		t.Parallel()
+		gate := &verificationGate{slots: make(chan struct{}, 1), wait: time.Hour}
+
+		release, err := gate.acquire(context.Background())
+		if err != nil {
+			t.Fatalf("acquire() error = %v, want a slot", err)
+		}
+		if got := len(gate.slots); got != 1 {
+			t.Errorf("%d slots held after acquire, want 1", got)
+		}
+		release()
+		if got := len(gate.slots); got != 0 {
+			t.Errorf("%d slots held after release, want 0", got)
+		}
+	})
+
+	t.Run("a full gate refuses after its wait", func(t *testing.T) {
+		t.Parallel()
+		gate := &verificationGate{slots: make(chan struct{}, 1), wait: 20 * time.Millisecond}
+		gate.slots <- struct{}{}
+
+		start := time.Now()
+		release, err := gate.acquire(context.Background())
+		if !errors.Is(err, ErrVerificationBusy) || release != nil {
+			t.Fatalf("acquire() = %v, %v; want no slot and ErrVerificationBusy", release != nil, err)
+		}
+		if errors.Is(err, context.Canceled) {
+			t.Errorf("error = %v, want saturation alone: the request did not end", err)
+		}
+		if waited := time.Since(start); waited < gate.wait {
+			t.Errorf("refused after %v, want the whole wait of %v first", waited, gate.wait)
+		}
+	})
+
+	t.Run("a request that ends while it waits is refused with its cause", func(t *testing.T) {
+		t.Parallel()
+		gate := &verificationGate{slots: make(chan struct{}, 1), wait: time.Hour}
+		gate.slots <- struct{}{}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		release, err := gate.acquire(ctx)
+		if !errors.Is(err, context.Canceled) || release != nil {
+			t.Errorf("acquire() = %v, %v; want no slot and context.Canceled", release != nil, err)
+		}
+		if errors.Is(err, ErrVerificationBusy) {
+			t.Errorf("error = %v; a wait the request's own end cut short is not saturation", err)
+		}
+	})
+
+	// Go picks at random among the cases of a select that are ready together,
+	// so a gate that asked for the slot and the context's end in one select
+	// would refuse this request about half the time. Asking many times is what
+	// tells the two apart.
+	t.Run("a free slot is taken even by a request that has ended", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		for attempt := range 64 {
+			gate := &verificationGate{slots: make(chan struct{}, 1), wait: time.Hour}
+			release, err := gate.acquire(ctx)
+			if err != nil || release == nil {
+				t.Fatalf("attempt %d: acquire() = %v, %v; want the free slot, which no other request holds", attempt, release != nil, err)
+			}
+			release()
+		}
+	})
+}
+
+// TestErrVerificationBusy_SaysNothingAboutOtherCallers pins the sentinel's
+// text, which reaches a caller on the one path the bearer guard does not word
+// itself: the SDK's middleware writes a verifier error it does not recognize
+// into its own answer. Saying that verification is saturated or busy there
+// would tell the caller that other callers are verifying (INV-019).
+func TestErrVerificationBusy_SaysNothingAboutOtherCallers(t *testing.T) {
+	t.Parallel()
+
+	text := strings.ToLower(ErrVerificationBusy.Error())
+	for _, unwanted := range []string{"saturat", "busy", "slot", "other", "concurren"} {
+		t.Run(unwanted, func(t *testing.T) {
+			t.Parallel()
+			if strings.Contains(text, unwanted) {
+				t.Errorf("ErrVerificationBusy = %q, which says %q", ErrVerificationBusy, unwanted)
+			}
+		})
+	}
+	if !strings.Contains(text, "retry") {
+		t.Errorf("ErrVerificationBusy = %q; want it to say the caller may retry", ErrVerificationBusy)
+	}
+}
+
+// TestNewGitLabVerifierFor_RunsAtMostTheRegisterSlots drives the verifier the
+// server builds past its ceiling: seventeen distinct tokens arrive at once
+// against an instance that holds every identity request, and GitLab sees
+// sixteen of them in flight, never more, while the seventeenth waits for a
+// slot and is verified once one comes free inside its wait. The seventeenth
+// identity request arrives only after the release.
+//
+// Sixteen is the register's value (ADM-014). Before issue 950 every token the
+// cache did not hold reached GitLab at once, however many arrived.
+func TestNewGitLabVerifierFor_RunsAtMostTheRegisterSlots(t *testing.T) {
+	t.Parallel()
+
+	instance := startHeldInstance(t, "/api/v4/user")
+	verifier := NewGitLabVerifierFor(func(*http.Request) (string, error) { return instance.url, nil }, false, time.Minute, nil)
+
+	const arriving = tenancy.OAuthVerifications + 1
+	errs := make(chan error, arriving)
+	for i := range arriving {
+		go func() {
+			_, err := verifier(context.Background(), "token-"+strconv.Itoa(i), verificationRequest())
+			errs <- err
+		}()
+	}
+
+	awaitCount(t, "identity requests held", instance.arrived.Load, tenancy.OAuthVerifications, errs)
+	// Long enough for a seventeenth request to arrive if nothing held it back.
+	time.Sleep(50 * time.Millisecond)
+	if got := instance.arrived.Load(); got != tenancy.OAuthVerifications {
+		t.Errorf("%d identity requests reached GitLab with every slot taken, want %d", got, tenancy.OAuthVerifications)
+	}
+	instance.release()
+
+	for range arriving {
+		if err := <-errs; err != nil {
+			t.Errorf("verification error = %v, want every token verified once slots came free", err)
+		}
+	}
+	if got := instance.identity.Load(); got != arriving {
+		t.Errorf("%d identity requests in all, want one per token, %d", got, arriving)
+	}
+}
+
+// TestNewGitLabVerifier_SaturatedSlots_RefuseWithoutAskingGitLab pins what a
+// verification that finds every slot taken does: it waits out its wait and is
+// refused with ErrVerificationBusy, a refusal that is neither GitLab's verdict
+// on the token nor an upstream failure, and its token is never sent.
+func TestNewGitLabVerifier_SaturatedSlots_RefuseWithoutAskingGitLab(t *testing.T) {
+	t.Parallel()
+
+	instance := startHeldInstance(t, "/api/v4/user")
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: 20 * time.Millisecond}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return instance.url, nil },
+		newVerificationClient(false), time.Minute, NewTokenCache(), gate, nil)
+
+	first := make(chan error, 1)
+	go func() {
+		_, err := verifier(context.Background(), "holding-the-slot", verificationRequest())
+		first <- err
+	}()
+	awaitCount(t, "identity requests held", instance.arrived.Load, 1, first)
+
+	info, err := verifier(context.Background(), "arriving-second", verificationRequest())
+	if !errors.Is(err, ErrVerificationBusy) || info != nil {
+		t.Errorf("second verification = %+v, %v; want nothing and ErrVerificationBusy", info, err)
+	}
+	if errors.Is(err, auth.ErrInvalidToken) {
+		t.Error("a saturated verifier called the token invalid; the client would discard it")
+	}
+	if upstream, ok := errors.AsType[*UpstreamError](err); ok {
+		t.Errorf("a saturated verifier reported GitLab failing (%v); GitLab was never asked", upstream)
+	}
+	if got := instance.identity.Load(); got != 1 {
+		t.Errorf("%d identity requests reached GitLab, want the one holding the slot", got)
+	}
+
+	instance.release()
+	if held := <-first; held != nil {
+		t.Errorf("the verification holding the slot = %v, want it verified", held)
+	}
+}
+
+// TestNewGitLabVerifier_CachedIdentity_TakesNoSlot pins the order the issue
+// asked to keep: the cache is read before a slot is asked for, so a credential
+// this deployment already serves is answered while every slot is taken.
+func TestNewGitLabVerifier_CachedIdentity_TakesNoSlot(t *testing.T) {
+	t.Parallel()
+
+	cache := NewTokenCache()
+	cache.Put(testInstance, "in-service", &auth.TokenInfo{UserID: "5"}, time.Hour)
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: time.Hour}
+	gate.slots <- struct{}{}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return testInstance, nil },
+		newVerificationClient(false), time.Minute, cache, gate, nil)
+
+	info, err := verifier(context.Background(), "in-service", verificationRequest())
+	if err != nil || info == nil || info.UserID != "5" {
+		t.Errorf("verification = %+v, %v; want the cached identity with every slot taken", info, err)
+	}
+}
+
+// TestNewGitLabVerifier_WaiterFindsTheIdentityTheHolderVerified pins the second
+// read of the cache, the one made under the slot. A client opening several
+// requests at once with a token it has just been issued sends each of them to
+// verification; the one holding the slot verifies and caches the identity, and
+// the one waiting behind it finds that identity once the slot is its own,
+// sending GitLab nothing. Without that read it would repeat every round trip,
+// and one still waiting when its wait ran out would be refused a credential
+// the cache already held.
+func TestNewGitLabVerifier_WaiterFindsTheIdentityTheHolderVerified(t *testing.T) {
+	t.Parallel()
+
+	instance := startHeldInstance(t, "/api/v4/user")
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: 10 * time.Second}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return instance.url, nil },
+		newVerificationClient(false), time.Minute, NewTokenCache(), gate, nil)
+
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := verifier(context.Background(), "just-issued", verificationRequest())
+			errs <- err
+		}()
+	}
+	awaitCount(t, "identity requests held", instance.arrived.Load, 1, errs)
+	// Long enough for the second request to be waiting on the slot, past the
+	// first read of the cache, when the first one finishes.
+	time.Sleep(50 * time.Millisecond)
+	instance.release()
+
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Errorf("verification = %v, want both answered with the one identity", err)
+		}
+	}
+	if got := instance.identity.Load(); got != 1 {
+		t.Errorf("%d identity requests for one token, want 1: the waiter asked GitLab again", got)
+	}
+}
+
+// TestNewGitLabVerifier_WaitThatEnds_FindsAnIdentityCachedMeanwhile pins the
+// read of the cache at the end of a wait that got no slot. While every slot is
+// taken, a request for a token another request has meanwhile verified is not
+// refused a credential the cache holds: it is answered with the identity, and
+// GitLab is sent nothing for it. The wait here ends with the request's own
+// context, which is the one ending a test can choose the moment of; a wait that
+// runs out takes the same path.
+func TestNewGitLabVerifier_WaitThatEnds_FindsAnIdentityCachedMeanwhile(t *testing.T) {
+	t.Parallel()
+
+	var asked atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Add(1)
+		http.Error(w, "not expected", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	cache := NewTokenCache()
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: time.Hour}
+	gate.slots <- struct{}{}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return srv.URL, nil },
+		newVerificationClient(false), time.Minute, cache, gate, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	type answer struct {
+		info *auth.TokenInfo
+		err  error
+	}
+	answered := make(chan answer, 1)
+	go func() {
+		info, err := verifier(ctx, "verified-by-a-sibling", httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", http.NoBody))
+		answered <- answer{info, err}
+	}()
+	// Long enough for the request to be past its first read and waiting.
+	time.Sleep(50 * time.Millisecond)
+	cache.Put(srv.URL, "verified-by-a-sibling", &auth.TokenInfo{UserID: "11"}, time.Hour)
+	cancel()
+
+	got := <-answered
+	if got.err != nil || got.info == nil || got.info.UserID != "11" {
+		t.Errorf("verification = %+v, %v; want the identity cached while it waited", got.info, got.err)
+	}
+	if n := asked.Load(); n != 0 {
+		t.Errorf("%d requests reached GitLab, want none", n)
+	}
+}
+
+// TestNewGitLabVerifier_SlotIsHeldThroughIntrospection pins that the slot
+// covers every request a verification sends, not only the identity request:
+// while one verification waits on scope introspection with the only slot, a
+// second sends GitLab nothing, and it is verified once the first gives the
+// slot back.
+func TestNewGitLabVerifier_SlotIsHeldThroughIntrospection(t *testing.T) {
+	t.Parallel()
+
+	instance := startHeldInstance(t, "/api/v4/personal_access_tokens/self")
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: 10 * time.Second}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return instance.url, nil },
+		newVerificationClient(false), time.Minute, nil, gate, nil)
+
+	errs := make(chan error, 2)
+	go func() {
+		_, err := verifier(context.Background(), "introspecting", verificationRequest())
+		errs <- err
+	}()
+	awaitCount(t, "introspection requests held", instance.arrived.Load, 1, errs)
+
+	go func() {
+		_, err := verifier(context.Background(), "waiting", verificationRequest())
+		errs <- err
+	}()
+	// Long enough for the second verification's identity request to arrive if
+	// the slot had been given back before introspection.
+	time.Sleep(50 * time.Millisecond)
+	if got := instance.identity.Load(); got != 1 {
+		t.Errorf("%d identity requests while the only slot was held through introspection, want the first alone", got)
+	}
+
+	instance.release()
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Errorf("verification = %v, want both verified in turn", err)
+		}
+	}
+	if got := instance.identity.Load(); got != 2 {
+		t.Errorf("%d identity requests in all, want 2", got)
+	}
+}
+
+// TestNewGitLabVerifier_RefusedTokenGivesItsSlotBack pins that a verification
+// GitLab refuses hands its slot back like one it accepts: with a single slot,
+// a second verification after a refused one is asked of GitLab rather than
+// refused as saturated.
+func TestNewGitLabVerifier_RefusedTokenGivesItsSlotBack(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	gate := &verificationGate{slots: make(chan struct{}, 1), wait: 20 * time.Millisecond}
+	verifier := newGitLabVerifier(func(*http.Request) (string, error) { return srv.URL, nil },
+		newVerificationClient(false), time.Minute, nil, gate, nil)
+
+	// sequential: the second verification is what finds out whether the first gave its slot back.
+	for _, token := range []string{"first-refused", "second-refused"} {
+		if _, err := verifier(context.Background(), token, verificationRequest()); !errors.Is(err, auth.ErrInvalidToken) {
+			t.Errorf("verification of %s = %v, want GitLab's refusal rather than saturation", token, err)
+		}
+	}
+	if got := len(gate.slots); got != 0 {
+		t.Errorf("%d slots still held after both verifications ended, want 0", got)
 	}
 }

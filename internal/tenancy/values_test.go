@@ -66,6 +66,9 @@ func frozenValues() []frozenValue {
 		{"OAuthCacheTTLMax", OAuthCacheTTLMax, 2 * time.Hour},
 		{"OAuthCacheSweepDivisor", OAuthCacheSweepDivisor, 4},
 		{"OAuthCacheSweepFloor", OAuthCacheSweepFloor, 30 * time.Second},
+		{"OAuthCacheCapacity", OAuthCacheCapacity, 10000},
+		{"OAuthVerifications", OAuthVerifications, 16},
+		{"OAuthVerificationWait", OAuthVerificationWait, 5 * time.Second},
 		{"RejectedTokenTTL", RejectedTokenTTL, 5 * time.Minute},
 		{"RejectedTokenCapacity", RejectedTokenCapacity, 4096},
 		{"CredentialMaxAge", CredentialMaxAge, 1 * time.Hour},
@@ -106,6 +109,19 @@ func TestValues_HoldTheirPins(t *testing.T) {
 				t.Errorf("%s = %v (%T), want %v (%T)", v.name, v.got, v.got, v.want, v.want)
 			}
 		})
+	}
+}
+
+// TestValues_OAuthCacheCapacity_IsTheLargestPool holds the one relation
+// between two values the register states in prose: the identity cache holds as
+// many identities as the largest pool an operator may configure, so no pool the
+// server can be given serves more credentials than the cache remembers (ADM-005
+// and POL-001). The two stay separate literals, each frozen above, because a
+// change to either is a policy change of its own; this test is what makes that
+// change look at the other.
+func TestValues_OAuthCacheCapacity_IsTheLargestPool(t *testing.T) {
+	if OAuthCacheCapacity != PoolSizeMax {
+		t.Errorf("OAuthCacheCapacity = %d and PoolSizeMax = %d; the cache must hold the largest pool", OAuthCacheCapacity, PoolSizeMax)
 	}
 }
 

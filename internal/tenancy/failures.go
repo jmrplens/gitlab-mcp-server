@@ -123,6 +123,9 @@ func Failures() []Failure {
 			Kind: "gitlab-rejected", Attributable: true, Charged: true, Decision: "ADM-002",
 			At: classifySite(), Status: 401, Prefix: rejectedPrefix,
 		},
+		// A verification that produced no verdict, whether the round trip
+		// failed or no slot came free: ADM-014's refusal is this return too, in
+		// the same words, as POL-006's is ADM-001's above.
 		{
 			Kind: "verification-failed", Decision: "ADM-002", At: classifySite(), Status: 503,
 			Prefix: "GitLab could not verify this token right now.",
