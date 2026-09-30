@@ -632,6 +632,18 @@ type fakeGitLab struct {
 	// test can tell a write GitLab was asked to make from one the server
 	// withheld before sending anything.
 	issuesCreated atomic.Int32
+	// versionRefusal, when set, is the sentence GitLab refuses the version
+	// endpoint with: a 403 carrying insufficient_granular_scope, what a
+	// fine-grained token not granted Metadata: Read is answered. Empty
+	// answers the version. Set it before the server starts.
+	versionRefusal string
+	// versionReads counts the requests that reached the version endpoint.
+	versionReads atomic.Int32
+	// namespacePlan, when set, is the plan the namespace listing reports for
+	// the one namespace the token administers, the way GitLab.com reports a
+	// subscription; empty leaves the listing unanswered. Set it before the
+	// server starts.
+	namespacePlan string
 }
 
 // awaitInFlightCall blocks until a call has reached the blocking endpoint.
@@ -655,7 +667,22 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		fake.versionReads.Add(1)
+		if fake.versionRefusal != "" {
+			refusal, _ := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": fake.versionRefusal})
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write(refusal)
+			return
+		}
 		writeJSON(w, `{"version":"17.0.0","revision":"abcdef"}`)
+	})
+	mux.HandleFunc("/api/v4/namespaces", func(w http.ResponseWriter, _ *http.Request) {
+		if fake.namespacePlan == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writeJSON(w, `[{"id":1,"full_path":"paid-group","plan":"`+fake.namespacePlan+`"}]`)
 	})
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"id":7,"username":"someone","name":"Some One"}`)

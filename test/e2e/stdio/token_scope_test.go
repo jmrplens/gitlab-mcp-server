@@ -163,6 +163,79 @@ func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAre(t *testing.T) {
 	}
 }
 
+// metadataReadRefusal is GitLab's sentence for a fine-grained token not
+// granted Metadata: Read, which GET /api/v4/version declares at the instance
+// boundary (lib/api/metadata.rb at v19.4.1-ee).
+const metadataReadRefusal = "Access denied: This operation requires a fine-grained personal access token with the following instance permissions: [Metadata: Read]."
+
+// TestTokenScope_FineGrainedTokenWithoutMetadataRead_StartsWhole verifies the
+// start of a fine-grained token GitLab refuses the instance version and
+// allows the rest: the server is not degraded, says once at WARN which
+// permission GitLab named, asks the version endpoint once over twenty calls
+// (it used to re-ask once per thirty seconds of activity for the life of the
+// process), and still detects the tier from the namespace plan GitLab.com
+// reports, which it never reached before because a refused version was read
+// as an unreachable instance. The row without a plan is the control: the
+// Premium tool is listed because the plan was read, and not because the
+// surface always lists it.
+func TestTokenScope_FineGrainedTokenWithoutMetadataRead_StartsWhole(t *testing.T) {
+	tests := []struct {
+		name        string
+		plan        string
+		wantPremium bool
+	}{
+		{name: "a paid namespace plan", plan: "ultimate", wantPremium: true},
+		{name: "no namespace plan", plan: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := startFakeGitLab(t)
+			fake.scopes = []string{"granular"}
+			fake.versionRefusal = metadataReadRefusal
+			fake.namespacePlan = tt.plan
+			env := baseEnv(fake.URL)
+			env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
+			s := startSession(t, env)
+
+			names := toolNames(t, s.call(t, request(1, "tools/list", "")))
+			if listed := contains(names, "gitlab_list_vulnerabilities"); listed != tt.wantPremium {
+				t.Errorf("gitlab_list_vulnerabilities listed = %v, want %v with the namespace plan %q", listed, tt.wantPremium, tt.plan)
+			}
+			if !contains(names, "gitlab_issue_create") {
+				t.Error("gitlab_issue_create is not listed: the fine-grained token was served a read-only surface")
+			}
+			assertVersionAskedOnceAndWarnedOnce(t, s, fake)
+		})
+	}
+}
+
+// assertVersionAskedOnceAndWarnedOnce makes twenty calls that reach GitLab and
+// holds the session to one request of the version endpoint over all of them,
+// and to one warning, naming Metadata: Read, with no degraded start.
+func assertVersionAskedOnceAndWarnedOnce(t *testing.T, s *session, fake *fakeGitLab) {
+	t.Helper()
+	for id := 2; id <= 21; id++ {
+		called := s.call(t, request(id, "tools/call", `{"name":"gitlab_user_current","arguments":{}}`))
+		if called["error"] != nil {
+			t.Fatalf("call %d failed: %v", id, called["error"])
+		}
+	}
+	if got := fake.versionReads.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times over twenty calls, want once", got)
+	}
+
+	stderr := s.stderrText()
+	if got := strings.Count(stderr, "GitLab refused this token GET /api/v4/version"); got != 1 {
+		t.Errorf("the refused version was warned about %d times, want once\nstderr: %s", got, stderr)
+	}
+	if !strings.Contains(stderr, "Metadata: Read") {
+		t.Errorf("the warning does not name Metadata: Read\nstderr: %s", stderr)
+	}
+	if strings.Contains(stderr, "degraded mode") {
+		t.Errorf("a reachable instance was called degraded\nstderr: %s", stderr)
+	}
+}
+
 // individualListing starts a server on the individual surface against a fake
 // instance whose self endpoint reports scopes, or is left unanswered when
 // scopes is nil, and returns every tool it lists keyed by name, following the
