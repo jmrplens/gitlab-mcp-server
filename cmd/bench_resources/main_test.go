@@ -444,6 +444,12 @@ func TestProgressFunc_QuietUnlessAsked(t *testing.T) {
 func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 	const good = 100 * time.Millisecond
 	const step = defaultStepDuration
+	// A descriptor limit is refused on Windows, where the shell that sets it
+	// does not exist, so the host would decide what a run that measures is.
+	// These cases judge the values, and the refusal has a test of its own.
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	runtimeGOOS = "linux"
 	cases := []struct {
 		name    string
 		opts    options

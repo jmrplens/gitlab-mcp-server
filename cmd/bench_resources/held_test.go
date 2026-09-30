@@ -286,6 +286,10 @@ func TestProbeHealth_AnswersTheStatusOrUnanswered(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+		// Go's monotonic clock advances in timer ticks on Windows, up to
+		// about 15.6 ms apart, so a loopback answer can measure 0; waiting
+		// longer than a tick keeps "a positive time" true there too.
+		time.Sleep(20 * time.Millisecond)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
