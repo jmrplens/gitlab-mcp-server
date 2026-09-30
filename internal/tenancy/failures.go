@@ -50,17 +50,20 @@ func classifySite() Site {
 
 // The refusal texts more than one failure begins with.
 const (
-	blockedPrefix  = "Too many failed authentication attempts from this address."
-	rejectedPrefix = "GitLab rejected this token."
-	severalPrefix  = "This deployment serves several GitLab instances"
-	recipientText  = "This token is valid for the GitLab instance"
+	blockedPrefix    = "Too many failed authentication attempts from this address."
+	rejectedPrefix   = "GitLab rejected this token."
+	severalPrefix    = "This deployment serves several GitLab instances"
+	recipientText    = "This token is valid for the GitLab instance"
+	permissionPrefix = "GitLab accepted this token and refused it the permission to read its own user."
 )
 
 // Failures returns every refusal the legacy gate and the OAuth bearer guard
-// return: eight in the gate's resolve, seven in the guard's check and six in
+// return: ten in the gate's resolve, eight in the guard's check and seven in
 // its classify. Five are charged, and each of them is a failure the caller
 // caused; the rest are refused without a charge, because the credential was
-// never judged or the refusal is about the request rather than the token.
+// never judged, the refusal is about the request rather than the token, or
+// GitLab accepted the token and refused it only the permission this server's
+// identity check needs.
 //
 // A return that hands back another listed function's answer, as check does
 // with classify's, is not a refusal of its own and has no row.
@@ -86,6 +89,12 @@ func Failures() []Failure {
 			Kind: "upstream", Decision: "ADM-001", At: resolveSite(), Status: 503,
 			Prefix: "Could not initialize a GitLab session for this token.",
 		},
+		// GitLab accepted the token and refused the probe User: Read, answered
+		// from the rejected-token structure once known and from the pool's
+		// probe the first time. Neither is the caller's doing: the token is
+		// genuine (INV-007).
+		{Kind: "cached-permission-missing", Decision: "ADM-006", At: resolveSite(), Status: 403, Prefix: permissionPrefix},
+		{Kind: "gitlab-permission-missing", Decision: "ADM-001", At: resolveSite(), Status: 403, Prefix: permissionPrefix},
 
 		// The OAuth bearer guard, before verification.
 		{Kind: "blocked", Decision: "AUB-001", At: checkSite(), Status: 429, Prefix: blockedPrefix},
@@ -99,6 +108,7 @@ func Failures() []Failure {
 			Prefix: "This deployment does not serve the GitLab instance",
 		},
 		{Kind: "cached-unaccepted-recipient", Decision: "ADM-004", At: checkSite(), Status: 401, Prefix: recipientText},
+		{Kind: "cached-permission-missing", Decision: "ADM-006", At: checkSite(), Status: 403, Prefix: permissionPrefix},
 		{
 			Kind: "cached-rejection", Attributable: true, Charged: true, Decision: "ADM-006",
 			At: checkSite(), Status: 401, Prefix: rejectedPrefix,
@@ -114,6 +124,7 @@ func Failures() []Failure {
 			Kind: "gitlab-insufficient-scope", Decision: "ADM-002", At: classifySite(), Status: 403,
 			Prefix: "GitLab rejected this token for lacking the scope",
 		},
+		{Kind: "gitlab-permission-missing", Decision: "ADM-002", At: classifySite(), Status: 403, Prefix: permissionPrefix},
 		{
 			Kind: "introspection-unanswered", Decision: "ADM-004", At: classifySite(), Status: 503,
 			Prefix: "This deployment admits only tokens issued to specific OAuth applications",

@@ -15,7 +15,7 @@ func TestFailures_ValidateFailuresIsNil(t *testing.T) {
 }
 
 // TestFailures_ListEveryRefusalOfTheThreeFunctions pins the table to the
-// twenty-one refusal returns of the gate's resolve and the bearer guard's
+// twenty-five refusal returns of the gate's resolve and the bearer guard's
 // check and classify, of which two, two and one are charged.
 func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 	type tally struct{ returns, charged int }
@@ -33,9 +33,9 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 		returns int
 		charged int
 	}{
-		{"mcpServerGate.resolve", 8, 2},
-		{"bearerGuard.check", 7, 2},
-		{"bearerGuard.classify", 6, 1},
+		{"mcpServerGate.resolve", 10, 2},
+		{"bearerGuard.check", 8, 2},
+		{"bearerGuard.classify", 7, 1},
 	} {
 		t.Run(tc.fn, func(t *testing.T) {
 			if got[tc.fn] != (tally{tc.returns, tc.charged}) {
@@ -44,8 +44,34 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 			}
 		})
 	}
-	if len(got) != 3 || len(Failures()) != 21 {
-		t.Errorf("%d functions and %d failures, want 3 and 21", len(got), len(Failures()))
+	if len(got) != 3 || len(Failures()) != 25 {
+		t.Errorf("%d functions and %d failures, want 3 and 25", len(got), len(Failures()))
+	}
+}
+
+// TestFailures_PermissionMissingIsNeverCharged holds the four returns of a
+// credential GitLab accepted and refused the permission to read its own user,
+// fresh and cached at each door, to the answer INV-007 gives them: uncharged
+// and not the caller's doing, since GitLab authenticated the token before it
+// judged the grant, and each a 403 in the words ADM-001, ADM-002 and ADM-006
+// declare.
+func TestFailures_PermissionMissingIsNeverCharged(t *testing.T) {
+	var found []string
+	for _, f := range Failures() {
+		if f.Prefix != permissionPrefix {
+			continue
+		}
+		found = append(found, f.At.Name+":"+f.Kind+":"+f.Decision)
+		if f.Charged || f.Attributable || f.Status != 403 {
+			t.Errorf("%s:%s = %+v; want an uncharged 403 the caller did not cause", f.At.Name, f.Kind, f)
+		}
+	}
+	want := "mcpServerGate.resolve:cached-permission-missing:ADM-006," +
+		"mcpServerGate.resolve:gitlab-permission-missing:ADM-001," +
+		"bearerGuard.check:cached-permission-missing:ADM-006," +
+		"bearerGuard.classify:gitlab-permission-missing:ADM-002"
+	if got := strings.Join(found, ","); got != want {
+		t.Errorf("permission-missing failures = %s\nwant %s", got, want)
 	}
 }
 

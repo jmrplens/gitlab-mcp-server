@@ -3464,6 +3464,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	sprayBudget := authSprayBudget(cfg)
 	blockCounts := &authBlockCounters{}
 	observeAuthBlocks(blockCounts)
+	// One structure for the rejections of both layers: the guard records what
+	// its verification learned, and the gate reads it back for the one verdict
+	// it can reach too, a credential GitLab accepted and refused the
+	// permission to read its own user.
+	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
@@ -3482,13 +3487,13 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		challenge:        oauthChallenge(requiredScope, resourceMetadataURL),
 		bearerOnly:       true,
 		oauthMode:        true,
+		rejected:         rejectedTokens,
 		held:             processHeldRequests,
 		statefulSessions: processStatefulSessions,
 		stateless:        cfg.Stateless,
 	}
 
 	tokenCache := oauth.NewTokenCache()
-	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
 	// A token that never returns is never read, so lazy eviction never reaches
 	// it. The cache's capacity bounds how many such entries there can be;
@@ -3553,7 +3558,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		minimumScope:    oauth.MinimumScope,
 		advertisedScope: requiredScope,
 	}
-	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
+	// No Scopes: the guard in front owns the minimum (ADM-002), and the SDK
+	// would require every listed scope literally, refusing behind the guard's
+	// back a fine-grained token the guard admitted as unknown authority, whose
+	// one scope is granular and never read_api.
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL})
 	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), links)
 	// One path, the one RFC 9728 §3 derives from this deployment's resource
 	// identifier and the one the challenge above advertises, so the document
@@ -3629,6 +3638,13 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	}
 	blockCounts := &authBlockCounters{}
 	observeAuthBlocks(blockCounts)
+	// Legacy mode keeps no negative cache of invalid tokens (the failure
+	// budgets bound those), but it does remember a token GitLab accepted and
+	// refused the permission to read its own user: that refusal is uncharged,
+	// so nothing else stops the same token costing a probe on every request.
+	// Same structure and sizes as the OAuth one (ADM-006).
+	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
+	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
@@ -3641,6 +3657,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		sessions:           binding.sessions,
 		credentials:        binding.credentials,
 		challenge:          legacyAuthChallenge,
+		rejected:           rejectedTokens,
 		held:               processHeldRequests,
 		statefulSessions:   processStatefulSessions,
 		stateless:          cfg.Stateless,
