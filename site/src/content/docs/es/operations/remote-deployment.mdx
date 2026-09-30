@@ -705,8 +705,9 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
   Ninguno de los dos techos tiene uno por credencial a su lado, porque una
   credencial es una clave que quien llama puede acuñar, así que una sola
   credencial puede llenar cualquiera de ellos; y el servidor no tiene un tope
-  de memoria propio, así que pon un límite de memoria al contenedor, que es lo
-  que acota la memoria donde el límite de descriptores es grande.
+  de memoria propio, así que mantén `MemoryMax` en la unidad (la de arriba fija
+  512M) o pon un límite de memoria al contenedor, que es lo que acota la memoria
+  donde el límite de descriptores es grande.
 - **El token pasa por esta máquina.** El token de GitLab de cada cliente llega a
   este proceso, autentica una petición y nunca se persiste. Si las personas
   dueñas de esos tokens consideran de fiar esa máquina es una pregunta que el

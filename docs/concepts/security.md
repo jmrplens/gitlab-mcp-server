@@ -729,10 +729,11 @@ deployment that needs more calls in flight raises the limit or runs more
 replicas. Where the limit is large the ceiling sits far above what the default
 rate limit lets any caller reach, and memory, about 190 KiB of resident set a
 held call, runs out first. The server keeps no memory cap of its own, which
-issue 951 also decided: the container's memory limit is what bounds it.
-`GOMEMLIMIT` makes the Go runtime collect harder as the heap nears it, but it
-refuses nothing, so what held calls keep live passes it and only the container's
-limit stops it.
+issue 951 also decided: the memory limit the process runs under is what bounds
+it, a memory limit on the container or `MemoryMax` on the systemd unit, and a
+unit without `MemoryMax` is bounded only by the host. `GOMEMLIMIT` makes the Go
+runtime collect harder as the heap nears it, but it refuses nothing, so what
+held calls keep live passes it and only that limit stops it.
 Having no per-caller ceiling beside it, any refusal of it tells its caller that
 the process is full, the one bit `INV-019` accepts for the refusal of a bound
 keyed on the process, and its words, `This server is busy. Retry later.`, say
@@ -793,10 +794,12 @@ What the figure bounds is descriptors, and memory only where the hard limit is
 small: the descriptor limit raises none of what an idle session costs in memory,
 88 to 110 KiB of resident set with the ceiling at 500 to 4000 sessions, so the
 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
-idle, and on such a host the container's memory limit bounds the sessions before
-this ceiling does. No fixed cap stands beside the derived figure, which issue 951
-decided: the container's memory limit already bounds that memory, and a fixed
-cap no flag moves would be sized for one host.
+idle, and on such a host the memory limit the process runs under (a container's,
+or a systemd unit's `MemoryMax`) bounds the sessions before this ceiling does. No
+fixed cap stands beside the derived figure, which issue 951 decided: that memory
+limit already bounds that memory where one is set, a unit without `MemoryMax`
+being bounded only by the host, and a fixed cap no flag moves would be sized for
+one host.
 
 It is keyed on the process and not configurable for the held-call ceiling's
 reason, and it discloses the same one bit: its refusal says only that the

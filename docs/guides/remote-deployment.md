@@ -760,8 +760,9 @@ five things:
   [Stateful sessions kept at once](http-server-mode.md#stateful-sessions-kept-at-once)).
   Neither ceiling has a per-credential one beside it, since a credential is a
   key a caller can mint, so one credential can fill either; and the server
-  keeps no memory cap of its own, so set a memory limit on the container,
-  which is what bounds memory where the descriptor limit is large.
+  keeps no memory cap of its own, so keep `MemoryMax` on the unit (the unit
+  above sets 512M), or set a memory limit on the container, which is what
+  bounds memory where the descriptor limit is large.
 - **The token passes through the box.** Every caller's GitLab token reaches this
   process, authenticates one request, and is never persisted. That is a property
   of the software. Whether the people whose tokens they are consider the machine

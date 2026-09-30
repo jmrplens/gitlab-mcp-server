@@ -557,8 +557,10 @@ caller can mint (`INV-003`), so a per-credential number multiplies with every to
 caller mints and cannot bound what the process holds, and one credential can therefore
 fill the ceiling where the limit is small, at the default rate in about fifteen seconds.
 No memory cap does either: the figure bounds descriptors, and where the limit is large
-the memory held calls take, about 190 KiB each, is bounded by the container's memory
-limit, which the operator sets and the server does not repeat. And Windows keeps the
+the memory held calls take, about 190 KiB each, is bounded by the memory limit the
+process runs under (a container's, or a systemd unit's `MemoryMax`) where one is set,
+which the operator sets and the server does not repeat; a unit without `MemoryMax` is
+bounded only by the host. And Windows keeps the
 figure a limit of 1024 gives rather than none, so that platform is not left unbounded by
 default. The third,
 `HLD-010`, bounds the stateful sessions the process keeps on `--stateless=false` across
@@ -594,7 +596,9 @@ its stream, bounded by the ceiling. What the ceiling bounds is descriptors, and 
 only where the limit is small: an idle session's 88 to 110 KiB of resident set, measured
 with the ceiling at 500 to 4000 sessions, is not something the descriptor limit raises,
 so the 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
-idle, and there the container's memory limit bounds them first. Standing
+idle, and there the memory limit the process runs under (a container's, or a systemd
+unit's `MemoryMax`) bounds them first where one is set; a unit without `MemoryMax` is
+bounded only by the host. Standing
 alone, it is also cheap to fill: `initialize` spends no rate and an idle session holds no
 connection, so one credential can take every slot, and a session nobody deletes holds its
 slot for `--session-timeout`, half an hour by default and a day at most, and with a
@@ -604,9 +608,9 @@ Issue 951 decided to leave both costs where they are, for `HLD-011`'s reason. No
 per-credential ceiling stands beside it and `initialize` stays unmetered (`RTC-004`),
 because the credential is a key a caller can mint (`INV-003`): a per-credential number,
 and a price in the opener's own rate, multiply with every token a caller mints. No fixed
-cap stands beside the derived figure either, because the container's memory limit bounds
-the memory the figure does not, and a fixed cap no flag moves would be sized for one
-host. The slot is taken after
+cap stands beside the derived figure either, because the memory limit the process runs
+under (a container's, or a systemd unit's `MemoryMax`) bounds the memory the figure does
+not where one is set, and a fixed cap no flag moves would be sized for one host. The slot is taken after
 admission, the departure `HLD-011` records, and it costs more here: at the pool's bound a
 newcomer's admission evicts another credential's quiet entry (`POL-002`), an entry
 holding only stateful sessions is quiet (`POL-003`), and evicting it ends those sessions,
