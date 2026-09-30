@@ -331,6 +331,12 @@ quien llama y otra para las URIs de recurso, así que el valor que pones nunca s
 usa como clave directamente y un digest de usuario no se puede comparar con uno
 de recurso.
 
+Con `GODEBUG=fips140=only`, HKDF no acepta una clave de menos de 112 bits, así
+que una clave de menos de 14 bytes se rechaza al arrancar: el servidor deja el
+rechazo en el log y no registra nada sobre quien llama, como siempre que no
+puede derivar sus claves de seudonimización. La 3.1.0 detenía el proceso con un
+panic ante esa misma clave.
+
 ### Qué no se registra nunca
 
 Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:

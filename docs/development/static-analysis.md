@@ -222,13 +222,28 @@ ours.
 
 Be precise about what did **not** happen, because the shorter version of this
 story is wrong. The advisory is keyed to the module `golang.org/x/crypto`, not to
-the `openpgp` package, and that module is still a direct requirement:
+the `openpgp` package, so what a scanner reports depends on whether the module
+is in a binary, not on whether openpgp is. Removing the self-update subsystem
+took openpgp out of the server and left the module in it: `internal/telemetry`
+derived its pseudonymisation keys with `golang.org/x/crypto/hkdf`, so every
+server binary up to and including 3.1.0 named the module in its build
+information, every image SBOM listed it, and every scanner that reads either
+(`govulncheck -mode binary -scan module`, Trivy, Grype, osv-scanner, Docker
+Scout, verifymcp.io) reported `GO-2026-5932` against a binary that does not link
+the package the advisory is about. The keyring now derives its keys with the
+standard library's `crypto/hkdf`, which produces the same bytes, and no server
+binary links the module at all: `go list -deps ./cmd/server` names none of its
+packages outside the standard library's own vendored copies, which are not a
+module in the build information.
+
+The module is still a direct requirement, for test code alone:
 `test/e2e/internal/fixture/user.go` imports `golang.org/x/crypto/ssh` to build
-the SSH keys its fixtures need.
-So `govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
-results, and always will. What changed is the only thing that was ever
-actionable: nothing in this repository calls into openpgp any more, so the
-package is not linked into any shipped binary.
+the SSH keys its fixtures need, and the tests of `internal/telemetry` hold the
+key derivation to `golang.org/x/crypto/hkdf` byte for byte. So
+`govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
+results, and will for as long as that is so. There it is information rather
+than a failure, because the source scan gates on what our code calls, and
+nothing in this repository calls into openpgp.
 
 That distinction is also what the wrapper gates on. It defers to govulncheck's
 own exit status, which reports whether **our code calls** a vulnerable symbol,

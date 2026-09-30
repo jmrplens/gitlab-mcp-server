@@ -26,12 +26,19 @@
 #   is affected by 0 vulnerabilities" where it previously named ours.
 #
 #   Be precise about what did NOT happen: the advisory is keyed to the module
-#   golang.org/x/crypto, not to the openpgp package, and that module is still a
-#   direct requirement because test/e2e/internal/fixture/user.go imports
-#   golang.org/x/crypto/ssh. So `govulncheck -show verbose ./...` still lists
-#   GO-2026-5932 under module results, and always will: it covers every version
-#   ("introduced: 0", "Fixed in: N/A"). What the removal cleared is the reachable
-#   path, which is the thing that mattered and the thing this gate checks.
+#   golang.org/x/crypto, not to the openpgp package, and it covers every
+#   version ("introduced: 0", "Fixed in: N/A"). The removal cleared the
+#   reachable path, which is what this gate checks, and left the module in
+#   every server binary up to and including 3.1.0, because internal/telemetry
+#   derived its keys with golang.org/x/crypto/hkdf; a scanner reading the build
+#   information or the image SBOM kept reporting the advisory. The keyring uses
+#   the standard library's crypto/hkdf now, and no server binary links the
+#   module. It is still a direct requirement for test code alone
+#   (test/e2e/internal/fixture/user.go imports golang.org/x/crypto/ssh, and the
+#   telemetry tests hold the derivation to x/crypto's), so
+#   `govulncheck -show verbose ./...` still lists GO-2026-5932 under module
+#   results. That listing is information, not a failure: see the exit status
+#   rule below.
 #
 #   Keep the list empty. An entry here is a vulnerability shipped on purpose in
 #   code we actually call. If one is ever added it needs the same standard of
