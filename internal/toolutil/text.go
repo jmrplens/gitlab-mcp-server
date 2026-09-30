@@ -164,16 +164,17 @@ func EscapeMdLinkLabel(s string) string {
 
 // mdLinkDestEscaper percent-encodes the characters that would end a link
 // destination early or split it in two. Each encoding resolves to the same
-// resource, so the link still works.
+// resource, so the link still works. A tab ends a destination as a space
+// does, and what followed it was read as the link's title.
 //
 // The pipe and the line endings are encoded for the cell the link sits in
 // rather than for the link: a destination is not escaped by
 // [EscapeMdTableCell], so a URL carrying a pipe used to end the cell in the
 // middle of the link, and one carrying a line break ended the row.
-var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
+var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", "\t", "%09", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
 
 // EscapeMdLinkDestination renders url as the destination of a Markdown link.
-// It contains the delimiters and nothing else: whether the value may be a
+// It contains the delimiters and judges nothing: whether the value may be a
 // destination at all is [LinkableDestination]'s question, asked by the
 // callers that decide to write a link. The whitespace around the value is
 // dropped first, as [LinkableDestination] drops it before judging, so the

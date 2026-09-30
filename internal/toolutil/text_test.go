@@ -833,6 +833,7 @@ func TestEscapers_AreIdempotent(t *testing.T) {
 		"# heading\n## two",
 		"http://h/?a=(1)|2 <x>",
 		"\x1b[2J bell\x07",
+		"http://h/a\t'b'",
 	}
 	escapers := []struct {
 		name      string
@@ -841,7 +842,7 @@ func TestEscapers_AreIdempotent(t *testing.T) {
 	}{
 		{name: "EscapeMdTableCell", fn: EscapeMdTableCell, forbidden: "|<[\r\n"},
 		{name: "EscapeMdHeading", fn: EscapeMdHeading, forbidden: "<\r\n"},
-		{name: "EscapeMdLinkDestination", fn: EscapeMdLinkDestination, forbidden: "()<> \"|\r\n"},
+		{name: "EscapeMdLinkDestination", fn: EscapeMdLinkDestination, forbidden: "()<> \"|\t\r\n"},
 	}
 	for _, e := range escapers {
 		t.Run(e.name, func(t *testing.T) {
@@ -873,18 +874,37 @@ func TestEscapeMdLinkDestination_PipeCannotSplitTheCell(t *testing.T) {
 }
 
 // TestEscapeMdLinkDestination_SurroundingSpace_IsDropped verifies that the
-// destination written is the address LinkableDestination judged: the space
-// around it is trimmed rather than encoded, since an encoded leading space
-// turns an absolute address into a relative one, while a space inside the
-// address is still encoded so it cannot end the destination.
+// destination written is the address LinkableDestination judged: the control
+// bytes are dropped first and the space around what remains is trimmed rather
+// than encoded, in the order LinkableDestination applies them, since an
+// encoded leading space turns an absolute address into a relative one, while
+// a space inside the address is still encoded so it cannot end the
+// destination. The control bytes outside the space are what tell the two
+// orders apart: trimming first would leave the space they enclose.
 func TestEscapeMdLinkDestination_SurroundingSpace_IsDropped(t *testing.T) {
-	const url = " \thttps://gitlab.example.com/a b\n "
+	const url = "\x00 \thttps://gitlab.example.com/a b\n \x7f"
 	if got, want := EscapeMdLinkDestination(url), "https://gitlab.example.com/a%20b"; got != want {
 		t.Errorf("EscapeMdLinkDestination(%q) = %q, want %q", url, got, want)
 	}
 	got := MdTitleLink("file", url)
 	if dest := linkDestinations(got); len(dest) != 1 || dest[0] != "https://gitlab.example.com/a%20b" {
 		t.Errorf("MdTitleLink(%q) = %q, destinations %v, want exactly [https://gitlab.example.com/a%%20b]", url, got, dest)
+	}
+}
+
+// TestEscapeMdLinkDestination_TabInside_IsEncoded verifies that a tab inside
+// an address is percent-encoded like a space: written raw it ends the
+// destination, so "https://host/a\t'b'" read as the destination
+// "https://host/a" with the title "b", and the rest of the address was lost.
+func TestEscapeMdLinkDestination_TabInside_IsEncoded(t *testing.T) {
+	const url = "https://gitlab.example.com/a\t'b'"
+	const want = "https://gitlab.example.com/a%09'b'"
+	if got := EscapeMdLinkDestination(url); got != want {
+		t.Errorf("EscapeMdLinkDestination(%q) = %q, want %q", url, got, want)
+	}
+	got := MdTitleLink("x", url)
+	if dest := linkDestinations(got); len(dest) != 1 || dest[0] != want {
+		t.Errorf("MdTitleLink(%q) = %q, destinations %v, want exactly [%s]", url, got, dest, want)
 	}
 }
 
