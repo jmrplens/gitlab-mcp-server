@@ -483,6 +483,12 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 govulncheck ./...
 ```
 
+That scan asks whether the code calls a vulnerable function. Scanners that read a shipped binary or an image SBOM ask something else: whether any module the binary names has an advisory, linked or not. CI asks that of every binary the release builds (`make check-binary-vulns`), and you can ask it of one you downloaded:
+
+```bash
+govulncheck -mode binary -scan module ./gitlab-mcp-server-linux-amd64
+```
+
 ## Rate Limiting Model
 
 The server ships a token-bucket rate limiter that gates every call that reaches

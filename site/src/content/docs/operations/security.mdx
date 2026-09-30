@@ -416,6 +416,16 @@ oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:3.0.0
 Image provenance and SBOM attestations start with the first release after 3.0.0. On 3.0.0 itself the `gh attestation verify` commands above answer that no attestation was found: that release was signed but not attested. The signature command works on 3.0.0.
 :::
 
+## Known vulnerabilities in a binary
+
+Scanners that read a binary or an image SBOM (Trivy, Grype, osv-scanner, Docker Scout) report every advisory against any Go module the binary names in its build information, whether or not the vulnerable code is linked. CI now asks the same question of every binary the release builds, on every push and pull request: each one is built and checked against the Go vulnerability database at module grain, and a finding fails the build unless a reviewed declaration in the repository accepts it. You can ask it of a binary you downloaded:
+
+```bash
+go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitlab-mcp-server-linux-amd64
+```
+
+Releases 3.0.0 and 3.1.0 carry `golang.org/x/crypto` in their build information, so those scanners report `GO-2026-5932` against them, although neither links the openpgp packages the advisory concerns: the module was there for one HKDF function, which later releases take from the Go standard library, so they do not carry the module at all. Releases before 3.0.0 did link openpgp, through the self-update subsystem 3.0.0 removed.
+
 ## Does the token appear in logs?
 
 The server does not log the token. Tool-call logging is structured and writes a fixed set of fields to stderr — the tool name, the call duration, the error when one occurs, and, when the request carries an authenticated identity, the GitLab username and user ID for audit purposes. The token is not one of those fields, and it is sent to GitLab as a request header rather than in a URL, so it does not appear in logged request paths.
