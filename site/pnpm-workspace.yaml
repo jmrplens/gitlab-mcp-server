@@ -17,12 +17,17 @@ overrides:
   yaml-language-server@1.20.0>yaml: 2.9.0
   # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp) and unbounded-expansion DoS
   # (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895); dev/build deps only.
-  # The 1.x line now has a fixed release on the maintenance-v1 tag (1.1.18), so
-  # both branches can be pinned to a patched version and neither needs an audit
+  # Both branches can be pinned to a patched version and neither needs an audit
   # exception. Do not force 5.x onto a 1.x consumer: v1 exported the expand
-  # function directly where v5 exports an object.
-  "brace-expansion@<1.1.18": 1.1.18
-  "brace-expansion@>=3.0.0 <5.0.9": 5.0.9
+  # function directly where v5 exports an object. 1.1.18 and 5.0.9 then became
+  # vulnerable themselves: stack exhaustion through uncontrolled recursion in
+  # parseCommaParts (GHSA-6j4f-fj2g-mc7p, fixed in 1.1.19 and 5.0.10) and on
+  # nested brace groups (GHSA-qhr7-859c-m2p7, fixed in 1.1.20 and 5.0.11), and
+  # quadratic-time expansion of the `{a},b}` rewrite (GHSA-q2hr-2g5m-vwhr,
+  # fixed in 1.1.21 and 5.0.12), so both pins move to 1.1.21 on the 1.x tag
+  # and 5.0.12, the last release of each line.
+  "brace-expansion@<1.1.21": 1.1.21
+  "brace-expansion@>=3.0.0 <5.0.12": 5.0.12
   # fast-uri host confusion via failed IDN / backslash authority
   # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx, GHSA-6q2v-7v5f-6qmw), and via
   # percent-encoded scheme normalization (GHSA-jqff-g426-hqxp, which the 3.1.5
