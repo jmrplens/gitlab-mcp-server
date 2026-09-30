@@ -132,7 +132,7 @@ docs(readme): update tool count after wiki tools
 3. Push the branch and open a pull request — reviewers are auto-requested via [CODEOWNERS](CODEOWNERS)
 4. Fill in the PR template (auto-populated from `.github/pull_request_template.md`)
 5. Address review feedback
-6. Squash-merge once approved (the only allowed merge strategy)
+6. Squash-merge once approved (the only allowed merge strategy). The squash commit's message is the pull request description, so the description carries no skip command GitHub reads (a bracketed skip ci or one of the four other commands GitHub documents, or a skip-checks trailer), which would turn off every workflow on main for that commit; `make check-pr-description` refuses one
 
 ### PR Size Guidelines
 

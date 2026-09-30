@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Refuse an em dash (U+2014) in the text a pull request lands in main, and
-# refuse a review bot's generated block in its description.
+# refuse a review bot's generated block or a skip command in its description.
 #
 # Two surfaces, two subcommands, because each becomes permanent in a different
 # way and only one of them can still be cleaned by a later commit:
@@ -28,22 +28,20 @@ set -euo pipefail
 
 EM_DASH=$(printf '\xe2\x80\x94')
 
-# Paths whose added lines are not judged, each with its reason. A generated
-# record that quotes GitLab's own prose is not this repository's writing:
-# docs/development/gitlab-api-live.json holds the parameter descriptions a
-# booted GitLab reported, one of which already contains an em dash, so a
-# re-take of that record must not fail this gate. A declaration that no longer
-# names a file in the tree is a finding of its own, on the terms every
-# declaration table in this repository is held to.
-# Paths whose added lines are not this branch's prose. The API record is
-# machine-written from a booted GitLab. The rest are generated documents that
+# Paths whose added lines are not judged, because they are not this branch's
+# prose. docs/development/gitlab-api-live.json is machine-written from a booted
+# GitLab and holds the parameter descriptions it reported, one of which already
+# contains an em dash, so a re-take of that record must not fail this gate.
+# The rest are generated documents that
 # copy package doc comments verbatim, so the roughly two thousand em dashes
 # already in the tree reach them the moment a branch regenerates one:
 # docs/development/testing/testing.md carries the one in
 # internal/gatewaycompat/doc.go today. Failing a branch for regenerating an
 # artifact it did not write is how a gate teaches people to route around it.
 # README.md is deliberately not here, being mostly hand-written; an em dash
-# reaching its generated block would be a finding about the generator.
+# reaching its generated block would be a finding about the generator. A
+# declaration that no longer names a file in the tree is a finding of its own,
+# on the terms every declaration table in this repository is held to.
 EXCLUDED_PATHS=(
   "docs/development/gitlab-api-live.json"
   "docs/development/testing/testing.md"
@@ -65,6 +63,26 @@ INJECTED_BLOCK_PATTERNS=(
   '^#{1,6}[[:space:]]*summary by coderabbit'
 )
 
+# The ways GitHub reads a commit message as a request to skip every workflow a
+# push or a pull request would trigger. A squash merge makes the description
+# that commit message, so a description that merely quotes one, backticks
+# included, turns off CI on main for the merge and the release for any tag
+# later put on that commit. That is what happened to 7baa4a40b, the merge of
+# pull request 1094: its description explained a fixture that commits with the
+# first of the bracketed commands, and neither the push of the eight commits
+# nor the v3.1.0 tag on the last of them ran anything.
+#
+# The five bracketed commands are matched anywhere, without regard to case and
+# with any spacing inside the brackets, which costs nothing and does not rely on
+# GitHub matching only the spelling it documents. The skip-checks trailer is
+# matched at the start of a line only, indented or in backticks included, since
+# GitHub reads it as a trailer and prose may name it mid-sentence; and on any
+# line rather than the last, since the description is not the end of the
+# squash commit's message and where GitHub honours the trailer is not
+# something to rely on.
+SKIP_CI_PATTERN='\[[[:space:]]*(skip[[:space:]]+ci|ci[[:space:]]+skip|no[[:space:]]+ci|skip[[:space:]]+actions|actions[[:space:]]+skip)[[:space:]]*\]'
+SKIP_CHECKS_PATTERN='^[[:space:]]*`?skip-checks[[:space:]]*:[[:space:]]*true'
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -76,8 +94,10 @@ diff         Fail when a line this branch adds carries an em dash (U+2014).
              comparison is the three-dot form, so only what this branch added
              on top of their merge base is judged.
 
-description  Fail when the pull request title or body carries an em dash, or
-             when the body carries a generated block a review bot injected.
+description  Fail when the pull request title or body carries an em dash or
+             a command that makes GitHub skip workflows, or when the body
+             carries a skip-checks trailer or a generated block a review bot
+             injected.
              The pull request is $PR_NUMBER, or the one open for the current
              branch. Set PR_TITLE_FILE and PR_BODY_FILE to judge text from
              disk instead, which is how the gate is rehearsed without a pull
@@ -248,14 +268,19 @@ cmd_description() {
 
   echo "Judging the pull request title and body ($PR_SOURCE)."
 
-  local em_dashed=0 injected=0 hits pattern
+  local em_dashed=0 injected=0 skipping=0 hits pattern
 
   if [[ "$PR_TITLE" == *"$EM_DASH"* ]]; then
     printf 'title: %s\n' "$PR_TITLE"
     em_dashed=1
   fi
 
-  hits=$(printf '%s\n' "$PR_BODY" | { grep -nF -- "$EM_DASH" || true; } | label_hits body)
+  # Every body grep reads its input as text (-a): a byte that is not valid in
+  # the locale's encoding would otherwise turn the match into "binary file
+  # matches" on stderr and nothing on stdout, and the gate would pass a line it
+  # never judged. The API path cannot produce one, since jq writes valid UTF-8;
+  # a body read from disk can.
+  hits=$(printf '%s\n' "$PR_BODY" | { grep -anF -- "$EM_DASH" || true; } | label_hits body)
   if [[ -n "$hits" ]]; then
     printf '%s\n' "$hits"
     em_dashed=1
@@ -279,7 +304,7 @@ EOF
   # a location.
   local markers=""
   for pattern in "${INJECTED_BLOCK_PATTERNS[@]}"; do
-    hits=$(printf '%s\n' "$PR_BODY" | { grep -nEi -- "$pattern" || true; } | label_hits body)
+    hits=$(printf '%s\n' "$PR_BODY" | { grep -anEi -- "$pattern" || true; } | label_hits body)
     [[ -z "$hits" ]] || markers+="$hits"$'\n'
   done
   if [[ -n "$markers" ]]; then
@@ -311,13 +336,46 @@ how pull request 832 carried one in permanently.
 EOF
   fi
 
-  if [[ "$em_dashed" -ne 0 || "$injected" -ne 0 ]]; then
+  # The title is one line, so it is reported the way the em dash check above
+  # reports it; the body is reported by line.
+  if grep -aqEi -- "$SKIP_CI_PATTERN" <<< "$PR_TITLE"; then
+    printf 'title: %s\n' "$PR_TITLE"
+    skipping=1
+  fi
+  hits=$( {
+    printf '%s\n' "$PR_BODY" | { grep -anEi -- "$SKIP_CI_PATTERN" || true; }
+    printf '%s\n' "$PR_BODY" | { grep -anEi -- "$SKIP_CHECKS_PATTERN" || true; }
+  } | sort -u -t: -k1,1n | label_hits body)
+  if [[ -n "$hits" ]]; then
+    printf '%s\n' "$hits"
+    skipping=1
+  fi
+
+  if [[ "$skipping" -ne 0 ]]; then
+    cat >&2 <<'EOF'
+
+FAIL: the pull request title or body carries a command that makes GitHub skip
+workflows.
+
+GitHub skips every workflow a push triggers when the commit it lands on carries
+one of the bracketed commands in its message, wherever it appears and in
+backticks too, or ends with a skip-checks trailer. This repository squash
+merges, so the description becomes that message: the merge would run no CI,
+CodeQL, mirror or Pages on main, and a release tag put on the commit would run
+no release. Name the command without its square brackets, or the trailer
+inside a sentence rather than on a line of its own, then edit the description:
+
+    gh pr edit <number>
+EOF
+  fi
+
+  if [[ "$em_dashed" -ne 0 || "$injected" -ne 0 || "$skipping" -ne 0 ]]; then
     echo >&2
     echo "Re-check with: make check-pr-description" >&2
     return 1
   fi
 
-  echo "OK: the title and body carry no em dash and no injected block."
+  echo "OK: the title and body carry no em dash, no injected block and no skip command."
 }
 
 main() {

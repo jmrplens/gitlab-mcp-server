@@ -923,6 +923,10 @@ jobs:
       # action specs, scripts/check-spec-conditions.sh, in a throwaway git
       # repository against a stand-in recipe, and holds the reason it gives a
       # package it could not measure.
+      # scripts/check_em_dash_sh_test.py runs the description gate,
+      # scripts/check-em-dash.sh, over titles and bodies written to disk and
+      # once through a stand-in gh, and holds it to refusing a command that
+      # makes GitHub skip workflows.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,
@@ -1033,7 +1037,11 @@ jobs:
       # the merge does not reach the commit. The same step refuses a generated
       # block a review bot injected into the body, which is the failure that
       # prompted all of this: the block was stripped before merging, the bot
-      # put it back, and the merge carried it into main's history.
+      # put it back, and the merge carried it into main's history. It also
+      # refuses a command that makes GitHub skip workflows, bracketed or as a
+      # skip-checks trailer: in the squash commit it turns off every push
+      # workflow on main and the release of any tag put on that commit, which
+      # is what 7baa4a40b did to v3.1.0.
       #
       # It is checked apart from the diff because it is not part of the commit
       # and can change after the diff was judged, so two properties matter.

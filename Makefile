@@ -2281,11 +2281,13 @@ check-em-dash:
 	scripts/check-em-dash.sh diff $(EM_DASH_BASE)
 
 ## check-pr-description: fail when the pull request title or body carries an em
-## dash, or when the body carries a block a review bot injected. This is the
-## half no later commit can fix: a squash merge copies the description into
-## main's history. A branch with no pull request open passes, having no
-## description to land; PR_NUMBER names one explicitly. Without gh it fails
-## and says so, because a check that cannot read what it judges must not
+## dash or a command that makes GitHub skip workflows, or when the body carries
+## a skip-checks trailer or a block a review bot injected. This is the half no
+## later commit can fix: a squash merge copies the description into main's
+## history, and a skip command there turns off CI on main and the release of
+## any tag put on that commit. A branch with no pull request open passes,
+## having no description to land; PR_NUMBER names one explicitly. Without gh it
+## fails and says so, because a check that cannot read what it judges must not
 ## report that it judged it. PR_TITLE_FILE and PR_BODY_FILE judge text from
 ## disk instead, which needs no gh and is how the gate is rehearsed.
 check-pr-description:
