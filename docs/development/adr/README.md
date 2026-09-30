@@ -35,6 +35,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0021](adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)      | A field client-go does not model is read from the captured response      | Accepted                                                | Current                                         | 2026-09-08 |
 | [ADR-0022](adr-0022-operator-named-destinations-are-exempt.md)                   | An operator-named instance is exempt from the outbound destination guard | Accepted                                                | Current                                         | 2026-09-10 |
 | [ADR-0023](adr-0023-tenant-policy-is-declared-once.md)                           | Tenant policy is declared once, in a register the layers read            | Accepted                                                | Current                                         | 2026-09-25 |
+| [ADR-0024](adr-0024-fine-grained-token-authority-per-action.md)                  | Fine-grained token authority is evaluated per action from GitLab         | Accepted                                                | Current                                         | 2026-09-30 |
 
 ## About Missing ADRs
 
@@ -50,7 +51,7 @@ ADR-0004 is now a standalone document. It was previously referenced only in the 
 
 New ADRs follow the template in `.github/skills/create-architectural-decision-record/`. Each ADR includes:
 
-- YAML front matter (title, status, date, authors, tags). ADR-0010 and ADR-0015 through ADR-0023 carry none and state their status and date in the Status section instead
+- YAML front matter (title, status, date, authors, tags). ADR-0010 and ADR-0015 through ADR-0024 carry none and state their status and date in the Status section instead
 - Context, decision drivers, and options considered
 - Decision outcome with positive/negative consequences
 - Compliance checklist
