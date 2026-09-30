@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -89,6 +90,16 @@ type Client struct {
 	initMu sync.Mutex
 	// lastInitAttempt prevents thundering herd on a recovering GitLab instance.
 	lastInitAttempt time.Time
+
+	// version is the instance version the last answered read of
+	// /api/v4/version reported, when it is one ([validVersion]), and "" when
+	// what it reported is not; nil before any read answered. See
+	// [Client.Version].
+	version atomic.Pointer[string]
+	// versionRefusal is GitLab's sentence when it accepted this client's
+	// credential and refused it /api/v4/version for a fine-grained permission
+	// the token's grant lacks; nil otherwise. See [Client.VersionRefusal].
+	versionRefusal atomic.Pointer[string]
 
 	// onUnauthorized is told when GitLab answers a call made with this
 	// client's credential with 401, and what the 401 said. The server pool
@@ -446,12 +457,29 @@ func (c *Client) GL() *gl.Client {
 // Initialize validates GitLab connectivity via a direct HTTP health check
 // (bypassing the SDK transport chain to avoid recursion). On success it
 // marks the client as initialized and returns the GitLab version string.
+//
+// One refusal is a success too: GitLab accepting the credential and refusing
+// it /api/v4/version for a fine-grained permission its grant lacks, which at
+// v19.4.1-ee is Metadata: Read (lib/api/metadata.rb declares read_metadata at
+// the instance boundary). The instance answered and authenticated the token,
+// so it is reachable, and the client is marked initialized with the version
+// and the edition unknown and the empty string returned: [Client.VersionRefusal]
+// carries GitLab's sentence for the caller that has to say so. Read as a
+// failure, it put the client into lazy re-initialization for good, since a
+// token's grant cannot be changed after it is created: every SDK request then
+// paid a refused /api/v4/version once per [initCooldown], and a caller that
+// only runs identity and tier detection after a successful start never ran
+// them at all.
 func (c *Client) Initialize(ctx context.Context) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 
 	versionInfo, err := c.versionDirect(ctx)
+	if _, refused := errors.AsType[*versionRefusedError](err); refused {
+		c.initialized.Store(true)
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
@@ -508,6 +536,58 @@ func (c *Client) IsInitialized() bool { return c.initialized.Load() }
 // with a token or mock credentials.
 func (c *Client) MarkInitialized() { c.initialized.Store(true) }
 
+// Version returns the GitLab version the instance reported the last time
+// /api/v4/version answered this client, and the empty string when it has not
+// answered, refused the credential the permission to ask, or reported
+// something that is not a version.
+//
+// Only a version [validVersion] accepts is returned, because the string is the
+// instance's: under --allow-any-gitlab-url the instance is one a caller named,
+// and a version a reader prints or matches against a recorded release has to
+// be one, of a bounded length, whoever sent it.
+func (c *Client) Version() string {
+	if v := c.version.Load(); v != nil {
+		return *v
+	}
+	return ""
+}
+
+// VersionRefusal returns GitLab's sentence and true when the instance accepted
+// this client's credential and refused it /api/v4/version for a fine-grained
+// permission the token's grant lacks, and false otherwise. The sentence is the
+// instance's text as sent, so a reader that quotes it bounds and filters it
+// first ([PermissionRefusal]).
+//
+// Once seen, the refusal stands until a later read of the version endpoint is
+// answered: [Client.DetectEnterprise] does not ask while it stands, because a
+// token's grant cannot be changed after it is created. A read that is answered
+// clears it, which is what GitLab's one refusal that can change while a
+// process runs, fine-grained tokens not yet enabled for the token's user,
+// needs once an administrator enables them.
+func (c *Client) VersionRefusal() (string, bool) {
+	if refusal := c.versionRefusal.Load(); refusal != nil {
+		return *refusal, true
+	}
+	return "", false
+}
+
+// versionPattern is the shape of a version GitLab reports: three numbers and
+// an optional suffix (19.4.1-ee, 19.5.0-pre). versionMaxBytes bounds it,
+// since the pattern alone lets a suffix run on.
+var versionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
+
+const versionMaxBytes = 64
+
+// validVersion returns reported when it is a version GitLab could have sent
+// ([versionPattern], at most [versionMaxBytes] long), and the empty string
+// otherwise.
+func validVersion(reported string) string {
+	if len(reported) > versionMaxBytes || !versionPattern.MatchString(reported) {
+		return ""
+	}
+	return reported
+}
+
 // pingDirect performs a raw HTTP GET to /api/v4/version using the dedicated
 // health client, bypassing the SDK transport chain entirely. This prevents
 // recursion when called from [EnsureInitialized] inside [resilienceTransport].
@@ -519,8 +599,20 @@ func (c *Client) pingDirect(ctx context.Context) error {
 // DetectEnterprise updates the client edition flag from /api/v4/version when
 // GitLab exposes it, returning fallback when the field is absent or detection
 // fails.
+//
+// A token GitLab refuses the version endpoint for a fine-grained permission
+// ([Client.VersionRefusal]) is not asked again, and its refusal is logged at
+// debug rather than as a failed detection: the refusal is a fact about the
+// token's grant, which cannot change, and whoever starts the client says so
+// once where the operator reads it.
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
+	if _, refused := c.VersionRefusal(); refused {
+		return c.editionUnreadable(ctx, fallback)
+	}
 	versionInfo, err := c.versionDirect(ctx)
+	if _, refused := errors.AsType[*versionRefusedError](err); refused {
+		return c.editionUnreadable(ctx, fallback)
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
 		c.SetEnterprise(fallback)
@@ -534,6 +626,16 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	c.SetEnterprise(*versionInfo.Enterprise)
 	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
 	return *versionInfo.Enterprise
+}
+
+// editionUnreadable is [Client.DetectEnterprise]'s answer for a token GitLab
+// refuses the version endpoint for a fine-grained permission: the fallback,
+// with the reason at debug.
+func (c *Client) editionUnreadable(ctx context.Context, fallback bool) bool {
+	slog.DebugContext(ctx, "the token may not read the instance version, so its edition is unknown; using configured enterprise mode",
+		"fallback", fallback)
+	c.SetEnterprise(fallback)
+	return fallback
 }
 
 // DetectTier resolves the GitLab licensing tier and stores it on the client.
@@ -709,8 +811,17 @@ func namespacePlanAnswers(plan string) bool {
 // licensed instance whose license this token cannot read, and the surface the
 // caller gets is smaller than the one they are paying for, which is worth one
 // line naming the setting that fixes it.
+//
+// A token GitLab refuses the version endpoint for a fine-grained permission
+// leaves the edition unknown, so neither holds: the tier is Free and the reason
+// is logged at debug, because whoever started the client has already said,
+// once, that the edition could not be read and what settles the tier.
 func (c *Client) warnUnresolvedTier(ctx context.Context) {
 	if !c.DetectEnterprise(ctx, false) {
+		if _, refused := c.VersionRefusal(); refused {
+			slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
+			return
+		}
 		slog.DebugContext(ctx, "no license and no paid namespace plan on a CE instance; the tier is free")
 		return
 	}
@@ -740,6 +851,11 @@ func (c *Client) setAuthHeader(req *http.Request) {
 // client initialization and degraded-mode recovery. The URL it asks is
 // healthURL, derived once from the normalized base URL the operator
 // configured, never from a request.
+//
+// It records what it learns on the client: the version an answer reports
+// ([Client.Version]), and GitLab's sentence when it refuses the credential the
+// endpoint for a fine-grained permission ([Client.VersionRefusal]), which it
+// returns as a *versionRefusedError.
 func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody)
 	if err != nil {
@@ -754,8 +870,17 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body))
+		// Read as far as a refusal GitLab writes can reach, since the one
+		// refusal that is not a failure is told apart only by its body, and
+		// quote no more of it than the error has always quoted.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, refusalBodyBytes))
+		if resp.StatusCode == http.StatusForbidden {
+			if description, missing := PermissionRefusal(body); missing {
+				c.versionRefusal.Store(&description)
+				return nil, &versionRefusedError{description: description}
+			}
+		}
+		return nil, fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body[:min(len(body), versionErrorBodyBytes)]))
 	}
 
 	var versionInfo gitLabVersionInfo
@@ -766,7 +891,29 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 		return nil, errors.New("gitlab ping failed: empty version in response")
 	}
 
+	version := validVersion(versionInfo.Version)
+	c.version.Store(&version)
+	c.versionRefusal.Store(nil)
 	return &versionInfo, nil
+}
+
+// versionErrorBodyBytes is how much of an unexpected answer's body the version
+// probe's error quotes.
+const versionErrorBodyBytes = 512
+
+// versionRefusedError is what [Client.versionDirect] returns when GitLab
+// accepted the credential and refused it the version endpoint for a
+// fine-grained permission its grant lacks: a 403 whose body is
+// [PermissionRefusal]'s. It is not an unreachable instance, which is what
+// every other error of the probe means to its callers.
+type versionRefusedError struct {
+	description string
+}
+
+// Error names the refusal and not GitLab's sentence, which is the instance's
+// text: a reader that wants it asks [Client.VersionRefusal], and bounds it.
+func (e *versionRefusedError) Error() string {
+	return "gitlab ping: GitLab accepted the token and refused it the fine-grained permission to read the instance version"
 }
 
 // CredentialVerdict is what GitLab answered when asked whether it accepts a
@@ -872,7 +1019,7 @@ func (c *Client) CheckCredentialDetail(ctx context.Context) CredentialCheck {
 	// it: the one 403 that is not a refusal is told apart only by its body. A
 	// body longer than this is not one GitLab writes for that 403, and is
 	// read as far as this and no further.
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, credentialProbeBodyBytes))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, refusalBodyBytes))
 
 	check := CredentialCheck{Verdict: credentialVerdictFor(resp.StatusCode, body), Status: resp.StatusCode}
 	switch check.Verdict {
@@ -884,11 +1031,12 @@ func (c *Client) CheckCredentialDetail(ctx context.Context) CredentialCheck {
 	return check
 }
 
-// credentialProbeBodyBytes is how much of the credential probe's answer is
-// read: enough for GitLab's error document naming a missing fine-grained
-// permission, whose sentence is a few hundred bytes, and a bound on what an
-// instance can make the probe hold.
-const credentialProbeBodyBytes = 4 << 10
+// refusalBodyBytes is how much of a refusal the raw probes read, the
+// credential probe's answer and the version probe's unexpected one: enough
+// for GitLab's error document naming a missing fine-grained permission, whose
+// sentence is a few hundred bytes, and a bound on what an instance can make a
+// probe hold.
+const refusalBodyBytes = 4 << 10
 
 // credentialVerdictFor reads the status and body the credential probe was
 // answered with. Only an explicit 401 or 403 refuses and only a 2xx accepts;
