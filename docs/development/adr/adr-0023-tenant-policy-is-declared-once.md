@@ -192,7 +192,7 @@ twice), and the gate holds the pinned literal equal to the register's.
   stateful sessions it keeps, have no per-caller ceiling beside them, which issue 951
   decided because a per-caller number on a key a caller can mint multiplies with every
   token it mints (`INV-003`), so any refusal of
-  either tells its caller that the process is full, which is the same bit and no more:
+  either tells its caller that the process is full, which is at most the same bit:
   both answer in the same words, which say only that the server is busy, and name no
   bound, no count and no caller. No wording closes it:
   the caller's own count or its own wait supplies the bit whatever the refusal says,

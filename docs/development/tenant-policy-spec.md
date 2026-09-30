@@ -248,9 +248,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   or the existence of its traffic. Two one-bit disclosures are the accepted exceptions:
   `credential_evicted` (ADR-0020), and the refusal of a bound keyed on the process
   (`HLD-002`, `HLD-004`, `HLD-010`, `HLD-011`, `RTC-007`, `ADM-014`), which tells a
-  caller that has not reached its own bound, or that knows the upstream to be healthy,
-  that the process has reached its one, and so that others are holding, spending or
-  verifying against it (issues 951 and 950, ADR-0023 NEG-007). Neither carries a count of
+  caller that is still under a bound of its own beside it, or that knows the upstream to
+  be healthy, that the process has reached its bound, and so that others are holding,
+  spending or verifying against it, and tells a caller refused by `HLD-010` or
+  `HLD-011`, which have no such bound, that the process is full (issues 951 and 950,
+  ADR-0023 NEG-007). Neither carries a count of
   what others hold or an identity, and neither says more than a caller could infer from
   its own count or its own wait: the stream ceilings name the scope that refused, which a
   caller counting its own streams knows already, `RTC-007` answers in `RTC-003`'s words
@@ -258,10 +260,15 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   the log line says which bound refused. `HLD-010` and `HLD-011` have no per-caller
   ceiling beside them, so any refusal of either says the process is full whatever its
   words, and both use the same words, which say only that the server is busy, naming no
-  bound, no figure and no caller. They fall under this exception rather than needing one
-  of their own, which issue 951 decided: the bit is the one the exception already
-  accepts, and no per-caller ceiling is set beside them to hide it, since a number on a
-  key a caller can mint multiplies with every token it mints (`INV-003`).
+  bound, no figure and no caller. That the process is full is all such a refusal
+  establishes: one credential can fill `HLD-010` by itself, and `HLD-011` where the
+  descriptor limit is small or the rate limit is off, and the refusal names no figure, so
+  it is consistent with other callers holding slots without showing that they do, and a
+  caller can conclude that they do only from its own count, plainly when it holds none.
+  They fall under this exception rather than needing one of their own, which issue
+  951 decided: the bit is at most the one the exception already accepts, and no
+  per-caller ceiling is set beside them to hide it, since a number on a key a caller can
+  mint multiplies with every token it mints (`INV-003`).
 - **INV-020 Endings name their cause from a closed vocabulary**, and a removal path added
   without a decision produces no reason rather than the nearest one.
 - **INV-021 A change of policy is its own change.** A change to a limit's key, value,
@@ -559,8 +566,9 @@ fill the ceiling where the limit is small, at the default rate in about fifteen 
 No memory cap does either: the figure bounds descriptors, and where the limit is large
 the memory held calls take, about 190 KiB each, is bounded by the memory limit the
 process runs under (a container's, or a systemd unit's `MemoryMax`) where one is set,
-which the operator sets and the server does not repeat; a unit without `MemoryMax` is
-bounded only by the host. And Windows keeps the
+which the operator sets and the server does not repeat; a unit without a `MemoryMax` of
+its own is bounded by the slices above it where one of them sets one, and otherwise only
+by the host. And Windows keeps the
 figure a limit of 1024 gives rather than none, so that platform is not left unbounded by
 default. The third,
 `HLD-010`, bounds the stateful sessions the process keeps on `--stateless=false` across
@@ -597,8 +605,9 @@ only where the limit is small: an idle session's 88 to 110 KiB of resident set, 
 with the ceiling at 500 to 4000 sessions, is not something the descriptor limit raises,
 so the 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
 idle, and there the memory limit the process runs under (a container's, or a systemd
-unit's `MemoryMax`) bounds them first where one is set; a unit without `MemoryMax` is
-bounded only by the host. Standing
+unit's `MemoryMax`) bounds them first where one is set; a unit without a `MemoryMax` of
+its own is bounded by the slices above it where one of them sets one, and otherwise only
+by the host. Standing
 alone, it is also cheap to fill: `initialize` spends no rate and an idle session holds no
 connection, so one credential can take every slot, and a session nobody deletes holds its
 slot for `--session-timeout`, half an hour by default and a day at most, and with a

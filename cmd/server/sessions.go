@@ -45,8 +45,9 @@ import (
 // them idle, and there the memory the process is given is what bounds the
 // sessions. Issue 951 decided that no fixed cap stands beside the derived one:
 // the memory limit the process runs under (a container's, or a systemd unit's
-// MemoryMax) bounds that memory where one is set, a unit without MemoryMax is
-// bounded only by the host, and a cap no flag moves would be sized for one
+// MemoryMax) bounds that memory where one is set, a unit without a MemoryMax
+// of its own is bounded by the slices above it where one of them sets one and
+// otherwise only by the host, and a cap no flag moves would be sized for one
 // host. Nor does a per-credential ceiling, and
 // initialize stays unmetered: a credential is a key a caller can mint, so a
 // per-credential number multiplies with every token it mints.
@@ -194,8 +195,8 @@ func statefulSessionsMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 // session past the ceiling, and the operator's line for it.
 //
 // The refusal is the held-call ceiling's, word for word: the next action is the
-// same, and words that named this ceiling would tell a caller that others hold
-// sessions, where the one bit INV-019 accepts is that the process is full. The
+// same, and words that named this ceiling would tell a caller which of the two
+// is full, where the one bit INV-019 accepts is that the process is full. The
 // line is throttled like every refusal a caller can cause at will, and names
 // the scope and the figure, so an operator knows which bound refused.
 func refuseStatefulSession(w http.ResponseWriter, r *http.Request, limit int64) {

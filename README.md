@@ -474,10 +474,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,387 |       322,479 |
+| Source (`.go`, non-test) |     1,387 |       322,483 |
 | Unit tests (`_test.go`)  |       957 |       641,615 |
 | End-to-end tests         |       508 |       108,635 |
-| **Total**                | **2,852** | **1,072,729** |
+| **Total**                | **2,852** | **1,072,733** |
 
 ### Functions
 
@@ -497,7 +497,7 @@ and the workaround this server carries until it ships.
 | Test lines vs source lines         | 1.99× more tests than code |
 | Average source file length         |                 ~233 lines |
 | Average test file length           |                 ~670 lines |
-| Comment lines in source            |  79,080 (~24.5% of source) |
+| Comment lines in source            |  79,084 (~24.5% of source) |
 | Test functions per source function |                       1.7× |
 
 ### Code patterns
