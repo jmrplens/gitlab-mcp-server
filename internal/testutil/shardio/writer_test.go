@@ -140,7 +140,7 @@ func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
 	}
 	for _, spelling := range []string{dir + "/.", dir + "/", dir + "/sub/..", " " + dir + " "} {
 		t.Run(spelling, func(t *testing.T) {
-			if got := shards.OpenDir(spelling); got != canonical {
+			if shards.OpenDir(spelling) != canonical {
 				t.Errorf("OpenDir(%q) returned a second writer for one directory", spelling)
 			}
 		})

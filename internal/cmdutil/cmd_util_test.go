@@ -230,7 +230,7 @@ func TestDiagnosticWriters_AsShipped_AreStderrAndNotStdout(t *testing.T) {
 // the identity is asserted through the code pointer.
 func TestFatalf_AsShipped_EndsTheProcess(t *testing.T) {
 	got := reflect.ValueOf(initialExitProcess).Pointer()
-	if want := reflect.ValueOf(os.Exit).Pointer(); got != want {
+	if got != reflect.ValueOf(os.Exit).Pointer() {
 		t.Error("exitProcess is not os.Exit; Fatalf would return to its caller instead of ending the process")
 	}
 }

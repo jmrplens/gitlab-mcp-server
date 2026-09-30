@@ -144,7 +144,7 @@ func TestIdentityPseudonym_AcrossARotation_StillAnswers(t *testing.T) {
 	if identity == before {
 		t.Errorf("the identity pseudonym %q did not change across the rotation", identity)
 	}
-	if resource := ring.ResourcePseudonym("gitlab://project/42"); resource == "" {
+	if ring.ResourcePseudonym("gitlab://project/42") == "" {
 		t.Error("the resource pseudonym is empty after a rotation, so resource recording stopped rather than rotated")
 	}
 }

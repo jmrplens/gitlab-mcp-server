@@ -1843,7 +1843,7 @@ func TestNewGitLabVerifier_DuplicateIdentityMember_IsRefusedRatherThanResolved(t
 			info, err := verifier(t.Context(), "a-token",
 				httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 
-			if admitted := err == nil; admitted != testCase.wantAdmit {
+			if (err == nil) != testCase.wantAdmit {
 				t.Fatalf("verifier() err = %v, want admitted=%v", err, testCase.wantAdmit)
 			}
 			if testCase.wantAdmit && info.UserID != "999" {

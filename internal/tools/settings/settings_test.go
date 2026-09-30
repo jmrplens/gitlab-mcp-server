@@ -299,7 +299,7 @@ func TestSettingScalar_EveryJSONKind_RendersItsOwnForm(t *testing.T) {
 // produced, and the fallback exists so the formatter is total over the `any` its
 // signature accepts.
 func TestCompactJSON_ValueJSONRefuses_FallsBackToTheGoForm(t *testing.T) {
-	if got := compactJSON(make(chan int)); got == "" {
+	if compactJSON(make(chan int)) == "" {
 		t.Error("compactJSON(chan) = \"\", want the value's Go form")
 	}
 }

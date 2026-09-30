@@ -909,7 +909,7 @@ func TestArmoredBody_ValueWithNoArmorIsItsOwnBody(t *testing.T) {
 	if got := armoredBody("  ssh-style-value  "); got != "ssh-style-value" {
 		t.Errorf("armoredBody = %q, want %q", got, "ssh-style-value")
 	}
-	if got := armoredBody("-----BEGIN PGP PUBLIC KEY BLOCK-----\n-----END PGP PUBLIC KEY BLOCK-----"); got == "" {
+	if armoredBody("-----BEGIN PGP PUBLIC KEY BLOCK-----\n-----END PGP PUBLIC KEY BLOCK-----") == "" {
 		t.Error("a value that is only armor must still preview as something")
 	}
 }

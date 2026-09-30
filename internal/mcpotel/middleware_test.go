@@ -315,7 +315,7 @@ func TestMiddleware_APanickingHandlerStillNamesTheRouteThatRan(t *testing.T) {
 
 	func() {
 		defer func() {
-			if recovered := recover(); recovered == nil {
+			if recover() == nil {
 				t.Error("the middleware swallowed the panic, which would hide the failure from the caller")
 			}
 		}()

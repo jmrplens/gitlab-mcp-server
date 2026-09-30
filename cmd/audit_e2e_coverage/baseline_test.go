@@ -260,7 +260,7 @@ func TestCompareBaseline_WeakerCredits_MetByStrongerOnes(t *testing.T) {
 			if result.BaselineReached != 1 {
 				t.Fatalf("the baseline reached %d keys, want the one the case names", result.BaselineReached)
 			}
-			if got := len(result.Lost) == 1; got != tc.lost {
+			if (len(result.Lost) == 1) != tc.lost {
 				t.Errorf("lost = %q, want lost=%t", result.Lost, tc.lost)
 			}
 		})

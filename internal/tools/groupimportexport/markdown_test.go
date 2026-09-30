@@ -38,7 +38,7 @@ func TestFormatScheduleExportMarkdown(t *testing.T) {
 		t.Errorf("schedule confirmation:\n got %q\nwant %q", md, want)
 	}
 
-	if result := FormatScheduleExportMarkdown(ScheduleExportOutput{}); result != nil {
+	if FormatScheduleExportMarkdown(ScheduleExportOutput{}) != nil {
 		t.Error("an output with no message rendered something")
 	}
 }
@@ -58,7 +58,7 @@ func TestFormatExportDownloadMarkdown(t *testing.T) {
 		t.Errorf("download card:\n got %q\nwant %q", md, want)
 	}
 
-	if result := FormatExportDownloadMarkdown(ExportDownloadOutput{}); result != nil {
+	if FormatExportDownloadMarkdown(ExportDownloadOutput{}) != nil {
 		t.Error("an empty download rendered something")
 	}
 }
@@ -74,7 +74,7 @@ func TestFormatImportFileMarkdown(t *testing.T) {
 		t.Errorf("import confirmation:\n got %q\nwant %q", md, want)
 	}
 
-	if result := FormatImportFileMarkdown(ImportFileOutput{}); result != nil {
+	if FormatImportFileMarkdown(ImportFileOutput{}) != nil {
 		t.Error("an output with no message rendered something")
 	}
 }

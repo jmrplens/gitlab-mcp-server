@@ -120,7 +120,7 @@ func TestAuthFailureLimiter_ZeroSettings_BuildNoLimiter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := &config.Config{AuthFailureLimit: tc.limit, AuthFailureWindow: tc.window}
-			if got := authFailureLimiter(cfg); got != nil {
+			if authFailureLimiter(cfg) != nil {
 				t.Fatalf("authFailureLimiter(%d, %v) built a limiter; zero must mean no budget, not a budget of zero",
 					tc.limit, tc.window)
 			}

@@ -176,7 +176,7 @@ func TestSessionRows_IdleSessions_CountedAndAnAllIdleShapeReadsUnobserved(t *tes
 				t.Fatalf("json.Marshal(row): %v", err)
 			}
 			wantKey := `"idle_sessions":` + strconv.Itoa(expected.idle)
-			if carries := strings.Contains(string(encoded), `"idle_sessions"`); carries != (expected.idle != 0) {
+			if strings.Contains(string(encoded), `"idle_sessions"`) != (expected.idle != 0) {
 				t.Errorf("the row encodes as %s; want idle_sessions present only when the count is not zero", encoded)
 			}
 			if expected.idle != 0 && !strings.Contains(string(encoded), wantKey) {

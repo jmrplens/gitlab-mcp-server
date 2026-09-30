@@ -472,7 +472,7 @@ func TestCanonicalizeNumbers_ANumberItCannotParseKeepsItsText(t *testing.T) {
 	if got != numberMarker+"not-a-number" {
 		t.Errorf("canonicalizeNumbers(unparseable) = %v, want its text kept behind the number marker", got)
 	}
-	if other := canonicalizeNumbers(json.Number("also-not-one")); got == other {
+	if got == canonicalizeNumbers(json.Number("also-not-one")) {
 		t.Error("two different unparseable numbers canonicalized alike, so they would share a digest")
 	}
 }
