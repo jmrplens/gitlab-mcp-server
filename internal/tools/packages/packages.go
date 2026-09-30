@@ -589,9 +589,11 @@ type GetOutput struct {
 // GitLab reads only a package whose status is default or deprecated here while
 // package.list shows one in error status as well, so re-listing alone would
 // hand back the same package_id.
-const packageNotFoundHint = "check the package's status in package.list, since GitLab answers 404 here for a " +
-	"package whose status is not default or deprecated, and whether the package_id is still listed, since a " +
-	"deleted version answers 404 as well"
+//
+// It is one literal rather than a concatenation: a constant has no statement
+// to cover, so the mutation gate reports every operator of a concatenation as
+// a mutant nothing can reach.
+const packageNotFoundHint = "check the package's status in package.list, since GitLab answers 404 here for a package whose status is not default or deprecated, and whether the package_id is still listed, since a deleted version answers 404 as well"
 
 // Get retrieves one package of a project via the GitLab Packages API
 // (GET /projects/:id/packages/:package_id), the only endpoint that sends the
