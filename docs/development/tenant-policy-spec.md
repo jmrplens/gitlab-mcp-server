@@ -631,22 +631,31 @@ the rest; every one of the 360 cached requests was served in both arms, at a med
 14 ms with the ceiling and 13 and 15 ms without it. The phase follows the lead-in on
 one clock and opens after the flood has settled into its queue, so these are what a
 sustained flood leaves rather than what an empty queue serves in its first seconds.
-The share served follows the slots' share of what arrives, which is two in five here,
-and stays below it: 80 and 82 of 120 at 50 ms, where the slots finish four in five, 17
-and 17 at 200 ms, where they finish one in five, and 17 and 17 at 100 ms under a flood
-of a thousand a second, where they finish about one in six. What the ceiling
-buys is the instance's load, which the slots and the round trip set whatever the flood:
-at 100 ms the instance received about 5,640 requests under the flood of four hundred and
-about 5,600 under the flood of a thousand, never more than 20 at once, against 12,600
-and 30,600 and up to 56 and 110 at once without it. The queue moves into the process
+The share served follows the slots' share of what arrives, which is two in five here: 80
+and 82 of 120 at 50 ms, where the slots finish four in five, 17 and 17 at 200 ms, where
+they finish one in five, and 17 and 17 at 100 ms under a flood of a thousand a second,
+where they finish about one in six. The new credentials' share sat a few points under
+the slots' share in every configuration, which a queue model attributes to the driver's
+schedule rather than to the ceiling: the flood arrives evenly spaced and the new
+credentials in clumps on fixed ticks, and when both arrive at random the two shares
+match. What the ceiling buys is the instance's load, which the slots and the round trip
+set whatever the flood: at 100 ms the instance received about 160 requests a second
+under either flood, sixteen slots over the round trip, never more than 20 at once,
+against about 420 and 1,020 a second and up to 56 and 110 at once without it (5,640 and
+5,600 requests over the 35 seconds from the phase's first request to the answer of its
+last waiter, against 12,600 and 30,600 over 30). The queue moves into the process
 instead, since each waiting request holds its connection for up to the five seconds:
 the server's resident set peaked at 273 and 277 MiB against 175 and 178 without the
 ceiling under the flood of four hundred, and at 436 and 438 against 188 under the flood
-of a thousand. Nothing bounds how many
-requests wait but the rate they arrive at, and their connections are descriptors outside
-the held calls `HLD-011` counts, since the wait comes before the gate admits a request;
-the runs had a descriptor limit of 1048576 and did not reach it. The ceiling trades the
-admission of new credentials during a flood for the load the instance receives.
+of a thousand. Nothing bounds how many requests wait but the rate they arrive at, and
+their connections are descriptors outside the held calls `HLD-011` counts, since the
+wait comes before the gate admits a request; the runs had a descriptor limit of 1048576
+and did not reach it. The same waiters hold memory: each cost the process about 50 KiB
+in the measurement (the resident set rose by about 100 MiB for some 2,000 waiting and
+250 MiB for some 5,000), so where the memory limit the process runs under is below the
+arrival rate times five seconds times that, the flood ends the process and every cached
+credential with it. The ceiling trades the admission of new credentials during a flood
+for the load the instance receives.
 Measured through the verifier
 against a stand-in GitLab, a hundred thousand distinct credentials held a hundred
 thousand entries and sixty megabytes before, and hold ten thousand and seven megabytes
