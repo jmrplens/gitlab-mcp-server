@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -255,23 +256,81 @@ func assertOlderRevisionsAtTheCeiling(t *testing.T, ctx context.Context, client 
 	}
 }
 
-// offerPastTheCeiling sends count modern calls at once, each on a connection
-// of its own, and reports how many were refused with the gate's 503. It
-// touches no *testing.T, since the calls run on goroutines of their own.
-func offerPastTheCeiling(ctx context.Context, baseURL string, count int) int {
-	flood := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-	var refused atomic.Int64
+// windowsFloodWidth is how many of a flood's connections are open at once on
+// Windows. The flood exists to outrun a descriptor limit Windows does not
+// have, and there a burst of hundreds of loopback connections most likely
+// overflows the listen queue, which answers the rest with WSAECONNREFUSED
+// before the server accepts them and says nothing about the server; in waves
+// of this width every connection reaches it.
+const windowsFloodWidth = 64
+
+// floodResult is how the requests of a flood ended: the ones refused with the
+// gate's 503, and every other ending counted by what it was, so a failure
+// says whether the server answered something else or never answered.
+type floodResult struct {
+	refused  int
+	others   map[string]int
+	firstErr string
+}
+
+// String names the endings that were not a 503, for a failure message.
+func (r floodResult) String() string {
+	if len(r.others) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(r.others))
+	for _, ending := range slices.Sorted(maps.Keys(r.others)) {
+		parts = append(parts, fmt.Sprintf("%d %s", r.others[ending], ending))
+	}
+	if r.firstErr != "" {
+		parts = append(parts, "the first failure: "+r.firstErr)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// flood sends count requests, each on a connection of its own, all at once
+// except on Windows (windowsFloodWidth), and sorts how each ended. It touches
+// no *testing.T, since the requests run on goroutines of their own.
+func flood(count int, send func(client *http.Client, i int) (response, error)) floodResult {
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	width := count
+	if runtime.GOOS == "windows" {
+		width = min(count, windowsFloodWidth)
+	}
+	slots := make(chan struct{}, width)
+	var mu sync.Mutex
+	result := floodResult{others: map[string]int{}}
 	var wait sync.WaitGroup
 	for i := range count {
+		slots <- struct{}{}
 		wait.Go(func() {
-			resp, err := modernHeldCall(ctx, flood, baseURL, 5000+i, "2")
-			if err == nil && resp.status == http.StatusServiceUnavailable {
-				refused.Add(1)
+			defer func() { <-slots }()
+			resp, err := send(client, i)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err != nil:
+				result.others["failed"]++
+				if result.firstErr == "" {
+					result.firstErr = err.Error()
+				}
+			case resp.status == http.StatusServiceUnavailable:
+				result.refused++
+			default:
+				result.others["answered "+strconv.Itoa(resp.status)]++
 			}
 		})
 	}
 	wait.Wait()
-	return int(refused.Load())
+	return result
+}
+
+// offerPastTheCeiling sends count modern calls through a flood and reports
+// how they ended.
+func offerPastTheCeiling(ctx context.Context, baseURL string, count int) floodResult {
+	return flood(count, func(client *http.Client, i int) (response, error) {
+		return modernHeldCall(ctx, client, baseURL, 5000+i, "2")
+	})
 }
 
 // TestLimit_ProcessBoundsHeldRequests starts the server under a descriptor
@@ -292,7 +351,8 @@ func offerPastTheCeiling(ctx context.Context, baseURL string, count int) int {
 // more descriptors than the limit allows, and the process would stop accepting
 // connections, /health among them. Refused and closed, they cost nothing that
 // stays, and /health answers. (Windows has no descriptor limit to set, so
-// there the last half shows only that the refusals are made.) Once GitLab
+// there the last half shows only that the refusals are made, and the calls
+// go in waves the platform's listen queue can take.) Once GitLab
 // answers, every held call is served, and the next call is served too.
 //
 // The rate limit is off so one credential can hold every slot: the per-caller
@@ -352,11 +412,13 @@ func TestLimit_ProcessBoundsHeldRequests(t *testing.T) {
 			listenMeta+`}}`,
 		"notifications/subscriptions/acknowledged")
 
-	// More modern calls than the descriptor limit could hold, all at once, on
-	// connections of their own.
+	// More modern calls than the descriptor limit could hold, on
+	// connections of their own: all at once where the limit is set, in
+	// waves on Windows (flood).
 	const extra = 600
-	if got := offerPastTheCeiling(ctx, srv.baseURL, extra); got != extra {
-		t.Errorf("%d of the %d calls offered past the ceiling were refused with 503, want every one", got, extra)
+	if got := offerPastTheCeiling(ctx, srv.baseURL, extra); got.refused != extra {
+		t.Errorf("%d of the %d calls offered past the ceiling were refused with 503, want every one; the rest: %s",
+			got.refused, extra, got)
 	}
 	if health := srv.do(t, request{method: http.MethodGet, path: "/health"}); health.status != http.StatusOK {
 		t.Errorf("/health = %d after %d calls were offered past the ceiling, want 200", health.status, extra)
