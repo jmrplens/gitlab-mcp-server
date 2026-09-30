@@ -32,8 +32,11 @@ import (
 // What it deliberately does not say is "not found" or "your token lacks
 // access". Both were what a caller used to see, and both send someone to check
 // permissions that are perfectly fine.
-const UnattributedRequestMessage = "this request could not be attributed to a credential and was not sent to GitLab; " +
-	"retry, and report it if it persists"
+//
+// It is one literal rather than a concatenation, as are the two descriptions
+// of a 401 below: a constant has no statement to cover, so the mutation gate
+// reports every operator of a concatenation as a mutant nothing can reach.
+const UnattributedRequestMessage = "this request could not be attributed to a credential and was not sent to GitLab; retry, and report it if it persists"
 
 // DestinationRefusedMessage is what a caller is told when this server declined
 // to open the connection an action needed.
@@ -347,9 +350,7 @@ func answeredRequest(glErr *gl.ErrorResponse) *http.Request {
 // "unauthorized" rather than "authentication failed", because for the second
 // cause authentication succeeded, and a model told otherwise checked the
 // credential, found nothing wrong with it and stopped.
-const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, " +
-	"or it is valid and lacks a permission this action needs, since some GitLab endpoints answer " +
-	"a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
+const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal"
 
 // rejectedTokenDescription is what a 401 means when GitLab said the credential
 // itself was the problem, which [gitlabclient.UnauthorizedNamesCredential]
@@ -364,8 +365,7 @@ const unauthorizedDescription = "unauthorized: either the token (GITLAB_TOKEN) i
 // description names as a missing scope, so leaving the scope out here would
 // have the two surfaces describe one cause two ways. Replacing the token is the
 // remedy for all four causes.
-const rejectedTokenDescription = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself " +
-	"as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
+const rejectedTokenDescription = "authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it"
 
 // httpStatusDescriptions maps HTTP status codes to semantic descriptions.
 var httpStatusDescriptions = map[int]string{
