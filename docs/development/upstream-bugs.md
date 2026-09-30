@@ -154,6 +154,10 @@ readable without opening the tracker:
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | No | No | No | No | Yes |
 | 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
 | 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another user, [golang/go#81122](https://github.com/golang/go/issues/81122) | Yes, [golang/go#81871](https://github.com/golang/go/pull/81871), imported as [go.dev/cl/841585](https://go.dev/cl/841585), open | No | No; without the workaround it fails race runs of the tooling tests at random | Yes |
+| 82 | gitlab-org/gitlab, then client-go | [The admin token route takes no granular scopes, and no client-go create option carries them](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them) | GitLab half yes, by GitLab, [gitlab-org/gitlab#630541](https://gitlab.com/gitlab-org/gitlab/-/issues/630541); client-go half no | No; attempts by other users, [gitlab-org/gitlab!245585](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585) and [gitlab-org/api/client-go!2978](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2978), closed unmerged | No | No | None taken; the five token create actions send classic scopes only, tracked in [issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115) |
+| 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
+| 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
+| 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -378,6 +382,29 @@ one of its commits as it stands uses the new numbering, while the dated
 history keeps the numbers of its day. Row 34's section tells the split, and
 row 19's records a finding it turned up in the project itself: its
 `tests:integration` job has run no integration test since the 3.0 release.
+
+Rows 82 to 85 were added on 2026-09-30 from a study of what client-go could
+tell a caller about the fine-grained permission a request needs, which
+[issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952) wants
+for fine-grained personal access tokens. GitLab sends no machine-readable name
+of that permission, on success or on a refusal, so the four rows are what would
+move that: GitLab creating fine-grained tokens for a user, and client-go
+options to ask for one (row 82); GitLab naming the missing permissions in a
+form a program can read (row 83); a client-go helper that returns the
+refusal's fields as GitLab sent them (row 84); and a GitLab defect in the label
+the refusal prints (row 85). None has been raised by us. Three of the six merge
+requests open against client-go that day are this project's,
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+[gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065)
+and
+[gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066),
+and a maintainer has written that the volume weighs on a team of three
+([gitlab-org/api/client-go!3053 note 3810461065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053#note_3810461065)),
+so each section records the verified facts, the order, what each step waits on
+and the text to send. No client-go merge request from these rows goes out
+before those three are reviewed, row 83's issue goes before row 84's, which
+cites it, and nothing goes out anywhere without the maintainer's approval and
+an independent review of its exact text.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -1581,6 +1608,9 @@ commit `1c8ac034` of gitlab-org/gitlab.
   `lib/api/entities/resource_access_token.rb` also exposes `resource_type`
   (`project` or `group`) and `resource_id`. A caller listing tokens across
   scopes cannot tell which resource each belongs to.
+
+The request side, the create options, is
+[row 82](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them).
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` and `shapes.sent.unsurfaced` in
@@ -3762,6 +3792,320 @@ right name; add `FormattedText string` with `json:"formatted_text,omitempty"`
 to `OrbitSchema`; correct the option's doc comment, which names `format` as
 the parameter.
 
+### No client-go helper returns the RFC 6750 fields of a token refusal
+
+- **Reported**: no. The issue is drafted below. It goes after row 83's issue,
+  which it cites, and only once this project has decided to adopt the helper,
+  since a named consumer is what makes it acceptable; like every item here it
+  waits on the maintainer's approval and an independent review of its text.
+  An issue is not held behind the open merge requests: the maintainer who
+  asked for fewer merge requests asked for issues instead.
+- **In review**: no. The merge request follows a maintainer's answer on the
+  issue, and only after
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065)
+  and
+  [gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066)
+  have been reviewed.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: not needed. This server decodes the body itself, in
+  `errorCode` and `carriesInvalidToken`
+  (`internal/gitlab/credential_refusal.go:190` and `:183`), which
+  `UnauthorizedNamesCredential` and `RefusalMayBePermission` read
+  ([row 55](#a-permission-refusal-is-answered-401-rather-than-403)). The first
+  is one rule with two readers that the file says must not disagree: the
+  transport, which reads a raw prefix of a 401's body before client-go builds
+  any error (`classifyUnauthorized`, `internal/gitlab/response_limit.go:130`),
+  and `internal/toolutil/errors.go`, which holds the `*ErrorResponse` (`:313`,
+  and `:601` through `RefusalMayBePermission`). The helper replaces the two
+  decoders only if this project adopts it, which is the decision the issue
+  waits on. `isInsufficientScope` in `internal/oauth/verifier.go` decodes a
+  response of the OAuth verifier's own HTTP client and stays either way.
+
+**Where**: client-go v3.15.0 (`be72a3fe`), `gitlab.go`. `CheckResponse` (line
+1412) keeps the raw body in `ErrorResponse.Body` (1427) and flattens it into
+`Message` with `parseError` (1433), so `err.Error()` already ends in
+`{error: insufficient_granular_scope}, {error_description: Access denied:
+...}`. Nothing returns the fields typed.
+
+**What**: a gap rather than a defect. A caller that wants the RFC 6750 code, to
+tell a revoked token (`invalid_token`) from a missing scope
+(`insufficient_scope`) or a missing fine-grained permission
+(`insufficient_granular_scope`), decodes GitLab's body itself, as this server
+does. `HasStatusCode` (1484-1491) and `StatusCode` (1495-1502) cannot tell
+those apart, and GitLab answers some permission refusals with a plain 401
+(row 55), which the body separates from a revoked or expired credential. A
+token GitLab cannot find gets the same plain 401
+(`lib/gitlab/auth/auth_finders.rb:414` raises `UnauthorizedError`, which
+`lib/api/helpers.rb:1034-1036` answers with `unauthorized!`), which is why row
+55's workaround puts such a 401 to the credential probe. A classic token can
+meet `insufficient_granular_scope` too: under a group's enforcement on
+GitLab.com, GitLab refuses a legacy token with the fine-grained sentence, which
+[gitlab-org/gitlab#616442](https://gitlab.com/gitlab-org/gitlab/-/issues/616442)
+shows for a service account's legacy token, so a client-go caller on
+GitLab.com whose classic token reaches such a group can see that code. On a
+self-managed instance, enforcement only stops legacy tokens from being created
+or rotated (`doc/auth/tokens/fine_grained_access_tokens.md`, lines 134 to 153;
+`NamespaceSetting#granular_tokens_enforced?` is false unless the GitLab.com
+flag `granular_personal_access_tokens_enforcement_saas` is on,
+`app/models/namespace_setting.rb:246-250`).
+
+**The shape proposed**: package-level functions in the style of `StatusCode`,
+which
+[gitlab-org/api/client-go!3055](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3055)
+added. They decode a body only when it has the shape GitLab's API guard
+renders, and return the fields exactly as sent. The name does not end in
+`Error`, because the type is not an `error` and client-go's error types are:
+
+```go
+// TokenRefusal is the RFC 6750 error GitLab's API guard answers a refused
+// token with, as GitLab sent it.
+type TokenRefusal struct {
+	Code        string   // invalid_token, insufficient_scope, insufficient_granular_scope, ...
+	Description string   // error_description, verbatim
+	Scope       []string // the scope attribute split on spaces; empty when absent
+}
+
+// ParseTokenRefusal decodes a response body in the shape GitLab's API guard
+// renders, and returns false for a body of any other shape.
+func ParseTokenRefusal(body []byte) (*TokenRefusal, bool)
+
+// TokenRefusalFrom applies ParseTokenRefusal to the body of the first
+// *ErrorResponse in err's chain, and returns false when there is none.
+func TokenRefusalFrom(err error) (*TokenRefusal, bool)
+```
+
+Two entry points to one rule, because this server reads the same body in two
+places: a transport deciding what a 401 means before client-go builds an error
+has only the bytes, and a handler describing an error has the
+`*ErrorResponse`. `CheckResponse` and the type it returns do not change, so
+`HasStatusCode`, `StatusCode`, `errors.Is(err, ErrNotFound)` and the type
+assertion at `graphql.go:177` behave as today. That avoids the riskier shape
+go-github chose, distinct error types returned from its `CheckResponse`
+(`TwoFactorAuthError`, `RateLimitError`, `AbuseRateLimitError`, in
+`github/github.go` on its master). It does not parse `[Work Item: Read]`:
+[row 83](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)
+asks GitLab for that value instead, and if GitLab sends it in `scope`, these
+functions return it with no further change.
+
+**Why only with a named consumer**, in the maintainers' words:
+
+- `StatusCode` came with one, and a maintainer asked for it: Timo Furrer
+  requested it on a glab merge request
+  ([gitlab-org/cli!3898 note 3831430533](https://gitlab.com/gitlab-org/cli/-/merge_requests/3898#note_3831430533))
+  so that `glab` could shorten its update check error, opened it himself, and
+  when a bot tried to drop the helper wrote "I still want the convenience
+  helper"
+  ([note 3831750912](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3055#note_3831750912)).
+- Patrick Rice wants "the solution to be driven by a given problem as opposed
+  to just general golang convention"
+  ([gitlab-org/api/client-go#2119 note 2488046687](https://gitlab.com/gitlab-org/api/client-go/-/issues/2119#note_2488046687),
+  on the package layout), and asked of an addition nobody used yet, "Is there
+  value here until we can change the MergeRequest struct too?"
+  ([gitlab-org/api/client-go!3013 note 3755379471](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3013#note_3755379471)).
+- The objection to expect is go-github's to a typed header: "we already
+  provide the actual response (along with its headers) to the client user of
+  this repo, so maybe nothing more needs to be done here"
+  ([google/go-github#2886](https://github.com/google/go-github/issues/2886#issuecomment-1701051006)).
+  client-go provides `Body` and `Message` just as completely.
+- A change at the library level goes in a merge request of its own, with
+  integration tests: Patrick Rice split two of this project's changes out of
+  the joint merge request because "these are more fundamental changes at the
+  library level"
+  ([gitlab-org/api/client-go!3063 note 3926712100](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063#note_3926712100)).
+- Heidi Berry's "Usually, we just return the API response rather than
+  attempting to map it like this"
+  ([gitlab-org/api/client-go#2175 note 2900268862](https://gitlab.com/gitlab-org/api/client-go/-/issues/2175#note_2900268862))
+  is about the `users.go` sentinels below, and supports removing them, not
+  adding this helper.
+
+**The consumer, and the decision it waits on**: this server would use
+`ParseTokenRefusal` in the transport and `TokenRefusalFrom` in
+`internal/toolutil`, retiring `errorCode` and `carriesInvalidToken` while
+keeping one rule for both readers, and would read the code of a 403
+`insufficient_granular_scope` through it in phase A of
+[issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952), which
+maps that refusal to an uncharged one naming the missing permission when
+GitLab gives it. Whether it does is the maintainer's decision, and the draft's
+consumer sentence commits it, so the issue goes out only after that decision.
+[Issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103) is the
+GraphQL side and outside the helper: a GraphQL refusal of a mutation arrives
+with HTTP 200 and an `errors` array, and `GraphQL.Do` builds a
+`GraphQLResponseError` only on a non-2xx status (`graphql.go:173-186`), so if
+GitLab adopts that issue's upstream change the matching accessor is a
+proposal of its own. glab would be the other candidate consumer; it has no
+hint for either code, and nobody has asked there.
+
+**Limits the issue states**:
+
+- A project or group hidden from the token's user answers a plain 404,
+  `{"message":"404 Not Found"}`, the same bytes as a missing resource, which
+  reaches callers as `ErrNotFound` (`gitlab.go:1416-1417`).
+- REST only, for the reason above.
+- For a classic token `Scope` is the list registered for the API class plus
+  the API-wide scopes (`lib/api/api_guard.rb:102-114` in GitLab), not what the
+  method needs: the body quoted in
+  [gitlab-org/api/client-go#2175](https://gitlab.com/gitlab-org/api/client-go/-/issues/2175)
+  for a block call carried `read_user ai_workflows api read_api`.
+- The code does not always mean a permission is missing: two refusals carry
+  `insufficient_granular_scope` with a sentence and no permission (row 83's
+  fourth property), so `Scope` stays empty there even after row 83's change.
+- Six user moderation methods replace a 403 with a client-side sentinel, so
+  the helper cannot see those refusals: `UnblockUser` (`users.go:1045`),
+  `DeactivateUser` (`:1107`), `ActivateUser` (`:1129`), `ApproveUser`
+  (`:1151`), `RejectUser` (`:1173`) and `DisableTwoFactor` (`:1360`). Removing
+  them was agreed on the same issue (Timo Furrer, "NOT return that specific
+  LDAP error from client-go",
+  [note 2901967459](https://gitlab.com/gitlab-org/api/client-go/-/issues/2175#note_2901967459);
+  Patrick Rice, "I agree",
+  [note 2903422993](https://gitlab.com/gitlab-org/api/client-go/-/issues/2175#note_2903422993)),
+  `BlockUser` was fixed on main by
+  [gitlab-org/api/client-go!2581](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2581)
+  (`366f12a8`, v0.161.0), and
+  [gitlab-org/api/client-go!2632](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2632)
+  (`e56b79e8`, into `release-client-2.0`) removed the rest. On 2026-02-14 the
+  merge of main into `release-client-2.0` (`2ba417c9`) brought the sixteen
+  returns back, and its fix-up, `0152d148` ("Resolve several merge issues"),
+  the ten `ErrUser*` declarations; they ship in v2.0.0, v3.0.0 and v3.15.0, and
+  nothing records whether that was deliberate. Wrapping them would still print
+  the sentinel's own sentence, the defect that issue reported, and callers have
+  compared them since v2.0.0, so restoring the removal belongs in an issue of
+  its own for 4.0, beside
+  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/issues/2301),
+  which lists the breaks deferred from the joint merge request, or behind a
+  toggle, as Patrick Rice asked for another behaviour change ("implement it as
+  a feature toggle with a note saying that in v4 the toggle would become the
+  default",
+  [gitlab-org/api/client-go!3063 note 3924608467](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063#note_3924608467)).
+  The merge resolution was a maintainer's, so the wording stays neutral.
+
+**Tests the merge request carries**: unit tests beside `TestCheckResponse`
+(`gitlab_test.go:226`) for each body shape, a body that is not JSON, an empty
+body, an error that is not an `*ErrorResponse` and one wrapped with
+`fmt.Errorf("%w")`; and integration tests with classic tokens, which the
+fixture can make today: an impersonation token created with `read_api` and
+used for a write (`insufficient_scope`), and the same token revoked
+(`invalid_token`, "Token was revoked"). `ImpersonateTestUser`
+(`gitlab_test/utils_test.go:145-165`) hard-codes the `api` scope, so the test
+calls `CreateImpersonationToken` itself, or the helper gains a scopes
+parameter. A fine-grained test waits on
+[row 82](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them),
+since client-go cannot create such a token until then, and a raw request in a
+test would draw a reviewer's question.
+
+**What it costs this server**: nothing beyond the decoding it already carries;
+see
+[row 83's section](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)
+for what none of rows 82 to 85 gives issue 952.
+
+**Verified, inferred and unverified**:
+
+- Verified at client-go v3.15.0 and GitLab 19.4.1, in this repository at
+  `origin/main`, and on gitlab.com and GitHub with GET requests on 2026-09-30:
+  every line and every quote above; the sentinel history, read with `git show
+  <commit>:users.go` at each commit and tag; and the enforcement case, through
+  the issue above.
+- Inferred: that a refused GraphQL mutation arrives with HTTP 200 and
+  `errors`.
+- Unverified: whether client-go's maintainers accept the helper, and in which
+  shape; whether glab or the Terraform provider want it; whether the
+  restoration of the sentinels was deliberate.
+
+**Before posting**: decide whether this server adopts the helper, since the
+draft says it will; decide whether to link row 55 of this register for the 401
+case, which is not reported upstream, or keep the draft stating the behaviour,
+as it does now; fill `gitlab-org/gitlab#<n>` with row 83's issue, which goes
+first; re-read `gitlab.go` and `users.go` on client-go's main.
+
+**Effort**: small, one type and two functions with doc comments, unit tests
+and two integration tests, roughly 100 to 200 lines, an estimate. A plain
+`feat:` title, as the `StatusCode` merge request had, and the `type::feature`
+label.
+
+<details>
+<summary>Draft: the gitlab-org/api/client-go issue</summary>
+
+Reviewed twice while it was prepared, and corrected after a third review; not
+posted. Native references, first person as the maintainer, one paragraph per
+line.
+
+Title: `Expose the RFC 6750 fields GitLab returns when it refuses a token`
+
+```markdown
+## Summary
+
+When GitLab's API guard refuses a token it answers with an RFC 6750 error in the body: `error` (`invalid_token`, `insufficient_scope`, `insufficient_granular_scope`, ...), `error_description`, and for `insufficient_scope` a `scope` attribute. client-go keeps that body in `ErrorResponse.Body` and flattens it into `Message`, so every caller that wants to act on the code decodes GitLab's body format itself. I would like to add a small helper, in the style of `StatusCode`, that returns those fields exactly as GitLab sent them.
+
+## Problem
+
+`HasStatusCode(err, 401)` and `HasStatusCode(err, 403)` do not say whether the credential itself was refused. Two cases where that matters to a caller:
+
+- A 401 with `invalid_token` means GitLab found the token and refused it: revoked, expired, or an impersonation token where impersonation is disabled. GitLab also answers some permission refusals with a plain 401 (`{"message":"401 Unauthorized"}`), where the token is fine and only the caller's role is not, and it answers a token it cannot find at all with that same plain 401. Only the body tells a revoked or expired token from a role refusal.
+- On GitLab.com the owner of a top-level group can require fine-grained tokens. After the enforcement date a classic token is refused in that group with `insufficient_granular_scope`, as gitlab-org/gitlab#616442 shows for a service account's legacy token, so a caller holding a classic personal access token can meet that code without ever creating a fine-grained one. On a self-managed instance, enforcement only stops legacy tokens being created or rotated.
+
+I maintain gitlab-mcp-server, which is built on client-go and decodes these bodies itself today (`errorCode` and `carriesInvalidToken` in `internal/gitlab/credential_refusal.go`): once in its HTTP transport, on the body of a 401 before client-go builds an error, and again where it describes an error to a model. I would switch both to the functions below, so they have a consumer from the first release.
+
+## Proposal
+
+A body-level function, and a helper that applies it to the first `*ErrorResponse` in the chain. Each decodes the body only when it has that shape. Naming is open, for example:
+
+    type TokenRefusal struct {
+        Code        string   // invalid_token, insufficient_scope, insufficient_granular_scope, ...
+        Description string   // error_description, verbatim
+        Scope       []string // the scope attribute split on spaces; empty when GitLab sends none
+    }
+
+    func ParseTokenRefusal(body []byte) (*TokenRefusal, bool)
+    func TokenRefusalFrom(err error) (*TokenRefusal, bool)
+
+- The body-level function is for a caller that reads a response before client-go builds an error, such as a transport deciding what a 401 means. Keeping one rule behind both is what stops the two readers from disagreeing.
+- `CheckResponse` and the error type it returns do not change, so `HasStatusCode`, `StatusCode`, `errors.Is(err, ErrNotFound)` and the type assertion in `graphql.go` behave exactly as today.
+- It returns GitLab's values and nothing of its own. It does not parse the permission names out of the `insufficient_granular_scope` description, which is text GitLab changes.
+- I am happy to mark it experimental, like `Routes()`, while the shape is agreed.
+
+I am not proposing to record the fine-grained permission of each method here; that answer belongs in GitLab, and I opened gitlab-org/gitlab#<n> asking GitLab to name the missing permissions in a machine-readable field of that response. If it lands, these functions return them with no further change.
+
+<details>
+<summary>What GitLab sends today (19.4.1)</summary>
+
+- Revoked token, `lib/api/api_guard.rb`: `401` with `WWW-Authenticate: Bearer realm="...", error="invalid_token", error_description="..."` and the body `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`.
+- Classic token missing a scope, same file, documented in the REST authentication page: `403 {"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"..."}`. The `scope` list is the one registered for the API class, not per method: the body quoted in #2175 for a block call listed `read_user ai_workflows api read_api`.
+- Fine-grained token missing a permission, same file, text from `app/services/authz/tokens/authorize_granular_scopes_service.rb`: `403 {"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Work Item: Read]."}`.
+- The two 403s carry no `WWW-Authenticate` header (a FIXME in `api_guard.rb` says so), so for them the body is the only carrier; the 401 carries its code in both.
+
+</details>
+
+<details>
+<summary>Known limits</summary>
+
+- When a fine-grained token's project or group is hidden from the token's user, GitLab answers a plain 404, `{"message":"404 Not Found"}`, the same bytes as a missing resource, which reaches callers as `ErrNotFound`.
+- REST only. GraphQL refusals of a mutation arrive with HTTP 200 and an `errors` array, and a refused query field is `null`.
+- `insufficient_granular_scope` also answers two refusals no permission fixes ("Fine-grained personal access tokens are not yet supported." and "This operation doesn't support fine-grained personal access tokens."), so the code alone does not say a permission is missing.
+- The user moderation methods in `users.go` (`UnblockUser`, `DeactivateUser` and siblings) still replace a 403 with a client-side error, so the helper cannot see those refusals. Removing those errors was agreed in #2175 and merged in !2632, and they came back in a later merge resolution; since callers have compared them since v2.0.0, I would raise that in an issue of its own for 4.0 rather than in this change.
+
+</details>
+
+<details>
+<summary>Tests</summary>
+
+- Unit tests next to the `CheckResponse` tests: each body above, a non-JSON body, an empty body, a non-`ErrorResponse` error, and an `ErrorResponse` wrapped with `fmt.Errorf("%w")`.
+- Integration tests against the Docker instance: an impersonation token created with `read_api` and used for a write (`insufficient_scope`), and the same token after revocation (`invalid_token`).
+
+</details>
+
+<details>
+<summary>Where this comes from</summary>
+
+I ran into this while maintaining [gitlab-mcp-server](https://github.com/jmrplens/gitlab-mcp-server), an MCP server built on client-go. The project keeps a record of everything done on its dependencies and on sibling projects in [docs/development/upstream-bugs.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md). I looked at recording each method's fine-grained permission here and dropped it: you have left GitLab facts about a method, such as whether it is CE or EE, to its consumers (!2931).
+
+</details>
+
+Two questions before I open a merge request: would you prefer functions like the ones above, or fields on `ErrorResponse` filled in by `CheckResponse`? I lean towards the functions because they add nothing to a struct callers build in their own tests. And should they carry the experimental note?
+```
+
+</details>
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 Nine of the entries here were filed upstream together on 2026-09-13, one issue
@@ -5589,6 +5933,727 @@ older than the release that added it.
 payload's `errors`, the way the mutation already returns the attach
 service's own errors.
 
+### The admin token route takes no granular scopes, and no client-go create option carries them
+
+- **Reported**: the GitLab half yes, by GitLab itself,
+  [gitlab-org/gitlab#630541](https://gitlab.com/gitlab-org/gitlab/-/issues/630541)
+  ("Support granular scopes when admins create a personal access token for a
+  user via REST"), opened on 2026-09-23 by @alexbuijs of
+  `group::authorization`. Read on 2026-09-30 it is unassigned, has no
+  milestone, carries `automation:quick-win-judged`, and has no comment. The
+  client-go half no.
+- **In review**: no. Two attempts by other contributors were closed unmerged.
+  [gitlab-org/gitlab!245585](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585)
+  ("Add granular scope support to admin create-token-for-user endpoint", by
+  @abime, reviewed by @alexbuijs, 575 changed lines in 9 files) was closed by
+  its author on 2026-08-24. Its first review round, on the audit event it
+  emitted when the privilege escalation check refuses a grant (a spec for it,
+  and a layer shared with the GraphQL mutation), was answered "Done" in commit
+  `c08e1a12`; the second, of 2026-08-21, was not: three user lookups for one
+  request
+  ([note 3715838735](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585#note_3715838735)),
+  an unrelated change to the page's history
+  ([note 3715838757](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585#note_3715838757)),
+  and a missing link to the fine-grained permissions reference
+  ([note 3715838766](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585#note_3715838766)).
+  [gitlab-org/api/client-go!2978](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2978)
+  (`feat(personal_access_tokens): support granular scopes`, by @jchorl) added
+  `GranularScopes` to the impersonation and current-user create options and the
+  granular fields to the token struct; its one maintainer request, a couple of
+  integration tests, went unanswered, and it was closed with the `stale` label
+  on 2026-09-24.
+- **Merged**: no.
+- **Blocking**: no. This server creates no fine-grained token, and the plans of
+  [issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952) need
+  none created through it.
+- **Workaround**: none taken. All five actions that create a personal access
+  token send classic `scopes` only and refuse a call without them:
+  `user.create_personal_access_token` and `user.create_impersonation_token`
+  (`internal/tools/impersonationtokens/impersonation_tokens.go`),
+  `user.create_current_user_pat`
+  (`internal/tools/users/user_service_accounts.go`),
+  `group.service_account_pat_create` and `project.service_account_pat_create`.
+  The current-user action can therefore create only a `k8s_proxy` or
+  `self_rotate` token, the two classic scopes GitLab accepts on that route.
+  `user.create_impersonation_token` also takes no `description`
+  (`impersonation_tokens.go:88-93`), because client-go's options have none
+  (below). Both gaps on this side are tracked in
+  [issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115),
+  and retire with the client-go merge request below for the routes GitLab
+  serves them on.
+
+**Where**: GitLab v19.4.1-ee (`26212baa`), `lib/api/users.rb`. The admin
+route, `POST /users/:user_id/personal_access_tokens` (`resource
+:personal_access_tokens` at line 1291, `before { authenticated_as_admin! }` at
+1298), declares `requires :scopes` (1308) and no granular parameter. The
+impersonation route, `POST /users/:user_id/impersonation_tokens`, has `use
+:granular_scope_params` and `mutually_exclusive :scopes, :granular_scopes`
+(1227-1228); the current-user route, `POST /user/personal_access_tokens`, has
+`use :granular_scope_params` and `exactly_one_of :scopes, :granular_scopes`
+(1851, 1858). Each of the two answers 404 when
+`granular_personal_access_tokens` is off for the user the token is for (1234,
+1864). The service account token routes declare `requires :scopes` and no
+granular parameter either (`lib/api/group_service_accounts.rb:231`,
+`lib/api/project_service_accounts.rb:229`), which is
+[gitlab-org/gitlab#616442](https://gitlab.com/gitlab-org/gitlab/-/issues/616442),
+open since 2026-08-17: under a group's enforcement on GitLab.com its service
+accounts are left with no working token. That one is GitLab's own and outside
+the merge request below.
+
+**What**:
+
+- `doc/api/user_tokens.md` documents `granular_scopes` for none of the three
+  routes (their sections open at lines 17, 77 and 266 of the 19.4.1 page), and
+  still lists `scopes` as required for the impersonation route. client-go
+  "only supports what is in the public API docs" (`CONTRIBUTING.md:20-21`), so
+  GitLab's documentation is what makes the client-go half admissible.
+- In client-go v3.15.0 (`be72a3fe`), `CreateImpersonationTokenOptions`
+  (`users.go:1224`), `CreatePersonalAccessTokenOptions` (`:1253`) and
+  `CreatePersonalAccessTokenForCurrentUserOptions` (`:1274`) carry `Scopes`
+  and nothing granular, so a client-go caller cannot create a fine-grained
+  token through any of the three routes, the two GitLab already serves
+  included.
+- The feature is not experimental.
+  `config/feature_flags/beta/granular_personal_access_tokens.yml` is
+  `default_enabled: true` (type `beta`, milestone 18.7), and
+  `doc/auth/tokens/fine_grained_access_tokens.md` records general availability
+  in 19.2 on every tier, so the client-go maintainers' reluctance about
+  experimental endpoints does not apply.
+- Found while reading for this entry: `CreateImpersonationTokenOptions` also
+  has no `Description`, which the route accepts (`lib/api/users.rb:1224`) and
+  the page documents under "Create an impersonation token". It is recorded
+  nowhere else here, and can travel in the same client-go merge request.
+
+**Who is waiting on it**:
+[gitlab-org/terraform-provider-gitlab#6868](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/6868)
+asks for fine-grained tokens on the provider's personal access token resource,
+which creates a token for a user through the admin route. Heidi Berry, a
+client-go code owner (`.gitlab/CODEOWNERS:1`), set it to `workflow::blocked`,
+"hopefully can be worked on once the admin endpoint has been updated"
+([note 3603251022](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/6868#note_3603251022)),
+and on 2026-09-12 wrote that "it looks like the MR stalled as the assignee is
+moving to a different team" and asked @jpr0c "do you know if there are any
+plans to continue the work" on the merge request above
+([note 3825448075](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/6868#note_3825448075)).
+Nobody had answered on 2026-09-30.
+
+**Row 32 is the other half.**
+[Row 32](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still)
+is the response side and is not repeated here: commit 24 of
+[gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+(`fff671b1`) gives `PersonalAccessToken` the fields `Granular`,
+`GranularScopes` and `LastUsedIPs`, with a new type,
+`PersonalAccessTokenGranularScope`, for one scope a token holds. This entry is
+the request side. The option type the client-go merge request adds for one
+scope to grant (the earlier attempt called it `GranularScopeOptions`, with
+typed constants for `access`) is named to sit beside that response type, whose
+`project_id` and `group_id` are not the request's names, and if the joint merge
+request has not merged by then, the description says which of the two lands
+first.
+
+**The order, and what each step waits on**:
+
+1. **The GitLab merge request** for the issue, from the
+   [community fork](https://gitlab.com/gitlab-community/gitlab-org/gitlab).
+   Nothing in client-go's review queue holds it. It waits on the maintainer's
+   approval, an independent review of every text before it goes out, and one
+   decision taken first: whether to say on the issue that we are taking it,
+   since it is unassigned and the earlier merge request was closed by its own
+   author. The note is drafted at the end of this section.
+2. **The client-go merge request**, once the GitLab change is merged,
+   documented and in a release the client-go integration fixture pulls (it
+   runs `gitlab-ee:latest`, `docker-compose.yml:5` and `:29`), and only after
+   this project's three open client-go merge requests, which the paragraph
+   under the summary table lists, have been reviewed. It needs no issue first.
+   `CONTRIBUTING.md:10-12` exempts a merge request that describes the problem
+   it solves, and adding fields for documented parameters is what the
+   maintainers asked to receive on demand once the joint merge request is in
+   ("then go back to having people submit fields on-demand",
+   [gitlab-org/api/client-go#2300 note 3811110919](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300#note_3811110919)).
+   Row 84 files an issue first because it adds a library-level function
+   whose shape is a choice. The merge request links the GitLab issue and the
+   provider issue.
+3. Both descriptions say plainly that the current-user and impersonation
+   fields alone do not unblock the provider; the admin route does. The
+   provider's own change is not ours to plan and was not researched.
+
+**What the GitLab merge request carries**:
+
+- In `lib/api/users.rb`, the admin block (1291-1323): `use
+  :granular_scope_params`, `scopes` made optional with `exactly_one_of
+  :scopes, :granular_scopes`, a granular branch following the impersonation
+  one (1232-1241) that looks the target user up once (the block's
+  `target_user` helper calls `find_user_by_id(params)` each time, which the
+  first open comment counted three times in one request), and a 404 when the
+  flag is off for the target user. A request that passes `scopes` works as it
+  does today.
+- In `doc/api/user_tokens.md`, `granular_scopes` for the admin, current-user
+  and impersonation create routes, with a link to the fine-grained permissions
+  reference, `scopes` marked optional where it is, and no unrelated history
+  edits.
+- Request specs in `spec/requests/api/users_spec.rb` in the shape the earlier
+  merge request had: every access type, a privilege escalation refused, the
+  flag off, legacy tokens unchanged. The OpenAPI document regenerated, and a
+  changelog trailer.
+- Not by default: the audit event the earlier merge request emitted on a
+  refused escalation. 19.4.1 emits none there (`create_granular_token`,
+  `lib/api/helpers/personal_access_tokens_helpers.rb:136-147`, and nothing in
+  `app/services/authz/tokens/privilege_escalation_check.rb` audits), and it
+  goes beyond the issue's proposal, so it is carried only if the issue's
+  author wants it, in the layer shared with the GraphQL mutation that the
+  review asked for
+  ([note 3694332559](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585#note_3694332559)).
+- A description that credits the earlier merge request and its author,
+  answers its three open comments one by one, links the issue and the provider
+  issue, keeps its long parts in collapsed sections, and says it comes from
+  maintaining this server, linking this register as the record. The workflow
+  is the
+  [upstream contribution skill](../../.github/skills/upstream-contribution/).
+
+**What the client-go merge request carries**:
+
+- `GranularScopes` on `CreatePersonalAccessTokenOptions`,
+  `CreateImpersonationTokenOptions` and
+  `CreatePersonalAccessTokenForCurrentUserOptions`, with the option type for
+  one scope as GitLab's request declares it: `access`, `permissions`,
+  `project_ids` and `group_ids`, the last two only with `selected_memberships`
+  (`lib/api/helpers/personal_access_tokens_helpers.rb:40-50`). Each field's
+  comment says how it combines with `Scopes` on that route. And `Description`
+  on the impersonation options.
+- Unit tests in the package's style, and the integration tests the maintainer
+  asked for on the earlier attempt: a fine-grained token created through each
+  route against the Docker instance and, once row 32's fields have landed,
+  read back to show its scopes.
+- A description crediting the earlier client-go merge request and its author,
+  and linking the GitLab merge request.
+
+**What the maintainers have said that decides this shape**:
+
+- Patrick Rice, on the earlier client-go attempt: "Since the documentation for
+  these APIs doesn't appear to be updated and tokens are a fairly commonly
+  used API function, can you create a couple integration tests showing that
+  the updates work properly?"
+  ([gitlab-org/api/client-go!2978 note 3664553320](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2978#note_3664553320)).
+  Hence GitLab's documentation first, and integration tests in client-go.
+- Patrick Rice, on 2026-09-09: "with so many coming in to a team of 3
+  maintainers, it puts a bit of a burden on us to validate each MR
+  individually, where if we had an issue we could approve ahead of time in
+  chunks we just have to validate that the MR matches the issue we
+  pre-approved"
+  ([gitlab-org/api/client-go!3053 note 3810461065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053#note_3810461065)).
+  Hence nothing new in client-go's queue until the three open merge requests
+  are reviewed.
+
+**What it costs this server**: the gaps the Workaround field names. What none
+of rows 82 to 85 gives issue 952, and the two calls that read a fine-grained
+token's own grant, are in
+[row 83's section](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose).
+
+**Before posting**: re-read the admin route and the page on `master` (checked
+on 2026-09-30 at `3421b9a9`: the route still `requires :scopes`, and
+`doc/api/user_tokens.md` still says nothing of `granular_scopes`), and read
+the issue's notes again; decide whether to announce on the issue first.
+
+**Verified, inferred and unverified**:
+
+- Verified at the two pins, on `master` where noted, and on gitlab.com with GET
+  requests on 2026-09-30: every route, parameter, line, flag and documentation
+  fact above, the state of the three issues and both closed merge requests,
+  the size of the GitLab one (575 changed lines, 478 added and 97 removed, in 9
+  files), and every quote.
+- Inferred: that the provider needs only the admin route and client-go's
+  option to close its issue.
+- Unverified: whether @jpr0c or `group::authorization` plans to pick the issue
+  up.
+
+**Effort**: the GitLab merge request is medium, in authentication code owned by
+`group::authorization`, with a changelog entry; the client-go one small to
+medium.
+
+<details>
+<summary>Draft: a note on the GitLab issue, if we decide to announce</summary>
+
+Written for this entry and reviewed with it; not posted. Native references,
+first person as the maintainer, one paragraph per line.
+
+```markdown
+I would like to take this, following the proposal above and the approach of !245585, whose three open review comments (one user lookup per request, no unrelated history change in the docs, a link to the fine-grained permissions reference) I would address. I would document `granular_scopes` for the impersonation route, as the proposal says, and for the current-user route, which is undocumented too; the Go client only adds a parameter the public API docs describe, and gitlab-org/terraform-provider-gitlab#6868 is waiting on the admin route. @alexbuijs, is anyone on the team already picking it up?
+```
+
+</details>
+
+### The fine-grained refusal names the missing permissions only as display labels in prose
+
+- **Reported**: no. The issue is drafted below and goes before row 84's, which
+  cites it. It needs nothing from client-go, and waits only on the
+  maintainer's approval and an independent review of its text.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The call is refused correctly; what is missing is a value
+  a program can act on.
+- **Workaround**: none taken. This server passes GitLab's sentence on as it
+  passes any GitLab message, and reads nothing out of it. Turning a label back
+  into the identifier a token is created with needs a table taken from
+  GitLab's permission YAML, which is the coupling this entry asks GitLab to
+  make unnecessary.
+
+**Where**: GitLab v19.4.1-ee (`26212baa`). `authorize_granular_token_scopes!`
+(`lib/api/helpers.rb:1339-1354`) runs `AuthorizeGranularScopesService`,
+records the denied raw permissions with
+`Current.add_granular_denied_permissions` (1350), and raises
+`Gitlab::Auth::GranularPermissionsError` with the message alone (1352). What
+reads the recorded permissions is the `use_pat` tracking event
+(`lib/api/track_api_request_from_personal_access_token.rb:23-29`), and only
+where `track_api_request_from_personal_access_token` is enabled for the user
+(`:15`): a GitLab.com derisk flag, `default_enabled: false` at 19.4.1 and on
+`master`, whose rollout issue
+[gitlab-org/gitlab#596560](https://gitlab.com/gitlab-org/gitlab/-/issues/596560)
+is open and labelled as missed in every milestone from 19.0 to 19.4. The error
+class carries nothing but the message (`lib/gitlab/auth/auth_finders.rb:13`),
+and the API guard renders it as `Bearer::Forbidden` with the code
+`insufficient_granular_scope` and no `scope` (`lib/api/api_guard.rb:235-238`).
+
+**What**: a fine-grained token that lacks a permission gets
+
+```text
+403 {"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Work Item: Read]."}
+```
+
+`access_denied_error`
+(`app/services/authz/tokens/authorize_granular_scopes_service.rb:127-138`)
+builds the description from display labels, each `resource_name: Action`,
+sorted and joined. The identifiers a token is created with, the values
+`granular_scopes` takes in its `permissions` (such as `read_work_item`), appear
+nowhere in the response. The classic refusal a few lines above in the same
+guard has a machine-readable part: `insufficient_scope` passes `{ scope:
+e.scopes }` (`api_guard.rb:217-223`) and its body carries a `scope`, a shape
+the REST authentication page documents (`doc/api/rest/authentication.md`,
+lines 200 to 205). That branch's missing `WWW-Authenticate` header is
+[row 1](#403-responses-carry-no-www-authenticate-header), a change of its own.
+
+Four properties any such field has to be honest about, read in the same
+service:
+
+- The check passes when any one boundary holds every permission (`:85-87`),
+  and the sentence names only the first boundary, by priority, that lacks one
+  (`:128`). A route that accepts a group or the user, such as
+  `POST /import/bitbucket` (`lib/api/import_bitbucket.rb:34-35`), is refused
+  with one of them named.
+- The label is GitLab's reported denial, not a guaranteed grant. In
+  [gitlab-org/gitlab#627693](https://gitlab.com/gitlab-org/gitlab/-/issues/627693)
+  a token holding Pipeline: Read is refused with `[Pipeline: Read]` because no
+  policy rule enables `read_pipeline_job`; and for sixteen raw permissions the
+  label names a deprecated definition,
+  [row 85](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label).
+- A token whose boundary is hidden from its user gets a 404 instead
+  (`helpers.rb:1348`), a plain `{"message":"404 Not Found"}` (`not_found!`,
+  `helpers.rb:600-605`), the same bytes as a missing resource. That is
+  deliberate and nothing here changes it. At 19.4.1 the service asks, for each
+  boundary in priority order, whether the token's user is a member of it or
+  can see it (`Authz::BoundaryPolicy`,
+  `app/policies/authz/boundary_policy.rb:16-26`; what the token grants plays no
+  part); on `master` it asks only about the boundary the sentence would name,
+  through that project's or group's own policy for the token's user.
+- The code does not always mean a permission is missing.
+  `insufficient_granular_scope` also carries "Access denied: Fine-grained
+  personal access tokens are not yet supported." and "Access denied: This
+  operation doesn't support fine-grained personal access tokens." (service
+  `:115-121`, raised through `helpers.rb:1346-1352`). A field naming the
+  missing permissions would be absent there, and a client has to read its
+  absence as "no permission fixes this", which is what phase A of issue 952
+  has to tell a model.
+
+**Why a field of its own, not a change to the sentence**: GitLab made the
+sentence human-readable on purpose.
+[gitlab-org/gitlab#591681](https://gitlab.com/gitlab-org/gitlab/-/issues/591681)
+replaced raw names such as `[read_project]` with the `[Resource: Action]`
+form: @alexbuijs wrote that with the old message "users are not able to search
+for `read_project` anywhere"
+([note 3119035543](https://gitlab.com/gitlab-org/gitlab/-/issues/591681#note_3119035543)),
+and the issue's author proposed removing the raw permission and structuring
+the required permissions "as Resource: Permission(s)"
+([note 3124860631](https://gitlab.com/gitlab-org/gitlab/-/issues/591681#note_3124860631)).
+A proposal that put identifiers back into the sentence would reverse that; one
+that leaves the sentence alone and adds a field for programs does not. The
+names the field carries are the identifiers `granular_scopes[].permissions`
+takes and a token's own grant lists. For 718 of the 786 live definitions that
+identifier is also a raw permission name (`read_project` among them, from
+`projects/project/read.yml`), so the case rests on the field being separate
+from the sentence and on each name being one a caller can grant, not on the
+strings differing.
+
+**What is proposed** (the draft below):
+
+1. `GranularPermissionsError` carries the missing permissions, named by
+   assignable identifier with `Assignable.available_for_permission`
+   (`lib/authz/permission_groups/assignable.rb:21-23`), so the names are
+   current ones. At 19.4.1 each of the 1251 raw permissions the 857
+   assignable definitions declare sits in exactly one live definition, and
+   GitLab's own permission checks make that hold for a REST route by
+   construction: a route permission with no live definition is a
+   `missing_assignable` violation
+   (`lib/tasks/gitlab/permissions/routes/validate_task.rb:187-195`), and a raw
+   permission in two live definitions a `duplicate_raw_permission` one
+   (`lib/tasks/gitlab/permissions/assignable/validate_task.rb:309-318`). The
+   mapping therefore always has one answer.
+2. The guard passes them as `{ scope: identifiers }`, which rack-oauth2
+   2.2.1's `Forbidden` already renders space-joined
+   (`lib/rack/oauth2/server/resource/error.rb:26-37` in the gem). The
+   description does not change.
+3. The example at `doc/auth/tokens/fine_grained_access_tokens.md:126-131` is
+   updated, and specs cover both.
+
+The body would become
+
+```text
+{"error":"insufficient_granular_scope","error_description":"Access denied: ... [Work Item: Read].","scope":"read_work_item"}
+```
+
+and the field would be absent from the two refusals above that name no
+permission. Two points are left to the group, and the draft asks them: in the
+classic refusal `scope` lists scopes of which any one is accepted, class-wide
+(`api_guard.rb:102-114`), while here it would list permissions all missing on
+one boundary, so they may prefer a dedicated key through a small `Forbidden`
+subclass; and only a dedicated key could list each boundary's missing set as
+an alternative. Out of scope, and said so: permission names a token cannot be
+granted, the deliberate 404, and GraphQL, where a mutation's errors could
+follow with `extensions` and a query field redacts to null, which
+[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103)
+investigates from this side.
+
+**What the group has said that decides this shape**: besides the issue above,
+@alexbuijs, asking a user how GitLab could help migrate legacy tokens to
+fine-grained ones, pointed at the refusals themselves: "I don't think it's
+possible to avoid the whack-a-mole game from our side. Your script could be
+adjusted to not exit when an API call fails. That would allow you to see all
+error messages with missing permissions"
+([gitlab-org/gitlab#553887 note 3109306972](https://gitlab.com/gitlab-org/gitlab/-/issues/553887#note_3109306972)).
+The user answered that "setting up my token is basically guessing what
+permissions map to what I think my program does and just following the
+errors"
+([note 3109707685](https://gitlab.com/gitlab-org/gitlab/-/issues/553887#note_3109707685)).
+If the refusals are how a caller finds its permissions, a program should be
+able to read them. The open
+[gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849),
+from the same group, is the token's side of the same need: that a
+fine-grained token can read its own grant, `granular_scopes` included, in one
+request and without broader access, leaving open whether that means no
+`read_personal_access_token` or a dedicated permission. No GitLab issue
+proposed the field when this was written.
+
+**What it costs this server.** Issue 952 needs the permission an action
+requires **before** the call, so that a fine-grained token is served the
+actions its grant allows (its phase B), and none of rows 82 to 85 provides
+that. GitLab sends nothing about the permission a request used when it
+succeeds (`helpers.rb:1339-1354` computes it from the route's `route_setting
+:authorization` and discards it on a pass), and a refusal names what was
+missing only after the call. Phase B takes the route-to-permission mapping
+from GitLab: each route's `route_setting :authorization`, which
+`cmd/gen_api_live` does not record yet and could record from a booted GitLab,
+or GitLab's generated reference page
+(`doc/auth/tokens/fine_grained_access_tokens_rest.md`). It cannot come from
+client-go, whose maintainers leave GitLab facts about a method, such as the
+edition, to its consumers
+([gitlab-org/api/client-go!2931 note 3504443036](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2931#note_3504443036)).
+The fact that helps today is on the token's side: a fine-grained token reads
+its own grant in two calls. `GET /personal_access_tokens/self`
+(`GetSinglePersonalAccessToken`, which `DetectScopes` in
+`internal/gitlab/scopes.go` already calls) gives its id and `granular: true`
+but no scopes, because it does not pass `with_granular_scopes`
+(`lib/api/personal_access_tokens/self_information.rb:49-51`) and the entity
+exposes the scopes only under that option
+(`lib/api/entities/personal_access_token.rb:25-27`). `GET
+/personal_access_tokens/:id` (`GetSinglePersonalAccessTokenByID`) passes it
+and presents them (`lib/api/personal_access_tokens.rb:61-70`). Both routes
+need the `read_personal_access_token` permission on the user boundary, and
+client-go decodes the scopes only once row 32's commit lands, so the second
+call is read from the captured response
+([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+as the token tools already do.
+[gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849)
+above asks for it in one call, and leaves open whether that means no
+`read_personal_access_token` or a dedicated permission. What rows 83 and 85
+add is the other direction:
+after a refusal, the permission to add, named the way GitLab's token form and
+token API name it, which phase A of issue 952 wants for the refusal it passes
+on.
+
+**Verified, inferred and unverified**:
+
+- Verified in source at 19.4.1 (every line cited above), on `master` where
+  noted, in the rack-oauth2 2.2.1 gem, and on gitlab.com with GET requests on
+  2026-09-30 (every quote, and the state of every gitlab-org/gitlab issue this
+  section links). Verified as well: a classic token under a group's
+  enforcement on GitLab.com gets the same code,
+  [gitlab-org/gitlab#616442](https://gitlab.com/gitlab-org/gitlab/-/issues/616442)
+  showing it for a service account's legacy token; on a self-managed instance
+  enforcement refuses no existing legacy token
+  (`doc/auth/tokens/fine_grained_access_tokens.md`, lines 134 to 153).
+- The 403 body is quoted from the source and from public issues that show it
+  from live instances:
+  [gitlab-org/gitlab#602772](https://gitlab.com/gitlab-org/gitlab/-/issues/602772),
+  [gitlab-org/gitlab#616442](https://gitlab.com/gitlab-org/gitlab/-/issues/616442),
+  [gitlab-org/gitlab#594315](https://gitlab.com/gitlab-org/gitlab/-/issues/594315),
+  and the Pipeline: Read case above, from gitlab.com. This project has not
+  captured one: issue 952's measurement on `gitlab/gitlab-ee:19.4.1-ee.0`
+  (2026-09-28) records the status and the code and quotes no body. Capture one
+  on the Docker instance before any text calls a body observed.
+- Unverified: whether `group::authorization` accepts the field, and whether it
+  prefers `scope` or a dedicated key. The reluctance on record is about raw
+  names in the sentence and about exposing raw permissions a caller cannot
+  grant; the field names only identifiers a caller can grant, though most are
+  spelled like a raw permission (above). Besides the issue above, a note on the
+  permission renames says the only mitigation would be to "expose assignable
+  permission versions and the raw permissions to customers, which I don't
+  think we want to do"
+  ([gitlab-org/gitlab#591420 note 3113376776](https://gitlab.com/gitlab-org/gitlab/-/issues/591420#note_3113376776)).
+
+**Before posting**: re-read on `master` every GitLab file the draft cites
+(checked on 2026-09-30 at `3421b9a9`: `access_denied_error` still builds the
+sentence from `for_permission`, and `hidden_boundary` has moved as described
+above, which the draft's out-of-scope 404 sentence still covers); capture a
+body on the Docker instance. The flag question is answered in the draft, and
+its client-go mention is generic, so this issue waits on nothing from row 84.
+
+**Effort**: small, about five Ruby files plus specs and one documentation
+example, an estimate. REST only.
+
+<details>
+<summary>Draft: the gitlab-org/gitlab issue ("Feature Proposal - lean" headings)</summary>
+
+Reviewed twice while it was prepared, and corrected after a third review; not
+posted. Native references, first person as the maintainer, one paragraph per
+line.
+
+Title: `Name the missing fine-grained permissions in a machine-readable field of the insufficient_granular_scope response`
+
+```markdown
+### Release notes
+
+When a fine-grained personal access token is refused because it lacks a permission, the API response keeps its human-readable description and also names the missing permissions by the identifiers you grant when you create a token (for example `read_work_item`), so scripts, CLIs and API clients can tell you exactly which permission to add.
+
+### Problem to solve
+
+A fine-grained personal access token that lacks a permission gets this 403 from the REST API:
+
+    {"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Work Item: Read]."}
+
+#591681 made that sentence human-readable on purpose, and it should stay that way: people search the token form and the documentation for `Work Item`, not for `read_work_item`. But a program cannot act on the sentence. It names display labels, not the identifiers the token API takes in `granular_scopes[].permissions`, and mapping one to the other needs GitLab's permission YAML. The missing permissions are known at that moment: `authorize_granular_token_scopes!` records them, as raw permission names, with `Current.add_granular_denied_permissions` (`lib/api/helpers.rb`), and the response does not carry them.
+
+The classic refusal a few lines above in `lib/api/api_guard.rb` already has a machine-readable part: `insufficient_scope` passes `{ scope: e.scopes }` and the response carries `"scope": "..."`. GitHub has a comparable header for its fine-grained tokens, `X-Accepted-GitHub-Permissions`, which names the permissions an endpoint accepts.
+
+This is part of the "whack-a-mole" described in #553887, where the suggested way through was to read the error messages for the missing permissions. #629849 asks for a token's own grant to be readable in one request; naming the missing permissions in the refusal is the other half, and it needs no new endpoint.
+
+### Proposal
+
+1. Let `Gitlab::Auth::GranularPermissionsError` carry the missing permissions, the way `InsufficientScopeError` carries `scopes`, named by assignable permission identifiers. Map them with `Authz::PermissionGroups::Assignable.available_for_permission`, not `for_permission`, so the answer uses current names only. The permission checks already make that mapping exact for a REST route: `gitlab:permissions:validate` reports a route permission with no live definition, and a raw permission in two.
+2. In the `GranularPermissionsError` branch of `lib/api/api_guard.rb`, pass them as `{ scope: identifiers }` to `Rack::OAuth2::Server::Resource::Bearer::Forbidden`, which rack-oauth2 2.2.1 already renders as a space-separated `scope`. `error_description` does not change.
+3. Update the example response in `doc/auth/tokens/fine_grained_access_tokens.md`.
+
+The response would become:
+
+    {"error":"insufficient_granular_scope","error_description":"Access denied: ... [Work Item: Read].","scope":"read_work_item"}
+
+The same `error` code also answers "Fine-grained personal access tokens are not yet supported." and "This operation doesn't support fine-grained personal access tokens.", which no permission fixes. The field would be absent there, and its absence is what tells a client so.
+
+Two points for the group to decide:
+
+- For `insufficient_scope`, `scope` lists scopes of which any one is accepted; here it would list permissions that are all missing on the boundary the description names. The `error` code tells the two apart. If you would rather use a dedicated key, that needs a small subclass of `Forbidden`, and I am happy to do either.
+- An endpoint that accepts several boundaries passes when any one of them has every permission, while the description names the first failing one. A dedicated key could list each boundary's missing set as an alternative; `scope` can only carry one set.
+
+Out of scope: permission names a token cannot be granted (the field carries assignable identifiers, which for most definitions are spelled like a raw permission, `read_project` among them); the 404 returned when the boundary is hidden from the token's user, which is deliberate; GraphQL, where mutation errors could follow with `extensions` in a separate change and query fields redact to null.
+
+I would like to contribute the merge request.
+
+### Intended users
+
+- Sasha (Software Developer) and Priyanka (Platform Engineer), who configure fine-grained tokens for automation and today do it by trial and error.
+- Authors of API clients and integrations: the Go client (gitlab-org/api/client-go), glab, the Terraform provider, python-gitlab, MCP servers.
+
+### Feature Usage Metrics
+
+The denied permissions are already recorded on the `use_pat` event where `track_api_request_from_personal_access_token` is enabled (a GitLab.com derisk flag, default off); the field adds no event.
+
+### Does this feature require an audit event?
+
+No.
+
+<details>
+<summary>Where this comes from</summary>
+
+I ran into this while maintaining [gitlab-mcp-server](https://github.com/jmrplens/gitlab-mcp-server), an MCP server for GitLab built on the Go client, which has to tell a model which permission a refused call needed. The project keeps a record of everything done on its dependencies and on sibling projects in [docs/development/upstream-bugs.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md).
+
+</details>
+
+<details>
+<summary>Code references (19.4.1)</summary>
+
+- `lib/api/helpers.rb`, `authorize_granular_token_scopes!`: records `result.payload[:denied_permissions]` and raises `GranularPermissionsError` with the message only.
+- `app/services/authz/tokens/authorize_granular_scopes_service.rb`, `access_denied_error`: builds the description from `Assignable.for_permission(permission).first`, for the first boundary with missing permissions.
+- `lib/api/api_guard.rb`: the `InsufficientScopeError` branch passes `scope`; the `GranularPermissionsError` branch does not.
+- `lib/gitlab/auth/auth_finders.rb`: `InsufficientScopeError` has `attr_reader :scopes`; `GranularPermissionsError` is `Class.new(AuthenticationError)`.
+- rack-oauth2 2.2.1, `lib/rack/oauth2/server/resource/error.rb`: `Forbidden` accepts `scope` in its options and renders it space-joined.
+
+</details>
+```
+
+</details>
+
+### The fine-grained refusal can name a deprecated permission's label
+
+- **Reported**: no. It is read from the source and not yet reproduced on a
+  running instance, which comes first.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The call is refused correctly; the sentence points at a
+  permission the token form does not offer.
+- **Workaround**: none taken. This server passes the sentence on as GitLab
+  wrote it. The routes whose raw permission is among the sixteen below include
+  those behind `project.hook_test`, `group.hook_test` and
+  `admin.system_hook_test`, and the import routes behind `admin.import_github`,
+  `admin.import_bitbucket`, `admin.import_bitbucket_server`,
+  `admin.import_cancel_github` and the bulk import actions, so a refusal of
+  one of those would tell the caller to grant a permission the form hides.
+
+**Where**: GitLab v19.4.1-ee (`26212baa`), `access_denied_error` in
+`app/services/authz/tokens/authorize_granular_scopes_service.rb`, line 130,
+names each missing permission by `Assignable.for_permission(permission).first`.
+`for_permission` (`lib/authz/permission_groups/assignable.rb:17-19`) keeps
+deprecated definitions; `available_for_permission` (`:21-23`) is the one that
+drops them. The definitions are loaded in `Dir.glob` order and keyed by name
+(`load_files_to_hash` in `lib/authz/concerns/yaml_permission.rb`), so `.first`
+is the definition whose file sorts first. On `master` (`3421b9a9`,
+2026-09-30) `access_denied_error` still looks the label up with
+`for_permission`.
+
+**What**: 71 of the 857 assignable definitions are deprecated at 19.4.1. 124
+raw permissions sit in both a deprecated and a live definition, and for 16 the
+deprecated one sorts first: `cancel_bulk_import`, `cancel_github_import`,
+`create_bitbucket_import`, `create_bitbucket_server_import`,
+`create_bulk_import`, `create_github_gist_import`, `create_github_import`,
+`create_group_import`, `increment_usage_data_metric`, `read_bulk_import`,
+`read_bulk_import_entity`, `read_bulk_import_entity_failure`,
+`read_epic_label_event`, `read_issue_label_event`,
+`read_user_project_deploy_key` and `test_webhook`. For those the refusal names
+a definition the token form does not offer
+(`app/graphql/resolvers/authz/access_tokens/permissions_resolver.rb:27` lists
+`available_definitions` only) and the documentation does not print
+(`lib/tasks/gitlab/permissions/routes/docs_task.rb:141` uses
+`available_for_permission`). Two examples:
+
+- `test_webhook`, which `POST /projects/:id/hooks/:hook_id/test/:trigger`
+  declares (`lib/api/hooks/trigger_test.rb:34`), is in
+  `integrations/webhook/test.yml` (`deprecated: true`) and in
+  `integrations/webhook/trigger.yml`. `test.yml` sorts first, so the refusal
+  asks for `[Webhook: Test]`, while
+  `doc/auth/tokens/fine_grained_access_tokens_rest.md:1468` lists that route
+  under `Trigger` and the form offers only Webhook: Trigger.
+- `read_epic_label_event` is in `project_planning/epic_label_event/read.yml`
+  (deprecated) and `project_planning/work_item/read.yml`, so the refusal would
+  ask for `[Epic Label Event: Read]` where the form offers Work Item: Read.
+
+Swapping the lookup is safe: every raw permission sits in exactly one live
+definition at 19.4.1, which GitLab's own permission checks make hold for a REST
+route by construction, as
+[row 83](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)
+records, so `available_for_permission(permission).first` always has one
+answer. The defect ends for a definition once GitLab deletes it, which
+`gitlab:permissions:assignable:cleanup_deprecated` does after the definition's
+rename migration is finalized (`lib/tasks/gitlab/permissions/permissions.rake`,
+lines 23 to 29), and that may make the group prefer to wait.
+
+**How we found it**: while studying what the refusal can tell a client
+(row 83), a count over the permission YAML showed deprecated definitions
+sorting first. It was then recounted for this entry with Ruby 3.3.11, the
+version GitLab's `.ruby-version` names at `26212baa`, running `Dir.glob` over
+the 857 files of the 19.4.1 checkout, which gives the counts and the list
+above; the label each refusal would print was worked out from the same files.
+
+**Before anything is filed**: reproduce it on the Docker GitLab
+(`gitlab/gitlab-ee:19.4.1-ee.0`): a fine-grained token holding a project
+permission other than Webhook: Trigger (Project: Read, say) on a project that
+has a webhook, then
+`POST /api/v4/projects/:id/hooks/:hook_id/test/push_events` with it, expecting
+403 and `[Webhook: Test]`. A hidden project answers a plain 404,
+`{"message":"404 Not Found"}`, instead. At 19.4.1 that is
+`token.can?(:read_boundary, boundary)` (service lines 89-91), which
+`Authz::BoundaryPolicy` grants when the token's user is a member of the
+project or can see it (`app/policies/authz/boundary_policy.rb:16-26`), whatever
+the token grants; on `master` the service asks the same of the token's user
+through the project's own policy. Either way, use a token of a member of the
+project, such as the user who added the webhook. Paste the body observed into
+the draft below in place of its marker. Then search `gitlab-org/gitlab` once
+more; a search on 2026-09-30 found nothing on it.
+
+**Proposal**: look the label up with `available_for_permission` at line 130,
+the method the documentation task already uses, with a spec for a permission
+that sits in a deprecated and a live definition. Filed as the issue drafted
+below, or as a small merge request of its own; or, if the group agrees on row
+83's issue that the lookup should change for the new field anyway, carried by
+that merge request.
+
+**What it costs this server**: see
+[row 83's section](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose).
+A model relaying `[Webhook: Test]` sends its user looking for an option that
+is not there.
+
+**Verified, inferred and unverified**:
+
+- Verified in source at 19.4.1 and on `master` where noted: the lookup, the
+  two methods, the load order, the counts and the list (with Ruby 3.3.11's
+  `Dir.glob`), the form's and the documentation's lookups, the route
+  declarations, the permission checks, and the cleanup task.
+- Inferred: the 403 itself. No refusal naming a deprecated label has been
+  observed on a running instance.
+
+**Effort**: small, a one-line change and a spec, owned by
+`group::authorization`.
+
+<details>
+<summary>Draft: the gitlab-org/gitlab issue ("Bug" headings)</summary>
+
+Written for this entry and reviewed with it, not yet in its final form: the
+current-behaviour section waits on the reproduction above. Native references,
+first person as the maintainer, one paragraph per line.
+
+Title: `The insufficient_granular_scope refusal names a deprecated permission for 16 raw permissions`
+
+```markdown
+### Summary
+
+When a fine-grained personal access token is refused, `access_denied_error` in `app/services/authz/tokens/authorize_granular_scopes_service.rb` names each missing permission by `Authz::PermissionGroups::Assignable.for_permission(permission).first`. `for_permission` keeps deprecated definitions, so for 16 raw permissions the refusal names a deprecated definition, which the token form does not offer and the fine-grained permissions reference does not list. For example, `POST /projects/:id/hooks/:hook_id/test/:trigger` requires `test_webhook`, which is in both `integrations/webhook/test.yml` (`deprecated: true`) and `integrations/webhook/trigger.yml`. `test.yml` sorts first, so the refusal asks for `[Webhook: Test]`, while the reference lists the route under `Trigger` and the form offers only Webhook: Trigger.
+
+### Steps to reproduce
+
+1. On GitLab 19.4.1, as a member of a project that has a webhook, create a fine-grained personal access token that does not hold Webhook: Trigger (for example one holding only Project: Read).
+2. Call `POST /api/v4/projects/:id/hooks/:hook_id/test/push_events` with that token.
+
+### What is the current *bug* behavior?
+
+TODO before posting: paste the observed 403 body.
+
+### What is the expected *correct* behavior?
+
+The refusal names `[Webhook: Trigger]`, the permission the token form offers and the reference lists for that route.
+
+### Relevant logs and/or screenshots
+
+The 16 raw permissions whose deprecated definition sorts before the live one in `Dir.glob` order at 19.4.1: `cancel_bulk_import`, `cancel_github_import`, `create_bitbucket_import`, `create_bitbucket_server_import`, `create_bulk_import`, `create_github_gist_import`, `create_github_import`, `create_group_import`, `increment_usage_data_metric`, `read_bulk_import`, `read_bulk_import_entity`, `read_bulk_import_entity_failure`, `read_epic_label_event`, `read_issue_label_event`, `read_user_project_deploy_key`, `test_webhook`.
+
+### Possible fixes
+
+Look the label up with `Assignable.available_for_permission`, as `gitlab:permissions:routes:compile_docs` already does (`lib/tasks/gitlab/permissions/routes/docs_task.rb`), with a spec for a permission that sits in a deprecated and a live definition. The permission checks make the lookup exact for a REST route: `gitlab:permissions:validate` reports a route permission with no live definition, and a raw permission in two, so it always has one answer. The defect also ends for each definition that `gitlab:permissions:assignable:cleanup_deprecated` deletes once its rename migration is finalized, if you would rather wait for that. I would like to contribute the merge request.
+
+<details>
+<summary>Where this comes from</summary>
+
+I ran into this while maintaining [gitlab-mcp-server](https://github.com/jmrplens/gitlab-mcp-server), an MCP server for GitLab, which passes this refusal on to a model. The project keeps a record of everything done on its dependencies and on sibling projects in [docs/development/upstream-bugs.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md).
+
+</details>
+```
+
+</details>
+
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 
 Both entries here were filed as an issue first and then a merge request that
@@ -6387,8 +7452,10 @@ reproducing the panic outside this repository showed where it comes from.
   opened on 2026-09-29 and imported to Gerrit as
   [go.dev/cl/841585](https://go.dev/cl/841585), open. Patch set 2
   (2026-09-30) holds both constructions in its test, the importer's and a
-  package checked from source. Read on 2026-09-30 its reviewers are Robert
-  Griesemer and Mark Freeman, with no vote or comment yet.
+  package checked from source. Its reviewers are Robert Griesemer and Mark
+  Freeman. On 2026-09-30 Mark Freeman asked for a shorter commit message,
+  patch set 3 of the same day carries it with the code unchanged, and that
+  thread is resolved; no vote yet.
 - **Merged**: no. No Go release carries a fix, and `master` still reads the
   field the same way.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
