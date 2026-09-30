@@ -588,8 +588,8 @@ jobs:
   # The linter used to be `go install …@latest`: fifty seconds compiling it
   # from source on every run, and whichever version the proxy served that
   # morning, so two runs of the same commit could disagree. The official action
-  # downloads a release binary for an exact version and caches it. It only
-  # installs; the Makefile target is still what runs, so CI and a developer's
+  # downloads a release binary for an exact version. It only installs; the
+  # Makefile target is still what runs, so CI and a developer's
   # `make golangci-lint` are the same three commands.
   golangci-lint:
     name: "🧹 golangci-lint"
@@ -607,10 +607,6 @@ jobs:
       - name: Read the pinned linter version
         id: lint
         run: echo "version=$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile)" >> "$GITHUB_OUTPUT"
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: ${{ steps.lint.outputs.version }}
-          install-only: true
       # golangci-lint's own analysis cache (~/.cache/golangci-lint) is
       # deliberately not restored, so the result depends only on the tree
       # being linted. A pull request restores first from its own ref, which
@@ -618,11 +614,26 @@ jobs:
       # on 2026-09-24 that failed a cascaded layer twice with an unused
       # //nolint:contextcheck in a file the stack never touched, which a
       # cold run did not report (issue 945). The same staleness could hide a
-      # finding. The Go build and module caches setup-go keeps are still
-      # used: their keys are content hashes. The cost is small: a cold
-      # analysis of the whole tree took 101 s against 29 s warm on a 4-CPU
-      # host, and this job runs well inside the cross-platform matrix that
-      # sets the wall clock.
+      # finding. skip-cache is what keeps it out: install-only stops the
+      # action after the install and nowhere else, so without it the action
+      # still restores that cache before installing and saves it after the
+      # job. Its key names only the runner OS, a seven-day interval and the
+      # hash of go.mod, so a pull request that leaves go.mod alone can
+      # restore main's analysis of another tree by exact key. Removing an
+      # actions/cache step of our own left that cache in place, and on
+      # 2026-09-30 a lint reading it reported fifty unused
+      # //nolint:staticcheck directives on each of seven layers of a stack,
+      # which a cold run of the same tree does not report. The Go build and
+      # module caches setup-go keeps are
+      # still used: their keys are content hashes.
+      # The cost is small: a cold analysis of the whole tree took 101 s
+      # against 29 s warm on a 4-CPU host, and this job runs well inside the
+      # cross-platform matrix that sets the wall clock.
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.lint.outputs.version }}
+          install-only: true
+          skip-cache: true
       - run: make golangci-lint
 
   govulncheck:
