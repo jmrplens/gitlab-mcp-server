@@ -27,7 +27,7 @@
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
-	bench-resources bench-resources-render check-bench-resources bench-fairness \
+	bench-resources bench-resources-render check-bench-resources bench-fairness bench-held \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -1589,6 +1589,17 @@ check-bench-resources:
 BOUND ?= tools-call-rps
 bench-fairness:
 	go run ./cmd/bench_resources/ -fairness $(BOUND)
+
+## bench-held: measure what a held call costs and what the process does with
+## more of them than its descriptor limit allows. The ladder the held-call
+## ceiling (register row HLD-011) was measured with, under a hard descriptor
+## limit of 1024, from HELD_CREDENTIALS credentials. Minutes on a modest host,
+## Linux or macOS (the limit is set through /bin/sh). Writes bench/held.json,
+## which is not committed, and draws nothing.
+HELD_CREDENTIALS ?= 1
+bench-held:
+	go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024 \
+		-held-credentials $(HELD_CREDENTIALS)
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 ## Runs unit-test coverage over ./cmd/... and ./internal/..., so it takes minutes.

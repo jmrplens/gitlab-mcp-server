@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -274,6 +275,28 @@ func TestWaitUntil_AnswersForAnInstantAlreadyPast(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWaitUntil_AnInstantThatIsNow_OnACancelledRun_SaysCancelled pins the edge
+// between an instant already past and one to come.
+//
+// An instant that is exactly now is not waited for, so a cancelled run is told
+// so at once. Waiting on it instead starts a timer that has already fired and
+// races it against the cancellation: with both ready the select takes either,
+// and a cancelled schedule would now and then send one more request. Only a
+// fake clock can ask for exactly now, and asking many times is what makes the
+// race lose at least once if it is there.
+func TestWaitUntil_AnInstantThatIsNow_OnACancelledRun_SaysCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		for range 64 {
+			if waitUntil(ctx, time.Now()) {
+				t.Error("waitUntil said the schedule runs on a cancelled run, for an instant that is now")
+				return
+			}
+		}
+	})
 }
 
 // TestFairTally_Record_FilesTheFirstFailureAndNothingAfterIt verifies a

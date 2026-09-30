@@ -17,6 +17,10 @@ package tenancy
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func allowDecisions() []Decision {
+	// heldRefusalPrefix is what every refusal of HLD-011 begins with, and
+	// heldRefusal where its in-band refusals are built.
+	const heldRefusalPrefix = "This server is busy."
+	heldRefusal := refuse(pkgServer, "heldRequestsRefusal")
 	busy := refuse(pkgServer, "listenLimits.busy")
 	listenRefusal := Refusal{
 		Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeServerBusyLegacy,
@@ -383,12 +387,14 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
-			// A decision by absence, recorded like RTC-004: nothing bounds the
-			// requests one credential or the process holds open, nor the
-			// stateful sessions, while the reason the listen ceilings give
-			// applies to every held connection (F-31, issue 951).
+			// A decision by absence, recorded like RTC-004: nothing bounds how
+			// many stateful sessions exist, while the reason the listen
+			// ceilings give applies to every held connection (F-31, issue
+			// 951). The requests the process holds open were the other half
+			// of this row until HLD-011 bounded them; the sessions are the
+			// half F-31 still records.
 			ID: "HLD-010", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Ruled,
-			Resource: "held requests and stateful sessions",
+			Resource: "stateful sessions",
 			Key:      KeyProcess, StdioKey: KeyNone,
 			ReasonUnit: KeyProcess, ProtectsProcess: true,
 			Source:   SourceNone,
@@ -396,6 +402,105 @@ func allowDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgServer, "streamableHTTPOptions"),
 				enforce(pkgServer, "sessionOwners.record"),
+			},
+		},
+		{
+			// The ceiling on the calls the process holds open, across every
+			// credential (issue 951, answering F-31 for them; the stateful
+			// sessions stay on HLD-010). It stands alone, keyed on the process
+			// with no per-caller number beside it: a per-caller one would
+			// multiply by however many credentials a caller mints, and would
+			// bound nothing INV-018 asks of this row. Whether a per-credential
+			// ceiling should stand beside it anyway, as HLD-001 stands beside
+			// HLD-002, is put to the maintainer in the pull request.
+			//
+			// Its value is derived rather than written: the descriptors the
+			// process may open, read once at startup, less an eighth spare and
+			// the listen streams HLD-002 reserves, divided by what one held
+			// call costs. Where the platform has no limit to read it is sized
+			// against FallbackDescriptorLimit. The runtime raises the soft
+			// limit to the hard one before main, so the limit read is the hard
+			// one: 192 under 1024, and far above anything a rate-limited
+			// caller reaches under a default systemd or container limit.
+			//
+			// It counts the calls that reach GitLab (MeterFor's tool-call and
+			// completion buckets), a listen aside, since HLD-001 and HLD-002
+			// count that one. The calls are counted where the SDK dispatches
+			// them, so each call of a batch is counted, a response the client
+			// sends to a request of the server's own is not, and the method is
+			// the one the SDK read out of the body; the gate takes the slot
+			// itself only for a POST whose headers the SDK holds to the body
+			// (protocol 2026-07-28 or later), and refuses it with a 503 before
+			// the SDK reads it. Either way the slot is taken after admission,
+			// which departs from PAT-003 (take the process slot before
+			// anything per key): a slot taken before admission would let a
+			// caller with no credential hold one for as long as its
+			// verification takes. What a refused newcomer has spent by then is
+			// its admission: in legacy mode the pool entry its first call
+			// builds (POL-006's probe of GitLab, the tier, the catalog), which
+			// at the pool's bound evicts another credential's quiet entry
+			// (POL-002), and in oauth mode one of ADM-014's verification slots.
+			// It never spends the credential's rate.
+			//
+			// Its refusals say only that the process is busy, in words that
+			// name no bound, no figure and no caller: with no per-caller
+			// ceiling beside it any refusal of it tells its caller that the
+			// process is full, and no wording can take that bit back, which is
+			// the one INV-019 accepts for a bound keyed on the process. The
+			// log line is the one place that says which bound refused. Whether
+			// a held call makes an entry busy is POL-003's answer and did not
+			// change: it does not.
+			ID: "HLD-011", Question: Allow, Kind: Ceiling, Class: ClassP, Disposition: Valued,
+			Resource: "calls the process holds open across every credential",
+			Key:      KeyProcess, StdioKey: KeyNone,
+			StatedUnit: KeyProcess, ReasonUnit: KeyProcess, ProtectsProcess: true,
+			Reason:    "only a ceiling keyed on the process bounds the process",
+			ReasonAt:  reasonAt(pkgServer, "processHeldRequests"),
+			Values:    []string{"HeldRequestDescriptors", "DescriptorSpareDivisor", "FallbackDescriptorLimit"},
+			Functions: []string{"MeterFor"},
+			Source:    Derived, Zero: ZeroNotApplicable,
+			AtCapacity: RefuseNewcomer,
+			Decided:    []string{"issue 951"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodGate}, Era: EraModern, Channel: Gate, Code: CodeUnavailable, Status: 503,
+					RetryAfter: RetryAfterFixed, Prefix: heldRefusalPrefix, Answer: RetryLater,
+					At: refuse(pkgServer, "heldRequestsFailure"),
+				},
+				{
+					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: heldRefusalPrefix, Answer: RetryLater,
+					At: heldRefusal,
+				},
+				{
+					Methods: []string{"resources/read", "resources/subscribe", "prompts/get"}, Channel: RPC,
+					Code: CodeTooManyRequests, Prefix: heldRefusalPrefix, Answer: RetryLater, At: heldRefusal,
+				},
+				{
+					Methods: []string{"completion/complete"}, Channel: EmptyCompletion, Answer: RetryLater,
+					At: heldRefusal,
+				},
+			},
+			Sites: []Site{
+				alias(pkgServer, "heldRequestDescriptors", "HeldRequestDescriptors"),
+				alias(pkgServer, "descriptorSpareDivisor", "DescriptorSpareDivisor"),
+				alias(pkgServer, "fallbackDescriptorLimit", "FallbackDescriptorLimit"),
+				alias(pkgServer, "heldRefusalCode", "CodeTooManyRequests"),
+				enforce(pkgServer, "heldRequestsFor"),
+				enforce(pkgServer, "heldRequestsCeiling"),
+				enforce(pkgServer, "descriptorLimit"),
+				enforce(pkgServer, "descriptorLimitFrom"),
+				enforce(pkgServer, "processHeldRequests"),
+				enforce(pkgServer, "heldRequests.acquire"),
+				enforce(pkgServer, "holdsOpen"),
+				enforce(pkgServer, "gateCountsRequest"),
+				enforce(pkgServer, "claimGateSlot"),
+				enforce(pkgServer, "heldRequestsMiddleware"),
+				enforce(pkgServer, "newServerShell"),
+				enforce(pkgServer, "mcpServerGate.middleware"),
+				enforce(pkgServer, "registerOAuthMCPHandlers"),
+				enforce(pkgServer, "registerLegacyMCPHandlers"),
+				refuse(pkgServer, "heldRequestsFailure"),
+				heldRefusal,
 			},
 		},
 		{

@@ -47,7 +47,7 @@ func requirementIDs() []string {
 		{"ADM", 14},
 		{"AUB", 5},
 		{"RTC", 7},
-		{"HLD", 10},
+		{"HLD", 11},
 		{"POL", 9},
 		{"AUT", 6},
 		{"DST", 3},

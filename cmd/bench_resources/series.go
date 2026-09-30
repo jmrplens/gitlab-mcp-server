@@ -143,11 +143,19 @@ func (r *runner) walkSteps(ctx context.Context, in seriesInput, result *SeriesSc
 		result.Steps = append(result.Steps, step)
 		result.StoppedAt = step.Clients
 		r.sayf("      %s", step.summary())
-		if step.CallP99Ms > float64(latencyCeiling.Milliseconds()) {
+		if crossesLatencyCeiling(step.CallP99Ms) {
 			result.stopAfter(i, &SeriesStop{Kind: stopLatency, P99Ms: step.CallP99Ms})
 			return
 		}
 	}
+}
+
+// crossesLatencyCeiling reports whether a step's tools/call tail, in
+// milliseconds, is past the ceiling. A tail that reaches it exactly has not
+// crossed it, which is the edge the stop sentence ("above the ceiling")
+// states, and the one a measured tail can land on only by rounding.
+func crossesLatencyCeiling(p99Ms float64) bool {
+	return p99Ms > float64(latencyCeiling.Milliseconds())
 }
 
 // sayf prints a line whatever the verbosity: a series can run for an hour,
@@ -212,26 +220,29 @@ func (r *runner) admit(ctx context.Context, tgt target, have, want int) ([]*clie
 		conn *clientConn
 		err  error
 	}
+	// One outcome per credential admitted, and the loop runs over them, so the
+	// count of clients started and the count of slots read back are one number
+	// rather than two that have to agree.
 	outcomes := make([]outcome, want-have)
 	slots := make(chan struct{}, warmParallel)
 	var wg sync.WaitGroup
-	for index := have; index < want; index++ {
+	for slot := range outcomes {
 		wg.Add(1)
-		go func(index int) {
+		go func(slot int) {
 			defer wg.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			conn, _, err := tgt.addClient(ctx, index)
+			conn, _, err := tgt.addClient(ctx, have+slot)
 			if err == nil {
-				listCtx, cancel := context.WithTimeout(ctx, callTimeout)
+				listCtx, cancel := context.WithTimeout(ctx, warmUpTimeout)
 				err = coldList(listCtx, conn.rpc)
 				cancel()
 				if err != nil {
 					err = fmt.Errorf("cold tools/list for %s: %w", conn.label, err)
 				}
 			}
-			outcomes[index-have] = outcome{conn: conn, err: err}
-		}(index)
+			outcomes[slot] = outcome{conn: conn, err: err}
+		}(slot)
 	}
 	wg.Wait()
 

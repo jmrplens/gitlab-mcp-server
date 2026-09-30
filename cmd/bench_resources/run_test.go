@@ -77,6 +77,16 @@ func TestCPUFigures_PublishesOnlyWhatWasMeasured(t *testing.T) {
 			wantNote:         "fell between samples",
 		},
 		{
+			// Equal samples are a load that cost nothing measurable, not a
+			// sample that went backwards: zero is published, and no note.
+			name:             "no time consumed under load",
+			startup:          cpuSample{seconds: 3, ok: true},
+			total:            cpuSample{seconds: 3, ok: true},
+			loadWall:         wall,
+			wantStartup:      3,
+			wantTotalSeconds: 3,
+		},
+		{
 			name:             "no load window to divide by",
 			startup:          cpuSample{seconds: 1, ok: true},
 			total:            cpuSample{seconds: 3, ok: true},

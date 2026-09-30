@@ -563,8 +563,11 @@ func linearXTicks(e lineExtent) []float64 {
 	needed := textWidth(fmt.Sprintf("%.0f", e.maxX), xTickFontSize) + xTickLabelGap
 	stride := math.Max(1, niceStep(needed/perUnit))
 
+	// The first candidate is the first multiple of the stride at or past the
+	// origin; the origin itself, and anything too close to either end, is
+	// what the spacing test below turns away.
 	ticks := []float64{e.minX}
-	for x := math.Ceil((e.minX+1)/stride) * stride; x < e.maxX; x += stride {
+	for x := math.Ceil(e.minX/stride) * stride; x < e.maxX; x += stride {
 		if (x-e.minX)*perUnit < needed || (e.maxX-x)*perUnit < needed {
 			continue
 		}

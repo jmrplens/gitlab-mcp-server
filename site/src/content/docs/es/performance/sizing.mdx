@@ -165,12 +165,30 @@ de GitLab contra un token, que ningún número de instancias eleva.
 | `--http-idle-timeout`                     | `0`         | Déjalo desactivado. Un valor positivo corta los flujos de larga duración                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `--drain-delay`                           | `0`         | Ponlo al menos en un intervalo de detección del balanceador                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
-Otros tres límites no son configurables: diez watchers de recursos por
-credencial y 512 en todo el proceso, y diez autenticaciones fallidas por minuto
-y dirección de cliente antes de que esa dirección reciba `429` durante un
-minuto. Los techos de watchers rechazan en lugar de desalojar: una credencial se
-acuña con una llamada a la API, así que un número por credencial se multiplica
-por cuantas tenga quien llame y solo el del proceso acota el proceso.
+Otros dos límites no son configurables: diez watchers de recursos por
+credencial y 512 en todo el proceso, y las llamadas retenidas a la vez en todo
+el proceso. Los techos de watchers rechazan en lugar de desalojar: una
+credencial se acuña con una llamada a la API, así que un número por credencial
+se multiplica por cuantas tenga quien llame y solo el del proceso acota el
+proceso. El techo de llamadas retenidas sigue al límite de descriptores con el
+que corre el proceso en lugar de ser un número: cada llamada que espera a GitLab
+le cuesta dos descriptores de fichero (la conexión del cliente y la saliente),
+así que deja libre una octava parte del límite y un descriptor para cada uno de
+los 512 streams de listen, y reparte el resto entre las llamadas retenidas, dos
+por cabeza. Son 192 bajo un límite duro de 1024 y 229120 bajo los 524288 que
+systemd da por defecto a un servicio; el que cuenta es el límite duro, porque el
+runtime de Go sube el blando hasta él antes de que arranque el servidor. Una
+llamada por encima se rechaza como ocupado, con `503` y un `Retry-After` de 30
+segundos en el protocolo 2026-07-28; bajo un límite duro de 1024, con 4000
+llamadas ofrecidas desde una credencial o desde cien, el proceso se quedó en 394
+descriptores y `/health` respondió en un milisegundo. Donde el límite es grande
+se agota antes la memoria, unos 190 KiB por llamada retenida, así que la cifra a
+dimensionar es el límite de memoria del contenedor.
+
+El presupuesto de autenticaciones fallidas sí es configurable: diez fallos por
+minuto y dirección de cliente por defecto (`--auth-failure-limit`,
+`--auth-failure-window`) antes de que esa dirección reciba `429` durante la
+ventana.
 
 ## Lo que no crece con el número de credenciales
 

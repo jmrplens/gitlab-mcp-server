@@ -296,8 +296,10 @@ func (s *sampler) meanRSS() uint64 {
 func (s *sampler) current() (procStat, error) {
 	pids := s.pidsFn()
 
+	// Whether any process answered is all that is asked of the loop, so it is
+	// kept as that rather than as a count nothing reads.
 	var total procStat
-	var seen int
+	var answered bool
 	var lastErr error
 	for _, pid := range pids {
 		stat, err := readProcStat(s.ctx, pid)
@@ -307,9 +309,9 @@ func (s *sampler) current() (procStat, error) {
 		}
 		total.rssBytes += stat.rssBytes
 		total.cpuSeconds += stat.cpuSeconds
-		seen++
+		answered = true
 	}
-	if seen == 0 {
+	if !answered {
 		if lastErr != nil {
 			return procStat{}, lastErr
 		}
@@ -362,7 +364,9 @@ var dumpWait = 10 * time.Second
 func countGoroutines(dump string) int {
 	count := 0
 	scanner := bufio.NewScanner(strings.NewReader(dump))
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	// Only the ceiling on a line is set: the scanner grows its buffer up to it
+	// as the longest line needs, and where it starts changes no count.
+	scanner.Buffer(nil, 8*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "goroutine ") {

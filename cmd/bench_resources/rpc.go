@@ -229,6 +229,32 @@ func headerNameFor(method string, params map[string]any) string {
 	}
 }
 
+// executeTool is the dynamic surface's tool that runs a catalog action, and
+// executeActionHeader the header its action argument is mirrored into: the
+// tool's schema marks that argument with SEP-2243's x-mcp-header, and from
+// protocol 2026-07-28 the transport refuses a call whose header is missing.
+const (
+	executeTool         = "gitlab_execute_action"
+	executeActionHeader = "Mcp-Param-Action"
+)
+
+// paramHeaderFor returns the parameter header a request must carry and its
+// value, or two empty strings when it carries none. The one tool this harness
+// calls that declares one is gitlab_execute_action, whose action argument is
+// mirrored; the value is never invented, so a call that names no action sends
+// no header and is refused the way a real client's would be.
+func paramHeaderFor(method string, params map[string]any) (name, value string) {
+	if method != methodToolsCall || params["name"] != executeTool {
+		return "", ""
+	}
+	arguments, _ := params["arguments"].(map[string]any)
+	action, ok := arguments["action"].(string)
+	if !ok {
+		return "", ""
+	}
+	return executeActionHeader, action
+}
+
 // call posts one request and reads the answer.
 func (c *httpRPC) call(ctx context.Context, method string, params map[string]any) ([]byte, error) {
 	body, err := requestBody(c.ids.Add(1), method, params)
@@ -247,6 +273,9 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	req.Header.Set("Mcp-Method", method)
 	if name := headerNameFor(method, params); name != "" {
 		req.Header.Set("Mcp-Name", name)
+	}
+	if header, value := paramHeaderFor(method, params); header != "" {
+		req.Header.Set(header, value)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
 
@@ -289,7 +318,10 @@ func (c *httpRPC) close() { c.client.CloseIdleConnections() }
 // answers in SSE by default, which is the shape a real client receives.
 func eventStreamPayload(body []byte) ([]byte, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(body))
-	scanner.Buffer(make([]byte, 0, 64*1024), 32*1024*1024)
+	// No starting buffer of its own: the scanner grows one to the longest
+	// line it meets, and a capacity chosen here would change nothing but the
+	// first allocation.
+	scanner.Buffer(nil, 32*1024*1024)
 	for scanner.Scan() {
 		if data, ok := strings.CutPrefix(scanner.Text(), "data: "); ok {
 			return []byte(data), nil
@@ -303,14 +335,8 @@ func eventStreamPayload(body []byte) ([]byte, error) {
 
 // firstLine trims a body for an error message.
 func firstLine(body []byte) string {
-	text := strings.TrimSpace(string(body))
-	if index := strings.IndexByte(text, '\n'); index >= 0 {
-		text = text[:index]
-	}
-	if len(text) > 200 {
-		text = text[:200]
-	}
-	return text
+	text, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
+	return text[:min(len(text), 200)]
 }
 
 // stdioRPC talks to one server process over its pipes.
@@ -345,7 +371,7 @@ func newStdioRPC(stdin io.WriteCloser, stdout io.Reader) *stdioRPC {
 func (c *stdioRPC) read(stdout io.Reader) {
 	defer close(c.done)
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
+	scanner.Buffer(nil, 64*1024*1024)
 	for scanner.Scan() {
 		line := append([]byte(nil), scanner.Bytes()...)
 		var envelope struct {

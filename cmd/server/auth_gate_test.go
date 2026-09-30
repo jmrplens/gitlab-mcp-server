@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -1873,6 +1874,54 @@ func TestTransportBudget_Charge_RechargesAPairWhoseWindowLapsed(t *testing.T) {
 	if blocked, _ := budget.blockedFor(source); !blocked {
 		t.Error("a key whose window lapsed was not charged again; the source is let off a client it has not paid for this window")
 	}
+}
+
+// TestTransportBudget_Charge_KeepsAPairThroughTheLastInstantOfItsWindow pins
+// the edge of the deduplication window to the limiter's own.
+//
+// The limiter still counts a failure exactly one window after it, and forgets
+// it only once more than a window has passed, so the pair that failure came
+// from has to stay remembered at that instant too. Re-opening the pair one
+// instant early charges the source a second time for a client the limiter
+// still holds against it, which is the per-failure aggregation the budget
+// exists to avoid. Only a fake clock can land a charge on that instant, which
+// is what the bubble is for: nothing here touches a socket.
+func TestTransportBudget_Charge_KeepsAPairThroughTheLastInstantOfItsWindow(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const source, key = "203.0.113.7", "198.51.100.1"
+		budget.charge(source, key)
+
+		time.Sleep(authFailureWindow)
+		budget.charge(source, key)
+		if blocked, _ := budget.blockedFor(source); blocked {
+			t.Error("a client charged exactly one window ago was charged again, while the limiter still holds its first failure: the source paid twice for one client")
+		}
+	})
+}
+
+// TestTransportBudget_Cleanup_KeepsAPairThroughTheLastInstantOfItsWindow is
+// the sweep's half of the same edge. A sweep that lands exactly one window
+// after a pair was charged keeps it, as the limiter's own sweep keeps the
+// failure, so the client failing again at that instant does not cost the
+// source a second time.
+func TestTransportBudget_Cleanup_KeepsAPairThroughTheLastInstantOfItsWindow(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), authFailureWindow)
+		const source, key = "203.0.113.7", "198.51.100.1"
+		budget.charge(source, key)
+
+		time.Sleep(authFailureWindow)
+		budget.cleanup()
+		budget.charge(source, key)
+		if blocked, _ := budget.blockedFor(source); blocked {
+			t.Error("a sweep exactly one window after a charge forgot the pair while the limiter kept the failure, so the same client charged the source twice")
+		}
+	})
 }
 
 // TestTransportBudget_Charge_KeepsTheSourceAndKeyApart pins the separator in

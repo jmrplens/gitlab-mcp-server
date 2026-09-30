@@ -444,6 +444,12 @@ func TestProgressFunc_QuietUnlessAsked(t *testing.T) {
 func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 	const good = 100 * time.Millisecond
 	const step = defaultStepDuration
+	// A descriptor limit is refused on Windows, where the shell that sets it
+	// does not exist, so the host would decide what a run that measures is.
+	// These cases judge the values, and the refusal has a test of its own.
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	runtimeGOOS = "linux"
 	cases := []struct {
 		name    string
 		opts    options
@@ -478,6 +484,20 @@ func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 			"fairness with a sample interval the ticker cannot take", options{
 				fairness: "tools-call-rps", rounds: 3, sampleInterval: 0, stepDuration: step,
 			}, "-sample-interval",
+		},
+		// A held run is a measurement too, so the same short-circuit must
+		// not carry it past what it cannot measure with.
+		{"held with check", options{check: true, held: "1", heldCredentials: 1}, "-check"},
+		{"held with render", options{render: true, held: "1", heldCredentials: 1}, "-render"},
+		{"held with fairness", options{held: "1", heldCredentials: 1, fairness: "tools-call-rps"}, "-fairness"},
+		{"held counts that descend", options{held: "5,2", heldCredentials: 1}, "-held:"},
+		{"held with no credential", options{held: "1", heldCredentials: 0}, "-held-credentials"},
+		{"held under a negative limit", options{held: "1", heldCredentials: 1, heldNoFile: -1}, "-held-nofile"},
+		{
+			"held that measures", options{
+				held: "1,2", heldCredentials: 2, heldNoFile: 256,
+				rounds: 3, sampleInterval: good, stepDuration: step,
+			}, "",
 		},
 	}
 	for _, tc := range cases {
@@ -535,8 +555,17 @@ func runWithStandin(m *testing.M) int {
 		}
 		standinPath = path
 	}
+	// Every warm-up here is against the stand-in, which answers at once, so a
+	// warm-up still asking after this long is a retry rule that no longer
+	// takes the answer it was given. Held to seconds, it fails the test that
+	// admitted rather than holding the package until the runner gives up.
+	warmUpTimeout = testWarmUpTimeout
 	return m.Run()
 }
+
+// testWarmUpTimeout is the warm-up ceiling the tests run under: far above
+// what a stand-in listing takes, and far below the five minutes a run allows.
+const testWarmUpTimeout = 15 * time.Second
 
 // standinBinary returns the stand-in server, skipping where nothing can be
 // measured.
@@ -821,6 +850,17 @@ func TestLocateRoot_MeasureOnlyRunNeedsNoRepository(t *testing.T) {
 	})
 	t.Run("a fairness run that must build one", func(t *testing.T) {
 		if _, err := locateRoot(options{fairness: "tools-call-rps"}); err == nil {
+			t.Error("locateRoot found a root to build the server in where there is none")
+		}
+	})
+	// A held run is the same shape: its own document, nothing drawn.
+	t.Run("a held run with a binary", func(t *testing.T) {
+		if _, err := locateRoot(options{held: "1", binary: "/somewhere/server"}); err != nil {
+			t.Errorf("locateRoot = %v, want a held run to need no checkout", err)
+		}
+	})
+	t.Run("a held run that must build one", func(t *testing.T) {
+		if _, err := locateRoot(options{held: "1"}); err == nil {
 			t.Error("locateRoot found a root to build the server in where there is none")
 		}
 	})

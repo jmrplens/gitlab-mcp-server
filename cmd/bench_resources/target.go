@@ -63,7 +63,7 @@ var errServerGone = errors.New("the server exited before it answered /health")
 // which is a minute against a binary that never serves it, and the port
 // reservation, whose failures the kernel does not produce on demand.
 var (
-	healthWait  = 60 * time.Second
+	healthWait  = time.Minute
 	reservePort = func(ctx context.Context) (net.Listener, error) {
 		return (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	}
@@ -217,11 +217,10 @@ func configFreeEnviron() []string {
 // list of the test's own, including the entry without an "=" that execve
 // permits and os.Environ never hands a Go program in practice.
 func withoutConfig(environ []string) []string {
-	legacy := make([]string, 0, len(config.PrefixedEnvNames())+1)
+	legacy := []string{"AUTOPILOT"}
 	for _, name := range config.PrefixedEnvNames() {
 		legacy = append(legacy, config.RetiredEnvName(name))
 	}
-	legacy = append(legacy, "AUTOPILOT")
 	kept := make([]string, 0, len(environ))
 	for _, entry := range environ {
 		name, _, ok := strings.Cut(entry, "=")
@@ -275,6 +274,9 @@ type httpTarget struct {
 	// whose switch is a variable rather than a flag.
 	boundArgs []string
 	boundEnv  []string
+	// nofile, when positive, is the descriptor limit the process is started
+	// under (see [nofileScript]); zero inherits this process's.
+	nofile int
 
 	addr string
 	// mu guards cmd and the reaper watching it, which the sampler reads from a
@@ -365,7 +367,13 @@ func (t *httpTarget) startOnce(ctx context.Context) (time.Duration, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 	t.output = &lockedBuffer{}
-	cmd := exec.CommandContext(runCtx, t.binary, args...) // #nosec G204 -- the binary is this command's own build of cmd/server
+	name, argv := t.binary, args
+	if t.nofile > 0 {
+		// The shell execs the server in its own place, so the process the
+		// sampler reads and the pid it reads it by are the server's.
+		name, argv = "/bin/sh", append([]string{"-c", nofileScript, strconv.Itoa(t.nofile), t.binary}, args...)
+	}
+	cmd := exec.CommandContext(runCtx, name, argv...) // #nosec G204 -- the binary is this command's own build of cmd/server, and the script is a constant
 	cmd.Env = append(childEnv(t.plan, t.stubURL, t.otlpURL, false), t.boundEnv...)
 	cmd.Stdout = t.output
 	cmd.Stderr = t.output

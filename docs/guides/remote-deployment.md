@@ -746,8 +746,12 @@ five things:
   answers `429` with `Retry-After`. A throttled `tools/call` is not a `429`: it
   is a normal MCP result carrying an error, so it will not show up in HTTP-level
   monitoring.
-- **Bounds.** `--max-http-clients` caps pooled entries, not sessions or
-  concurrent requests. `--pool-idle-timeout` reclaims unused ones, except an
+- **Bounds.** `--max-http-clients` caps pooled entries, not sessions or the
+  requests they hold; the process bounds the calls held at once across every
+  credential by its descriptor limit (192 under a hard limit of 1024), not
+  configurable, and refuses the next one as busy (see
+  [Requests held open at once](http-server-mode.md#requests-held-open-at-once)).
+  `--pool-idle-timeout` reclaims unused ones, except an
   entry with a live subscription, which is not idle however long it has been
   since it made a request. `--session-timeout` applies to stateful mode only.
 - **The token passes through the box.** Every caller's GitLab token reaches this
