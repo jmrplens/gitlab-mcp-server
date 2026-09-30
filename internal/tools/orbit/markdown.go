@@ -22,6 +22,10 @@ const (
 	actionGraphStatus = "orbit.graph_status"
 )
 
+// hintGraphStatus is the next step the status card ends on, whichever of its
+// three shapes it takes: cluster health says nothing about one namespace.
+const hintGraphStatus = "inspect indexing status for a namespace or project"
+
 // orbitNotFoundOutput is returned by MCP Orbit tools when the requested resource or feature is not found (HTTP 404).
 // Used to provide actionable hints for missing Orbit endpoints or disabled features.
 type orbitNotFoundOutput struct {
@@ -71,13 +75,13 @@ func FormatStatusMarkdown(out StatusOutput) string {
 
 	if facts.formattedText != "" {
 		c.Fence("", "text", facts.formattedText)
-		c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
+		c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
 		return b.String()
 	}
 
 	if out.User == nil && facts.empty() {
 		c.Note("No Orbit status data returned.")
-		c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
+		c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
 		return b.String()
 	}
 
@@ -102,7 +106,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 		}
 	}
 
-	c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
+	c.End(toolutil.HintAction(actionGraphStatus, hintGraphStatus))
 	return b.String()
 }
 

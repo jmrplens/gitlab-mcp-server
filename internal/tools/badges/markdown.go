@@ -18,6 +18,10 @@ const (
 	actionGroupBadgeGet    = "group.badge_get"
 	actionGroupBadgeEdit   = "group.badge_edit"
 	actionGroupBadgeAdd    = "group.badge_add"
+
+	// The two labels a card row and a table column both carry.
+	labelLinkURL  = "Link URL"
+	labelImageURL = "Image URL"
 )
 
 type badgeNotFoundOutput struct {
@@ -52,7 +56,7 @@ func FormatBadgeListMarkdown(badges []BadgeItem, title string, pagination toolut
 	}
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, title, len(badges), pagination)
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Link URL", "Image URL", "Kind"))
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", labelLinkURL, labelImageURL, "Kind"))
 	for _, b := range badges {
 		sb.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(b.ID, 10),
@@ -99,8 +103,8 @@ func FormatBadgeMarkdown(b BadgeItem) *mcp.CallToolResult {
 // GitLab renders the last two by substituting into it, so each is shown as the
 // value it is rather than linked.
 func writeBadgeRows(c *toolutil.Card, b BadgeItem) {
-	c.Field("Link URL", b.LinkURL)
-	c.Field("Image URL", b.ImageURL)
+	c.Field(labelLinkURL, b.LinkURL)
+	c.Field(labelImageURL, b.ImageURL)
 	c.Field("Rendered Link", b.RenderedLinkURL)
 	c.Field("Rendered Image", b.RenderedImageURL)
 	c.Field("Kind", b.Kind)
@@ -114,8 +118,8 @@ func writeBadgeRows(c *toolutil.Card, b BadgeItem) {
 func formatBadgePreview(b BadgeItem) *mcp.CallToolResult {
 	var sb strings.Builder
 	c := toolutil.NewCard(&sb, "Badge Preview")
-	c.Field("Link URL", b.LinkURL)
-	c.Field("Image URL", b.ImageURL)
+	c.Field(labelLinkURL, b.LinkURL)
+	c.Field(labelImageURL, b.ImageURL)
 	c.Field("Rendered Link", b.RenderedLinkURL)
 	c.Field("Rendered Image", b.RenderedImageURL)
 	c.End(

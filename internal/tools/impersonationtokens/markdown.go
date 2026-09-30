@@ -8,6 +8,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// labelExpiresAt is the label the token cards and the list column all carry.
+const labelExpiresAt = "Expires At"
+
 func init() {
 	toolutil.RegisterMarkdown(FormatMarkdownString)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
@@ -32,7 +35,7 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	var sb strings.Builder
 	toolutil.WriteListHeading(&sb, "Impersonation Tokens", len(out.Tokens), out.Pagination)
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", "Expires At"))
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", labelExpiresAt))
 	for _, t := range out.Tokens {
 		sb.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(t.ID, 10),
@@ -60,7 +63,7 @@ func FormatMarkdownString(out Output) string {
 	c.Bool("Active", out.Active)
 	c.Warn("Revoked", out.Revoked)
 	c.Field("Scopes", strings.Join(out.Scopes, ", "))
-	c.Time("Expires At", out.ExpiresAt)
+	c.Time(labelExpiresAt, out.ExpiresAt)
 	c.Secret("Token", out.Token)
 	c.End(
 		toolutil.HintAction(actionImpersonationTokenRevoke, "revoke this token"),
@@ -79,7 +82,7 @@ func FormatPATMarkdownString(out PATOutput) string {
 	c.Field("Scopes", strings.Join(out.Scopes, ", "))
 	c.Text("Description", out.Description)
 	c.Int("User ID", out.UserID)
-	c.Time("Expires At", out.ExpiresAt)
+	c.Time(labelExpiresAt, out.ExpiresAt)
 	c.Secret("Token", out.Token)
 	c.End()
 	return sb.String()

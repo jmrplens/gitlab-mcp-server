@@ -22,6 +22,11 @@ const (
 	exitUsage    = 2
 )
 
+// logPrefix names this command on the lines that print an error as it came,
+// so a maintainer reading a `make` log with several audits in it can tell
+// whose error they are reading.
+const logPrefix = "audit_e2e_coverage:"
+
 // options is one invocation.
 type options struct {
 	// dir is the repository root; empty finds it from the working directory.
@@ -154,7 +159,7 @@ func run(opts options, stdout, stderr io.Writer) int {
 	if opts.dir == "" {
 		root, err := mcpsurface.ProjectRoot()
 		if err != nil {
-			fmt.Fprintln(stderr, "audit_e2e_coverage:", err)
+			fmt.Fprintln(stderr, logPrefix, err)
 			return exitUsage
 		}
 		opts.dir = root
@@ -269,7 +274,7 @@ func runPortMap(opts options, stdout, stderr io.Writer) int {
 func runCoverage(opts options, static *staticResult, stdout, stderr io.Writer) int {
 	runtimes, err := readRuntimes(opts.calls)
 	if err != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage:", err)
+		fmt.Fprintln(stderr, logPrefix, err)
 		return exitUsage
 	}
 	selectors := splitSelectors(opts.runtime)
@@ -285,7 +290,7 @@ func runCoverage(opts options, static *staticResult, stdout, stderr io.Writer) i
 	reports, code := classifyRuntimes(opts, selectRuntimes(runtimes, selectors), selectors, static, stderr)
 	status = max(status, code)
 	if writeErr := writeOutputs(opts, reports, stdout); writeErr != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage:", writeErr)
+		fmt.Fprintln(stderr, logPrefix, writeErr)
 		return exitUsage
 	}
 	if opts.record {
@@ -304,7 +309,7 @@ func classifyRuntimes(opts options, runtimes []*runtimeRecords, selectors []stri
 	)
 	if opts.results != "" {
 		if results, err = readResults(opts.results); err != nil {
-			fmt.Fprintln(stderr, "audit_e2e_coverage:", err)
+			fmt.Fprintln(stderr, logPrefix, err)
 			return nil, exitUsage
 		}
 	}
@@ -325,7 +330,7 @@ func classifyRuntimes(opts options, runtimes []*runtimeRecords, selectors []stri
 	for _, rt := range runtimes {
 		rep, code, classifyErr := classifyRuntime(opts, rt, selectors, results, baseline, static)
 		if classifyErr != nil {
-			fmt.Fprintln(stderr, "audit_e2e_coverage:", classifyErr)
+			fmt.Fprintln(stderr, logPrefix, classifyErr)
 			return nil, exitUsage
 		}
 		status = max(status, code)

@@ -23,6 +23,13 @@ const hintCursorNext = "Pass the `end_cursor` above as `after` to fetch the next
 // keeps its width and an empty cell is never read as a missing value.
 const dash = "-"
 
+// The two next steps most views end on, each worded once so the cards that
+// offer them cannot come to describe the same action two ways.
+const (
+	hintSeeRecipients = "see who holds this achievement"
+	hintSeeUserAwards = "see every award one user holds"
+)
+
 // writeAchievementRows writes the fields shared by every single-achievement
 // card, so the detail and delete views cannot drift apart.
 func writeAchievementRows(c *toolutil.Card, a Achievement) {
@@ -108,7 +115,7 @@ func FormatOutputMarkdown(out Output) string {
 	writeAchievementRows(c, out.Achievement)
 	c.End(
 		toolutil.HintAction(actionAward, "hand this achievement to a user"),
-		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		toolutil.HintAction(actionRecipients, hintSeeRecipients),
 		toolutil.HintAction(actionList, "see the other achievements in the namespace"),
 	)
 	return b.String()
@@ -142,7 +149,7 @@ func FormatUserAchievementOutputMarkdown(out UserAchievementOutput) string {
 	c.End(
 		toolutil.HintAction(actionUserAchievementUpdate, "change whether this award shows on the profile"),
 		toolutil.HintAction(actionRevoke, "revoke it while keeping the record"),
-		toolutil.HintAction(actionUserList, "see every award one user holds"),
+		toolutil.HintAction(actionUserList, hintSeeUserAwards),
 	)
 	return b.String()
 }
@@ -155,8 +162,8 @@ func FormatUserAchievementMutationOutputMarkdown(out UserAchievementMutationOutp
 	c.Field("Result", out.Message)
 	writeUserAchievementRows(c, out.UserAchievement)
 	c.End(
-		toolutil.HintAction(actionUserList, "see every award one user holds"),
-		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		toolutil.HintAction(actionUserList, hintSeeUserAwards),
+		toolutil.HintAction(actionRecipients, hintSeeRecipients),
 	)
 	return b.String()
 }
@@ -224,7 +231,7 @@ func FormatUserAchievementListMarkdown(out UserAchievementListOutput) string {
 	toolutil.WriteListHeading(&sb, "Awards", len(out.UserAchievements), toolutil.PaginationOutput{})
 	writeUserAchievementTable(&sb, out.UserAchievements)
 	writeCursorFooter(&sb, out.Pagination, len(out.UserAchievements), false,
-		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		toolutil.HintAction(actionRecipients, hintSeeRecipients),
 		hintCursorNext,
 	)
 	return sb.String()
@@ -240,14 +247,14 @@ func FormatReorderOutputMarkdown(out ReorderOutput) string {
 	c.Count("Awards", int64(len(out.UserAchievements)))
 	if len(out.UserAchievements) == 0 {
 		c.Note("GitLab returned no awards for this reorder.")
-		c.End(toolutil.HintAction(actionUserList, "see every award one user holds"))
+		c.End(toolutil.HintAction(actionUserList, hintSeeUserAwards))
 		return b.String()
 	}
 	table := c.Table("Awards", userAchievementColumns...)
 	for _, award := range out.UserAchievements {
 		table.Row(userAchievementCells(award)...)
 	}
-	c.End(toolutil.HintAction(actionUserList, "see every award one user holds"))
+	c.End(toolutil.HintAction(actionUserList, hintSeeUserAwards))
 	return b.String()
 }
 
@@ -283,7 +290,7 @@ func FormatUniqueUsersMarkdown(out UniqueUsersOutput) string {
 		))
 	}
 	writeCursorFooter(&sb, out.Pagination, len(users), linked,
-		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		toolutil.HintAction(actionRecipients, hintSeeRecipients),
 		hintCursorNext,
 	)
 	return sb.String()

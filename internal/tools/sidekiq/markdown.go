@@ -15,6 +15,10 @@ const (
 	actionCompound       = "admin.sidekiq_compound_metrics"
 )
 
+// hintCompound is the next step every single-metric view offers: the one call
+// that reads all three.
+const hintCompound = "read the queues, processes and job counts in one call"
+
 // queueColumns are the columns of the queue table, shared by the standalone
 // queue result and the queue section of the compound one so a reader meets one
 // table in both.
@@ -63,7 +67,7 @@ func FormatQueueMetricsMarkdown(out GetQueueMetricsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
 		"Monitor queues with high backlog or latency for potential issues",
-		toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+		toolutil.HintAction(actionCompound, hintCompound))
 	return b.String()
 }
 
@@ -80,7 +84,7 @@ func FormatProcessMetricsMarkdown(out GetProcessMetricsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
 		"Check process resource usage to identify overloaded workers",
-		toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+		toolutil.HintAction(actionCompound, hintCompound))
 	return b.String()
 }
 
@@ -92,7 +96,7 @@ func FormatJobStatsMarkdown(out GetJobStatsOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Sidekiq Job Statistics")
 	writeJobStats(c, out.Jobs)
-	c.End(toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+	c.End(toolutil.HintAction(actionCompound, hintCompound))
 	return b.String()
 }
 

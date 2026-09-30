@@ -37,6 +37,10 @@ const (
 // attached to the result rather than printed.
 const imageNote = "\U0001F5BC️ Image content is attached below as ImageContent for multimodal viewing."
 
+// labelContentType is the row both blob cards write for what kind of content
+// the blob holds, whichever of the three kinds it is.
+const labelContentType = "Content Type"
+
 // treeNodeIcon marks what a tree entry is. A submodule is a commit object
 // pinned inside the tree, not a file, and marking it as one told a reader it
 // could be read with file_get.
@@ -175,12 +179,12 @@ func FormatBlobMarkdown(out BlobOutput) string {
 	c.Int("Size (bytes)", int64(out.Size))
 	switch out.ContentCategory {
 	case "image":
-		c.Field("Content Type", "image ("+out.ImageMIMEType+")")
+		c.Field(labelContentType, "image ("+out.ImageMIMEType+")")
 		c.Note(imageNote)
 	case "binary":
-		c.Field("Content Type", "binary (content omitted, not viewable as text)")
+		c.Field(labelContentType, "binary (content omitted, not viewable as text)")
 	default:
-		c.Field("Content Type", "text")
+		c.Field(labelContentType, "text")
 		c.Int("Characters", int64(len(out.Content)))
 	}
 	c.End(toolutil.HintAction(actionRawBlob, "read the decoded text content"))
@@ -198,10 +202,10 @@ func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 	c.Int("Size (bytes)", int64(out.Size))
 	switch out.ContentCategory {
 	case "image":
-		c.Field("Content Type", "image ("+out.ImageMIMEType+")")
+		c.Field(labelContentType, "image ("+out.ImageMIMEType+")")
 		c.Note(imageNote)
 	case "binary":
-		c.Field("Content Type", "binary (content omitted, not viewable as text)")
+		c.Field(labelContentType, "binary (content omitted, not viewable as text)")
 	default:
 		// The blob is a file of the repository, so a fixed fence is closed by
 		// the first run of three backticks whoever pushed it wrote.

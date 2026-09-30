@@ -10,6 +10,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// labelRequiredApprovals is the label the card row and the list column both
+// carry.
+const labelRequiredApprovals = "Required Approvals"
+
 // FormatOutputMarkdown renders one protected environment as the card of a
 // single object: the approvals it needs, then the deploy access levels and the
 // approval rules as nested collections.
@@ -25,9 +29,9 @@ func FormatOutputMarkdown(pe Output) string {
 	// deployment, and printing it alone said a deployment needed two approvals
 	// when it needed one from each of three rules.
 	if len(pe.ApprovalRules) > 0 {
-		c.Field("Required Approvals", "per approval rule (see below)")
+		c.Field(labelRequiredApprovals, "per approval rule (see below)")
 	} else {
-		c.Int("Required Approvals", pe.RequiredApprovalCount)
+		c.Int(labelRequiredApprovals, pe.RequiredApprovalCount)
 	}
 	if len(pe.DeployAccessLevels) > 0 {
 		t := c.Table("Deploy Access Levels", "ID", "Level", "Grantee", "Description", "Inheritance")
@@ -110,7 +114,7 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	var b strings.Builder
 	toolutil.WriteListHeading(&b, "Protected Environments", len(out.Environments), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("Name", "Required Approvals", "Deploy Access Levels", "Approval Rules"))
+	b.WriteString(toolutil.MarkdownTableHeader("Name", labelRequiredApprovals, "Deploy Access Levels", "Approval Rules"))
 	for _, pe := range out.Environments {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(pe.Name),
