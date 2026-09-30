@@ -989,6 +989,12 @@ func TestLinkableDestination_OnlyAnHTTPAddressIs(t *testing.T) {
 		{name: "mailto", url: "mailto:someone@example.com", want: false},
 		{name: "protocol relative", url: "//attacker.invalid/x", want: false},
 		{name: "scheme and no host", url: "https://", want: false},
+		{name: "http scheme and no host", url: "http://", want: false},
+		{name: "scheme ending in http", url: "xhttp://gitlab.example.com/", want: false},
+		{name: "scheme starting with https", url: "httpsx://gitlab.example.com/", want: false},
+		{name: "http without the separator", url: "http:gitlab.example.com", want: false},
+		{name: "separator later in the value", url: "ftp://http://gitlab.example.com/", want: false},
+		{name: "separator inside the query", url: "https://gitlab.example.com/-/redirect?to=https://other.example/", want: true},
 		{name: "blank", url: "", want: false},
 		{name: "entity spelled colon", url: "javascript&colon;alert(1)", want: false},
 	}

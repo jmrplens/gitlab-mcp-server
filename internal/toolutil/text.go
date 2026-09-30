@@ -192,15 +192,17 @@ func EscapeMdLinkDestination(url string) string {
 // origin, so the allow list costs nothing legitimate. The check runs on the
 // value with its control bytes gone, because "java\x00script:" is the escaped
 // destination "javascript:" and would pass a check made on the bytes as sent.
+//
+// Plain http is admitted on purpose: a self-managed instance served without
+// TLS builds every address it sends on that scheme, and refusing it would
+// unlink every row such an instance answers with. The scheme is read as the
+// text before the first "://" and compared whole, so "xhttp" and "httpx" are
+// refused, and an address is only linked when something follows the
+// separator. A value with no separator at all has nothing following one,
+// which is the same refusal.
 func LinkableDestination(url string) bool {
-	s := strings.TrimSpace(StripControlBytes(url))
-	lower := strings.ToLower(s)
-	for _, scheme := range []string{"http://", "https://"} {
-		if strings.HasPrefix(lower, scheme) && len(s) > len(scheme) {
-			return true
-		}
-	}
-	return false
+	scheme, rest, _ := strings.Cut(strings.ToLower(strings.TrimSpace(StripControlBytes(url))), "://")
+	return rest != "" && (scheme == "http" || scheme == "https")
 }
 
 // MdTitleLink returns the title as a Markdown link if url is non-empty,
