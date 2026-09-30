@@ -189,7 +189,9 @@ twice), and the gate holds the pinned literal equal to the register's.
   presents one new token to an instance it knows to be healthy and is refused after the
   five-second slot wait learns that other callers are verifying. `HLD-011` (issue 951),
   the ceiling on the calls the process holds open, and `HLD-010`, the ceiling on the
-  stateful sessions it keeps, have no per-caller ceiling beside them, so any refusal of
+  stateful sessions it keeps, have no per-caller ceiling beside them, which issue 951
+  decided because a per-caller number on a key a caller can mint multiplies with every
+  token it mints (`INV-003`), so any refusal of
   either tells its caller that the process is full, which is the same bit and no more:
   both answer in the same words, which say only that the server is busy, and name no
   bound, no count and no caller. No wording closes it:

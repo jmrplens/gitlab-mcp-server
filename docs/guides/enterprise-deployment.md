@@ -197,9 +197,14 @@ MCP handler reads it on protocol 2026-07-28, and the log says `request refused:
 too many requests held across the process`. Size the fleet for it where the
 limit is small: callers that wait on pipelines hold their slot for as long as
 they wait, so an instance serving many of them at once needs a larger
-descriptor limit or replicas beside it, since no flag moves the figure. Where
-the limit is large, memory runs out before the ceiling does, at about 190 KiB a
-held call, and the container's memory limit is the bound to size. See
+descriptor limit or replicas beside it, since no flag moves the figure. One
+credential can fill it too: no per-credential ceiling stands beside it, which
+issue 951 decided because a credential is a key a caller can mint and such a
+number multiplies with every token a caller mints. Where the limit is large,
+memory runs out before the ceiling does, at about 190 KiB a held call, and the
+memory limit the process runs under is the bound to size, a memory limit on the
+container or `MemoryMax` on the systemd unit, since the server keeps no memory
+cap of its own and a unit without `MemoryMax` is bounded only by the host. See
 [Requests held open at once](http-server-mode.md#requests-held-open-at-once).
 
 The session ceiling applies only under `--stateless=false`, and caps the
@@ -216,11 +221,14 @@ A session nobody deletes keeps its slot until `--session-timeout` ends it, and
 with `--session-timeout=0` until the pool evicts its credential, so a fleet of
 stateful clients that walk away without a `DELETE` fills the ceiling at the
 rate they connect, and one credential can fill it at no cost, since
-`initialize` spends no rate-limit token; shorten the timeout, raise the
-descriptor limit, or move the clients to the default stateless transport, which
-keeps no sessions. Where the descriptor limit is large the figure bounds
-descriptors and not memory: 114560 idle sessions would take about ten to twelve
-GiB, so the container's memory limit is the bound to size. See
+`initialize` spends no rate-limit token and no per-credential ceiling stands
+beside it, both decided on issue 951 for the held-call ceiling's reason;
+shorten the timeout, raise the descriptor limit, or move the clients to the
+default stateless transport, which keeps no sessions. Where the descriptor
+limit is large the figure bounds descriptors and not memory: 114560 idle
+sessions would take about ten to twelve GiB, so the memory limit the process
+runs under (a container's, or a systemd unit's `MemoryMax`) is the bound to
+size, and no fixed cap stands beside the figure. See
 [Stateful sessions kept at once](http-server-mode.md#stateful-sessions-kept-at-once).
 
 The failed-authentication budget is configurable, and worth knowing too: ten

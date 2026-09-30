@@ -720,12 +720,20 @@ It is keyed on the process and not configurable for the reason the stream and
 watcher ceilings are: a per-caller number would multiply by however many
 credentials a caller mints, and a number an operator could raise could be raised
 past what the process can hold; raising the descriptor limit raises the ceiling
-and what it protects together. It promises no caller a share, so where the limit
-is small one credential that fills it has the next call from anybody refused
-until a held call ends, and a deployment that needs more calls in flight raises
-the limit or runs more replicas. Where the limit is large the ceiling sits far
-above what the default rate limit lets any caller reach, and memory, about
-190 KiB of resident set a held call, runs out first; nothing here bounds that.
+and what it protects together. No per-credential ceiling stands beside it, which
+issue 951 decided for the same reason: a credential is a key a caller can mint,
+so such a number multiplies with every token a caller mints. It promises no
+caller a share, so where the limit is small one credential can fill it, and
+while it does the next call from anybody is refused until a held call ends; a
+deployment that needs more calls in flight raises the limit or runs more
+replicas. Where the limit is large the ceiling sits far above what the default
+rate limit lets any caller reach, and memory, about 190 KiB of resident set a
+held call, runs out first. The server keeps no memory cap of its own, which
+issue 951 also decided: the memory limit the process runs under is what bounds
+it, a memory limit on the container or `MemoryMax` on the systemd unit, and a
+unit without `MemoryMax` is bounded only by the host. `GOMEMLIMIT` makes the Go
+runtime collect harder as the heap nears it, but it refuses nothing, so what
+held calls keep live passes it and only that limit stops it.
 Having no per-caller ceiling beside it, any refusal of it tells its caller that
 the process is full, the one bit `INV-019` accepts for the refusal of a bound
 keyed on the process, and its words, `This server is busy. Retry later.`, say
@@ -786,9 +794,12 @@ What the figure bounds is descriptors, and memory only where the hard limit is
 small: the descriptor limit raises none of what an idle session costs in memory,
 88 to 110 KiB of resident set with the ceiling at 500 to 4000 sessions, so the
 114560 sessions a hard limit of 524288 allows come to about ten to twelve GiB
-idle, and on such a host the container's memory limit bounds the sessions before
-this ceiling does. Whether a fixed cap should stand beside the derived figure is
-put to the maintainer on issue 951.
+idle, and on such a host the memory limit the process runs under (a container's,
+or a systemd unit's `MemoryMax`) bounds the sessions before this ceiling does. No
+fixed cap stands beside the derived figure, which issue 951 decided: that memory
+limit already bounds that memory where one is set, a unit without `MemoryMax`
+being bounded only by the host, and a fixed cap no flag moves would be sized for
+one host.
 
 It is keyed on the process and not configurable for the held-call ceiling's
 reason, and it discloses the same one bit: its refusal says only that the
@@ -807,9 +818,11 @@ Before this ceiling an idle session refused nobody; what exhausted the process
 was a thousand held streams. With `--session-timeout=0` a session nobody deletes
 holds its slot until the pool evicts its credential, after
 `--pool-idle-timeout` without a request or to make room at `--max-http-clients`,
-and startup warns about that combination. Whether a per-credential ceiling
-should stand beside this one, or `initialize` be metered, is put to the
-maintainer on issue 951. A deployment that needs more
+and startup warns about that combination. No per-credential ceiling stands
+beside this one and `initialize` stays unmetered, which issue 951 decided for
+the held-call ceiling's reason: a credential is a key a caller can mint, so a
+per-credential number, or a price in the opener's own rate, multiplies with
+every token a caller mints. A deployment that needs more
 stateful clients at once shortens that timeout, raises the descriptor limit, or
 moves its clients to the default stateless transport, which keeps no sessions
 at all.
