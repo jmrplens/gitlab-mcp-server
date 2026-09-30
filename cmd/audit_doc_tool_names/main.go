@@ -44,6 +44,7 @@ var allowed = map[string]string{
 	"gitlab_ci_ymls":     "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
 	"gitlab_duo":         "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
 	"gitlab_status":      "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
+	"gitlab_test":        "client-go's integration test directory (gitlab_test/), quoted in upstream-bugs.md",
 	"gitlab_mcp_server":  "the Python import package of the PyPI distribution (python -m gitlab_mcp_server), not a tool",
 	"gitlab_interactive": "the guided flows' catalog group name, which --exclude-tools accepts on every surface; no surface registers a tool of that name, since meta and individual register the four gitlab_interactive_* flows one by one",
 }
