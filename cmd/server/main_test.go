@@ -14184,18 +14184,22 @@ func TestReportRetiredEnvNames_WarnsAndKeepsStarting(t *testing.T) {
 }
 
 // TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired verifies that a
-// deployment still carrying GITLAB_READ_ONLY or GITLAB_SAFE_MODE is refused
-// rather than started.
+// deployment still carrying GITLAB_READ_ONLY, GITLAB_SAFE_MODE or
+// EXCLUDE_TOOLS is refused rather than started.
 //
-// Both of those take capability away, and a version that stopped reading one
-// without saying so would serve writes on a deployment whose whole
-// configuration was the request not to. A warning is the wrong answer because
-// the deployments most likely to still carry these are the unattended ones,
-// where nobody reads stderr.
+// Each of those withholds part of what the server serves, and a version that
+// stopped reading one without saying so would serve writes, or an action the
+// operator removed, on a deployment whose whole configuration was the request
+// not to. A warning is the wrong answer because the deployments most likely to
+// still carry these are the unattended ones, where nobody reads stderr.
 func TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired(t *testing.T) {
-	for _, retired := range []string{"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE"} {
+	for retired, value := range map[string]string{
+		"GITLAB_READ_ONLY": "true",
+		"GITLAB_SAFE_MODE": "true",
+		"EXCLUDE_TOOLS":    "project.delete",
+	} {
 		t.Run(retired, func(t *testing.T) {
-			t.Setenv(retired, "true")
+			t.Setenv(retired, value)
 
 			var logged bytes.Buffer
 			previous := slog.Default()

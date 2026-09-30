@@ -16,7 +16,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -169,9 +168,9 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 	// the process to survive until it is signaled deliberately.
 	cmd := exec.Command(bin, args...) //nolint:noctx // see above
 	prepareForTermination(cmd)
-	cmd.Env = append(os.Environ(),
-		"LOG_LEVEL=info",
-		"TOOL_SURFACE=dynamic",
+	cmd.Env = append(configFreeEnviron(),
+		"GITLAB_MCP_LOG_LEVEL=info",
+		"GITLAB_MCP_TOOL_SURFACE=dynamic",
 	)
 	// These servers are asked to stop by the test itself, which is the one
 	// exit an instrumented binary needs to write its counters; without the

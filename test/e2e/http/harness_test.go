@@ -351,8 +351,8 @@ func tryStartServerLaunched(t *testing.T, port int, launch launcher, env map[str
 	cmd := exec.CommandContext(ctx, name, argv...)
 	prepareForTermination(cmd)
 	cmd.Env = append(configFreeEnviron(),
-		"LOG_LEVEL=info",
-		"TOOL_SURFACE=dynamic",
+		"GITLAB_MCP_LOG_LEVEL=info",
+		"GITLAB_MCP_TOOL_SURFACE=dynamic",
 	)
 	// Before the caller's own entries, so a test that needs to say something
 	// else about GORACE still can.
@@ -736,7 +736,7 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(configFreeEnviron(), "LOG_LEVEL=info")
+	cmd.Env = append(configFreeEnviron(), "GITLAB_MCP_LOG_LEVEL=info")
 	// A refusal is an exit, so an instrumented binary writes its counters on
 	// the way out: the startup validation these cases drive is measured like
 	// everything else.
@@ -749,8 +749,12 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 // generic enough to belong to something else in the same shell. 3.1.0 stopped
 // reading them and the prefixed spellings are covered by the GITLAB_ rule
 // below, so nothing here configures the child any more: the list stays because
-// two of these retired names now stop the server starting, and a developer who
-// still has one exported would measure nothing at all.
+// one of these retired names, EXCLUDE_TOOLS, now stops the server starting (as
+// the retired GITLAB_READ_ONLY and GITLAB_SAFE_MODE do, which the GITLAB_ rule
+// removes), and a developer who still has it exported would see every test
+// here fail to start a server. Every starter in this module builds its
+// child's environment from configFreeEnviron for that reason, and names its
+// own settings in their GITLAB_MCP_ spelling, the only one the server reads.
 //
 // They are listed rather than imported because this module builds the binary
 // rather than linking it, so the list is duplicated on purpose and a name

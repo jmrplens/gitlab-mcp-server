@@ -136,11 +136,13 @@ gitlab-mcp-server
 ```
 
 Most flags on this page fall back to an environment variable when they are not
-passed, and the settings this project defines are named `GITLAB_MCP_<NAME>`
-from 2.8.0. The unprefixed spelling still works and is removed in 3.1.0; when
-both are set the prefixed one wins and a startup warning names the one being
-ignored. `GITLAB_URL`, `GITLAB_TOKEN`, the `GITLAB_`-prefixed switches and
-every `OTEL_*` variable keep their bare names. The flags with no variable at
+passed, and the settings this project defines are named `GITLAB_MCP_<NAME>`.
+The spellings they had before 2.8.0, bare or beginning with `GITLAB_`, are
+read by nothing since 3.1.0: one left set is named at startup with the
+variable to rename it to, and `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and
+`EXCLUDE_TOOLS` refuse the start instead, since ignoring one would serve what
+it withheld. `GITLAB_URL`, `GITLAB_TOKEN` and every `OTEL_*` variable keep
+their bare names. The flags with no variable at
 all, the transport and listener ones in particular, are marked _(none)_ in
 [HTTP Mode Equivalents](env.md#http-mode-equivalents). See
 [Environment Variables](env.md#variable-naming) for the full rule.

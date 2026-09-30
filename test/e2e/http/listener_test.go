@@ -72,9 +72,9 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, append([]string{"--http"}, withInstancePolicy(flags)...)...)
 	prepareForTermination(cmd)
-	cmd.Env = append(os.Environ(),
-		"LOG_LEVEL=info",
-		"TOOL_SURFACE=dynamic",
+	cmd.Env = append(configFreeEnviron(),
+		"GITLAB_MCP_LOG_LEVEL=info",
+		"GITLAB_MCP_TOOL_SURFACE=dynamic",
 	)
 	// The TLS and unix-socket listeners this starter exists for are statements
 	// nothing else in the tree reaches, so an instrumented binary has to be

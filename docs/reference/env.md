@@ -19,9 +19,12 @@ collision is silent: the server reads a value nobody gave it and behaves in a
 way nobody configured.
 
 The unprefixed spelling was removed in 3.1.0 and is read by nothing. One left
-set is named at startup, with the variable to rename it to.
+set is named at startup, with the variable to rename it to, and one of them,
+`EXCLUDE_TOOLS`, refuses the start instead (see below).
 
-The switches that already began with `GITLAB_` were renamed as well, so that every variable of this server reads alike: `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` and `GITLAB_SKIP_TLS_VERIFY` are now `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` and `GITLAB_MCP_SKIP_TLS_VERIFY`, and `YOLO_MODE` is `GITLAB_MCP_YOLO_MODE`. **The old spellings stopped working in 3.1.0.** One left in the environment is reported at startup naming its replacement, and for `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` the server refuses to start rather than serve writes on a deployment that asked to be read-only.
+The switches that already began with `GITLAB_` were renamed as well, so that every variable of this server reads alike: `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` and `GITLAB_SKIP_TLS_VERIFY` are now `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` and `GITLAB_MCP_SKIP_TLS_VERIFY`, and `YOLO_MODE` is `GITLAB_MCP_YOLO_MODE`. **The old spellings stopped working in 3.1.0.** One left in the environment is reported at startup naming its replacement.
+
+Three retired names refuse the start rather than warn: `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS`. They are how an operator withholds part of what a deployment serves, so a version that ignored one in silence would serve writes, or the actions the operator removed, on a deployment that asked for neither. The rule is what ignoring a name would cost, and it reads the name and never its value; a name set in a dotenv file the server loads counts as much as one exported in the shell. `EXCLUDE_TOOLS` is generic enough that another tool in the same shell could own it: rename it to `GITLAB_MCP_EXCLUDE_TOOLS`, or unset it in this server's environment when it is somebody else's.
 
 Two names are gone rather than renamed, both deprecated in 2.7.5 and removed in 3.0.0: `META_TOOLS`, whose replacement is `GITLAB_MCP_TOOL_SURFACE`, and `GITLAB_ENTERPRISE`, whose replacement is `GITLAB_MCP_TIER`.
 

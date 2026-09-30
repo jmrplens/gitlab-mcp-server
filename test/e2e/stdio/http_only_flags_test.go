@@ -128,13 +128,14 @@ func TestHTTPOnlyFlags_UnderTransportAuto_SettingFlagsStillWarn(t *testing.T) {
 // awaitRefusal waits for a refused stdio start to end and returns its refusal
 // line, holding what every refusal shares: the process exits non-zero before
 // serving, having written nothing on stdout for a client to mistake for a
-// server.
+// server. retired_env_test.go uses it too, for a retired variable rather than
+// a flag.
 func awaitRefusal(t *testing.T, s *session, line string) map[string]any {
 	t.Helper()
 
 	code, exited := s.waitExit(t, 20*time.Second)
 	if !exited {
-		t.Fatalf("a stdio server given a flag it cannot ignore started instead of refusing\nstderr: %s", s.stderrText())
+		t.Fatalf("a stdio server given a setting it cannot ignore started instead of refusing\nstderr: %s", s.stderrText())
 	}
 	if code == 0 {
 		t.Errorf("the refusal exited 0\nstderr: %s", s.stderrText())

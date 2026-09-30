@@ -535,10 +535,15 @@ a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,
 `GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and their old
 spellings were removed in 3.1.0. `config.RetiredEnvUses` finds one still set in
 the environment so a deployment is told rather than quietly reconfigured, and
-splits its answer: `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` **refuse startup**,
-because ignoring either in silence serves writes on a deployment that asked to
-be read-only, and every other retired name is a warning. The condition is what
-ignoring one would cost, not where it came from.
+splits its answer: `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS`
+(`config.protectionNames`, the three settings register row `AUT-004` decides)
+**refuse startup**, because ignoring one in silence serves writes, or the
+actions an operator removed, on a deployment that asked for neither, and every
+other retired name is a warning. The condition is what ignoring one would cost,
+not where it came from: the refusal reads the name and never its value, and a
+bare `EXCLUDE_TOOLS` refuses even though another tool in the same shell could
+own it, since the server cannot tell whose it is and guessing that it is
+somebody else's is the guess that serves what was removed.
 Only three groups stay bare, because prefixing them
 would be wrong rather than churn: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
 convention, and what a user already has in the environment, so they are never
