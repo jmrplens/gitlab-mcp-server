@@ -118,7 +118,7 @@ readable without opening the tracker:
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Yes, on Community Edition | None possible |
-| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), open; [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | No | Was yes | Yes |
+| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) merged and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704) open; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Half, unreleased**: the new endpoint, in milestone 19.5 | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572) | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, unreleased** | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No issue; named as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
@@ -4915,15 +4915,51 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   merged-results pipeline, 2892780713, started; no thread blocks the merge,
   and it waits on that pipeline.
 
-  `gitlab-org/gitlab!255704` waits on it in turn: it is rebased onto
-  `gitlab-org/gitlab!255702` once that merges, and gains a link to the new
-  section then. That is what was agreed with @marc_shaw in one of its threads.
-  Read on 2026-09-27 it sits at `workflow::in dev` on head `69752099`, its
+  **It merged on 2026-09-29.** @egrieff added it to the merge train at 11:33
+  UTC and it merged at 11:36 UTC, merge commit `043d425d`, in milestone 19.5.
+  The `master` pipeline on that commit, 2893091347, failed
+  `permissions-verify`, and not on this change: the job runs only when a
+  path it watches changes, and `lib/api/` and
+  `doc/auth/tokens/fine_grained_access_tokens_rest.md` are two, so it ran
+  here and not on the commit before; it reported the REST permissions valid
+  and failed because `read_duo_workflow` has seven GraphQL declarations and
+  three authorization tests, which this merge request does not touch. The
+  broken-`master` incident opened for it,
+  [gitlab-org/quality/engineering-productivity/master-broken-incidents#30549](https://gitlab.com/gitlab-org/quality/engineering-productivity/master-broken-incidents/-/issues/30549),
+  was closed by gitlab-bot seven seconds later as a duplicate.
+
+  `gitlab-org/gitlab!255704` was waiting on it: it was to be rebased onto
+  `gitlab-org/gitlab!255702` once that merged, and to gain a link to the new
+  section then, which is what was agreed with @marc_shaw in one of its threads.
+  Read on 2026-09-27 it sat at `workflow::in dev` on head `69752099`, its
   fork pipeline green, with @uchandran's approval of the documentation half
   and the `/lib/` and `/spec/` maintainer approvals still to come, and four
   unresolved threads, GitLab Duo's style note and three of @marc_shaw's, each
-  last answered by us on 2026-09-16 and so the reviewers' to resolve. Nothing
-  is owed on it until `gitlab-org/gitlab!255702` merges.
+  last answered by us on 2026-09-16 and so the reviewers' to resolve.
+
+  **The rebase, pushed on 2026-09-30.** The branch was rebuilt on `master`
+  at `4f19ee05` as the same six commits, head `a1dd4552`, and did what was
+  agreed: the deprecation warning links to `#cancel-auto-merge` in the form
+  the technical writing review suggested, and this branch's change to
+  `doc/api/merge_trains.md` drops out, since `master` already points that
+  link at the new section. Three edits keep each commit true on the new
+  base: the first commit's message no longer says `cancel_auto_merge` has
+  the contract this endpoint always described, the technical writing
+  commit's message says the warning now links to the section, and the first
+  commit's warning, which said the new endpoint answers `406 Not Acceptable`
+  until the technical writing commit replaces that sentence, says
+  `409 Conflict`, which is what the section below it on the new base
+  documents. The link and `doc/api/merge_trains.md` aside, what the branch
+  leaves on the page is what was reviewed before the rebase. It was pushed
+  at 07:46 UTC, which reset @uchandran's approval of the documentation half,
+  and at 07:47 the description was rewritten to say what the rebase did,
+  @marc_shaw's thread about waiting for `gitlab-org/gitlab!255702` was
+  answered inside it, and a `@gitlab-bot ready` note asked for review again,
+  naming the approval the push reset and the only documentation changes
+  since it was given; gitlab-bot moved it to `workflow::ready for review`
+  and pinged @marc_shaw and @uchandran the same minute. It waits on their
+  review, on the `/lib/` and `/spec/` maintainer approvals, and on its five
+  unresolved threads, the four above and the ready note's, being resolved.
 
   **The first attempt,
   [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), was
@@ -4942,7 +4978,14 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   documentation notice and **not** an entry in `doc/api/rest/deprecations.md`,
   which promises removals, and why a symmetric `add_to_auto_merge` was declined
   in the same breath.
-- **Merged**: no.
+- **Merged**: half of it, and unreleased.
+  [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702),
+  the new `cancel_auto_merge` endpoint, merged into `master` on 2026-09-29
+  (milestone 19.5, merge commit `043d425d`). Held to the tags that contain
+  that commit, read on 2026-09-30, it is in no release yet; 19.5 is due on
+  2026-10-15.
+  [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704),
+  the old endpoint's documentation and deprecation, is in review.
 - **Blocking**: it was, for the action. `merge_request.cancel_auto_merge`
   answered a model with an object carrying no IID, no state and no title, so a
   caller could not tell a cancelled auto-merge from a broken call.
@@ -4951,7 +4994,11 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   the merge request back when the answer carries no IID, which is what
   `toggleSubscription` beside it already does when a subscription toggle is
   answered 304 with an empty body. Pinned by
-  `TestMRCancelAutoMerge_StatusHashIsReadBack`.
+  `TestMRCancelAutoMerge_StatusHashIsReadBack`. The action still calls the old
+  endpoint, and has to for any instance older than the release that ships
+  `cancel_auto_merge`. Calling the new one on a newer instance takes a
+  client-go method, which neither v3.14.0 nor v3.15.0 has, or a request of
+  the handler's own, the way `invites.postInvitation` makes one.
 
 **What**: `POST /projects/:id/merge_requests/:iid/cancel_merge_when_pipeline_succeeds`
 is annotated `success Entities::MergeRequest` in `lib/api/merge_requests.rb`,
