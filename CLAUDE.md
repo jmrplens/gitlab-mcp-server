@@ -12,6 +12,12 @@
 > PR afterwards does not remove it — strip it **before** merging. Ordinary technical
 > mentions are unaffected: model IDs in evaluator config and `https://claude.ai` as a
 > client origin in CORS examples are content, not attribution.
+>
+> For the same reason a description never carries a command GitHub reads as a request
+> to skip workflows (a bracketed skip ci or one of the four other commands GitHub
+> documents, or a skip-checks trailer), not even quoted in backticks: the squash commit of #1094 carried one, and
+> main ran no CI and the v3.1.0 tag on it no release. `make check-pr-description`
+> refuses it.
 
 ## Project Overview
 
