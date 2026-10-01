@@ -135,9 +135,9 @@ func TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach(t *testing.T) {
 func clientGoSourceDir(t *testing.T, root string) string {
 	t.Helper()
 	cfg := &packages.Config{Context: t.Context(), Mode: packages.NeedName | packages.NeedFiles, Dir: root}
-	loaded, err := packages.Load(cfg, clientGoPath)
+	loaded, err := packages.Load(cfg, ClientGoPath)
 	if err != nil || len(loaded) != 1 || len(loaded[0].GoFiles) == 0 {
-		t.Fatalf("locate %s from %s: %d package(s), %v", clientGoPath, root, len(loaded), err)
+		t.Fatalf("locate %s from %s: %d package(s), %v", ClientGoPath, root, len(loaded), err)
 	}
 	return filepath.Dir(loaded[0].GoFiles[0])
 }
@@ -310,7 +310,7 @@ func TestBoundHandlers_ANameBoundToNothing_IsPassedOver(t *testing.T) {
 
 	found := synthResolver().boundHandlers(Handler{Lit: lit, pkg: at.pkg, at: at})
 
-	if len(found) != 1 || found[0].Lit == nil {
-		t.Errorf("boundHandlers() = %+v, want the one literal fn is bound to", found)
+	if len(found) != 1 || found[0].handler.Lit == nil || found[0].variable != info.Uses[bound] {
+		t.Errorf("boundHandlers() = %+v, want the one literal fn is bound to, through fn", found)
 	}
 }

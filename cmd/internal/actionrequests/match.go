@@ -92,17 +92,29 @@ func (r *resolver) handlerRoot(handler Handler, entered map[*ast.FuncLit]*types.
 	r.prog.link(fn)
 	r.prog.funcs[stand] = fn
 	for _, bound := range r.boundHandlers(handler) {
-		fn.calls[r.handlerRoot(bound, entered)] = true
+		root := r.handlerRoot(bound.handler, entered)
+		fn.calls[root] = true
+		if fn.bound == nil {
+			fn.bound = make(map[*types.Var][]*types.Func)
+		}
+		fn.bound[bound.variable] = append(fn.bound[bound.variable], root)
 	}
 	return stand
+}
+
+// boundHandler is one handler a literal reaches through a parameter of the
+// route helper it was written in, with the parameter it reaches it through.
+type boundHandler struct {
+	variable *types.Var
+	handler  Handler
 }
 
 // boundHandlers resolves every function-valued parameter a literal names to
 // the handlers its caller bound to it, in the order the literal first names
 // each parameter.
-func (r *resolver) boundHandlers(handler Handler) []Handler {
+func (r *resolver) boundHandlers(handler Handler) []boundHandler {
 	seen := make(map[*types.Var]bool)
-	var found []Handler
+	var found []boundHandler
 	ast.Inspect(handler.Lit.Body, func(node ast.Node) bool {
 		ident, ok := node.(*ast.Ident)
 		if !ok {
@@ -117,7 +129,9 @@ func (r *resolver) boundHandlers(handler Handler) []Handler {
 			return true
 		}
 		seen[variable] = true
-		found = append(found, r.resolveHandler(bound.expr, bound.frame, 0)...)
+		for _, resolved := range r.resolveHandler(bound.expr, bound.frame, 0) {
+			found = append(found, boundHandler{variable: variable, handler: resolved})
+		}
 		return true
 	})
 	return found

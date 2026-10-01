@@ -234,6 +234,92 @@ func TestProgram_Function_AnswersForIndexedBodiesOnly(t *testing.T) {
 	}
 }
 
+// TestProgram_Initializer_AnswersForIndexedVariablesOnly verifies the stand-in
+// a package-level variable's initializer was indexed as is handed to a reader
+// that walks it, and that a variable with no indexed initializer gets nothing.
+func TestProgram_Initializer_AnswersForIndexedVariablesOnly(t *testing.T) {
+	prog := loadFixture(t, requestSources())
+	want := lookupInitializer(t, prog, "requests", "first")
+	var first *types.Var
+	for variable, stand := range prog.initializers {
+		if stand == want {
+			first = variable
+		}
+	}
+
+	if stand, ok := prog.Initializer(first); !ok || stand != want {
+		t.Errorf("Initializer(first) = %v, %t, want its stand-in", stand, ok)
+	}
+	if stand, ok := prog.Initializer(types.NewVar(token.NoPos, nil, "elsewhere", types.Typ[types.Int])); ok || stand != nil {
+		t.Errorf("Initializer() of an unindexed variable = %v, %t, want nothing", stand, ok)
+	}
+}
+
+// TestProgram_Document_AnswersForDeclaringObjectsOnly verifies the text of a
+// named document is handed to a reader that meets the name, and that an
+// object declaring no document gets nothing.
+func TestProgram_Document_AnswersForDeclaringObjectsOnly(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+	var listQuery types.Object
+	for obj := range prog.documents {
+		if obj.Pkg() != nil && obj.Pkg().Name() == "vuln" && obj.Name() == "listQuery" {
+			listQuery = obj
+		}
+	}
+
+	if text, ok := prog.Document(listQuery); !ok || !strings.Contains(text, "vulnerabilities") {
+		t.Errorf("Document(listQuery) = %q, %t, want the list query", text, ok)
+	}
+	if text, ok := prog.Document(lookupFunc(t, prog, "vuln", "send")); ok || text != "" {
+		t.Errorf("Document() of a function = %q, %t, want nothing", text, ok)
+	}
+}
+
+// TestFunction_Accessors_HandTheIndexedBodyToAWalker verifies what a walker
+// of a body reads off it: the package it resolves names through, the node it
+// was indexed from, and the declaration its parameters bind to, which a
+// stand-in has none of.
+func TestFunction_Accessors_HandTheIndexedBodyToAWalker(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+	send, _ := prog.Function(lookupFunc(t, prog, "vuln", "send"))
+
+	if send.Package() == nil || send.Package().Name != "vuln" {
+		t.Errorf("Package() = %v, want vuln", send.Package())
+	}
+	if send.Decl() == nil || send.Root() != send.Decl().Body {
+		t.Errorf("Root() = %v, Decl() = %v, want the declaration's body and the declaration", send.Root(), send.Decl())
+	}
+	for _, testCase := range []struct {
+		name string
+		fn   *Function
+	}{
+		{name: "stand-in", fn: &Function{}},
+		{name: "declaration without a body", fn: &Function{decl: &ast.FuncDecl{}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if decl := testCase.fn.Decl(); decl != nil {
+				t.Errorf("Decl() = %v, want nil", decl)
+			}
+		})
+	}
+}
+
+// TestFunction_Bound_NamesWhatTheHelperWasHandedForOneVariable verifies a
+// handler literal answers, per variable it names, the functions its route
+// helper's caller bound there, and nothing for a variable nothing bound.
+func TestFunction_Bound_NamesWhatTheHelperWasHandedForOneVariable(t *testing.T) {
+	handler := types.NewVar(token.NoPos, nil, "fn", types.NewSignatureType(nil, nil, nil, nil, nil, false))
+	deleteFn := types.NewFunc(token.NoPos, nil, "Delete", nil)
+	lit := &Function{bound: map[*types.Var][]*types.Func{handler: {deleteFn}}}
+
+	if got := lit.Bound(handler); !slices.Equal(got, []*types.Func{deleteFn}) {
+		t.Errorf("Bound(fn) = %v, want [Delete]", got)
+	}
+	if got := lit.Bound(types.NewVar(token.NoPos, nil, "other", types.Typ[types.Int])); got != nil {
+		t.Errorf("Bound(other) = %v, want nothing", got)
+	}
+}
+
 // TestProgram_Packages_AreTheLoadedOnesInOrder verifies a reader that reads
 // its own directives out of the syntax is handed every loaded package.
 func TestProgram_Packages_AreTheLoadedOnesInOrder(t *testing.T) {
@@ -789,13 +875,13 @@ func TestServiceMethod_TheMethodsThatSendARequest(t *testing.T) {
 		callee *types.Func
 		want   string
 	}{
-		{name: "an interface a handler holds", callee: methodOn(serviceType(clientGoPath, "IssuesServiceInterface")), want: "Issues.Get"},
-		{name: "a struct through a pointer", callee: methodOn(types.NewPointer(serviceType(clientGoPath, "IssuesService"))), want: "Issues.Get"},
+		{name: "an interface a handler holds", callee: methodOn(serviceType(ClientGoPath, "IssuesServiceInterface")), want: "Issues.Get"},
+		{name: "a struct through a pointer", callee: methodOn(types.NewPointer(serviceType(ClientGoPath, "IssuesService"))), want: "Issues.Get"},
 		{name: "a function with no receiver", callee: types.NewFunc(token.NoPos, nil, "Get", types.NewSignatureType(nil, nil, nil, nil, nil, false))},
 		{name: "a method of an unnamed type", callee: methodOn(types.NewStruct(nil, nil))},
 		{name: "a service of another package", callee: methodOn(serviceType("example.com/other", "IssuesService"))},
-		{name: "a client-go type no service is named for", callee: methodOn(serviceType(clientGoPath, "Client"))},
-		{name: "a type named for no service at all", callee: methodOn(serviceType(clientGoPath, "Service"))},
+		{name: "a client-go type no service is named for", callee: methodOn(serviceType(ClientGoPath, "Client"))},
+		{name: "a type named for no service at all", callee: methodOn(serviceType(ClientGoPath, "Service"))},
 		{name: "a type of no package", callee: methodOn(types.NewNamed(types.NewTypeName(token.NoPos, nil, "IssuesService", nil), types.NewStruct(nil, nil), nil))},
 	}
 	for _, testCase := range cases {
