@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -61,6 +62,22 @@ type ToolSurfaceResourceOptions struct {
 	// details find the fine-grained requirement the catalog's actions carry.
 	// Nil leaves them without the block.
 	StandaloneActions map[string]string
+	// ToolActions maps each registered tool to the canonical IDs of the
+	// actions it runs: one for an individual or standalone tool, every action
+	// of its group for a meta tool, none for the dynamic surface's two tools.
+	// It is what a fine-grained session's read of the manifest is narrowed by
+	// (issue 952), and it is the server's own answer, the same one its
+	// tools/list filter reads, so the two can never list different tools.
+	// Nil narrows only the entries whose action the catalog names.
+	ToolActions map[string][]string
+}
+
+// ToolSurfaceWithheld is what the detail of an action a fine-grained session
+// may not run carries in place of being absent: why, in the words a call to
+// it is refused with.
+type ToolSurfaceWithheld struct {
+	Cause   string `json:"cause"`
+	Message string `json:"message,omitempty"`
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -275,11 +292,22 @@ type ToolSurfaceDetail struct {
 	// tokens included, since the detail is where a model looks up what an
 	// action needs; the listing and find results do not carry it.
 	FineGrained *finegrained.Description `json:"fine_grained,omitempty"`
+	// Withheld says why this session may not run the action, when it is a
+	// fine-grained session the action is withheld from; absent otherwise.
+	// The detail is served rather than answered not found, because the detail
+	// is where a model looks up why it cannot find an action in the listing.
+	Withheld *ToolSurfaceWithheld `json:"withheld,omitempty"`
 }
 
 type toolSurfaceSnapshot struct {
 	manifest ToolSurfaceManifest
 	details  map[string]ToolSurfaceDetail
+	// entryActions maps an entry or detail key to the canonical ID of the
+	// action it runs, for the keys that run one.
+	entryActions map[string]string
+	// toolActions maps a visible tool to the actions it runs (see
+	// [ToolSurfaceResourceOptions.ToolActions]).
+	toolActions map[string][]string
 }
 
 type toolSnapshot struct {
@@ -355,9 +383,60 @@ func registerToolManifestIndex(server *mcp.Server, snapshot *toolSurfaceSnapshot
 		Description: "Surface-aware manifest of the tools and executable actions available in this server instance. Use gitlab://tools/{id} to fetch one entry's accepted call shape and input schema.",
 		Annotations: toolutil.ResourceMachineList,
 		Icons:       toolutil.IconConfig,
-	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return marshalResourceJSON(snapshot.manifest)
+	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return marshalResourceJSON(snapshot.manifestFor(ctx))
 	})
+}
+
+// manifestFor is the manifest one read is served: the shared snapshot, or for
+// a fine-grained session a copy without the entries and tools it may not run.
+//
+// The snapshot is shared by every server of one configuration and never
+// changed, so the narrowing is a copy made per read, and only for a session
+// whose client carries an authority; a classic session is served the snapshot
+// itself. A tool stays listed while any action it runs does, which is the rule
+// tools/list applies, and a tool that runs none of the catalog's actions (the
+// dynamic surface's two) is never removed. The server's own reads are never
+// narrowed ([toolutil.IsInternalInspection]).
+func (snapshot *toolSurfaceSnapshot) manifestFor(ctx context.Context) ToolSurfaceManifest {
+	authority := gitlabclient.AuthorityFrom(ctx)
+	if authority == nil || toolutil.IsInternalInspection(ctx) {
+		return snapshot.manifest
+	}
+	listed := func(id string) bool { return authority.Decide(id).Listed }
+	narrowed := snapshot.manifest
+	narrowed.Entries = make([]ToolSurfaceEntry, 0, len(snapshot.manifest.Entries))
+	for _, entry := range snapshot.manifest.Entries {
+		if id, runs := snapshot.entryActions[entry.ID]; !runs || listed(id) {
+			narrowed.Entries = append(narrowed.Entries, entry)
+		}
+	}
+	narrowed.VisibleTools = make([]ToolSurfaceVisibleTool, 0, len(snapshot.manifest.VisibleTools))
+	for _, tool := range snapshot.manifest.VisibleTools {
+		ids := snapshot.toolActions[tool.Name]
+		if len(ids) == 0 || slices.ContainsFunc(ids, listed) {
+			narrowed.VisibleTools = append(narrowed.VisibleTools, tool)
+		}
+	}
+	narrowed.EntryCount = len(narrowed.Entries)
+	narrowed.VisibleToolCount = len(narrowed.VisibleTools)
+	return narrowed
+}
+
+// detailFor is the detail one read of key is served: the shared one, or for a
+// fine-grained session an action it may not run, a copy carrying why.
+func (snapshot *toolSurfaceSnapshot) detailFor(ctx context.Context, key string, detail ToolSurfaceDetail) ToolSurfaceDetail {
+	authority := gitlabclient.AuthorityFrom(ctx)
+	id, runs := snapshot.entryActions[key]
+	if authority == nil || !runs || toolutil.IsInternalInspection(ctx) {
+		return detail
+	}
+	decision := authority.Decide(id)
+	if decision.Listed {
+		return detail
+	}
+	detail.Withheld = &ToolSurfaceWithheld{Cause: string(decision.Cause), Message: authority.WithheldText(id, decision)}
+	return detail
 }
 
 // registerToolManifestTemplate registers the URI-template resource that
@@ -372,7 +451,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot *toolSurfaceSnaps
 		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_project_get in individual mode.",
 		Annotations: toolutil.ResourceMachineDetail,
 		Icons:       toolutil.IconConfig,
-	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		id := parseToolManifestURI(req.Params.URI)
 		if id == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -381,7 +460,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot *toolSurfaceSnaps
 		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		return marshalResourceJSON(detail)
+		return marshalResourceJSON(snapshot.detailFor(ctx, id, detail))
 	})
 }
 
@@ -430,6 +509,7 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 	// copied before it carries the block too, and after the uncovered direct
 	// tools, whose details that pass files afresh and would otherwise lose it.
 	snapshot.attachFineGrained(opts.Catalog, opts.StandaloneActions)
+	snapshot.indexActions(opts)
 	slices.SortFunc(snapshot.manifest.Entries, func(a, b ToolSurfaceEntry) int { return cmp.Compare(a.ID, b.ID) })
 	snapshot.manifest.EntryCount = len(snapshot.manifest.Entries)
 	return snapshot
@@ -646,6 +726,45 @@ func (snapshot *toolSurfaceSnapshot) attachFineGrained(catalog *actioncatalog.Ca
 	}
 	for name, id := range standalone {
 		snapshot.describeDetail(name, table.Describe(actiongrants.Requirement(id)))
+	}
+}
+
+// indexActions records which action each detail runs and which actions each
+// visible tool runs, which is what a fine-grained session's reads are narrowed
+// by ([toolSurfaceSnapshot.manifestFor], [toolSurfaceSnapshot.detailFor]).
+//
+// A detail is keyed by the canonical ID on every surface and, on meta, by the
+// tool and action as well; a registered tool's own key is taken from
+// opts.ToolActions, which names the action registration bound it to, since an
+// individual tool name can be declared by several actions and only the first
+// in registration order runs under it; the standalone utilities are keyed by
+// their tool names. Only keys that file a detail are recorded, and an entry is
+// keyed as its detail is.
+func (snapshot *toolSurfaceSnapshot) indexActions(opts ToolSurfaceResourceOptions) {
+	snapshot.entryActions = make(map[string]string, len(snapshot.details))
+	snapshot.toolActions = opts.ToolActions
+	for _, action := range opts.Catalog.Actions() {
+		id := string(action.ID)
+		snapshot.recordAction(id, id)
+		if snapshot.manifest.Surface == toolSurfaceMeta {
+			snapshot.recordAction(metaManifestID(action.ToolName, action.Name), id)
+		}
+	}
+	for name, ids := range opts.ToolActions {
+		if len(ids) == 1 {
+			snapshot.recordAction(name, ids[0])
+		}
+	}
+	for name, id := range opts.StandaloneActions {
+		snapshot.recordAction(name, id)
+	}
+}
+
+// recordAction notes that the detail filed under key runs the action id, when
+// a detail is filed under it.
+func (snapshot *toolSurfaceSnapshot) recordAction(key, id string) {
+	if _, filed := snapshot.details[key]; filed {
+		snapshot.entryActions[key] = id
 	}
 }
 
