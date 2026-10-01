@@ -222,10 +222,10 @@ func (b *limitedBody) Read(p []byte) (int, error) {
 		return 0, ErrResponseTooLarge
 	}
 	// Read one byte past what is left, so the overflow is detected on this
-	// call rather than only on the next one.
-	if int64(len(p)) > b.remaining+1 {
-		p = p[:b.remaining+1]
-	}
+	// call rather than only on the next one. Cut with min rather than a
+	// comparison: a buffer exactly that long was cut to the length it already
+	// had, so the comparison's two sides agreed at its edge.
+	p = p[:min(int64(len(p)), b.remaining+1)]
 	n, err := b.inner.Read(p)
 	if int64(n) > b.remaining {
 		b.exceeded = true
