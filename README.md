@@ -38,7 +38,7 @@
 
 </p>
 
-**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases — in plain language.** One static binary (or a container), [1000+ GitLab tools](#tool-surfaces) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
+**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases, in plain language.** One static binary (or a container), [~868 GitLab tools on Free/CE, up to ~1094 on Ultimate](#tool-surfaces) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
 
 You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
@@ -236,7 +236,7 @@ It is a personal service, run by one person and offered as-is: no SLA, no suppor
 ## Why this server
 
 - **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
-- **The whole platform — [1000+ tools](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
+- **The whole platform: [~868 tools on Free/CE, up to ~1094 on Ultimate](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
 - **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window. ([Token footprint →](#token-footprint))
 - **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) quality/security gates.
 - **Runs anywhere.** One static binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).

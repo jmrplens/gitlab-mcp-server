@@ -29,6 +29,15 @@
 // optionalDependency pins) and builds nothing. It needs no binaries, so the
 // release version-stamp step can keep the checked-in file honest between
 // releases without staging a whole distribution.
+//
+// Every package, the launcher included, carries the repository's LICENSE: the
+// packages are copies of this project, and MIT's one condition is that its
+// notice travels with each copy. Each also carries THIRD_PARTY_NOTICES, the
+// license, notice and patent texts of every module the binaries link, which
+// the release generates beside the binaries (cmd/gen_third_party_notices) and
+// lists in checksums.txt; it is read from <dir> and verified like a binary.
+// The launcher's copies are written into the checked-in npm/gitlab-mcp-server
+// at build time and are git-ignored there, so each text has one source.
 
 import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -36,6 +45,30 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// The release asset holding the third-party notices.
+const NOTICES = "THIRD_PARTY_NOTICES";
+
+// licenseFiles names the texts every package carries, by the name they take
+// in it and where they are read from: the repository's LICENSE, and the
+// notices the release generated beside the binaries in binariesDir.
+function licenseFiles(binariesDir) {
+  return [
+    { name: "LICENSE", src: join(repoRoot, "LICENSE") },
+    { name: NOTICES, src: join(binariesDir, NOTICES) },
+  ];
+}
+
+// copyLicenses writes each licence text into dir. A missing source is an
+// error rather than a package without it.
+function copyLicenses(dir, files) {
+  for (const file of files) {
+    if (!existsSync(file.src)) throw new Error(`licence file ${file.name} not found at ${file.src}`);
+    copyFileSync(file.src, join(dir, file.name));
+    chmodSync(join(dir, file.name), 0o644);
+  }
+  return files.map((file) => file.name);
+}
 
 // PLATFORMS is the whole distribution matrix. `key` is the npm suffix and the
 // runtime lookup the launcher performs; `os`/`cpu` gate the install; `asset` is
@@ -81,6 +114,22 @@ function sha256(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+// verifyAsset returns the sha256 of the release asset `name` at path, after
+// holding it to the digest checksums.txt names when there is a manifest.
+function verifyAsset(name, path, binariesDir, checksums) {
+  const digest = sha256(path);
+  if (checksums) {
+    const want = checksums.get(name);
+    if (!want) {
+      throw new Error(`${name} is not listed in ${join(binariesDir, "checksums.txt")}`);
+    }
+    if (want !== digest) {
+      throw new Error(`${name} is sha256 ${digest}, but checksums.txt says ${want}`);
+    }
+  }
+  return digest;
+}
+
 // readChecksums parses GoReleaser's checksums.txt ("<hex>  <name>" lines).
 // Returns null when the file is absent so the caller can decide whether that
 // is acceptable.
@@ -111,22 +160,14 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
 
   const binaryName = plat.exe ? "gitlab-mcp-server.exe" : "gitlab-mcp-server";
   const src = join(binariesDir, plat.asset);
-  const digest = sha256(src);
-  if (checksums) {
-    const want = checksums.get(plat.asset);
-    if (!want) {
-      throw new Error(`${plat.asset} is not listed in ${join(binariesDir, "checksums.txt")}`);
-    }
-    if (want !== digest) {
-      throw new Error(`${plat.asset} is sha256 ${digest}, but checksums.txt says ${want}`);
-    }
-  }
+  const digest = verifyAsset(plat.asset, src, binariesDir, checksums);
   const dst = join(dir, binaryName);
   copyFileSync(src, dst);
   // 0o755 both here and in the copy: npm records the file mode in the tarball,
   // so a binary packed without the executable bit installs un-runnable on the
   // consumer's machine.
   chmodSync(dst, 0o755);
+  const licenses = copyLicenses(dir, licenseFiles(binariesDir));
 
   const pkg = {
     name: `@jmrp.io/gitlab-mcp-server-${plat.key}`,
@@ -140,7 +181,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
     os: [plat.os],
     cpu: [plat.cpu],
     ...(plat.libc ? { libc: [plat.libc] } : {}),
-    files: [binaryName],
+    files: [binaryName, ...licenses],
     preferUnplugged: true,
   };
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
@@ -191,10 +232,22 @@ function main() {
     process.stderr.write("WARNING: --allow-unverified — binaries are being packaged without a checksum manifest\n");
   }
 
+  // The notices are checked before any package is written: a release short
+  // of them is refused, not packaged without them.
+  const noticesPath = join(args.binaries, NOTICES);
+  if (!existsSync(noticesPath)) {
+    throw new Error(
+      `${noticesPath} not found: the release generates it beside the binaries ` +
+        "(cmd/gen_third_party_notices), and every package carries it",
+    );
+  }
+  const noticesDigest = verifyAsset(NOTICES, noticesPath, args.binaries, checksums);
+
   const platformPackages = PLATFORMS.map((p) =>
     writePlatformPackage(p, args.version, args.binaries, args.out, checksums),
   );
   const mainPackage = syncMainPackage(args.version, args.out);
+  copyLicenses(mainPackage.dir, licenseFiles(args.binaries));
 
   // Record what was verified so validate-npm.mjs can confirm the packed
   // tarballs still carry those exact bytes. Written beside the package
@@ -206,6 +259,7 @@ function main() {
         version: args.version,
         verified: Boolean(checksums),
         binaries: Object.fromEntries(platformPackages.map((p, i) => [PLATFORMS[i].key, p.digest])),
+        notices: noticesDigest,
       },
       null,
       2,

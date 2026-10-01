@@ -304,6 +304,8 @@ Cada GitHub Release incluye tres artefactos de integridad:
 - `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
 - `<artefacto>.sbom.json` — un SBOM en formato SPDX por cada binario
 
+A partir del primer release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`, los textos de licencia, aviso y patente de todos los módulos que enlazan los binarios, que los SBOM nombran sin incluir. Se genera a partir de los binarios en el momento del release y figura en `checksums.txt`, así que los pasos siguientes lo verifican como a un binario.
+
 Nada de esto se verifica por ti: el servidor nunca descarga ni reemplaza su propio binario, así que quien pone un binario en la máquina es quien lo comprueba. Los gestores de paquetes hacen su propia verificación (Homebrew fija una fórmula con checksums; npm y el registro de contenedores fijan digests). Para un binario que descargues tú, verifica tanto la firma como el checksum antes de ejecutarlo.
 
 ### 1. Instalar Cosign

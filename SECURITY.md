@@ -255,8 +255,8 @@ from a model that may have read attacker-influenced content.
 
 ### Read-Only and Safe Modes
 
-- Set `GITLAB_MCP_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read-only tools (list, get, search) are registered.
-- Set `GITLAB_MCP_SAFE_MODE=true` to intercept mutating tools and return a JSON preview instead of executing the change.
+- Set `GITLAB_MCP_READ_ONLY=true` to remove every mutating action (create, update, delete) from the served surface, on every surface; reads (list, get, search) keep working.
+- Set `GITLAB_MCP_SAFE_MODE=true` to have a mutating action return a preview card naming the action and echoing its arguments instead of running the change; reads keep working.
 - Both flags provide additional protection for sensitive GitLab instances.
 
 ### Input Validation

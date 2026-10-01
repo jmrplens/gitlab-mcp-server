@@ -10,6 +10,16 @@ publish action ever sees the wheels:
 - WHEEL/METADATA/entry_points agree with the file name, the version, and the
   console script contract;
 - METADATA carries the mcp-name ownership token the MCP Registry validates;
+- the licence is declared as core metadata 2.4 defines it (PEP 639): an
+  SPDX License-Expression, no legacy License field and no License ::
+  classifier beside it (PyPI refuses that pair), and a License-File for
+  each text under .dist-info/licenses/, which hold the repository's own
+  LICENSE byte for byte, the release's THIRD_PARTY_NOTICES (the
+  generator's header, and the digest build_pypi.py verified against
+  checksums.txt), and nothing undeclared;
+- METADATA links the issue tracker and the security policy under the
+  well-known Issues and Security labels;
+- every archive entry, RECORD included, is a regular file (S_IFREG);
 - each wheel holds exactly one binary with the right magic number and
   machine type for its tag, the executable bit set, and a size floor;
 - every embedded binary is the exact one build_pypi.py verified against the
@@ -20,7 +30,9 @@ publish action ever sees the wheels:
   manylinux_2_17 tag promises;
 - the wheel matching the host is installed into a throwaway venv and the
   console script must answer an MCP initialize handshake over stdio with
-  pure JSON-RPC and the right server version (skipped with --no-install).
+  pure JSON-RPC and the right server version (skipped with --no-install);
+- `twine check --strict` passes over every wheel, when twine is installed
+  in the interpreter running this (the publish action runs its own).
 
 Standard library only. Usage:
     python3 scripts/validate_pypi.py --wheels pypi/dist --version 2.7.5
@@ -28,7 +40,9 @@ Standard library only. Usage:
 
 import argparse
 import base64
+import email.parser
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -46,6 +60,26 @@ COMMAND = "gitlab-mcp-server"
 MCP_NAME_TOKEN = "mcp-name: io.github.jmrplens/gitlab-mcp-server"
 MIN_BINARY_BYTES = 20 * 1024 * 1024
 GLIBC_CEILING = (2, 17)
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+METADATA_VERSION = "2.4"
+LICENSE_EXPRESSION = "MIT"
+
+# License-File value -> the file in this repository whose bytes it must hold.
+LICENSE_SOURCES = {"LICENSE": os.path.join(ROOT, "LICENSE")}
+
+# The License-File generated with the release rather than kept in the
+# repository: held to the generator's header and to the digest build_pypi.py
+# recorded after checking it against the release's checksums.txt.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_HEADER = b"Third-party notices for gitlab-mcp-server\n"
+LICENSE_FILES = sorted(list(LICENSE_SOURCES) + [NOTICES])
+
+# Well-known project URL labels the wheel must carry, with their targets.
+REQUIRED_PROJECT_URLS = {
+    "Issues": "https://github.com/jmrplens/gitlab-mcp-server/issues",
+    "Security": "https://github.com/jmrplens/gitlab-mcp-server/security/policy",
+}
 
 # tag -> (goos, expected magic checker)
 EXPECTED_TAGS = [
@@ -117,7 +151,8 @@ TAG_PLAT_KEYS = {
 
 
 def read_verified(wheels_dir, version):
-    """Load the digests build_pypi.py recorded, or fail if there are none.
+    """Load the digests build_pypi.py recorded, or fail if there are none:
+    the binaries' by platform, and the notices'.
 
     The manifest lives in the wheelhouse and is removed once read, so the
     publish step never sees a non-wheel file in packages-dir.
@@ -126,7 +161,7 @@ def read_verified(wheels_dir, version):
     if not os.path.isfile(path):
         fail("wheels were assembled without {} — build_pypi.py did not check them "
              "against the release's checksums.txt".format(VERIFIED_MANIFEST))
-        return {}
+        return {}, None
     with open(path, encoding="utf-8") as fh:
         manifest = json.load(fh)
     os.remove(path)
@@ -135,10 +170,82 @@ def read_verified(wheels_dir, version):
     if manifest.get("version") != version:
         fail("{} records version {} but this is {}".format(
             VERIFIED_MANIFEST, manifest.get("version"), version))
-    return manifest.get("binaries") or {}
+    if not manifest.get("notices"):
+        fail("{} records no digest for {}".format(VERIFIED_MANIFEST, NOTICES))
+    return manifest.get("binaries") or {}, manifest.get("notices")
 
 
-def validate_wheel(path, version, tag, verified=None):
+def metadata_headers(metadata):
+    """Parse the header block of a METADATA file (the part before the
+    description) the way packaging tools read it: RFC 822 style fields."""
+    return email.parser.HeaderParser().parsestr(metadata)
+
+
+def check_licensing(zf, name, dist_info, metadata, notices_digest=None):
+    """Hold the wheel's licence declaration to core metadata 2.4 (PEP 639).
+
+    The legacy License field and License-Expression are mutually exclusive
+    and PyPI refuses a file carrying both; a License :: classifier is
+    deprecated beside an expression. Every License-File must be in
+    .dist-info/licenses/ under the path the field names, nothing may sit
+    there undeclared, and each repository text must be the repository's own
+    file byte for byte, so a wheel can never carry a licence the source does
+    not. The third-party notices open with the generator's header and, when
+    build_pypi.py recorded their digest, are those exact bytes.
+    """
+    headers = metadata_headers(metadata)
+    if headers.get("Metadata-Version") != METADATA_VERSION:
+        fail("{}: Metadata-Version is {!r}, want {!r} (License-Expression needs it)".format(
+            name, headers.get("Metadata-Version"), METADATA_VERSION))
+    if headers.get("License-Expression") != LICENSE_EXPRESSION:
+        fail("{}: License-Expression is {!r}, want {!r}".format(
+            name, headers.get("License-Expression"), LICENSE_EXPRESSION))
+    if headers.get("License") is not None:
+        fail("{}: METADATA carries the legacy License field beside License-Expression, "
+             "which PyPI refuses".format(name))
+    for classifier in headers.get_all("Classifier") or []:
+        if classifier.startswith("License ::"):
+            fail("{}: METADATA carries the classifier {!r}, deprecated beside License-Expression".format(
+                name, classifier))
+
+    declared = headers.get_all("License-File") or []
+    prefix = dist_info + "/licenses/"
+    shipped = sorted(n[len(prefix):] for n in zf.namelist() if n.startswith(prefix))
+    if sorted(declared) != LICENSE_FILES:
+        fail("{}: License-File declares {}, want {}".format(name, sorted(declared), LICENSE_FILES))
+    if shipped != sorted(declared):
+        fail("{}: {} holds {} but METADATA declares {}".format(name, prefix, shipped, sorted(declared)))
+    for license_file, source in LICENSE_SOURCES.items():
+        arc = prefix + license_file
+        if arc not in zf.namelist():
+            continue
+        with open(source, "rb") as fh:
+            want = fh.read()
+        if zf.read(arc) != want:
+            fail("{}: {} is not the repository's {}".format(name, arc, os.path.relpath(source, ROOT)))
+    arc = prefix + NOTICES
+    if arc in zf.namelist():
+        notices = zf.read(arc)
+        if not notices.startswith(NOTICES_HEADER):
+            fail("{}: {} does not open with the generator's header".format(name, arc))
+        got = hashlib.sha256(notices).hexdigest()
+        if notices_digest and got != notices_digest:
+            fail("{}: {} is sha256 {}, but the release's signed checksums.txt named {}".format(
+                name, arc, got, notices_digest))
+
+
+def check_project_urls(name, metadata):
+    """The issue tracker and the security policy under well-known labels."""
+    urls = {}
+    for value in metadata_headers(metadata).get_all("Project-URL") or []:
+        label, _, url = value.partition(",")
+        urls[label.strip()] = url.strip()
+    for label, url in REQUIRED_PROJECT_URLS.items():
+        if urls.get(label) != url:
+            fail("{}: Project-URL {!r} is {!r}, want {!r}".format(name, label, urls.get(label), url))
+
+
+def validate_wheel(path, version, tag, verified=None, notices_digest=None):
     name = os.path.basename(path)
     with zipfile.ZipFile(path) as zf:
         names = zf.namelist()
@@ -168,6 +275,13 @@ def validate_wheel(path, version, tag, verified=None):
                 fail("{}: METADATA missing {!r}".format(name, needle))
         if not re.search(r"(^|\s)" + re.escape(MCP_NAME_TOKEN) + r"(\s|$)", metadata):
             fail("{}: METADATA description lost the MCP Registry ownership token".format(name))
+        check_licensing(zf, name, dist_info, metadata, notices_digest)
+        check_project_urls(name, metadata)
+
+        for info in zf.infolist():
+            if (info.external_attr >> 16) & 0o170000 != 0o100000:
+                fail("{}: {} is not a regular file (mode {:o})".format(
+                    name, info.filename, info.external_attr >> 16))
 
         entry = zf.read(dist_info + "/entry_points.txt").decode("utf-8")
         if DIST_NAME + " = gitlab_mcp_server:main" not in entry:
@@ -204,6 +318,26 @@ def validate_wheel(path, version, tag, verified=None):
             if want != got:
                 fail("{}: the embedded binary is sha256 {}, but the release's signed "
                      "checksums.txt named {}".format(name, got, want))
+
+
+def twine_check(wheels):
+    """Run `twine check --strict` over the wheels when twine is importable.
+
+    This is the reading PyPI's own upload path makes of the metadata, so a
+    field it would refuse fails here instead of after a file name is burned.
+    It is skipped, and says so, where twine is not installed: the
+    validator stays standard library only, and the publish action runs the
+    same check before it uploads.
+    """
+    if importlib.util.find_spec("twine") is None:
+        print("twine: not installed here, skipping twine check (the publish action runs its own)")
+        return
+    result = subprocess.run([sys.executable, "-m", "twine", "check", "--strict"] + list(wheels),
+                            capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        fail("twine check --strict refused the wheels:\n{}{}".format(result.stdout, result.stderr))
+    else:
+        print("twine: check --strict passed for", len(wheels), "wheels")
 
 
 def host_tag():
@@ -292,7 +426,7 @@ def main():
 
     expected = {"{}-{}-py3-none-{}.whl".format(DIST, args.version, tag): tag
                 for tag in EXPECTED_TAGS}
-    verified = read_verified(args.wheels, args.version)
+    verified, notices_digest = read_verified(args.wheels, args.version)
 
     present = sorted(f for f in os.listdir(args.wheels) if f.endswith(".whl"))
     if set(present) != set(expected):
@@ -304,7 +438,10 @@ def main():
 
     for fname in present:
         if fname in expected:
-            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname], verified)
+            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname], verified,
+                           notices_digest)
+    if present:
+        twine_check([os.path.join(args.wheels, fname) for fname in present])
 
     if not args.no_install and not failures:
         tag = host_tag()

@@ -827,7 +827,9 @@ jobs:
       - name: Check for Docker changes
         id: filter
         run: |
-          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} -- Dockerfile docker-compose*.yml .dockerignore)
+          # The image's builder runs cmd/gen_third_party_notices and the smoke
+          # test reads LICENSE, so a change to either is a change to the image.
+          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} -- Dockerfile docker-compose*.yml .dockerignore LICENSE cmd/gen_third_party_notices cmd/internal/golist cmd/internal/docgen scripts/smoke-test-image.sh)
           if [ -n "$CHANGED" ]; then
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
@@ -939,6 +941,12 @@ jobs:
       # scripts/check-em-dash.sh, over titles and bodies written to disk and
       # once through a stand-in gh, and holds it to refusing a command that
       # makes GitHub skip workflows.
+      # scripts/check_elf_interp_test.py holds the release's PT_INTERP check
+      # to ELF images built byte by byte, and its table of loaders to the
+      # per-target overrides .goreleaser.yml builds with.
+      # scripts/smoke_test_image_sh_test.py runs the image smoke test against
+      # a stand-in docker, and holds it to refusing an image without this
+      # repository's LICENSE or without third-party notices for its platform.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,

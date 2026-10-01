@@ -23,6 +23,19 @@ genuinely no manifest (never in CI).
 
 Wheels land in --out (default pypi/dist), which is wiped first so a rebuild
 cannot mix versions.
+
+The licence is declared the way PEP 639 and core metadata 2.4 define it: an
+SPDX License-Expression, and a License-File for each licence text the wheel
+carries under its .dist-info/licenses/ directory. The legacy License field
+and the License :: classifier are left out on purpose, since the
+specification makes License and License-Expression mutually exclusive and
+PyPI refuses an upload carrying both.
+
+The texts are the repository's LICENSE and THIRD_PARTY_NOTICES, the
+license, notice and patent texts of every module the binaries link, which
+the release generates beside the binaries (cmd/gen_third_party_notices) and
+lists in checksums.txt. The notices are read from the binaries directory and
+verified like a binary, and a release without them builds no wheel.
 """
 
 import argparse
@@ -63,6 +76,17 @@ PLATFORMS = {
 # Deterministic zip entry timestamp (zip's epoch): rebuilding the same
 # inputs yields byte-identical wheels.
 ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+# The licence texts every wheel carries from the repository, by the name they
+# take under .dist-info/licenses/ (the License-File value) and where they are
+# read from. The third-party notices join them from the release assets.
+LICENSE_FILES = [("LICENSE", os.path.join(ROOT, "LICENSE"))]
+
+# The release asset holding the third-party notices, and its License-File
+# value.
+NOTICES = "THIRD_PARTY_NOTICES"
 
 LAUNCHER = '''\
 """Locator for the gitlab-mcp-server binary installed by this wheel.
@@ -121,19 +145,26 @@ if __name__ == "__main__":
 '''
 
 
-def build_metadata(version, readme):
+def build_metadata(version, readme, license_files):
     headers = [
-        ("Metadata-Version", "2.1"),
+        ("Metadata-Version", "2.4"),
         ("Name", DIST_NAME),
         ("Version", version),
         ("Summary", "GitLab MCP server: GitLab REST v4 and GraphQL as Model Context Protocol tools (native Go binary)"),
         ("Author", "jmrplens"),
-        ("License", "MIT"),
+        ("License-Expression", "MIT"),
+    ]
+    headers += [("License-File", name) for name in license_files]
+    headers += [
         ("Project-URL", "Homepage, https://github.com/jmrplens/gitlab-mcp-server"),
         ("Project-URL", "Documentation, https://jmrp.io/docs/gitlab-mcp-server/"),
         ("Project-URL", "Repository, https://github.com/jmrplens/gitlab-mcp-server"),
         ("Project-URL", "Changelog, https://github.com/jmrplens/gitlab-mcp-server/releases"),
-        ("Classifier", "License :: OSI Approved :: MIT License"),
+        # "Issues" and "Security" are labels the well-known project URLs
+        # specification names, so PyPI renders them as the issue tracker and
+        # the security policy rather than as two more links.
+        ("Project-URL", "Issues, https://github.com/jmrplens/gitlab-mcp-server/issues"),
+        ("Project-URL", "Security, https://github.com/jmrplens/gitlab-mcp-server/security/policy"),
         ("Classifier", "Development Status :: 5 - Production/Stable"),
         ("Classifier", "Intended Audience :: Developers"),
         ("Classifier", "Topic :: Software Development"),
@@ -172,13 +203,14 @@ def read_checksums(binaries_dir):
     return entries
 
 
-def verify_binary(binary_path, checksums):
-    """Abort unless the file matches the digest the signed manifest names."""
-    name = os.path.basename(binary_path)
+def verify_asset(path, checksums):
+    """Abort unless the release asset at path matches the digest the signed
+    manifest names, and return that digest."""
+    name = os.path.basename(path)
     want = checksums.get(name)
     if want is None:
         sys.exit("build_pypi: {} is not listed in checksums.txt".format(name))
-    with open(binary_path, "rb") as fh:
+    with open(path, "rb") as fh:
         got = hashlib.sha256(fh.read()).hexdigest()
     if got != want:
         sys.exit("build_pypi: {} is sha256 {}, but checksums.txt says {}".format(name, got, want))
@@ -204,7 +236,20 @@ def add_file(zf, records, arcname, data, executable=False):
     records.append("{},{},{}".format(arcname, record_hash(data), len(data)))
 
 
-def build_wheel(out_dir, version, plat_key, tag, binary_path, readme):
+def read_licenses(files):
+    """Read each (name, path) of `files` into (name, bytes), refusing a
+    missing one: a wheel that declares a License-File it does not carry is
+    one PyPI and every metadata reader treat as malformed."""
+    texts = []
+    for name, path in files:
+        if not os.path.isfile(path):
+            sys.exit("build_pypi: licence file {} not found at {}".format(name, path))
+        with open(path, "rb") as fh:
+            texts.append((name, fh.read()))
+    return texts
+
+
+def build_wheel(out_dir, version, plat_key, tag, binary_path, readme, licenses):
     dist_info = "{}-{}.dist-info".format(NORM_NAME, version)
     wheel_name = "{}-{}-py3-none-{}.whl".format(NORM_NAME, version, tag)
     wheel_path = os.path.join(out_dir, wheel_name)
@@ -225,15 +270,22 @@ def build_wheel(out_dir, version, plat_key, tag, binary_path, readme):
         add_file(zf, records, PKG_NAME + "/__init__.py", LAUNCHER.format(version=version))
         add_file(zf, records, PKG_NAME + "/__main__.py", MAIN_MODULE)
         add_file(zf, records, data_scripts + "/" + bin_name, binary, executable=True)
-        add_file(zf, records, dist_info + "/METADATA", build_metadata(version, readme))
+        add_file(zf, records, dist_info + "/METADATA",
+                 build_metadata(version, readme, [name for name, _ in licenses]))
         add_file(zf, records, dist_info + "/WHEEL", wheel_file(tag))
         add_file(zf, records, dist_info + "/entry_points.txt",
                  "[console_scripts]\n{} = {}:main\n".format(DIST_NAME, PKG_NAME))
+        # The wheel specification puts every License-File under
+        # .dist-info/licenses/, keeping the path the metadata names.
+        for name, text in licenses:
+            add_file(zf, records, dist_info + "/licenses/" + name, text)
         record_name = dist_info + "/RECORD"
         records.append("{},,".format(record_name))
         record_data = "\n".join(records) + "\n"
         info = zipfile.ZipInfo(record_name, date_time=ZIP_DATE)
-        info.external_attr = 0o644 << 16
+        # A regular file like every other entry: 0o644 alone left the type
+        # bits out, which unzip -Z shows as "?rw-r--r--".
+        info.external_attr = 0o100644 << 16
         info.compress_type = zipfile.ZIP_DEFLATED
         zf.writestr(info, record_data)
     return wheel_name
@@ -254,11 +306,12 @@ def main():
     if not re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?", args.version):
         sys.exit("build_pypi: version {!r} does not look like a release version".format(args.version))
 
-    readme_path = os.path.join(os.path.dirname(__file__), "..", "pypi", "README.md")
+    readme_path = os.path.join(ROOT, "pypi", "README.md")
     with open(readme_path, encoding="utf-8") as fh:
         readme = fh.read()
     if "mcp-name: io.github.jmrplens/gitlab-mcp-server" not in readme:
         sys.exit("build_pypi: pypi/README.md lost the mcp-name ownership token the MCP Registry validates")
+    licenses = read_licenses(LICENSE_FILES)
 
     checksums = read_checksums(args.binaries)
     if checksums is None and not args.allow_unverified:
@@ -268,6 +321,19 @@ def main():
         )
     if checksums is None:
         sys.stderr.write("WARNING: --allow-unverified — wheels are being built without a checksum manifest\n")
+
+    notices_path = os.path.join(args.binaries, NOTICES)
+    if not os.path.isfile(notices_path):
+        sys.exit(
+            "build_pypi: {} not found: the release generates it beside the binaries "
+            "(cmd/gen_third_party_notices), and every wheel carries it".format(notices_path)
+        )
+    notices = read_licenses([(NOTICES, notices_path)])
+    if checksums is not None:
+        notices_digest = verify_asset(notices_path, checksums)
+    else:
+        notices_digest = hashlib.sha256(notices[0][1]).hexdigest()
+    licenses += notices
 
     if os.path.isdir(args.out):
         shutil.rmtree(args.out)
@@ -281,13 +347,17 @@ def main():
         if not os.path.isfile(binary_path):
             sys.exit("build_pypi: missing release binary {}".format(binary_path))
         if checksums is not None:
-            digests[plat_key] = verify_binary(binary_path, checksums)
-        built.append(build_wheel(args.out, args.version, plat_key, tag, binary_path, readme))
+            digests[plat_key] = verify_asset(binary_path, checksums)
+        built.append(build_wheel(args.out, args.version, plat_key, tag, binary_path, readme, licenses))
 
     # Record what was verified so validate_pypi.py can confirm the wheels still
     # carry those exact bytes. Written beside the wheels, never inside one.
     with open(os.path.join(args.out, "verified-binaries.json"), "w", encoding="utf-8") as fh:
-        json.dump({"version": args.version, "verified": checksums is not None, "binaries": digests}, fh, indent=2)
+        json.dump(
+            {"version": args.version, "verified": checksums is not None, "binaries": digests,
+             "notices": notices_digest},
+            fh, indent=2,
+        )
         fh.write("\n")
 
     for name in built:

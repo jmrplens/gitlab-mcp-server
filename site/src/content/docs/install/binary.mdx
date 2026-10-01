@@ -140,6 +140,10 @@ If either step fails, do not run the file. The full walkthrough, including insta
 The release workflow now records a build provenance attestation for every asset in `checksums.txt` and emits one SPDX SBOM per binary (`<asset>.sbom.json`), checkable with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server`. Those steps landed after v2.7.5 was tagged, so they apply to the releases published after it; for v2.7.5 itself, the checksum and signature above are the verification available.
 :::
 
+:::note[Third-party notices]
+From the first release after 3.1.0 each release also ships `THIRD_PARTY_NOTICES`: the license, notice and patent texts of the Go standard library and of every module the binaries link, generated from the release binaries themselves and listed in `checksums.txt`, so the commands above verify it too. The npm, PyPI and NuGet packages and the Claude Desktop bundles carry the same file beside `LICENSE`.
+:::
+
 ## Where to put it
 
 - **Per user, no `sudo`**: `~/.local/bin` on Linux and macOS (the script's default), `%LOCALAPPDATA%\Programs\gitlab-mcp-server` on Windows (the PowerShell script's default).

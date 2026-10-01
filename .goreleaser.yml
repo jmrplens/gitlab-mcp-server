@@ -24,9 +24,31 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+      - &ldflags -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
     # Reproducible builds: stamp binary mtime from commit timestamp.
     mod_timestamp: "{{ .CommitTimestamp }}"
+    # -buildmode=pie makes the Linux binaries dynamically linked, and the
+    # linker picks their ELF interpreter (PT_INTERP) by stat-ing the build
+    # host: the glibc loader unless the musl one exists there
+    # (cmd/link/internal/ld/elf.go). The release runner happens to give the
+    # glibc paths below, which is what every Linux channel promises (npm's
+    # libc: glibc, PyPI's manylinux tags, NuGet's linux RIDs, the .mcpb
+    # launcher), so they are named here rather than left to whatever host
+    # builds the release: the image's arm64 binary once shipped with a loader
+    # its base image did not have and died at exec. An override replaces the
+    # whole ldflags list, hence the anchor. scripts/check_elf_interp.py holds
+    # the built binaries to these paths right after GoReleaser.
+    overrides:
+      - goos: linux
+        goarch: amd64
+        ldflags:
+          - *ldflags
+          - -I /lib64/ld-linux-x86-64.so.2
+      - goos: linux
+        goarch: arm64
+        ldflags:
+          - *ldflags
+          - -I /lib/ld-linux-aarch64.so.1
 
 # macOS universal (fat) binary for the Claude Desktop extension (.mcpb):
 # platform_overrides in the MCPB manifest key by OS only (darwin/win32/linux),
@@ -104,7 +126,8 @@ sboms:
   # `binary`, not `archive`: binary-format archives produce Binary-type
   # artifacts, which the archive filter never matches — with `archive` here
   # GoReleaser logs "no artifacts matching current filters" and no SBOM ships.
-  - artifacts: binary
+  - id: binaries
+    artifacts: binary
     documents:
       - "{{ .ArtifactName }}.sbom.json"
     cmd: syft
@@ -115,6 +138,40 @@ sboms:
       - spdx-json=${document}
       - --enrich
       - all
+  # THIRD_PARTY_NOTICES: the license, notice and patent texts of every module
+  # the six binaries link, which their licenses ask to travel with a binary
+  # redistribution and the SBOMs above name without carrying. It is an sboms
+  # entry because that is the one hook GoReleaser runs after every build and
+  # before checksums.txt is computed and signed, so the file becomes a release
+  # asset listed in the signed checksums.txt like every binary. `any` runs the
+  # command once, in dist/, with no artifact of its own; the glob names the
+  # six per-target build directories and not the universal darwin binary, and
+  # -targets refuses a run that read one binary fewer. GoReleaser hands the
+  # command a reduced environment (HOME and PATH among a few), so the go
+  # settings that place the module cache the `go mod download` hook filled are
+  # passed through; an unset one reaches go empty, which go reads as unset.
+  # A failure stops the release, since a release short of its notices is not
+  # one to publish.
+  - id: third-party-notices
+    artifacts: any
+    cmd: go
+    args:
+      - run
+      - ../cmd/gen_third_party_notices
+      - -o
+      - $document
+      - -targets
+      - darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,windows/amd64,windows/arm64
+      - gitlab-mcp-server_*/gitlab-mcp-server*
+    documents:
+      - THIRD_PARTY_NOTICES
+    env:
+      - GOPATH=${GOPATH}
+      - GOMODCACHE=${GOMODCACHE}
+      - GOCACHE=${GOCACHE}
+      - GOFLAGS=${GOFLAGS}
+      - GOTOOLCHAIN=${GOTOOLCHAIN}
+      - GOPROXY=${GOPROXY}
 
 release:
   github:

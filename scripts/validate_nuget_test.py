@@ -50,6 +50,11 @@ build_nuget = load_module("build_nuget")
 VERSION = "9.9.9"
 RIDS = build_nuget.RIDS
 
+# A stand-in for what cmd/gen_third_party_notices writes: the validator reads
+# its header line and its digest, nothing else.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_TEXT = b"Third-party notices for gitlab-mcp-server\n\nstand-in body\n"
+
 
 def fake_binary(plat_key, tail=b""):
     """Bytes with the header the validator checks for this platform."""
@@ -71,7 +76,8 @@ def asset_name(plat_key):
 
 
 def write_fixture(binaries_dir, with_checksums=True):
-    """The six release assets and, optionally, a matching checksums.txt."""
+    """The six release assets, the notices and, optionally, a matching
+    checksums.txt."""
     os.makedirs(binaries_dir, exist_ok=True)
     lines = []
     for plat_key in RIDS:
@@ -79,6 +85,9 @@ def write_fixture(binaries_dir, with_checksums=True):
         with open(os.path.join(binaries_dir, asset_name(plat_key)), "wb") as fh:
             fh.write(payload)
         lines.append("{}  {}".format(hashlib.sha256(payload).hexdigest(), asset_name(plat_key)))
+    with open(os.path.join(binaries_dir, NOTICES), "wb") as fh:
+        fh.write(NOTICES_TEXT)
+    lines.append("{}  {}".format(hashlib.sha256(NOTICES_TEXT).hexdigest(), NOTICES))
     if with_checksums:
         with open(os.path.join(binaries_dir, "checksums.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
@@ -178,6 +187,27 @@ class PackedFixture(unittest.TestCase):
     def problems(self):
         return validate_nuget.validate_packages(self.out, VERSION)
 
+    def forget_notices_digest(self):
+        """Rewrite the manifest the packer left without the notices digest."""
+        path = os.path.join(self.out, "verified-binaries.json")
+        with open(path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+        del manifest["notices"]
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh)
+
+    def relicense_mode(self, rid, mode):
+        """Rewrite one package with its LICENSE entry carrying `mode`."""
+        path = self.package(rid)
+        tmp = path + ".tmp"
+        with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w") as dst:
+            for info in src.infolist():
+                data = src.read(info.filename)
+                if info.filename == "LICENSE":
+                    info.external_attr = mode << 16
+                dst.writestr(info, data)
+        os.replace(tmp, path)
+
 
 class BuildNugetTest(PackedFixture):
     """What the packer emits, checked by opening the packages directly."""
@@ -191,6 +221,7 @@ class BuildNugetTest(PackedFixture):
         self.assertTrue(manifest["verified"])
         self.assertEqual(manifest["version"], VERSION)
         self.assertEqual(sorted(manifest["binaries"]), sorted(RIDS))
+        self.assertEqual(manifest["notices"], hashlib.sha256(NOTICES_TEXT).hexdigest())
 
     def test_pointer_layout(self):
         with zipfile.ZipFile(self.package()) as zf:
@@ -228,6 +259,52 @@ class BuildNugetTest(PackedFixture):
                     self.assertIn('EntryPoint="{}" Runner="executable"'.format(bin_name), settings)
                     nuspec = zf.read("gitlab-mcp-server.{}.nuspec".format(rid)).decode()
                     self.assertIn('<packageType name="DotnetToolRidPackage" />', nuspec)
+
+    def test_every_package_carries_the_licence(self):
+        with open(os.path.join(ROOT, "LICENSE"), "rb") as fh:
+            want = fh.read()
+        for rid in [None] + list(RIDS.values()):
+            with self.subTest(rid or "pointer"):
+                with zipfile.ZipFile(self.package(rid)) as zf:
+                    self.assertEqual(zf.read("LICENSE"), want)
+                    self.assertEqual(zf.getinfo("LICENSE").external_attr >> 16, 0o100644)
+
+    def test_every_package_carries_the_notices(self):
+        for rid in [None] + list(RIDS.values()):
+            with self.subTest(rid or "pointer"):
+                with zipfile.ZipFile(self.package(rid)) as zf:
+                    self.assertEqual(zf.read(NOTICES), NOTICES_TEXT)
+                    self.assertEqual(zf.getinfo(NOTICES).external_attr >> 16, 0o100644)
+
+    def test_the_notices_must_come_with_the_release(self):
+        cases = [
+            ("no notices", "remove", "THIRD_PARTY_NOTICES not found"),
+            ("notices checksums.txt does not name", "replace", "THIRD_PARTY_NOTICES is sha256"),
+        ]
+        for name, action, want in cases:
+            with self.subTest(name):
+                path = os.path.join(self.binaries, NOTICES)
+                if action == "remove":
+                    os.remove(path)
+                else:
+                    with open(path, "wb") as fh:
+                        fh.write(b"Third-party notices for gitlab-mcp-server\nanother body\n")
+                try:
+                    result = subprocess.run(
+                        [sys.executable, BUILDER, "--binaries", self.binaries, "--version", VERSION,
+                         "--out", os.path.join(self.work, "again")],
+                        cwd=ROOT, capture_output=True, text=True, check=False,
+                    )
+                finally:
+                    with open(path, "wb") as fh:
+                        fh.write(NOTICES_TEXT)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(want, result.stderr)
+
+    def test_a_missing_licence_stops_the_pack(self):
+        with self.assertRaises(SystemExit) as caught:
+            build_nuget.read_licenses([("LICENSE", os.path.join(self.work, "absent"))])
+        self.assertIn("licence file LICENSE not found", str(caught.exception))
 
     def test_is_deterministic(self):
         first = {}
@@ -331,6 +408,24 @@ class ValidateNugetTest(PackedFixture):
              lambda: rewrite(self.package("linux-x64"), comment=b"built by hand"), "archive comment"),
             ("a package is already signed", lambda: sign_like_nuget(self.package("osx-arm64")),
              "already carries .signature.p7s"),
+            ("a runtime package lost its licence",
+             lambda: repack(self.package("linux-arm64"), drop=("LICENSE",)), "no LICENSE at the package root"),
+            ("the pointer carries another licence text",
+             lambda: repack(self.package(), {"LICENSE": "Not the MIT License\n"}),
+             "LICENSE is not the repository's LICENSE"),
+            ("a licence entry without its file type", lambda: self.relicense_mode("win-x64", 0o644),
+             "LICENSE is not a regular file (mode 644)"),
+            ("the pointer lost the notices",
+             lambda: repack(self.package(), drop=(NOTICES,)), "no THIRD_PARTY_NOTICES at the package root"),
+            ("a runtime package carries other notices",
+             lambda: repack(self.package("osx-x64"),
+                            {NOTICES: b"Third-party notices for gitlab-mcp-server\nanother body\n"}),
+             "THIRD_PARTY_NOTICES is sha256"),
+            ("a runtime package carries a file without the header",
+             lambda: repack(self.package("linux-x64"), {NOTICES: "some other text\n"}),
+             "THIRD_PARTY_NOTICES does not open with the generator's header"),
+            ("the manifest records no notices digest", self.forget_notices_digest,
+             "records no digest for THIRD_PARTY_NOTICES"),
         ]
         for name, tamper, want in cases:
             with self.subTest(name):

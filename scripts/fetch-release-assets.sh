@@ -9,8 +9,10 @@
 #   <version>          release version without the leading v (e.g. 2.7.6)
 #   <dest-dir>         directory the assets are downloaded into (created)
 #   [asset-pattern]    gh release download --pattern globs; default: every
-#                      gitlab-mcp-server-<os>-* binary and its SBOM, which
-#                      leaves out the Claude Desktop bundles
+#                      gitlab-mcp-server-<os>-* binary and its SBOM, and
+#                      THIRD_PARTY_NOTICES, which every package carries beside
+#                      the binaries and which the default therefore requires;
+#                      it leaves out the Claude Desktop bundles
 #                      (gitlab-mcp-server-<os>.mcpb and gitlab-mcp-server.mcpb)
 #
 # Requires GH_TOKEN with read access to the repository's releases, and cosign
@@ -51,12 +53,20 @@ VERSION="${1:?Usage: $0 [--checksums-only] <version> <dest-dir> [asset-pattern .
 DEST="${2:?Usage: $0 [--checksums-only] <version> <dest-dir> [asset-pattern ...]}"
 shift 2
 PATTERNS=("$@")
+# The license, notice and patent texts of what the binaries link, generated
+# at release time (cmd/gen_third_party_notices) and listed in checksums.txt
+# like every binary.
+NOTICES="THIRD_PARTY_NOTICES"
+REQUIRE_NOTICES=0
 if [ ${#PATTERNS[@]} -eq 0 ] && [ "$CHECKSUMS_ONLY" -eq 0 ]; then
   # One glob per operating system rather than gitlab-mcp-server-*, which also
   # matches the per-OS Claude Desktop bundles (gitlab-mcp-server-linux.mcpb):
   # the jobs that take the default package the binaries and have no use for
-  # some 75 MB of bundles, nor for the attestation round trips below.
-  PATTERNS=("gitlab-mcp-server-darwin-*" "gitlab-mcp-server-linux-*" "gitlab-mcp-server-windows-*")
+  # some 75 MB of bundles, nor for the attestation round trips below. They
+  # package the notices with the binaries, so a release short of them stops
+  # here rather than in each packager.
+  PATTERNS=("gitlab-mcp-server-darwin-*" "gitlab-mcp-server-linux-*" "gitlab-mcp-server-windows-*" "$NOTICES")
+  REQUIRE_NOTICES=1
 fi
 
 REPO="${REPO:-${GITHUB_REPOSITORY:-jmrplens/gitlab-mcp-server}}"
@@ -127,6 +137,13 @@ echo "Verifying assets against checksums.txt"
 )
 if grep -q ": FAILED" "$DEST/sha256-check.log"; then
   echo "ERROR: an asset does not match checksums.txt" >&2
+  rm -f "$DEST/sha256-check.log"
+  exit 1
+fi
+# gh downloads whatever matches and says nothing about a pattern that matched
+# nothing, so the notices are required by name: present, and verified.
+if [ "$REQUIRE_NOTICES" -eq 1 ] && ! grep -qxF "${NOTICES}: OK" "$DEST/sha256-check.log"; then
+  echo "ERROR: ${TAG} has no ${NOTICES} listed in checksums.txt, and every package carries it beside the binaries" >&2
   rm -f "$DEST/sha256-check.log"
   exit 1
 fi

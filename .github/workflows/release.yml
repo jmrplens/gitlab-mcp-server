@@ -538,7 +538,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.DOCKERHUB_IMAGE }}
-          short-description: "MCP server exposing 1,000+ GitLab operations as AI-accessible tools. By jmrp.io"
+          short-description: "MCP server for GitLab: ~868 tools on Free/CE, up to ~1094 on Ultimate. By jmrp.io"
           readme-filepath: ./.github/dockerhub-description.md
 
   # Signing and attestation, in a job of their own, for two reasons that both
@@ -1070,6 +1070,15 @@ jobs:
               done
           ls -1 dist/
 
+      # Every Linux channel (npm, PyPI, NuGet, the .mcpb launcher, the release
+      # assets) hands out these two binaries and promises a glibc system, so
+      # the loader each one names in PT_INTERP is checked once here, before
+      # anything packs them. .goreleaser.yml names the loaders explicitly;
+      # this holds the build to them, the way the Dockerfile holds the image's
+      # binary to the musl loader.
+      - name: Check the Linux binaries' ELF interpreter
+        run: python3 scripts/check_elf_interp.py dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64
+
       # The bundles are built before the stamp because server.json declares
       # the three per-OS ones and needs their SHA256. GoReleaser does not
       # produce them, so they are absent from the signed checksums.txt and
@@ -1094,16 +1103,17 @@ jobs:
           gh release upload "v${VERSION}" dist/*.mcpb --clobber
 
       # A rehearsal hands its build to the publisher jobs the way a release
-      # hands them the published assets: the staged binaries, checksums.txt
-      # and the bundles (the universal one by name, the per-OS ones through
-      # the gitlab-mcp-server-* glob), which fetch-release-assets.sh unpacks
-      # and checks in place of downloading. One tar rather than the files, so
-      # the executable bits survive the trip.
+      # hands them the published assets: the staged binaries, checksums.txt,
+      # THIRD_PARTY_NOTICES (which every package carries and the fetch
+      # requires) and the bundles (the universal one by name, the per-OS ones
+      # through the gitlab-mcp-server-* glob), which fetch-release-assets.sh
+      # unpacks and checks in place of downloading. One tar rather than the
+      # files, so the executable bits survive the trip.
       - name: Hand the rehearsal's build to the publishers
         if: env.REHEARSAL == 'true'
         run: |
           set -euo pipefail
-          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt gitlab-mcp-server.mcpb gitlab-mcp-server-*)
+          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt THIRD_PARTY_NOTICES gitlab-mcp-server.mcpb gitlab-mcp-server-*)
           tar -tf "${RUNNER_TEMP}/rehearsal-assets.tar"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -1133,8 +1143,9 @@ jobs:
         with:
           subject-path: dist/*.mcpb
 
-      # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
-      # attached and attested before the release becomes visible: a client
+      # Every asset (binaries, checksums.txt + signature, SBOMs,
+      # THIRD_PARTY_NOTICES, .mcpb) is attached and attested before the
+      # release becomes visible: a client
       # never sees a partial release, and this is the draft-then-publish flow
       # immutable releases require. GoReleaser creates the release as a draft
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads
