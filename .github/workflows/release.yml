@@ -179,11 +179,12 @@ jobs:
   # builds the targets .goreleaser.yml names with the toolchain go.mod names,
   # as the release job does, and cmd/audit_binary_vulns refuses every build
   # setting it does not read (an unread key of a build or an override, a global
-  # env, a gomod section, a before hook other than go mod download), so what it
-  # scans links the modules the published binaries link. It stands in front of
-  # `docker`, the first job that publishes anything, beside the E2E and race
-  # gates, and runs in a rehearsal too. No credential: it reads the tree and the
-  # public vulnerability database and nothing else.
+  # env, a gomod section that sets anything, a before key other than hooks or a
+  # hook other than go mod download), so what it scans links the modules the
+  # published binaries link. It stands in front of `docker`, the first job that
+  # publishes anything, beside the E2E and race gates, and runs in a rehearsal
+  # too. No credential: it reads the tree and the public vulnerability database
+  # and nothing else.
   binary-vulns:
     name: "🛡️ Binary vulnerability gate"
     runs-on: ubuntu-latest

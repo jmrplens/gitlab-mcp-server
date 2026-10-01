@@ -6874,10 +6874,11 @@ choice.
   scanner that reads a binary's module list rather than its symbols
   (`govulncheck -mode binary -scan module`, and every directory working from
   an SBOM) still reported the advisory against both. The release after 3.1.0
-  derives those keys with the standard library's `crypto/hkdf` and links no
-  `golang.org/x/crypto` at all, and `make check-binary-vulns` holds every
-  release binary to the database at that grain. The upstream PR stays worth
-  merging for the module's other users.
+  derives those keys with the standard library's `crypto/hkdf` and names no
+  `golang.org/x/crypto` module in its build information, and
+  `make check-binary-vulns` holds every release binary to the database at
+  that grain. The upstream PR stays worth merging for the module's other
+  users.
 
 ### A receiving middleware cannot read the JSON-RPC request id
 
@@ -7519,7 +7520,7 @@ reproducing the panic outside this repository showed where it comes from.
   `cmd/` that type-check Go source with go/packages, `cmd/internal/goprogram`,
   `cmd/internal/graphqldocs` and `internal/testutil/modelcorpus`.
 - **Workaround**: yes. `internal/testutil/serialtypecheck` is imported blank by
-  one test file of each of the 22 packages whose test binary links
+  one test file of each of the 23 packages whose test binary links
   go/packages. In a race build its initializer sets GOMAXPROCS to one before
   go/packages sizes the semaphore it type-checks under, so the checkers run
   one after another; in any other build it changes nothing. Its tests hold
