@@ -19,7 +19,9 @@ packages:
   name, with the right magic number and machine type for its runtime
   identifier, the executable bit set, and a size floor;
 - every package carries the repository's LICENSE at its root, a regular
-  file holding that text byte for byte;
+  file holding that text byte for byte, and the release's
+  THIRD_PARTY_NOTICES beside it, opening with the generator's header and
+  holding the bytes build_nuget.py verified against checksums.txt;
 - every embedded binary is the exact one build_nuget.py verified against the
   release's cosign-signed checksums.txt: the checks above are shape checks,
   and a wrong-but-plausible file of the right size with the right first bytes
@@ -67,6 +69,12 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 # Entry name at a package's root -> the repository file it must equal.
 LICENSE_SOURCES = {"LICENSE": os.path.join(ROOT, "LICENSE")}
+
+# The entry generated with the release rather than kept in the repository:
+# held to the generator's header and to the digest build_nuget.py recorded
+# after checking it against the release's checksums.txt.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_HEADER = b"Third-party notices for gitlab-mcp-server\n"
 
 # Runtime identifier -> the plat_key build_nuget.py records digests under.
 RID_PLAT_KEYS = {
@@ -209,7 +217,8 @@ def check_signable_layout(data, name, problems):
 
 
 def read_verified(packages_dir, version, problems):
-    """Load the digests build_nuget.py recorded, or fail if there are none.
+    """Load the digests build_nuget.py recorded, or fail if there are none:
+    the binaries' by platform, and the notices'.
 
     The manifest lives beside the packages and is removed once read, so the
     publish step never sees a non-package file in the directory it pushes.
@@ -218,7 +227,7 @@ def read_verified(packages_dir, version, problems):
     if not os.path.isfile(path):
         problems.append("packages were assembled without {}: build_nuget.py did not check them "
                         "against the release's checksums.txt".format(VERIFIED_MANIFEST))
-        return {}
+        return {}, None
     with open(path, encoding="utf-8") as fh:
         manifest = json.load(fh)
     os.remove(path)
@@ -227,7 +236,9 @@ def read_verified(packages_dir, version, problems):
     if manifest.get("version") != version:
         problems.append("{} records version {} but this is {}".format(
             VERIFIED_MANIFEST, manifest.get("version"), version))
-    return manifest.get("binaries") or {}
+    if not manifest.get("notices"):
+        problems.append("{} records no digest for {}".format(VERIFIED_MANIFEST, NOTICES))
+    return manifest.get("binaries") or {}, manifest.get("notices")
 
 
 def read_nuspec(zf, pkg_id, name, problems):
@@ -316,19 +327,30 @@ def parse_settings(zf, arcname, name, problems):
     return root
 
 
-def check_licenses(zf, name, problems):
+def check_licenses(zf, name, problems, notices_digest=None):
     """Every package carries each licence text at its root, as a regular
-    file, holding the repository's own file byte for byte."""
-    for entry, source in LICENSE_SOURCES.items():
+    file: the repository's own files byte for byte, and the third-party
+    notices opening with the generator's header and, when build_nuget.py
+    recorded their digest, holding exactly those bytes."""
+    for entry in list(LICENSE_SOURCES) + [NOTICES]:
         if entry not in zf.namelist():
             problems.append("{}: no {} at the package root".format(name, entry))
             continue
         mode = zf.getinfo(entry).external_attr >> 16
         if mode & 0o170000 != 0o100000:
             problems.append("{}: {} is not a regular file (mode {:o})".format(name, entry, mode))
-        with open(source, "rb") as fh:
+        data = zf.read(entry)
+        if entry == NOTICES:
+            if not data.startswith(NOTICES_HEADER):
+                problems.append("{}: {} does not open with the generator's header".format(name, entry))
+            got = hashlib.sha256(data).hexdigest()
+            if notices_digest and got != notices_digest:
+                problems.append("{}: {} is sha256 {}, but the release's signed checksums.txt named {}".format(
+                    name, entry, got, notices_digest))
+            continue
+        with open(LICENSE_SOURCES[entry], "rb") as fh:
             want = fh.read()
-        if zf.read(entry) != want:
+        if data != want:
             problems.append("{}: {} is not the repository's {}".format(name, entry, entry))
 
 
@@ -339,14 +361,14 @@ def check_readme_token(zf, readme_name, name, problems):
             name, readme_name, MCP_NAME_TOKEN))
 
 
-def validate_pointer(path, version, problems):
+def validate_pointer(path, version, problems, notices_digest=None):
     name = os.path.basename(path)
     with zipfile.ZipFile(path) as zf:
         metadata = read_nuspec(zf, PKG_ID, name, problems)
         if metadata is None:
             return
         check_metadata(metadata, name, PKG_ID, version, ("DotnetTool", "McpServer"), problems)
-        check_licenses(zf, name, problems)
+        check_licenses(zf, name, problems, notices_digest)
 
         readme_name = check_declared_file(zf, metadata, name, "readme", problems)
         if readme_name is None:
@@ -394,7 +416,7 @@ def validate_pointer(path, version, problems):
                 name, ", ".join(binaries)))
 
 
-def validate_rid_package(path, version, rid, verified, problems):
+def validate_rid_package(path, version, rid, verified, problems, notices_digest=None):
     name = os.path.basename(path)
     pkg_id = "{}.{}".format(PKG_ID, rid)
     bin_name = bin_name_for(rid)
@@ -404,7 +426,7 @@ def validate_rid_package(path, version, rid, verified, problems):
             return
         check_metadata(metadata, name, pkg_id, version, ("DotnetToolRidPackage",), problems)
         check_declared_file(zf, metadata, name, "readme", problems)
-        check_licenses(zf, name, problems)
+        check_licenses(zf, name, problems, notices_digest)
 
         settings = parse_settings(zf, "tools/any/{}/DotnetToolSettings.xml".format(rid), name, problems)
         if settings is not None:
@@ -450,7 +472,7 @@ def expected_packages(version):
 def validate_packages(packages_dir, version):
     """Run every offline check and return the problems found."""
     problems = []
-    verified = read_verified(packages_dir, version, problems)
+    verified, notices_digest = read_verified(packages_dir, version, problems)
     expected = expected_packages(version)
 
     present = sorted(f for f in os.listdir(packages_dir) if f.endswith(".nupkg"))
@@ -472,9 +494,9 @@ def validate_packages(packages_dir, version):
             check_signable_layout(fh.read(), fname, problems)
         rid = expected[fname]
         if rid is None:
-            validate_pointer(path, version, problems)
+            validate_pointer(path, version, problems, notices_digest)
         else:
-            validate_rid_package(path, version, rid, verified, problems)
+            validate_rid_package(path, version, rid, verified, problems, notices_digest)
     return problems
 
 

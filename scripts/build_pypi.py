@@ -30,6 +30,12 @@ carries under its .dist-info/licenses/ directory. The legacy License field
 and the License :: classifier are left out on purpose, since the
 specification makes License and License-Expression mutually exclusive and
 PyPI refuses an upload carrying both.
+
+The texts are the repository's LICENSE and THIRD_PARTY_NOTICES, the
+license, notice and patent texts of every module the binaries link, which
+the release generates beside the binaries (cmd/gen_third_party_notices) and
+lists in checksums.txt. The notices are read from the binaries directory and
+verified like a binary, and a release without them builds no wheel.
 """
 
 import argparse
@@ -73,9 +79,14 @@ ZIP_DATE = (1980, 1, 1, 0, 0, 0)
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
-# The licence texts every wheel carries, by the name they take under
-# .dist-info/licenses/ (the License-File value) and where they are read from.
+# The licence texts every wheel carries from the repository, by the name they
+# take under .dist-info/licenses/ (the License-File value) and where they are
+# read from. The third-party notices join them from the release assets.
 LICENSE_FILES = [("LICENSE", os.path.join(ROOT, "LICENSE"))]
+
+# The release asset holding the third-party notices, and its License-File
+# value.
+NOTICES = "THIRD_PARTY_NOTICES"
 
 LAUNCHER = '''\
 """Locator for the gitlab-mcp-server binary installed by this wheel.
@@ -192,13 +203,14 @@ def read_checksums(binaries_dir):
     return entries
 
 
-def verify_binary(binary_path, checksums):
-    """Abort unless the file matches the digest the signed manifest names."""
-    name = os.path.basename(binary_path)
+def verify_asset(path, checksums):
+    """Abort unless the release asset at path matches the digest the signed
+    manifest names, and return that digest."""
+    name = os.path.basename(path)
     want = checksums.get(name)
     if want is None:
         sys.exit("build_pypi: {} is not listed in checksums.txt".format(name))
-    with open(binary_path, "rb") as fh:
+    with open(path, "rb") as fh:
         got = hashlib.sha256(fh.read()).hexdigest()
     if got != want:
         sys.exit("build_pypi: {} is sha256 {}, but checksums.txt says {}".format(name, got, want))
@@ -310,6 +322,19 @@ def main():
     if checksums is None:
         sys.stderr.write("WARNING: --allow-unverified — wheels are being built without a checksum manifest\n")
 
+    notices_path = os.path.join(args.binaries, NOTICES)
+    if not os.path.isfile(notices_path):
+        sys.exit(
+            "build_pypi: {} not found: the release generates it beside the binaries "
+            "(cmd/gen_third_party_notices), and every wheel carries it".format(notices_path)
+        )
+    notices = read_licenses([(NOTICES, notices_path)])
+    if checksums is not None:
+        notices_digest = verify_asset(notices_path, checksums)
+    else:
+        notices_digest = hashlib.sha256(notices[0][1]).hexdigest()
+    licenses += notices
+
     if os.path.isdir(args.out):
         shutil.rmtree(args.out)
     os.makedirs(args.out)
@@ -322,13 +347,17 @@ def main():
         if not os.path.isfile(binary_path):
             sys.exit("build_pypi: missing release binary {}".format(binary_path))
         if checksums is not None:
-            digests[plat_key] = verify_binary(binary_path, checksums)
+            digests[plat_key] = verify_asset(binary_path, checksums)
         built.append(build_wheel(args.out, args.version, plat_key, tag, binary_path, readme, licenses))
 
     # Record what was verified so validate_pypi.py can confirm the wheels still
     # carry those exact bytes. Written beside the wheels, never inside one.
     with open(os.path.join(args.out, "verified-binaries.json"), "w", encoding="utf-8") as fh:
-        json.dump({"version": args.version, "verified": checksums is not None, "binaries": digests}, fh, indent=2)
+        json.dump(
+            {"version": args.version, "verified": checksums is not None, "binaries": digests,
+             "notices": notices_digest},
+            fh, indent=2,
+        )
         fh.write("\n")
 
     for name in built:

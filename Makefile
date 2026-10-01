@@ -1342,8 +1342,9 @@ check-mcpb:
 ## (dist/gitlab-mcp-server-darwin.mcpb, -windows.mcpb and -linux.mcpb) and the
 ## universal dist/gitlab-mcp-server.mcpb. Cross-compiles the darwin universal
 ## binary (lipo), the windows/amd64 binary and the linux/amd64 and linux/arm64
-## binaries the Linux launcher chooses between, then assembles, packs and
-## measures the bundles with scripts/build-mcpb.sh.
+## binaries the Linux launcher chooses between, writes the third-party notices
+## of those binaries (cmd/gen_third_party_notices, from the module cache), then
+## assembles, packs and measures the bundles with scripts/build-mcpb.sh.
 mcpb:
 	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
 	@set -e; \
@@ -1356,6 +1357,11 @@ mcpb:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_linux_amd64/gitlab-mcp-server ./cmd/server; \
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_linux_arm64/gitlab-mcp-server ./cmd/server; \
+	go run ./cmd/gen_third_party_notices -o dist/THIRD_PARTY_NOTICES \
+		-targets darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,windows/amd64 \
+		dist/local_darwin_amd64/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server \
+		dist/local_linux_amd64/gitlab-mcp-server dist/local_linux_arm64/gitlab-mcp-server \
+		dist/local_windows_amd64/gitlab-mcp-server.exe; \
 	bash scripts/build-mcpb.sh "$$VER"
 
 ## gen-npm: assemble the npm distribution (launcher + 6 per-platform packages).

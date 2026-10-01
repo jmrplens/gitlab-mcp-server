@@ -5,7 +5,10 @@ assembled from stand-in binaries.
 A published npm version is permanent, so the validator decides what the
 registry receives. These cases hold the seven packages to carrying the
 repository's LICENSE, byte for byte, the launcher included, and the
-validator to refusing a package that lost it or carries another text.
+validator to refusing a package that lost it or carries another text. The
+same holds for THIRD_PARTY_NOTICES, which the release generates beside the
+binaries: every package carries the copy checksums.txt names, and the
+builder refuses a release without it.
 
 Both scripts are copied into a scratch tree with the files they read, so
 the build's write of the launcher package is a write into that tree and
@@ -42,6 +45,11 @@ ASSETS = {
     "windows-arm64": "gitlab-mcp-server-windows-arm64.exe",
 }
 PLATFORM_KEYS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64", "win32-arm64"]
+
+# A stand-in for what cmd/gen_third_party_notices writes: the validator
+# reads its header line and its digest, nothing else.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_TEXT = b"Third-party notices for gitlab-mcp-server\n\nstand-in body\n"
 
 
 def stand_in(plat_key):
@@ -88,19 +96,25 @@ class NpmLicenceTest(unittest.TestCase):
             with open(os.path.join(self.binaries, asset), "wb") as fh:
                 fh.write(payload)
             lines.append("{}  {}".format(hashlib.sha256(payload).hexdigest(), asset))
+        with open(os.path.join(self.binaries, NOTICES), "wb") as fh:
+            fh.write(NOTICES_TEXT)
+        lines.append("{}  {}".format(hashlib.sha256(NOTICES_TEXT).hexdigest(), NOTICES))
         with open(os.path.join(self.binaries, "checksums.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
 
         self.packages = os.path.join(self.tree, "npm", "packages")
         self.launcher = launcher
-        build = subprocess.run(
+        build = self.build()
+        self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+        with open(os.path.join(ROOT, "LICENSE"), "rb") as fh:
+            self.licence = fh.read()
+
+    def build(self):
+        return subprocess.run(
             ["node", os.path.join(self.tree, "scripts", "build-npm.mjs"),
              "--binaries", self.binaries, "--version", self.version, "--out", self.packages],
             cwd=self.tree, capture_output=True, text=True, check=False,
         )
-        self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
-        with open(os.path.join(ROOT, "LICENSE"), "rb") as fh:
-            self.licence = fh.read()
 
     def validate(self):
         return subprocess.run(
@@ -119,6 +133,67 @@ class NpmLicenceTest(unittest.TestCase):
                 with open(os.path.join(directory, "package.json"), encoding="utf-8") as fh:
                     self.assertIn("LICENSE", json.load(fh)["files"])
                 self.assertEqual(os.stat(os.path.join(directory, "LICENSE")).st_mode & 0o777, 0o644)
+
+    def test_every_package_carries_the_notices(self):
+        dirs = [os.path.join(self.packages, key) for key in PLATFORM_KEYS] + [self.launcher]
+        for directory in dirs:
+            with self.subTest(os.path.basename(directory)):
+                with open(os.path.join(directory, NOTICES), "rb") as fh:
+                    self.assertEqual(fh.read(), NOTICES_TEXT)
+                with open(os.path.join(directory, "package.json"), encoding="utf-8") as fh:
+                    self.assertIn(NOTICES, json.load(fh)["files"])
+                self.assertEqual(os.stat(os.path.join(directory, NOTICES)).st_mode & 0o777, 0o644)
+        with open(os.path.join(self.packages, "verified-binaries.json"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["notices"], hashlib.sha256(NOTICES_TEXT).hexdigest())
+
+    def test_the_builder_refuses_a_release_without_its_notices(self):
+        cases = [
+            ("no notices at all", "remove", "THIRD_PARTY_NOTICES not found"),
+            ("notices checksums.txt does not name", "replace",
+             "THIRD_PARTY_NOTICES is sha256"),
+        ]
+        for name, action, want in cases:
+            with self.subTest(name):
+                path = os.path.join(self.binaries, NOTICES)
+                if action == "remove":
+                    os.remove(path)
+                else:
+                    with open(path, "wb") as fh:
+                        fh.write(b"Third-party notices for gitlab-mcp-server\nanother body\n")
+                try:
+                    result = self.build()
+                finally:
+                    with open(path, "wb") as fh:
+                        fh.write(NOTICES_TEXT)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(want, result.stderr)
+
+    def test_refuses_a_package_without_the_notices_or_with_others(self):
+        cases = [
+            ("platform package lost them", "darwin-x64", b"", "darwin-x64: tarball ships"),
+            ("platform package carries another copy", "linux-x64",
+             b"Third-party notices for gitlab-mcp-server\nanother body\n",
+             "linux-x64: THIRD_PARTY_NOTICES in the tarball is sha256"),
+            ("launcher carries a file without the header", None, b"some other text\n",
+             "main: THIRD_PARTY_NOTICES in the tarball does not open with the generator's header"),
+        ]
+        for name, key, body, want in cases:
+            with self.subTest(name):
+                directory = self.launcher if key is None else os.path.join(self.packages, key)
+                path = os.path.join(directory, NOTICES)
+                if body:
+                    with open(path, "wb") as fh:
+                        fh.write(body)
+                else:
+                    os.remove(path)
+                try:
+                    result = self.validate()
+                finally:
+                    with open(path, "wb") as fh:
+                        fh.write(NOTICES_TEXT)
+                    os.chmod(path, 0o644)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(want, result.stdout)
 
     def test_the_built_packages_validate(self):
         result = self.validate()

@@ -30,7 +30,8 @@
   "files": [
     "cli.js",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES"
   ],
   "optionalDependencies": {
     "@jmrp.io/gitlab-mcp-server-linux-x64": "3.1.0",

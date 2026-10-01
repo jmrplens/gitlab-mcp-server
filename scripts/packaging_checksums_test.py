@@ -6,7 +6,9 @@ the build directory: six files of the right size with the right first bytes
 passed every check either validator made, and five of the six were never
 executed by anything before reaching an immutable registry. The builders now
 compare each binary with the release's own cosign-signed checksums.txt, and
-the NuGet builder was written to the same contract.
+the NuGet builder was written to the same contract. THIRD_PARTY_NOTICES, which
+the release generates beside the binaries and every package carries, is held
+to the same manifest, and a release without it packages nothing.
 
 Run with:
 
@@ -36,13 +38,19 @@ ASSETS = {
 }
 
 
+# The third-party notices the release generates beside the binaries.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_TEXT = b"Third-party notices for gitlab-mcp-server\n\nstand-in body\n"
+
+
 def repo_version():
     with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as fh:
         return fh.read().strip()
 
 
-def write_fixture(binaries_dir, with_checksums=True, tamper=None):
-    """Create the six release assets and, optionally, a matching checksums.txt.
+def write_fixture(binaries_dir, with_checksums=True, tamper=None, with_notices=True):
+    """Create the six release assets, the notices and, optionally, a matching
+    checksums.txt.
 
     `tamper` names an asset to rewrite *after* its digest is recorded, which is
     exactly the shape of the defect: a manifest that no longer describes the
@@ -50,15 +58,17 @@ def write_fixture(binaries_dir, with_checksums=True, tamper=None):
     """
     os.makedirs(binaries_dir, exist_ok=True)
     lines = []
-    for name, magic in ASSETS.items():
-        payload = magic + (name.encode() * 64)
+    payloads = {name: magic + (name.encode() * 64) for name, magic in ASSETS.items()}
+    if with_notices:
+        payloads[NOTICES] = NOTICES_TEXT
+    for name, payload in payloads.items():
         path = os.path.join(binaries_dir, name)
         with open(path, "wb") as fh:
             fh.write(payload)
         lines.append("{}  {}".format(hashlib.sha256(payload).hexdigest(), name))
     if tamper:
         with open(os.path.join(binaries_dir, tamper), "wb") as fh:
-            fh.write(ASSETS[tamper] + b"swapped payload")
+            fh.write(ASSETS.get(tamper, b"") + b"swapped payload")
     if with_checksums:
         with open(os.path.join(binaries_dir, "checksums.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
@@ -94,7 +104,7 @@ class BuildNpmTest(BuilderChecksumTestCase):
         launcher = os.path.join(launcher_dir, "package.json")
         with open(launcher, "rb") as fh:
             original = fh.read()
-        copies = [os.path.join(launcher_dir, name) for name in ("LICENSE",)]
+        copies = [os.path.join(launcher_dir, name) for name in ("LICENSE", NOTICES)]
         absent = [path for path in copies if not os.path.exists(path)]
 
         def restore():
@@ -123,6 +133,10 @@ class BuildNpmTest(BuilderChecksumTestCase):
             ("no checksums.txt at all", dict(with_checksums=False), (), 1, "checksums.txt"),
             ("a binary that does not match", dict(tamper="gitlab-mcp-server-linux-arm64"), (),
              1, "gitlab-mcp-server-linux-arm64"),
+            ("notices that do not match", dict(tamper=NOTICES), (), 1, NOTICES + " is sha256"),
+            ("no notices", dict(with_notices=False), (), 1, NOTICES + " not found"),
+            ("no notices, opted out of verification", dict(with_checksums=False, with_notices=False),
+             ("--allow-unverified",), 1, NOTICES + " not found"),
             ("matching checksums", dict(), (), 0, ""),
             ("explicit opt-out", dict(with_checksums=False), ("--allow-unverified",), 0, ""),
         ]
@@ -143,6 +157,7 @@ class BuildNpmTest(BuilderChecksumTestCase):
         self.assertTrue(manifest["verified"])
         self.assertEqual(manifest["version"], self.version)
         self.assertEqual(len(manifest["binaries"]), len(ASSETS))
+        self.assertEqual(manifest["notices"], hashlib.sha256(NOTICES_TEXT).hexdigest())
 
     def test_opting_out_is_recorded_as_unverified(self):
         write_fixture(self.binaries, with_checksums=False)
@@ -170,6 +185,10 @@ class BuildPypiTest(BuilderChecksumTestCase):
             ("no checksums.txt at all", dict(with_checksums=False), (), 1, "checksums.txt"),
             ("a binary that does not match", dict(tamper="gitlab-mcp-server-windows-arm64.exe"), (),
              1, "gitlab-mcp-server-windows-arm64.exe"),
+            ("notices that do not match", dict(tamper=NOTICES), (), 1, NOTICES + " is sha256"),
+            ("no notices", dict(with_notices=False), (), 1, NOTICES + " not found"),
+            ("no notices, opted out of verification", dict(with_checksums=False, with_notices=False),
+             ("--allow-unverified",), 1, NOTICES + " not found"),
             ("matching checksums", dict(), (), 0, ""),
             ("explicit opt-out", dict(with_checksums=False), ("--allow-unverified",), 0, ""),
         ]
@@ -191,6 +210,7 @@ class BuildPypiTest(BuilderChecksumTestCase):
         self.assertTrue(manifest["verified"])
         self.assertEqual(manifest["version"], self.version)
         self.assertEqual(len(manifest["binaries"]), len(ASSETS))
+        self.assertEqual(manifest["notices"], hashlib.sha256(NOTICES_TEXT).hexdigest())
 
 
 class BuildNugetTest(BuilderChecksumTestCase):
@@ -213,6 +233,10 @@ class BuildNugetTest(BuilderChecksumTestCase):
             ("no checksums.txt at all", dict(with_checksums=False), (), 1, "checksums.txt"),
             ("a binary that does not match", dict(tamper="gitlab-mcp-server-darwin-arm64"), (),
              1, "gitlab-mcp-server-darwin-arm64"),
+            ("notices that do not match", dict(tamper=NOTICES), (), 1, NOTICES + " is sha256"),
+            ("no notices", dict(with_notices=False), (), 1, NOTICES + " not found"),
+            ("no notices, opted out of verification", dict(with_checksums=False, with_notices=False),
+             ("--allow-unverified",), 1, NOTICES + " not found"),
             ("matching checksums", dict(), (), 0, ""),
             ("explicit opt-out", dict(with_checksums=False), ("--allow-unverified",), 0, ""),
         ]
@@ -234,6 +258,7 @@ class BuildNugetTest(BuilderChecksumTestCase):
         self.assertTrue(manifest["verified"])
         self.assertEqual(manifest["version"], self.version)
         self.assertEqual(len(manifest["binaries"]), len(ASSETS))
+        self.assertEqual(manifest["notices"], hashlib.sha256(NOTICES_TEXT).hexdigest())
 
 
 if __name__ == "__main__":

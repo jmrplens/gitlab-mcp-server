@@ -4,7 +4,10 @@
 # One run builds four bundles from the same release binaries produced by
 # GoReleaser, the checked-in manifest (mcpb/manifest.json), the derivation of
 # its per-platform form (mcpb/platform.jq), the 512x512 icon (mcpb/icon.png),
-# the Linux launcher (mcpb/linux/launch.sh) and the repository's LICENSE:
+# the Linux launcher (mcpb/linux/launch.sh), the repository's LICENSE, and
+# <dist-dir>/THIRD_PARTY_NOTICES, the license, notice and patent texts of what
+# the binaries link, which GoReleaser generates beside them in a release and
+# `make mcpb` generates for its own builds (cmd/gen_third_party_notices):
 #
 #   gitlab-mcp-server-darwin.mcpb    macOS: the universal binary (arm64 + amd64)
 #   gitlab-mcp-server-windows.mcpb   Windows: the amd64 executable
@@ -27,6 +30,7 @@
 #   ├── manifest.json                  (version stamped to <version>)
 #   ├── icon.png
 #   ├── LICENSE
+#   ├── THIRD_PARTY_NOTICES
 #   └── server/
 #       ├── gitlab-mcp-server          (darwin universal: arm64 + amd64)
 #       ├── gitlab-mcp-server.exe      (windows amd64)
@@ -86,6 +90,10 @@ LAUNCHER="mcpb/linux/launch.sh"
 # The licence travels with the binaries it covers: a bundle is a redistribution
 # of the server, and MIT asks for its notice to accompany every copy.
 LICENSE_FILE="LICENSE"
+# The notices of the modules those binaries link travel with them for the
+# same reason, and are generated with the binaries rather than kept here.
+NOTICES_FILE="$DIST_DIR/THIRD_PARTY_NOTICES"
+NOTICES_HEADER="Third-party notices for gitlab-mcp-server"
 
 for f in "$MANIFEST" "$PLATFORM_JQ" "$ICON" "$LAUNCHER" "$LICENSE_FILE"; do
   if [[ ! -f "$f" ]]; then
@@ -93,6 +101,14 @@ for f in "$MANIFEST" "$PLATFORM_JQ" "$ICON" "$LAUNCHER" "$LICENSE_FILE"; do
     exit 1
   fi
 done
+if [[ ! -f "$NOTICES_FILE" ]]; then
+  echo "ERROR: $NOTICES_FILE not found: GoReleaser writes it beside the release binaries and make mcpb beside its own (cmd/gen_third_party_notices)" >&2
+  exit 1
+fi
+if [[ "$(head -n 1 "$NOTICES_FILE")" != "$NOTICES_HEADER" ]]; then
+  echo "ERROR: $NOTICES_FILE does not open with '$NOTICES_HEADER', so it is not what cmd/gen_third_party_notices writes" >&2
+  exit 1
+fi
 
 for tool in jq zip unzip; do
   if ! command -v "$tool" &> /dev/null; then
@@ -134,7 +150,7 @@ LINUX_ARM64_BIN=$(find_binary "*linux_arm64*" "gitlab-mcp-server")
 # below packs its archive and is what that archive is checked against
 # afterwards. manifest.json comes first: a reader that streams the archive
 # finds the manifest before the multi-megabyte binaries.
-COMMON_ENTRIES=(manifest.json icon.png LICENSE)
+COMMON_ENTRIES=(manifest.json icon.png LICENSE THIRD_PARTY_NOTICES)
 DARWIN_ENTRIES=(server/gitlab-mcp-server)
 WINDOWS_ENTRIES=(server/gitlab-mcp-server.exe)
 LINUX_ENTRIES=(
@@ -190,6 +206,7 @@ source_of() {
   case "$1" in
     icon.png) echo "$ICON" ;;
     LICENSE) echo "$LICENSE_FILE" ;;
+    THIRD_PARTY_NOTICES) echo "$NOTICES_FILE" ;;
     server/gitlab-mcp-server) echo "$DARWIN_BIN" ;;
     server/gitlab-mcp-server.exe) echo "$WINDOWS_BIN" ;;
     server/linux/launch.sh) echo "$LAUNCHER" ;;

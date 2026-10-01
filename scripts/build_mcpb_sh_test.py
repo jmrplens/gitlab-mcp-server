@@ -7,7 +7,9 @@ After packing, the script reads each archive back and removes the whole set
 when any bundle fails any of its checks, so that no later step and no
 developer picks up a bundle that failed, or the rest of a set one failed.
 Four things are tested here. Each bundle carries its own system's servers, the
-licence and a manifest that lists only the platforms it serves; a per-OS
+licence, the third-party notices generated beside the binaries (a dist/
+without them, or with a file the generator did not write, is refused), and a
+manifest that lists only the platforms it serves; a per-OS
 manifest is the committed one with that platform's command promoted to the
 base command. The rules on the packed manifest refuse each shape that would
 ship a bundle Claude Desktop cannot start on one of its platforms: a platform
@@ -57,6 +59,7 @@ VERSION = "9.8.7"
 # The dist/ `make mcpb` leaves: one local_<goos>_<goarch> directory per target
 # it cross-compiles, the darwin one holding the lipo'd universal binary.
 MAKE_MCPB_DIST = [
+    "THIRD_PARTY_NOTICES",
     "local_darwin_all/gitlab-mcp-server",
     "local_windows_amd64/gitlab-mcp-server.exe",
     "local_linux_amd64/gitlab-mcp-server",
@@ -77,6 +80,7 @@ MAKE_MCPB_SOURCES = {
 # bundle does not carry and the per-arch darwin builds beside the universal
 # one, the staged copies with their SBOMs, and GoReleaser's own metadata.
 RELEASE_DIST = [
+    "THIRD_PARTY_NOTICES",
     "artifacts.json",
     "checksums.txt",
     "config.yaml",
@@ -109,10 +113,17 @@ RELEASE_SOURCES = {
 }
 
 
+NOTICES = "THIRD_PARTY_NOTICES"
+
+
 def stand_in(rel):
     """The bytes the scratch dist/ holds at rel: different for every file, so
-    a bundle packed from the wrong one is told apart. Nothing executes them."""
-    return b"stand-in for dist/" + rel.encode() + b"\n" * 64
+    a bundle packed from the wrong one is told apart. Nothing executes them.
+    The notices open with the generator's header, which the script checks."""
+    body = b"stand-in for dist/" + rel.encode() + b"\n" * 64
+    if rel == NOTICES:
+        return b"Third-party notices for gitlab-mcp-server\n" + body
+    return body
 
 # The four bundles one run packs, by the target name the script gives each.
 TARGETS = ("darwin", "windows", "linux", "universal")
@@ -134,8 +145,8 @@ SERVER_ENTRIES = {
     ],
 }
 SERVER_ENTRIES["universal"] = SERVER_ENTRIES["darwin"] + SERVER_ENTRIES["windows"] + SERVER_ENTRIES["linux"]
-ENTRIES = {target: ["manifest.json", "icon.png", "LICENSE"] + SERVER_ENTRIES[target] for target in TARGETS}
-NOT_EXECUTABLE = {"manifest.json", "icon.png", "LICENSE"}
+ENTRIES = {target: ["manifest.json", "icon.png", "LICENSE", NOTICES] + SERVER_ENTRIES[target] for target in TARGETS}
+NOT_EXECUTABLE = {"manifest.json", "icon.png", "LICENSE", NOTICES}
 # The process.platform value each per-OS bundle serves.
 PLATFORM = {"darwin": "darwin", "windows": "win32", "linux": "linux"}
 
@@ -303,6 +314,7 @@ class BuildMcpbTest(unittest.TestCase):
                     self.assertEqual(oct(info.external_attr >> 16), oct(expected), info.filename)
                 with open(self.licence, "rb") as fh:
                     self.assertEqual(bundle.read("LICENSE"), fh.read())
+                self.assertEqual(bundle.read(NOTICES), stand_in(NOTICES))
                 if "server/linux/launch.sh" in ENTRIES[target]:
                     with open(self.launcher, "rb") as fh:
                         self.assertEqual(bundle.read("server/linux/launch.sh"), fh.read())
@@ -380,11 +392,21 @@ class BuildMcpbTest(unittest.TestCase):
         def without_the_derivation():
             os.remove(os.path.join(self.work, "mcpb", "platform.jq"))
 
+        def without_the_notices():
+            os.remove(os.path.join(self.dist, NOTICES))
+
+        def with_notices_nothing_generated():
+            with open(os.path.join(self.dist, NOTICES), "wb") as fh:
+                fh.write(b"some other text\n")
+
         cases = [
             ("a binary found twice", with_a_second_linux_amd64_build, "remove the stale ones"),
             ("a missing input", without_the_icon, "mcpb/icon.png not found"),
             ("a missing licence", without_the_licence, "LICENSE not found"),
             ("a missing derivation", without_the_derivation, "mcpb/platform.jq not found"),
+            ("missing notices", without_the_notices, "dist/THIRD_PARTY_NOTICES not found"),
+            ("notices the generator did not write", with_notices_nothing_generated,
+             "dist/THIRD_PARTY_NOTICES does not open with 'Third-party notices for gitlab-mcp-server'"),
         ]
         for name, break_the_tree, message in cases:
             with self.subTest(case=name):
@@ -478,15 +500,16 @@ class BuildMcpbTest(unittest.TestCase):
             ("an entry past 512 MiB",
              {"FAKE_ENTRY": arm64, "FAKE_ENTRY_BYTES": 512 * MIB + 1, "FAKE_ARCHIVE_BYTES": 20 * MIB},
              "gitlab-mcp-server-linux.mcpb: an entry unpacks to 536870913 bytes; Claude Desktop refuses an entry over 536870912 (512 MiB)"),
+            # Five entries at 400 MiB stay under 2048 MiB and seven do not.
             ("past 2048 MiB in all",
              {"FAKE_EVERY_ENTRY_BYTES": 400 * MIB, "FAKE_ARCHIVE_BYTES": 100 * MIB},
-             "gitlab-mcp-server-linux.mcpb: unpacks to 2516582400 bytes; Claude Desktop refuses more than 2147483648 (2048 MiB)"),
+             "gitlab-mcp-server-linux.mcpb: unpacks to 2936012800 bytes; Claude Desktop refuses more than 2147483648 (2048 MiB)"),
             ("more than 50 times its own size",
              {"FAKE_ARCHIVE_BYTES": 100},
              "gitlab-mcp-server-darwin.mcpb: unpacks to more than 50 times its 100 bytes; Claude Desktop refuses it as a zip bomb"),
             ("more than 100,000 entries",
              {"FAKE_EXTRA_ENTRIES": 100000, "FAKE_ARCHIVE_BYTES": 10 * MIB},
-             "gitlab-mcp-server-windows.mcpb: 100004 entries; Claude Desktop refuses an extension with more than 100000"),
+             "gitlab-mcp-server-windows.mcpb: 100005 entries; Claude Desktop refuses an extension with more than 100000"),
         ]
         for name, sizes, message in cases:
             with self.subTest(case=name):
@@ -495,14 +518,17 @@ class BuildMcpbTest(unittest.TestCase):
     def test_keeps_a_bundle_at_claude_desktops_limits(self):
         # Each limit is a ceiling a bundle may reach: Desktop refuses only what
         # passes it. The universal bundle, with the most entries, is the one
-        # each case puts exactly at its limit.
+        # each case puts exactly at its limit: its nine entries hold eight
+        # sized ones and the notices reported empty, since nine does not
+        # divide either limit.
         cases = [
             ("an entry of exactly 512 MiB",
              {"FAKE_ENTRY": "server/gitlab-mcp-server.exe", "FAKE_ENTRY_BYTES": 512 * MIB, "FAKE_ARCHIVE_BYTES": 20 * MIB}),
             ("exactly 2048 MiB in all",
-             {"FAKE_EVERY_ENTRY_BYTES": 256 * MIB, "FAKE_ARCHIVE_BYTES": 100 * MIB}),
+             {"FAKE_EVERY_ENTRY_BYTES": 256 * MIB, "FAKE_ENTRY": NOTICES, "FAKE_ENTRY_BYTES": 0,
+              "FAKE_ARCHIVE_BYTES": 100 * MIB}),
             ("exactly 50 times its own size",
-             {"FAKE_EVERY_ENTRY_BYTES": 50, "FAKE_ARCHIVE_BYTES": 8}),
+             {"FAKE_EVERY_ENTRY_BYTES": 50, "FAKE_ENTRY": NOTICES, "FAKE_ENTRY_BYTES": 0, "FAKE_ARCHIVE_BYTES": 8}),
             ("exactly 100,000 entries",
              {"FAKE_EXTRA_ENTRIES": 100000 - len(ENTRIES["universal"]), "FAKE_ARCHIVE_BYTES": 10 * MIB}),
         ]
@@ -518,10 +544,10 @@ class BuildMcpbTest(unittest.TestCase):
             ("past 50 MiB to download", {"FAKE_ARCHIVE_BYTES": 60 * MIB},
              "is 60.00 MiB to download, over the 50 MiB past which directories stop reading a bundle",
              ("darwin", "windows", "linux")),
-            # Six Linux entries at 50 MiB pass 256 MiB unpacked and four do
+            # Seven Linux entries at 50 MiB pass 256 MiB unpacked and five do
             # not; the archive size keeps every ratio under 50:1.
             ("past 256 MiB unpacked", {"FAKE_EVERY_ENTRY_BYTES": 50 * MIB, "FAKE_ARCHIVE_BYTES": 30 * MIB},
-             "unpacks to 300.00 MiB, over the 256 MiB past which directories stop reading a bundle",
+             "unpacks to 350.00 MiB, over the 256 MiB past which directories stop reading a bundle",
              ("linux",)),
         ]
         for name, sizes, message, warned in cases:

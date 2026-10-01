@@ -14,7 +14,9 @@ publish action ever sees the wheels:
   SPDX License-Expression, no legacy License field and no License ::
   classifier beside it (PyPI refuses that pair), and a License-File for
   each text under .dist-info/licenses/, which hold the repository's own
-  LICENSE byte for byte and nothing undeclared;
+  LICENSE byte for byte, the release's THIRD_PARTY_NOTICES (the
+  generator's header, and the digest build_pypi.py verified against
+  checksums.txt), and nothing undeclared;
 - METADATA links the issue tracker and the security policy under the
   well-known Issues and Security labels;
 - every archive entry, RECORD included, is a regular file (S_IFREG);
@@ -65,6 +67,13 @@ LICENSE_EXPRESSION = "MIT"
 
 # License-File value -> the file in this repository whose bytes it must hold.
 LICENSE_SOURCES = {"LICENSE": os.path.join(ROOT, "LICENSE")}
+
+# The License-File generated with the release rather than kept in the
+# repository: held to the generator's header and to the digest build_pypi.py
+# recorded after checking it against the release's checksums.txt.
+NOTICES = "THIRD_PARTY_NOTICES"
+NOTICES_HEADER = b"Third-party notices for gitlab-mcp-server\n"
+LICENSE_FILES = sorted(list(LICENSE_SOURCES) + [NOTICES])
 
 # Well-known project URL labels the wheel must carry, with their targets.
 REQUIRED_PROJECT_URLS = {
@@ -142,7 +151,8 @@ TAG_PLAT_KEYS = {
 
 
 def read_verified(wheels_dir, version):
-    """Load the digests build_pypi.py recorded, or fail if there are none.
+    """Load the digests build_pypi.py recorded, or fail if there are none:
+    the binaries' by platform, and the notices'.
 
     The manifest lives in the wheelhouse and is removed once read, so the
     publish step never sees a non-wheel file in packages-dir.
@@ -151,7 +161,7 @@ def read_verified(wheels_dir, version):
     if not os.path.isfile(path):
         fail("wheels were assembled without {} — build_pypi.py did not check them "
              "against the release's checksums.txt".format(VERIFIED_MANIFEST))
-        return {}
+        return {}, None
     with open(path, encoding="utf-8") as fh:
         manifest = json.load(fh)
     os.remove(path)
@@ -160,7 +170,9 @@ def read_verified(wheels_dir, version):
     if manifest.get("version") != version:
         fail("{} records version {} but this is {}".format(
             VERIFIED_MANIFEST, manifest.get("version"), version))
-    return manifest.get("binaries") or {}
+    if not manifest.get("notices"):
+        fail("{} records no digest for {}".format(VERIFIED_MANIFEST, NOTICES))
+    return manifest.get("binaries") or {}, manifest.get("notices")
 
 
 def metadata_headers(metadata):
@@ -169,15 +181,17 @@ def metadata_headers(metadata):
     return email.parser.HeaderParser().parsestr(metadata)
 
 
-def check_licensing(zf, name, dist_info, metadata):
+def check_licensing(zf, name, dist_info, metadata, notices_digest=None):
     """Hold the wheel's licence declaration to core metadata 2.4 (PEP 639).
 
     The legacy License field and License-Expression are mutually exclusive
     and PyPI refuses a file carrying both; a License :: classifier is
     deprecated beside an expression. Every License-File must be in
     .dist-info/licenses/ under the path the field names, nothing may sit
-    there undeclared, and each text must be the repository's own file byte
-    for byte, so a wheel can never carry a licence the source does not.
+    there undeclared, and each repository text must be the repository's own
+    file byte for byte, so a wheel can never carry a licence the source does
+    not. The third-party notices open with the generator's header and, when
+    build_pypi.py recorded their digest, are those exact bytes.
     """
     headers = metadata_headers(metadata)
     if headers.get("Metadata-Version") != METADATA_VERSION:
@@ -197,8 +211,8 @@ def check_licensing(zf, name, dist_info, metadata):
     declared = headers.get_all("License-File") or []
     prefix = dist_info + "/licenses/"
     shipped = sorted(n[len(prefix):] for n in zf.namelist() if n.startswith(prefix))
-    if sorted(declared) != sorted(LICENSE_SOURCES):
-        fail("{}: License-File declares {}, want {}".format(name, sorted(declared), sorted(LICENSE_SOURCES)))
+    if sorted(declared) != LICENSE_FILES:
+        fail("{}: License-File declares {}, want {}".format(name, sorted(declared), LICENSE_FILES))
     if shipped != sorted(declared):
         fail("{}: {} holds {} but METADATA declares {}".format(name, prefix, shipped, sorted(declared)))
     for license_file, source in LICENSE_SOURCES.items():
@@ -209,6 +223,15 @@ def check_licensing(zf, name, dist_info, metadata):
             want = fh.read()
         if zf.read(arc) != want:
             fail("{}: {} is not the repository's {}".format(name, arc, os.path.relpath(source, ROOT)))
+    arc = prefix + NOTICES
+    if arc in zf.namelist():
+        notices = zf.read(arc)
+        if not notices.startswith(NOTICES_HEADER):
+            fail("{}: {} does not open with the generator's header".format(name, arc))
+        got = hashlib.sha256(notices).hexdigest()
+        if notices_digest and got != notices_digest:
+            fail("{}: {} is sha256 {}, but the release's signed checksums.txt named {}".format(
+                name, arc, got, notices_digest))
 
 
 def check_project_urls(name, metadata):
@@ -222,7 +245,7 @@ def check_project_urls(name, metadata):
             fail("{}: Project-URL {!r} is {!r}, want {!r}".format(name, label, urls.get(label), url))
 
 
-def validate_wheel(path, version, tag, verified=None):
+def validate_wheel(path, version, tag, verified=None, notices_digest=None):
     name = os.path.basename(path)
     with zipfile.ZipFile(path) as zf:
         names = zf.namelist()
@@ -252,7 +275,7 @@ def validate_wheel(path, version, tag, verified=None):
                 fail("{}: METADATA missing {!r}".format(name, needle))
         if not re.search(r"(^|\s)" + re.escape(MCP_NAME_TOKEN) + r"(\s|$)", metadata):
             fail("{}: METADATA description lost the MCP Registry ownership token".format(name))
-        check_licensing(zf, name, dist_info, metadata)
+        check_licensing(zf, name, dist_info, metadata, notices_digest)
         check_project_urls(name, metadata)
 
         for info in zf.infolist():
@@ -403,7 +426,7 @@ def main():
 
     expected = {"{}-{}-py3-none-{}.whl".format(DIST, args.version, tag): tag
                 for tag in EXPECTED_TAGS}
-    verified = read_verified(args.wheels, args.version)
+    verified, notices_digest = read_verified(args.wheels, args.version)
 
     present = sorted(f for f in os.listdir(args.wheels) if f.endswith(".whl"))
     if set(present) != set(expected):
@@ -415,7 +438,8 @@ def main():
 
     for fname in present:
         if fname in expected:
-            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname], verified)
+            validate_wheel(os.path.join(args.wheels, fname), args.version, expected[fname], verified,
+                           notices_digest)
     if present:
         twine_check([os.path.join(args.wheels, fname) for fname in present])
 
