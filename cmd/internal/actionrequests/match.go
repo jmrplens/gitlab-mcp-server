@@ -91,12 +91,10 @@ func (r *resolver) handlerRoot(handler Handler, entered map[*ast.FuncLit]*types.
 	fn.decl = &ast.FuncDecl{Name: ast.NewIdent(literalName)}
 	r.prog.link(fn)
 	r.prog.funcs[stand] = fn
+	fn.bound = make(map[*types.Var][]*types.Func)
 	for _, bound := range r.boundHandlers(handler) {
 		root := r.handlerRoot(bound.handler, entered)
 		fn.calls[root] = true
-		if fn.bound == nil {
-			fn.bound = make(map[*types.Var][]*types.Func)
-		}
 		fn.bound[bound.variable] = append(fn.bound[bound.variable], root)
 	}
 	return stand

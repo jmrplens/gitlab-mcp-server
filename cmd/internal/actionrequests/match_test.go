@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"testing"
+	"time"
 
 	"golang.org/x/tools/go/packages"
 
@@ -130,6 +131,28 @@ func TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach(t *testing.T) {
 	}
 }
 
+// sitesDeadline bounds resolving every construction site of the tree, which
+// takes seconds. A resolver step that stopped counting toward its bound fans
+// out without end through the tree's helpers, and is reported as a stall
+// rather than left to run into the binary's own timeout, which would hide
+// which step it was behind the time it took.
+const sitesDeadline = 90 * time.Second
+
+// sitesWithin resolves prog's construction sites on a goroutine of their own
+// and fails the test when they are not resolved within [sitesDeadline].
+func sitesWithin(t *testing.T, prog *Program) map[string][]Site {
+	t.Helper()
+	done := make(chan map[string][]Site, 1)
+	go func() { done <- prog.Sites() }()
+	select {
+	case sites := <-done:
+		return sites
+	case <-time.After(sitesDeadline):
+		t.Fatalf("resolving the tree's construction sites did not finish within %s", sitesDeadline)
+		return nil
+	}
+}
+
 // clientGoSourceDir returns the directory of the client-go root package the
 // module at root builds against, which is what cmd/internal/sdkroutes reads.
 func clientGoSourceDir(t *testing.T, root string) string {
@@ -162,7 +185,7 @@ func TestMatch_EveryCatalogAction_JoinsOneSiteWhoseMethodsSDKRoutesReads(t *test
 		t.Fatalf("Load: %v", err)
 	}
 	sdk := sdkroutes.Read(clientGoSourceDir(t, root))
-	sites := prog.Sites()
+	sites := sitesWithin(t, prog)
 	byID := realCatalog(t)
 
 	reached := make(map[*types.Func]bool)
