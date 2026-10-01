@@ -103,13 +103,14 @@ def stand_in(rel):
 ENTRIES = [
     "manifest.json",
     "icon.png",
+    "LICENSE",
     "server/gitlab-mcp-server",
     "server/gitlab-mcp-server.exe",
     "server/linux/launch.sh",
     "server/linux/gitlab-mcp-server-linux-amd64",
     "server/linux/gitlab-mcp-server-linux-arm64",
 ]
-NOT_EXECUTABLE = {"manifest.json", "icon.png"}
+NOT_EXECUTABLE = {"manifest.json", "icon.png", "LICENSE"}
 
 # Stands in for zip and leaves out the entry DROP_ENTRY names, which is what
 # zip itself does, with exit status 0, when one of its inputs is missing.
@@ -161,6 +162,8 @@ class BuildMcpbTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.work, True)
         os.makedirs(os.path.join(self.work, "mcpb", "linux"))
         shutil.copyfile(os.path.join(ROOT, "mcpb", "icon.png"), os.path.join(self.work, "mcpb", "icon.png"))
+        self.licence = os.path.join(ROOT, "LICENSE")
+        shutil.copyfile(self.licence, os.path.join(self.work, "LICENSE"))
         self.launcher = os.path.join(ROOT, "mcpb", "linux", "launch.sh")
         shutil.copyfile(self.launcher, os.path.join(self.work, "mcpb", "linux", "launch.sh"))
         with open(os.path.join(ROOT, "mcpb", "manifest.json"), encoding="utf-8") as fh:
@@ -233,6 +236,9 @@ class BuildMcpbTest(unittest.TestCase):
             packed = json.loads(bundle.read("manifest.json"))
             with open(self.launcher, "rb") as fh:
                 self.assertEqual(bundle.read("server/linux/launch.sh"), fh.read())
+            # The licence the binaries are distributed under, byte for byte.
+            with open(self.licence, "rb") as fh:
+                self.assertEqual(bundle.read("LICENSE"), fh.read())
         self.assertEqual(packed["version"], VERSION)
         expected_manifest = copy.deepcopy(self.manifest)
         expected_manifest["version"] = VERSION
@@ -261,14 +267,19 @@ class BuildMcpbTest(unittest.TestCase):
         def without_the_icon():
             os.remove(os.path.join(self.work, "mcpb", "icon.png"))
 
+        def without_the_licence():
+            os.remove(os.path.join(self.work, "LICENSE"))
+
         cases = [
             ("a binary found twice", with_a_second_linux_amd64_build, "remove the stale ones"),
             ("a missing input", without_the_icon, "mcpb/icon.png not found"),
+            ("a missing licence", without_the_licence, "LICENSE not found"),
         ]
         for name, break_the_tree, message in cases:
             with self.subTest(case=name):
                 self.lay_out_dist(MAKE_MCPB_DIST)
                 shutil.copyfile(os.path.join(ROOT, "mcpb", "icon.png"), os.path.join(self.work, "mcpb", "icon.png"))
+                shutil.copyfile(self.licence, os.path.join(self.work, "LICENSE"))
                 first = self.build()
                 self.assertEqual(first.returncode, 0, first.stderr.decode())
                 self.assertTrue(os.path.exists(self.output))

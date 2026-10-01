@@ -3,12 +3,13 @@
 #
 # Assembles a MCPB bundle directory from the checked-in manifest
 # (mcpb/manifest.json), the 512x512 icon (mcpb/icon.png), the Linux launcher
-# (mcpb/linux/launch.sh) and the release binaries produced by GoReleaser, then
-# packs it as a zip:
+# (mcpb/linux/launch.sh), the repository's LICENSE and the release binaries
+# produced by GoReleaser, then packs it as a zip:
 #
 #   bundle/
 #   ├── manifest.json                  (version stamped to <version>)
 #   ├── icon.png
+#   ├── LICENSE
 #   └── server/
 #       ├── gitlab-mcp-server          (darwin universal: arm64 + amd64)
 #       ├── gitlab-mcp-server.exe      (windows amd64)
@@ -45,8 +46,11 @@ trap 'rm -f "$OUTPUT"' EXIT
 MANIFEST="mcpb/manifest.json"
 ICON="mcpb/icon.png"
 LAUNCHER="mcpb/linux/launch.sh"
+# The licence travels with the binaries it covers: a bundle is a redistribution
+# of the server, and MIT asks for its notice to accompany every copy.
+LICENSE_FILE="LICENSE"
 
-for f in "$MANIFEST" "$ICON" "$LAUNCHER"; do
+for f in "$MANIFEST" "$ICON" "$LAUNCHER" "$LICENSE_FILE"; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: $f not found (run from the repository root)" >&2
     exit 1
@@ -94,6 +98,7 @@ LINUX_ARM64_BIN=$(find_binary "*linux_arm64*" "gitlab-mcp-server")
 ENTRIES=(
   manifest.json
   icon.png
+  LICENSE
   server/gitlab-mcp-server
   server/gitlab-mcp-server.exe
   server/linux/launch.sh
@@ -116,6 +121,7 @@ mkdir -p "$BUNDLE_DIR/server/linux"
 
 jq --arg v "$VERSION" '.version = $v' "$MANIFEST" > "$BUNDLE_DIR/manifest.json"
 cp "$ICON" "$BUNDLE_DIR/icon.png"
+cp "$LICENSE_FILE" "$BUNDLE_DIR/LICENSE"
 cp "$DARWIN_BIN" "$BUNDLE_DIR/server/gitlab-mcp-server"
 cp "$WINDOWS_BIN" "$BUNDLE_DIR/server/gitlab-mcp-server.exe"
 cp "$LAUNCHER" "$BUNDLE_DIR/server/linux/launch.sh"
