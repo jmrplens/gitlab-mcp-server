@@ -1,0 +1,7 @@
+package gitlab
+
+// FromText is Go source in a file whose name says it is not, which the reading
+// must not parse: only .go files are client-go's source.
+func (s *IssuesService) FromText() (*Issue, *Response, error) {
+	return nil, nil, nil
+}
