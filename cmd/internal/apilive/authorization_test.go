@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // TestRoute_FineGrained_ClassifiesInGitLabsOrder verifies the class a route
@@ -265,6 +267,63 @@ func TestGranular_Expandable_IsEveryRawPermissionAnAssignableExpandsTo(t *testin
 		got := none.Expandable()
 		if got == nil || len(got) != 0 {
 			t.Errorf("Expandable() of a nil vocabulary = %v, want an empty set", got)
+		}
+	})
+}
+
+// deniedRecord is a record holding one of each element a denial can name: a
+// route, a mutation, an object type and a union.
+func deniedRecord() *Document {
+	return &Document{
+		Routes: []Route{{Method: "GET", Path: EndpointPrefix + "/projects/:id/nothing"}},
+		GraphQLAuthz: &GraphQLAuthz{
+			Types:     map[string]GraphQLType{"BranchRule": {Enforced: true}, "WorkItem": {Enforced: true}},
+			Abstract:  map[string]AbstractType{"VulnerabilityDetail": {Kind: "union", PossibleTypes: []string{"BaseObject"}}},
+			Mutations: map[string]Mutation{"issueCreate": {Name: "CreateIssue"}, "workItemUpdate": {Name: "WorkItemUpdate"}},
+		},
+	}
+}
+
+// TestDocument_HoldsDenial_HoldsADenialToWhatTheRecordDeclares verifies the
+// question both the derivation's gate 2 and R-GRANT ask: a denial is held only
+// when the element it names is one the record holds, of the kind its cause
+// names. A route for a REST cause, a mutation for an undeclared mutation, an
+// object, union or interface type for a position, and a type or a mutation
+// for a boundary a declaration says never resolves.
+func TestDocument_HoldsDenial_HoldsADenialToWhatTheRecordDeclares(t *testing.T) {
+	t.Parallel()
+	record := deniedRecord()
+	cases := []struct {
+		name   string
+		denial finegrained.Denial
+		want   bool
+	}{
+		{name: "a recorded route", denial: finegrained.Denial{Cause: finegrained.CauseRESTUndeclared, Element: "GET /projects/:id/nothing"}, want: true},
+		{name: "a route the record lacks", denial: finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /nowhere"}},
+		{name: "a recorded mutation", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "issueCreate"}, want: true},
+		{name: "a mutation the record lacks", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "undeclaredThing"}},
+		{name: "a type for a mutation cause", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "BranchRule"}},
+		{name: "an object type", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule"}, want: true},
+		{name: "a union", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "VulnerabilityDetail"}, want: true},
+		{name: "a type the record lacks", denial: finegrained.Denial{Cause: finegrained.CausePayloadUndeclared, Element: "Nowhere"}},
+		{name: "a mutation for a type cause", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "issueCreate"}},
+		{name: "an unresolvable type", denial: finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: "WorkItem"}, want: true},
+		{name: "an unresolvable mutation", denial: finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: "workItemUpdate"}, want: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := record.HoldsDenial(&testCase.denial); got != testCase.want {
+				t.Errorf("HoldsDenial(%+v) = %t, want %t", testCase.denial, got, testCase.want)
+			}
+		})
+	}
+	t.Run("no GraphQL record", func(t *testing.T) {
+		t.Parallel()
+		bare := deniedRecord()
+		bare.GraphQLAuthz = nil
+		if bare.HoldsDenial(&finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule"}) {
+			t.Error("a GraphQL denial is held with no GraphQL record")
 		}
 	})
 }

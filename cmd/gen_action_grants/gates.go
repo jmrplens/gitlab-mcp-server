@@ -35,7 +35,7 @@ func gateFindings(derived []derive.Action, joined []join.Action, record *apilive
 	}
 	for i := range joined {
 		row := joined[i].Row
-		if row != nil && row.Denied != nil && !join.Known(record, row.Denied) {
+		if row != nil && row.Denied != nil && !record.HoldsDenial(row.Denied) {
 			findings = append(findings, fmt.Sprintf("gate 2: %s is denied by %s, which the live record does not hold as a %s",
 				row.ID, row.Denied.Element, row.Denied.Cause))
 		}
