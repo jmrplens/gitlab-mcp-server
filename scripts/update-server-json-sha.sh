@@ -24,7 +24,8 @@
 #       each with its own identifier and a fileSha256 hashed from the file, in
 #       place of the mcpb entries server.json held. GoReleaser does not build
 #       the bundles, so they are absent from the signed checksums.txt and their
-#       hashes cannot be appended there without breaking checksums.txt.asc
+#       hashes cannot be appended there without breaking the cosign
+#       signature over it (checksums.txt.sigstore.json)
 #
 # Steps for .plugin/plugin.json:
 #   5. Sets top-level .version to the given version (if file exists)
@@ -196,8 +197,8 @@ done < "$CHECKSUMS_FILE"
 
 # 4b. Declare the .mcpb bundles. They are built after GoReleaser runs, so they
 # are not in checksums.txt, and appending them there would invalidate the
-# checksums.txt.asc signature. The bundles must therefore exist before this
-# script runs.
+# cosign signature over it, checksums.txt.sigstore.json. The bundles must
+# therefore exist before this script runs.
 #
 # server.json ends up with one mcpb entry per bundle given and no other. The
 # entries are rebuilt from the bundles rather than updated in place, so the

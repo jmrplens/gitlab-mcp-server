@@ -33,12 +33,25 @@
 // none of which a linux build carries. The architecture decides nothing today,
 // and every pair is built anyway, since a dependency is free to split on it.
 //
-// The entry's ldflags are not passed. They carry GoReleaser templates this
-// command does not evaluate, and they set two strings and strip the symbol
-// table, none of which changes which modules a binary links, which is all a
-// module-grain scan reads. An entry that selects its targets with ignore or
-// targets rather than plain goos and goarch lists is refused rather than read
-// half right.
+// The entry's ldflags are not passed, and neither are its overrides'. They
+// carry GoReleaser templates this command does not evaluate, and they set two
+// strings, strip the symbol table and name the Linux loader, none of which
+// changes which modules a binary links, which is all a module-grain scan reads.
+//
+// Anything else is refused rather than read half right. An entry may carry
+// only the keys this command reads or knows to leave the module set alone (id,
+// main, env, flags, goos, goarch, binary, ldflags, mod_timestamp and
+// overrides), an override only the keys that select its targets and ldflags,
+// and a global env is refused, since GoReleaser applies it to every build. So
+// is a gomod section that sets anything, since each of its keys changes how
+// every build fetches or builds the module (proxy builds from the module proxy
+// and ignores replace directives), and a before hook other than go mod
+// download, which runs ahead of every build and may change the source or
+// go.mod. ignore, targets, tags, dir, gobinary and an override that sets env,
+// flags or tags each change what GoReleaser builds in a way this command would
+// not apply, and a decode that dropped them would scan binaries nobody ships.
+// The rest of the configuration (archives, signing, the release itself)
+// decides what happens to a binary once it is built, and is not read.
 //
 // # How a finding is judged
 //

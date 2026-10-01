@@ -2,7 +2,7 @@
   "identifier": "jmrplens-gitlab-mcp-server",
   "name": "GitLab MCP Server",
   "version": "3.1.0",
-  "description": "Model Context Protocol server exposing GitLab REST + GraphQL operations as AI tools, ~868 on Free/CE and up to ~1094 on Ultimate: merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces, plus resource subscriptions (live change notifications by polling).",
+  "description": "Model Context Protocol server exposing GitLab REST + GraphQL operations as AI tools, ~868 on Free/CE and up to ~1094 on GitLab.com Ultimate: merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces, plus resource subscriptions (live change notifications by polling).",
   "author": "José M. Requena Plens",
   "authorUrl": "https://github.com/jmrplens",
   "cloudEndpoint": "https://mcp.jmrp.io/gitlab",
@@ -23,7 +23,7 @@
     {
       "name": "gitlab_execute_action",
       "title": "GitLab Execute Action",
-      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
+      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear. Example: {\"action\":\"issue.list\",\"params\":{\"project_id\":\"group/project\"}}",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -59,7 +59,7 @@
     {
       "name": "gitlab_find_action",
       "title": "GitLab Find Action",
-      "description": "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples.",
+      "description": "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples. Example: {\"query\":\"issue list\"}",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

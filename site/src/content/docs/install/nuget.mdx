@@ -133,7 +133,7 @@ After `dotnet tool install -g`, use the command instead:
 ```
 
 `GITLAB_TOKEN` is the only required value: a personal access token with the
-`api` scope (`read_api` also works; pair it with `GITLAB_MCP_READ_ONLY=true`, since over stdio the server does not narrow the tool surface to the token's scope).
+`api` scope (`read_api` also works; the server detects it at startup and serves a read-only surface).
 `GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for a
 self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
@@ -161,11 +161,16 @@ provenance attestation GitHub holds for that asset verifies it with the
 ```bash
 # dnx: the NuGet package cache (<rid> and <version> as in the table above)
 gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server \
-  -R jmrplens/gitlab-mcp-server
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 
 # dotnet tool install -g: on Linux and macOS the shim links into the tool store
-gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" \
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
+
+`--signer-workflow` holds the attestation to the release workflow, since
+`-R` alone accepts one any workflow of the repository minted; add
+`--source-ref refs/tags/v<version>` to hold it to the release you run.
 
 On Windows the cache is under `%USERPROFILE%\.nuget\packages` and the file
 is `gitlab-mcp-server.exe`. `dnx gitlab-mcp-server -- --version` prints the
@@ -181,7 +186,8 @@ from a downloaded copy and verify what is left:
 v=<version>
 curl -sSLO "https://api.nuget.org/v3-flatcontainer/gitlab-mcp-server/$v/gitlab-mcp-server.$v.nupkg"
 zip -q -d "gitlab-mcp-server.$v.nupkg" .signature.p7s
-gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server
+gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml --source-ref "refs/tags/v$v"
 ```
 
 The same works for each `gitlab-mcp-server.<rid>` package. Info-ZIP's

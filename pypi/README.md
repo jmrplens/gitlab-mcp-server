@@ -47,13 +47,15 @@ The `gitlab-mcp-server` command a wheel installs is the release binary byte for 
 
 ```bash
 # pip, pipx or uv tool install: the command on your PATH is the binary
-gh attestation verify "$(command -v gitlab-mcp-server)" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(command -v gitlab-mcp-server)" -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 
 # uvx: the binary sits in uv's cache, and the package says where
-gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import gitlab_mcp_server as m; print(m.find_binary())')" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import gitlab_mcp_server as m; print(m.find_binary())')" \
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the first form. For a pinned `uvx`, name the same version in `--from` (`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own publish attestation (PEP 740), shown on each file's page on PyPI. The release signature and the other channels are covered in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+`--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted; add `--source-ref refs/tags/v<version>` to hold it to the release you installed. On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the first form. For a pinned `uvx`, name the same version in `--from` (`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own publish attestation (PEP 740), shown on each file's page on PyPI. The release signature and the other channels are covered in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
 ## Configuration
 

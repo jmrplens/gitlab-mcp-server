@@ -71,7 +71,8 @@ La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/late
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                         |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                    |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                    |
-| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                                                                                                                                           |
+| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, y un SBOM SPDX por binario, `<archivo>.sbom.json`                                                                  |
+| Licencias             | `THIRD_PARTY_NOTICES`, a partir de la primera release posterior a 3.1.0                                                                                                                                  |
 | Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo), y `gitlab-mcp-server.mcpb` para los tres; consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 `gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop para macOS porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
@@ -101,7 +102,7 @@ En Windows, renombra el archivo a `gitlab-mcp-server.exe` y colócalo en una car
 
 ## Verifica lo que has descargado
 
-Los scripts de instalación ya comparan la descarga con `checksums.txt`, y comprueban su firma cuando `cosign` o `gh` están instalados. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
+Los scripts de instalación ya comparan la descarga con `checksums.txt`, y comprueban su firma cuando `cosign` o `gh` están instalados. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, de sus SBOM y, a partir de la primera release posterior a 3.1.0, de `THIRD_PARTY_NOTICES`, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
 
 1. Descarga `checksums.txt` y `checksums.txt.sigstore.json` de la misma release que el binario.
 2. Verifica la firma. La identidad es el workflow de release en la etiqueta que has descargado:
@@ -137,11 +138,11 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
 Si cualquiera de los dos pasos falla, no ejecutes el archivo. El recorrido completo, incluida la instalación de Cosign, está en [Verificación de la integridad del release](/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release).
 
 :::note[Atestaciones de procedencia y SBOM]
-El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server`. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella; para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
+El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella; para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
 :::
 
 :::note[Avisos de terceros]
-A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, generados a partir de los propios binarios del release y listados en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE`.
+A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, generados a partir de los propios binarios del release y listados en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE`, y la fórmula de Homebrew instala ambos en su prefijo. winget y los instaladores de una línea entregan solo el binario: para ellos los avisos son el asset del release que lo acompaña, y `LICENSE` es el archivo de la raíz de la etiqueta del release.
 :::
 
 ## Dónde colocarlo

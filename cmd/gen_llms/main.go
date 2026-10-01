@@ -317,7 +317,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, or in the one file `GITLAB_MCP_ENV_FILE` names (give it an absolute path). Precedence, highest first: the process environment, then `GITLAB_MCP_ENV_FILE`, then the home file. A `.env` in the working directory is deliberately not loaded, only reported at WARN with the keys it wanted to set.\n")
 	b.WriteString("- Updating: use whichever channel installed it. The server never replaces its own binary.\n\n")
 
-	b.WriteString("Configuration (environment variables, stdio mode). Settings this project defines are read as GITLAB_MCP_<NAME>; the older bare spellings still work and warn once at startup:\n\n")
+	b.WriteString("Configuration (environment variables, stdio mode). Settings this project defines are read as GITLAB_MCP_<NAME> and under no other spelling; the older bare spellings were removed in 3.1.0, and one still set is named at startup, where GITLAB_READ_ONLY, GITLAB_SAFE_MODE and EXCLUDE_TOOLS refuse the start:\n\n")
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_MCP_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
@@ -325,7 +325,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("- GITLAB_MCP_CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
 	b.WriteString("- GITLAB_MCP_READ_ONLY: Remove mutating operations per action; reads keep working (default: false)\n")
 	b.WriteString("- GITLAB_MCP_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_MCP_READ_ONLY takes precedence\n")
-	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
+	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects it from the instance license, then from the plans of the namespaces the token administers, falling back to free. Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
 	b.WriteString("- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC\n")
 	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n\n")
 
@@ -441,12 +441,9 @@ func describeSize(bytes int) string {
 	if bytes <= 0 {
 		return "size unknown"
 	}
-	var size string
-	switch {
-	case bytes >= 1024*1024:
+	size := fmt.Sprintf("%d KB", (bytes+512)/1024)
+	if bytes >= 1024*1024 {
 		size = fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
-	default:
-		size = fmt.Sprintf("%d KB", (bytes+512)/1024)
 	}
 	tokens := float64(bytes) / 4
 	if tokens >= 1_000_000 {
@@ -629,11 +626,17 @@ func buildLLMSFullTxt(version string, catalog llmsCatalog) (generatedFile, error
 	writeLLMSFullPrompts(&b, catalog.Prompts)
 
 	content := b.String()
-	if err := validateLLMSFullTxt(content); err != nil {
+	if err := validateFullText(content); err != nil {
 		return generatedFile{}, fmt.Errorf("validate llms-full.txt: %w", err)
 	}
 	return generatedFile{name: llmsFullFileName, content: content}, nil
 }
+
+// validateFullText is [validateLLMSFullTxt] behind a seam. Every section that
+// validator demands is written whatever the catalog holds, so no content
+// reaches its failing arm; a test swaps it to drive the refusal through
+// buildLLMSFullTxt, buildLLMSReferenceFiles and run.
+var validateFullText = validateLLMSFullTxt
 
 // llmsHeader renders the shared title + one-line summary every companion file
 // opens with, so a consumer that fetched only one of them still knows the
@@ -741,7 +744,7 @@ func writeLLMSFullEnterpriseOnlyMetaTools(b *strings.Builder, catalog llmsCatalo
 		return
 	}
 	b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
+	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license or namespace plan). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 	for _, tool := range enterpriseOnly {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
 	}
@@ -821,7 +824,9 @@ func compactToolDescription(description string) string {
 	if utf8.RuneCountInString(desc) <= maxFullDescRunes {
 		return desc
 	}
-	if sentence := firstSentence(desc); sentence != "" && utf8.RuneCountInString(sentence) <= maxFullDescRunes {
+	// The sentence is never empty here, since desc is not
+	// (TestFirstSentence_IsNeverEmptyForTextThatHasAny).
+	if sentence := firstSentence(desc); utf8.RuneCountInString(sentence) <= maxFullDescRunes {
 		return sentence
 	}
 	return truncateRunes(desc, maxFullDescRunes)
@@ -1152,10 +1157,7 @@ func firstParagraph(s string) string {
 // firstSentence returns text up to the first sentence-ending period or newline.
 // It skips common abbreviations (e.g., i.e., etc., vs.) to avoid false splits.
 func firstSentence(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
-	}
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
 	if i := findSentenceEnd(s); i >= 0 {
 		return s[:i+1]
 	}

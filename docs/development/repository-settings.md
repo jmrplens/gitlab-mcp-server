@@ -46,7 +46,7 @@ release depends on it, and no gate can see it.
 **Immutable releases**.
 
 **Why.** Every other artifact this project publishes is pinned by a hash or by
-an immutable registry version: the `.mcpb` bundle by `fileSha256` in
+an immutable registry version: the `.mcpb` bundles by their `fileSha256` in
 `server.json`, the container image by `@sha256:` digest, npm, PyPI and NuGet by
 version (all three registries forbid republishing one). The GitHub Release is
 the exception.

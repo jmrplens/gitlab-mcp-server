@@ -59,7 +59,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#tier-gating",
             "name": "Gating por tier",
-            "description": "Registrar solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de GITLAB_MCP_TIER si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando.",
+            "description": "Registrar solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de GITLAB_MCP_TIER si está definido; si no, se detecta de la licencia de la instancia y después de los planes de los namespaces que administra el token, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -165,7 +165,7 @@ El **modo dinámico** es la superficie predeterminada, y expone solo `gitlab_fin
 
 ## Gating por tier
 
-El **gating por tier** registra solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de `GITLAB_MCP_TIER` si está definido; si no, se detecta de la licencia de la instancia, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando al cliente.
+El **gating por tier** registra solo las acciones y campos de esquema que soporta la licencia de GitLab conectada. El tier sale de `GITLAB_MCP_TIER` si está definido; si no, se detecta de la licencia de la instancia y después de los planes de los namespaces que administra el token, con Free como reserva. Los esquemas de entrada se podan de forma estricta, para que un tier inferior nunca vea campos superiores; los de salida se podan de forma laxa, para que los datos sigan llegando al cliente.
 
 ## Modo seguro
 

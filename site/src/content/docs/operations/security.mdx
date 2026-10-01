@@ -368,10 +368,11 @@ Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding filen
 Every release artifact carries a SLSA provenance attestation stored by GitHub, tying the file to the workflow run that produced it:
 
 ```bash
-gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-server
+gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-This is independent of the Cosign signature: the signature says the checksums came from this repository's release pipeline, the attestation says which workflow run built this exact file.
+This is independent of the Cosign signature: the signature says the checksums came from this repository's release pipeline, the attestation says which workflow run built this exact file. `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one minted by any workflow of the repository; add `--source-ref refs/tags/v<version>` to hold it to one release, which is what `install.sh` and `install.ps1` demand.
 
 ### 6. Verify the container image
 
@@ -388,8 +389,10 @@ cosign verify docker.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Build provenance: which commit and which workflow run produced it
-gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
-gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
 The two commands answer different questions and neither substitutes for the other. The signature binds the index to the release workflow's identity; its predicate is empty, so it says who pushed the image and not what went into it. The provenance attestation names the source commit and the workflow run.
@@ -399,12 +402,14 @@ The image also carries an SBOM attestation over the index **and** over each plat
 ```bash
 # SBOM: what is inside the image. A tag resolves to the index, which carries one.
 gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document
 
 # Or by the digest of the platform manifest you actually run
 digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
 gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document
 ```
 
@@ -420,7 +425,7 @@ Image provenance and SBOM attestations start with the first release after 3.0.0.
 
 ## Known vulnerabilities in a binary
 
-Scanners that read a binary or an image SBOM (Trivy, Grype, osv-scanner, Docker Scout) report every advisory against any Go module the binary names in its build information, whether or not the vulnerable code is linked. CI now asks the same question of every binary the release builds, on every push and pull request: each one is built and checked against the Go vulnerability database at module grain, and a finding fails the build unless a reviewed declaration in the repository accepts it. You can ask it of a binary you downloaded:
+Scanners that read a binary or an image SBOM (Trivy, Grype, osv-scanner, Docker Scout) report every advisory against any Go module the binary names in its build information, whether or not the vulnerable code is linked. CI now asks the same question of every binary the release builds, on every pull request and every push to main, and the release workflow asks it again of the tagged tree before anything is published: each one is built and checked against the Go vulnerability database at module grain, and a finding fails the build unless a reviewed declaration in the repository accepts it. You can ask it of a binary you downloaded:
 
 ```bash
 go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitlab-mcp-server-linux-amd64

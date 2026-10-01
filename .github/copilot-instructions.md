@@ -51,6 +51,7 @@ gitlab-mcp-server/
 │   ├── gen_llms/           # llms.txt / llms-full.txt
 │   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
 │   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
+│   ├── gen_third_party_notices/ # THIRD_PARTY_NOTICES from the release binaries' build information and the module cache (GoReleaser's sboms, the Dockerfile, make mcpb)
 │   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger
 │   ├── gen_model_results/  # Folds a model evaluation run's shards into the published record
 │   └── internal/           # Helpers shared by the commands (apidocs, auditshared, docgen, mcpsurface)
@@ -256,7 +257,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.7x), or `full` (~18.3x). Independent of `GITLAB_MCP_TOOL_SURFACE`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
 | `GITLAB_MCP_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
 | `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
-| `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
+| `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license`, then from the plans of the namespaces the token administers (`GET /namespaces`), falling back to `free`. Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `MODELEVAL_MODELS`       | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs to ask; `fake:perfect` replays the corpus key with no provider call | —                  |
 | `MODELEVAL_SPEND`        | `test/e2e/modeleval`: consent to call a real provider (`yes`, `true`, `1`) | `no` (default)     |
 | `MODELEVAL_BUDGET_USD`   | `test/e2e/modeleval`: ceiling in US dollars a run stops at | —                  |

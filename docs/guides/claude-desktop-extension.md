@@ -13,7 +13,9 @@ operating system. No Docker, Node.js, or Python is required.
 Each bundle lists only its own system in its manifest, so Claude Desktop
 refuses one opened on another system with a message instead of installing a
 server that cannot start there. All three install as the same extension,
-`gitlab-mcp-server`, and each carries the `LICENSE` it is distributed under.
+`gitlab-mcp-server`, and each carries the `LICENSE` it is distributed under
+and `THIRD_PARTY_NOTICES`, the license and notice texts of every module the
+server links.
 
 [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
 is the universal bundle: all three systems' servers in one file, about 77 MB
@@ -61,10 +63,11 @@ the universal one included, which lets you confirm the file came from this
 repository's release run:
 
 ```bash
-gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server
+gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-Use the name of the bundle you downloaded.
+Use the name of the bundle you downloaded. `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one minted by any workflow of the repository; `--source-ref refs/tags/v<version>` holds it to one release as well.
 
 The release binaries are covered by `checksums.txt`, its keyless Cosign
 signature, and their own provenance attestation — see
@@ -79,8 +82,9 @@ make check-mcpb    # validates mcpb/manifest.json and the three manifests derive
 
 `make mcpb` cross-compiles the darwin arm64/amd64 binaries, merges them with
 `lipo`, cross-compiles the Windows amd64 binary and the Linux amd64 and arm64
-binaries, and packs the four bundles with `scripts/build-mcpb.sh`. It still
-needs macOS for `lipo`.
+binaries, writes their `THIRD_PARTY_NOTICES` with
+`cmd/gen_third_party_notices` (from the module cache), and packs the four
+bundles with `scripts/build-mcpb.sh`. It still needs macOS for `lipo`.
 
 Every bundle uses the same layout and carries the entries its system needs, in
 this order:
@@ -89,6 +93,7 @@ this order:
 manifest.json                                 every bundle
 icon.png                                      every bundle
 LICENSE                                       every bundle
+THIRD_PARTY_NOTICES                           every bundle
 server/gitlab-mcp-server                      macOS universal binary: darwin, universal
 server/gitlab-mcp-server.exe                  Windows amd64: windows, universal
 server/linux/launch.sh                        Linux launcher: linux, universal

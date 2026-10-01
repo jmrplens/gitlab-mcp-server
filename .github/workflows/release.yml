@@ -172,11 +172,45 @@ jobs:
     permissions:
       contents: read
 
+  # The release binaries at module grain, asked of the tree being released at
+  # the moment it is released. ci.yml asks it on every pull request and push to
+  # main, but a tag can be cut from a commit whose last CI run is days old, and
+  # an advisory published in between would otherwise reach every channel. It
+  # builds the targets .goreleaser.yml names with the toolchain go.mod names,
+  # as the release job does, and cmd/audit_binary_vulns refuses every build
+  # setting it does not read (an unread key of a build or an override, a global
+  # env, a gomod section that sets anything, a before key other than hooks or a
+  # hook other than go mod download), so what it scans links the modules the
+  # published binaries link. It stands in front of `docker`, the first job that
+  # publishes anything, beside the E2E and race gates, and runs in a rehearsal
+  # too. No credential: it reads the tree and the public vulnerability database
+  # and nothing else.
+  binary-vulns:
+    name: "🛡️ Binary vulnerability gate"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [preflight]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          # No Actions cache, as in the release job: the gate's verdict is on
+          # what the repository fixes, modules checked against go.sum, not on
+          # a build cache a run on main wrote.
+          cache: false
+      - name: Release binaries at module grain
+        run: make check-binary-vulns
+
   docker:
     name: "🐳 Docker"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [preflight, e2e, race]
+    needs: [preflight, e2e, race, binary-vulns]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     # No `environment:` — this job never ran under one, and adding it would
@@ -538,7 +572,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.DOCKERHUB_IMAGE }}
-          short-description: "MCP server for GitLab: ~868 tools on Free/CE, up to ~1094 on Ultimate. By jmrp.io"
+          short-description: "MCP server for GitLab: ~868 tools on Free/CE, up to ~1094 on GitLab.com Ultimate. By jmrp.io"
           readme-filepath: ./.github/dockerhub-description.md
 
   # Signing and attestation, in a job of their own, for two reasons that both
@@ -688,6 +722,7 @@ jobs:
       # same three aliases when it looks the docker login credential up.
       #
       # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (ghcr.io, index)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
@@ -973,7 +1008,7 @@ jobs:
     # critical path, which is the right trade. A rehearsal is unaffected: the job
     # runs and succeeds with its steps skipped, rather than being skipped itself,
     # which a needs edge would propagate.
-    needs: [preflight, e2e, docker, sign-attest]
+    needs: [preflight, e2e, binary-vulns, docker, sign-attest]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
@@ -1131,6 +1166,7 @@ jobs:
       # bundle verifies it the same way.
       # Stored in GitHub's attestation store — no release asset changes.
       # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (release binaries)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
@@ -1296,6 +1332,15 @@ jobs:
       contents: read # download the published release assets
       id-token: write # nuget.org trusted publishing (NuGet/login), and the attestation's signing identity
       attestations: write # actions/attest-build-provenance (the .nupkg files)
+    # These two are live while the .NET SDK, which setup-dotnet fetches by
+    # version rather than by hash, runs the validation and the push. sign-attest
+    # was split out of the docker job to avoid that, and here it is accepted
+    # instead. id-token was already live in this job for NuGet/login, so the
+    # attestation adds the write to the attestation store and not the
+    # identity. And the push is `dotnet nuget push`, which needs that same SDK
+    # beside the key NuGet/login mints, so a job that attested and logged in
+    # without the SDK would still hand the key to one that runs it. The release
+    # job attests while GoReleaser runs on the same terms.
     # The digests attested, in sha256sum's format, for verify-published to
     # hold what nuget.org serves to once its repository signature is removed.
     outputs:
@@ -1352,6 +1397,7 @@ jobs:
       # A re-run is safe: each attempt attests before it pushes, so whatever
       # --skip-duplicate keeps was attested by the attempt that pushed it.
       # Verify: gh attestation verify <unsigned .nupkg> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (NuGet packages)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4

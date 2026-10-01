@@ -155,6 +155,12 @@ func TestRender_ReproducesEveryTextInLayout(t *testing.T) {
 		"reproduced below in full, read from the module at the version the\n" +
 		"binaries link. cmd/gen_third_party_notices writes this file from the\n" +
 		"build information the binaries record.\n\n" +
+		"The source code of each module is available at the version listed, or\n" +
+		"at the replacement's where one is named, from the Go module proxy: the\n" +
+		"command go mod download -json <module>@<version> fetches it, from\n" +
+		"https://proxy.golang.org unless GOPROXY names another. The source code\n" +
+		"of the Go standard library is part of the Go release named under\n" +
+		"Toolchain, published at https://go.dev/dl/.\n\n" +
 		"Contents\n\n" +
 		"  Go standard library go1.27.1\n" +
 		"  example.com/alpha v1.2.0\n" +

@@ -133,7 +133,7 @@ Because all surfaces share the same catalog entry, schemas, read-only filtering,
 
 ### Tier-gating
 
-Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. When a server is built (at startup in stdio mode, per token+URL pool entry in HTTP mode) the tier is resolved (`GITLAB_MCP_TIER` / `--tier`, or auto-detection via `GET /license`, falling back to `free`), the catalog filter drops premium/ultimate-only actions above it, and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) prunes the per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
+Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. When a server is built (at startup in stdio mode, per token+URL pool entry in HTTP mode) the tier is resolved (`GITLAB_MCP_TIER` / `--tier`, or auto-detection via the instance license (`GET /license`) and then the namespace plans (`GET /namespaces`), falling back to `free`), the catalog filter drops premium/ultimate-only actions above it, and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) prunes the per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
 
 ```mermaid
 graph LR

@@ -159,13 +159,18 @@ echo "Verified ${verified} asset(s) against checksums.txt"
 # a registry job fetches and the universal one alike, so a bundle nobody
 # attested fails here whichever pattern brought it. A rehearsal attests
 # nothing, and the bundles it unpacked were built by a job of the same run.
+#
+# The attestation is held to the same signer as checksums.txt above: the
+# release workflow at this release's tag. --repo alone accepts an attestation
+# any workflow of the repository minted, at any ref, and these bundles are the
+# ones whose hashes go into server.json.
 for bundle in "$DEST"/*.mcpb; do
   [ -f "$bundle" ] || continue
   if [ -n "$ARCHIVE" ]; then
     echo "Rehearsal: $(basename "$bundle") came from this run's own build; its attestation is minted at release"
   else
     echo "Verifying the build-provenance attestation of $(basename "$bundle")"
-    gh attestation verify "$bundle" --repo "$REPO"
+    gh attestation verify "$bundle" --repo "$REPO" --cert-identity "$SIGNER_IDENTITY"
   fi
   verified=$((verified + 1))
 done

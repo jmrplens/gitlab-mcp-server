@@ -178,21 +178,37 @@ class FetchRetryTest(unittest.TestCase):
         self.assertEqual(opener.count(url), 1)
 
 
-def npm_tarball(payload):
-    """A .tgz shaped like a published npm platform package."""
+def npm_tarball(payload, notices=None):
+    """A .tgz shaped like a published npm platform package: a directory
+    entry, its package.json and LICENSE, the binary when payload is given,
+    and package/THIRD_PARTY_NOTICES when notices is given."""
+    entries = [("package/package.json", b"{}"), ("package/LICENSE", b"MIT License\n")]
+    if payload is not None:
+        entries.append(("package/bin/gitlab-mcp-server", payload))
+    if notices is not None:
+        entries.append(("package/" + vpp.NOTICES, notices))
     blob = io.BytesIO()
     with tarfile.open(fileobj=blob, mode="w:gz") as tar:
-        info = tarfile.TarInfo("package/bin/gitlab-mcp-server")
-        info.size = len(payload)
-        tar.addfile(info, io.BytesIO(payload))
+        directory = tarfile.TarInfo("package/bin")
+        directory.type = tarfile.DIRTYPE
+        tar.addfile(directory)
+        for name, data in entries:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     return blob.getvalue()
 
 
-def wheel(version, payload):
-    """A .whl shaped like a published platform wheel."""
+def wheel(version, payload, notices=None):
+    """A .whl shaped like a published platform wheel: the notices under
+    .dist-info/licenses/ when given, written first the way a wheel lists its
+    metadata, then the binary when payload is given."""
     blob = io.BytesIO()
     with zipfile.ZipFile(blob, "w") as zf:
-        zf.writestr(f"{vpp.PYPI_NORM}-{version}.data/scripts/gitlab-mcp-server", payload)
+        if notices is not None:
+            zf.writestr(f"{vpp.PYPI_NORM}-{version}.dist-info/licenses/{vpp.NOTICES}", notices)
+        if payload is not None:
+            zf.writestr(f"{vpp.PYPI_NORM}-{version}.data/scripts/gitlab-mcp-server", payload)
     return blob.getvalue()
 
 
@@ -332,6 +348,140 @@ class MismatchIsNotRetriedTest(unittest.TestCase):
         vpp.check_nuget(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("is not listed on nuget.org", problems[0])
+
+
+class NoticesTest(unittest.TestCase):
+    """Every npm platform package and every wheel carries the
+    THIRD_PARTY_NOTICES the release signed, when the release signed one."""
+
+    VERSION = "1.0.0"
+    WHEEL = "pkg-1.0.0-py3-none-manylinux_2_17_x86_64.whl"
+    WHEEL_URL = "https://files.pythonhosted.org/x/" + WHEEL
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        self.notices = b"Third-party notices for gitlab-mcp-server\n\nthe texts the release signed\n"
+        self.digests = {asset: hashlib.sha256(self.binary).hexdigest() for asset in vpp.NPM_ASSETS.values()}
+        self.digests[vpp.NOTICES] = hashlib.sha256(self.notices).hexdigest()
+
+    def serve_npm(self, notices_for):
+        """Serve every npm platform package, each carrying the notices
+        notices_for names for its suffix (self.notices unless named)."""
+        script = {}
+        for suffix in vpp.NPM_ASSETS:
+            quoted = vpp.urllib.parse.quote(f"{vpp.NPM_SCOPE}/gitlab-mcp-server-{suffix}", safe="")
+            tarball_url = f"https://registry.npmjs.org/{quoted}/-/{suffix}-{self.VERSION}.tgz"
+            script[f"https://registry.npmjs.org/{quoted}/{self.VERSION}"] = [
+                b'{"dist": {"tarball": "%s"}}' % tarball_url.encode()
+            ]
+            script[tarball_url] = [npm_tarball(self.binary, notices_for.get(suffix, self.notices))]
+        vpp.urllib.request.urlopen = FakeOpener(script)
+
+    def serve_wheel(self, notices):
+        index = f"https://pypi.org/pypi/{vpp.PYPI_DIST}/{self.VERSION}/json"
+        meta = b'{"urls": [{"packagetype": "bdist_wheel", "filename": "%s", "url": "%s"}]}' % (
+            self.WHEEL.encode(), self.WHEEL_URL.encode())
+        vpp.urllib.request.urlopen = FakeOpener({index: [meta], self.WHEEL_URL: [wheel(self.VERSION, self.binary,
+                                                                                         notices)]})
+
+    def test_npm_packages_carrying_the_signed_notices_pass(self):
+        self.serve_npm({})
+        out = io.StringIO()
+        problems = []
+        with contextlib.redirect_stdout(out):
+            vpp.check_npm(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        self.assertEqual(problems, [])
+        self.assertEqual(out.getvalue().count(f"{vpp.NOTICES} matches the signed one"), len(vpp.NPM_ASSETS))
+
+    def test_npm_packages_with_other_notices_or_none_are_named(self):
+        self.serve_npm({"linux-x64": b"Third-party notices for gitlab-mcp-server\n\nanother build\n",
+                        "win32-arm64": None})
+        problems = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            vpp.check_npm(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        self.assertEqual(len(problems), 2, problems)
+        self.assertIn(f"npm linux-x64: {vpp.NOTICES} in https://registry.npmjs.org/", problems[0])
+        self.assertIn("but the signed checksums.txt says " + self.digests[vpp.NOTICES], problems[0])
+        self.assertIn("npm win32-arm64: https://registry.npmjs.org/", problems[1])
+        self.assertIn(f"carries no {vpp.NOTICES}, but the release signed one", problems[1])
+
+    def test_each_wheel_is_held_to_the_signed_notices(self):
+        cases = [
+            ("the signed notices", self.notices, None),
+            ("other notices", b"other notices\n", f"{vpp.NOTICES} in {self.WHEEL_URL} is sha256"),
+            ("no notices", None, f"{self.WHEEL_URL} carries no {vpp.NOTICES}, but the release signed one"),
+        ]
+        for name, notices, want in cases:
+            with self.subTest(name):
+                self.serve_wheel(notices)
+                problems = []
+                with contextlib.redirect_stdout(io.StringIO()):
+                    vpp.check_pypi(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+                notice_problems = [p for p in problems if vpp.NOTICES in p]
+                if want is None:
+                    self.assertEqual(notice_problems, [])
+                else:
+                    self.assertEqual(len(notice_problems), 1, problems)
+                    self.assertIn(want, notice_problems[0])
+
+    def test_a_package_without_its_binary_is_named_and_its_notices_are_not_judged(self):
+        """A package that cannot be read is one finding, not two."""
+        self.serve_npm({})
+        tarball = next(url for url in vpp.urllib.request.urlopen.script if url.endswith("linux-x64-1.0.0.tgz"))
+        vpp.urllib.request.urlopen.script[tarball] = [npm_tarball(None, self.notices)]
+        problems = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            vpp.check_npm(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("npm linux-x64: could not read the published package:", problems[0])
+        self.assertIn("ships no gitlab-mcp-server binary", problems[0])
+
+        self.serve_wheel(self.notices)
+        index = f"https://pypi.org/pypi/{vpp.PYPI_DIST}/{self.VERSION}/json"
+        vpp.urllib.request.urlopen.script[self.WHEEL_URL] = [wheel(self.VERSION, None, self.notices)]
+        self.assertIn(index, vpp.urllib.request.urlopen.script)
+        problems = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            vpp.check_pypi(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        read_failures = [p for p in problems if "could not read the wheel" in p]
+        self.assertEqual(len(read_failures), 1, problems)
+        self.assertEqual([p for p in problems if vpp.NOTICES in p], [])
+
+    def test_a_release_from_before_the_notices_compares_none(self):
+        del self.digests[vpp.NOTICES]
+        self.serve_npm({suffix: None for suffix in vpp.NPM_ASSETS})
+        problems = []
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            vpp.check_npm(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
+        self.assertEqual(problems, [])
+        self.assertNotIn(vpp.NOTICES, out.getvalue())
+
+    def test_the_signed_notices_are_read_from_checksums_txt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "checksums.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("a" * 64 + "  gitlab-mcp-server-linux-amd64\n")
+                fh.write("b" * 64 + "  " + vpp.NOTICES + "\n")
+                fh.write("c" * 64 + "  gitlab-mcp-server-linux-amd64.sbom.json\n")
+            self.assertEqual(vpp.released_digests(path), {
+                "gitlab-mcp-server-linux-amd64": "a" * 64, vpp.NOTICES: "b" * 64})
+
+    def test_a_checksums_txt_naming_only_the_notices_names_no_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "checksums.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("b" * 64 + "  " + vpp.NOTICES + "\n")
+            real_argv = sys.argv
+            sys.argv = ["verify_published_packages.py", self.VERSION, path]
+            try:
+                with self.assertRaises(SystemExit) as raised:
+                    vpp.main()
+            finally:
+                sys.argv = real_argv
+        self.assertIn("names none of the release binaries", str(raised.exception.code))
 
 
 class NugetUnsignedTest(unittest.TestCase):
@@ -622,6 +772,14 @@ class MainTest(NugetFixture):
         self.assertEqual(code, 0, out)
         self.assertIn("no --nuget-digests given", out)
         self.assertNotIn("the one the release attested", out)
+        self.assertIn(f"names no {vpp.NOTICES}, a release from before they were generated", out)
+
+    def test_a_release_that_signed_its_notices_does_not_say_it_predates_them(self):
+        self.digests[vpp.NOTICES] = "b" * 64
+        self.serve()
+        code, out = self.run_main()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(f"names no {vpp.NOTICES}", out)
 
 
 if __name__ == "__main__":

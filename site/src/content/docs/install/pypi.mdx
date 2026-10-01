@@ -148,7 +148,7 @@ After an install with pipx, uv tool or pip, use the native command instead:
 ```
 
 `GITLAB_TOKEN` is the only required value: a personal access token with the
-`api` scope (`read_api` also works; pair it with `GITLAB_MCP_READ_ONLY=true`, since over stdio the server does not narrow the tool surface to the token's scope).
+`api` scope (`read_api` also works; the server detects it at startup and serves a read-only surface).
 `GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for a
 self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
@@ -169,12 +169,17 @@ asset (releases after 2.7.5) verifies it directly with the
 
 ```bash
 # pip, pipx or uv tool install: the command on your PATH is the binary
-gh attestation verify "$(command -v gitlab-mcp-server)" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(command -v gitlab-mcp-server)" \
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 
 # uvx: the binary sits in uv's cache, and the package says where
 gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import gitlab_mcp_server as m; print(m.find_binary())')" \
-  -R jmrplens/gitlab-mcp-server
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
+
+`--signer-workflow` holds the attestation to the release workflow, since
+`-R` alone accepts one any workflow of the repository minted; add
+`--source-ref refs/tags/v<version>` to hold it to the release you installed.
 
 On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the
 first form. For a pinned `uvx`, name the same version in `--from`
