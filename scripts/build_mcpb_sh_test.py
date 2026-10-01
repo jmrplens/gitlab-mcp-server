@@ -6,7 +6,7 @@ declares, and the universal one, kept under its old name for existing links.
 After packing, the script reads each archive back and removes the whole set
 when any bundle fails any of its checks, so that no later step and no
 developer picks up a bundle that failed, or the rest of a set one failed.
-Three things are tested here. Each bundle carries its own system's servers, the
+Four things are tested here. Each bundle carries its own system's servers, the
 licence and a manifest that lists only the platforms it serves; a per-OS
 manifest is the committed one with that platform's command promoted to the
 base command. The rules on the packed manifest refuse each shape that would
@@ -15,10 +15,18 @@ listed with no override (it would be handed the macOS binary, the base
 command), a platform left out of the list (Desktop marks the bundle
 incompatible there), an override for an unlisted platform, an override
 carrying `env` (it replaces the base env and drops `GITLAB_TOKEN`), and a path
-the archive does not carry. And every refusal ends with the bundles removed,
-including one where an entry never reached the archive, which `zip` allows by
-exiting 0 when one of its inputs is missing, and one before anything was
-packed, which must not leave the previous run's bundles behind.
+the archive does not carry. Each bundle's size is reported, a bundle past one
+of Claude Desktop's own limits is refused, and a declared bundle past the
+sizes directories stop reading at is a warning. And every refusal ends with
+the bundles removed, including one where an entry never reached the archive,
+which `zip` allows by exiting 0 when one of its inputs is missing, and one
+before anything was packed, which must not leave the previous run's bundles
+behind.
+
+The size limits are reached by a stand-in for zipinfo that reports larger
+figures for an archive the script packed, since packing hundreds of megabytes
+for real would make every run of this file slow. The script reads every figure
+from that one listing, so the stand-in moves exactly what it measures.
 
 Each case runs the real script from a scratch tree laid out the way it expects,
 the repository root with mcpb/ and a dist/ of per-target builds, holding small
@@ -141,6 +149,26 @@ done
 exec "$REAL_ZIP" "$@"
 """
 
+# Stands in for unzip and, for the zipinfo listing the size checks read
+# (unzip -Zl), reports the archive's size as FAKE_ARCHIVE_BYTES, every entry's
+# unpacked size as FAKE_EVERY_ENTRY_BYTES, the entry FAKE_ENTRY's as
+# FAKE_ENTRY_BYTES, and FAKE_EXTRA_ENTRIES more entries than there are. Every
+# other call is the real unzip's.
+UNZIP_REPORTING_SIZES = """#!/bin/sh
+if [ "$1" != "-Zl" ]; then
+  exec "$REAL_UNZIP" "$@"
+fi
+"$REAL_UNZIP" "$@" | awk -v archive="${FAKE_ARCHIVE_BYTES:-}" -v every="${FAKE_EVERY_ENTRY_BYTES:-}" \\
+  -v name="${FAKE_ENTRY:-}" -v size="${FAKE_ENTRY_BYTES:-}" -v extra="${FAKE_EXTRA_ENTRIES:-0}" '
+  /^Zip file size:/ && archive != "" { $4 = archive }
+  $1 ~ /^-/ && every != "" { $4 = every }
+  $1 ~ /^-/ && name != "" && $NF == name { $4 = size }
+  { print }
+  END { for (i = 0; i < extra; i++) print "-rw-r--r--  3.0 unx 1 t- 1 defN 80-Jan-01 00:00 extra" i }'
+"""
+
+MIB = 1024 * 1024
+
 
 def without_platform(manifest, platform, keep_override=False):
     manifest["compatibility"]["platforms"].remove(platform)
@@ -227,13 +255,22 @@ class BuildMcpbTest(unittest.TestCase):
         if not env.get("PATH", "").startswith(bin_dir + os.pathsep):
             env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
 
-    def build(self, manifest=None, drop_entry=None):
+    def build(self, manifest=None, drop_entry=None, sizes=None, env_extra=None):
+        """Runs the script; sizes, when given, are the FAKE_* figures the
+        zipinfo stand-in reports."""
         with open(os.path.join(self.work, "mcpb", "manifest.json"), "w", encoding="utf-8") as fh:
             json.dump(self.manifest if manifest is None else manifest, fh, indent=2, ensure_ascii=False)
         env = dict(os.environ)
+        # A CI runner sets these; the cases that need them set them below.
+        env.pop("GITHUB_ACTIONS", None)
+        env.pop("GITHUB_STEP_SUMMARY", None)
         if drop_entry is not None:
             env.update(REAL_ZIP=shutil.which("zip"), DROP_ENTRY=drop_entry)
             self.install_stand_in("zip", ZIP_DROPPING_AN_ENTRY, env)
+        if sizes is not None:
+            env.update(REAL_UNZIP=shutil.which("unzip"), **{key: str(value) for key, value in sizes.items()})
+            self.install_stand_in("unzip", UNZIP_REPORTING_SIZES, env)
+        env.update(env_extra or {})
         return subprocess.run(
             ["bash", SCRIPT, VERSION, "dist"],
             cwd=self.work,
@@ -410,6 +447,101 @@ class BuildMcpbTest(unittest.TestCase):
                     self.build(drop_entry=entry),
                     "the archive does not carry exactly the expected entries",
                 )
+
+    def test_reports_each_bundles_size_and_writes_the_job_summary(self):
+        summary = os.path.join(self.work, "summary.md")
+        result = self.build(env_extra={"GITHUB_STEP_SUMMARY": summary})
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        stdout = result.stdout.decode()
+        with open(summary, encoding="utf-8") as fh:
+            table = fh.read()
+        for target in TARGETS:
+            name = bundle_name(target)
+            with self.subTest(bundle=target):
+                with zipfile.ZipFile(self.outputs[target]) as bundle:
+                    unpacked = sum(info.file_size for info in bundle.infolist())
+                archive = os.path.getsize(self.outputs[target])
+                # The stand-ins are a few kilobytes, so both round to 0.0x MiB:
+                # the line is matched on its figures as the script prints them.
+                line = f"{name}: {archive / MIB:.2f} MiB to download, {unpacked / MIB:.2f} MiB unpacked, {len(ENTRIES[target])} entries"
+                self.assertIn(line, stdout)
+                declared = "no, kept for existing links" if target == "universal" else "yes"
+                self.assertIn(f"| `{name}` | {archive / MIB:.2f} MiB | {unpacked / MIB:.2f} MiB | {declared} |", table)
+        self.assertIn("| Bundle | Download | Unpacked | Declared in server.json |", table)
+        self.assertNotIn("WARNING", result.stderr.decode())
+
+    def test_refuses_a_bundle_past_claude_desktops_limits(self):
+        arm64 = "server/linux/gitlab-mcp-server-linux-arm64"
+        cases = [
+            # A large archive keeps the unpacked-to-download ratio under 50:1,
+            # so the entry limit is the one rule this case trips.
+            ("an entry past 512 MiB",
+             {"FAKE_ENTRY": arm64, "FAKE_ENTRY_BYTES": 512 * MIB + 1, "FAKE_ARCHIVE_BYTES": 20 * MIB},
+             "gitlab-mcp-server-linux.mcpb: an entry unpacks to 536870913 bytes; Claude Desktop refuses an entry over 536870912 (512 MiB)"),
+            ("past 2048 MiB in all",
+             {"FAKE_EVERY_ENTRY_BYTES": 400 * MIB, "FAKE_ARCHIVE_BYTES": 100 * MIB},
+             "gitlab-mcp-server-linux.mcpb: unpacks to 2516582400 bytes; Claude Desktop refuses more than 2147483648 (2048 MiB)"),
+            ("more than 50 times its own size",
+             {"FAKE_ARCHIVE_BYTES": 100},
+             "gitlab-mcp-server-darwin.mcpb: unpacks to more than 50 times its 100 bytes; Claude Desktop refuses it as a zip bomb"),
+            ("more than 100,000 entries",
+             {"FAKE_EXTRA_ENTRIES": 100000, "FAKE_ARCHIVE_BYTES": 10 * MIB},
+             "gitlab-mcp-server-windows.mcpb: 100004 entries; Claude Desktop refuses an extension with more than 100000"),
+        ]
+        for name, sizes, message in cases:
+            with self.subTest(case=name):
+                self.assert_refused(self.build(sizes=sizes), message)
+
+    def test_keeps_a_bundle_at_claude_desktops_limits(self):
+        # Each limit is a ceiling a bundle may reach: Desktop refuses only what
+        # passes it. The universal bundle, with the most entries, is the one
+        # each case puts exactly at its limit.
+        cases = [
+            ("an entry of exactly 512 MiB",
+             {"FAKE_ENTRY": "server/gitlab-mcp-server.exe", "FAKE_ENTRY_BYTES": 512 * MIB, "FAKE_ARCHIVE_BYTES": 20 * MIB}),
+            ("exactly 2048 MiB in all",
+             {"FAKE_EVERY_ENTRY_BYTES": 256 * MIB, "FAKE_ARCHIVE_BYTES": 100 * MIB}),
+            ("exactly 50 times its own size",
+             {"FAKE_EVERY_ENTRY_BYTES": 50, "FAKE_ARCHIVE_BYTES": 8}),
+            ("exactly 100,000 entries",
+             {"FAKE_EXTRA_ENTRIES": 100000 - len(ENTRIES["universal"]), "FAKE_ARCHIVE_BYTES": 10 * MIB}),
+        ]
+        for name, sizes in cases:
+            with self.subTest(case=name):
+                result = self.build(sizes=sizes)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                for output in self.outputs.values():
+                    self.assertTrue(os.path.exists(output), output)
+
+    def test_warns_about_a_declared_bundle_directories_stop_reading(self):
+        cases = [
+            ("past 50 MiB to download", {"FAKE_ARCHIVE_BYTES": 60 * MIB},
+             "is 60.00 MiB to download, over the 50 MiB past which directories stop reading a bundle",
+             ("darwin", "windows", "linux")),
+            # Six Linux entries at 50 MiB pass 256 MiB unpacked and four do
+            # not; the archive size keeps every ratio under 50:1.
+            ("past 256 MiB unpacked", {"FAKE_EVERY_ENTRY_BYTES": 50 * MIB, "FAKE_ARCHIVE_BYTES": 30 * MIB},
+             "unpacks to 300.00 MiB, over the 256 MiB past which directories stop reading a bundle",
+             ("linux",)),
+        ]
+        for name, sizes, message, warned in cases:
+            for actions in (False, True):
+                with self.subTest(case=name, github_actions=actions):
+                    env_extra = {"GITHUB_ACTIONS": "true"} if actions else {}
+                    result = self.build(sizes=sizes, env_extra=env_extra)
+                    # A warning is not a refusal: every bundle is kept.
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    stream = result.stdout.decode() if actions else result.stderr.decode()
+                    prefix = "::warning::" if actions else "WARNING: "
+                    for target in TARGETS:
+                        line = prefix + bundle_name(target) + " "
+                        if target in warned:
+                            self.assertIn(line, stream)
+                            self.assertIn(message, stream)
+                        else:
+                            # The universal bundle is declared nowhere a
+                            # directory reads, and is over both sizes by design.
+                            self.assertNotIn(line, stream)
 
 
 if __name__ == "__main__":

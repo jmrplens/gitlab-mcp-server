@@ -1342,8 +1342,8 @@ check-mcpb:
 ## (dist/gitlab-mcp-server-darwin.mcpb, -windows.mcpb and -linux.mcpb) and the
 ## universal dist/gitlab-mcp-server.mcpb. Cross-compiles the darwin universal
 ## binary (lipo), the windows/amd64 binary and the linux/amd64 and linux/arm64
-## binaries the Linux launcher chooses between, then assembles and packs the
-## bundles with scripts/build-mcpb.sh.
+## binaries the Linux launcher chooses between, then assembles, packs and
+## measures the bundles with scripts/build-mcpb.sh.
 mcpb:
 	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
 	@set -e; \

@@ -46,7 +46,8 @@
 #   <version>   Release version without the leading v (e.g. 2.5.0)
 #   [dist-dir]  GoReleaser output directory (default: dist)
 #
-# Output: the four bundles above in <dist-dir>.
+# Output: the four bundles above in <dist-dir>. Each one's download and
+# unpacked size is printed, and written to the job summary in GitHub Actions.
 
 set -euo pipefail
 
@@ -370,12 +371,105 @@ check_bundle() {
   fi
 }
 
+# --- How big each bundle is ----------------------------------------------------
+# Claude Desktop's own limits, read from its extension runtime (2.7032.0, the
+# extraction policy it applies to an extension): it refuses an archive with
+# more than 100,000 entries, any entry that unpacks past 512 MiB, more than
+# 2048 MiB unpacked in all, and an archive that unpacks to more than 50 times
+# its own size. A bundle past any of them cannot be installed at all, so each
+# one fails the build.
+DESKTOP_MAX_ENTRIES=100000
+DESKTOP_MAX_ENTRY_BYTES=$((512 * 1024 * 1024))
+DESKTOP_MAX_UNPACKED_BYTES=$((2048 * 1024 * 1024))
+DESKTOP_MAX_RATIO=50
+# Directories that score MCP servers stop reading a bundle past 50 MiB to
+# download or 256 MiB unpacked (verifymcp.io's inspection limits), and then
+# report its provenance, licence and maintenance as unverified; 3.1.0's single
+# bundle, at 73 MiB and 285 MiB, lost all three that way. Every user also
+# downloads the whole file. Neither is a reason to refuse a release, so a
+# declared bundle past either size is a warning. The universal bundle is not
+# declared anywhere a directory reads, and carries all three systems' servers
+# by design, so it is measured and not warned about.
+DIRECTORY_WARN_DOWNLOAD_BYTES=$((50 * 1024 * 1024))
+DIRECTORY_WARN_UNPACKED_BYTES=$((256 * 1024 * 1024))
+
+warn() {
+  # A workflow command on stdout becomes an annotation on the run's summary.
+  if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    echo "::warning::$1"
+  else
+    echo "WARNING: $1" >&2
+  fi
+}
+
+# Bytes as MiB with two decimals, rounded half up.
+mib() {
+  local hundredths=$((($1 * 100 + 524288) / 1048576))
+  printf '%d.%02d' $((hundredths / 100)) $((hundredths % 100))
+}
+
+# One row per bundle for the job summary, filled in as each one is measured.
+REPORT_ROWS=()
+
+# Measures the archive $1 of target $2, reports its sizes and checks them.
+check_size() {
+  local output="$1" target="$2" name listing size archive unpacked=0 largest=0 count=0 tenths
+  name=$(basename "$output")
+  # Every figure comes from one zipinfo listing of the archive: its header
+  # gives the archive's size in bytes, and each regular file's line starts
+  # with '-' and gives its unpacked size in the fourth column. The sums are
+  # taken in the shell, whose integers are 64 bits wide, since some awk builds
+  # print a sum past 2^31 in exponent form.
+  listing=$(unzip -Zl "$output")
+  archive=$(awk '/^Zip file size:/ { print $4; exit }' <<< "$listing")
+  if [[ ! "$archive" =~ ^[1-9][0-9]*$ ]]; then
+    fail "$output: zipinfo gave no archive size, so the bundle could not be measured"
+    return 0
+  fi
+  while read -r size; do
+    count=$((count + 1))
+    unpacked=$((unpacked + size))
+    if ((size > largest)); then
+      largest=$size
+    fi
+  done < <(awk '$1 ~ /^-/ { print $4 }' <<< "$listing")
+  tenths=$((unpacked * 10 / archive))
+
+  echo "$name: $(mib "$archive") MiB to download, $(mib "$unpacked") MiB unpacked, $count entries, largest $(mib "$largest") MiB, ratio $((tenths / 10)).$((tenths % 10)):1"
+  local declared=yes
+  [[ "$target" == universal ]] && declared="no, kept for existing links"
+  REPORT_ROWS+=("| \`$name\` | $(mib "$archive") MiB | $(mib "$unpacked") MiB | $declared |")
+
+  if ((count > DESKTOP_MAX_ENTRIES)); then
+    fail "$output: $count entries; Claude Desktop refuses an extension with more than $DESKTOP_MAX_ENTRIES"
+  fi
+  if ((largest > DESKTOP_MAX_ENTRY_BYTES)); then
+    fail "$output: an entry unpacks to $largest bytes; Claude Desktop refuses an entry over $DESKTOP_MAX_ENTRY_BYTES (512 MiB)"
+  fi
+  if ((unpacked > DESKTOP_MAX_UNPACKED_BYTES)); then
+    fail "$output: unpacks to $unpacked bytes; Claude Desktop refuses more than $DESKTOP_MAX_UNPACKED_BYTES (2048 MiB)"
+  fi
+  if ((unpacked > DESKTOP_MAX_RATIO * archive)); then
+    fail "$output: unpacks to more than $DESKTOP_MAX_RATIO times its $archive bytes; Claude Desktop refuses it as a zip bomb"
+  fi
+
+  [[ "$target" == universal ]] && return 0
+  if ((archive > DIRECTORY_WARN_DOWNLOAD_BYTES)); then
+    warn "$name is $(mib "$archive") MiB to download, over the 50 MiB past which directories stop reading a bundle and report its provenance, licence and maintenance as unverified"
+  fi
+  if ((unpacked > DIRECTORY_WARN_UNPACKED_BYTES)); then
+    warn "$name unpacks to $(mib "$unpacked") MiB, over the 256 MiB past which directories stop reading a bundle and report its provenance, licence and maintenance as unverified"
+  fi
+  return 0
+}
+
 for target in "${TARGETS[@]}"; do
   output=$(output_of "$target")
   select_target "$target"
   pack "$output"
   before=$failures
   check_bundle "$output"
+  check_size "$output" "$target"
   if ((failures > before)); then
     echo "ERROR: $output failed $((failures - before)) check(s)" >&2
   fi
@@ -394,3 +488,13 @@ echo "Built ${#OUTPUTS[@]} bundles (version $VERSION)"
 for output in "${OUTPUTS[@]}"; do
   unzip -Z -l "$output"
 done
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo "### Claude Desktop extension bundles $VERSION"
+    echo
+    echo "| Bundle | Download | Unpacked | Declared in server.json |"
+    echo "| --- | ---: | ---: | --- |"
+    printf '%s\n' "${REPORT_ROWS[@]}"
+  } >> "$GITHUB_STEP_SUMMARY"
+fi
