@@ -44,6 +44,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/health"
@@ -1604,6 +1605,12 @@ func prepareStdioCatalog(
 	if registerErr := shell.register(ctx); registerErr != nil {
 		return fmt.Errorf("registering the tool catalog: %w", registerErr)
 	}
+	// After registration, whose own listings must see the whole surface, and
+	// before the gate opens, because the handshake is already answered and a
+	// tools/list parked in the gate would otherwise be served unfiltered and
+	// kept by the client for the listing's cache lifetime (register row
+	// AUT-007). A classic token gets nil and nothing changes for it.
+	client.SetAuthority(actiongrants.Build(gitlabclient.FineGrained(serverCfg.TokenScopes)))
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
 	return nil
@@ -1742,6 +1749,11 @@ type serverShell struct {
 	// options mcp.NewServer is given, and the prompts are registered on the
 	// server that call returns, so the names cannot be known when it is built.
 	completions *completions.Handler
+	// toolActions is which catalog actions each registered tool runs, which
+	// the fine-grained call check and listing filter read (register row
+	// AUT-007). register publishes it; until then it is nil and both pass
+	// every request through.
+	toolActions atomic.Pointer[toolvisibility.ToolActions]
 }
 
 // stateFor returns the credential a request runs under: the one bound to its
@@ -1976,6 +1988,13 @@ func newServerShell(
 	// budget notices.
 	toolutil.AttachArgumentLimits(server, toolutil.DefaultMaxArgumentDepth)
 
+	// A call a fine-grained session may not run is answered with the reason
+	// before the argument limit and the SDK's validation, so one cause gets one
+	// refusal whatever the arguments, and inside the rate limiter and the
+	// held-call count, so a withheld call spends its credential's token and
+	// holds its slot like every other refused call (register row AUT-007).
+	server.AddReceivingMiddleware(fineGrainedCalls(gate, shell.toolActions.Load))
+
 	// Per-credential rate limit on every call that reaches GitLab, and on
 	// tools/list, which reaches none but spends the processor every tenant of
 	// the process shares. In HTTP mode each pooled per-token-and-URL entry gets
@@ -2001,6 +2020,16 @@ func newServerShell(
 		)
 	}
 
+	// A fine-grained session's tools/list is narrowed to what it may run
+	// (register row AUT-007). Added right after the rate limit, so it runs
+	// outside it and outside the schema lockdown and the pagination bounds:
+	// the listing record RTC-007 charges in advance is one per server, and a
+	// filter inside it would let one narrow grant's listing lower what other
+	// credentials' wide ones are charged; and no narrow credential's first
+	// listing decides which tools get their schemas finalized. Inside the
+	// credential binding, which is what tells it whose listing this is.
+	server.AddReceivingMiddleware(toolvisibility.ListingMiddleware(shell.toolActions.Load))
+
 	// Ceiling on the calls the process holds open across every credential
 	// (register row HLD-011). Added after the rate limit so it runs before it:
 	// a call it refuses spends none of its credential's bucket. It counts only
@@ -2014,7 +2043,7 @@ func newServerShell(
 	// stateless or stdio server carries it and claims nothing.
 	server.AddReceivingMiddleware(statefulSessionsMiddleware)
 
-	identifier := attachIdentityMiddlewares(server, settings, toolSurface)
+	identifier := attachIdentityMiddlewares(server, settings, toolSurface, client)
 
 	shell.server = server
 	shell.client = client
@@ -2041,7 +2070,7 @@ func newServerShell(
 // of it, and because they are read far more often than they are changed. The
 // SDK wraps the current handler on each addition, so the LAST middleware added
 // is the FIRST to run, and every comment below is about that inversion.
-func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, toolSurface string) *deferredCallIdentifier {
+func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, toolSurface string, client *gitlabclient.Client) *deferredCallIdentifier {
 	// Near the end, so the span covers every middleware above it, and so a
 	// panic reaches this middleware's deferred span.End before recoverPanics
 	// swallows it. That ordering is what lets the SDK record the panic as an
@@ -2089,8 +2118,15 @@ func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, tool
 	// Outside the telemetry, rate-limit, listen-ceiling and subscription
 	// middlewares, all of which ask which credential this is and would
 	// otherwise answer for the wrong one, or for none.
+	//
+	// A server that serves one credential binds that one, so whatever reads
+	// the request's client through the context rather than through a handler's
+	// captured one reads it on stdio too: the layers that decide what a
+	// fine-grained session is shown hold no client of their own.
 	if settings.credentials != nil {
 		server.AddReceivingMiddleware(settings.credentials.bindCredential)
+	} else {
+		server.AddReceivingMiddleware(bindProcessClient(client))
 	}
 
 	// Near the end so the context it installs is the one every middleware
@@ -2162,6 +2198,12 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// binary sees.
 	toolvisibility.Apply(ctx, server, cfg, sh.toolSurface, surfaceCatalog)
 
+	// Which actions each registered tool runs, read by the fine-grained call
+	// check and listing filter (register row AUT-007) and by the manifest
+	// below, so the three can never disagree about a tool.
+	toolActions := toolvisibility.NewToolActions(sh.toolSurface, surfaceCatalog)
+	sh.toolActions.Store(toolActions)
+
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
 		slog.Warn("failed to count registered tools", "error", err)
@@ -2196,6 +2238,7 @@ func (sh *serverShell) register(ctx context.Context) error {
 			MetaRoutes:        metaSchemaRoutes,
 			ShareKey:          manifestShareKey(sh.toolSurface, sh.capabilitySurface, cfg, surfaceCatalog),
 			StandaloneActions: gitlabtools.StandaloneActionIDs(),
+			ToolActions:       toolActions.ActionIDs(),
 		}
 		if sh.subs != nil {
 			manifestOpts.SubscribableURITemplates = subscriptions.Templates()

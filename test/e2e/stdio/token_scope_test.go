@@ -16,6 +16,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // resultText joins the text blocks of a tools/call result.
@@ -118,19 +121,23 @@ func TestTokenScope_FineGrainedTokenIsNotReadOnly(t *testing.T) {
 	}
 }
 
-// TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAre verifies the
-// reading itself rather than two tools of it: on the individual surface a
-// fine-grained token is listed exactly what a token whose scopes could not be
-// detected is listed, tool for tool and descriptor for descriptor. That listing
-// is the catalog no scope narrowed, so a partial narrowing on the strength of
-// the fine-grained list, one write or one admin_mode group removed, makes the
-// two differ, and the difference is named.
+// TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAreLessWhatNoGrantReaches
+// verifies the reading itself rather than two tools of it: on the individual
+// surface a fine-grained token is listed what a token whose scopes could not be
+// detected is listed, tool for tool and descriptor for descriptor, less the
+// tools whose action no fine-grained token can reach at the recorded GitLab
+// version (issue 952, phase A). That listing is the catalog no scope narrowed,
+// so a partial narrowing on the strength of the fine-grained list, one write or
+// one admin_mode group removed, shows as a missing tool that is not withheld,
+// and is named; every tool left out is called, and must answer that its action
+// is withheld from a fine-grained token, naming an action the generated table
+// denies.
 //
 // The unknown-scope session is the fake instance with its self endpoint left
 // unanswered, which is what DetectScopes reads as unknown; the write and the
 // admin tool checked on it hold that the reference is the unfiltered listing
 // and not one that happens to be narrowed the same way.
-func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAre(t *testing.T) {
+func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAreLessWhatNoGrantReaches(t *testing.T) {
 	unknown := individualListing(t, nil)
 	fineGrained := individualListing(t, []string{"granular"})
 
@@ -157,9 +164,135 @@ func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAre(t *testing.T) {
 			extra = append(extra, name)
 		}
 	}
-	if len(missing)+len(extra)+len(differ) > 0 {
-		t.Errorf("the fine-grained listing is not the unknown-scope listing of %d tools: missing %s, extra %s, described differently %s",
-			len(unknown), firstNames(missing), firstNames(extra), firstNames(differ))
+	if len(extra)+len(differ) > 0 {
+		t.Errorf("the fine-grained listing is not the unknown-scope listing of %d tools less some: extra %s, described differently %s",
+			len(unknown), firstNames(extra), firstNames(differ))
+	}
+	if len(missing) == 0 {
+		t.Fatal("the fine-grained listing withholds nothing, while the generated table denies actions this surface registers")
+	}
+
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	env := baseEnv(fake.URL)
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
+	s := startSession(t, env)
+	slices.Sort(missing)
+	for i, name := range missing {
+		t.Run("withheld "+name, func(t *testing.T) {
+			text := resultText(t, s.call(t, request(100+i, "tools/call", `{"name":"`+name+`","arguments":{}}`)))
+			id, rest, found := strings.Cut(strings.TrimPrefix(text, `action "`), `" `)
+			if !found || !strings.HasPrefix(rest, withheldPrefix) {
+				t.Fatalf("%s left the listing but its call is not answered as withheld: %q", name, text)
+			}
+			if row := actiongrants.Requirement(id); row == nil || row.Denied == nil {
+				t.Errorf("%s was withheld as %s, which the generated table does not deny", name, id)
+			}
+		})
+	}
+}
+
+// withheldPrefix is the stable text a phase A refusal carries after the action
+// it names (register row AUT-007).
+const withheldPrefix = "exists but is not available to a fine-grained personal access token: "
+
+// TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed verifies,
+// on the default surface, that an action no fine-grained token can reach is
+// answered as withheld, with the reason, what GitLab does to it and the GitLab
+// version the verdict is recorded at, never as an unknown action; that its
+// detail in gitlab://tools carries the same answer as a withheld block instead
+// of being not found; and that a token whose scopes are unknown is answered
+// nothing of the kind.
+func TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed(t *testing.T) {
+	const want = `gitlab_execute_action: action "custom_emoji.list" ` + withheldPrefix +
+		`GitLab 19.4.1 declares no fine-grained permission on the GraphQL type CustomEmoji this action reads, ` +
+		`and removes the items from such a list.`
+	call := `{"name":"gitlab_execute_action","arguments":{"action":"custom_emoji.list","params":{"group_path":"g"}}}`
+
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	s := startSession(t, baseEnv(fake.URL))
+	if text := resultText(t, s.call(t, request(1, "tools/call", call))); !strings.HasPrefix(text, want) {
+		t.Errorf("custom_emoji.list under a fine-grained token = %q, want it to begin %q", text, want)
+	}
+	read := s.call(t, request(2, "resources/read", `{"uri":"gitlab://tools/custom_emoji.list"}`))
+	result, _ := read["result"].(map[string]any)
+	contents, _ := result["contents"].([]any)
+	if len(contents) != 1 {
+		t.Fatalf("gitlab://tools/custom_emoji.list answered %v", read)
+	}
+	first, _ := contents[0].(map[string]any)
+	var detail struct {
+		Withheld *struct {
+			Cause   string `json:"cause"`
+			Message string `json:"message"`
+		} `json:"withheld"`
+	}
+	if err := json.Unmarshal([]byte(first["text"].(string)), &detail); err != nil || detail.Withheld == nil {
+		t.Fatalf("the detail of custom_emoji.list carries no withheld block: %v %v", err, first["text"])
+	}
+	if detail.Withheld.Cause != "graphql-type-undeclared" || !strings.Contains(want, detail.Withheld.Message[:40]) {
+		t.Errorf("withheld block = %+v", detail.Withheld)
+	}
+
+	unknown := startSession(t, baseEnv(startFakeGitLab(t).URL))
+	if text := resultText(t, unknown.call(t, request(1, "tools/call", call))); strings.Contains(text, "fine-grained") {
+		t.Errorf("a token whose scopes are unknown was answered as a fine-grained one: %q", text)
+	}
+}
+
+// TestTokenScope_FineGrainedToken_TheFirstListingIsAlreadyNarrowed verifies
+// that a tools/list sent while the catalog is still being prepared, which the
+// server holds until it is ready, is answered narrowed for a fine-grained
+// token: the authority is attached before the server opens, since a client may
+// keep that first listing for the listing's cache lifetime. The instance holds
+// the version the startup asks first until the listing has been sent, so the
+// listing is in the server before the catalog is.
+func TestTokenScope_FineGrainedToken_TheFirstListingIsAlreadyNarrowed(t *testing.T) {
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	fake.versionHold = make(chan struct{})
+	env := baseEnv(fake.URL)
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
+	s := startSession(t, env)
+
+	s.send(t, request(1, "tools/list", ""))
+	close(fake.versionHold)
+	got := s.readMessage(t, 60*time.Second)
+	result, ok := got["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("the first tools/list answered no result: %v", got)
+	}
+	tools, _ := result["tools"].([]any)
+	for _, entry := range tools {
+		tool, _ := entry.(map[string]any)
+		if tool["name"] == "gitlab_list_custom_emoji" {
+			t.Fatal("the first listing, held while the catalog was prepared, lists gitlab_list_custom_emoji, which no fine-grained token can run")
+		}
+	}
+	if len(tools) == 0 {
+		t.Fatal("the first listing lists nothing")
+	}
+}
+
+// TestTokenScope_FineGrainedToken_AnExcludedStandaloneToolStaysAbsent verifies
+// that an operator's exclusion of a standalone utility still removes it for a
+// fine-grained token: the exclusion pass runs over the whole registered
+// surface at registration, which the fine-grained listing filter never narrows.
+func TestTokenScope_FineGrainedToken_AnExcludedStandaloneToolStaysAbsent(t *testing.T) {
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	env := baseEnv(fake.URL)
+	env["GITLAB_MCP_TOOL_SURFACE"] = "meta"
+	env["GITLAB_MCP_EXCLUDE_TOOLS"] = "gitlab_discover_project"
+	s := startSession(t, env)
+
+	names := toolNames(t, s.call(t, request(1, "tools/list", "")))
+	if contains(names, "gitlab_discover_project") {
+		t.Error("gitlab_discover_project is listed to a fine-grained token although the operator excluded it")
+	}
+	if !contains(names, "gitlab_interactive_issue_create") {
+		t.Error("gitlab_interactive_issue_create is missing, so the listing is not the meta surface less the exclusion")
 	}
 }
 
