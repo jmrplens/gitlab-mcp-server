@@ -6867,9 +6867,17 @@ choice.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: retired. It was the `GO-2026-5932` entry in the govulncheck
-  allowlist; removing the self-update subsystem removed the dependency, so the
-  advisory no longer reaches any binary and the allowlist is empty again. The
-  upstream PR stays worth merging for the module's other users.
+  allowlist. Removing the self-update subsystem in 3.0.0 took the openpgp
+  import out of every binary, so the source scan has reported nothing since
+  and the allowlist is empty again. The module itself stayed in the binaries
+  of 3.0.0 and 3.1.0, through the HKDF import in `internal/telemetry`, and a
+  scanner that reads a binary's module list rather than its symbols
+  (`govulncheck -mode binary -scan module`, and every directory working from
+  an SBOM) still reported the advisory against both. The release after 3.1.0
+  derives those keys with the standard library's `crypto/hkdf` and links no
+  `golang.org/x/crypto` at all, and `make check-binary-vulns` holds every
+  release binary to the database at that grain. The upstream PR stays worth
+  merging for the module's other users.
 
 ### A receiving middleware cannot read the JSON-RPC request id
 
