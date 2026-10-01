@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -377,12 +378,34 @@ func truncatingServer(t *testing.T) string {
 	return srv.URL
 }
 
-// closedEndpoint is the address of a server that is no longer listening.
+// closedEndpoint is the address of a server that answers nothing: it accepts
+// each connection and closes it before reading a byte, so every request sent
+// there fails before any response, which the code under test handles as it
+// would a server that is gone. The listener holds its port until the test
+// ends. A server that was started and closed again freed its port at once,
+// and whatever was given the port next could answer the request this address
+// exists to see fail: this package's parallel tests start servers of their
+// own, some of which answer any request with 200 (truncatingServer does), and
+// the coverage job runs other test binaries beside this one.
+// TestBenchSession_OpenStream_ReportsWhatItCouldNotOpen once got a stream
+// opened that way.
 func closedEndpoint(t *testing.T) string {
 	t.Helper()
-	srv := httptest.NewServer(http.NotFoundHandler())
-	srv.Close()
-	return srv.URL
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	return "http://" + listener.Addr().String()
 }
 
 // TestSessionClient_Send_ReportsWhatItCouldNotSend covers a request that could
