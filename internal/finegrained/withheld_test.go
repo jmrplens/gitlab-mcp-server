@@ -163,6 +163,7 @@ func TestAuthority_WithheldText_AppendsWhyTheGrantWasNotEvaluated(t *testing.T) 
 	}{
 		{FallbackNone, "", "classic tokens. Do not report"},
 		{FallbackGrantUnreadable, "", " The token cannot read its own grant (a token created with Personal Access Token: Read can), so the grant was not evaluated. Do not"},
+		{FallbackGrantUnanswered, "", " The instance did not answer the request for the token's grant, so the grant was not evaluated."},
 		{FallbackGrantTooLarge, "", " The token's grant is larger than this server reads, so the grant was not evaluated."},
 		{FallbackGrantShape, "", " The token's grant holds a scope this server cannot read without guessing, so the grant was not evaluated."},
 		{FallbackVersionUnreadable, "", " The instance did not report a version this server can read (a token granted Metadata: Read lets it), so the grant was not evaluated."},
