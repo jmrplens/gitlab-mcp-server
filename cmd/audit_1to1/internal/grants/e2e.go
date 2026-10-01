@@ -91,14 +91,15 @@ func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
 	for _, id := range ids {
 		check.Compared++
 		lead := CountLead{Action: id, Mandatory: mandatory[id], Observed: observed[id]}
-		switch {
-		case !sends[id] && lead.Observed > 0:
+		if !sends[id] && lead.Observed > 0 {
 			check.SentWhereNoneDerived = append(check.SentWhereNoneDerived, lead)
-		case lead.Observed < lead.Mandatory:
-			check.FewerThanMandatory = append(check.FewerThanMandatory, lead)
-		default:
-			check.Consistent++
+			continue
 		}
+		if lead.Observed < lead.Mandatory {
+			check.FewerThanMandatory = append(check.FewerThanMandatory, lead)
+			continue
+		}
+		check.Consistent++
 	}
 	return check
 }
@@ -122,9 +123,9 @@ func observedCounts(records []e2ecalls.Record, known map[string]int) (observed m
 			}
 			continue
 		}
-		if count, seen := observed[dispatch.Action]; !seen || dispatch.Requests > count {
-			observed[dispatch.Action] = dispatch.Requests
-		}
+		// A missing entry reads as zero, which no count is below, so the
+		// first line of an action is kept whatever it carried.
+		observed[dispatch.Action] = max(observed[dispatch.Action], dispatch.Requests)
 	}
 	sort.Strings(unknown)
 	return observed, unknown

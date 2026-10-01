@@ -69,6 +69,13 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			wants: []string{"the table says the public sets are known (true) and the live record says false; run `make gen-action-grants`"},
 		},
 		{
+			name: "public_sets_known_on_the_record_only",
+			bend: func(table *finegrained.Table, _ *actionrequests.Record, _ *apilive.Document) {
+				table.PublicKnown = false
+			},
+			wants: []string{"the table says the public sets are known (false) and the live record says true; run `make gen-action-grants`"},
+		},
+		{
 			name: "a_public_permission_on_each_boundary",
 			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
 				live.Granular.PublicAnonymous.Project = []string{"read_issue", "update_issue"}

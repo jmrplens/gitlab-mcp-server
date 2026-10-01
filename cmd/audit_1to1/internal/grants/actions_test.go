@@ -63,6 +63,27 @@ func TestViewActions_TheFixture_WordsEveryRowAndSortsTheWithheld(t *testing.T) {
 	}
 }
 
+// TestViewActions_EitherEmptyPart_DegradesTheAction verifies an action is
+// listed as served with a part empty when only a part always empty applies
+// and when only a part empty without more of the grant does, not only when
+// both do.
+func TestViewActions_EitherEmptyPart_DegradesTheAction(t *testing.T) {
+	table := fixtureTable()
+	table.Actions = []finegrained.Requirement{
+		{ID: "only.always", Paths: [][]uint32{{0}}, Degraded: []uint32{2}},
+		{ID: "only.without", Paths: [][]uint32{{3}}},
+		{ID: "neither", Paths: [][]uint32{{0}}},
+	}
+	view := viewActions(table, actionrequests.Record{}, nil)
+	ids := make([]string, 0, len(view.degraded))
+	for _, degraded := range view.degraded {
+		ids = append(ids, degraded.ID)
+	}
+	if !slices.Equal(ids, []string{"only.always", "only.without"}) {
+		t.Errorf("degraded = %v, want only.always and only.without", ids)
+	}
+}
+
 // TestViewActions_ARowTheRecordLacks_IsWordedWithoutWhatShapedIt verifies a
 // row with no entry in the request record still gets its requirement, with
 // no shaping and no declaration, which the gate reports separately.
@@ -124,13 +145,16 @@ func TestRequestName_NamesEachKindByWhatALookupUses(t *testing.T) {
 // REST operations every requirement of which the anonymous policy grants at a
 // boundary it may be held at: one at the project, one at the group, and one
 // whose additional scope is public at another boundary than its primary
-// requirement. A skipped route, a GraphQL operation, a route whose primary
-// requirement is not public, one whose additional scope is not, and one
-// holding a public permission beside a private one are left out; a table
-// carrying no evaluated set lists nothing.
+// requirement. A skipped route, its groups public or not, a GraphQL
+// operation, a route whose primary requirement is not public, one whose
+// additional scope is not, and one holding a public permission beside a
+// private one are left out; a table carrying no evaluated set lists nothing.
 func TestPublicOperations_ListsWhatAPublicResourceServesWithNoGrant(t *testing.T) {
 	table := fixtureTable()
-	table.Operations = append(table.Operations, finegrained.Operation{Name: "POST /projects/:id/other", Groups: []uint32{0, 1}})
+	table.Operations = append(table.Operations,
+		finegrained.Operation{Name: "POST /projects/:id/other", Groups: []uint32{0, 1}},
+		finegrained.Operation{Name: "GET /projects/:id/skipped", Groups: []uint32{0}, Skip: true},
+	)
 	// z.other reaches the public listing twice, through two of its ways, and
 	// is named once.
 	table.Actions = append(table.Actions, finegrained.Requirement{ID: "z.other", Paths: [][]uint32{{0}, {0, 8}}})

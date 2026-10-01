@@ -72,11 +72,12 @@ func publicSets(table *finegrained.Table, granular *apilive.Granular) []string {
 	if granular != nil {
 		public = granular.PublicAnonymous
 	}
-	if table.PublicKnown != (public != nil) {
+	recordKnows := public != nil
+	if table.PublicKnown != recordKnows {
 		return []string{fmt.Sprintf("the table says the public sets are known (%t) and the live record says %t; %s",
-			table.PublicKnown, public != nil, regenerate)}
+			table.PublicKnown, recordKnows, regenerate)}
 	}
-	if public == nil {
+	if !recordKnows {
 		return nil
 	}
 	var found []string

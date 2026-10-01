@@ -46,13 +46,17 @@ func TestE2ECheck_AnUnreadableRecord_IsANoteNotAFailure(t *testing.T) {
 // its mandatory requests is consistent, retries and a lower second trace
 // included; one carrying fewer is a lead; one the derivation says sends
 // nothing seen sending is a lead of the other kind, while one seen sending
-// nothing is consistent; a declined dispatch, a line of another type, a line
+// nothing is consistent; only the mandatory requests are counted, so an
+// action with two of them and an optional one is a lead at one request and
+// consistent at two; a declined dispatch, a line of another type, a line
 // naming no action and a line with no dispatch are passed over; and an id the
 // record does not hold is named once.
 func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsMandatoryRequests(t *testing.T) {
 	useE2ECalls(t, []e2ecalls.Record{
 		dispatch("issue.update", 3, ""),
 		dispatch("issue.update", 1, ""),
+		dispatch("two.step", 1, ""),
+		dispatch("two.exact", 2, ""),
 		dispatch("issue.get", 0, ""),
 		dispatch("issue.get", 0, "safe_mode"),
 		dispatch("topic.list", 1, ""),
@@ -67,12 +71,24 @@ func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsMandatoryRequests(t *testin
 		{Type: e2ecalls.TypeCall},
 	}, nil)
 	record := fixtureRecord()
-	record.Actions = append(record.Actions, actionrequests.RecordAction{ID: "quiet.action"})
+	twoMandatory := []actionrequests.RecordRequest{
+		rest("GET /a", actionrequests.ClassMandatory),
+		rest("GET /b", actionrequests.ClassMandatory),
+		rest("GET /c", actionrequests.ClassOptional),
+	}
+	record.Actions = append(record.Actions,
+		actionrequests.RecordAction{ID: "quiet.action"},
+		actionrequests.RecordAction{ID: "two.step", Requests: twoMandatory},
+		actionrequests.RecordAction{ID: "two.exact", Requests: twoMandatory},
+	)
 	got := e2eCheck("shards", record)
 	want := E2ECheck{
 		Ran: true, Directory: "shards", Grain: e2eGrain,
-		Compared: 5, Consistent: 3,
-		FewerThanMandatory:   []CountLead{{Action: "issue.get", Mandatory: 1, Observed: 0}},
+		Compared: 7, Consistent: 4,
+		FewerThanMandatory: []CountLead{
+			{Action: "issue.get", Mandatory: 1, Observed: 0},
+			{Action: "two.step", Mandatory: 2, Observed: 1},
+		},
 		SentWhereNoneDerived: []CountLead{{Action: "topic.list", Mandatory: 0, Observed: 1}},
 		NotInRecord:          []string{"gone.action"},
 	}

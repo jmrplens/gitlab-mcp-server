@@ -190,12 +190,15 @@ func (check *InventoryCheck) countDerived(derived derivedRequests, seen map[stri
 // derivation's own spelling of the routes a declaration placed.
 func (requests *packageRequests) join(row requestinventory.Row, index *apilive.RouteIndex) (key, request, why string) {
 	key, request, why = rowKey(row, index)
-	if row.Kind != requestinventory.KindGraphQL && !requests.derives(key) {
+	if requests.derives(key) {
+		return key, request, ""
+	}
+	if row.Kind != requestinventory.KindGraphQL {
 		if placed, ok := requests.place(row); ok {
-			key, why = placed, ""
+			return placed, request, ""
 		}
 	}
-	if why == "" && !requests.derives(key) {
+	if why == "" {
 		why = whyNotDerived
 	}
 	return key, request, why
