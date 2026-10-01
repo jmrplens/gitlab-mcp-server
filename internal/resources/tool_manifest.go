@@ -55,6 +55,12 @@ type ToolSurfaceResourceOptions struct {
 	// decides which tools are visible, the meta parameter-schema mode and
 	// the capability surface. Empty builds a private snapshot.
 	ShareKey string
+	// StandaloneActions maps each standalone utility's registered tool name
+	// to its canonical action ID. The meta and individual surfaces register
+	// those tools beside the catalog rather than in it, so this is how their
+	// details find the fine-grained requirement the catalog's actions carry.
+	// Nil leaves them without the block.
+	StandaloneActions map[string]string
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -417,12 +423,13 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 	// each one taken and does nothing, and that is worth a pass over the
 	// catalog: the alternative is a rule about which surfaces alias, written
 	// here, that a reader of aliasCanonicalActionIDs cannot see.
-	//
-	// The fine-grained requirement is attached first, so the canonical-ID
-	// aliases copy a detail that already carries it.
-	snapshot.attachFineGrained(opts.Catalog)
 	snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	snapshot.addUncoveredDirectTools(toolDetails)
+	// The fine-grained requirement is attached last, once every detail is
+	// filed: under its canonical ID as well as its surface key, so an alias
+	// copied before it carries the block too, and after the uncovered direct
+	// tools, whose details that pass files afresh and would otherwise lose it.
+	snapshot.attachFineGrained(opts.Catalog, opts.StandaloneActions)
 	slices.SortFunc(snapshot.manifest.Entries, func(a, b ToolSurfaceEntry) int { return cmp.Compare(a.ID, b.ID) })
 	snapshot.manifest.EntryCount = len(snapshot.manifest.Entries)
 	return snapshot
@@ -626,24 +633,28 @@ func (snapshot *toolSurfaceSnapshot) aliasCanonicalActionIDs(catalog *actioncata
 // its canonical ID, which is the dynamic surface's key, and the key the meta
 // and individual surfaces file it under. The standalone utilities are
 // registered beside the meta and individual catalogs rather than in them, so
-// their details on those two surfaces carry no block; on the dynamic surface,
-// whose catalog holds them, they carry it like any action.
-func (snapshot *toolSurfaceSnapshot) attachFineGrained(catalog *actioncatalog.Catalog) {
-	if catalog == nil {
-		return
-	}
+// on those two surfaces their details are found by registered tool name, and
+// their rows by the canonical ID standalone maps it to, which is the row the
+// dynamic surface's catalog carries for them.
+func (snapshot *toolSurfaceSnapshot) attachFineGrained(catalog *actioncatalog.Catalog, standalone map[string]string) {
 	table := actiongrants.Table()
 	for _, action := range catalog.Actions() {
 		description := table.Describe(action.FineGrained)
-		if description == nil {
-			continue
-		}
 		for _, key := range []string{string(action.ID), snapshot.surfaceKeyFor(action)} {
-			if detail, ok := snapshot.details[key]; ok {
-				detail.FineGrained = description
-				snapshot.details[key] = detail
-			}
+			snapshot.describeDetail(key, description)
 		}
+	}
+	for name, id := range standalone {
+		snapshot.describeDetail(name, table.Describe(actiongrants.Requirement(id)))
+	}
+}
+
+// describeDetail gives the detail filed under key a fine-grained block, when
+// there is such a detail and a description to give it.
+func (snapshot *toolSurfaceSnapshot) describeDetail(key string, description *finegrained.Description) {
+	if detail, ok := snapshot.details[key]; ok && description != nil {
+		detail.FineGrained = description
+		snapshot.details[key] = detail
 	}
 }
 

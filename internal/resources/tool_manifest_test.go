@@ -663,6 +663,43 @@ func TestToolManifest_Detail_CarriesTheFineGrainedRequirement(t *testing.T) {
 	})
 }
 
+// TestToolManifest_StandaloneDetail_CarriesTheFineGrainedRequirement verifies
+// a standalone tool the meta and individual surfaces register beside their
+// catalog finds its row through the map of standalone actions: it carries the
+// block of the action it is, none when the map is absent or names an action
+// the table has no row for, and the map gives no detail to a tool the server
+// did not register.
+func TestToolManifest_StandaloneDetail_CarriesTheFineGrainedRequirement(t *testing.T) {
+	const name, standaloneID = "gitlab_discover_project", "discover_project.resolve"
+	domain := domainSurfaceCatalog(t)
+	want := actiongrants.Table().Describe(actiongrants.Requirement(standaloneID))
+	if want == nil {
+		t.Fatalf("the generated table has no row for %s; regenerate it with make gen-action-grants", standaloneID)
+	}
+	for _, surface := range []string{toolSurfaceMeta, toolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			opts := ToolSurfaceResourceOptions{
+				Surface: surface, Catalog: domain, MetaRoutes: domain.ActionMaps(),
+				Tools: []*mcp.Tool{{Name: name}, {Name: "gitlab_no_row"}},
+			}
+			if got := newToolSurfaceSnapshot(opts).details[name].FineGrained; got != nil {
+				t.Errorf("with no standalone map, details[%s] carries %+v", name, got)
+			}
+			opts.StandaloneActions = map[string]string{name: standaloneID, "gitlab_no_row": "nowhere.none", "gitlab_not_registered": standaloneID}
+			snapshot := newToolSurfaceSnapshot(opts)
+			if got := snapshot.details[name].FineGrained; !reflect.DeepEqual(got, want) {
+				t.Errorf("details[%s].FineGrained = %+v, want %+v", name, got, want)
+			}
+			if got := snapshot.details["gitlab_no_row"].FineGrained; got != nil {
+				t.Errorf("a tool whose action the table has no row for carries %+v", got)
+			}
+			if _, filed := snapshot.details["gitlab_not_registered"]; filed {
+				t.Error("a standalone tool this server does not register was given a detail")
+			}
+		})
+	}
+}
+
 // TestToolManifestTemplate_NotFound verifies that the
 // "gitlab://tools/{id}" template resource returns a
 // ResourceNotFoundError for unknown IDs, empty IDs, slash-separated

@@ -514,6 +514,35 @@ func TestNewServedCallIdentifier_StandaloneActions_AgreeWithTheCatalogAssembly(t
 	}
 }
 
+// TestStandaloneActionIDs_NameEachRegisteredToolsAction verifies the map the
+// meta and individual manifests read a standalone tool's action from holds one
+// entry per spec, keyed by the name the tool registers under and naming the
+// canonical ID the dynamic surface's catalog assembly gives it, and that a
+// caller writing to the map it was given changes nobody else's.
+func TestStandaloneActionIDs_NameEachRegisteredToolsAction(t *testing.T) {
+	assembled, err := surfaces.AddToolCatalog(nil, StandaloneSurfaceToolSpecs(UnboundClient(false)), surfaces.CatalogOptions{})
+	if err != nil {
+		t.Fatalf("assembling the standalone catalog: %v", err)
+	}
+	ids := StandaloneActionIDs()
+	if len(ids) != len(assembled.Actions()) {
+		t.Errorf("StandaloneActionIDs holds %d tools, want one per standalone action (%d)", len(ids), len(assembled.Actions()))
+	}
+	for _, action := range assembled.Actions() {
+		if got := ids[action.IndividualTool.Name]; got != string(action.ID) {
+			t.Errorf("StandaloneActionIDs()[%q] = %q, want %q", action.IndividualTool.Name, got, action.ID)
+		}
+	}
+	for name := range ids {
+		ids[name] = "changed"
+	}
+	for name, id := range StandaloneActionIDs() {
+		if id == "changed" {
+			t.Errorf("writing one caller's map changed %s for the next", name)
+		}
+	}
+}
+
 // TestNewServedCallIdentifier_IndexAdded_KeepsTheDispatchAndTheSharedResolver covers the
 // two things the constructor must not lose while it adds the index.
 //
