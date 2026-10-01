@@ -36,7 +36,8 @@
 # job left behind.
 #
 # Invariants that must survive any edit here:
-#   * the release stays a draft until every artefact is attached AND attested;
+#   * the release stays a draft until every artefact is attached AND attested,
+#     and no NuGet package is pushed before all seven are attested;
 #   * release assets are staged under the exact names dist/artifacts.json gives
 #     them, because installers and package managers match names literally;
 #   * server.json's OCI entry is stamped with the digest the docker job pushed,
@@ -1273,7 +1274,8 @@ jobs:
     environment: release
     permissions:
       contents: read # download the published release assets
-      id-token: write # nuget.org trusted publishing (NuGet/login)
+      id-token: write # nuget.org trusted publishing (NuGet/login), and the attestation's signing identity
+      attestations: write # actions/attest-build-provenance (the .nupkg files)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1313,6 +1315,24 @@ jobs:
       # `dnx` run and an MCP handshake for the runner's own platform.
       - name: Build and validate NuGet packages
         run: make validate-nuget-local NUGET_BINARIES=dist
+
+      # SLSA build provenance over the seven packages as packed and validated,
+      # before anything is pushed, so a failed attestation stops the push the
+      # way it keeps the GitHub release a draft. The checksums.txt attestation
+      # covers only the binaries inside the runtime packages; this one names
+      # the packages themselves, with the nuspec, the pointer's
+      # DotnetToolSettings.xml (which decides what runs) and .mcp/server.json.
+      # nuget.org adds its own repository signature to every package it serves,
+      # so a verifier removes that entry the way NuGet defines an unsigned
+      # package and looks up the digest of what is left, which is these bytes.
+      # A re-run is safe: each attempt attests before it pushes, so whatever
+      # --skip-duplicate keeps was attested by the attempt that pushed it.
+      # Verify: gh attestation verify <unsigned .nupkg> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (NuGet packages)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: nuget/dist/*.nupkg
 
       # nuget.org trusted publishing: the job's OIDC token is exchanged for an
       # API key that lives one hour and can be minted once per token, under
