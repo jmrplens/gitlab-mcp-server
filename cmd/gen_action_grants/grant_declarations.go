@@ -85,7 +85,9 @@ var grantDeclarations = join.Declarations{
 			Route: "HEAD /projects/:/repository/files/:/raw", Category: categoryHeadInheritsGet,
 			Reason: "repository.file_raw_metadata asks for the raw file's headers only; GitLab mounts the route as a GET " +
 				"(lib/api/files.rb), and Grape 2.4.0's Endpoint#mount_in answers the automatic HEAD from the same endpoint, " +
-				"so the GET's route_setting is the one checked (read from the image's Grape source when the live record was taken)",
+				"so the GET's route_setting is the one checked. Measured on 19.4.1-ee: the HEAD sent with a fine-grained " +
+				"token lacking Repository: Read is refused 403 and with it answered 200, as the GET is " +
+				"(TestFineGrainedProbes_RawFileHead_AsksWhatTheGetAsks in test/e2e/gitlab/common holds it)",
 			Use: "GET /projects/:id/repository/files/:file_path/raw",
 		},
 		{
