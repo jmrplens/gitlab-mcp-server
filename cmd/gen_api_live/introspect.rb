@@ -766,13 +766,6 @@ def mutation_class_of(field)
   resolver if resolver.is_a?(Class) && resolver < ::Mutations::BaseMutation
 end
 
-# mutation_directives_of reads a mutation's directives from its field first
-# and its class second, which is where GitLab looks.
-def mutation_directives_of(field, resolver)
-  granular = granular_of(field)
-  granular.empty? ? granular_of(resolver) : granular
-end
-
 # todo_rule_type? is the type half of the rule that generates GitLab's
 # authorization_todo.txt (lib/tasks/gitlab/permissions/graphql/schema_directives.rb).
 def todo_rule_type?(name, type)
@@ -843,15 +836,32 @@ def graphql_authz_document
     resolver = mutation_class_of(field)
     next unless resolver
 
-    granular = mutation_directives_of(field, resolver)
+    # granular is what GitLab's runtime check reads, the class's own
+    # directives and nothing else (Mutations::BaseMutation#granular_scope_authorization
+    # hands GranularScopeAuthorization self.class.directives).
+    #
+    # GitLab's permission task reads the field's directives first and the
+    # class's only when the field has none (find_mutation_directives in
+    # lib/tasks/gitlab/permissions/graphql/schema_directives.rb), and its todo
+    # list is generated that way, so the todo rule below keeps that reading.
+    # graphql-ruby's Schema::Field#directives (2.6.10 at 19.4.1) answers for a
+    # mutation field with any directives the field declares itself followed by
+    # the class's, and mount_mutation declares none on the field, so the two
+    # readings agree at every mutation today. field_granular is recorded only
+    # where they do not, and the gate refuses it, because the todo list and
+    # what a fine-grained token is refused would then describe two
+    # requirements.
+    granular = granular_of(resolver)
+    task_granular = granular_of(field)
     entry = {
       "name" => resolver.graphql_name.to_s,
       "class" => resolver.name.to_s,
       "payload" => resolver.payload_type.graphql_name.to_s,
     }
     entry["granular"] = granular unless granular.empty?
+    entry["field_granular"] = task_granular unless task_granular.empty? || task_granular == granular
     mutations[field_name] = entry
-    rule_mutations << resolver.graphql_name.to_s if granular.empty?
+    rule_mutations << resolver.graphql_name.to_s if task_granular.empty? && granular.empty?
   end
 
   document = {

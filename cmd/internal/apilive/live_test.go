@@ -124,7 +124,8 @@ func fullRecord() Document {
 			Abstract: map[string]AbstractType{"Issuable": {Kind: "union", PossibleTypes: []string{"Issue"}}},
 			Mutations: map[string]Mutation{"workItemCreate": {
 				Name: "WorkItemCreate", Class: "Mutations::WorkItems::Create", Payload: "WorkItemCreatePayload",
-				Granular: []Directive{{Permissions: []string{"create_work_item"}}},
+				Granular:      []Directive{{Permissions: []string{"create_work_item"}}},
+				FieldGranular: []Directive{{Permissions: []string{"update_work_item"}}},
 			}},
 			Fields:               map[string][]Directive{"Issue.createNoteEmail": {{Permissions: []string{"create_note"}}}},
 			UndeclaredByTodoRule: TodoSet{Types: []string{"Namespace"}, Mutations: []string{"AiAction"}},
@@ -836,6 +837,13 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
      {
       "permissions": [
        "create_work_item"
+      ]
+     }
+    ],
+    "field_granular": [
+     {
+      "permissions": [
+       "update_work_item"
       ]
      }
     ]

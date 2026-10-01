@@ -437,26 +437,32 @@ func TestRouteAuthorizationProblems_HoldsEachRouteToTheShapesGitLabReads(t *test
 	})
 }
 
-// graphQLAt is a GraphQL half holding one directive list at each of the three
-// places a directive can be declared.
+// graphQLAt is a GraphQL half holding one directive list at each of the four
+// places a directive can be declared: a type, a mutation's class, a mutation's
+// field and an object field.
 func graphQLAt(directives []apilive.Directive) apilive.Document {
 	return apilive.Document{
 		Granular: vocabulary(),
 		GraphQLAuthz: &apilive.GraphQLAuthz{
-			Types:     map[string]apilive.GraphQLType{"WorkItem": {Enforced: true, Granular: directives}},
-			Mutations: map[string]apilive.Mutation{"workItemCreate": {Name: "WorkItemCreate", Granular: directives}},
-			Fields:    map[string][]apilive.Directive{"Issue.createNoteEmail": directives},
+			Types: map[string]apilive.GraphQLType{"WorkItem": {Enforced: true, Granular: directives}},
+			Mutations: map[string]apilive.Mutation{"workItemCreate": {
+				Name: "WorkItemCreate", Granular: directives, FieldGranular: directives,
+			}},
+			Fields: map[string][]apilive.Directive{"Issue.createNoteEmail": directives},
 		},
 	}
 }
 
 // TestDirectiveProblems_HoldsEveryDirectiveToTheShapesGitLabReads verifies
 // refusals 4, 5, 6 and 7 of the design for GraphQL, at every place a directive
-// is declared.
+// is declared, a mutation's field included: GitLab's permission task reads a
+// directive there before the class's, so one it could not read is as wrong
+// there as anywhere.
 func TestDirectiveProblems_HoldsEveryDirectiveToTheShapesGitLabReads(t *testing.T) {
 	t.Parallel()
 	sites := func(suffix string) string {
-		return "field Issue.createNoteEmail" + suffix + ", mutation workItemCreate" + suffix + ", type WorkItem" + suffix
+		return "field Issue.createNoteEmail" + suffix + ", mutation field workItemCreate" + suffix +
+			", mutation workItemCreate" + suffix + ", type WorkItem" + suffix
 	}
 	for _, testCase := range []struct {
 		name       string
@@ -471,35 +477,35 @@ func TestDirectiveProblems_HoldsEveryDirectiveToTheShapesGitLabReads(t *testing.
 		{
 			name:       "both permissions and a skip reason",
 			directives: []apilive.Directive{{Permissions: []string{"read_project"}, SkipReason: "parent_authorizes"}},
-			want: []string{"3 GraphQL directives carry both permissions and a skip reason, or neither (" + sites("") +
+			want: []string{"4 GraphQL directives carry both permissions and a skip reason, or neither (" + sites("") +
 				"): a reader cannot tell whether they require anything"},
 		},
 		{
 			name:       "neither permissions nor a skip reason",
 			directives: []apilive.Directive{{BoundaryType: "project"}},
-			want: []string{"3 GraphQL directives carry both permissions and a skip reason, or neither (" + sites("") +
+			want: []string{"4 GraphQL directives carry both permissions and a skip reason, or neither (" + sites("") +
 				"): a reader cannot tell whether they require anything"},
 		},
 		{
 			name:       "a permission GitLab does not define",
 			directives: []apilive.Directive{{Permissions: []string{"read_nothing"}}},
-			want:       []string{notDefined(3, sites(" read_nothing"))},
+			want:       []string{notDefined(4, sites(" read_nothing"))},
 		},
 		{
 			name:       "a permission no assignable expands to",
 			directives: []apilive.Directive{{Permissions: []string{"orphan_raw"}}},
-			want:       []string{unassignable(3, sites(" orphan_raw"))},
+			want:       []string{unassignable(4, sites(" orphan_raw"))},
 		},
 		{
 			name:       "a boundary type GitLab does not resolve",
 			directives: []apilive.Directive{{Permissions: []string{"read_project"}, BoundaryType: "PROJECT"}},
-			want: []string{"3 GraphQL directives name a boundary type outside project, group, user and instance (" +
+			want: []string{"4 GraphQL directives name a boundary type outside project, group, user and instance (" +
 				sites(" PROJECT") + "): GitLab resolves no boundary for it"},
 		},
 		{
 			name:       "an argument nothing reads",
 			directives: []apilive.Directive{{SkipReason: "parent_authorizes", UnknownKeys: []string{"weight", "zone"}}},
-			want: []string{"3 GraphQL directives carry arguments nothing here reads (" + sites(" weight+zone") +
+			want: []string{"4 GraphQL directives carry arguments nothing here reads (" + sites(" weight+zone") +
 				"): introspect.rb met an argument it does not know, and a reader would judge the element without it"},
 		},
 	} {
@@ -513,6 +519,75 @@ func TestDirectiveProblems_HoldsEveryDirectiveToTheShapesGitLabReads(t *testing.
 		doc := graphQLAt(nil)
 		doc.GraphQLAuthz = nil
 		assertProblems(t, directiveProblems(doc), nil)
+	})
+}
+
+// TestMutationFieldProblems_HoldsTheFieldsDirectivesToTheClasss verifies the
+// refusal for a mutation GitLab's two readers would disagree about.
+//
+// The runtime check reads the class and the permission task the field first,
+// so a field declaring nothing, or exactly what the class declares, leaves the
+// two readings equal and passes. A field declaring anything else is refused,
+// a class declaring nothing included: the task would then call declared a
+// mutation the runtime refuses every fine-grained token.
+func TestMutationFieldProblems_HoldsTheFieldsDirectivesToTheClasss(t *testing.T) {
+	t.Parallel()
+	create := []apilive.Directive{{Permissions: []string{"create_work_item"}, BoundaryType: "project"}}
+	update := []apilive.Directive{{Permissions: []string{"update_work_item"}, BoundaryType: "project"}}
+	refused := func(count int, sites string) []string {
+		return []string{fmt.Sprintf("%d mutations declare directives on their Mutation field that differ from their class's (%s): "+
+			"GitLab's permission task reads the field and its runtime check reads the class, so its todo list "+
+			"and what a fine-grained token is refused no longer describe one requirement", count, sites)}
+	}
+	for _, testCase := range []struct {
+		name      string
+		mutations map[string]apilive.Mutation
+		want      []string
+	}{
+		{name: "a field declaring nothing passes", mutations: map[string]apilive.Mutation{
+			"workItemCreate": {Granular: create},
+		}},
+		{name: "neither declaring anything passes", mutations: map[string]apilive.Mutation{
+			"aiAction": {},
+		}},
+		{name: "a field declaring what the class declares passes", mutations: map[string]apilive.Mutation{
+			"workItemCreate": {Granular: create, FieldGranular: slices.Clone(create)},
+		}},
+		{
+			name:      "a field declaring another permission",
+			mutations: map[string]apilive.Mutation{"workItemCreate": {Granular: create, FieldGranular: update}},
+			want:      refused(1, "workItemCreate"),
+		},
+		{
+			name:      "a field declaring what a class with none does not",
+			mutations: map[string]apilive.Mutation{"workItemCreate": {FieldGranular: create}},
+			want:      refused(1, "workItemCreate"),
+		},
+		{
+			name: "a field declaring the class's directive and one more",
+			mutations: map[string]apilive.Mutation{"workItemCreate": {
+				Granular: create, FieldGranular: append(slices.Clone(create), update...),
+			}},
+			want: refused(1, "workItemCreate"),
+		},
+		{
+			name: "every mutation that differs is named, in order",
+			mutations: map[string]apilive.Mutation{
+				"workItemUpdate": {Granular: update, FieldGranular: create},
+				"workItemCreate": {Granular: create, FieldGranular: update},
+				"noteCreate":     {Granular: create},
+			},
+			want: refused(2, "workItemCreate, workItemUpdate"),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			assertProblems(t, mutationFieldProblems(&apilive.GraphQLAuthz{Mutations: testCase.mutations}), testCase.want)
+		})
+	}
+	t.Run("no GraphQL half has no mutation field problems", func(t *testing.T) {
+		t.Parallel()
+		assertProblems(t, mutationFieldProblems(nil), nil)
 	})
 }
 
@@ -701,6 +776,9 @@ func TestAuthorizationProblems_CollectsEveryRuleInTheOrderAMaintainerReadsThem(t
 	payload.Routes[0].Authorization.UnknownKeys = []string{"weight"}
 	payload.GraphQLAuthz.Abstract["Node"] = apilive.AbstractType{Kind: "interface"}
 	payload.GraphQLAuthz.Types[typeName(0)] = apilive.GraphQLType{Granular: []apilive.Directive{{BoundaryType: "project"}}}
+	payload.GraphQLAuthz.Mutations["workItemCreate"] = apilive.Mutation{
+		FieldGranular: []apilive.Directive{{Permissions: []string{rawName(0)}, BoundaryType: "project"}},
+	}
 	payload.GraphQLAuthz.Todo = &apilive.Todo{Types: []string{"PageInfo"}}
 	delete(payload.Granular.RawToAssignable, rawName(5))
 
@@ -710,6 +788,7 @@ func TestAuthorizationProblems_CollectsEveryRuleInTheOrderAMaintainerReadsThem(t
 		"1 raw permissions an assignable permission expands to have no assignable named for them",
 		"1 route authorizations carry keys nothing here reads",
 		"1 GraphQL directives carry both permissions and a skip reason, or neither",
+		"1 mutations declare directives on their Mutation field that differ from their class's",
 		"the undeclared GraphQL types computed with GitLab's todo rule differ",
 		"1 unions or interfaces record no possible types",
 	}

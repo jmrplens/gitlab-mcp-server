@@ -281,9 +281,18 @@ type Mutation struct {
 	Name    string `json:"name"`
 	Class   string `json:"class"`
 	Payload string `json:"payload"`
-	// Granular is empty for a mutation that declares nothing, which a
+	// Granular is what GitLab's runtime check reads, the mutation class's own
+	// directives, and is empty for a mutation that declares nothing, which a
 	// fine-grained token is refused.
 	Granular []Directive `json:"granular,omitempty"`
+	// FieldGranular is what GitLab's permission task reads for the mutation,
+	// the Mutation field's directives (which graphql-ruby answers with any the
+	// field declares itself followed by the class's), recorded only where it
+	// differs from Granular. The task's todo list is generated from this
+	// reading and the runtime check never makes it, so the gate refuses a
+	// record carrying one: the todo list and what a token is refused would
+	// then describe two requirements. Empty for every mutation at 19.4.1.
+	FieldGranular []Directive `json:"field_granular,omitempty"`
 }
 
 // Directive is one GranularScope directive, argument for argument.
@@ -324,7 +333,11 @@ type AuthorizationCounts struct {
 	DeprecatedAssignablePermissions int `json:"deprecated_assignable_permissions"`
 	GraphQLDeclaredTypes            int `json:"graphql_declared_types"`
 	// GraphQLUndeclaredTypes are the types GitLab checks and that declare
-	// nothing, which a fine-grained token is denied.
+	// nothing. A fine-grained token is denied an object of every one of them
+	// but two: Query and Mutation are counted here and pass, because the
+	// check passes when there is neither an object nor arguments to find a
+	// boundary in, which is what a root is. A reader taking this figure, or
+	// Enforced without Declared, for "denied" has to set those two apart.
 	GraphQLUndeclaredTypes int `json:"graphql_undeclared_types"`
 	// GraphQLUncheckedUndeclaredTypes are the ones GitLab's todo rule calls
 	// undeclared and its check never runs on, such as PageInfo.

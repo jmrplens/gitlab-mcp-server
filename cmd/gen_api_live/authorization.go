@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -56,6 +57,7 @@ func authorizationProblems(doc apilive.Document) []string {
 	problems = append(problems, vocabularyProblems(doc.Granular)...)
 	problems = append(problems, routeAuthorizationProblems(doc)...)
 	problems = append(problems, directiveProblems(doc)...)
+	problems = append(problems, mutationFieldProblems(doc.GraphQLAuthz)...)
 	problems = append(problems, todoProblems(doc)...)
 	problems = append(problems, shapeProblems(doc)...)
 	return problems
@@ -324,6 +326,7 @@ func directiveProblems(doc apilive.Document) []string {
 	}
 	for name, mutation := range authz.Mutations {
 		judge("mutation "+name, mutation.Granular)
+		judge("mutation field "+name, mutation.FieldGranular)
 	}
 	for name, directives := range authz.Fields {
 		judge("field "+name, directives)
@@ -339,6 +342,35 @@ func directiveProblems(doc apilive.Document) []string {
 	return reportSites(problems, unknownKeys,
 		"%d GraphQL directives carry arguments nothing here reads (%s): introspect.rb met an argument it "+
 			"does not know, and a reader would judge the element without it")
+}
+
+// mutationFieldProblems reports a mutation whose Mutation field declares
+// directives other than its class's.
+//
+// GitLab reads a mutation's directives in two places, and not the same way:
+// its runtime check reads the class alone
+// (Mutations::BaseMutation#granular_scope_authorization), while the permission
+// task its todo list is generated with reads the field first and the class
+// only when the field has none. The record holds the runtime's reading as
+// Granular and the task's as FieldGranular, which introspect.rb writes only
+// where the two differ; a FieldGranular equal to Granular passes all the same.
+// Where they differ, the todo list and what a fine-grained token is refused
+// describe two requirements, and no reader of one of them can tell which
+// GitLab means.
+func mutationFieldProblems(authz *apilive.GraphQLAuthz) []string {
+	if authz == nil {
+		return nil
+	}
+	var differing []string
+	for name, mutation := range authz.Mutations {
+		if len(mutation.FieldGranular) > 0 && !reflect.DeepEqual(mutation.FieldGranular, mutation.Granular) {
+			differing = append(differing, name)
+		}
+	}
+	return reportSites(nil, differing,
+		"%d mutations declare directives on their Mutation field that differ from their class's (%s): "+
+			"GitLab's permission task reads the field and its runtime check reads the class, so its todo list "+
+			"and what a fine-grained token is refused no longer describe one requirement")
 }
 
 // todoProblems holds the undeclared set computed with GitLab's own rule to the
