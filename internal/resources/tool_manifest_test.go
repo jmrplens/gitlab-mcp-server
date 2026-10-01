@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -592,6 +593,74 @@ func TestToolManifest_IndividualSurfaceUsesDirectToolIDs(t *testing.T) {
 	if detail.Call.ParamsLocation != "arguments" || len(detail.RequiredParams) != 1 || detail.RequiredParams[0].Name != "project_id" {
 		t.Fatalf("detail call/required params = %+v, want direct arguments project_id", detail)
 	}
+}
+
+// TestToolManifest_Detail_CarriesTheFineGrainedRequirement verifies an
+// action's detail serves what a fine-grained token needs for it, worded from
+// the generated table, on every surface and under every key the detail is
+// read by: the surface's own entry and the canonical ID aliased to it. An
+// action the table holds no row for, such as the widget fixture's, is served
+// without the block rather than with an empty one.
+func TestToolManifest_Detail_CarriesTheFineGrainedRequirement(t *testing.T) {
+	const id = "project.get"
+	domain := domainSurfaceCatalog(t)
+	action, ok := domain.Action(id)
+	if !ok {
+		t.Fatalf("the catalog has no %s", id)
+	}
+	want := actiongrants.Table().Describe(actiongrants.Requirement(id))
+	if want == nil {
+		t.Fatalf("the generated table has no row for %s; regenerate it with make gen-action-grants", id)
+	}
+	cases := []struct {
+		name string
+		opts ToolSurfaceResourceOptions
+		keys []string
+	}{
+		{
+			name: toolSurfaceDynamic,
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceDynamic, Catalog: domain,
+				Tools: []*mcp.Tool{{Name: "gitlab_execute_action"}, {Name: "gitlab_find_action"}},
+			},
+			keys: []string{id},
+		},
+		{
+			name: toolSurfaceMeta,
+			opts: ToolSurfaceResourceOptions{Surface: toolSurfaceMeta, Catalog: domain, MetaRoutes: domain.ActionMaps()},
+			keys: []string{metaManifestID(action.ToolName, action.Name), id},
+		},
+		{
+			name: toolSurfaceIndividual,
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceIndividual, Catalog: domain,
+				Tools: []*mcp.Tool{{Name: action.IndividualTool.Name}},
+			},
+			keys: []string{action.IndividualTool.Name, id},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			snapshot := newToolSurfaceSnapshot(testCase.opts)
+			for _, key := range testCase.keys {
+				if got := snapshot.details[key].FineGrained; !reflect.DeepEqual(got, want) {
+					t.Errorf("details[%s].FineGrained = %+v, want %+v", key, got, want)
+				}
+			}
+		})
+	}
+	t.Run("no row", func(t *testing.T) {
+		widgets := widgetCatalog(t)
+		snapshot := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+			Surface: toolSurfaceDynamic, Catalog: widgets,
+			Tools: []*mcp.Tool{{Name: "gitlab_execute_action"}},
+		})
+		for key, detail := range snapshot.details {
+			if detail.FineGrained != nil {
+				t.Errorf("details[%s] carries a fine-grained block for an action the table has no row for", key)
+			}
+		}
+	})
 }
 
 // TestToolManifestTemplate_NotFound verifies that the

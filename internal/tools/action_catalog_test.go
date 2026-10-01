@@ -16,9 +16,11 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1145,6 +1147,36 @@ func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Fatalf("catalog actions must be spec-backed:\n%s", formatMissingActionSpecs(missing))
+	}
+}
+
+// TestTable_CoversTheCatalog holds the generated fine-grained table to the
+// catalog this tree builds, in both directions: every action of the Ultimate
+// catalog, on a self-managed instance and on GitLab.com with the standalone
+// actions, carries the row the catalog read for it, and every row names an
+// action one of them holds. A new action without a row is served to a
+// fine-grained session with no requirement at all, and a row whose action is
+// gone answers for nothing; both mean make gen-action-grants was not run.
+func TestTable_CoversTheCatalog(t *testing.T) {
+	freshness.SkipIfDeferred(t)
+	built := map[string]bool{}
+	for _, client := range []*gitlabclient.Client{nil, newGitLabDotComClient(t)} {
+		catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+		catalog, err := dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+		if err != nil {
+			t.Fatalf("AddStandaloneCatalog() error = %v", err)
+		}
+		for _, action := range catalog.Actions() {
+			built[string(action.ID)] = true
+			if action.FineGrained == nil || action.FineGrained != actiongrants.Requirement(string(action.ID)) {
+				t.Errorf("%s carries no fine-grained row; run make gen-action-grants", action.ID)
+			}
+		}
+	}
+	for _, row := range actiongrants.Table().Actions {
+		if !built[row.ID] {
+			t.Errorf("the fine-grained table has a row for %s, which no catalog builds; run make gen-action-grants", row.ID)
+		}
 	}
 }
 

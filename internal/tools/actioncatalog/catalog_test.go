@@ -9,7 +9,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -300,6 +302,46 @@ func TestCatalog_AddActionCreatesGroupWithoutOptions(t *testing.T) {
 	}
 	if action.ToolName != "gitlab_no_opts" {
 		t.Fatalf("action.ToolName = %q, want gitlab_no_opts", action.ToolName)
+	}
+}
+
+// TestCatalog_AddAction_ReadsTheFineGrainedRowByCanonicalID verifies an
+// action joining a catalog is handed the generated table's row for its
+// canonical ID, the same row every catalog points at, while one the table has
+// no row for gets nothing and one already carrying a row keeps it. Setting it
+// on the way in is what reaches the standalone actions too, which join a
+// catalog after it is built.
+func TestCatalog_AddAction_ReadsTheFineGrainedRowByCanonicalID(t *testing.T) {
+	rows := actiongrants.Table().Actions
+	if len(rows) == 0 {
+		t.Fatal("the generated table holds no row; regenerate it with make gen-action-grants")
+	}
+	domain, name, _ := strings.Cut(rows[0].ID, ".")
+	preset := &finegrained.Requirement{ID: "preset.row"}
+	cases := []struct {
+		name   string
+		action Action
+		want   *finegrained.Requirement
+	}{
+		{name: "row in the table", action: Action{Name: name, Domain: domain}, want: &rows[0]},
+		{name: "no row", action: Action{Name: "no_such_action", Domain: domain}},
+		{name: "row already set", action: Action{Name: name, Domain: domain, FineGrained: preset}, want: preset},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			catalog := NewCatalog()
+			testCase.action.Route = testRoute(false)
+			if err := catalog.AddAction("gitlab_"+domain, testCase.action); err != nil {
+				t.Fatalf("AddAction() error = %v", err)
+			}
+			action, ok := catalog.Action(ActionID(domain + "." + testCase.action.Name))
+			if !ok {
+				t.Fatal("the added action is not in the catalog")
+			}
+			if action.FineGrained != testCase.want {
+				t.Errorf("FineGrained = %p, want %p", action.FineGrained, testCase.want)
+			}
+		})
 	}
 }
 
