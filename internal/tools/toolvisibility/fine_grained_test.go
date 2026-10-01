@@ -6,17 +6,23 @@
 package toolvisibility
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -346,7 +352,17 @@ func TestCallMiddleware_AnswersAWithheldCallBeforeTheArgumentsAreRead(t *testing
 	next := func(context.Context, string, mcp.Request) (mcp.Result, error) { return reached, nil }
 
 	t.Run("a withheld call", func(t *testing.T) {
-		result, err := CallMiddleware(ready)(next)(session, methodToolsCall, call("gitlab_demo", `{"action":"denied","params":"not an object"}`))
+		var logged bytes.Buffer
+		original := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+		t.Cleanup(func() { slog.SetDefault(original) })
+		recorder := tracetest.NewSpanRecorder()
+		tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+		t.Cleanup(func() { _ = tp.Shutdown(session) })
+		ctx, span := tp.Tracer("test").Start(session, methodToolsCall)
+
+		result, err := CallMiddleware(ready)(next)(ctx, methodToolsCall, call("gitlab_demo", `{"action":"denied","params":"not an object"}`))
+		span.End()
 		got, ok := result.(*mcp.CallToolResult)
 		if err != nil || !ok || got == reached || !got.IsError {
 			t.Fatalf("CallMiddleware = %+v, %v; want the withheld answer", result, err)
@@ -354,6 +370,22 @@ func TestCallMiddleware_AnswersAWithheldCallBeforeTheArgumentsAreRead(t *testing
 		text := got.Content[0].(*mcp.TextContent).Text
 		if !strings.HasPrefix(text, `action "demo.denied" exists but is not available to a fine-grained personal access token`) {
 			t.Errorf("CallMiddleware text = %q", text)
+		}
+		// Recorded as the dispatcher's refusal is, under the reason the
+		// telemetry guide names, which a refusal answered here and never
+		// dispatched would otherwise not carry.
+		for _, want := range []string{`"msg":"tool call refused"`, `"tool":"gitlab_demo"`, `"reason":"fine_grained"`} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("the log does not carry %s:\n%s", want, logged.String())
+				}
+			})
+		}
+		ended := recorder.Ended()
+		if len(ended) != 1 || !slices.ContainsFunc(ended[0].Attributes(), func(attr attribute.KeyValue) bool {
+			return attr.Key == mcpotel.AttrRefusalReason && attr.Value.AsString() == "fine_grained"
+		}) {
+			t.Errorf("the call's span does not carry the refusal reason fine_grained: %d spans", len(ended))
 		}
 	})
 	passes := []struct {

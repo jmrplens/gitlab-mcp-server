@@ -1,15 +1,20 @@
 package toolutil
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
 // The actions of the table these tests decide by.
@@ -88,6 +93,48 @@ func TestFineGrainedRefusal_WithholdsOnlyWhatTheSessionMayNotRun(t *testing.T) {
 				t.Errorf("FineGrainedRefusal = %+v, text %q", got, text)
 			}
 		})
+	}
+}
+
+// TestFineGrainedRefusal_RecordsTheRefusalAsFineGrained verifies a withheld
+// call is recorded under the reason fine_grained on the span and in the INFO
+// line, which the telemetry guide's table and the model evaluation read, and
+// that the DEBUG line names the action and its cause.
+func TestFineGrainedRefusal_RecordsTheRefusalAsFineGrained(t *testing.T) {
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	ctx, span := tp.Tracer("test").Start(fineGrainedContext(), "tools/call")
+	refused := FineGrainedRefusal(ctx, nil, "gitlab_demo/denied", fgDenied, "")
+	span.End()
+	if refused == nil {
+		t.Fatal("FineGrainedRefusal let a withheld action through")
+	}
+
+	// The value is spelled out rather than read from the constant, because the
+	// value is what the guide and the evaluation filter on.
+	out := buf.String()
+	for _, want := range []string{
+		`"msg":"tool call refused"`, `"tool":"gitlab_demo/denied"`, `"reason":"fine_grained"`,
+		`"msg":"fine-grained session withheld an action"`, `"action":"demo.denied"`, `"cause":"graphql-type-undeclared"`,
+	} {
+		t.Run(want, func(t *testing.T) { assertContains(t, out, want) })
+	}
+	marked := 0
+	for _, ended := range recorder.Ended() {
+		for _, attr := range ended.Attributes() {
+			if attr.Key == mcpotel.AttrRefusalReason && attr.Value.AsString() == "fine_grained" {
+				marked++
+			}
+		}
+	}
+	if marked != 1 {
+		t.Errorf("%d spans carry the refusal reason fine_grained, want the call's one", marked)
 	}
 }
 

@@ -500,10 +500,10 @@ func TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord(t *testing.T) {
 // TestRefusalReasons_EveryOneIsDocumented ties the closed set to the guide that
 // calls it closed.
 //
-// The guide tells an operator these five values are the whole set and that
+// The guide tells an operator these six values are the whole set and that
 // grouping a dashboard by them is safe. That claim is true today and nothing
-// kept it true: a sixth constant added next year would silently give the metric
-// a value no dashboard filters on and no page mentions.
+// kept it true: a seventh constant added next year would silently give the
+// metric a value no dashboard filters on and no page mentions.
 //
 // The constants are read out of the source rather than listed here, because a
 // list here would be the same drift one file further along.
@@ -511,8 +511,8 @@ func TestRefusalReasons_EveryOneIsDocumented(t *testing.T) {
 	t.Parallel()
 
 	reasons := refusalConstants(t)
-	if len(reasons) < 5 {
-		t.Fatalf("found %d refusal constants, want at least the five this package declares; the parse is probably wrong",
+	if len(reasons) < 6 {
+		t.Fatalf("found %d refusal constants, want at least the six this package declares; the parse is probably wrong",
 			len(reasons))
 	}
 
