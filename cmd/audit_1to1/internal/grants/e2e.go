@@ -17,11 +17,14 @@ import (
 //
 // It compares counts, not routes, until the dispatch line carries the route of
 // each client span, and a count is a floor: the spans travel through a
-// batching processor that drops silently when its queue overflows. So a count
-// at or above what the derivation makes on every path is consistent and says
-// nothing about which routes were sent, and one below it is a lead, either an
-// over-approximation of the derivation or a dropped span. It reports and
-// never gates, for the reasons R-PATH's end-to-end observation gives.
+// batching processor that drops silently when its queue overflows. The number
+// a count is held to is the fewest requests any recorded way of running the
+// action makes, its mandatory requests and the alternatives that way takes,
+// since a trace ran one of those ways and sent at least what it makes. So a
+// count at or above that number is consistent and says nothing about which
+// routes were sent, and one below it is a lead, either an over-approximation
+// of the derivation or a dropped span. It reports and never gates, for the
+// reasons R-PATH's end-to-end observation gives.
 type E2ECheck struct {
 	// Ran is whether a record was read at all; Error says why not, when one
 	// was asked for and could not be read.
@@ -33,9 +36,9 @@ type E2ECheck struct {
 	// the server did not decline, and Consistent those no lead below names.
 	Compared   int `json:"actions_compared"`
 	Consistent int `json:"actions_consistent"`
-	// FewerThanMandatory are actions whose busiest trace carried fewer
-	// requests than the derivation says every path makes.
-	FewerThanMandatory []CountLead `json:"fewer_requests_than_mandatory,omitempty"`
+	// FewerThanAnyPath are actions whose busiest trace carried fewer
+	// requests than any recorded way of running them makes.
+	FewerThanAnyPath []CountLead `json:"fewer_requests_than_any_path,omitempty"`
 	// SentWhereNoneDerived are actions the derivation says send nothing that
 	// a trace saw sending.
 	SentWhereNoneDerived []CountLead `json:"requests_where_none_derived,omitempty"`
@@ -48,14 +51,14 @@ type E2ECheck struct {
 // derivation.
 type CountLead struct {
 	Action string `json:"action"`
-	// Mandatory is how many requests the derivation says every path makes,
-	// and Observed the most one trace of the action carried.
-	Mandatory int `json:"mandatory"`
-	Observed  int `json:"observed"`
+	// Fewest is the fewest requests any recorded way of running the action
+	// makes, and Observed the most one trace of the action carried.
+	Fewest   int `json:"fewest_on_a_path"`
+	Observed int `json:"observed"`
 }
 
 // e2eGrain is what [E2ECheck.Grain] says, spelled once.
-const e2eGrain = "action, by count: consistent when the most requests one trace of the action carried is at least the number the derivation makes on every path; a count cannot say which routes were sent"
+const e2eGrain = "action, by count: consistent when the most requests one trace of the action carried is at least the fewest any recorded way of running it makes; a count cannot say which routes were sent"
 
 // e2eCheck folds the dispatch lines of a recorded run into the per-action
 // comparison. An empty directory is not an error: no end-to-end record was
@@ -70,18 +73,13 @@ func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
 		check.Error = fmt.Sprintf("read the end-to-end call record: %v", err)
 		return check
 	}
-	mandatory := map[string]int{}
+	fewest := map[string]int{}
 	sends := map[string]bool{}
 	for _, action := range record.Actions {
-		mandatory[action.ID] = 0
+		fewest[action.ID] = fewestRequests(action.Paths)
 		sends[action.ID] = len(action.Requests) > 0
-		for _, request := range action.Requests {
-			if request.Class == actionrequests.ClassMandatory {
-				mandatory[action.ID]++
-			}
-		}
 	}
-	observed, unknown := observedCounts(records, mandatory)
+	observed, unknown := observedCounts(records, fewest)
 	check.NotInRecord = unknown
 	ids := make([]string, 0, len(observed))
 	for id := range observed {
@@ -90,18 +88,33 @@ func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
 	sort.Strings(ids)
 	for _, id := range ids {
 		check.Compared++
-		lead := CountLead{Action: id, Mandatory: mandatory[id], Observed: observed[id]}
+		lead := CountLead{Action: id, Fewest: fewest[id], Observed: observed[id]}
 		if !sends[id] && lead.Observed > 0 {
 			check.SentWhereNoneDerived = append(check.SentWhereNoneDerived, lead)
 			continue
 		}
-		if lead.Observed < lead.Mandatory {
-			check.FewerThanMandatory = append(check.FewerThanMandatory, lead)
+		if lead.Observed < lead.Fewest {
+			check.FewerThanAnyPath = append(check.FewerThanAnyPath, lead)
 			continue
 		}
 		check.Consistent++
 	}
 	return check
+}
+
+// fewestRequests is the fewest requests any recorded way of running an action
+// makes. A path holds the action's mandatory requests and the alternatives
+// that way takes, and an optional request is on none, so it is never counted;
+// an action with no recorded path is held to none.
+func fewestRequests(paths [][]int) int {
+	if len(paths) == 0 {
+		return 0
+	}
+	fewest := len(paths[0])
+	for _, path := range paths[1:] {
+		fewest = min(fewest, len(path))
+	}
+	return fewest
 }
 
 // observedCounts is, per action of the record a dispatch ran and the server

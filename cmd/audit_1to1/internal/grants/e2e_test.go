@@ -41,22 +41,27 @@ func TestE2ECheck_AnUnreadableRecord_IsANoteNotAFailure(t *testing.T) {
 	}
 }
 
-// TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsMandatoryRequests verifies
-// the per-action comparison: an action whose busiest trace carried at least
-// its mandatory requests is consistent, retries and a lower second trace
-// included; one carrying fewer is a lead; one the derivation says sends
-// nothing seen sending is a lead of the other kind, while one seen sending
-// nothing is consistent; only the mandatory requests are counted, so an
-// action with two of them and an optional one is a lead at one request and
-// consistent at two; a declined dispatch, a line of another type, a line
-// naming no action and a line with no dispatch are passed over; and an id the
-// record does not hold is named once.
-func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsMandatoryRequests(t *testing.T) {
+// TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsShortestPath verifies the
+// per-action comparison: an action whose busiest trace carried at least the
+// fewest requests any of its paths makes is consistent, retries and a lower
+// second trace included; one carrying fewer is a lead; one the derivation
+// says sends nothing seen sending is a lead of the other kind, while one seen
+// sending nothing is consistent, and so is one the record holds no path for;
+// an optional request is on no path and is not counted, so an action with two
+// mandatory requests and an optional one is a lead at one request and
+// consistent at two; an action whose every request is an alternative is held
+// to its shortest path rather than to none, so a trace that sent nothing is a
+// lead and one that sent one request is not; a declined dispatch, a line of
+// another type, a line naming no action and a line with no dispatch are
+// passed over; and an id the record does not hold is named once.
+func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsShortestPath(t *testing.T) {
 	useE2ECalls(t, []e2ecalls.Record{
 		dispatch("issue.update", 3, ""),
 		dispatch("issue.update", 1, ""),
 		dispatch("two.step", 1, ""),
 		dispatch("two.exact", 2, ""),
+		dispatch("either.way", 0, ""),
+		dispatch("either.ok", 1, ""),
 		dispatch("issue.get", 0, ""),
 		dispatch("issue.get", 0, "safe_mode"),
 		dispatch("topic.list", 1, ""),
@@ -76,20 +81,31 @@ func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsMandatoryRequests(t *testin
 		rest("GET /b", actionrequests.ClassMandatory),
 		rest("GET /c", actionrequests.ClassOptional),
 	}
+	// Every request of the two below is an alternative, and the shorter of
+	// their two ways is the second, so neither has a mandatory request and
+	// both are held to one.
+	alternatives := []actionrequests.RecordRequest{
+		rest("GET /a", actionrequests.ClassAlternative),
+		rest("GET /b", actionrequests.ClassAlternative),
+		rest("GET /c", actionrequests.ClassAlternative),
+	}
 	record.Actions = append(record.Actions,
 		actionrequests.RecordAction{ID: "quiet.action"},
-		actionrequests.RecordAction{ID: "two.step", Requests: twoMandatory},
-		actionrequests.RecordAction{ID: "two.exact", Requests: twoMandatory},
+		actionrequests.RecordAction{ID: "two.step", Requests: twoMandatory, Paths: [][]int{{0, 1}}},
+		actionrequests.RecordAction{ID: "two.exact", Requests: twoMandatory, Paths: [][]int{{0, 1}}},
+		actionrequests.RecordAction{ID: "either.way", Requests: alternatives, Paths: [][]int{{0, 1}, {2}}},
+		actionrequests.RecordAction{ID: "either.ok", Requests: alternatives, Paths: [][]int{{0, 1}, {2}}},
 	)
 	got := e2eCheck("shards", record)
 	want := E2ECheck{
 		Ran: true, Directory: "shards", Grain: e2eGrain,
-		Compared: 7, Consistent: 4,
-		FewerThanMandatory: []CountLead{
-			{Action: "issue.get", Mandatory: 1, Observed: 0},
-			{Action: "two.step", Mandatory: 2, Observed: 1},
+		Compared: 9, Consistent: 5,
+		FewerThanAnyPath: []CountLead{
+			{Action: "either.way", Fewest: 1, Observed: 0},
+			{Action: "issue.get", Fewest: 1, Observed: 0},
+			{Action: "two.step", Fewest: 2, Observed: 1},
 		},
-		SentWhereNoneDerived: []CountLead{{Action: "topic.list", Mandatory: 0, Observed: 1}},
+		SentWhereNoneDerived: []CountLead{{Action: "topic.list", Fewest: 0, Observed: 1}},
 		NotInRecord:          []string{"gone.action"},
 	}
 	if !reflect.DeepEqual(got, want) {
