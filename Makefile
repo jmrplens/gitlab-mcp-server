@@ -1787,10 +1787,12 @@ audit-1to1-paths-e2e:
 ## consistency of what make gen-action-grants committed with the live GitLab record it was
 ## joined from: the table joined at the record's release, naming its permission vocabulary
 ## and its public sets, denying nothing on an element the record does not hold as the kind
-## the denial's cause says, and covering the actions the request record covers. It reads
+## the denial's cause says, demanding on each REST operation what the record's route
+## declares, and covering the actions the request record and the catalog cover. It reads
 ## committed files only (the table compiled in, action-requests.json, the live record and
-## the request inventory), so it needs no network, no Docker and no program load; CI runs it
-## under the FRESHNESS deferral like every committed-artifact gate.
+## the request inventory) and the catalog the tree builds, so it needs no network, no Docker
+## and no program load; CI runs it under the FRESHNESS deferral like every committed-artifact
+## gate.
 audit-1to1-grants:
 	go run ./cmd/audit_1to1/ -scope=grants -gaps-only
 

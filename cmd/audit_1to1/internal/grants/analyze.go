@@ -163,7 +163,7 @@ func buildReport(root string, opts Options) (Report, error) {
 	elements := worklist(table, record, &live, owners)
 	crossCheck := inventoryCheck(inventory.Requests, record, &live, owners)
 	e2e := e2eCheck(opts.E2ECallsDir, record)
-	found := inconsistencies(table, record, &live)
+	found := inconsistencies(table, record, &live, actions)
 
 	report := Report{
 		SchemaVersion:    shared.SchemaVersion,

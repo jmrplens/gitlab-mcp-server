@@ -109,7 +109,10 @@ func fixtureLive() *apilive.Document {
 		Source: apilive.Source{Version: "19.4.1-ee"},
 		Routes: []apilive.Route{
 			route("GET", "/projects/:id/issues", held("project", "read_issue")),
-			route("PUT", "/projects/:id/issues/:issue_iid", held("project", "update_issue")),
+			route("PUT", "/projects/:id/issues/:issue_iid", &apilive.RouteAuthorization{
+				Permissions: []string{"update_issue"},
+				Boundaries:  []apilive.Boundary{{BoundaryType: "project"}, {BoundaryType: "group"}},
+			}),
 			route("GET", "/namespaces", held("group", "read_namespace")),
 			route("GET", "/topics", &apilive.RouteAuthorization{Skip: "catch_all"}),
 			route("GET", "/later", &apilive.RouteAuthorization{Todo: "pending"}),
@@ -198,6 +201,17 @@ func fixtureOwners() map[string]string {
 	}
 }
 
+// fixtureCatalog is the catalog the fixture table was joined for, one action
+// per row, sorted by ID as actionrequests.Catalog returns it.
+func fixtureCatalog() []actionrequests.Action {
+	var actions []actionrequests.Action
+	for id, owner := range fixtureOwners() {
+		actions = append(actions, actionrequests.Action{ID: id, Owner: owner})
+	}
+	slices.SortFunc(actions, func(a, b actionrequests.Action) int { return strings.Compare(a.ID, b.ID) })
+	return actions
+}
+
 // useFixtures points every input seam at the fixture, restoring the real ones
 // when the test ends.
 func useFixtures(t *testing.T) {
@@ -215,13 +229,7 @@ func useFixtures(t *testing.T) {
 			{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/issues"},
 		}}, nil
 	}
-	catalog = func() ([]actionrequests.Action, error) {
-		var actions []actionrequests.Action
-		for id, owner := range fixtureOwners() {
-			actions = append(actions, actionrequests.Action{ID: id, Owner: owner})
-		}
-		return actions, nil
-	}
+	catalog = func() ([]actionrequests.Action, error) { return fixtureCatalog(), nil }
 	grantTable = fixtureTable
 	readE2ECalls = func(string) ([]e2ecalls.Record, error) { return nil, nil }
 }

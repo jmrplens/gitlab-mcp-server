@@ -20,15 +20,19 @@
 //
 // # What it gates
 //
-// The committed artifacts' consistency with the live record and with each
-// other: the table was joined at the record's release, names the record's
-// permission vocabulary and public sets, denies nothing on an element the
-// record does not hold as the kind its cause says (the derivation's gate 2,
-// read back from the table), and covers the actions the request record
-// covers. A table that fails one of these was joined from another record or
-// left behind by one, and every answer below would be read from it. It runs
-// where the other committed-artifact gates run, under the FRESHNESS deferral
-// in CI.
+// The committed artifacts' consistency with the live record, with each other
+// and with the catalog: the table was joined at the record's release, names
+// the record's permission vocabulary and public sets, denies nothing on an
+// element the record does not hold as the kind its cause says (the
+// derivation's gate 2, read back from the table), demands on every REST
+// operation what the record's route declares (the join's REST half, read back
+// through the same apilive.Route.Requirements), and covers the actions the
+// request record and the catalog cover. A table that fails one of these was
+// joined from another record or left behind by one, and every answer below
+// would be read from it. What a GraphQL operation demands is not read back,
+// since that needs the documents walked against the schema, which is the
+// derivation's work. It runs where the other committed-artifact gates run,
+// under the FRESHNESS deferral in CI.
 //
 // # What it reports and never gates
 //

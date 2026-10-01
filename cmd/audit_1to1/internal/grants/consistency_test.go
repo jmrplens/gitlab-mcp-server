@@ -14,7 +14,7 @@ import (
 // other tests bend is consistent to begin with, so each finding below comes
 // from the one change its case makes.
 func TestInconsistencies_TheFixture_AgreesWithItsRecord(t *testing.T) {
-	if found := inconsistencies(fixtureTable(), fixtureRecord(), fixtureLive()); len(found) != 0 {
+	if found := inconsistencies(fixtureTable(), fixtureRecord(), fixtureLive(), fixtureCatalog()); len(found) != 0 {
 		t.Errorf("inconsistencies = %v, want none", found)
 	}
 }
@@ -23,7 +23,10 @@ func TestInconsistencies_TheFixture_AgreesWithItsRecord(t *testing.T) {
 // check of the gate: the release, the vocabulary both ways, the public sets
 // (known on one side only, and a permission on each boundary), a denial and a
 // denied way naming something the record does not hold as the kind its cause
-// says, and an action one artifact covers and the other does not. Each
+// says, a REST operation no route of the record is, one demanding other
+// permissions than its route, one the record now skips, defers or declares, one
+// the table skips that the record checks, and an action one artifact covers
+// and the other does not, which the catalog does not build either. Each
 // finding ends with the command that regenerates the artifacts, or the one
 // that re-records the record when it is the record that lacks something.
 func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
@@ -98,6 +101,40 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			},
 		},
 		{
+			name: "an_operation_no_route_of_the_record_is",
+			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				live.Routes = slices.DeleteFunc(live.Routes, func(route apilive.Route) bool {
+					return route.Path == apilive.EndpointPrefix+"/projects/:id/protected_branches"
+				})
+			},
+			wants: []string{"the table's operation GET /projects/:id/protected_branches is no route of the live record; run `make gen-action-grants`"},
+		},
+		{
+			name: "a_route_demanding_other_permissions",
+			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				liveRoute(live, "PATCH /projects/:id/issues").Authorization = held("project", "read_issue")
+			},
+			wants: []string{"the table says PATCH /projects/:id/issues demands read_issue and update_issue at project and the live record says read_issue at project; run `make gen-action-grants`"},
+		},
+		{
+			name: "routes_the_record_now_skips_and_defers",
+			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				liveRoute(live, "POST /projects/:id/things").Authorization.Skip = "public"
+				liveRoute(live, "GET /namespaces").Authorization = &apilive.RouteAuthorization{Todo: "later"}
+			},
+			wants: []string{
+				"the table says GET /namespaces demands read_namespace at group and the live record says no permission; run `make gen-action-grants`",
+				"the table says POST /projects/:id/things demands read_issue at project; read_namespace at group and the live record says a skip that leaves the route to GitLab; run `make gen-action-grants`",
+			},
+		},
+		{
+			name: "a_route_the_table_skips_and_the_record_checks",
+			bend: func(_ *finegrained.Table, _ *actionrequests.Record, live *apilive.Document) {
+				liveRoute(live, "GET /topics").Authorization = held("project", "read_issue")
+			},
+			wants: []string{"the table says GET /topics demands a skip that leaves the route to GitLab and the live record says read_issue at project; run `make gen-action-grants`"},
+		},
+		{
 			name: "an_action_on_one_side",
 			bend: func(table *finegrained.Table, record *actionrequests.Record, _ *apilive.Document) {
 				table.Actions = table.Actions[1:]
@@ -106,7 +143,9 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 			},
 			wants: []string{
 				"branch.protected_list has an entry in the request record and no row in the table; run `make gen-action-grants`",
+				"branch.protected_list is built by the catalog and has no row in the table; run `make gen-action-grants`",
 				"zz.new has an entry in the request record and no row in the table; run `make gen-action-grants`",
+				"zz.other has a row in the table and is built by no catalog; run `make gen-action-grants`",
 				"zz.other has a row in the table and no entry in the request record; run `make gen-action-grants`",
 			},
 		},
@@ -115,11 +154,40 @@ func TestInconsistencies_EachDisagreement_IsNamedWithTheWayOut(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			table, record, live := fixtureTable(), fixtureRecord(), fixtureLive()
 			testCase.bend(table, &record, live)
-			found := inconsistencies(table, record, live)
+			found := inconsistencies(table, record, live, fixtureCatalog())
 			if !slices.Equal(found, testCase.wants) {
 				t.Errorf("inconsistencies =\n%s\nwant\n%s", strings.Join(found, "\n"), strings.Join(testCase.wants, "\n"))
 			}
 		})
+	}
+}
+
+// liveRoute is the fixture record's route of one name, which a case bends in
+// place. A name the fixture lacks is a mistake in the test, and the nil handed
+// back for it stops the case where it is bent.
+func liveRoute(live *apilive.Document, name string) *apilive.Route {
+	for i := range live.Routes {
+		if apilive.RouteName(&live.Routes[i]) == name {
+			return &live.Routes[i]
+		}
+	}
+	return nil
+}
+
+// TestInconsistencies_TheCatalog_IsCoveredRowForRow verifies the table is held
+// to the catalog this tree builds, both ways: a row for an action the catalog
+// no longer builds, and an action the catalog builds with no row, each named
+// with the way out.
+func TestInconsistencies_TheCatalog_IsCoveredRowForRow(t *testing.T) {
+	actions := slices.DeleteFunc(fixtureCatalog(), func(action actionrequests.Action) bool { return action.ID == "issue.bulk" })
+	actions = append(actions, actionrequests.Action{ID: "zz.new"})
+	found := inconsistencies(fixtureTable(), fixtureRecord(), fixtureLive(), actions)
+	want := []string{
+		"issue.bulk has a row in the table and is built by no catalog; run `make gen-action-grants`",
+		"zz.new is built by the catalog and has no row in the table; run `make gen-action-grants`",
+	}
+	if !slices.Equal(found, want) {
+		t.Errorf("inconsistencies =\n%s\nwant\n%s", strings.Join(found, "\n"), strings.Join(want, "\n"))
 	}
 }
 

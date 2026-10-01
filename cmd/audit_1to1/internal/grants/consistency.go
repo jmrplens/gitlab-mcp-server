@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -27,8 +28,16 @@ const regenerate = "run `make gen-action-grants`"
 //   - the public sets, which the call guard reads;
 //   - every denial's element, held by the record as the kind its cause says,
 //     which is the derivation's gate 2 read back from what it wrote;
-//   - the actions the two artifacts cover, written together and so equal.
-func inconsistencies(table *finegrained.Table, record actionrequests.Record, live *apilive.Document) []string {
+//   - what every REST operation demands, which is the join's REST half read
+//     back: a re-recording at the same release that changes a route's
+//     permissions moves no other check;
+//   - the actions the two artifacts cover, written together and so equal, and
+//     the catalog this tree builds, which one row per action is joined for.
+//
+// What a GraphQL operation or position demands is not read back: answering
+// it means walking each document against the pinned schema, which is the
+// derivation's work, so it is held only by make check-action-grants.
+func inconsistencies(table *finegrained.Table, record actionrequests.Record, live *apilive.Document, actions []actionrequests.Action) []string {
 	var found []string
 	if table.Version != live.Source.Version {
 		found = append(found, fmt.Sprintf("the table was joined at GitLab %s and the live record is %s; %s",
@@ -37,7 +46,9 @@ func inconsistencies(table *finegrained.Table, record actionrequests.Record, liv
 	found = append(found, vocabulary(table, live.Granular)...)
 	found = append(found, publicSets(table, live.Granular)...)
 	found = append(found, deniedElements(table, live)...)
+	found = append(found, restOperations(table, live)...)
 	found = append(found, coverage(table, record)...)
+	found = append(found, catalogCoverage(table, actions)...)
 	sort.Strings(found)
 	return found
 }
@@ -124,6 +135,92 @@ func deniedElements(table *finegrained.Table, live *apilive.Document) []string {
 					row.ID, way.Element, way.Cause, regenerate))
 			}
 		}
+	}
+	return found
+}
+
+// restOperations reads the join's REST half back from the table: every
+// operation the table names as a route is a route of the live record, and
+// demands what that route's authorization says, read by the same
+// apilive.Route.Requirements the join reads it by, group for group and in
+// order, with the same skip. A route GitLab deferred or never declared demands
+// no group and is no skip; the denial it decides is deniedElements' to hold.
+func restOperations(table *finegrained.Table, live *apilive.Document) []string {
+	routes := make(map[string]*apilive.Route, len(live.Routes))
+	for i := range live.Routes {
+		routes[apilive.RouteName(&live.Routes[i])] = &live.Routes[i]
+	}
+	var found []string
+	for i := range table.Operations {
+		op := &table.Operations[i]
+		if graphQLOperation(op.Name) {
+			continue
+		}
+		route := routes[op.Name]
+		if route == nil {
+			found = append(found, fmt.Sprintf("the table's operation %s is no route of the live record; %s", op.Name, regenerate))
+			continue
+		}
+		read, skip, _ := route.Requirements()
+		if want, got := demand(read, skip), demand(tableGroups(table, op), op.Skip); got != want {
+			found = append(found, fmt.Sprintf("the table says %s demands %s and the live record says %s; %s",
+				op.Name, got, want, regenerate))
+		}
+	}
+	return found
+}
+
+// tableGroups reads an operation's groups out of the table in the form the
+// record's are read in, permission names in the order the group holds them.
+func tableGroups(table *finegrained.Table, op *finegrained.Operation) []apilive.Requirement {
+	groups := make([]apilive.Requirement, 0, len(op.Groups))
+	for _, index := range op.Groups {
+		group := &table.Groups[index]
+		names := make([]string, 0, len(group.Perms))
+		for _, perm := range group.Perms {
+			names = append(names, table.Permissions[perm])
+		}
+		groups = append(groups, apilive.Requirement{Permissions: names, Any: group.Any})
+	}
+	return groups
+}
+
+// demand spells what an operation demands, so the table's and the record's
+// compare as text and a disagreement reads as one: each group's permissions
+// and the boundaries it may be held at, then the skip.
+func demand(groups []apilive.Requirement, skip bool) string {
+	parts := make([]string, 0, len(groups)+1)
+	for _, group := range groups {
+		parts = append(parts, strings.Join(group.Permissions, " and ")+" at "+group.Any.String())
+	}
+	if skip {
+		parts = append(parts, "a skip that leaves the route to GitLab")
+	}
+	if len(parts) == 0 {
+		return "no permission"
+	}
+	return strings.Join(parts, "; ")
+}
+
+// catalogCoverage holds the table to the catalog this tree builds. The
+// generator joins one row per catalog action, so an action the catalog builds
+// that the table lacks was added after the last derivation, and a row no
+// catalog builds is one an action left behind.
+func catalogCoverage(table *finegrained.Table, actions []actionrequests.Action) []string {
+	built := make(map[string]bool, len(actions))
+	for _, action := range actions {
+		built[action.ID] = true
+	}
+	var found []string
+	for i := range table.Actions {
+		id := table.Actions[i].ID
+		if !built[id] {
+			found = append(found, fmt.Sprintf("%s has a row in the table and is built by no catalog; %s", id, regenerate))
+		}
+		delete(built, id)
+	}
+	for id := range built {
+		found = append(found, fmt.Sprintf("%s is built by the catalog and has no row in the table; %s", id, regenerate))
 	}
 	return found
 }
