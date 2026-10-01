@@ -141,7 +141,7 @@ El workflow de release registra ahora una atestación de procedencia de compilac
 :::
 
 :::note[Avisos de terceros]
-A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, generados a partir de los propios binarios del release y listados en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE`.
+A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, generados a partir de los propios binarios del release y listados en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE`, y la fórmula de Homebrew instala ambos en su prefijo. winget y los instaladores de una línea entregan solo el binario: para ellos los avisos son el asset del release que lo acompaña, y `LICENSE` es el archivo de la raíz de la etiqueta del release.
 :::
 
 ## Dónde colocarlo

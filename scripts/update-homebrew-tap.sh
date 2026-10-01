@@ -6,6 +6,14 @@
 # pushes it to the tap repository. The caller must have push access to the
 # tap (in CI: an SSH deploy key wired through GIT_SSH_COMMAND).
 #
+# The formula installs the licence and the third-party notices beside the
+# binary, in the keg's prefix, because the binary links modules whose licences
+# ask for their texts to travel with it. THIRD_PARTY_NOTICES is a release asset
+# listed in checksums.txt, so its hash comes from there like the binaries'.
+# LICENSE is not a release asset: the formula fetches it from the tag's tree,
+# and its hash is taken from the LICENSE of the checkout this script runs from,
+# which in the release workflow is the tagged tree.
+#
 # Usage: update-homebrew-tap.sh <checksums-file> <version> [tap-clone-dir] [--dry-run]
 #
 # --dry-run does everything but the push: the formula is rendered, checked
@@ -30,6 +38,8 @@ VERSION="${2:?Usage: $0 <checksums-file> <version> [tap-clone-dir] [--dry-run]}"
 TAP_DIR="${3:-homebrew-tap}"
 TAP_REPO="${TAP_REPO:-git@github.com:jmrplens/homebrew-tap.git}"
 BASE_URL="https://github.com/jmrplens/gitlab-mcp-server/releases/download/v${VERSION}"
+LICENSE_URL="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/v${VERSION}/LICENSE"
+LICENSE_FILE="$(cd "$(dirname "$0")/.." && pwd)/LICENSE"
 
 sha_for() {
   local name="$1" sha
@@ -45,6 +55,12 @@ SHA_DARWIN_ARM=$(sha_for gitlab-mcp-server-darwin-arm64)
 SHA_DARWIN_INTEL=$(sha_for gitlab-mcp-server-darwin-amd64)
 SHA_LINUX_ARM=$(sha_for gitlab-mcp-server-linux-arm64)
 SHA_LINUX_INTEL=$(sha_for gitlab-mcp-server-linux-amd64)
+SHA_NOTICES=$(sha_for THIRD_PARTY_NOTICES)
+if [[ ! -f "$LICENSE_FILE" ]]; then
+  echo "ERROR: no LICENSE at $LICENSE_FILE to hash" >&2
+  exit 1
+fi
+SHA_LICENSE=$(sha256sum "$LICENSE_FILE" | awk '{print $1}')
 
 if [[ ! -d "$TAP_DIR/.git" ]]; then
   git clone --depth 1 "$TAP_REPO" "$TAP_DIR"
@@ -90,8 +106,20 @@ class GitlabMcpServer < Formula
     end
   end
 
+  resource "license" do
+    url "${LICENSE_URL}"
+    sha256 "${SHA_LICENSE}"
+  end
+
+  resource "third-party-notices" do
+    url "${BASE_URL}/THIRD_PARTY_NOTICES"
+    sha256 "${SHA_NOTICES}"
+  end
+
   def install
     bin.install Dir["gitlab-mcp-server-*"].first => "gitlab-mcp-server"
+    resource("license").stage { prefix.install "LICENSE" }
+    resource("third-party-notices").stage { prefix.install "THIRD_PARTY_NOTICES" }
   end
 
   def caveats
