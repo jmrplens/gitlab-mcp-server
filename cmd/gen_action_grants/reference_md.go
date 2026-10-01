@@ -26,7 +26,9 @@ own words, as its token creation page shows them, with the boundary each is
 held at: a token whose grant covers every permission of one line, at one of the
 boundaries named, can run the action. Where an action has several lines, any
 one of them is enough, since the action sends a different request depending on
-its input.
+its input. Where one of those requests is one no fine-grained token passes, the
+entry says so after what the others need: the action runs, except with an input
+that makes it send that request.
 
 An action GitLab declares nothing for cannot be run with a fine-grained token at
 this release, whatever the grant says: the reason is in the second column, and
@@ -63,7 +65,8 @@ func renderReference(table *finegrained.Table) []byte {
 	return []byte(b.String())
 }
 
-// needsText is what the action needs, way by way.
+// needsText is what the action needs, way by way, and the ways no
+// fine-grained token takes when some other way runs.
 func needsText(description *finegrained.Description) string {
 	if description.Denied != nil {
 		return "Not reachable at this release: " + denialText(description.Denied)
@@ -72,10 +75,19 @@ func needsText(description *finegrained.Description) string {
 	for i, way := range description.AnyOf {
 		ways[i] = wayText(way)
 	}
-	if len(ways) == 1 {
-		return ways[0]
+	text := strings.Join(ways, " **or** ")
+	if len(ways) > 1 {
+		text = "one of: " + text
 	}
-	return "one of: " + strings.Join(ways, " **or** ")
+	if len(description.DeniedWays) == 0 {
+		return text
+	}
+	reasons := make([]string, len(description.DeniedWays))
+	for i := range description.DeniedWays {
+		reasons[i] = denialText(&description.DeniedWays[i])
+	}
+	return text + ". With an input that sends another request instead, not reachable at this release: " +
+		strings.Join(reasons, " **or** ")
 }
 
 // wayText is what one way of running the action needs.
@@ -102,28 +114,17 @@ func needText(need finegrained.Need) string {
 // served empty.
 func servedEmptyText(description *finegrained.Description) string {
 	parts := make([]string, 0, len(description.AlwaysEmpty)+len(description.EmptyWithout))
-	for _, path := range description.AlwaysEmpty {
-		parts = append(parts, "`"+selectionText(path)+"` (always)")
+	for _, selection := range description.AlwaysEmpty {
+		parts = append(parts, "`"+selection+"` (always)")
 	}
 	for _, position := range description.EmptyWithout {
 		needs := make([]string, len(position.Needs))
 		for i, need := range position.Needs {
 			needs[i] = needText(need)
 		}
-		parts = append(parts, "`"+selectionText(position.Path)+"` (without "+strings.Join(needs, "; ")+")")
+		parts = append(parts, "`"+position.Selection+"` (without "+strings.Join(needs, "; ")+")")
 	}
 	return strings.Join(parts, ", ")
-}
-
-// selectionText writes a position of the answer as the GraphQL selection that
-// reaches it, `project { vulnerabilities { nodes } }` for the dotted path the
-// table holds. It is how a reader meets the position in a query, and a dotted
-// path on this page would read as an action ID wherever its first field shares
-// a domain's name, as `vulnerability.project` does, which is exactly what the
-// documentation's name check holds a page to.
-func selectionText(path string) string {
-	fields := strings.Split(path, ".")
-	return strings.Join(fields, " { ") + strings.Repeat(" }", len(fields)-1)
 }
 
 // denialText says why no fine-grained token reaches an action.

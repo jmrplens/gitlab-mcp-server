@@ -82,6 +82,29 @@ func TestNeedsText_WordsEachWayOfRunningTheAction(t *testing.T) {
 			want: "one of: Project: Read at project or group **or** a request GitLab does not judge by the grant",
 		},
 		{name: "nothing needed", description: finegrained.Description{AnyOf: []finegrained.Way{{}}}, want: "no permission"},
+		{
+			name: "a way no token takes",
+			description: finegrained.Description{
+				AnyOf:      []finegrained.Way{{Needs: []finegrained.Need{read}}},
+				DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace"}},
+			},
+			want: "Project: Read at project or group. With an input that sends another request instead, not reachable at this release: " +
+				"GitLab declares no fine-grained permission for `Namespace`, which the answer is made of",
+		},
+		{
+			name: "two ways no token takes",
+			description: finegrained.Description{
+				AnyOf: []finegrained.Way{{Needs: []finegrained.Need{read}}, {Needs: []finegrained.Need{write}}},
+				DeniedWays: []finegrained.Denial{
+					{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace"},
+					{Cause: finegrained.CauseRESTUndeclared, Element: "GET /x"},
+				},
+			},
+			want: "one of: Project: Read at project or group **or** Issue: Create, Label: Create at project. " +
+				"With an input that sends another request instead, not reachable at this release: " +
+				"GitLab declares no fine-grained permission for `Namespace`, which the answer is made of **or** " +
+				"GitLab declares no fine-grained permission for `GET /x`",
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -94,13 +117,13 @@ func TestNeedsText_WordsEachWayOfRunningTheAction(t *testing.T) {
 
 // TestServedEmptyText_NamesWhatAGrantStillLeavesOut verifies the parts of an
 // answer a fine-grained token is served empty are named, each as the GraphQL
-// selection that reaches it: always, or unless the grant also holds what
-// follows them.
+// selection the description carries: always, or unless the grant also holds
+// what follows them.
 func TestServedEmptyText_NamesWhatAGrantStillLeavesOut(t *testing.T) {
 	description := finegrained.Description{
-		AlwaysEmpty: []string{"project.branchRules.nodes", "vulnerability"},
+		AlwaysEmpty: []string{"project { branchRules { nodes } }", "vulnerability"},
 		EmptyWithout: []finegrained.Position{{
-			Path: "issue.author", Needs: []finegrained.Need{{Permissions: []string{"User: Read"}, At: []string{"user"}}},
+			Selection: "issue { author }", Needs: []finegrained.Need{{Permissions: []string{"User: Read"}, At: []string{"user"}}},
 		}},
 	}
 	want := "`project { branchRules { nodes } }` (always), `vulnerability` (always), `issue { author }` (without User: Read at user)"

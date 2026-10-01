@@ -1,6 +1,9 @@
 package finegrained
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // Description is one action's requirement in GitLab's words: what the detail
 // of an action serves a model and what the reference page prints, built here
@@ -11,10 +14,15 @@ type Description struct {
 	// AnyOf are the ways of running the action, any one of which is enough:
 	// the action sends a different request depending on its input.
 	AnyOf []Way `json:"any_of,omitempty"`
+	// DeniedWays are the ways of running the action no fine-grained token
+	// passes, beside the ways in AnyOf that it can: an input that selects one
+	// of these meets the denial, every other input runs.
+	DeniedWays []Denial `json:"denied_ways,omitempty"`
 	// Denied says why no fine-grained token runs the action at this release.
 	Denied *Denial `json:"denied,omitempty"`
 	// AlwaysEmpty are parts of the answer GitLab leaves empty for every
-	// fine-grained token, while the rest is served.
+	// fine-grained token, while the rest is served, each written as a
+	// [Selection].
 	AlwaysEmpty []string `json:"always_empty,omitempty"`
 	// EmptyWithout are parts of the answer GitLab leaves empty unless the
 	// grant also holds what each names.
@@ -37,10 +45,24 @@ type Need struct {
 	At          []string `json:"at"`
 }
 
-// Position is a part of an answer and what a grant needs for it to be served.
+// Position is a part of an answer, written as a [Selection], and what a grant
+// needs for it to be served.
 type Position struct {
-	Path  string `json:"path"`
-	Needs []Need `json:"needs"`
+	Selection string `json:"selection"`
+	Needs     []Need `json:"needs"`
+}
+
+// Selection writes a position of an answer as the GraphQL selection that
+// reaches it from the field the action asks for, `project { vulnerabilities {
+// nodes } }` for the dotted path a table element holds. It is how a reader
+// meets the position in a query, and it is the one spelling of a position
+// this package hands out: a dotted path reads as a canonical action ID
+// wherever its first field shares a domain's name, as `vulnerability.project`
+// does, to a model reading the detail and to the documentation's name check
+// reading the reference page alike.
+func Selection(path string) string {
+	fields := strings.Split(path, ".")
+	return strings.Join(fields, " { ") + strings.Repeat(" }", len(fields)-1)
 }
 
 // Describe words one row. A nil row describes nothing and yields nil.
@@ -60,8 +82,9 @@ func (t *Table) Describe(row *Requirement) *Description {
 			description.AnyOf = append(description.AnyOf, way)
 		}
 	}
+	description.DeniedWays = slices.Clone(row.DeniedWays)
 	for _, element := range row.Degraded {
-		description.AlwaysEmpty = append(description.AlwaysEmpty, t.Elements[element].Path)
+		description.AlwaysEmpty = append(description.AlwaysEmpty, Selection(t.Elements[element].Path))
 	}
 	seen := map[uint32]bool{}
 	for _, path := range row.Paths {
@@ -72,7 +95,7 @@ func (t *Table) Describe(row *Requirement) *Description {
 				}
 				seen[element] = true
 				description.EmptyWithout = append(description.EmptyWithout, Position{
-					Path: t.Elements[element].Path, Needs: t.needs(t.Elements[element].Groups),
+					Selection: Selection(t.Elements[element].Path), Needs: t.needs(t.Elements[element].Groups),
 				})
 			}
 		}

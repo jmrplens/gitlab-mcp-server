@@ -40,6 +40,9 @@ func describeTable() *Table {
 			{ID: "a.denied", Denied: &Denial{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}},
 			{ID: "a.graphql", Paths: [][]uint32{{3, 0}}, Degraded: []uint32{2}},
 			{ID: "a.skipped", Paths: [][]uint32{{5}}},
+			{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []Denial{
+				{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull},
+			}},
 			{ID: "a.twice", Paths: [][]uint32{{4}}},
 			{ID: "a.ways", Paths: [][]uint32{{0}, {1}, {2}}},
 		},
@@ -97,9 +100,9 @@ func TestTable_Describe_WordsEachRow(t *testing.T) {
 					{Permissions: []string{"A: Read", "C: Write"}, At: []string{"project"}},
 					{Permissions: []string{"A: Read"}, At: []string{"project"}},
 				}}},
-				AlwaysEmpty: []string{"thing.never"},
+				AlwaysEmpty: []string{"thing { never }"},
 				EmptyWithout: []Position{{
-					Path: "thing.part", Needs: []Need{{Permissions: []string{"read_b"}, At: []string{"group"}}},
+					Selection: "thing { part }", Needs: []Need{{Permissions: []string{"read_b"}, At: []string{"group"}}},
 				}},
 			},
 		},
@@ -111,6 +114,15 @@ func TestTable_Describe_WordsEachRow(t *testing.T) {
 				Needs:     []Need{{Permissions: []string{"read_b"}, At: []string{"group"}}},
 				NotJudged: true,
 			}}},
+		},
+		{
+			// A way no token passes is named beside the way that runs.
+			id: "a.some",
+			want: &Description{
+				GitLabVersion: "19.4.1",
+				AnyOf:         []Way{{Needs: []Need{{Permissions: []string{"A: Read"}, At: []string{"project"}}}}},
+				DeniedWays:    []Denial{{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}},
+			},
 		},
 		{
 			// Two groups wording the same are one need; a permission past
@@ -133,7 +145,8 @@ func TestTable_Describe_WordsEachRow(t *testing.T) {
 }
 
 // TestTable_Describe_DeniedIsACopy verifies the description does not hand a
-// reader a pointer into the table, which every session shares.
+// reader a pointer into the table, which every session shares: neither the
+// denial of a row nothing reaches nor the denied ways of one something does.
 func TestTable_Describe_DeniedIsACopy(t *testing.T) {
 	table := describeTable()
 	row := table.Requirement("a.denied")
@@ -141,6 +154,29 @@ func TestTable_Describe_DeniedIsACopy(t *testing.T) {
 	got.Denied.Element = "changed"
 	if row.Denied.Element != "Namespace" {
 		t.Errorf("writing the description changed the table's denial to %q", row.Denied.Element)
+	}
+	some := table.Requirement("a.some")
+	table.Describe(some).DeniedWays[0].Element = "changed"
+	if some.DeniedWays[0].Element != "Namespace" {
+		t.Errorf("writing the description changed the table's denied way to %q", some.DeniedWays[0].Element)
+	}
+}
+
+// TestSelection_WritesAPositionAsTheSelectionThatReachesIt verifies a dotted
+// path is written as the GraphQL selection reaching it, which no reader takes
+// for an action ID, and a root field as itself.
+func TestSelection_WritesAPositionAsTheSelectionThatReachesIt(t *testing.T) {
+	cases := map[string]string{
+		"vulnerability":                            "vulnerability",
+		"vulnerability.findingTokenStatus":         "vulnerability { findingTokenStatus }",
+		"project.vulnerabilities.nodes.issueLinks": "project { vulnerabilities { nodes { issueLinks } } }",
+	}
+	for path, want := range cases {
+		t.Run(path, func(t *testing.T) {
+			if got := Selection(path); got != want {
+				t.Errorf("Selection(%q) = %q, want %q", path, got, want)
+			}
+		})
 	}
 }
 
