@@ -310,11 +310,9 @@ func TestProbeHealth_AnswersTheStatusOrUnanswered(t *testing.T) {
 		t.Errorf("two probes opened %d connections, want one each", connections.Load())
 	}
 
-	closed := httptest.NewServer(http.NotFoundHandler())
-	closedAddr := strings.TrimPrefix(closed.URL, "http://")
-	closed.Close()
+	closedAddr := strings.TrimPrefix(closedEndpoint(t), "http://")
 	if status, _ := probeHealth(t.Context(), closedAddr); status != healthUnanswered {
-		t.Errorf("probeHealth of a closed listener = %q, want %q", status, healthUnanswered)
+		t.Errorf("probeHealth of a listener that answers nothing = %q, want %q", status, healthUnanswered)
 	}
 	if status, _ := probeHealth(t.Context(), "bad host"); status != healthUnanswered {
 		t.Errorf("probeHealth of an address no URL holds = %q, want %q", status, healthUnanswered)

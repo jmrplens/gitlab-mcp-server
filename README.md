@@ -475,9 +475,9 @@ and the workaround this server carries until it ships.
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
 | Source (`.go`, non-test) |     1,398 |       324,137 |
-| Unit tests (`_test.go`)  |       966 |       644,477 |
+| Unit tests (`_test.go`)  |       966 |       644,498 |
 | End-to-end tests         |       508 |       108,680 |
-| **Total**                | **2,872** | **1,077,294** |
+| **Total**                | **2,872** | **1,077,315** |
 
 ### Functions
 
@@ -504,7 +504,7 @@ and the workaround this server carries until it ships.
 
 | Pattern                            |  Count |
 | ---------------------------------- | -----: |
-| `if err != nil` checks             | 10,016 |
+| `if err != nil` checks             | 10,017 |
 | `defer` statements                 |  1,331 |
 | `struct` types defined             |  3,573 |
 | `//nolint` suppressions            |    245 |
