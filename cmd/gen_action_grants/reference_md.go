@@ -32,7 +32,8 @@ An action GitLab declares nothing for cannot be run with a fine-grained token at
 this release, whatever the grant says: the reason is in the second column, and
 a classic personal access token is the way out. **Served empty** names a part of
 the answer GitLab leaves out for a fine-grained token while the rest is served:
-always, or unless the grant also holds what follows it.
+always, or unless the grant also holds what follows it. Each part is written as
+the GraphQL selection that reaches it from the field the action asks for.
 
 Classic personal access tokens are not judged here: their scopes decide what
 they can do, as before. The same requirement is served for each action in the
@@ -102,16 +103,27 @@ func needText(need finegrained.Need) string {
 func servedEmptyText(description *finegrained.Description) string {
 	parts := make([]string, 0, len(description.AlwaysEmpty)+len(description.EmptyWithout))
 	for _, path := range description.AlwaysEmpty {
-		parts = append(parts, "`"+path+"` (always)")
+		parts = append(parts, "`"+selectionText(path)+"` (always)")
 	}
 	for _, position := range description.EmptyWithout {
 		needs := make([]string, len(position.Needs))
 		for i, need := range position.Needs {
 			needs[i] = needText(need)
 		}
-		parts = append(parts, "`"+position.Path+"` (without "+strings.Join(needs, "; ")+")")
+		parts = append(parts, "`"+selectionText(position.Path)+"` (without "+strings.Join(needs, "; ")+")")
 	}
 	return strings.Join(parts, ", ")
+}
+
+// selectionText writes a position of the answer as the GraphQL selection that
+// reaches it, `project { vulnerabilities { nodes } }` for the dotted path the
+// table holds. It is how a reader meets the position in a query, and a dotted
+// path on this page would read as an action ID wherever its first field shares
+// a domain's name, as `vulnerability.project` does, which is exactly what the
+// documentation's name check holds a page to.
+func selectionText(path string) string {
+	fields := strings.Split(path, ".")
+	return strings.Join(fields, " { ") + strings.Repeat(" }", len(fields)-1)
 }
 
 // denialText says why no fine-grained token reaches an action.
@@ -125,10 +137,25 @@ func denialText(denial *finegrained.Denial) string {
 	case finegrained.CausePayloadUndeclared:
 		return "GitLab declares no fine-grained permission for " + element + " in the answer, so the write commits and its answer is lost"
 	case finegrained.CauseBoundaryUnresolvable:
-		return element + " is declared at a boundary this object never resolves to"
+		return element + " is declared at a boundary the object the action reaches never resolves to, " + unresolvedEffect(denial.Effect)
 	case finegrained.CauseRESTTodo:
 		return "GitLab marks " + element + " as not yet supported for fine-grained tokens"
 	default:
 		return "GitLab declares no fine-grained permission for " + element
+	}
+}
+
+// unresolvedEffect words what GitLab does where a boundary never resolves: a
+// mutation's own check refuses it before anything runs, a write's answer is
+// lost after the write commits, and a read answers null or leaves the object
+// out of its list.
+func unresolvedEffect(effect finegrained.Effect) string {
+	switch effect {
+	case finegrained.EffectRefused:
+		return "so GitLab refuses the write before it runs"
+	case finegrained.EffectCommittedThenNull:
+		return "so the write commits and its answer is lost"
+	default:
+		return "so GitLab answers it as null or leaves it out of the list"
 	}
 }
