@@ -550,20 +550,26 @@ func (s *Session) PromptSpecs() []PromptSpec {
 	return specs
 }
 
-// Serves reports whether this session can reach the given action at all.
+// Serves reports whether this session can reach the given action at all: a
+// call to it is sent, and the server runs it or GitLab answers it.
 //
 // It answers from the catalog the server built rather than from the base
 // catalog, so an action removed by read-only mode, by the credential's scopes
 // or by the operator's exclusions is not served, and neither is one whose
-// individual tool name another action owns.
+// individual tool name another action owns. For a fine-grained credential it
+// answers the call guard's verdict, which serves some actions the listing
+// leaves out ([Session.Actions]): one GitLab serves on a public project or
+// group, and on the release past the record any action phase A allows.
 func (s *Session) Serves(id ActionID) bool {
-	_, ok := s.conn.served.actions[id]
+	_, ok := s.conn.served.callable[id]
 	return ok
 }
 
-// Actions returns every action this session can reach, sorted, on the same
-// terms as Serves. It is what a test compares a listing the server published
-// against, and what a sweep walks.
+// Actions returns every action this session's listing shows, sorted. It is
+// what a test compares a listing the server published against, and what a
+// sweep walks. Every one of them is served; for every credential but a
+// fine-grained one in phase B the two sets are the same, while such a token's
+// listing shows only what its grant reaches and its calls reach more.
 func (s *Session) Actions() []ActionID {
 	actions := make([]ActionID, 0, len(s.conn.served.actions))
 	for id := range s.conn.served.actions {
@@ -873,6 +879,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		return nil, err
 	}
 	conn.served.actions = expectation.actions
+	conn.served.callable = expectation.callable
 	return conn, nil
 }
 

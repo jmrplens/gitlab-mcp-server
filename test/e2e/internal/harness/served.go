@@ -54,9 +54,16 @@ type servedSets struct {
 	// a sweep can bind the required ones from the World and skip a prompt it
 	// cannot satisfy rather than watch it error.
 	promptSpecs []PromptSpec
-	// actions are the catalog actions this session can reach, which is not a
-	// listing: it comes from the catalog the assemblers built.
+	// actions are the catalog actions this session lists, which is not read
+	// off a listing: it comes from the catalog the assemblers built, narrowed
+	// to what a fine-grained credential is listed.
 	actions map[ActionID]struct{}
+	// callable are the catalog actions a call is served on this session:
+	// every listed one, and for a fine-grained credential also the ones its
+	// listing leaves out and its call guard still passes to GitLab (an action
+	// GitLab serves on a public project or group, or any action phase A allows
+	// on the one release past the record that lists by the grant).
+	callable map[ActionID]struct{}
 }
 
 // PromptSpec is one served prompt and the arguments it declares, split into
@@ -223,9 +230,12 @@ func promptSpecOf(prompt *mcp.Prompt) PromptSpec {
 type surfaceExpectation struct {
 	// tools are the registered names the catalog accounts for, sorted.
 	tools []string
-	// actions are the catalog actions the surface can reach, the standalone
+	// actions are the catalog actions the surface lists, the standalone
 	// utilities among them wherever the surface registers them.
 	actions map[ActionID]struct{}
+	// callable are the catalog actions a call is served on the surface, a
+	// superset of actions that [listedFor] fills.
+	callable map[ActionID]struct{}
 	// standalone are the tool names registered outside the catalog, which the
 	// listing comparison ignores: they are pinned by behavior tests instead.
 	// The actions behind them are in actions all the same.
@@ -389,13 +399,19 @@ func (inst *instance) credential() credentialFacts {
 }
 
 // listedFor narrows an expectation to what a credential holding authority is
-// listed: the tools [toolvisibility.ToolActions.Listed] lists, which is the
-// decision the server's listing middleware takes, and the actions the
-// authority lists, which is what a session can be asked to reach and what a
-// sweep walks. An action withheld from the listing is then one [Withheld]
-// asserts. A nil authority narrows nothing, and tools may be nil for the
-// dynamic surface, whose two tools are listed whatever the catalog holds.
+// listed and may call: the tools [toolvisibility.ToolActions.Listed] lists,
+// which is the decision the server's listing middleware takes; the actions the
+// authority lists, which is what a listing is compared against and what a
+// sweep walks; and the actions its call guard passes
+// ([finegrained.Authority.Decide]), which is what a session can be asked to
+// reach. The two action sets differ only for a fine-grained credential in
+// phase B: an action GitLab serves on a public project or group, and on the
+// release past the record every action phase A allows, is called and not
+// listed. An action the call guard refuses is one [Withheld] asserts. A nil
+// authority narrows nothing, and tools may be nil for the dynamic surface,
+// whose two tools are listed whatever the catalog holds.
 func listedFor(expectation surfaceExpectation, authority *finegrained.Authority, tools *toolvisibility.ToolActions) surfaceExpectation {
+	expectation.callable = maps.Clone(expectation.actions)
 	if authority == nil {
 		return expectation
 	}
@@ -404,6 +420,9 @@ func listedFor(expectation surfaceExpectation, authority *finegrained.Authority,
 			return !tools.Listed(authority, name)
 		})
 	}
+	maps.DeleteFunc(expectation.callable, func(id ActionID, _ struct{}) bool {
+		return !authority.Decide(string(id)).Callable
+	})
 	maps.DeleteFunc(expectation.actions, func(id ActionID, _ struct{}) bool {
 		return !authority.Lists(string(id))
 	})

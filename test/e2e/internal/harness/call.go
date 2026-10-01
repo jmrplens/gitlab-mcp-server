@@ -508,8 +508,8 @@ func (s *Session) resolve(id ActionID, params map[string]any, confirm bool) (too
 		return toolCall{}, err
 	}
 	if !s.Serves(id) {
-		return toolCall{}, fmt.Errorf("the %s session does not serve %s: the %s mode, the credential's scopes, the %s tier "+
-			"its credential could read, or the operator's exclusions removed it", s.Surface(), id, s.Mode(), s.Tier())
+		return toolCall{}, fmt.Errorf("the %s session does not serve %s: the %s mode, the credential's scopes or fine-grained grant, "+
+			"the %s tier its credential could read, or the operator's exclusions removed it", s.Surface(), id, s.Mode(), s.Tier())
 	}
 	return call, nil
 }
