@@ -744,7 +744,7 @@ func writeLLMSFullEnterpriseOnlyMetaTools(b *strings.Builder, catalog llmsCatalo
 		return
 	}
 	b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
+	fmt.Fprintf(b, "These %d tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license or namespace plan). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 	for _, tool := range enterpriseOnly {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
 	}
