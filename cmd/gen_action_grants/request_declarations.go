@@ -1,6 +1,9 @@
 package main
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
 )
 
@@ -34,12 +37,10 @@ const userCoreBasic = `id
 		avatarUrl
 		webUrl`
 
-// workItemFragment is client-go's static WorkItem template (workitems.go,
-// workItemTemplate) with UserCoreBasic spread in, which is what GetWorkItem,
-// CreateWorkItem and UpdateWorkItem select for the item. Every object it
-// selects is a position GitLab checks a fine-grained token at, so it is
-// written out whole rather than cut to what decides today's verdict.
-const workItemFragment = `id
+// workItemScalars are the fields every WorkItem fragment of client-go's
+// selects outside its features (workitems.go, workItemCEFields and
+// workItemTemplate), with UserCoreBasic spread into the author.
+const workItemScalars = `id
 	iid
 	workItemType { name }
 	state
@@ -50,44 +51,84 @@ const workItemFragment = `id
 	createdAt
 	updatedAt
 	closedAt
-	webUrl
-	features {
-		assignees { assignees { nodes { ` + userCoreBasic + ` } } }
-		color { color textColor }
-		healthStatus { healthStatus }
-		hierarchy {
-			hasParent
-			parent { iid namespace { fullPath } }
-			hasChildren
-			children { nodes { iid namespace { fullPath } } }
-		}
-		iteration { iteration { id } }
-		labels { labels { nodes { id title color description descriptionHtml textColor } } }
-		linkedItems { linkedItems { nodes { workItem { iid namespace { fullPath } } linkType } } }
-		milestone { milestone { id } }
-		startAndDueDate { startDate dueDate }
-		status { status { name } }
-		weight { weight }
-	}`
+	webUrl`
+
+// workItemFeatures are the selections client-go keeps for each feature of a
+// work item, by the name ReturnedFields and its field registry give it.
+// Every object one selects is a position GitLab checks a fine-grained token
+// at, so each is written out whole rather than cut to what decides today's
+// verdict.
+var workItemFeatures = map[string]string{
+	"assignees":       `assignees { assignees { nodes { ` + userCoreBasic + ` } } }`,
+	"color":           `color { color textColor }`,
+	"healthStatus":    `healthStatus { healthStatus }`,
+	"hierarchy":       `hierarchy { hasParent parent { iid namespace { fullPath } } hasChildren children { nodes { iid namespace { fullPath } } } }`,
+	"iteration":       `iteration { iteration { id } }`,
+	"labels":          `labels { labels { nodes { id title color description descriptionHtml textColor } } }`,
+	"linkedItems":     `linkedItems { linkedItems { nodes { workItem { iid namespace { fullPath } } linkType } } }`,
+	"milestone":       `milestone { milestone { id } }`,
+	"startAndDueDate": `startAndDueDate { startDate dueDate }`,
+	"status":          `status { status { name } }`,
+	"weight":          `weight { weight }`,
+}
+
+// workItemDefaultListFeatures are the features of client-go's CE-safe
+// default list field set (WorkItemDefaultListFields), which a list handler
+// extends with the Enterprise ones it asks for.
+var workItemDefaultListFeatures = []string{"assignees", "hierarchy", "labels", "linkedItems", "milestone", "startAndDueDate"}
+
+// workItemFragment is a WorkItem fragment selecting the named features, in
+// the order given.
+func workItemFragment(features ...string) string {
+	selections := make([]string, len(features))
+	for i, feature := range features {
+		selections[i] = workItemFeatures[feature]
+	}
+	return workItemScalars + "\n\tfeatures { " + strings.Join(selections, " ") + " }"
+}
+
+// The work item fragments the handlers make client-go send. Get, create and
+// update use client-go's static WorkItem template, which selects every
+// feature; a list renders its fragment from the fields the handler asks for:
+// issue.work_item_list the CE-safe default and, on an Enterprise instance,
+// all five Enterprise features (workitems.listReturnedFields, the widest
+// default, since a caller's returned_fields only narrows it), and
+// group.epic_list the default with color, healthStatus and weight, an epic
+// carrying neither a status nor an iteration (epics.buildWorkItemsListOptions).
+var (
+	staticWorkItemFragment = workItemFragment("assignees", "color", "healthStatus", "hierarchy", "iteration",
+		"labels", "linkedItems", "milestone", "startAndDueDate", "status", "weight")
+	workItemListFragment = workItemFragment(append(slices.Clone(workItemDefaultListFeatures),
+		"color", "healthStatus", "iteration", "status", "weight")...)
+	epicListFragment = workItemFragment(append(slices.Clone(workItemDefaultListFeatures),
+		"color", "healthStatus", "weight")...)
+)
 
 // The work item documents client-go assembles from its templates, evaluated
-// with the data each method passes.
-const (
+// with what the method passes the template: nothing for get, create and
+// update, and for a list the fragment its fields render.
+var (
 	getWorkItemDocument = `query GetWorkItem($fullPath: ID!, $iid: String!) {
-	namespace(fullPath: $fullPath) { workItem(iid: $iid) { ` + workItemFragment + ` } }
+	namespace(fullPath: $fullPath) { workItem(iid: $iid) { ` + staticWorkItemFragment + ` } }
 }`
-	listWorkItemsDocument = `query ListWorkItems($fullPath: ID!) {
-	namespace(fullPath: $fullPath) {
-		workItems { nodes { ` + workItemFragment + ` } pageInfo { endCursor hasNextPage startCursor hasPreviousPage } }
-	}
-}`
+	listWorkItemsDocument  = listDocument(workItemListFragment)
+	listEpicsDocument      = listDocument(epicListFragment)
 	createWorkItemDocument = `mutation CreateWorkItem($input: WorkItemCreateInput!) {
-	workItemCreate(input: $input) { workItem { ` + workItemFragment + ` } errors }
+	workItemCreate(input: $input) { workItem { ` + staticWorkItemFragment + ` } errors }
 }`
 	updateWorkItemDocument = `mutation UpdateWorkItem($input: WorkItemUpdateInput!) {
-	workItemUpdate(input: $input) { workItem { ` + workItemFragment + ` } errors }
+	workItemUpdate(input: $input) { workItem { ` + staticWorkItemFragment + ` } errors }
 }`
 )
+
+// listDocument is client-go's ListWorkItems shell around one fragment.
+func listDocument(fragment string) string {
+	return `query ListWorkItems($fullPath: ID!) {
+	namespace(fullPath: $fullPath) {
+		workItems { nodes { ` + fragment + ` } pageInfo { endCursor hasNextPage startCursor hasPreviousPage } }
+	}
+}`
+}
 
 // The Terraform state documents client-go formats with the project path and
 // the state name quoted in.
@@ -145,7 +186,7 @@ var requestDeclarations = []derive.Declaration{
 	},
 	workItemDeclaration("group.epic_create", "WorkItems.CreateWorkItem", "CreateWorkItem", createWorkItemDocument),
 	workItemDeclaration("group.epic_get", "WorkItems.GetWorkItem", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("group.epic_list", "WorkItems.ListWorkItems", "ListWorkItems", listWorkItemsDocument),
+	workItemDeclaration("group.epic_list", "WorkItems.ListWorkItems", "ListWorkItems", listEpicsDocument),
 	workItemDeclaration("group.epic_update", "WorkItems.UpdateWorkItem", "UpdateWorkItem", updateWorkItemDocument),
 	workItemDeclaration("issue.work_item_create", "WorkItems.CreateWorkItem", "CreateWorkItem", createWorkItemDocument),
 	workItemDeclaration("issue.work_item_get", "WorkItems.GetWorkItem", "GetWorkItem", getWorkItemDocument),
@@ -165,11 +206,12 @@ var requestDeclarations = []derive.Declaration{
 }
 
 // workItemDeclaration declares the document a client-go work item method
-// assembles from its template.
+// assembles from its template. TestRequestDeclarations_DeclareWhatTheHandlerSends
+// holds each to what the handler makes client-go send.
 func workItemDeclaration(action, method, name, document string) derive.Declaration {
 	return derive.Declaration{
 		Action: action, Category: categoryTemplate,
-		Reason:   "client-go executes the " + name + " text/template of workitems.go at run time; the document is that template evaluated with the data the method passes",
+		Reason:   "client-go executes the " + name + " text/template of workitems.go at run time; the document is that template evaluated with what the handler hands the method",
 		Replaces: categoryTemplate + " " + method, Requests: []derive.Request{graphql(method, document)},
 	}
 }
