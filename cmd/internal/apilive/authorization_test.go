@@ -59,6 +59,99 @@ func TestRouteClasses_AreSpelledAsTheCountsNameThem(t *testing.T) {
 	}
 }
 
+// TestRoute_Requirements_ReadsWhatARouteDemands verifies what a route demands
+// of a fine-grained token in each class: a skipped route demands nothing and
+// is left to GitLab, a deferred one and one declaring nothing demand nothing
+// and are denied with their cause, and an authorized one demands its primary
+// requirement and then each additional scope, permissions sorted, the scope's
+// boundary read as all four when a callable resolves it or it names none
+// GitLab knows, and a requirement the route names twice demanded once. The
+// permissions are sorted on a copy, so the record is left as it was read.
+func TestRoute_Requirements_ReadsWhatARouteDemands(t *testing.T) {
+	t.Parallel()
+	callable := &Callable{Callable: true}
+	authorized := &RouteAuthorization{
+		Permissions: []string{"update_issue", "read_issue"}, BoundaryType: "project",
+		AdditionalScopes: []AdditionalScope{
+			{Permissions: []string{"read_namespace"}, BoundaryType: "group"},
+			{Permissions: []string{"read_user"}, BoundaryType: "user", Boundary: callable},
+			{Permissions: []string{"read_runner"}, BoundaryType: "namespace"},
+			{Permissions: []string{"read_issue", "update_issue"}, BoundaryType: "project"},
+			{Permissions: []string{"read_namespace"}, BoundaryType: "group"},
+		},
+	}
+	for _, testCase := range []struct {
+		name       string
+		auth       *RouteAuthorization
+		wantGroups []Requirement
+		wantSkip   bool
+		wantDenied finegrained.Cause
+	}{
+		{name: "skipped", auth: &RouteAuthorization{Permissions: []string{"read_issue"}, Skip: "public"}, wantSkip: true},
+		{name: "deferred", auth: &RouteAuthorization{Todo: "later"}, wantDenied: finegrained.CauseRESTTodo},
+		{name: "undeclared", auth: nil, wantDenied: finegrained.CauseRESTUndeclared},
+		{name: "authorized", auth: authorized, wantGroups: []Requirement{
+			{Permissions: []string{"read_issue", "update_issue"}, Any: finegrained.BoundaryProject},
+			{Permissions: []string{"read_namespace"}, Any: finegrained.BoundaryGroup},
+			{Permissions: []string{"read_user"}, Any: finegrained.AllBoundaries},
+			{Permissions: []string{"read_runner"}, Any: finegrained.AllBoundaries},
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			groups, skip, denied := (Route{Authorization: testCase.auth}).Requirements()
+			if !reflect.DeepEqual(groups, testCase.wantGroups) || skip != testCase.wantSkip || denied != testCase.wantDenied {
+				t.Errorf("Requirements() = %+v, %t, %q; want %+v, %t, %q",
+					groups, skip, denied, testCase.wantGroups, testCase.wantSkip, testCase.wantDenied)
+			}
+		})
+	}
+	if got := authorized.Permissions; !reflect.DeepEqual(got, []string{"update_issue", "read_issue"}) {
+		t.Errorf("Requirements() reordered the record's permissions to %q", got)
+	}
+}
+
+// TestPrimaryBoundary_ReadsWhereARouteMayBeHeld verifies a route's primary
+// requirement is held at the boundary it declares, at any of its alternative
+// boundaries, at all four when a callable resolves it per request or when it
+// declares none, that a callable declared beside a boundary type keeps that
+// type, and that an alternative naming neither adds nothing.
+func TestPrimaryBoundary_ReadsWhereARouteMayBeHeld(t *testing.T) {
+	t.Parallel()
+	callable := &Callable{Callable: true}
+	for _, testCase := range []struct {
+		name string
+		auth RouteAuthorization
+		want finegrained.Boundary
+	}{
+		{name: "declared", auth: RouteAuthorization{BoundaryType: "project"}, want: finegrained.BoundaryProject},
+		{
+			name: "alternatives",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "group"}, {BoundaryType: "user"}}},
+			want: finegrained.BoundaryGroup | finegrained.BoundaryUser,
+		},
+		{name: "callable alone", auth: RouteAuthorization{Boundaries: []Boundary{{Boundary: callable}}}, want: finegrained.AllBoundaries},
+		{
+			name: "callable with a type",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "project", Boundary: callable}}},
+			want: finegrained.BoundaryProject,
+		},
+		{name: "none", auth: RouteAuthorization{}, want: finegrained.AllBoundaries},
+		{
+			name: "an alternative naming neither",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "group"}, {}}},
+			want: finegrained.BoundaryGroup,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := primaryBoundary(&testCase.auth); got != testCase.want {
+				t.Errorf("primaryBoundary = %s, want %s", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestKnownBoundaryType_IsGitLabsLowerCaseFour verifies the boundary types a
 // record may name, spelled as GitLab's enum values and its boundary extractor
 // compare them, and nothing near them.

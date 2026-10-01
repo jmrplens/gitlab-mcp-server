@@ -1,6 +1,7 @@
 package join
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -31,42 +32,29 @@ func TestLooselyAgree_APlaceholderOnEitherSideStandsForALiteral(t *testing.T) {
 	}
 }
 
-// TestPrimaryBoundary_ReadsWhereARouteMayBeHeld verifies a route's primary
-// requirement is held at the boundary it declares, at any of its alternative
-// boundaries, at all four when a callable resolves it per request or when it
-// declares none, that a callable declared beside a boundary type keeps that
-// type, and that an alternative naming neither adds nothing.
-func TestPrimaryBoundary_ReadsWhereARouteMayBeHeld(t *testing.T) {
-	callable := &apilive.Callable{Callable: true}
-	cases := []struct {
-		name string
-		auth apilive.RouteAuthorization
-		want finegrained.Boundary
-	}{
-		{name: "declared", auth: apilive.RouteAuthorization{BoundaryType: "project"}, want: finegrained.BoundaryProject},
-		{
-			name: "alternatives",
-			auth: apilive.RouteAuthorization{Boundaries: []apilive.Boundary{{BoundaryType: "group"}, {BoundaryType: "user"}}},
-			want: finegrained.BoundaryGroup | finegrained.BoundaryUser,
-		},
-		{name: "callable alone", auth: apilive.RouteAuthorization{Boundaries: []apilive.Boundary{{Boundary: callable}}}, want: finegrained.AllBoundaries},
-		{
-			name: "callable with a type",
-			auth: apilive.RouteAuthorization{Boundaries: []apilive.Boundary{{BoundaryType: "project", Boundary: callable}}},
-			want: finegrained.BoundaryProject,
-		},
-		{name: "none", auth: apilive.RouteAuthorization{}, want: finegrained.AllBoundaries},
-		{
-			name: "an alternative naming neither",
-			auth: apilive.RouteAuthorization{Boundaries: []apilive.Boundary{{BoundaryType: "group"}, {}}},
-			want: finegrained.BoundaryGroup,
-		},
+// TestRestRequirements_CarriesTheRecordsReadingIntoTheJoinsForm verifies the
+// join takes a route's demand as apilive reads it, group for group and in
+// order, with its skip and its denial: an authorized route with a scope gives
+// its two groups, and a skipped and a deferred route give none.
+func TestRestRequirements_CarriesTheRecordsReadingIntoTheJoinsForm(t *testing.T) {
+	authorized := &apilive.Route{Authorization: &apilive.RouteAuthorization{
+		Permissions: []string{"update_issue", "read_issue"}, BoundaryType: "project",
+		AdditionalScopes: []apilive.AdditionalScope{{Permissions: []string{"read_namespace"}, BoundaryType: "group"}},
+	}}
+	groups, skip, denied := restRequirements(authorized)
+	want := []requirement{
+		{perms: []string{"read_issue", "update_issue"}, any: finegrained.BoundaryProject},
+		{perms: []string{"read_namespace"}, any: finegrained.BoundaryGroup},
 	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if got := primaryBoundary(&testCase.auth); got != testCase.want {
-				t.Errorf("primaryBoundary = %s, want %s", got, testCase.want)
-			}
-		})
+	if !reflect.DeepEqual(groups, want) || skip || denied != "" {
+		t.Errorf("restRequirements(authorized) = %+v, %t, %q; want %+v, false, none", groups, skip, denied, want)
+	}
+	groups, skip, denied = restRequirements(&apilive.Route{Authorization: &apilive.RouteAuthorization{Skip: "public"}})
+	if groups != nil || !skip || denied != "" {
+		t.Errorf("restRequirements(skipped) = %+v, %t, %q; want no group, a skip, no denial", groups, skip, denied)
+	}
+	groups, skip, denied = restRequirements(&apilive.Route{Authorization: &apilive.RouteAuthorization{Todo: "later"}})
+	if groups != nil || skip || denied != finegrained.CauseRESTTodo {
+		t.Errorf("restRequirements(todo) = %+v, %t, %q; want no group, no skip, %q", groups, skip, denied, finegrained.CauseRESTTodo)
 	}
 }

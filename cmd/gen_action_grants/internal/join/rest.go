@@ -28,43 +28,15 @@ func (r requirement) key() string {
 
 // restRequirements reads what a route demands: its groups, whether the grant
 // decides it at all, and why no fine-grained token passes it when none does.
+// The reading is apilive's ([apilive.Route.Requirements]), because R-GRANT
+// holds each REST operation of the committed table to the record by the same
+// reading, and the two must agree on what a route demands.
 func restRequirements(route *apilive.Route) (groups []requirement, skip bool, denied finegrained.Cause) {
-	switch route.FineGrained() {
-	case apilive.RouteSkipped:
-		return nil, true, ""
-	case apilive.RouteTodo:
-		return nil, false, finegrained.CauseRESTTodo
-	case apilive.RouteUndeclared:
-		return nil, false, finegrained.CauseRESTUndeclared
+	read, skip, denied := route.Requirements()
+	for _, group := range read {
+		groups = append(groups, requirement{perms: group.Permissions, any: group.Any})
 	}
-	auth := route.Authorization
-	groups = append(groups, requirement{perms: sorted(auth.Permissions), any: primaryBoundary(auth)})
-	for _, scope := range auth.AdditionalScopes {
-		boundaries := boundaryOf(scope.BoundaryType)
-		if scope.Boundary != nil || boundaries == 0 {
-			boundaries = finegrained.AllBoundaries
-		}
-		groups = append(groups, requirement{perms: sorted(scope.Permissions), any: boundaries})
-	}
-	return groups, false, ""
-}
-
-// primaryBoundary reads the boundary types a route's primary requirement may
-// be held at. A callable boundary wins over everything else and is resolved
-// per request, so it is read as the types the route declares beside it, or
-// all four when it declares none.
-func primaryBoundary(auth *apilive.RouteAuthorization) finegrained.Boundary {
-	declared := boundaryOf(auth.BoundaryType)
-	for _, alternative := range auth.Boundaries {
-		declared |= boundaryOf(alternative.BoundaryType)
-		if alternative.Boundary != nil && alternative.BoundaryType == "" {
-			return finegrained.AllBoundaries
-		}
-	}
-	if declared == 0 {
-		return finegrained.AllBoundaries
-	}
-	return declared
+	return groups, skip, denied
 }
 
 // boundaryOf reads one boundary type, nothing for an empty or unknown one.
