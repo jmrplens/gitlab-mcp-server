@@ -70,7 +70,7 @@ func runMain(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "find repository root: %v\n", err)
 		return 1
 	}
-	if runErr := run(stderr, root, options{check: *check, checkDerivation: *checkDerivation}, liveSources()); runErr != nil {
+	if runErr := run(stderr, root, options{check: *check, checkDerivation: *checkDerivation}, newSources()); runErr != nil {
 		fmt.Fprintf(stderr, "%v\n", runErr)
 		return 1
 	}
@@ -91,18 +91,29 @@ type sources struct {
 	sdk     func(prog *actionrequests.Program) (derive.SDK, error)
 	record  func(root string) (*apilive.Document, error)
 	schema  func() (*gqlast.Schema, error)
+	// requests and grants are the declaration tables the derivation and the
+	// join take.
+	requests []derive.Declaration
+	grants   join.Declarations
 }
 
-// liveSources reads the tree, client-go's module and the committed record.
+// newSources returns the inputs runMain reads, behind a variable so a test
+// can run the flags against a small program.
+var newSources = liveSources
+
+// liveSources reads the tree, client-go's module and the committed record,
+// with this command's declaration tables.
 func liveSources() sources {
 	return sources{
 		catalog: actionrequests.Catalog,
 		load: func(root string, overlay map[string][]byte) (*actionrequests.Program, error) {
 			return actionrequests.Load(root, loadPatterns, overlay)
 		},
-		sdk:    readSDK,
-		record: readRecord,
-		schema: graphqlschema.Schema,
+		sdk:      readSDK,
+		record:   readRecord,
+		schema:   graphqlschema.Schema,
+		requests: requestDeclarations,
+		grants:   grantDeclarations,
 	}
 }
 
@@ -194,12 +205,11 @@ func deriveAndJoin(root string, in sources) (outcome, error) {
 	if err != nil {
 		return outcome{}, fmt.Errorf("load the pinned GraphQL schema: %w", err)
 	}
-	derived := derive.Derive(prog, actions, sdk, requestDeclarations)
-	joined := join.Join(record, schema, derived.Actions, grantDeclarations)
+	derived := derive.Derive(prog, actions, sdk, in.requests)
+	joined := join.Join(record, schema, derived.Actions, in.grants)
+	// The join carries every action's own derivation findings with its own,
+	// since an action it cannot place whole is one it gives no row.
 	findings := append(append([]string{}, derived.Findings...), joined.Findings...)
-	for i := range derived.Actions {
-		findings = append(findings, derived.Actions[i].Findings...)
-	}
 	findings = append(findings, gateFindings(derived.Actions, joined.Actions, record)...)
 	return outcome{derived: derived, joined: joined, findings: findings}, nil
 }

@@ -141,6 +141,7 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 	}
 	spine := map[*position]bool{}
 	var positions []*position
+	skipped := 0
 	for _, field := range fields(op.SelectionSet) {
 		if !isObject(field) {
 			continue
@@ -150,7 +151,9 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 		positions = append(positions, flatten(root)...)
 		start := root
 		if out.Mutation {
-			a.mutation(root, &out)
+			if a.mutation(root, &out) {
+				skipped++
+			}
 			start = payloadObject(root)
 		}
 		for _, on := range spineFrom(start) {
@@ -158,13 +161,14 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 			out.Collection = on.sig.list || on.connectionItem
 		}
 	}
+	out.Skip = skipped > 0 && skipped == len(out.RootFields)
 	out.Name = fmt.Sprintf("%s %s", op.Operation, strings.Join(out.RootFields, " "))
 	if name != "" {
 		out.Name += " (" + name + ")"
 	}
 	for _, at := range positions {
 		out.Paths = append(out.Paths, at.path)
-		if element, ok := a.judge(at, spine, out.Mutation); ok {
+		if element, ok := a.judge(at, spine); ok {
 			out.Elements = append(out.Elements, element)
 		}
 	}
@@ -173,17 +177,23 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 	return out
 }
 
-// mutation reads a mutation field's own requirement.
-func (a *analyzer) mutation(root *position, out *Operation) {
+// mutation reads a mutation field's own requirement into its operation: its
+// groups beside any other field's, and the first field that declares nothing.
+// It reports whether the field opts out of the check, which leaves the
+// operation to GitLab only when every field does.
+func (a *analyzer) mutation(root *position, out *Operation) (skipped bool) {
 	mutation, known := a.authz.Mutations[root.field]
 	switch {
 	case !known || len(mutation.Granular) == 0:
-		out.Undeclared = root.field
+		if out.Undeclared == "" {
+			out.Undeclared = root.field
+		}
 	case anySkip(mutation.Granular):
-		out.Skip = true
+		return true
 	default:
-		out.Groups = directiveGroups(mutation.Granular)
+		out.Groups = dedupeRequirements(append(out.Groups, directiveGroups(mutation.Granular)...))
 	}
+	return false
 }
 
 // payloadObject is where a mutation's answer spine starts: the first object
@@ -279,7 +289,7 @@ func isConnection(at *position) bool {
 
 // judge reads the element one position is, and whether it is one: a position
 // GitLab checks, by its type or by a declaration on its field.
-func (a *analyzer) judge(at *position, spine map[*position]bool, mutation bool) (Element, bool) {
+func (a *analyzer) judge(at *position, spine map[*position]bool) (Element, bool) {
 	members := []string{at.typeName}
 	abstract, isAbstract := a.authz.Abstract[at.typeName]
 	element := Element{Path: at.path, Type: at.typeName}
@@ -316,9 +326,6 @@ func (a *analyzer) judge(at *position, spine map[*position]bool, mutation bool) 
 	landing, effect := a.landing(at)
 	element.Effect = effect
 	element.Fatal = spine[landing]
-	if mutation && element.Fatal && element.Undeclared {
-		element.Effect = finegrained.EffectCommittedThenNull
-	}
 	return element, true
 }
 

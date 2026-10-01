@@ -133,12 +133,12 @@ func agree(record, derived []string) (int, bool) {
 	}
 	score := 0
 	for i := range record {
-		switch {
-		case record[i] == derived[i]:
+		switch record[i] {
+		case derived[i]:
 			if record[i] != ":" {
 				score++
 			}
-		case record[i] == ":":
+		case ":":
 		default:
 			return 0, false
 		}
@@ -166,11 +166,11 @@ func restRequirements(route *apilive.Route) (groups []requirement, skip bool, de
 	auth := route.Authorization
 	groups = append(groups, requirement{perms: sorted(auth.Permissions), any: primaryBoundary(auth)})
 	for _, scope := range auth.AdditionalScopes {
-		any := boundaryOf(scope.BoundaryType)
-		if scope.Boundary != nil || any == 0 {
-			any = finegrained.AllBoundaries
+		boundaries := boundaryOf(scope.BoundaryType)
+		if scope.Boundary != nil || boundaries == 0 {
+			boundaries = finegrained.AllBoundaries
 		}
-		groups = append(groups, requirement{perms: sorted(scope.Permissions), any: any})
+		groups = append(groups, requirement{perms: sorted(scope.Permissions), any: boundaries})
 	}
 	return groups, false, ""
 }

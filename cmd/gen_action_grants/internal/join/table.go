@@ -26,7 +26,11 @@ type RouteDeclaration struct {
 }
 
 // EffectDeclaration overrides, for one action, whether a GraphQL position is
-// fatal, where a reviewer finds the spine rule wrong.
+// fatal, where a reviewer finds the spine rule wrong. It moves a declared
+// position between the spine and the rest of the answer, and an undeclared
+// or unresolvable one between withholding the action and emptying a field;
+// an action it departs for gets an operation of its own, since every other
+// action sending the same document keeps the rule's answer.
 type EffectDeclaration struct {
 	Action   string
 	Path     string
@@ -35,12 +39,19 @@ type EffectDeclaration struct {
 	Fatal    bool
 }
 
-// BoundaryDeclaration says a GraphQL type is declared at a boundary the
-// object one action reaches never resolves to, so no fine-grained token
-// passes it there whatever it was granted.
+// BoundaryDeclaration says a GraphQL position is declared at a boundary the
+// object one action reaches there never resolves to, so no fine-grained token
+// passes it whatever it was granted. Path is where the position sits in the
+// answer (`namespace.workItem` for a group's work item, which GitLab declares
+// at the project boundary only), which GitLab then answers as null or removes
+// from a list; or a mutation field (`workItemUpdate`), whose own check GitLab
+// then refuses with `404 Not Found` before anything runs. It is keyed by path
+// and not by type because one document reaches objects of one type that
+// resolve and objects that do not: an epic's child issues are project work
+// items, the epic is not.
 type BoundaryDeclaration struct {
 	Action   string
-	Type     string
+	Path     string
 	Category string
 	Reason   string
 }
@@ -106,22 +117,17 @@ type joiner struct {
 	opIndex    map[string]int
 	// opDenial is why no fine-grained token passes an operation, by index.
 	opDenial map[int]*finegrained.Denial
-	// opJudged keeps every judged position of a GraphQL operation, for the
-	// per-action rules.
-	opJudged   map[int][]judgedElement
+	// opDegraded are the positions an operation always answers empty, by
+	// index.
+	opDegraded map[int][]uint32
+	// judged keeps each GraphQL document's judged operation, by key.
+	judged     map[string]*Operation
 	elements   []finegrained.Element
 	elemIndex  map[string]uint32
 	opGraphQL  map[int]bool
 	collection map[int]bool
-	opDetail   map[int]Operation
 	findings   []string
 	fallbacks  int
-}
-
-// judgedElement is an element of an operation with its index in the table.
-type judgedElement struct {
-	Element
-	index uint32
 }
 
 // Join joins every derived action to the record.
@@ -135,11 +141,11 @@ func Join(record *apilive.Document, schema *gqlast.Schema, actions []derive.Acti
 		groupIndex: map[string]uint32{},
 		opIndex:    map[string]int{},
 		opDenial:   map[int]*finegrained.Denial{},
-		opJudged:   map[int][]judgedElement{},
+		opDegraded: map[int][]uint32{},
+		judged:     map[string]*Operation{},
 		elemIndex:  map[string]uint32{},
 		opGraphQL:  map[int]bool{},
 		collection: map[int]bool{},
-		opDetail:   map[int]Operation{},
 	}
 	table := j.vocabulary()
 	var out []Action
@@ -235,17 +241,20 @@ func (j *joiner) group(req requirement, where string) uint32 {
 		}
 		group.Perms = append(group.Perms, index)
 	}
-	index := uint32(len(j.groups))
+	index := uint32(len(j.groups)) //#nosec G115 -- a count of the groups one run builds, far below the conversion's range
 	j.groups = append(j.groups, group)
 	j.groupIndex[key] = index
 	return index
 }
 
-// groupsOf indexes a list of requirements.
+// groupsOf indexes a list of requirements, each group once: a route that
+// names one permission at one boundary twice demands it once.
 func (j *joiner) groupsOf(reqs []requirement, where string) []uint32 {
 	var out []uint32
 	for _, req := range reqs {
-		out = append(out, j.group(req, where))
+		if index := j.group(req, where); !slices.Contains(out, index) {
+			out = append(out, index)
+		}
 	}
 	return out
 }
@@ -254,9 +263,7 @@ func (j *joiner) groupsOf(reqs []requirement, where string) []uint32 {
 func (j *joiner) action(act derive.Action) Action {
 	out := Action{ID: act.ID, Handlers: act.Handlers, Paths: act.Paths, Declaration: act.Declaration}
 	complete := len(act.Findings) == 0
-	for _, finding := range act.Findings {
-		j.findings = append(j.findings, finding)
-	}
+	j.findings = append(j.findings, act.Findings...)
 	for _, use := range act.Uses {
 		request := Request{Use: use, Operation: -1}
 		switch use.Kind {
@@ -367,58 +374,140 @@ func (j *joiner) graphQLRequest(request *Request, actionID string) {
 		label = request.Sites[0]
 	}
 	key := "graphql " + derive.Digest(request.Document)
-	if index, seen := j.opIndex[key]; seen {
-		request.Operation = index
-		request.Name = j.opDetail[index].Name
-		request.RootFields = j.opDetail[index].RootFields
-		request.Positions = j.opDetail[index].Paths
-		return
-	}
-	operations, err := j.analyzer.operations(label, request.Document)
-	if err != nil {
-		j.findings = append(j.findings, fmt.Sprintf("%s: %v", actionID, err))
-		return
-	}
-	if len(operations) != 1 {
-		j.findings = append(j.findings, fmt.Sprintf("%s: document %s holds %d operations; one is what a request sends", actionID, label, len(operations)))
-		return
-	}
-	judged := operations[0]
-	j.fallbacks += judged.Fallbacks
-	op := finegrained.Operation{Name: judged.Name, Groups: j.groupsOf(judged.Groups, judged.Name), Skip: judged.Skip}
-	index := j.addOp(key, op)
-	j.opGraphQL[index] = true
-	j.collection[index] = judged.Collection
-	j.opDetail[index] = judged
-	if judged.Undeclared != "" {
-		j.opDenial[index] = &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: judged.Undeclared, Effect: finegrained.EffectRefused}
-	}
-	for _, element := range judged.Elements {
-		if element.Skip {
-			continue
+	judged, ok := j.judged[key]
+	if !ok {
+		operations, err := j.analyzer.operations(label, request.Document)
+		if err != nil {
+			j.findings = append(j.findings, fmt.Sprintf("%s: %v", actionID, err))
+			return
 		}
-		elementIndex := j.element(element)
-		j.opJudged[index] = append(j.opJudged[index], judgedElement{Element: element, index: elementIndex})
-		switch {
-		case element.Undeclared && element.Fatal:
-			if j.opDenial[index] == nil {
-				cause := finegrained.CauseTypeUndeclared
-				if judged.Mutation {
-					cause = finegrained.CausePayloadUndeclared
-				}
-				j.opDenial[index] = &finegrained.Denial{Cause: cause, Element: element.Type, Effect: element.Effect}
-			}
-		case element.Undeclared:
-		case element.Fatal:
-			j.ops[index].Spine = append(j.ops[index].Spine, elementIndex)
-		default:
-			j.ops[index].OffSpine = append(j.ops[index].OffSpine, elementIndex)
+		if len(operations) != 1 {
+			j.findings = append(j.findings, fmt.Sprintf("%s: document %s holds %d operations; one is what a request sends", actionID, label, len(operations)))
+			return
 		}
+		judged = &operations[0]
+		j.judged[key] = judged
+		j.fallbacks += judged.Fallbacks
+	}
+	rules := j.rulesFor(actionID, judged)
+	index, seen := j.opIndex[key+rules.variant]
+	if !seen {
+		index = j.graphQLOperation(key+rules.variant, judged, rules)
 	}
 	request.Operation = index
 	request.Name = judged.Name
 	request.RootFields = judged.RootFields
 	request.Positions = judged.Paths
+}
+
+// positionVerdict is how one action meets one judged position: whether a
+// denial there takes the answer with it, and whether the position's boundary
+// never resolves for the object the action reaches.
+type positionVerdict struct {
+	fatal        bool
+	unresolvable bool
+}
+
+// actionRules are one action's verdicts on every position of an operation,
+// read through its declarations.
+type actionRules struct {
+	// elements holds a verdict per element of the operation, in its order.
+	elements []positionVerdict
+	// mutationUnresolvable is set when a declaration says the mutation's own
+	// boundary never resolves for the action.
+	mutationUnresolvable string
+	// variant names how the verdicts depart from the rules, "" when they do
+	// not, so every action the rules hold for shares one operation.
+	variant string
+}
+
+// rulesFor reads one action's verdicts on an operation, noting each
+// declaration that answers something.
+func (j *joiner) rulesFor(actionID string, op *Operation) actionRules {
+	rules := actionRules{elements: make([]positionVerdict, len(op.Elements))}
+	var departures []string
+	if op.Mutation {
+		for _, field := range op.RootFields {
+			if rules.mutationUnresolvable == "" && j.unresolvable(actionID, field) {
+				rules.mutationUnresolvable = field
+				departures = append(departures, "unresolvable "+field)
+			}
+		}
+	}
+	for i, element := range op.Elements {
+		if element.Skip {
+			rules.elements[i] = positionVerdict{fatal: element.Fatal}
+			continue
+		}
+		rules.elements[i] = positionVerdict{fatal: j.fatalFor(actionID, element), unresolvable: j.unresolvable(actionID, element.Path)}
+		if rules.elements[i].fatal != element.Fatal {
+			departures = append(departures, fmt.Sprintf("fatal=%t %s", rules.elements[i].fatal, element.Path))
+		}
+		if rules.elements[i].unresolvable {
+			departures = append(departures, "unresolvable "+element.Path)
+		}
+	}
+	if len(departures) > 0 {
+		rules.variant = " for " + strings.Join(departures, ", ")
+	}
+	return rules
+}
+
+// graphQLOperation builds the table's operation for a judged document under
+// one set of verdicts: what a grant must hold on its spine and elsewhere, the
+// positions it always answers empty, and the first denial, in the order the
+// document's positions are answered, that no grant passes. The mutation's own
+// refusal comes before anything its payload holds, since nothing is written
+// when it is refused.
+func (j *joiner) graphQLOperation(key string, judged *Operation, rules actionRules) int {
+	op := finegrained.Operation{Name: judged.Name, Groups: j.groupsOf(judged.Groups, judged.Name), Skip: judged.Skip}
+	index := j.addOp(key, op)
+	j.opGraphQL[index] = true
+	j.collection[index] = judged.Collection
+	switch {
+	case judged.Undeclared != "":
+		j.opDenial[index] = &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: judged.Undeclared, Effect: finegrained.EffectRefused}
+	case rules.mutationUnresolvable != "":
+		j.opDenial[index] = &finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: rules.mutationUnresolvable, Effect: finegrained.EffectRefused}
+	}
+	for i, element := range judged.Elements {
+		if element.Skip {
+			continue
+		}
+		met := rules.elements[i]
+		denied := element.Undeclared || met.unresolvable
+		switch {
+		case denied && met.fatal:
+			if j.opDenial[index] == nil {
+				j.opDenial[index] = positionDenial(judged.Mutation, element, met)
+			}
+		case denied:
+			j.opDegraded[index] = append(j.opDegraded[index], j.element(element))
+		case met.fatal:
+			j.ops[index].Spine = append(j.ops[index].Spine, j.element(element))
+		default:
+			j.ops[index].OffSpine = append(j.ops[index].OffSpine, j.element(element))
+		}
+	}
+	return index
+}
+
+// positionDenial is why no grant passes an operation whose position, on the
+// spine, no fine-grained token passes. In a mutation the write has committed
+// by the time its payload is answered; in a read the position is answered
+// null, or emptied of the items no token passes.
+func positionDenial(mutation bool, element Element, met positionVerdict) *finegrained.Denial {
+	denial := &finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: element.Type, Effect: element.Effect}
+	if met.unresolvable {
+		denial.Cause, denial.Effect = finegrained.CauseBoundaryUnresolvable, finegrained.EffectNullOrEmpty
+	}
+	if mutation {
+		denial.Effect = finegrained.EffectCommittedThenNull
+		if !met.unresolvable {
+			denial.Cause = finegrained.CausePayloadUndeclared
+		}
+	}
+	return denial
 }
 
 // addOp records a new operation.
@@ -436,7 +525,7 @@ func (j *joiner) element(element Element) uint32 {
 	if index, ok := j.elemIndex[key]; ok {
 		return index
 	}
-	index := uint32(len(j.elements))
+	index := uint32(len(j.elements)) //#nosec G115 -- a count of the elements one run judges, far below the conversion's range
 	j.elements = append(j.elements, finegrained.Element{
 		Path: element.Path, Type: element.Type, Members: element.Members, Groups: groups,
 		Undeclared: element.Undeclared, Effect: element.Effect,
@@ -447,7 +536,10 @@ func (j *joiner) element(element Element) uint32 {
 
 // requirement builds an action's row: its paths over operations, with the
 // paths a denied operation sits on left out, and the denial when every path
-// holds one.
+// holds one. A path's denial is its first in the order the action makes its
+// requests, which is the derivation's order, since that is the refusal a
+// caller meets: a lookup no token passes stops the write after it from being
+// sent at all.
 func (j *joiner) requirement(id string, requests []Request, paths [][]int) *finegrained.Requirement {
 	row := &finegrained.Requirement{ID: id}
 	degraded := map[uint32]bool{}
@@ -455,12 +547,11 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 	for _, path := range paths {
 		var ops []uint32
 		var denial *finegrained.Denial
-		empty := map[uint32]bool{}
 		for _, request := range path {
 			op := requests[request].Operation
-			ops = append(ops, uint32(op))
-			if denied := j.denialFor(id, op, empty); denied != nil && denial == nil {
-				denial = denied
+			ops = append(ops, uint32(op)) //#nosec G115 -- an operation index, set and non-negative on every request of a complete action
+			if denial == nil {
+				denial = j.opDenial[op]
 			}
 		}
 		if denial != nil {
@@ -469,8 +560,10 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 			}
 			continue
 		}
-		for index := range empty {
-			degraded[index] = true
+		for _, op := range ops {
+			for _, index := range j.opDegraded[int(op)] {
+				degraded[index] = true
+			}
 		}
 		slices.Sort(ops)
 		ops = slices.Compact(ops)
@@ -493,30 +586,10 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 	return row
 }
 
-// denialFor says why no fine-grained token passes one operation of one
-// action, and collects the positions it leaves empty.
-func (j *joiner) denialFor(id string, op int, degraded map[uint32]bool) *finegrained.Denial {
-	denial := j.opDenial[op]
-	for _, element := range j.opJudged[op] {
-		fatal := j.fatalFor(id, element)
-		unresolvable := j.unresolvable(id, element.Type)
-		switch {
-		case unresolvable && fatal && denial == nil:
-			effect := finegrained.EffectNullOrEmpty
-			if j.opDetail[op].Mutation {
-				effect = finegrained.EffectRefused
-			}
-			denial = &finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: element.Type, Effect: effect}
-		case (element.Undeclared || unresolvable) && !fatal:
-			degraded[element.index] = true
-		}
-	}
-	return denial
-}
-
 // fatalFor reads whether a position is fatal for one action, a declaration
-// overriding the spine rule.
-func (j *joiner) fatalFor(id string, element judgedElement) bool {
+// overriding the spine rule. A declaration answers something only where it
+// departs from the rule; one that agrees with it is stale.
+func (j *joiner) fatalFor(id string, element Element) bool {
 	for _, declaration := range j.decl.Effects {
 		if declaration.Action == id && declaration.Path == element.Path {
 			key := "effect " + id + " " + element.Path
@@ -527,12 +600,12 @@ func (j *joiner) fatalFor(id string, element judgedElement) bool {
 	return element.Fatal
 }
 
-// unresolvable reports whether a declaration says a type never resolves its
-// boundary for one action.
-func (j *joiner) unresolvable(id, typeName string) bool {
+// unresolvable reports whether a declaration says a position, or a
+// mutation's own check, never resolves its boundary for one action.
+func (j *joiner) unresolvable(id, path string) bool {
 	for _, declaration := range j.decl.Unresolvable {
-		if declaration.Action == id && declaration.Type == typeName {
-			j.usedDecl["boundary "+id+" "+typeName] = true
+		if declaration.Action == id && declaration.Path == path {
+			j.usedDecl["boundary "+id+" "+path] = true
 			return true
 		}
 	}
@@ -554,8 +627,8 @@ func (j *joiner) staleDeclarations() {
 		}
 	}
 	for _, declaration := range j.decl.Unresolvable {
-		if !j.usedDecl["boundary "+declaration.Action+" "+declaration.Type] {
-			j.findings = append(j.findings, fmt.Sprintf("the %s declaration of %s on %s answers nothing: no position of the action is that type", declaration.Category, declaration.Action, declaration.Type))
+		if !j.usedDecl["boundary "+declaration.Action+" "+declaration.Path] {
+			j.findings = append(j.findings, fmt.Sprintf("the %s declaration of %s at %s answers nothing: no position or mutation of the action is there", declaration.Category, declaration.Action, declaration.Path))
 		}
 	}
 }

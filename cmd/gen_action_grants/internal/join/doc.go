@@ -35,4 +35,26 @@
 // judged on the spine the same way, so a grant failing it withholds the
 // action, and off the spine it only empties a field. An abstract position is
 // judged as the worst of the types GitLab may resolve there.
+//
+// # What a person answers
+//
+// Three declaration tables answer what the record cannot: the record route a
+// derived route the record lacks carries the authorization of (a HEAD GitLab
+// answers from the GET, a slug route GitLab mounts once per value, held to
+// every route it stands for declaring the same thing); whether a position is
+// fatal for one action where the spine rule is wrong for it; and a position,
+// or a mutation's own check, whose boundary never resolves for the object one
+// action reaches there (a group's work item, which GitLab declares at the
+// project boundary only). The last two are per action, so an action they
+// depart for is given an operation of its own while every other action
+// sending the same document keeps the rule's. A declaration that answers
+// nothing is a finding.
+//
+// # Which refusal an action reports
+//
+// A path no fine-grained token passes reports its first refusal in the order
+// the action makes its requests, which is the derivation's order, since that
+// is the one a caller meets: a lookup no token passes stops the write after it
+// from being sent, so nothing commits. An action is denied only when every
+// path is, and then reports its first path's refusal.
 package join
