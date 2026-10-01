@@ -226,7 +226,7 @@ func (k *Keyring) derive(secret []byte) error {
 // bought.
 //
 // The standard library's crypto/hkdf computes it, and golang.org/x/crypto/hkdf
-// did until 3.1.0. The bytes are the same, which is what keeps every
+// did up to and including 3.1.0. The bytes are the same, which keeps every
 // pseudonym a configured secret has already produced, and the tests hold the
 // two to each other. The module was the reason to change: that one import was
 // the only thing linking golang.org/x/crypto into the server, so the module
