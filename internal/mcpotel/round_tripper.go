@@ -24,6 +24,13 @@ import (
 // every attribute key the harness reads is exported against.
 const AttrHTTPRequestMethod = attribute.Key("http.request.method")
 
+// AttrURLTemplate is the convention's url.template: the low-cardinality
+// template of the path a GitLab call was sent to, such as
+// "/api/v4/projects/:id/issues". It is exported for the same reason as
+// AttrHTTPRequestMethod: the end-to-end harness reads it off each client span
+// to name the route a handler was seen calling.
+const AttrURLTemplate = attribute.Key("url.template")
+
 // The other attribute keys for an outbound HTTP call, from the Stable HTTP
 // conventions.
 const (
@@ -113,6 +120,46 @@ func SetMetricServerAddresses(hosts []string) {
 // set: the absence of a known name, not the name a caller sent.
 const OtherServerAddress = "_OTHER"
 
+// RouteTemplateFunc names the route a request was sent to, from its method and
+// escaped path, as a template that carries no identifier, and reports false
+// when it knows no route for the request.
+type RouteTemplateFunc func(method, escapedPath string) (string, bool)
+
+// routeTemplates is what names a client span's route, set once at startup
+// from the table of routes the binary carries.
+//
+// The span records no URL, because a GitLab path names projects and files and
+// a search query rides in it. A template the binary itself carries is none of
+// those things: every one is a string compiled into the program with each
+// identifier a placeholder, so the attribute is a member of a closed set
+// whatever a caller names, which is the property a metric label needs and a
+// span attribute here is held to as well. Unset, no span carries one.
+var routeTemplates atomic.Pointer[RouteTemplateFunc]
+
+// SetRouteTemplates declares what names the route of each GitLab call's span.
+// A nil function turns the attribute off.
+func SetRouteTemplates(fn RouteTemplateFunc) {
+	if fn == nil {
+		routeTemplates.Store(nil)
+		return
+	}
+	routeTemplates.Store(&fn)
+}
+
+// routeTemplateOf is the template the declared function names for a request,
+// and "" when none is declared or it knows no route for it.
+func routeTemplateOf(req *http.Request) string {
+	fn := routeTemplates.Load()
+	if fn == nil {
+		return ""
+	}
+	template, known := (*fn)(req.Method, req.URL.EscapedPath())
+	if !known {
+		return ""
+	}
+	return template
+}
+
 // boundedServerAddress returns the host as the metric may carry it.
 func boundedServerAddress(host string) string {
 	set := metricServerAddresses.Load()
@@ -132,10 +179,6 @@ type instrumentedTransport struct {
 }
 
 func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// The convention's client span name is the method alone when there is no
-	// low-cardinality route template, and there is none here: every GitLab path
-	// carries a project or group identifier, so a name built from one would
-	// mint a distinct span name per project.
 	host := req.URL.Hostname()
 	port := serverPort(req.URL)
 	shared := []attribute.KeyValue{
@@ -152,7 +195,20 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	spanAttrs := append(append([]attribute.KeyValue(nil), shared...),
 		attrServerAddress.String(host), attrServerPort.Int(port))
 
-	ctx, span := t.tracer.Start(req.Context(), req.Method,
+	// The convention's client span name is "{method} {url.template}" when a
+	// low-cardinality template is known and the method alone when it is not.
+	// The path itself is never one: every GitLab path carries a project or
+	// group identifier, so a name built from it would mint a distinct span
+	// name per project. The template is one of the binary's own
+	// (routeTemplates), and it stays off the metric, whose dimensions this
+	// change does not widen.
+	name := req.Method
+	if template := routeTemplateOf(req); template != "" {
+		spanAttrs = append(spanAttrs, AttrURLTemplate.String(template))
+		name = req.Method + " " + template
+	}
+
+	ctx, span := t.tracer.Start(req.Context(), name,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(spanAttrs...),
 	)
