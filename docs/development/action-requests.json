@@ -869,17 +869,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /personal_access_tokens/:id",
-          "class": "alternative",
-          "sites": [
-            "accesstokens.PersonalGet"
-          ],
-          "sdk_methods": [
-            "PersonalAccessTokens.GetSinglePersonalAccessTokenByID"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /personal_access_tokens/self",
           "class": "alternative",
           "sites": [
@@ -887,6 +876,17 @@
           ],
           "sdk_methods": [
             "PersonalAccessTokens.GetSinglePersonalAccessToken"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /personal_access_tokens/:id",
+          "class": "alternative",
+          "sites": [
+            "accesstokens.PersonalGet"
+          ],
+          "sdk_methods": [
+            "PersonalAccessTokens.GetSinglePersonalAccessTokenByID"
           ]
         }
       ],
@@ -2342,6 +2342,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "DELETE /users/:id/custom_attributes/:key",
+          "class": "alternative",
+          "sites": [
+            "customattributes.Delete"
+          ],
+          "sdk_methods": [
+            "CustomAttributes.DeleteCustomUserAttribute"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "DELETE /groups/:id/custom_attributes/:key",
           "class": "alternative",
           "sites": [
@@ -2360,17 +2371,6 @@
           ],
           "sdk_methods": [
             "CustomAttributes.DeleteCustomProjectAttribute"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /users/:id/custom_attributes/:key",
-          "class": "alternative",
-          "sites": [
-            "customattributes.Delete"
-          ],
-          "sdk_methods": [
-            "CustomAttributes.DeleteCustomUserAttribute"
           ]
         }
       ],
@@ -2394,6 +2394,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /users/:id/custom_attributes/:key",
+          "class": "alternative",
+          "sites": [
+            "customattributes.Get"
+          ],
+          "sdk_methods": [
+            "CustomAttributes.GetCustomUserAttribute"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /groups/:id/custom_attributes/:key",
           "class": "alternative",
           "sites": [
@@ -2412,17 +2423,6 @@
           ],
           "sdk_methods": [
             "CustomAttributes.GetCustomProjectAttribute"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /users/:id/custom_attributes/:key",
-          "class": "alternative",
-          "sites": [
-            "customattributes.Get"
-          ],
-          "sdk_methods": [
-            "CustomAttributes.GetCustomUserAttribute"
           ]
         }
       ],
@@ -2446,6 +2446,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /users/:id/custom_attributes",
+          "class": "alternative",
+          "sites": [
+            "customattributes.List"
+          ],
+          "sdk_methods": [
+            "CustomAttributes.ListCustomUserAttributes"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /groups/:id/custom_attributes",
           "class": "alternative",
           "sites": [
@@ -2464,17 +2475,6 @@
           ],
           "sdk_methods": [
             "CustomAttributes.ListCustomProjectAttributes"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /users/:id/custom_attributes",
-          "class": "alternative",
-          "sites": [
-            "customattributes.List"
-          ],
-          "sdk_methods": [
-            "CustomAttributes.ListCustomUserAttributes"
           ]
         }
       ],
@@ -2498,6 +2498,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "PUT /users/:id/custom_attributes/:key",
+          "class": "alternative",
+          "sites": [
+            "customattributes.Set"
+          ],
+          "sdk_methods": [
+            "CustomAttributes.SetCustomUserAttribute"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/custom_attributes/:key",
           "class": "alternative",
           "sites": [
@@ -2516,17 +2527,6 @@
           ],
           "sdk_methods": [
             "CustomAttributes.SetCustomProjectAttribute"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "PUT /users/:id/custom_attributes/:key",
-          "class": "alternative",
-          "sites": [
-            "customattributes.Set"
-          ],
-          "sdk_methods": [
-            "CustomAttributes.SetCustomUserAttribute"
           ]
         }
       ],
@@ -3952,17 +3952,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "attestations.List"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/attestations/:subject_digest",
           "class": "mandatory",
           "sites": [
@@ -3971,11 +3960,22 @@
           "sdk_methods": [
             "Attestations.ListAttestations"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "attestations.List"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -4327,17 +4327,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id/protected_branches/:name",
-          "class": "optional",
-          "sites": [
-            "branches.protectedBranchAlreadyExists"
-          ],
-          "sdk_methods": [
-            "ProtectedBranches.GetProtectedBranch"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "POST /projects/:id/protected_branches",
           "class": "mandatory",
           "sites": [
@@ -4346,11 +4335,22 @@
           "sdk_methods": [
             "ProtectedBranches.ProtectRepositoryBranches"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/protected_branches/:name",
+          "class": "optional",
+          "sites": [
+            "branches.protectedBranchAlreadyExists"
+          ],
+          "sdk_methods": [
+            "ProtectedBranches.GetProtectedBranch"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -4360,6 +4360,30 @@
         "branchrules.List"
       ],
       "requests": [
+        {
+          "kind": "graphql",
+          "operation": "query project (queryListBranchRulesCE)",
+          "root_fields": [
+            "project"
+          ],
+          "positions": [
+            "project",
+            "project.branchRules",
+            "project.branchRules.nodes",
+            "project.branchRules.nodes.branchProtection",
+            "project.branchRules.nodes.branchProtection.mergeAccessLevels",
+            "project.branchRules.nodes.branchProtection.mergeAccessLevels.nodes",
+            "project.branchRules.nodes.branchProtection.pushAccessLevels",
+            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes",
+            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes.deployKey",
+            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes.deployKey.user",
+            "project.branchRules.pageInfo"
+          ],
+          "class": "alternative",
+          "sites": [
+            "branchrules.List"
+          ]
+        },
         {
           "kind": "graphql",
           "operation": "query project (queryListBranchRulesEE)",
@@ -4435,30 +4459,6 @@
           "sites": [
             "branchrules.List"
           ]
-        },
-        {
-          "kind": "graphql",
-          "operation": "query project (queryListBranchRulesCE)",
-          "root_fields": [
-            "project"
-          ],
-          "positions": [
-            "project",
-            "project.branchRules",
-            "project.branchRules.nodes",
-            "project.branchRules.nodes.branchProtection",
-            "project.branchRules.nodes.branchProtection.mergeAccessLevels",
-            "project.branchRules.nodes.branchProtection.mergeAccessLevels.nodes",
-            "project.branchRules.nodes.branchProtection.pushAccessLevels",
-            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes",
-            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes.deployKey",
-            "project.branchRules.nodes.branchProtection.pushAccessLevels.nodes.deployKey.user",
-            "project.branchRules.pageInfo"
-          ],
-          "class": "alternative",
-          "sites": [
-            "branchrules.List"
-          ]
         }
       ],
       "paths": [
@@ -4466,7 +4466,7 @@
           0
         ],
         [
-          2
+          1
         ]
       ]
     },
@@ -7468,21 +7468,6 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation workItemUpdate (mutationRemoveParent)",
-          "root_fields": [
-            "workItemUpdate"
-          ],
-          "positions": [
-            "workItemUpdate",
-            "workItemUpdate.workItem"
-          ],
-          "class": "mandatory",
-          "sites": [
-            "epicissues.Remove"
-          ]
-        },
-        {
-          "kind": "graphql",
           "operation": "query namespace (queryResolveWorkItemGID)",
           "root_fields": [
             "namespace"
@@ -7497,6 +7482,21 @@
           ],
           "directives": [
             "mandatory: an epic action resolves the epic's work item ID here and then sends its own request with it, so both run on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "mutation workItemUpdate (mutationRemoveParent)",
+          "root_fields": [
+            "workItemUpdate"
+          ],
+          "positions": [
+            "workItemUpdate",
+            "workItemUpdate.workItem"
+          ],
+          "class": "mandatory",
+          "sites": [
+            "epicissues.Remove"
           ]
         }
       ],
@@ -7513,33 +7513,6 @@
         "epicissues.UpdateOrder"
       ],
       "requests": [
-        {
-          "kind": "graphql",
-          "operation": "query namespace (queryListChildren)",
-          "root_fields": [
-            "namespace"
-          ],
-          "positions": [
-            "namespace",
-            "namespace.workItem",
-            "namespace.workItem.widgets",
-            "namespace.workItem.widgets.children",
-            "namespace.workItem.widgets.children.nodes",
-            "namespace.workItem.widgets.children.nodes.author",
-            "namespace.workItem.widgets.children.nodes.widgets",
-            "namespace.workItem.widgets.children.nodes.widgets.labels",
-            "namespace.workItem.widgets.children.nodes.widgets.labels.nodes",
-            "namespace.workItem.widgets.children.nodes.workItemType",
-            "namespace.workItem.widgets.children.pageInfo"
-          ],
-          "class": "mandatory",
-          "sites": [
-            "epicissues.List"
-          ],
-          "directives": [
-            "mandatory: the reorder answers with the moved child only, so the epic's children are read back after it on every call"
-          ]
-        },
         {
           "kind": "graphql",
           "operation": "query namespace (queryResolveWorkItemGID)",
@@ -7572,6 +7545,33 @@
           "sites": [
             "epicissues.UpdateOrder"
           ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query namespace (queryListChildren)",
+          "root_fields": [
+            "namespace"
+          ],
+          "positions": [
+            "namespace",
+            "namespace.workItem",
+            "namespace.workItem.widgets",
+            "namespace.workItem.widgets.children",
+            "namespace.workItem.widgets.children.nodes",
+            "namespace.workItem.widgets.children.nodes.author",
+            "namespace.workItem.widgets.children.nodes.widgets",
+            "namespace.workItem.widgets.children.nodes.widgets.labels",
+            "namespace.workItem.widgets.children.nodes.widgets.labels.nodes",
+            "namespace.workItem.widgets.children.nodes.workItemType",
+            "namespace.workItem.widgets.children.pageInfo"
+          ],
+          "class": "mandatory",
+          "sites": [
+            "epicissues.List"
+          ],
+          "directives": [
+            "mandatory: the reorder answers with the moved child only, so the epic's children are read back after it on every call"
+          ]
         }
       ],
       "paths": [
@@ -7588,14 +7588,6 @@
         "epics.List"
       ],
       "requests": [
-        {
-          "kind": "rest",
-          "route": "GET /groups/:id/epics",
-          "class": "alternative",
-          "sites": [
-            "epics.rawListEpics"
-          ]
-        },
         {
           "kind": "graphql",
           "operation": "query namespace (WorkItems.ListWorkItems)",
@@ -7643,6 +7635,14 @@
             "epics.listWithWorkItems"
           ],
           "declaration": "sdk-graphql-template"
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/epics",
+          "class": "alternative",
+          "sites": [
+            "epics.rawListEpics"
+          ]
         }
       ],
       "paths": [
@@ -7662,6 +7662,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query namespace (queryResolveWorkItemGID)",
+          "root_fields": [
+            "namespace"
+          ],
+          "positions": [
+            "namespace",
+            "namespace.workItem"
+          ],
+          "class": "mandatory",
+          "sites": [
+            "epicworkitems.resolveGID"
+          ],
+          "directives": [
+            "mandatory: an epic action resolves the epic's work item ID here and then sends its own request with it, so both run on every call"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation createNote (mutationCreateNote)",
           "root_fields": [
             "createNote"
@@ -7677,24 +7695,6 @@
           "class": "mandatory",
           "sites": [
             "epicnotes.Create"
-          ]
-        },
-        {
-          "kind": "graphql",
-          "operation": "query namespace (queryResolveWorkItemGID)",
-          "root_fields": [
-            "namespace"
-          ],
-          "positions": [
-            "namespace",
-            "namespace.workItem"
-          ],
-          "class": "mandatory",
-          "sites": [
-            "epicworkitems.resolveGID"
-          ],
-          "directives": [
-            "mandatory: an epic action resolves the epic's work item ID here and then sends its own request with it, so both run on every call"
           ]
         }
       ],
@@ -7846,6 +7846,24 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query namespace (getWorkItemIDQuery)",
+          "root_fields": [
+            "namespace"
+          ],
+          "positions": [
+            "namespace",
+            "namespace.workItem"
+          ],
+          "class": "mandatory",
+          "sites": [
+            "epics.Update"
+          ],
+          "sdk_methods": [
+            "WorkItems.UpdateWorkItem"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "mutation workItemUpdate (WorkItems.UpdateWorkItem)",
           "root_fields": [
             "workItemUpdate"
@@ -7889,24 +7907,6 @@
             "epics.Update"
           ],
           "declaration": "sdk-graphql-template"
-        },
-        {
-          "kind": "graphql",
-          "operation": "query namespace (getWorkItemIDQuery)",
-          "root_fields": [
-            "namespace"
-          ],
-          "positions": [
-            "namespace",
-            "namespace.workItem"
-          ],
-          "class": "mandatory",
-          "sites": [
-            "epics.Update"
-          ],
-          "sdk_methods": [
-            "WorkItems.UpdateWorkItem"
-          ]
         }
       ],
       "paths": [
@@ -8796,17 +8796,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "DELETE /groups/:id/milestones/:milestone_id",
-          "class": "mandatory",
-          "sites": [
-            "groupmilestones.Delete"
-          ],
-          "sdk_methods": [
-            "GroupMilestones.DeleteGroupMilestone"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /groups/:id/milestones",
           "class": "mandatory",
           "sites": [
@@ -8817,6 +8806,17 @@
           ],
           "directives": [
             "mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /groups/:id/milestones/:milestone_id",
+          "class": "mandatory",
+          "sites": [
+            "groupmilestones.Delete"
+          ],
+          "sdk_methods": [
+            "GroupMilestones.DeleteGroupMilestone"
           ]
         }
       ],
@@ -9520,17 +9520,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id",
-          "class": "optional",
-          "sites": [
-            "groupldap.groupExists"
-          ],
-          "sdk_methods": [
-            "Groups.GetGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /groups/:id/ldap_group_links",
           "class": "mandatory",
           "sites": [
@@ -9539,11 +9528,22 @@
           "sdk_methods": [
             "Groups.ListGroupLDAPLinks"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id",
+          "class": "optional",
+          "sites": [
+            "groupldap.groupExists"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroup"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -10612,6 +10612,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "POST /groups/:id/transfer",
+          "class": "mandatory",
+          "sites": [
+            "groups.TransferSubGroup"
+          ],
+          "sdk_methods": [
+            "Groups.TransferSubGroup"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /groups/:id",
           "class": "optional",
           "sites": [
@@ -10631,22 +10642,11 @@
           "sdk_methods": [
             "Todos.ListTodos"
           ]
-        },
-        {
-          "kind": "rest",
-          "route": "POST /groups/:id/transfer",
-          "class": "mandatory",
-          "sites": [
-            "groups.TransferSubGroup"
-          ],
-          "sdk_methods": [
-            "Groups.TransferSubGroup"
-          ]
         }
       ],
       "paths": [
         [
-          2
+          0
         ]
       ]
     },
@@ -13016,52 +13016,6 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation workItemUpdate (WorkItems.UpdateWorkItem)",
-          "root_fields": [
-            "workItemUpdate"
-          ],
-          "positions": [
-            "workItemUpdate",
-            "workItemUpdate.workItem",
-            "workItemUpdate.workItem.author",
-            "workItemUpdate.workItem.features",
-            "workItemUpdate.workItem.features.assignees",
-            "workItemUpdate.workItem.features.assignees.assignees",
-            "workItemUpdate.workItem.features.assignees.assignees.nodes",
-            "workItemUpdate.workItem.features.color",
-            "workItemUpdate.workItem.features.healthStatus",
-            "workItemUpdate.workItem.features.hierarchy",
-            "workItemUpdate.workItem.features.hierarchy.children",
-            "workItemUpdate.workItem.features.hierarchy.children.nodes",
-            "workItemUpdate.workItem.features.hierarchy.children.nodes.namespace",
-            "workItemUpdate.workItem.features.hierarchy.parent",
-            "workItemUpdate.workItem.features.hierarchy.parent.namespace",
-            "workItemUpdate.workItem.features.iteration",
-            "workItemUpdate.workItem.features.iteration.iteration",
-            "workItemUpdate.workItem.features.labels",
-            "workItemUpdate.workItem.features.labels.labels",
-            "workItemUpdate.workItem.features.labels.labels.nodes",
-            "workItemUpdate.workItem.features.linkedItems",
-            "workItemUpdate.workItem.features.linkedItems.linkedItems",
-            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes",
-            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes.workItem",
-            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes.workItem.namespace",
-            "workItemUpdate.workItem.features.milestone",
-            "workItemUpdate.workItem.features.milestone.milestone",
-            "workItemUpdate.workItem.features.startAndDueDate",
-            "workItemUpdate.workItem.features.status",
-            "workItemUpdate.workItem.features.status.status",
-            "workItemUpdate.workItem.features.weight",
-            "workItemUpdate.workItem.workItemType"
-          ],
-          "class": "mandatory",
-          "sites": [
-            "workitems.Update"
-          ],
-          "declaration": "sdk-graphql-template"
-        },
-        {
-          "kind": "graphql",
           "operation": "query namespace (WorkItems.GetWorkItem)",
           "root_fields": [
             "namespace"
@@ -13123,11 +13077,57 @@
           "sdk_methods": [
             "WorkItems.UpdateWorkItem"
           ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "mutation workItemUpdate (WorkItems.UpdateWorkItem)",
+          "root_fields": [
+            "workItemUpdate"
+          ],
+          "positions": [
+            "workItemUpdate",
+            "workItemUpdate.workItem",
+            "workItemUpdate.workItem.author",
+            "workItemUpdate.workItem.features",
+            "workItemUpdate.workItem.features.assignees",
+            "workItemUpdate.workItem.features.assignees.assignees",
+            "workItemUpdate.workItem.features.assignees.assignees.nodes",
+            "workItemUpdate.workItem.features.color",
+            "workItemUpdate.workItem.features.healthStatus",
+            "workItemUpdate.workItem.features.hierarchy",
+            "workItemUpdate.workItem.features.hierarchy.children",
+            "workItemUpdate.workItem.features.hierarchy.children.nodes",
+            "workItemUpdate.workItem.features.hierarchy.children.nodes.namespace",
+            "workItemUpdate.workItem.features.hierarchy.parent",
+            "workItemUpdate.workItem.features.hierarchy.parent.namespace",
+            "workItemUpdate.workItem.features.iteration",
+            "workItemUpdate.workItem.features.iteration.iteration",
+            "workItemUpdate.workItem.features.labels",
+            "workItemUpdate.workItem.features.labels.labels",
+            "workItemUpdate.workItem.features.labels.labels.nodes",
+            "workItemUpdate.workItem.features.linkedItems",
+            "workItemUpdate.workItem.features.linkedItems.linkedItems",
+            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes",
+            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes.workItem",
+            "workItemUpdate.workItem.features.linkedItems.linkedItems.nodes.workItem.namespace",
+            "workItemUpdate.workItem.features.milestone",
+            "workItemUpdate.workItem.features.milestone.milestone",
+            "workItemUpdate.workItem.features.startAndDueDate",
+            "workItemUpdate.workItem.features.status",
+            "workItemUpdate.workItem.features.status.status",
+            "workItemUpdate.workItem.features.weight",
+            "workItemUpdate.workItem.workItemType"
+          ],
+          "class": "mandatory",
+          "sites": [
+            "workitems.Update"
+          ],
+          "declaration": "sdk-graphql-template"
         }
       ],
       "paths": [
         [
-          0,
+          1,
           2
         ]
       ]
@@ -14154,17 +14154,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
-          "class": "optional",
-          "sites": [
-            "mergerequests.Get"
-          ],
-          "sdk_methods": [
-            "MergeRequests.GetMergeRequest"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "POST /projects/:id/merge_requests/:merge_request_iid/cancel_merge_when_pipeline_succeeds",
           "class": "mandatory",
           "sites": [
@@ -14173,11 +14162,22 @@
           "sdk_methods": [
             "MergeRequests.CancelMergeWhenPipelineSucceeds"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
+          "class": "optional",
+          "sites": [
+            "mergerequests.Get"
+          ],
+          "sdk_methods": [
+            "MergeRequests.GetMergeRequest"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -14453,13 +14453,13 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id/merge_requests/:merge_request_iid/award_emoji",
-          "class": "optional",
+          "route": "POST /projects/:id/merge_requests/:merge_request_iid/award_emoji",
+          "class": "mandatory",
           "sites": [
-            "awardemoji.findExistingMRAwardEmoji"
+            "awardemoji.CreateMRAwardEmoji"
           ],
           "sdk_methods": [
-            "AwardEmoji.ListMergeRequestAwardEmoji"
+            "AwardEmoji.CreateMergeRequestAwardEmoji"
           ]
         },
         {
@@ -14475,19 +14475,19 @@
         },
         {
           "kind": "rest",
-          "route": "POST /projects/:id/merge_requests/:merge_request_iid/award_emoji",
-          "class": "mandatory",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid/award_emoji",
+          "class": "optional",
           "sites": [
-            "awardemoji.CreateMRAwardEmoji"
+            "awardemoji.findExistingMRAwardEmoji"
           ],
           "sdk_methods": [
-            "AwardEmoji.CreateMergeRequestAwardEmoji"
+            "AwardEmoji.ListMergeRequestAwardEmoji"
           ]
         }
       ],
       "paths": [
         [
-          2
+          0
         ]
       ]
     },
@@ -16473,6 +16473,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "PUT /projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name",
+          "class": "mandatory",
+          "sites": [
+            "packages.publishWithTracker"
+          ],
+          "sdk_methods": [
+            "GenericPackages.PublishPackageFile"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "POST /projects/:id/releases/:tag_name/assets/links",
           "class": "mandatory",
           "sites": [
@@ -16483,17 +16494,6 @@
           ],
           "directives": [
             "mandatory: the action publishes the file and then links it to the release, so both requests run on every call"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "PUT /projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name",
-          "class": "mandatory",
-          "sites": [
-            "packages.publishWithTracker"
-          ],
-          "sdk_methods": [
-            "GenericPackages.PublishPackageFile"
           ]
         }
       ],
@@ -17020,6 +17020,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/pipelines/latest",
+          "class": "mandatory",
+          "sites": [
+            "pipelines.GetLatest"
+          ],
+          "sdk_methods": [
+            "Pipelines.GetLatestPipeline"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/pipelines",
           "class": "optional",
           "sites": [
@@ -17039,22 +17050,11 @@
           "sdk_methods": [
             "Pipelines.GetPipeline"
           ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/pipelines/latest",
-          "class": "mandatory",
-          "sites": [
-            "pipelines.GetLatest"
-          ],
-          "sdk_methods": [
-            "Pipelines.GetLatestPipeline"
-          ]
         }
       ],
       "paths": [
         [
-          2
+          0
         ]
       ]
     },
@@ -17399,17 +17399,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id/pipeline_schedules/:pipeline_schedule_id",
-          "class": "mandatory",
-          "sites": [
-            "pipelineschedules.rawGetSchedule"
-          ],
-          "directives": [
-            "mandatory: the action answers with the schedule as it stands after the run, and a failed read fails the call"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "POST /projects/:id/pipeline_schedules/:pipeline_schedule_id/play",
           "class": "mandatory",
           "sites": [
@@ -17417,6 +17406,17 @@
           ],
           "sdk_methods": [
             "PipelineSchedules.RunPipelineSchedule"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/pipeline_schedules/:pipeline_schedule_id",
+          "class": "mandatory",
+          "sites": [
+            "pipelineschedules.rawGetSchedule"
+          ],
+          "directives": [
+            "mandatory: the action answers with the schedule as it stands after the run, and a failed read fails the call"
           ]
         }
       ],
@@ -18921,7 +18921,84 @@
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
+            "Services.DeleteJiraService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteSlackService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteDiscordService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteMattermostService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteMicrosoftTeamsService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteTelegramService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/integrations/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
             "Services.DeleteDataDogService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteJenkinsCIService"
           ]
         },
         {
@@ -18937,13 +19014,57 @@
         },
         {
           "kind": "rest",
-          "route": "DELETE /projects/:id/integrations/:slug",
+          "route": "DELETE /projects/:id/services/:slug",
           "class": "alternative",
           "sites": [
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
-            "Services.DisableSlackApplication"
+            "Services.DeletePipelinesEmailService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteExternalWikiService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteCustomIssueTrackerService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteDroneCIService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
+            "Services.DeleteGithubService"
           ]
         },
         {
@@ -18955,17 +19076,6 @@
           ],
           "sdk_methods": [
             "Services.DeleteHarborService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/integrations/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteJiraService"
           ]
         },
         {
@@ -18998,117 +19108,7 @@
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
-            "Services.DeleteCustomIssueTrackerService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteDiscordService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteDroneCIService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteExternalWikiService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteGithubService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteJenkinsCIService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteMattermostService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteMattermostSlashCommandsService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteMicrosoftTeamsService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeletePipelinesEmailService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationDeleters"
-          ],
-          "sdk_methods": [
-            "Services.DeleteSlackService"
+            "Services.DeleteYouTrackService"
           ]
         },
         {
@@ -19130,18 +19130,18 @@
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
-            "Services.DeleteTelegramService"
+            "Services.DeleteMattermostSlashCommandsService"
           ]
         },
         {
           "kind": "rest",
-          "route": "DELETE /projects/:id/services/:slug",
+          "route": "DELETE /projects/:id/integrations/:slug",
           "class": "alternative",
           "sites": [
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
-            "Services.DeleteYouTrackService"
+            "Services.DisableSlackApplication"
           ]
         }
       ],
@@ -19270,7 +19270,84 @@
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
+            "Services.GetJiraService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetSlackService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetDiscordService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetMattermostService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetMicrosoftTeamsService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetTelegramService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/integrations/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
             "Services.GetDataDogService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetJenkinsCIService"
           ]
         },
         {
@@ -19286,13 +19363,57 @@
         },
         {
           "kind": "rest",
-          "route": "GET /projects/:id/integrations/:slug",
+          "route": "GET /projects/:id/services/:slug",
           "class": "alternative",
           "sites": [
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
-            "Services.GetHarborService"
+            "Services.GetPipelinesEmailService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetExternalWikiService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetCustomIssueTrackerService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetDroneCIService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/services/:slug",
+          "class": "alternative",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
+            "Services.GetGithubService"
           ]
         },
         {
@@ -19303,7 +19424,7 @@
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
-            "Services.GetJiraService"
+            "Services.GetHarborService"
           ]
         },
         {
@@ -19336,117 +19457,7 @@
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
-            "Services.GetCustomIssueTrackerService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetDiscordService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetDroneCIService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetExternalWikiService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetGithubService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetJenkinsCIService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetMattermostService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetMattermostSlashCommandsService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetMicrosoftTeamsService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetPipelinesEmailService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetSlackService"
+            "Services.GetYouTrackService"
           ]
         },
         {
@@ -19468,18 +19479,7 @@
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
-            "Services.GetTelegramService"
-          ]
-        },
-        {
-          "kind": "rest",
-          "route": "GET /projects/:id/services/:slug",
-          "class": "alternative",
-          "sites": [
-            "integrations.integrationGetters"
-          ],
-          "sdk_methods": [
-            "Services.GetYouTrackService"
+            "Services.GetMattermostSlashCommandsService"
           ]
         }
       ],
@@ -20368,17 +20368,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "DELETE /projects/:id/milestones/:milestone_id",
-          "class": "mandatory",
-          "sites": [
-            "milestones.Delete"
-          ],
-          "sdk_methods": [
-            "Milestones.DeleteMilestone"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/milestones",
           "class": "mandatory",
           "sites": [
@@ -20389,6 +20378,17 @@
           ],
           "directives": [
             "mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/milestones/:milestone_id",
+          "class": "mandatory",
+          "sites": [
+            "milestones.Delete"
+          ],
+          "sdk_methods": [
+            "Milestones.DeleteMilestone"
           ]
         }
       ],
@@ -21464,17 +21464,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "projects.Get"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "POST /projects/:id/star",
           "class": "mandatory",
           "sites": [
@@ -21483,11 +21472,22 @@
           "sdk_methods": [
             "Projects.StarProject"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "projects.Get"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -21664,6 +21664,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "PUT /projects/:id/transfer",
+          "class": "mandatory",
+          "sites": [
+            "projects.Transfer"
+          ],
+          "sdk_methods": [
+            "Projects.TransferProject"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id",
           "class": "optional",
           "sites": [
@@ -21683,22 +21694,11 @@
           "sdk_methods": [
             "Todos.ListTodos"
           ]
-        },
-        {
-          "kind": "rest",
-          "route": "PUT /projects/:id/transfer",
-          "class": "mandatory",
-          "sites": [
-            "projects.Transfer"
-          ],
-          "sdk_methods": [
-            "Projects.TransferProject"
-          ]
         }
       ],
       "paths": [
         [
-          2
+          0
         ]
       ]
     },
@@ -22897,6 +22897,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "POST /projects/:id/repository/files/:file_path",
+          "class": "mandatory",
+          "sites": [
+            "files.Create"
+          ],
+          "sdk_methods": [
+            "RepositoryFiles.CreateFile"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "HEAD /projects/:id/repository/files/:file_path",
           "class": "optional",
           "sites": [
@@ -22908,22 +22919,11 @@
           "directives": [
             "optional: commit metadata enriches an answer the write already produced, and a failed read is ignored"
           ]
-        },
-        {
-          "kind": "rest",
-          "route": "POST /projects/:id/repository/files/:file_path",
-          "class": "mandatory",
-          "sites": [
-            "files.Create"
-          ],
-          "sdk_methods": [
-            "RepositoryFiles.CreateFile"
-          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -23081,6 +23081,17 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "PUT /projects/:id/repository/files/:file_path",
+          "class": "mandatory",
+          "sites": [
+            "files.Update"
+          ],
+          "sdk_methods": [
+            "RepositoryFiles.UpdateFile"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "HEAD /projects/:id/repository/files/:file_path",
           "class": "optional",
           "sites": [
@@ -23092,22 +23103,11 @@
           "directives": [
             "optional: commit metadata enriches an answer the write already produced, and a failed read is ignored"
           ]
-        },
-        {
-          "kind": "rest",
-          "route": "PUT /projects/:id/repository/files/:file_path",
-          "class": "mandatory",
-          "sites": [
-            "files.Update"
-          ],
-          "sdk_methods": [
-            "RepositoryFiles.UpdateFile"
-          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -24130,17 +24130,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Code"
-          ],
-          "sdk_methods": [
-            "Search.BlobsByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24148,6 +24137,17 @@
           ],
           "sdk_methods": [
             "Search.BlobsByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Code"
+          ],
+          "sdk_methods": [
+            "Search.BlobsByGroup"
           ]
         },
         {
@@ -24182,17 +24182,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Commits"
-          ],
-          "sdk_methods": [
-            "Search.CommitsByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24200,6 +24189,17 @@
           ],
           "sdk_methods": [
             "Search.CommitsByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Commits"
+          ],
+          "sdk_methods": [
+            "Search.CommitsByGroup"
           ]
         },
         {
@@ -24234,17 +24234,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Issues"
-          ],
-          "sdk_methods": [
-            "Search.IssuesByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24252,6 +24241,17 @@
           ],
           "sdk_methods": [
             "Search.IssuesByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Issues"
+          ],
+          "sdk_methods": [
+            "Search.IssuesByGroup"
           ]
         },
         {
@@ -24286,17 +24286,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.MergeRequests"
-          ],
-          "sdk_methods": [
-            "Search.MergeRequestsByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24304,6 +24293,17 @@
           ],
           "sdk_methods": [
             "Search.MergeRequestsByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.MergeRequests"
+          ],
+          "sdk_methods": [
+            "Search.MergeRequestsByGroup"
           ]
         },
         {
@@ -24338,17 +24338,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Milestones"
-          ],
-          "sdk_methods": [
-            "Search.MilestonesByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24356,6 +24345,17 @@
           ],
           "sdk_methods": [
             "Search.MilestonesByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Milestones"
+          ],
+          "sdk_methods": [
+            "Search.MilestonesByGroup"
           ]
         },
         {
@@ -24476,17 +24476,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Users"
-          ],
-          "sdk_methods": [
-            "Search.UsersByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24494,6 +24483,17 @@
           ],
           "sdk_methods": [
             "Search.UsersByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Users"
+          ],
+          "sdk_methods": [
+            "Search.UsersByGroup"
           ]
         },
         {
@@ -24528,17 +24528,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /groups/:id/(-/)search",
-          "class": "alternative",
-          "sites": [
-            "search.Wiki"
-          ],
-          "sdk_methods": [
-            "Search.WikiBlobsByGroup"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/(-/)search",
           "class": "alternative",
           "sites": [
@@ -24546,6 +24535,17 @@
           ],
           "sdk_methods": [
             "Search.WikiBlobsByProject"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/(-/)search",
+          "class": "alternative",
+          "sites": [
+            "search.Wiki"
+          ],
+          "sdk_methods": [
+            "Search.WikiBlobsByGroup"
           ]
         },
         {
@@ -24803,17 +24803,6 @@
       ],
       "requests": [
         {
-          "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "securityfindings.List"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
           "kind": "graphql",
           "operation": "query project (queryListFindings)",
           "root_fields": [
@@ -24854,11 +24843,22 @@
           "sites": [
             "securityfindings.List"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "securityfindings.List"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -27130,17 +27130,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "toolutil.ResolveProjectWebURLs"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /users/:id/events",
           "class": "mandatory",
           "sites": [
@@ -27149,11 +27138,22 @@
           "sdk_methods": [
             "Users.ListUserContributionEvents"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "toolutil.ResolveProjectWebURLs"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -27680,17 +27680,6 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "toolutil.ResolveProjectWebURLs"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
-          "kind": "rest",
           "route": "GET /projects/:id/events",
           "class": "mandatory",
           "sites": [
@@ -27699,11 +27688,22 @@
           "sdk_methods": [
             "Events.ListProjectVisibleEvents"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "toolutil.ResolveProjectWebURLs"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
@@ -28818,17 +28818,6 @@
       ],
       "requests": [
         {
-          "kind": "rest",
-          "route": "GET /projects/:id",
-          "class": "optional",
-          "sites": [
-            "vulnerabilities.List"
-          ],
-          "sdk_methods": [
-            "Projects.GetProject"
-          ]
-        },
-        {
           "kind": "graphql",
           "operation": "query project (queryListVulnerabilities)",
           "root_fields": [
@@ -28864,11 +28853,22 @@
           "sites": [
             "vulnerabilities.List"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id",
+          "class": "optional",
+          "sites": [
+            "vulnerabilities.List"
+          ],
+          "sdk_methods": [
+            "Projects.GetProject"
+          ]
         }
       ],
       "paths": [
         [
-          1
+          0
         ]
       ]
     },
