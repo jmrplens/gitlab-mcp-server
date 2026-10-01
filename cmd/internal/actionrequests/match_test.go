@@ -4,9 +4,15 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"maps"
+	"path/filepath"
 	"slices"
 	"sort"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sdkroutes"
 )
 
 // siteNamed builds a site with the identity Match reads and nothing else.
@@ -121,6 +127,79 @@ func TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach(t *testing.T) {
 				t.Errorf("the site joined routes to %+v, want %s", matched[0].Handlers, testCase.handler)
 			}
 		})
+	}
+}
+
+// clientGoSourceDir returns the directory of the client-go root package the
+// module at root builds against, which is what cmd/internal/sdkroutes reads.
+func clientGoSourceDir(t *testing.T, root string) string {
+	t.Helper()
+	cfg := &packages.Config{Context: t.Context(), Mode: packages.NeedName | packages.NeedFiles, Dir: root}
+	loaded, err := packages.Load(cfg, clientGoPath)
+	if err != nil || len(loaded) != 1 || len(loaded[0].GoFiles) == 0 {
+		t.Fatalf("locate %s from %s: %d package(s), %v", clientGoPath, root, len(loaded), err)
+	}
+	return filepath.Dir(loaded[0].GoFiles[0])
+}
+
+// TestMatch_EveryCatalogAction_JoinsOneSiteWhoseMethodsSDKRoutesReads holds
+// the two facts the request derivation stands on to every action this
+// repository publishes, not to the read-only half cmd/audit_readonly_graphql
+// walks. Each action meets exactly one construction site, and that site's
+// route resolves to a handler. Every client-go method a body reachable from
+// those handlers names is a method cmd/internal/sdkroutes reads, and none of
+// them sends a request whose path the reading could not fold.
+//
+// The readonly audit asks the first of these of read-only actions alone, so
+// without this test a mutating action handed a twin, or one whose route
+// resolves to nothing, passes every gate. Nothing else asks the second at
+// all: a client-go upgrade that renames a service interface empties the join
+// between the two readers without failing either of them.
+func TestMatch_EveryCatalogAction_JoinsOneSiteWhoseMethodsSDKRoutesReads(t *testing.T) {
+	root := repoRoot(t)
+	prog, err := Load(root, []string{"./internal/..."}, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	sdk := sdkroutes.Read(clientGoSourceDir(t, root))
+	sites := prog.Sites()
+	byID := realCatalog(t)
+
+	reached := make(map[*types.Func]bool)
+	for _, id := range slices.Sorted(maps.Keys(byID)) {
+		matched := Match(sites, byID[id])
+		if len(matched) != 1 {
+			t.Errorf("%s joins %d construction site(s), want exactly one", id, len(matched))
+			continue
+		}
+		roots := prog.Roots(matched)
+		if len(roots) == 0 {
+			t.Errorf("%s routes to no handler", id)
+			continue
+		}
+		maps.Copy(reached, prog.Reachable(roots))
+	}
+
+	named := make(map[string]bool)
+	for fn := range reached {
+		if body, ok := prog.Function(fn); ok {
+			for _, key := range body.SDKMethods {
+				named[key] = true
+			}
+		}
+	}
+	if len(named) == 0 {
+		t.Fatal("no reachable body names a client-go method, so the join between the two readers was never asked")
+	}
+	for _, key := range slices.Sorted(maps.Keys(named)) {
+		method, ok := sdk.Method(key)
+		if !ok {
+			t.Errorf("a handler names %s, which is not a method sdkroutes reads", key)
+			continue
+		}
+		if len(method.Unresolved) > 0 {
+			t.Errorf("%s sends a request whose path sdkroutes could not fold: %v", key, method.Unresolved)
+		}
 	}
 }
 
