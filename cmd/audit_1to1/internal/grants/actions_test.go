@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // TestViewActions_TheFixture_WordsEveryRowAndSortsTheWithheld verifies the
