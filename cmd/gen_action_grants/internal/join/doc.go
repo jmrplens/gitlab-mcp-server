@@ -26,7 +26,9 @@
 // A document is walked against the pinned schema, position by position, with
 // each position's signature read from the record where it has one, since
 // whether a denied position takes its parent with it is decided by the
-// signature GitLab serves. The answer spine starts at the root field (for a
+// signature GitLab serves. A field is read on the type it is selected on, so
+// one in a fragment on a union member is looked up on the member, its
+// signature and its field-level declaration both. The answer spine starts at the root field (for a
 // mutation, at the first object its payload selects other than errors) and
 // follows the one object a position selects while nothing else but connection
 // framing is selected beside it. A position GitLab checks and that declares
@@ -56,5 +58,8 @@
 // the action makes its requests, which is the derivation's order, since that
 // is the one a caller meets: a lookup no token passes stops the write after it
 // from being sent, so nothing commits. An action is denied only when every
-// path is, and then reports its first path's refusal.
+// path is, and then reports its first path's refusal. A denied path beside one
+// that runs is not dropped: its refusal is kept as a denied way, each once, so
+// the row still says an input that selects it meets the refusal, and whether
+// the action reads GraphQL or a collection is asked of every path.
 package join

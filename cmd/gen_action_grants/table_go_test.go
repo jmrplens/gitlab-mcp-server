@@ -37,6 +37,10 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 		Actions: []finegrained.Requirement{
 			{ID: "a.denied", Denied: &finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /a", Effect: finegrained.EffectRefused}},
 			{ID: "a.read", Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+			{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{
+				{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull},
+				{Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused},
+			}},
 		},
 	}
 	want := tableHeader + `	Version: "19.4.1-ee",
@@ -76,6 +80,7 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 	Actions: []finegrained.Requirement{
 		{ID: "a.denied", Denied: &finegrained.Denial{Cause: "rest-todo", Element: "GET /a", Effect: "refused"}},
 		{ID: "a.read", Paths: [][]uint32{{0}, {0, 1}}, Degraded: []uint32{1}, GraphQL: true, Collection: true},
+		{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: "graphql-type-undeclared", Element: "Namespace", Effect: "null"}, {Cause: "rest-undeclared", Element: "GET /b", Effect: "refused"}}},
 	},
 }
 `

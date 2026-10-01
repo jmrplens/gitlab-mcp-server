@@ -119,14 +119,21 @@ type Requirement struct {
 	// Denied is set when no fine-grained token reaches the action at the
 	// recorded version.
 	Denied *Denial
+	// DeniedWays are the denials of the ways no fine-grained token runs,
+	// each once, when another way is reachable: the action runs, except with
+	// an input that selects one of these. They are kept out of Paths, which
+	// is what a grant is judged against, since no grant passes them.
+	DeniedWays []Denial
 	// Degraded are indices into [Table.Elements]: undeclared positions off
 	// every spine, served and always empty.
 	Degraded []uint32
-	// GraphQL is set when some mandatory operation is a GraphQL one, which is
-	// what a null answer is worth a hint for.
+	// GraphQL is set when some mandatory operation of any way, a denied one
+	// included, is a GraphQL one, which is what a null answer is worth a hint
+	// for: an input that selects a denied GraphQL way is answered null too.
 	GraphQL bool
-	// Collection is set when the answer spine ends in a list or a connection,
-	// which is what an empty answer is worth a hint for.
+	// Collection is set when the answer spine of any way, a denied one
+	// included, ends in a list or a connection, which is what an empty answer
+	// is worth a hint for.
 	Collection bool
 }
 

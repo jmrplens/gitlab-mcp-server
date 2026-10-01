@@ -100,8 +100,14 @@ func renderTable(table *finegrained.Table) []byte {
 			b.WriteString(", Paths: [][]uint32{" + strings.Join(paths, ", ") + "}")
 		}
 		if row.Denied != nil {
-			fmt.Fprintf(&b, ", Denied: &finegrained.Denial{Cause: %q, Element: %q, Effect: %q}",
-				row.Denied.Cause, row.Denied.Element, row.Denied.Effect)
+			fmt.Fprintf(&b, ", Denied: &finegrained.Denial%s", denial(*row.Denied))
+		}
+		if len(row.DeniedWays) > 0 {
+			ways := make([]string, len(row.DeniedWays))
+			for i, way := range row.DeniedWays {
+				ways[i] = denial(way)
+			}
+			b.WriteString(", DeniedWays: []finegrained.Denial{" + strings.Join(ways, ", ") + "}")
 		}
 		writeIndices(&b, "Degraded", row.Degraded)
 		writeFlag(&b, "GraphQL", row.GraphQL)
@@ -113,6 +119,11 @@ func renderTable(table *finegrained.Table) []byte {
 	// formatting failure is a defect of this function, which the repository's
 	// rule says to state at the leaf.
 	return cmdutil.Must(format.Source(b.Bytes()))
+}
+
+// denial spells one denial's fields as a keyed literal body.
+func denial(d finegrained.Denial) string {
+	return fmt.Sprintf("{Cause: %q, Element: %q, Effect: %q}", d.Cause, d.Element, d.Effect)
 }
 
 // writeStrings writes a string slice field, one value per line.

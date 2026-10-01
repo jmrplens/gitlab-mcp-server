@@ -76,7 +76,8 @@ union VulnerabilityDetail = DetailText | DetailCode
 type DetailText { text: String }
 type DetailCode { code: String }
 union VulnerabilityLocation = LocationSast | LocationDast
-type LocationSast { file: String }
+type LocationSast { file: String dependency: Dependency }
+type Dependency { name: String }
 type LocationDast { host: String }
 type VulnerabilityIssueLinkConnection { nodes: [VulnerabilityIssueLink] }
 type VulnerabilityIssueLink { id: ID! }
@@ -225,9 +226,12 @@ func fixtureRecord() *apilive.Document {
 				"VulnerabilityIssueLink":           enforced(),
 				"DetailText":                       enforced(),
 				"DetailCode":                       enforced(),
-				"LocationSast":                     enforced(directive("default", "project", "read_vulnerability")),
-				"LocationDast":                     enforced(directive("default", "project", "read_vulnerability")),
-				"WorkItem":                         enforced(directive("default", "project", "read_work_item")),
+				"LocationSast": withFields(enforced(directive("default", "project", "read_vulnerability")), map[string]string{
+					"dependency": "Dependency!",
+				}),
+				"Dependency":   enforced(directive("default", "project", "read_dependency")),
+				"LocationDast": enforced(directive("default", "project", "read_vulnerability")),
+				"WorkItem":     enforced(directive("default", "project", "read_work_item")),
 			},
 			Abstract: map[string]apilive.AbstractType{
 				"VulnerabilityDetail":   {Kind: "union", PossibleTypes: []string{"DetailText", "DetailCode"}},
@@ -241,8 +245,9 @@ func fixtureRecord() *apilive.Document {
 				"emptyPayload":   {Name: "emptyPayload", Granular: []apilive.Directive{directive("default", "project", "create_issue")}},
 			},
 			Fields: map[string][]apilive.Directive{
-				"Project.counts": {directive("default", "project", "read_project_counts")},
-				"Issue.notes":    {{SkipReason: "not_a_resource"}},
+				"Project.counts":          {directive("default", "project", "read_project_counts")},
+				"LocationSast.dependency": {directive("default", "project", "admin_vulnerability")},
+				"Issue.notes":             {{SkipReason: "not_a_resource"}},
 			},
 		},
 	}
@@ -285,6 +290,9 @@ func render(table *finegrained.Table, act *Action) string {
 	var b strings.Builder
 	if act.Row.Denied != nil {
 		fmt.Fprintf(&b, "denied %s %s %s\n", act.Row.Denied.Cause, act.Row.Denied.Element, act.Row.Denied.Effect)
+	}
+	for _, way := range act.Row.DeniedWays {
+		fmt.Fprintf(&b, "denied way %s %s %s\n", way.Cause, way.Element, way.Effect)
 	}
 	for _, path := range act.Row.Paths {
 		b.WriteString("path\n")
@@ -370,11 +378,21 @@ func fixtureActions() []derive.Action {
 		action("rest.missing", rest("GET", "/projects/:/missing")),
 		action("rest.twice", rest("GET", "/projects/:/issues"), rest("GET", "/projects/:/issues")),
 		{ID: "rest.alternatives", Uses: []derive.Use{rest("GET", "/projects/:/later"), rest("GET", "/projects/:/issues")}, Paths: [][]int{{0}, {1}}},
+		{ID: "rest.denied_twice", Uses: []derive.Use{
+			rest("GET", "/projects/:/later"), rest("GET", "/projects/:/issues"), rest("GET", "/projects/:/later"), rest("GET", "/projects/:/nothing"),
+		}, Paths: [][]int{{0}, {1}, {2}, {3}}},
+		{ID: "mixed.denied_graphql_way", Uses: []derive.Use{
+			graphQL(`query { namespace(fullPath: "a") { id name } }`), rest("GET", "/groups/:/epics"),
+		}, Paths: [][]int{{0}, {1}}},
+		{ID: "mixed.denied_list_way", Uses: []derive.Use{
+			rest("GET", "/projects/:/issues"), graphQL(`query { project(fullPath: "a") { branchRules { nodes { name } } } }`),
+		}, Paths: [][]int{{0}, {1}}},
 		{ID: "rest.declared_nothing", Declaration: "sends-nothing", Paths: [][]int{{}}},
 		action("graphql.issues", graphQL(`query { project(fullPath: "a") { issues { nodes { id author { username } notes { body } } pageInfo { hasNextPage } count } } }`)),
 		action("graphql.edges", graphQL(`query { project(fullPath: "a") { issues { edges { node { id } cursor } } } }`)),
 		action("graphql.branch_rules", graphQL(`query { project(fullPath: "a") { branchRules { nodes { name } } } }`)),
 		action("graphql.vulnerability", graphQL(`query { vulnerability(id: "1") { id issueLinks { nodes { id } } location { ... on LocationSast { file } } } }`)),
+		action("graphql.member_field", graphQL(`query { vulnerability(id: "1") { id location { ... on LocationSast { dependency { name } } } } }`)),
 		action("graphql.details", graphQL(`query { vulnerability(id: "1") { id details { ... on DetailText { text } } } }`)),
 		action("graphql.namespace", graphQL(`query { namespace(fullPath: "a") { id name } }`)),
 		action("graphql.counts", graphQL(`query { project(fullPath: "a") { counts { total } } }`)),
@@ -445,10 +463,13 @@ func fixtureDeclarations() Declarations {
 // route declaring nothing; a GraphQL answer spine through connections and
 // edges, a declared element a non-null chain carries onto it (Issue.author),
 // an undeclared one off it served empty, an abstract position judged as its
-// worst member (Vulnerability.details), a redacted connection, and the
-// mutations a fine-grained token is refused or whose answer it loses; and a
-// group work item, declared at a boundary it never resolves to, read and
-// written.
+// worst member (Vulnerability.details), a field selected in a fragment on a
+// union member read on the member (its record signature and its field-level
+// declaration), a redacted connection, and the mutations a fine-grained token
+// is refused or whose answer it loses; a group work item, declared at a
+// boundary it never resolves to, read and written; and an action one of whose
+// ways no token passes, kept as a denied way beside the ways that run, each
+// denial once, with the GraphQL and collection flags read from every way.
 func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 	result := Join(fixtureRecord(), fixtureSchema(t), fixtureActions(), fixtureDeclarations())
 	issuesQuery := "path\n  query project (fixture.Handler)\n" +
@@ -464,30 +485,39 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 	}
 	issuesRoute := "path\n  GET /projects/:id/issues\n    group read_issue @ project\n"
 	want := map[string]string{
-		"rest.issues":           issuesRoute,
-		"rest.epics_optional":   "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
-		"rest.epics_plain":      "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
-		"rest.things":           "path\n  POST /projects/:id/things\n    group create_thing @ project or group or user or instance\n    group read_user @ user\n    group read_project @ project or group or user or instance\n",
-		"rest.skipped":          "path\n  GET /projects/:id/skipped [skip]\n",
-		"rest.later":            "denied rest-todo GET /projects/:id/later refused\n",
-		"rest.nothing":          "denied rest-undeclared GET /projects/:id/nothing refused\n",
-		"rest.unknown":          "path\n  GET /projects/:id/unknown\n    group  @ project\n",
-		"rest.head":             "path\n  GET /projects/:id/files/:file_path/raw\n    group read_repository_file @ project\n",
-		"rest.slug":             "path\n  PUT /projects/:id/integrations/slack\n    group update_integration @ project\n",
-		"rest.missing":          "no row\n",
-		"rest.twice":            issuesRoute,
-		"rest.alternatives":     issuesRoute,
+		"rest.issues":         issuesRoute,
+		"rest.epics_optional": "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
+		"rest.epics_plain":    "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
+		"rest.things":         "path\n  POST /projects/:id/things\n    group create_thing @ project or group or user or instance\n    group read_user @ user\n    group read_project @ project or group or user or instance\n",
+		"rest.skipped":        "path\n  GET /projects/:id/skipped [skip]\n",
+		"rest.later":          "denied rest-todo GET /projects/:id/later refused\n",
+		"rest.nothing":        "denied rest-undeclared GET /projects/:id/nothing refused\n",
+		"rest.unknown":        "path\n  GET /projects/:id/unknown\n    group  @ project\n",
+		"rest.head":           "path\n  GET /projects/:id/files/:file_path/raw\n    group read_repository_file @ project\n",
+		"rest.slug":           "path\n  PUT /projects/:id/integrations/slack\n    group update_integration @ project\n",
+		"rest.missing":        "no row\n",
+		"rest.twice":          issuesRoute,
+		"rest.alternatives":   "denied way rest-todo GET /projects/:id/later refused\n" + issuesRoute,
+		"rest.denied_twice": "denied way rest-todo GET /projects/:id/later refused\n" +
+			"denied way rest-undeclared GET /projects/:id/nothing refused\n" + issuesRoute,
+		"mixed.denied_graphql_way": "denied way graphql-type-undeclared Namespace null\n" +
+			"path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\ngraphql\n",
+		"mixed.denied_list_way": "denied way graphql-type-undeclared BranchRule null\n" + issuesRoute + "graphql collection\n",
 		"rest.declared_nothing": "path\n",
 		"graphql.issues":        issuesQuery,
 		"graphql.again":         issuesQuery,
 		"graphql.edges": "path\n  query project (fixture.Handler)\n" +
 			"    spine project Project null [read_project @ project]\n" +
 			"    spine project.issues.edges.node Issue removed-items [read_issue @ project]\ngraphql collection\n",
-		"graphql.branch_rules":       "denied graphql-type-undeclared BranchRule null\n",
+		"graphql.branch_rules":       "denied graphql-type-undeclared BranchRule null\ngraphql collection\n",
 		"graphql.vulnerability":      vulnerability("spine"),
 		"graphql.vulnerability_rule": vulnerability("off"),
-		"graphql.details":            "denied graphql-type-undeclared VulnerabilityDetail null\n",
-		"graphql.namespace":          "denied graphql-type-undeclared Namespace null\n",
+		"graphql.member_field": "path\n  query vulnerability (fixture.Handler)\n" +
+			"    spine vulnerability Vulnerability null [read_vulnerability @ project or group] [admin_vulnerability @ project or group or user or instance]\n" +
+			"    off vulnerability.location VulnerabilityLocation null members LocationSast,LocationDast [read_vulnerability @ project]\n" +
+			"    off vulnerability.location.dependency Dependency null [read_dependency @ project] [admin_vulnerability @ project]\ngraphql\n",
+		"graphql.details":   "denied graphql-type-undeclared VulnerabilityDetail null\ngraphql\n",
+		"graphql.namespace": "denied graphql-type-undeclared Namespace null\ngraphql\n",
 		"graphql.counts": "path\n  query project (fixture.Handler)\n" +
 			"    spine project Project null [read_project @ project]\n" +
 			"    spine project.counts Counts null [read_project_counts @ project]\ngraphql\n",
@@ -506,17 +536,17 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 		"rest.instance": "path\n  GET /instance/things\n    group read_user @ project or group or user or instance\n",
 		"graphql.issue_create": "path\n  mutation issueCreate (fixture.Handler)\n    group create_issue @ project\n" +
 			"    spine issueCreate.issue Issue null [read_issue @ project]\ngraphql\n",
-		"graphql.undeclared":               "denied graphql-mutation-undeclared undeclaredThing refused\n",
+		"graphql.undeclared":               "denied graphql-mutation-undeclared undeclaredThing refused\ngraphql\n",
 		"graphql.skipped":                  "path\n  mutation skippedThing (fixture.Handler) [skip]\ngraphql\n",
-		"graphql.label_create":             "denied graphql-payload-undeclared Label committed-then-null\n",
-		"graphql.work_item_update":         "denied graphql-boundary-unresolvable WorkItem committed-then-null\n",
-		"graphql.work_item_refused":        "denied graphql-boundary-unresolvable workItemUpdate refused\n",
-		"graphql.work_item_read":           "denied graphql-boundary-unresolvable WorkItem null-or-empty\n",
+		"graphql.label_create":             "denied graphql-payload-undeclared Label committed-then-null\ngraphql\n",
+		"graphql.work_item_update":         "denied graphql-boundary-unresolvable WorkItem committed-then-null\ngraphql\n",
+		"graphql.work_item_refused":        "denied graphql-boundary-unresolvable workItemUpdate refused\ngraphql\n",
+		"graphql.work_item_read":           "denied graphql-boundary-unresolvable WorkItem null-or-empty\ngraphql\n",
 		"graphql.project_work_item_update": "path\n  mutation workItemUpdate (fixture.Handler)\n    group update_work_item @ project\n    spine workItemUpdate.workItem WorkItem null [read_work_item @ project]\ngraphql\n",
-		"graphql.links_fatal":              "denied graphql-type-undeclared VulnerabilityIssueLink null\n",
+		"graphql.links_fatal":              "denied graphql-type-undeclared VulnerabilityIssueLink null\ngraphql\n",
 		"graphql.branch_rules_lenient":     "path\n  query project (fixture.Handler)\n    spine project Project null [read_project @ project]\ndegraded project.branchRules.nodes BranchRule null undeclared\ngraphql collection\n",
-		"graphql.lookup_then_write":        "denied graphql-type-undeclared Namespace null\n",
-		"graphql.write_then_lookup":        "denied graphql-payload-undeclared Label committed-then-null\n",
+		"graphql.lookup_then_write":        "denied graphql-type-undeclared Namespace null\ngraphql\n",
+		"graphql.write_then_lookup":        "denied graphql-payload-undeclared Label committed-then-null\ngraphql\n",
 		"graphql.empty_payload":            "path\n  mutation emptyPayload (fixture.Handler)\n    group create_issue @ project\ngraphql\n",
 		"graphql.invalid":                  "no row\n",
 		"graphql.two":                      "no row\n",
@@ -551,7 +581,9 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 	}
 	// The record describes neither the plain root field nor Plain, so their
 	// signatures are the pinned schema's: one document reaches plain alone
-	// and two reach plain and its items.
+	// and two reach plain and its items. The dependency a union member
+	// selects is read on the member, which the record describes, so it adds
+	// none.
 	if result.Fallbacks != 5 {
 		t.Errorf("fallbacks = %d, want 5", result.Fallbacks)
 	}

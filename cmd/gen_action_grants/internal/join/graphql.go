@@ -135,10 +135,6 @@ func (a *analyzer) operations(name, text string) ([]Operation, error) {
 // operation judges one operation.
 func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operation {
 	out := Operation{Mutation: op.Operation == gqlast.Mutation}
-	rootType := "Query"
-	if out.Mutation {
-		rootType = "Mutation"
-	}
 	spine := map[*position]bool{}
 	var positions []*position
 	skipped := 0
@@ -147,7 +143,7 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 			continue
 		}
 		out.RootFields = append(out.RootFields, field.Name)
-		root := a.build(nil, rootType, field, &out)
+		root := a.build(nil, field, &out)
 		positions = append(positions, flatten(root)...)
 		start := root
 		if out.Mutation {
@@ -244,11 +240,18 @@ func spineFrom(start *position) []*position {
 // build builds the position a field selects and every object position under
 // it. Its signature is the record's where the record describes the parent
 // type, and the pinned schema's elsewhere.
-func (a *analyzer) build(parent *position, owner string, field *gqlast.Field, out *Operation) *position {
+//
+// The parent type is the one the field is selected on, which the validator
+// records on the field: the type condition of the fragment it sits in, or the
+// type of the position above it. A field of a union member is the member's,
+// so `dependency` under `... on VulnerabilityLocationDependencyScanning` is
+// looked up there, in the record and among the field-level declarations,
+// rather than on the union, which carries no fields of its own.
+func (a *analyzer) build(parent *position, field *gqlast.Field, out *Operation) *position {
 	at := &position{
 		parent:   parent,
 		typeName: field.Definition.Type.Name(),
-		owner:    owner,
+		owner:    field.ObjectDefinition.Name,
 		field:    field.Name,
 		path:     field.Alias,
 	}
@@ -256,7 +259,7 @@ func (a *analyzer) build(parent *position, owner string, field *gqlast.Field, ou
 		at.path = parent.path + "." + at.path
 		at.connectionItem = connectionItems[field.Name] && isConnection(parent)
 	}
-	if recorded, ok := a.authz.Types[owner].ObjectFields[field.Name]; ok {
+	if recorded, ok := a.authz.Types[at.owner].ObjectFields[field.Name]; ok {
 		at.sig = parseSignature(recorded.Type)
 	} else {
 		at.sig = schemaSignature(field.Definition.Type)
@@ -264,7 +267,7 @@ func (a *analyzer) build(parent *position, owner string, field *gqlast.Field, ou
 	}
 	for _, selected := range fields(field.SelectionSet) {
 		if isObject(selected) {
-			at.children = append(at.children, a.build(at, at.typeName, selected, out))
+			at.children = append(at.children, a.build(at, selected, out))
 		} else {
 			at.scalars = append(at.scalars, selected.Name)
 		}

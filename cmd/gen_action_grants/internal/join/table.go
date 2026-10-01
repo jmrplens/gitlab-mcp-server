@@ -535,28 +535,32 @@ func (j *joiner) element(element Element) uint32 {
 }
 
 // requirement builds an action's row: its paths over operations, with the
-// paths a denied operation sits on left out, and the denial when every path
-// holds one. A path's denial is its first in the order the action makes its
-// requests, which is the derivation's order, since that is the refusal a
-// caller meets: a lookup no token passes stops the write after it from being
-// sent at all.
+// paths a denied operation sits on kept apart as denied ways, and the denial
+// when every path holds one. A path's denial is its first in the order the
+// action makes its requests, which is the derivation's order, since that is
+// the refusal a caller meets: a lookup no token passes stops the write after
+// it from being sent at all. Whether the action reads GraphQL or a collection
+// is asked of every path, a denied one included, since an input that selects
+// a denied way is answered the way that way answers.
 func (j *joiner) requirement(id string, requests []Request, paths [][]int) *finegrained.Requirement {
 	row := &finegrained.Requirement{ID: id}
 	degraded := map[uint32]bool{}
-	var firstDenial *finegrained.Denial
+	var deniedWays []finegrained.Denial
 	for _, path := range paths {
 		var ops []uint32
 		var denial *finegrained.Denial
 		for _, request := range path {
 			op := requests[request].Operation
 			ops = append(ops, uint32(op)) //#nosec G115 -- an operation index, set and non-negative on every request of a complete action
+			row.GraphQL = row.GraphQL || j.opGraphQL[op]
+			row.Collection = row.Collection || j.collection[op]
 			if denial == nil {
 				denial = j.opDenial[op]
 			}
 		}
 		if denial != nil {
-			if firstDenial == nil {
-				firstDenial = denial
+			if !slices.Contains(deniedWays, *denial) {
+				deniedWays = append(deniedWays, *denial)
 			}
 			continue
 		}
@@ -568,16 +572,12 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 		slices.Sort(ops)
 		ops = slices.Compact(ops)
 		row.Paths = append(row.Paths, ops)
-		for _, op := range ops {
-			row.GraphQL = row.GraphQL || j.opGraphQL[int(op)]
-			row.Collection = row.Collection || j.collection[int(op)]
-		}
 	}
-	if len(row.Paths) == 0 && firstDenial != nil {
-		row.Denied = firstDenial
-		row.Paths = nil
+	if len(row.Paths) == 0 && len(deniedWays) > 0 {
+		row.Denied = &deniedWays[0]
 		return row
 	}
+	row.DeniedWays = deniedWays
 	row.Paths = minimizeOps(row.Paths)
 	for index := range degraded {
 		row.Degraded = append(row.Degraded, index)
