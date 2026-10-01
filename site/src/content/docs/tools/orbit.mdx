@@ -17,7 +17,7 @@ faq:
 
 import FAQ from "../../../components/FAQ.astro";
 
-Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools** — `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate (`GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`, `--tier=premium` or `--tier=ultimate` in HTTP mode, or the tier detected from the instance license and then the namespace plans). The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
+Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools**: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate (`GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`, `--tier=premium` or `--tier=ultimate` in HTTP mode, or the tier detected from the instance license and then the namespace plans). The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
 
 :::note[Technical reference]
 For the complete tool reference, see [`docs/reference/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) in the repository.
