@@ -368,10 +368,11 @@ Salida esperada: `gitlab-mcp-server-linux-amd64: OK` (o el nombre de archivo cor
 Cada artefacto del release lleva una atestación de procedencia SLSA guardada por GitHub, que liga el fichero a la ejecución de workflow que lo produjo:
 
 ```bash
-gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-server
+gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-Es independiente de la firma Cosign: la firma dice que los checksums vienen del pipeline de release de este repositorio; la atestación dice qué ejecución construyó exactamente este fichero.
+Es independiente de la firma Cosign: la firma dice que los checksums vienen del pipeline de release de este repositorio; la atestación dice qué ejecución construyó exactamente este fichero. `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio; añade `--source-ref refs/tags/v<versión>` para exigir además una release concreta, que es lo que exigen `install.sh` e `install.ps1`.
 
 ### 6. Verificar la imagen de contenedor
 
@@ -388,8 +389,10 @@ cosign verify docker.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Procedencia de compilación: qué commit y qué ejecución de workflow la produjeron
-gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
-gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
 Los dos comandos responden preguntas distintas y ninguno sustituye al otro. La firma liga el índice a la identidad del workflow de release; su predicado está vacío, así que dice quién subió la imagen y no qué entró en ella. La atestación de procedencia nombra el commit de origen y la ejecución del workflow.
@@ -399,12 +402,14 @@ La imagen lleva además una atestación de SBOM sobre el índice **y** sobre cad
 ```bash
 # SBOM: qué hay dentro de la imagen. Una etiqueta resuelve al índice, que lleva uno.
 gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document
 
 # O por el digest del manifiesto de plataforma que realmente ejecutas
 digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
 gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document
 ```
 

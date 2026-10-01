@@ -61,10 +61,11 @@ the universal one included, which lets you confirm the file came from this
 repository's release run:
 
 ```bash
-gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server
+gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-Use the name of the bundle you downloaded.
+Use the name of the bundle you downloaded. `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one minted by any workflow of the repository; `--source-ref refs/tags/v<version>` holds it to one release as well.
 
 The release binaries are covered by `checksums.txt`, its keyless Cosign
 signature, and their own provenance attestation — see

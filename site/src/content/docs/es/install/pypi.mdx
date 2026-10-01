@@ -173,14 +173,18 @@ lo verifica directamente con la [CLI de GitHub](https://cli.github.com/):
 
 ```bash
 # pip, pipx o uv tool install: el comando de tu PATH es el binario
-gh attestation verify "$(command -v gitlab-mcp-server)" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(command -v gitlab-mcp-server)" \
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 
 # uvx: el binario está en la caché de uv, y el paquete dice dónde
 gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import gitlab_mcp_server as m; print(m.find_binary())')" \
-  -R jmrplens/gitlab-mcp-server
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
 
-En Windows, `(Get-Command gitlab-mcp-server).Source` da la ruta para la
+`--signer-workflow` exige que la atestación venga del workflow de release,
+porque `-R` por sí solo acepta una emitida por cualquier workflow del
+repositorio; añade `--source-ref refs/tags/v<versión>` para exigir además la
+release que instalaste. En Windows, `(Get-Command gitlab-mcp-server).Source` da la ruta para la
 primera forma. Para un `uvx` fijado a una versión, nombra la misma versión
 en `--from` (`jmrplens-gitlab-mcp-server==<versión>`). Las wheels llevan
 además la atestación de publicación del propio PyPI (PEP 740), visible en la

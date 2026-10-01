@@ -195,7 +195,7 @@ On Linux/macOS, make it executable:
 chmod +x gitlab-mcp-server-linux-amd64
 ```
 
-Every release also ships `checksums.txt` and a keyless Cosign signature (`checksums.txt.sigstore.json`); releases after v2.7.5 add one SPDX SBOM per binary and a SLSA build provenance attestation you can check with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` (steps in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity), and the per-release detail in the [Installation guide](guides/installation.md#verify-a-download)). The `install.sh` and `install.ps1` scripts verify the SHA-256 against `checksums.txt` before installing and abort on a mismatch.
+Every release also ships `checksums.txt` and a keyless Cosign signature (`checksums.txt.sigstore.json`); releases after v2.7.5 add one SPDX SBOM per binary and a SLSA build provenance attestation you can check with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml` (steps in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity), and the per-release detail in the [Installation guide](guides/installation.md#verify-a-download)). The `install.sh` and `install.ps1` scripts verify the SHA-256 against `checksums.txt` before installing and abort on a mismatch.
 
 ---
 

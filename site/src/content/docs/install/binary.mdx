@@ -137,7 +137,7 @@ The install scripts already compare the download with `checksums.txt`, and check
 If either step fails, do not run the file. The full walkthrough, including installing Cosign, is under [Verifying release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
 :::note[Provenance attestations and SBOMs]
-The release workflow now records a build provenance attestation for every asset in `checksums.txt` and emits one SPDX SBOM per binary (`<asset>.sbom.json`), checkable with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server`. Those steps landed after v2.7.5 was tagged, so they apply to the releases published after it; for v2.7.5 itself, the checksum and signature above are the verification available.
+The release workflow now records a build provenance attestation for every asset in `checksums.txt` and emits one SPDX SBOM per binary (`<asset>.sbom.json`), checkable with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted. Those steps landed after v2.7.5 was tagged, so they apply to the releases published after it; for v2.7.5 itself, the checksum and signature above are the verification available.
 :::
 
 :::note[Third-party notices]

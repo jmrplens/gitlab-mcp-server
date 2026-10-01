@@ -170,11 +170,17 @@ instalado como lo hayas instalado:
 ```bash
 # dnx: la caché de paquetes de NuGet (<rid> y <versión> como en la tabla de arriba)
 gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<versión>/tools/any/<rid>/gitlab-mcp-server \
-  -R jmrplens/gitlab-mcp-server
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 
 # dotnet tool install -g: en Linux y macOS el shim enlaza con el almacén de herramientas
-gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server
+gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" \
+  -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
 ```
+
+`--signer-workflow` exige que la atestación venga del workflow de release,
+porque `-R` por sí solo acepta una emitida por cualquier workflow del
+repositorio; añade `--source-ref refs/tags/v<versión>` para exigir además la
+release que ejecutas.
 
 En Windows la caché está bajo `%USERPROFILE%\.nuget\packages` y el archivo
 es `gitlab-mcp-server.exe`. `dnx gitlab-mcp-server -- --version` imprime la
@@ -190,7 +196,8 @@ entrada de una copia descargada y verifica lo que queda:
 v=<versión>
 curl -sSLO "https://api.nuget.org/v3-flatcontainer/gitlab-mcp-server/$v/gitlab-mcp-server.$v.nupkg"
 zip -q -d "gitlab-mcp-server.$v.nupkg" .signature.p7s
-gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server
+gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml --source-ref "refs/tags/v$v"
 ```
 
 Lo mismo vale para cada paquete `gitlab-mcp-server.<rid>`. El `zip -d` de

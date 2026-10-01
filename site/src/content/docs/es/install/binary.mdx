@@ -137,7 +137,7 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
 Si cualquiera de los dos pasos falla, no ejecutes el archivo. El recorrido completo, incluida la instalación de Cosign, está en [Verificación de la integridad del release](/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release).
 
 :::note[Atestaciones de procedencia y SBOM]
-El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server`. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella; para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
+El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella; para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
 :::
 
 :::note[Avisos de terceros]

@@ -688,6 +688,7 @@ jobs:
       # same three aliases when it looks the docker login credential up.
       #
       # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (ghcr.io, index)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
@@ -1131,6 +1132,7 @@ jobs:
       # bundle verifies it the same way.
       # Stored in GitHub's attestation store — no release asset changes.
       # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (release binaries)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
@@ -1352,6 +1354,7 @@ jobs:
       # A re-run is safe: each attempt attests before it pushes, so whatever
       # --skip-duplicate keeps was attested by the attempt that pushed it.
       # Verify: gh attestation verify <unsigned .nupkg> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
       - name: Attest build provenance (NuGet packages)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
