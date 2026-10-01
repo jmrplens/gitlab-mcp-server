@@ -34,7 +34,7 @@ Not sure? Docker or the one-line installer for a first try, Homebrew or winget i
 - **Two values configure it.** `GITLAB_TOKEN` is the only required setting: a Personal Access Token (`glpat-...`) with the `api` scope. A `read_api` token also works: the server detects the scope at startup and serves a read-only surface for it, on stdio as in HTTP mode, so `GITLAB_MCP_READ_ONLY=true` is only needed to keep an `api` token from writing. `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance. Everything else is optional and listed in the [configuration reference](../reference/configuration.md).
 - **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, `dotnet tool update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
 - **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
-- **The current release is v2.7.5** (2026-08-27). Every registry below carries that version, and the Docker `latest` tag resolves to it. Facts in this guide that depend on the live registries were checked on 2026-09-01.
+- **The current release is v3.1.0** (2026-09-30). Every registry below carries that version, and the Docker `latest` tag resolves to it. Facts in this guide that depend on the live registries were checked on 2026-10-01.
 
 ---
 
@@ -156,11 +156,11 @@ Re-run the install script, or download the newer asset over the old file: the sc
 brew install jmrplens/tap/gitlab-mcp-server
 ```
 
-The tap is [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) and the formula is `Formula/gitlab-mcp-server.rb`, a binary formula: it downloads the release asset for your OS and architecture (`on_macos`/`on_linux` × `on_arm`/`on_intel`) pinned by the SHA-256 from that release's `checksums.txt`, and installs it as `bin/gitlab-mcp-server`. The formula is regenerated from `checksums.txt` by `scripts/update-homebrew-tap.sh` on every release, its `test` block runs `gitlab-mcp-server --version`, and the generator now emits a `livecheck` block (strategy `github_latest`). The live formula is at 2.7.5 with hashes matching that release; it predates the `livecheck` block, which appears with the next release.
+The tap is [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) and the formula is `Formula/gitlab-mcp-server.rb`, a binary formula: it downloads the release asset for your OS and architecture (`on_macos`/`on_linux` × `on_arm`/`on_intel`) pinned by the SHA-256 from that release's `checksums.txt`, and installs it as `bin/gitlab-mcp-server`. The formula is regenerated from `checksums.txt` by `scripts/update-homebrew-tap.sh` on every release, its `test` block runs `gitlab-mcp-server --version`, and the generator now emits a `livecheck` block (strategy `github_latest`). The live formula is at 3.1.0 with hashes matching that release, and carries the `livecheck` block.
 
 Configure your client with the command `$(brew --prefix)/bin/gitlab-mcp-server` (or just `gitlab-mcp-server` when Homebrew's bin directory is on your `PATH`), `GITLAB_TOKEN`, and `GITLAB_URL` for a self-managed instance.
 
-The formula published for 2.7.5 still mentions `AUTO_UPDATE=false` and `--setup` in its caveats. Neither exists any more; the tap's generator no longer emits those lines, so the next release's formula will not carry them.
+The formula published for 2.7.5 mentioned `AUTO_UPDATE=false` and `--setup` in its caveats. Neither exists any more, the tap's generator no longer emits those lines, and the live formula does not carry them.
 
 **Upgrade and uninstall.** `brew upgrade gitlab-mcp-server` (or a plain `brew upgrade`) moves to the newest formula; `brew uninstall gitlab-mcp-server` removes it, and `brew untap jmrplens/tap` drops the tap as well. These are ordinary Homebrew commands, not project-specific ones.
 
@@ -208,7 +208,7 @@ winget uninstall --id jmrplens.gitlab-mcp-server -e
 
 ### Version lag
 
-A winget release is not published by this repository directly. The release workflow opens a version pull request against `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork, and the new version becomes installable only after Microsoft's validation merges it. The newest version can therefore lag the GitHub Release; check `winget show` before assuming it is there. As of 2026-09-01 the newest published version, 2.7.5, matches the repository. The published locale manifest still describes an interactive `--setup` wizard and points at an old documentation host; both are stale text carried forward by the publishing tool and not a feature of the binary.
+A winget release is not published by this repository directly. The release workflow opens a version pull request against `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork, and the new version becomes installable only after Microsoft's validation merges it. The newest version can therefore lag the GitHub Release; check `winget show` before assuming it is there. As of 2026-10-01 the newest published version, 3.1.0, matches the repository. The locale manifests published up to 2.7.5 describe an interactive `--setup` wizard and point at an old documentation host; both were stale text carried forward by the publishing tool and not a feature of the binary, and the 3.1.0 manifest carries neither.
 
 ---
 
@@ -272,7 +272,7 @@ For a self-signed certificate, mount the CA into the container and set `SSL_CERT
 
 ### Tags, registries and updating
 
-Pin `ghcr.io/jmrplens/gitlab-mcp-server:<version>` in anything that has to be reproducible; `latest` tracks the newest release. As of 2026-09-01, `2.7.5` and `latest` resolve to the same digest on both registries, `sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168`, which is also the digest `server.json` pins for the MCP Registry.
+Pin `ghcr.io/jmrplens/gitlab-mcp-server:<version>` in anything that has to be reproducible; `latest` tracks the newest release. As of 2026-10-01, `3.1.0` and `latest` resolve to the same digest on both registries, `sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc`, which is also the digest `server.json` pins for the MCP Registry.
 
 Updating is a pull, then a restart: `docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest` (a standard Docker command; the repository's docs rely on `docker run` pulling on first use) and, for a stdio setup, nothing more, since `docker run --rm` starts a fresh container from the updated image on the next client launch. A long-running HTTP container keeps serving the image it started from until you recreate it. To remove the image, `docker rmi ghcr.io/jmrplens/gitlab-mcp-server:latest` after stopping any container using it.
 
@@ -302,7 +302,7 @@ A client launches it with `npx`:
 }
 ```
 
-After a global install the command is plain `gitlab-mcp-server`. On the registry, 2.7.5 is both `latest` and the only published version.
+After a global install the command is plain `gitlab-mcp-server`. As of 2026-10-01 the registry holds 2.7.5, 3.0.0 and 3.1.0, and `latest` is 3.1.0.
 
 If the launcher reports that the platform package is missing, the usual causes are `npm install --no-optional`, a lockfile generated on another operating system, or a musl-based distribution such as Alpine: from the first release after 2.7.5 the Linux packages are skipped there on purpose, because the PIE binaries need the glibc loader (on 2.7.5 the package installs and the binary then fails to start with "no such file or directory"). Use the [Docker image](#docker), which is musl-based, or build from source. On an unsupported platform the launcher exits with a message pointing at the release binaries.
 
@@ -318,7 +318,7 @@ pipx install jmrplens-gitlab-mcp-server     # isolated global install
 pip install jmrplens-gitlab-mcp-server      # into the active environment
 ```
 
-[`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) ships six platform wheels (the uv and ruff model): `manylinux_2_17` x86_64 and aarch64, `macosx_11_0` x86_64 and arm64, `win_amd64` and `win_arm64`, for Python 3.9 or newer. Each wheel places the native binary in its `.data/scripts` directory, so the installer puts it on the environment's scripts path as the `gitlab-mcp-server` command itself, executable bit set, and no Python runs when the server does. The wheel also declares a console script named `jmrplens-gitlab-mcp-server`, a wrapper that execs the binary; that second command is what lets `uvx` resolve the distribution by name, and `python -m gitlab_mcp_server` works too. On PyPI, 2.7.5 is the only released version.
+[`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) ships six platform wheels (the uv and ruff model): `manylinux_2_17` x86_64 and aarch64, `macosx_11_0` x86_64 and arm64, `win_amd64` and `win_arm64`, for Python 3.9 or newer. Each wheel places the native binary in its `.data/scripts` directory, so the installer puts it on the environment's scripts path as the `gitlab-mcp-server` command itself, executable bit set, and no Python runs when the server does. The wheel also declares a console script named `jmrplens-gitlab-mcp-server`, a wrapper that execs the binary; that second command is what lets `uvx` resolve the distribution by name, and `python -m gitlab_mcp_server` works too. As of 2026-10-01 PyPI holds 2.7.5, 3.0.0 and 3.1.0.
 
 The distribution name carries the author prefix because the unprefixed `gitlab-mcp-server` project on PyPI is an empty registration held by an unrelated account, under a PEP 541 reclamation request. If it is reclaimed, the rename is a constant in `scripts/build_pypi.py` and `scripts/validate_pypi.py`, the `server.json` identifier and the docs.
 
