@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "Go MCP server for GitLab: 2 dynamic tools reach 1000+ REST/GraphQL actions. Free/CE, no paid tier.",
+  "description": "Go MCP server for GitLab: 2 dynamic tools reach ~872 actions on Free/CE, up to ~1098 on Ultimate.",
   "version": "3.1.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
@@ -69,29 +69,8 @@
           ]
         },
         {
-          "name": "GITLAB_MCP_CAPABILITY_SURFACE",
-          "description": "Resource and prompt catalog selector: full or minimal (default: full); resource subscriptions require full",
-          "isRequired": false,
-          "default": "full",
-          "choices": [
-            "full",
-            "minimal"
-          ]
-        },
-        {
-          "name": "GITLAB_MCP_META_PARAM_SCHEMA",
-          "description": "Meta-tool input schema detail: opaque, compact, or full (default: opaque)",
-          "isRequired": false,
-          "default": "opaque",
-          "choices": [
-            "opaque",
-            "compact",
-            "full"
-          ]
-        },
-        {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -102,63 +81,17 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
-        },
-        {
-          "name": "GITLAB_MCP_EMBEDDED_RESOURCES",
-          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
-          "isRequired": false,
-          "default": "true",
-          "format": "boolean"
-        },
-        {
-          "name": "GITLAB_MCP_EXCLUDE_TOOLS",
-          "description": "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface (e.g. gitlab_admin,gitlab_runner)",
-          "isRequired": false,
-          "placeholder": "gitlab_admin,gitlab_runner"
-        },
-        {
-          "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
-          "isRequired": false,
-          "default": "false",
-          "format": "boolean"
-        },
-        {
-          "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
-          "isRequired": false,
-          "default": "2147483648"
-        },
-        {
-          "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
-          "isRequired": false,
-          "placeholder": "/path/to/exports:/another/path/to/exports"
-        },
-        {
-          "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
-          "isRequired": false,
-          "default": "0",
-          "format": "number"
-        },
-        {
-          "name": "GITLAB_MCP_RATE_LIMIT_BURST",
-          "description": "Token-bucket burst size when GITLAB_MCP_RATE_LIMIT_RPS is greater than 0 (default: 40)",
-          "isRequired": false,
-          "default": "40",
-          "format": "number"
         },
         {
           "name": "GITLAB_MCP_LOG_LEVEL",
@@ -236,7 +169,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -247,14 +180,14 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -281,19 +214,31 @@
         },
         {
           "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "description": "Largest local file an upload or file-reading action accepts, in bytes or with a KB, MB or GB suffix (e.g. 2GB); at most 1 TB (default: 2147483648, 2 GB)",
           "isRequired": false,
           "default": "2147483648"
         },
         {
+          "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/files:/another/path/to/files"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/downloads:/another/path/to/downloads"
+        },
+        {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "description": "Rate limit per credential, in requests per second, on every call that reaches GitLab, with tools/list charged to a bucket of its own; 0, the default on stdio, disables it (default: 0)",
           "isRequired": false,
           "default": "0",
           "format": "number"
@@ -381,7 +326,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -392,14 +337,14 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -426,19 +371,31 @@
         },
         {
           "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "description": "Largest local file an upload or file-reading action accepts, in bytes or with a KB, MB or GB suffix (e.g. 2GB); at most 1 TB (default: 2147483648, 2 GB)",
           "isRequired": false,
           "default": "2147483648"
         },
         {
+          "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/files:/another/path/to/files"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/downloads:/another/path/to/downloads"
+        },
+        {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "description": "Rate limit per credential, in requests per second, on every call that reaches GitLab, with tools/list charged to a bucket of its own; 0, the default on stdio, disables it (default: 0)",
           "isRequired": false,
           "default": "0",
           "format": "number"
@@ -528,7 +485,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -539,14 +496,14 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -573,19 +530,31 @@
         },
         {
           "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "description": "Largest local file an upload or file-reading action accepts, in bytes or with a KB, MB or GB suffix (e.g. 2GB); at most 1 TB (default: 2147483648, 2 GB)",
           "isRequired": false,
           "default": "2147483648"
         },
         {
+          "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/files:/another/path/to/files"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/downloads:/another/path/to/downloads"
+        },
+        {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "description": "Rate limit per credential, in requests per second, on every call that reaches GitLab, with tools/list charged to a bucket of its own; 0, the default on stdio, disables it (default: 0)",
           "isRequired": false,
           "default": "0",
           "format": "number"
@@ -676,7 +645,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -687,14 +656,14 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -721,19 +690,31 @@
         },
         {
           "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "description": "Largest local file an upload or file-reading action accepts, in bytes or with a KB, MB or GB suffix (e.g. 2GB); at most 1 TB (default: 2147483648, 2 GB)",
           "isRequired": false,
           "default": "2147483648"
         },
         {
+          "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/files:/another/path/to/files"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/downloads:/another/path/to/downloads"
+        },
+        {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "description": "Rate limit per credential, in requests per second, on every call that reaches GitLab, with tools/list charged to a bucket of its own; 0, the default on stdio, disables it (default: 0)",
           "isRequired": false,
           "default": "0",
           "format": "number"
@@ -824,7 +805,7 @@
         },
         {
           "name": "GITLAB_MCP_TIER",
-          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
+          "description": "GitLab tier: free/ce, premium or ultimate, used as given. When unset, detected from the instance license, then from the plans of the namespaces the token administers, falling back to free. Gates Premium and Ultimate actions; GitLab.com Ultimate also serves the Orbit Knowledge Graph tools",
           "isRequired": false,
           "choices": [
             "free",
@@ -835,14 +816,14 @@
         },
         {
           "name": "GITLAB_MCP_READ_ONLY",
-          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "description": "Read-only mode: removes every mutating action from the served surface; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
         },
         {
           "name": "GITLAB_MCP_SAFE_MODE",
-          "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "description": "Safe mode: a mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -869,19 +850,31 @@
         },
         {
           "name": "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
-          "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
+          "description": "Largest local file an upload or file-reading action accepts, in bytes or with a KB, MB or GB suffix (e.g. 2GB); at most 1 TB (default: 2147483648, 2 GB)",
           "isRequired": false,
           "default": "2147483648"
         },
         {
+          "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/files:/another/path/to/files"
+        },
+        {
+          "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "isRequired": false,
+          "placeholder": "/path/to/downloads:/another/path/to/downloads"
+        },
+        {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories allowed for local GitLab import archives",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
         {
           "name": "GITLAB_MCP_RATE_LIMIT_RPS",
-          "description": "Per-server tools/call rate limit in requests per second; 0 disables it (default: 0)",
+          "description": "Rate limit per credential, in requests per second, on every call that reaches GitLab, with tools/list charged to a bucket of its own; 0, the default on stdio, disables it (default: 0)",
           "isRequired": false,
           "default": "0",
           "format": "number"

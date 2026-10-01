@@ -102,28 +102,28 @@
     "tool_surface": {
       "type": "string",
       "title": "Tool surface",
-      "description": "Tool catalog surface: \"dynamic\" (two find/execute tools, lowest token use — recommended), \"meta\" (~32 consolidated domain tools) or \"individual\" (one tool per action).",
+      "description": "Tool catalog surface: \"dynamic\" (two find/execute tools, lowest token use, recommended), \"meta\" (~34 consolidated domain tools on Free/CE, more on paid tiers) or \"individual\" (one tool per action, ~868 on Free/CE, up to ~1094 on Ultimate).",
       "default": "dynamic",
       "required": false
     },
     "gitlab_tier": {
       "type": "string",
       "title": "GitLab tier",
-      "description": "Force the licensing tier (\"free\", \"premium\" or \"ultimate\") and skip license detection. Leave empty to auto-detect from the instance license.",
+      "description": "Force the licensing tier (\"free\", \"premium\" or \"ultimate\") and skip detection. Leave empty to detect it from the instance license, then from the plans of the namespaces your token administers, falling back to free.",
       "default": "",
       "required": false
     },
     "read_only": {
       "type": "boolean",
       "title": "Read-only mode",
-      "description": "Disable every mutating tool. Safe for exploration and review-only sessions.",
+      "description": "Remove every mutating action; reads keep working. Safe for exploration and review-only sessions.",
       "default": false,
       "required": false
     },
     "safe_mode": {
       "type": "boolean",
       "title": "Safe mode",
-      "description": "Mutating tools return a JSON preview of the request instead of executing it.",
+      "description": "A mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working.",
       "default": false,
       "required": false
     },
