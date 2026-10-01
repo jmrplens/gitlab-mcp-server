@@ -1330,6 +1330,15 @@ jobs:
       contents: read # download the published release assets
       id-token: write # nuget.org trusted publishing (NuGet/login), and the attestation's signing identity
       attestations: write # actions/attest-build-provenance (the .nupkg files)
+    # These two are live while the .NET SDK, which setup-dotnet fetches by
+    # version rather than by hash, runs the validation and the push. sign-attest
+    # was split out of the docker job to avoid that, and here it is accepted
+    # instead. id-token was already live in this job for NuGet/login, so the
+    # attestation adds the write to the attestation store and not the
+    # identity. And the push is `dotnet nuget push`, which needs that same SDK
+    # beside the key NuGet/login mints, so a job that attested and logged in
+    # without the SDK would still hand the key to one that runs it. The release
+    # job attests while GoReleaser runs on the same terms.
     # The digests attested, in sha256sum's format, for verify-published to
     # hold what nuget.org serves to once its repository signature is removed.
     outputs:
