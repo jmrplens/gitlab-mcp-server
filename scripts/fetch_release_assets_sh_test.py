@@ -50,6 +50,10 @@ PER_OS_BUNDLES = [
     "gitlab-mcp-server-linux.mcpb",
 ]
 UNIVERSAL_BUNDLE = "gitlab-mcp-server.mcpb"
+# The signer every attestation is held to: the release workflow at the tag,
+# which is also what the cosign check over checksums.txt demands. The stand-in
+# gh refuses an attestation verify that does not name it.
+SIGNER = "https://github.com/example/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v" + VERSION
 
 GH = """#!/usr/bin/env bash
 echo "$*" >> "$GH_LOG"
@@ -76,6 +80,10 @@ if [ "$1 $2" = "release download" ]; then
   exit 0
 fi
 if [ "$1 $2" = "attestation verify" ]; then
+  case " $* " in
+    *" --cert-identity $EXPECT_IDENTITY "*) ;;
+    *) echo "attestation verify names no release workflow signer: $*" >&2; exit 3 ;;
+  esac
   name=${3##*/}
   for refused in $FAIL_ATTEST; do
     if [ "$name" = "$refused" ]; then
@@ -143,6 +151,7 @@ class FetchReleaseAssetsBundleTest(unittest.TestCase):
             RELEASE_DIR=self.release,
             FAIL_ATTEST=" ".join(fail_attest),
             REPO="example/gitlab-mcp-server",
+            EXPECT_IDENTITY=SIGNER,
         )
         env.pop("REHEARSAL_ARCHIVE", None)
         if archive is not None:
@@ -231,6 +240,10 @@ class FetchReleaseAssetsBundleTest(unittest.TestCase):
         self.assertEqual(attested, sorted(PER_OS_BUNDLES))
         for name in PER_OS_BUNDLES:
             self.assertIn("Verifying the build-provenance attestation of " + name, result.stdout.decode())
+        for call in self.calls():
+            if call.startswith("attestation verify"):
+                with self.subTest(call.split()[2].rsplit("/", 1)[1]):
+                    self.assertIn("--cert-identity " + SIGNER, call)
 
     def test_a_bundle_whose_attestation_fails_stops_the_job(self):
         result = self.fetch(*PER_OS_BUNDLES, fail_attest=["gitlab-mcp-server-windows.mcpb"])
