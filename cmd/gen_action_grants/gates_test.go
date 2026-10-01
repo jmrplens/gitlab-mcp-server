@@ -8,6 +8,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/join"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // use is a derived REST request.

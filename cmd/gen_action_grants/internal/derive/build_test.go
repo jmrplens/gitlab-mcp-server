@@ -5,6 +5,8 @@ import (
 	"go/token"
 	"go/types"
 	"testing"
+
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // TestBuilderDecl_ADeclarationThatIsNotGeneral_ReadsNothing verifies a

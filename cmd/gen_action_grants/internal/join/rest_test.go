@@ -6,6 +6,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // TestExpandOptional_SpellsEveryWayAGrapePathCanBeWritten verifies a Grape
