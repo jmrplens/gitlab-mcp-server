@@ -1070,6 +1070,15 @@ jobs:
               done
           ls -1 dist/
 
+      # Every Linux channel (npm, PyPI, NuGet, the .mcpb launcher, the release
+      # assets) hands out these two binaries and promises a glibc system, so
+      # the loader each one names in PT_INTERP is checked once here, before
+      # anything packs them. .goreleaser.yml names the loaders explicitly;
+      # this holds the build to them, the way the Dockerfile holds the image's
+      # binary to the musl loader.
+      - name: Check the Linux binaries' ELF interpreter
+        run: python3 scripts/check_elf_interp.py dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64
+
       # The bundles are built before the stamp because server.json declares
       # the three per-OS ones and needs their SHA256. GoReleaser does not
       # produce them, so they are absent from the signed checksums.txt and

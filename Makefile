@@ -2372,6 +2372,7 @@ release:
 		fi; \
 	done
 	@rm -f dist/artifacts.json dist/config.yaml dist/metadata.json
+	@python3 scripts/check_elf_interp.py dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64
 	@echo "dist/ contents:" && ls -1 dist/
 
 ## release-check: validate .goreleaser.yml configuration

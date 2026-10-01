@@ -24,9 +24,31 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+      - &ldflags -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
     # Reproducible builds: stamp binary mtime from commit timestamp.
     mod_timestamp: "{{ .CommitTimestamp }}"
+    # -buildmode=pie makes the Linux binaries dynamically linked, and the
+    # linker picks their ELF interpreter (PT_INTERP) by stat-ing the build
+    # host: the glibc loader unless the musl one exists there
+    # (cmd/link/internal/ld/elf.go). The release runner happens to give the
+    # glibc paths below, which is what every Linux channel promises (npm's
+    # libc: glibc, PyPI's manylinux tags, NuGet's linux RIDs, the .mcpb
+    # launcher), so they are named here rather than left to whatever host
+    # builds the release: the image's arm64 binary once shipped with a loader
+    # its base image did not have and died at exec. An override replaces the
+    # whole ldflags list, hence the anchor. scripts/check_elf_interp.py holds
+    # the built binaries to these paths right after GoReleaser.
+    overrides:
+      - goos: linux
+        goarch: amd64
+        ldflags:
+          - *ldflags
+          - -I /lib64/ld-linux-x86-64.so.2
+      - goos: linux
+        goarch: arm64
+        ldflags:
+          - *ldflags
+          - -I /lib/ld-linux-aarch64.so.1
 
 # macOS universal (fat) binary for the Claude Desktop extension (.mcpb):
 # platform_overrides in the MCPB manifest key by OS only (darwin/win32/linux),
