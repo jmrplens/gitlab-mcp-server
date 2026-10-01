@@ -106,6 +106,25 @@ const (
 	FailureWithheld Failure = "withheld"
 )
 
+// failureFineGrained is an action a fine-grained personal access token is
+// refused before anything reaches GitLab: one no such token can run at the
+// recorded release, or one its grant does not reach. It is the refusal reason
+// the server counts the call under, on every surface. It is the harness's own
+// rather than a class a scenario names, since the one verb that sends such a
+// call, [Withheld], accepts it with the other shapes a withholding takes.
+const failureFineGrained Failure = Failure(toolutil.RefusalFineGrained)
+
+// The two sentences the server opens a fine-grained refusal with, right after
+// the action it names: one for an action no fine-grained token can run at the
+// recorded release, one for an action this token's grant does not reach. They
+// are the server's own wording (internal/finegrained), lower-cased the way
+// [classifyToolError] reads an answer, and the harness tests hold them to the
+// words the server builds.
+const (
+	fineGrainedUnavailable = "exists but is not available to a fine-grained personal access token"
+	fineGrainedNotGranted  = "exists but this fine-grained personal access token was not granted"
+)
+
 // String returns the class as a record spells it.
 func (f Failure) String() string { return string(f) }
 
@@ -268,16 +287,7 @@ const callRetryDelay = 500 * time.Millisecond
 func Do[O any](s *Session, id ActionID, params map[string]any, opts ...CallOption) O {
 	s.env.T.Helper()
 
-	var output O
-	resolved := resolveCallOptions(opts)
-	answer := s.invoke(id, params, resolved)
-	if !answer.ok() {
-		s.env.T.Fatalf("%s: %s%s", callLabel(id, resolved), answer.describe(), s.conn.failureContext())
-		return output
-	}
-	if err := decodeResult(answer.result, &output); err != nil {
-		s.env.T.Fatalf("%s: %v", callLabel(id, resolved), err)
-	}
+	output, _ := DoAnswer[O](s, id, params, opts...)
 	return output
 }
 
@@ -291,6 +301,26 @@ func DoVoid(s *Session, id ActionID, params map[string]any, opts ...CallOption) 
 	if !answer.ok() {
 		s.env.T.Fatalf("%s: %s%s", callLabel(id, resolved), answer.describe(), s.conn.failureContext())
 	}
+}
+
+// DoAnswer runs an action like Do and also hands back the server's own words
+// for the answer, its first text block, for a test whose subject is what the
+// server said beside the result: a note it added for the credential, a next
+// step. The structured content Do decodes leaves those out on the surfaces
+// that answer with one.
+func DoAnswer[O any](s *Session, id ActionID, params map[string]any, opts ...CallOption) (output O, said string) {
+	s.env.T.Helper()
+
+	resolved := resolveCallOptions(opts)
+	answer := s.invoke(id, params, resolved)
+	if !answer.ok() {
+		s.env.T.Fatalf("%s: %s%s", callLabel(id, resolved), answer.describe(), s.conn.failureContext())
+		return output, ""
+	}
+	if err := decodeResult(answer.result, &output); err != nil {
+		s.env.T.Fatalf("%s: %v", callLabel(id, resolved), err)
+	}
+	return output, answer.text
 }
 
 // Try runs an action and hands back both halves, for a test whose subject is
@@ -425,7 +455,7 @@ func Withheld(s *Session, id ActionID, params map[string]any, opts ...CallOption
 // for another reason means the action was admitted, and so served.
 func withheldAnswer(answer callResult) bool {
 	switch answer.failure {
-	case FailureUnknownAction:
+	case FailureUnknownAction, failureFineGrained:
 		return true
 	case FailureInvalidParams:
 		return strings.Contains(answer.text, "/properties/action")
@@ -711,6 +741,10 @@ var answeredStatus = regexp.MustCompile(`: (40[134])\b`)
 func classifyToolError(text string) Failure {
 	lowered := strings.ToLower(text)
 	switch {
+	// First: a fine-grained refusal opens with the generic withheld words
+	// below too, and is the one the server counts under a reason of its own.
+	case strings.Contains(lowered, fineGrainedUnavailable), strings.Contains(lowered, fineGrainedNotGranted):
+		return failureFineGrained
 	case strings.Contains(lowered, "re-send with confirm=true"):
 		return FailureNeedsConfirmation
 	case strings.Contains(lowered, "unknown action"),

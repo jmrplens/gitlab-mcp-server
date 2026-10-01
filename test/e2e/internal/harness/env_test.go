@@ -43,8 +43,17 @@ func TestNewDetached_Client_IsTheEnvsAndItsLedgerRunsAtTheEnd(t *testing.T) {
 		if name := e.Name("board"); !strings.Contains(name, e.RunID()) {
 			t.Errorf("Name() = %q, want it scoped to the run %q", name, e.RunID())
 		}
-		if runtime := e.Runtime(); runtime.Username != "" || runtime.UserID != 0 || runtime.URL != "" {
+		if runtime := e.Runtime(); runtime.Username != "" || runtime.UserID != 0 || runtime.Version != "" {
 			t.Errorf("Runtime() = %+v, want nothing a probe would have learned", runtime)
+		}
+		// The address is the one fact read off the client, so another
+		// credential's client reaches the same instance.
+		if got := e.Runtime().URL; got != "http://gitlab.test" {
+			t.Errorf("Runtime().URL = %q, want the client's instance", got)
+		}
+		other, otherErr := e.ClientFor("glpat-other")
+		if otherErr != nil || other.GL().BaseURL().String() != client.GL().BaseURL().String() {
+			t.Errorf("ClientFor() reaches %v (%v), want the client's own base %s", other, otherErr, client.GL().BaseURL())
 		}
 		if e.Ctx.Err() != nil {
 			t.Errorf("the Env's context is already done: %v", e.Ctx.Err())
@@ -57,6 +66,14 @@ func TestNewDetached_Client_IsTheEnvsAndItsLedgerRunsAtTheEnd(t *testing.T) {
 
 	if undone != 1 {
 		t.Errorf("the ledger ran %d cleanups when the test ended, want the one registered", undone)
+	}
+}
+
+// TestInstanceURLOf_NoClient_IsNoAddress checks a detached Env built with no
+// client carries no instance address rather than failing to build.
+func TestInstanceURLOf_NoClient_IsNoAddress(t *testing.T) {
+	if got := instanceURLOf(nil); got != "" {
+		t.Errorf("instanceURLOf(nil) = %q, want none", got)
 	}
 }
 

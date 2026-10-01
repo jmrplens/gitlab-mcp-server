@@ -24,7 +24,9 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // stubToken is the credential the harness's own tests run with. It reaches
@@ -1024,4 +1026,44 @@ func licensedActionFor(t *testing.T, inst *instance) ActionID {
 	}
 	t.Fatal("the Ultimate catalog carries no action the Free one lacks")
 	return ""
+}
+
+// TestSession_FineGrainedPhase_HoldsThePhaseTheReleaseDecides walks the
+// verdicts: a classic session is no fine-grained one; on the recorded release
+// phase B is right and phase A is not, whatever its reason; outside it phase A
+// for want of a recorded release is right, and phase B or phase A for any
+// other reason is not.
+func TestSession_FineGrainedPhase_HoldsThePhaseTheReleaseDecides(t *testing.T) {
+	recorded := actiongrants.Table().Version
+	const outsideVersion = "18.0.0"
+	empty := finegrained.Grant{Scopes: []finegrained.Scope{}}
+	granted := actiongrants.Build(true, finegrained.Reading{Grant: empty, Version: recorded})
+	outside := actiongrants.Build(true, finegrained.Reading{Grant: empty, Version: outsideVersion})
+	unreadable := actiongrants.Build(true, finegrained.Reading{Fallback: finegrained.FallbackVersionUnreadable})
+
+	cases := []struct {
+		name, version string
+		authority     *finegrained.Authority
+		judged        bool
+		problem       string
+	}{
+		{name: "a classic session", version: recorded, problem: "classic"},
+		{name: "phase B on the recorded release", version: recorded, authority: granted, judged: true},
+		{name: "phase A on the recorded release", version: recorded, authority: unreadable, judged: true, problem: "was not evaluated"},
+		{name: "phase A outside the record", version: outsideVersion, authority: outside},
+		{name: "phase B outside the record", version: outsideVersion, authority: granted, problem: "does not record"},
+		{name: "phase A for another reason outside the record", version: outsideVersion, authority: unreadable, problem: "does not record"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Session{env: &Env{inst: &instance{facts: runtimeFacts{Version: tc.version}}}, conn: &sessionConn{authority: tc.authority}}
+			judged, problem := s.FineGrainedPhase()
+			if judged != tc.judged {
+				t.Errorf("judged = %t, want %t", judged, tc.judged)
+			}
+			if (tc.problem == "") != (problem == "") || !strings.Contains(problem, tc.problem) {
+				t.Errorf("problem = %q, want one mentioning %q", problem, tc.problem)
+			}
+		})
+	}
 }

@@ -673,3 +673,47 @@ func TestFixtureProfile_WritesEachFlagUnderItsOwnKey(t *testing.T) {
 		})
 	}
 }
+
+// TestCredentialKind_EmptyReadsAsClassic checks that a line written before the
+// kind was recorded reads as the classic credential every such line came from,
+// and that a recorded kind reads as itself.
+func TestCredentialKind_EmptyReadsAsClassic(t *testing.T) {
+	cases := map[string]string{
+		"":                    CredentialClassic,
+		CredentialClassic:     CredentialClassic,
+		CredentialFineGrained: CredentialFineGrained,
+	}
+	for kind, want := range cases {
+		t.Run("kind "+kind, func(t *testing.T) {
+			if got := CredentialKind(kind); got != want {
+				t.Errorf("CredentialKind(%q) = %q, want %q", kind, got, want)
+			}
+		})
+	}
+}
+
+// TestRecords_CredentialAndRoutes_AreOmittedWhenEmpty checks the two fields a
+// fine-grained session added stay out of a line that has nothing to say in
+// them, so every line a classic session writes is the line it wrote before.
+func TestRecords_CredentialAndRoutes_AreOmittedWhenEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		line any
+		key  string
+	}{
+		{name: "session", line: Session{Label: "s"}, key: `"credential"`},
+		{name: "call", line: Call{Test: "T"}, key: `"credential"`},
+		{name: "dispatch", line: Dispatch{TraceID: "t"}, key: `"routes"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := json.Marshal(tc.line)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if strings.Contains(string(encoded), tc.key) {
+				t.Errorf("an empty %s line carries %s: %s", tc.name, tc.key, encoded)
+			}
+		})
+	}
+}

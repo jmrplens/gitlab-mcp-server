@@ -20,6 +20,7 @@ import (
 	"errors"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -62,6 +63,25 @@ type Runtime struct {
 // state built through client-go never counts as coverage, and a broken tool
 // then fails only its own test rather than every test that needs a project.
 func (e *Env) Client() *gitlabclient.Client { return e.inst.client }
+
+// ClientFor returns a GitLab client for the same instance holding another
+// credential, with the run's TLS setting.
+//
+// It is how a fixture acts as a user the administrator client cannot speak
+// for: GitLab creates a fine-grained token only for the user whose credential
+// sends the request, and a direct probe of what GitLab answers a fine-grained
+// token has to send that token and not the run's. Nothing it builds is the
+// server under test, so what it sends never counts as coverage.
+func (e *Env) ClientFor(token string) (*gitlabclient.Client, error) {
+	return e.inst.clientFor(token)
+}
+
+// clientFor builds a client for the instance with another credential, the one
+// way the harness does it for a session's credential and for a fixture alike.
+func (inst *instance) clientFor(token string) (*gitlabclient.Client, error) {
+	return gitlabclient.NewClientWithToken(inst.facts.URL, token,
+		strings.EqualFold(inst.settings.get(envSkipTLSVerify), "true"))
+}
 
 // Runtime returns what the probe learned about the instance this test runs
 // on. The scopes are copied, so a caller cannot change what the harness holds.

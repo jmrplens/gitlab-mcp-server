@@ -23,7 +23,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -573,6 +575,52 @@ func TestCallResultSaid_PrefersTheTextAndFallsBackToTheError(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := testCase.answer.said(); got != testCase.want {
 				t.Errorf("said() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestClassify_FineGrainedRefusal_IsItsOwnClassOnBothPhases holds the two
+// sentences the server refuses a fine-grained token's call with to the class
+// the server counts it under, fine_grained, and to a withholding [Withheld]
+// accepts.
+//
+// The sentences are the server's own, built by the binary's authority over
+// the table it carries rather than written down here: one from an authority
+// whose grant was never read (phase A), for an action no fine-grained token
+// can run, and one from an authority holding an empty grant at the recorded
+// release (phase B), for an action the grant does not reach. The first opens
+// with the words the dynamic dispatcher's scope refusal opens with too, which
+// is why it is read before them; read after, it was filed as unknown_action.
+func TestClassify_FineGrainedRefusal_IsItsOwnClassOnBothPhases(t *testing.T) {
+	phaseA := actiongrants.Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable})
+	phaseB := actiongrants.Build(true, finegrained.Reading{Grant: finegrained.Grant{Scopes: []finegrained.Scope{}}, Version: actiongrants.Table().Version})
+	if phaseB.Phase() != finegrained.PhaseGranted {
+		t.Fatalf("an empty grant at the recorded release was judged in phase %s, so no phase B sentence can be built", phaseB.Phase())
+	}
+	cases := []struct {
+		name      string
+		authority *finegrained.Authority
+		action    string
+	}{
+		{name: "phase A, an action no fine-grained token runs", authority: phaseA, action: "branch.rule_list"},
+		{name: "phase B, an action the grant does not reach", authority: phaseB, action: "issue.create"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			text := tc.authority.WithheldText(tc.action, tc.authority.Decide(tc.action))
+			if text == "" {
+				t.Fatalf("the authority words no refusal for %s", tc.action)
+			}
+			answer := classify(errorResult(text), nil)
+			if answer.failure != failureFineGrained {
+				t.Errorf("classified as %s, want %s: %s", answer.failure, failureFineGrained, text)
+			}
+			if answer.outcome != e2ecalls.RefusedOutcome(toolutil.RefusalFineGrained) {
+				t.Errorf("outcome = %q, want the server's own reason", answer.outcome)
+			}
+			if !withheldAnswer(answer) {
+				t.Error("Withheld does not accept the refusal a fine-grained session is declined with")
 			}
 		})
 	}

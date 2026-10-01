@@ -30,8 +30,10 @@ import (
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // The two errors the outcome classification tells apart: a server that
@@ -1778,6 +1780,11 @@ func TestSessionLines_NameWhatEachSessionServed(t *testing.T) {
 		if len(recorded.Prompts) == 0 {
 			t.Error("the session line lists no prompts, and the full capability surface serves them")
 		}
+		// The stub's token is classic: the binary attaches no authority to
+		// it, and the line says so by naming no kind.
+		if session.Authority() != nil || recorded.Credential != "" {
+			t.Errorf("a classic session has authority %v and records kind %q", session.Authority(), recorded.Credential)
+		}
 		return
 	}
 	t.Errorf("no session line names %s; the sessions a run started are what its coverage is measured against",
@@ -2065,5 +2072,48 @@ func TestNewProgressToken_IsUniqueAndRecognisable(t *testing.T) {
 			t.Fatalf("token %q was minted twice", token)
 		}
 		seen[token] = true
+	}
+}
+
+// TestDispatchLine_CarriesTheRoutesTheTraceNamed verifies the dispatch line
+// carries the routes its trace's client spans named, as a copy: a line written
+// while the trace is still receiving spans must not change under the writer.
+func TestDispatchLine_CarriesTheRoutesTheTraceNamed(t *testing.T) {
+	kept := traceSpans{dispatch: dispatchRecord{action: "issue.create"}, requests: 2, routes: []string{"GET /projects/:id", "POST /projects/:id/issues"}}
+	line := dispatchLine(testTraceID, kept)
+	if strings.Join(line.Routes, "|") != "GET /projects/:id|POST /projects/:id/issues" {
+		t.Errorf("routes = %q, want the trace's two", line.Routes)
+	}
+	kept.routes[0] = "changed"
+	if line.Routes[0] != "GET /projects/:id" {
+		t.Error("the dispatch line shares its routes with the trace it was written from")
+	}
+	if empty := dispatchLine(testTraceID, traceSpans{dispatch: dispatchRecord{action: "issue.list"}}); empty.Routes != nil {
+		t.Errorf("a trace that named no route wrote routes %q", empty.Routes)
+	}
+}
+
+// TestCredentialKind_IsWrittenOnlyForAFineGrainedSession verifies a session
+// whose credential carries an authority writes the fine-grained kind on its
+// session line and on every call line, and one that carries none writes no
+// kind, which a reader takes for classic.
+func TestCredentialKind_IsWrittenOnlyForAFineGrainedSession(t *testing.T) {
+	fineGrained := &sessionConn{authority: actiongrants.Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable})}
+	classic := &sessionConn{}
+	if got := fineGrained.credentialKind(); got != e2ecalls.CredentialFineGrained {
+		t.Errorf("a fine-grained session's kind = %q, want %q", got, e2ecalls.CredentialFineGrained)
+	}
+	if got := classic.credentialKind(); got != "" {
+		t.Errorf("a classic session's kind = %q, want none", got)
+	}
+	line := &e2ecalls.Call{}
+	fineGrained.describeSession(line)
+	if line.Credential != e2ecalls.CredentialFineGrained {
+		t.Errorf("a fine-grained session's call line carries kind %q", line.Credential)
+	}
+	line = &e2ecalls.Call{}
+	classic.describeSession(line)
+	if line.Credential != "" || e2ecalls.CredentialKind(line.Credential) != e2ecalls.CredentialClassic {
+		t.Errorf("a classic session's call line carries kind %q", line.Credential)
 	}
 }
