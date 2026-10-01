@@ -7611,8 +7611,6 @@
             "namespace.workItems.nodes.features.hierarchy.children.nodes.namespace",
             "namespace.workItems.nodes.features.hierarchy.parent",
             "namespace.workItems.nodes.features.hierarchy.parent.namespace",
-            "namespace.workItems.nodes.features.iteration",
-            "namespace.workItems.nodes.features.iteration.iteration",
             "namespace.workItems.nodes.features.labels",
             "namespace.workItems.nodes.features.labels.labels",
             "namespace.workItems.nodes.features.labels.labels.nodes",
@@ -7624,8 +7622,6 @@
             "namespace.workItems.nodes.features.milestone",
             "namespace.workItems.nodes.features.milestone.milestone",
             "namespace.workItems.nodes.features.startAndDueDate",
-            "namespace.workItems.nodes.features.status",
-            "namespace.workItems.nodes.features.status.status",
             "namespace.workItems.nodes.features.weight",
             "namespace.workItems.nodes.workItemType",
             "namespace.workItems.pageInfo"
