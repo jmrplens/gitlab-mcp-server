@@ -248,14 +248,16 @@ func (j *joiner) group(req requirement, where string) uint32 {
 	return index
 }
 
-// groupsOf indexes a list of requirements, each group once: a route that
-// names one permission at one boundary twice demands it once.
+// groupsOf indexes a list of requirements. Every list it is handed holds each
+// requirement once already, which is what makes one index per entry right: a
+// route's comes from apilive.Route.Requirements, which returns a requirement
+// the route names twice once, and a GraphQL operation's or position's from
+// dedupeRequirements. Two requirements that differ are two groups, since a
+// group is indexed by the requirement's key.
 func (j *joiner) groupsOf(reqs []requirement, where string) []uint32 {
 	var out []uint32
 	for _, req := range reqs {
-		if index := j.group(req, where); !slices.Contains(out, index) {
-			out = append(out, index)
-		}
+		out = append(out, j.group(req, where))
 	}
 	return out
 }
