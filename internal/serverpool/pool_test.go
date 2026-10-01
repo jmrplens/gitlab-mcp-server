@@ -27,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
@@ -5944,10 +5945,12 @@ func TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused(t *testing.T) 
 // TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot verifies an accepted
 // revalidation re-reads a fine-grained entry's grant and version with every
 // probe slot taken, since the sweep takes none, and that the authority it
-// carries is replaced only by reads that answered: a version read that failed
-// keeps it, and is logged once with its reason and never the token's id; an
-// upgrade to a release the table does not record moves it to phase A; and a
-// return to the recorded release with the grant read moves it back.
+// carries is replaced only by reads that answered: a version read the
+// instance did not answer keeps it, and is logged once with its reason and
+// never the token's id; an upgrade to a release the table does not record
+// moves it to phase A and says so once, with the phase, the reason and both
+// major.minors, however many sweeps find it there; and a return to the
+// recorded release with the grant read moves it back and says so too.
 func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	pool, entry := fineGrainedEntry(t, g)
@@ -5971,7 +5974,7 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 	for _, record := range records {
 		if record.Message == rereadKeptLog {
 			kept++
-			if reason, _ := logAttr(record, "reason"); reason.String() != string(finegrained.FallbackVersionUnreadable) {
+			if reason, _ := logAttr(record, "reason"); reason.String() != string(finegrained.FallbackVersionUnanswered) {
 				t.Errorf("kept with reason %q", reason.String())
 			}
 		}
@@ -5986,17 +5989,51 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 		t.Errorf("the kept re-read was logged %d times, want once", kept)
 	}
 
+	if _, logged := logs.find(rereadMovedLog); logged {
+		t.Error("a re-read that kept the authority was logged as one that moved it")
+	}
+
 	g.setVersion("19.6.0-ee")
+	pool.revalidateAll(context.Background())
 	pool.revalidateAll(context.Background())
 	upgraded := entry.Client().Authority()
 	if upgraded.Phase() != finegrained.PhaseUnknown || upgraded.Fallback() != finegrained.FallbackVersionOutside {
 		t.Errorf("after the upgrade: phase %v, fallback %q; want phase A outside the record", upgraded.Phase(), upgraded.Fallback())
 	}
+	assertMovedLogs(t, logs, []string{"A " + string(finegrained.FallbackVersionOutside) + " 19.6"})
 
 	g.setVersion("19.4.2-ee")
 	pool.revalidateAll(context.Background())
 	if got := entry.Client().Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.2-ee" {
 		t.Errorf("back at the recorded release: phase %v at %q; want phase B at 19.4.2-ee", got.Phase(), got.Reported())
+	}
+	assertMovedLogs(t, logs, []string{"A " + string(finegrained.FallbackVersionOutside) + " 19.6", "B  19.4"})
+}
+
+// assertMovedLogs holds the lines a fine-grained re-read that moved an entry
+// wrote, in order, each as its phase, reason and reported major.minor, and
+// every one of them to the recorded major.minor beside them.
+func assertMovedLogs(t *testing.T, logs *capturedRecords, want []string) {
+	t.Helper()
+	logs.mu.Lock()
+	records := slices.Clone(logs.records)
+	logs.mu.Unlock()
+	var got []string
+	for _, record := range records {
+		if record.Message != rereadMovedLog {
+			continue
+		}
+		phase, _ := logAttr(record, "phase")
+		reason, _ := logAttr(record, "reason")
+		bucket, _ := logAttr(record, "bucket")
+		recorded, _ := logAttr(record, "recorded_bucket")
+		got = append(got, phase.String()+" "+reason.String()+" "+bucket.String())
+		if recorded.String() != actiongrants.Table().Bucket {
+			t.Errorf("moved line names the recorded major.minor %q, want %q", recorded.String(), actiongrants.Table().Bucket)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("moved lines = %q, want %q", got, want)
 	}
 }
 
@@ -6021,9 +6058,11 @@ func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
 	}
 }
 
-// The two log lines a fine-grained entry may write: when it is built in phase
-// A, and when a re-read kept the authority it carried.
+// The three log lines a fine-grained entry may write: when it is built in
+// phase A, when a re-read moved it to another verdict, and when a re-read
+// kept the authority it carried.
 const (
 	phaseAEntryLog = "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches"
-	rereadKeptLog  = "server pool: a fine-grained token's re-read did not answer; keeping what it was shown"
+	rereadMovedLog = "server pool: a fine-grained token's re-read moved what it is shown"
+	rereadKeptLog  = "server pool: a fine-grained token's re-read could not be used; keeping what it was shown"
 )

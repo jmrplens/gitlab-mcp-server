@@ -77,27 +77,40 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 //
 // A token that may not read its own grant is not asked anything, since no
 // answer could lift that: its reading says why and nothing else, and its
-// authority is phase A. Otherwise it makes two requests, GET /api/v4/version
-// through the health client and GET /personal_access_tokens/:id, and a grant
-// read the instance did not answer is [finegrained.FallbackGrantUnanswered],
-// which is the one reason a later read can lift. Nothing is logged here: the
-// error of an unanswered read names the route, and the route names the token's
-// id.
+// authority is phase A. Otherwise it asks GET /api/v4/version through the
+// health client, and then GET /personal_access_tokens/:id only when that left
+// a version to judge the grant at, since without one no grant is evaluated.
+// A version read the instance did not answer is
+// [finegrained.FallbackVersionUnanswered], and one it answered with no
+// version this server can read (a refusal of Metadata: Read, or a string that
+// does not validate) [finegrained.FallbackVersionUnreadable]; a grant read it
+// did not answer is [finegrained.FallbackGrantUnanswered]. The two unanswered
+// reasons are the ones a later read can lift without anything about the token
+// changing. Nothing is logged here: the error of an unanswered read names the
+// route, and the route names the token's id.
 func (c *Client) ReadFineGrained(ctx context.Context, facts TokenFacts) finegrained.Reading {
 	if !facts.GrantReadable {
 		return finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}
 	}
-	version, _ := c.ReadVersion(ctx)
+	version, answered := c.ReadVersion(ctx)
+	if !answered {
+		return finegrained.Reading{Fallback: finegrained.FallbackVersionUnanswered}
+	}
 	return c.ReadFineGrainedAt(ctx, facts, version)
 }
 
 // ReadFineGrainedAt is [Client.ReadFineGrained] with the version already
-// read, which is a stdio start's: [Client.Initialize] asked it moments ago, and
-// asking again would cost the instance a request and a token without Metadata:
-// Read a second refusal for nothing.
+// read and answered, which is a stdio start's: [Client.Initialize] asked it
+// moments ago, and asking again would cost the instance a request and a token
+// without Metadata: Read a second refusal for nothing. An empty version is one
+// the instance answered with none this server can read, and the grant is not
+// asked for.
 func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, version string) finegrained.Reading {
 	if !facts.GrantReadable {
 		return finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}
+	}
+	if version == "" {
+		return finegrained.Reading{Fallback: finegrained.FallbackVersionUnreadable}
 	}
 	grant, reason, err := ReadGrant(ctx, c.GL(), facts.ID)
 	if err != nil {
@@ -108,30 +121,39 @@ func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, versio
 
 // RefreshAuthority re-reads a fine-grained token's grant and the instance
 // version and replaces the authority this client carries when the reads
-// answered, judging them against table ([finegrained.Rejudge]). It reports
-// whether it replaced it, and when it did not, the reason, which the caller
-// logs once rather than on every round: a version that was not read, or why the
-// grant was not usable. A token that may not read its grant is not asked
-// anything, and keeps its authority.
+// answered, judging them against table ([finegrained.Rejudge]).
+//
+// It returns the new authority when the replacement moved the token to
+// another verdict ([finegrained.Moved]: its phase, its reason or the release it
+// was judged at), which the caller logs with its [finegrained.Authority.LogArgs]
+// as an entry build logs one in phase A, so an instance upgraded to a release
+// no table records leaves a line saying the sessions on it fell back. A
+// replacement that moved nothing returns neither, since a re-read that answered
+// replaces the authority on every round. When it kept the authority it returns
+// the reason, which the caller logs once rather than on every round: a version
+// that was not answered or not readable, or why the grant was not usable. A
+// token that may not read its grant is not asked anything, and keeps its
+// authority.
 //
 // It is what an accepted revalidation of an HTTP pool entry does, and what the
 // stdio timer does for the process, so an instance upgraded under a running
 // session moves it to that release's verdict without its credential being
 // rebuilt.
-func (c *Client) RefreshAuthority(ctx context.Context, facts TokenFacts, table *finegrained.Table) (replaced bool, kept string) {
+func (c *Client) RefreshAuthority(ctx context.Context, facts TokenFacts, table *finegrained.Table) (moved *finegrained.Authority, kept string) {
 	if !facts.GrantReadable {
-		return false, ""
+		return nil, ""
 	}
 	reading := c.ReadFineGrained(ctx, facts)
-	next, replaced := finegrained.Rejudge(table, c.Authority(), reading)
-	if replaced {
-		c.SetAuthority(next)
-		return true, ""
+	current := c.Authority()
+	next, replaced := finegrained.Rejudge(table, current, reading)
+	if !replaced {
+		return nil, string(reading.Fallback)
 	}
-	if reading.Version == "" {
-		return false, string(finegrained.FallbackVersionUnreadable)
+	c.SetAuthority(next)
+	if finegrained.Moved(current, next) {
+		return next, ""
 	}
-	return false, string(reading.Fallback)
+	return nil, ""
 }
 
 // isStatus reports whether err is GitLab answering with the given status.

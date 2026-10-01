@@ -1624,9 +1624,10 @@ func prepareStdioCatalog(
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
 	// Re-read at the interval an HTTP pool entry is revalidated at by default
-	// (register row ADM-009), so the two transports follow an instance
-	// upgraded under a running session alike.
-	go refreshStdioAuthority(ctx, client, facts, serverpool.DefaultRevalidateInterval)
+	// (ADM-009's value, read here by register row AUT-008), so the two
+	// transports follow an instance upgraded under a running session alike.
+	// Stdio reads no revalidation setting, so nothing moves it or turns it off.
+	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval)
 	return nil
 }
 
@@ -1656,8 +1657,10 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // the process's fine-grained token and the instance version, and replaces the
 // authority its client carries when the reads answered
 // ([gitlabclient.Client.RefreshAuthority]). A token that may not read its grant
-// is never asked, so the goroutine returns at once. A re-read that kept the
-// authority is logged once, with its reason.
+// is never asked, so the goroutine returns at once. A re-read that moved the
+// token to another verdict is logged with the arguments the start logs a phase
+// A authority with, and one that kept the authority is logged once, with its
+// reason.
 func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration) {
 	if !facts.GrantReadable {
 		return
@@ -1671,11 +1674,14 @@ func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, fac
 			return
 		case <-ticker.C:
 			readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
-			_, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())
+			moved, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())
 			cancel()
+			if moved != nil {
+				slog.InfoContext(ctx, "the fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
+			}
 			if reason != "" && !logged {
 				logged = true
-				slog.InfoContext(ctx, "a fine-grained token's re-read did not answer; keeping what it was shown", "reason", reason)
+				slog.InfoContext(ctx, "the fine-grained token's re-read could not be used; keeping what it was shown", "reason", reason)
 			}
 		}
 	}

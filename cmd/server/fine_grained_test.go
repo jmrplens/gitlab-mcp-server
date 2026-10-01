@@ -568,9 +568,11 @@ func (b *lockedBuffer) String() string {
 
 // TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds verifies the
 // stdio timer re-reads at its interval: an upgrade to a release the table
-// does not record moves the process's token to phase A, a version read that
-// fails keeps what it has and is logged once, and the goroutine returns when
-// the context ends. A token that may not read its grant is never re-read.
+// does not record moves the process's token to phase A and says so once, with
+// the phase and the reason, however many re-reads find it there; a version
+// read the instance does not answer keeps what it has and is logged once, with
+// its reason; and the goroutine returns when the context ends. A token that
+// may not read its grant is never re-read.
 func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.T) {
 	g := newPhaseBGitLab(t)
 	client, err := gitlabclient.NewClientWithTokenRetries(g.url, phaseBProjectReader, false, true)
@@ -592,14 +594,21 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	// phase A, a failed re-read being logged, and two more failed re-reads.
 	g.setVersion("19.6.0-ee")
 	waitFor(t, func() bool { return client.Authority().Fallback() == finegrained.FallbackVersionOutside })
+	reads := g.versions.Load()
+	waitFor(t, func() bool { return g.versions.Load() >= reads+2 })
 	g.setVersion("")
 	waitFor(t, func() bool { return strings.Contains(logs.String(), "keeping what it was shown") })
-	reads := g.versions.Load()
+	reads = g.versions.Load()
 	waitFor(t, func() bool { return g.versions.Load() >= reads+2 })
 	cancel()
 	<-done
-	if count := strings.Count(logs.String(), "keeping what it was shown"); count != 1 {
-		t.Errorf("the kept re-read was logged %d times, want once", count)
+	text := logs.String()
+	if count := strings.Count(text, "keeping what it was shown"); count != 1 || !strings.Contains(text, "reason="+string(finegrained.FallbackVersionUnanswered)) {
+		t.Errorf("the kept re-read was logged %d times, want once with its reason:\n%s", count, text)
+	}
+	moved := "re-read moved what it is shown\" phase=A reason=" + string(finegrained.FallbackVersionOutside) + " bucket=19.6"
+	if count := strings.Count(text, "re-read moved what it is shown"); count != 1 || !strings.Contains(text, moved) {
+		t.Errorf("the upgrade was logged %d times, want once as %q:\n%s", count, moved, text)
 	}
 
 	unread := make(chan struct{})

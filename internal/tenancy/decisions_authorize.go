@@ -207,15 +207,22 @@ func authorizeDecisions() []Decision {
 			// which a caller names under --allow-any-gitlab-url. The listing
 			// varies with the authorization on the request alone (INV-009), so
 			// a re-read that did not answer keeps the authority in place
-			// rather than falling back. A withheld call charges no failure
-			// budget (INV-007) and spends its token of the credential's rate
-			// bucket like every other refused call. A call GitLab would serve
-			// on a public project or group, permission by permission, is passed
-			// to GitLab even when the listing leaves the action out. The bounds
-			// on the read itself are a request bound, RQB-011, and the build's
-			// two reads take POL-006's probe slots, which that row declares.
-			// The call middleware's refusal carries no resultType at protocol
-			// 2026-07-28, for the reason AUT-007 gives (F-20).
+			// rather than falling back. An HTTP entry is re-read on each
+			// accepted revalidation, at ADM-009's interval and off with it; the
+			// stdio process is re-read on a timer at ADM-009's default, which
+			// is this row's own use of that value (the Arg site below): stdio
+			// reads no revalidation setting, so nothing moves the timer or
+			// turns it off, and what it costs is the two reads, once per
+			// interval, of the one token the process serves. A withheld call
+			// charges no failure budget (INV-007) and spends its token of the
+			// credential's rate bucket like every other refused call. A call
+			// GitLab would serve on a public project or group, permission by
+			// permission, is passed to GitLab even when the listing leaves the
+			// action out. The bounds on the read itself are a request bound,
+			// RQB-011, and the build's two reads take POL-006's probe slots,
+			// which that row declares. The call middleware's refusal carries
+			// the resultType its revision requires, as AUT-007 says, so the row
+			// carries no F-20.
 			ID: "AUT-008", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the actions a fine-grained token's grant cannot reach",
 			Key:      KeyEntry, StdioKey: KeyProcess,
@@ -244,6 +251,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgPool, "ServerPool.refreshAuthority"),
 				enforce(pkgServer, "stdioAuthority"),
 				enforce(pkgServer, "refreshStdioAuthority"),
+				arg(pkgServer, "prepareStdioCatalog", "refreshStdioAuthority", 3, 1, "RevalidateInterval"),
 				enforce(pkgVisibility, "CallMiddleware"),
 				enforce(pkgToolutil, "FineGrainedRefusal"),
 				enforce(pkgVisibility, "ListingMiddleware"),

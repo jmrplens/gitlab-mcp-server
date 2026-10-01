@@ -1538,15 +1538,18 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 // is one goroutine walking the entries in turn, so it adds at most one read in
 // flight, under the context the sweep already gives each entry, and a slow
 // instance lengthens the sweep without holding a slot another tenant waits
-// for. A re-read that kept the authority is logged once per entry, with its
-// reason and nothing else.
+// for. A re-read that moved the token to another verdict, such as an instance
+// upgraded to a release no table records, is logged with the same arguments an
+// entry build in phase A logs; one that kept the authority is logged once per
+// entry, with its reason and nothing else.
 func (p *ServerPool) refreshAuthority(ctx context.Context, entry *Entry) {
-	replaced, reason := entry.client.RefreshAuthority(ctx, entry.token, actiongrants.Table())
-	if replaced || reason == "" {
+	moved, reason := entry.client.RefreshAuthority(ctx, entry.token, actiongrants.Table())
+	if moved != nil {
+		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
 		return
 	}
-	if entry.rereadKept.CompareAndSwap(false, true) {
-		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read did not answer; keeping what it was shown",
+	if reason != "" && entry.rereadKept.CompareAndSwap(false, true) {
+		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read could not be used; keeping what it was shown",
 			"reason", reason)
 	}
 }

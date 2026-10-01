@@ -210,11 +210,46 @@ func TestReadVersion_AnswersAndNonAnswers(t *testing.T) {
 	}
 }
 
+// TestClient_ReadFineGrained_AVersionThatLeavesNothingToJudgeAt_SaysWhyAndSkipsTheGrant
+// verifies the reading when the version read leaves no version to judge the
+// grant at: an instance that did not answer is read as unanswered, one that
+// refused Metadata: Read or named no readable version as unreadable, and a
+// version already read and empty as unreadable, each without asking for the
+// grant, since no grant is evaluated without a version.
+func TestClient_ReadFineGrained_AVersionThatLeavesNothingToJudgeAt_SaysWhyAndSkipsTheGrant(t *testing.T) {
+	readable := TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
+	cases := []struct {
+		name, served string
+		want         finegrained.FallbackReason
+	}{
+		{"no answer", "", finegrained.FallbackVersionUnanswered},
+		{"refused", "refused", finegrained.FallbackVersionUnreadable},
+		{"not a version", "nineteen", finegrained.FallbackVersionUnreadable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newGrantServer(t, http.StatusOK, grantBody, tc.served)
+			got := grantClient(t, stand.url).ReadFineGrained(t.Context(), readable)
+			if got.Fallback != tc.want || got.Version != "" || len(got.Grant.Scopes) != 0 || stand.grants.Load() != 0 || stand.versions.Load() != 1 {
+				t.Errorf("reading = %+v after %d grant and %d version reads; want %q, no grant read and one version read",
+					got, stand.grants.Load(), stand.versions.Load(), tc.want)
+			}
+		})
+	}
+	t.Run("an empty version already read", func(t *testing.T) {
+		stand := newGrantServer(t, http.StatusOK, grantBody, "19.4.1-ee")
+		got := grantClient(t, stand.url).ReadFineGrainedAt(t.Context(), readable, "")
+		if got.Fallback != finegrained.FallbackVersionUnreadable || stand.grants.Load()+stand.versions.Load() != 0 {
+			t.Errorf("reading = %+v after %d requests; want unreadable and none", got, stand.grants.Load()+stand.versions.Load())
+		}
+	})
+}
+
 // TestClient_ReadFineGrained_ReadsWhatTheTokenMayRead verifies the reading
 // handed to the judgement: a token that may not read its grant is asked
 // nothing; one that may is asked the version and the grant, or only the grant
 // when the version was already read; and a grant read nobody answered is
-// read as unanswered, the one reason a later read lifts.
+// read as unanswered, a reason a later read lifts.
 func TestClient_ReadFineGrained_ReadsWhatTheTokenMayRead(t *testing.T) {
 	readable := TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
 
@@ -255,49 +290,78 @@ func refreshTable() *finegrained.Table {
 	}
 }
 
+// refreshReadable is a fine-grained token that may read its grant, as the
+// self endpoint describes it.
+var refreshReadable = TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
+
+// refreshedClient is a client pointed at a stand-in answering the grant read
+// with status and body and the version read with version, carrying current.
+func refreshedClient(t *testing.T, status int, body, version string, current *finegrained.Authority) *Client {
+	t.Helper()
+	client := grantClient(t, newGrantServer(t, status, body, version).url)
+	client.SetAuthority(current)
+	return client
+}
+
 // TestClient_RefreshAuthority_ReplacesOnlyOnReadsThatAnswered verifies the
 // re-read a revalidation makes: nothing asked of a token that may not read its
-// grant, the authority replaced when the reads answered, and kept, with the
-// reason, when the version was not read or the grant read failed at the same
-// release.
+// grant; the authority replaced when the reads answered at the same release,
+// with nothing returned since no verdict moved; and kept, with the reason,
+// when the version was not answered or not readable or the grant read failed
+// at the same release.
 func TestClient_RefreshAuthority_ReplacesOnlyOnReadsThatAnswered(t *testing.T) {
-	readable := TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
 	table := refreshTable()
 	current := finegrained.Judge(table, finegrained.Reading{Grant: finegrained.Grant{}, Version: "19.4.1-ee"})
 
 	t.Run("a token that may not read its grant", func(t *testing.T) {
-		stand := newGrantServer(t, http.StatusOK, grantBody, "19.4.1-ee")
-		client := grantClient(t, stand.url)
-		client.SetAuthority(current)
-		if replaced, reason := client.RefreshAuthority(t.Context(), TokenFacts{FineGrained: true}, table); replaced || reason != "" || client.Authority() != current {
-			t.Errorf("RefreshAuthority = %v, %q", replaced, reason)
+		client := refreshedClient(t, http.StatusOK, grantBody, "19.4.1-ee", current)
+		if moved, reason := client.RefreshAuthority(t.Context(), TokenFacts{FineGrained: true}, table); moved != nil || reason != "" || client.Authority() != current {
+			t.Errorf("RefreshAuthority = %v, %q", moved, reason)
 		}
 	})
-	t.Run("reads that answered", func(t *testing.T) {
-		stand := newGrantServer(t, http.StatusOK, grantBody, "19.4.1-ee")
-		client := grantClient(t, stand.url)
-		client.SetAuthority(current)
-		replaced, reason := client.RefreshAuthority(t.Context(), readable, table)
-		if !replaced || reason != "" || client.Authority() == current || !client.Authority().Decide("project.get").Listed {
-			t.Errorf("RefreshAuthority = %v, %q; authority lists project.get %v", replaced, reason, client.Authority().Decide("project.get").Listed)
+	t.Run("reads that answered at the same release", func(t *testing.T) {
+		client := refreshedClient(t, http.StatusOK, grantBody, "19.4.1-ee", current)
+		moved, reason := client.RefreshAuthority(t.Context(), refreshReadable, table)
+		if moved != nil || reason != "" || client.Authority() == current || !client.Authority().Decide("project.get").Listed {
+			t.Errorf("RefreshAuthority = %v, %q; authority lists project.get %v", moved, reason, client.Authority().Decide("project.get").Listed)
 		}
 	})
-	t.Run("no version", func(t *testing.T) {
-		stand := newGrantServer(t, http.StatusOK, grantBody, "")
-		client := grantClient(t, stand.url)
-		client.SetAuthority(current)
-		if replaced, reason := client.RefreshAuthority(t.Context(), readable, table); replaced || reason != string(finegrained.FallbackVersionUnreadable) || client.Authority() != current {
-			t.Errorf("RefreshAuthority = %v, %q", replaced, reason)
-		}
-	})
-	t.Run("a grant read that failed", func(t *testing.T) {
-		stand := newGrantServer(t, http.StatusServiceUnavailable, `{}`, "19.4.1-ee")
-		client := grantClient(t, stand.url)
-		client.SetAuthority(current)
-		if replaced, reason := client.RefreshAuthority(t.Context(), readable, table); replaced || reason != string(finegrained.FallbackGrantUnanswered) {
-			t.Errorf("RefreshAuthority = %v, %q", replaced, reason)
-		}
-	})
+	for _, tc := range []struct {
+		name, served string
+		status       int
+		want         finegrained.FallbackReason
+	}{
+		{"no answer to the version", "", http.StatusOK, finegrained.FallbackVersionUnanswered},
+		{"a refused version", "refused", http.StatusOK, finegrained.FallbackVersionUnreadable},
+		{"a grant read that failed", "19.4.1-ee", http.StatusServiceUnavailable, finegrained.FallbackGrantUnanswered},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := refreshedClient(t, tc.status, grantBody, tc.served, current)
+			if moved, reason := client.RefreshAuthority(t.Context(), refreshReadable, table); moved != nil || reason != string(tc.want) || client.Authority() != current {
+				t.Errorf("RefreshAuthority = %v, %q; want it kept with %q", moved, reason, tc.want)
+			}
+		})
+	}
+}
+
+// TestClient_RefreshAuthority_AnUpgradePastTheRecord_ReturnsTheMoveOnce
+// verifies a re-read that moves the token to another verdict, an instance
+// upgraded to a release the table does not record, returns the phase A
+// authority it moved the token to, and that the next re-read at that release
+// replaces it without returning it again, so its caller logs the move once.
+func TestClient_RefreshAuthority_AnUpgradePastTheRecord_ReturnsTheMoveOnce(t *testing.T) {
+	table := refreshTable()
+	current := finegrained.Judge(table, finegrained.Reading{Grant: finegrained.Grant{}, Version: "19.4.1-ee"})
+	client := refreshedClient(t, http.StatusOK, grantBody, "19.6.0-ee", current)
+	moved, reason := client.RefreshAuthority(t.Context(), refreshReadable, table)
+	if moved == nil || moved != client.Authority() || reason != "" ||
+		moved.Phase() != finegrained.PhaseUnknown || moved.Fallback() != finegrained.FallbackVersionOutside {
+		t.Fatalf("RefreshAuthority = %+v, %q; want the phase A authority it moved the token to", moved, reason)
+	}
+	again, reason := client.RefreshAuthority(t.Context(), refreshReadable, table)
+	if again != nil || reason != "" || client.Authority() == moved {
+		t.Errorf("a second re-read at the same release = %v, %q; want it replaced and not reported as moved", again, reason)
+	}
 }
 
 // TestReadGrant_ACancelledRead_IsNoAnswer verifies the read carries the
