@@ -1,16 +1,10 @@
 package paths
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"path/filepath"
-	"regexp"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sdkroutes"
 )
 
 // sdkRoute is one endpoint a client-go service method reaches.
@@ -37,138 +31,23 @@ func (r sdkRoute) operation() string {
 	return r.Method + " " + r.Path
 }
 
-const (
-	// routeFunc is the client-go helper every endpoint template is declared
-	// through, so a package-level variable can register the route and still be
-	// used as a format string.
-	routeFunc = "route"
-	// pathOption and methodOption are the two request options that name where
-	// a method sends and how. A method that names no verb sends GET.
-	pathOption   = "withPath"
-	methodOption = "withMethod"
-	// legacyRequest is the pre-option form a handful of methods still use.
-	legacyRequest = "NewRequest"
-	// httpPackage qualifies the net/http verb constants both forms name.
-	httpPackage = "http"
-	// verbConstantPrefix opens each of them, so http.MethodPost is POST.
-	verbConstantPrefix = "Method"
-	// defaultVerb is what a client-go method sends when it names none.
-	defaultVerb = "GET"
-	// responseTypeName is client-go's pagination wrapper, which every void
-	// method answers with and no output type models.
-	responseTypeName = "Response"
-)
-
-// routeVerb is the set of format verbs a route template stands an identifier
-// in, spelled as client-go's own normalizer spells it.
-var routeVerb = regexp.MustCompile(`%[sdv]`)
-
-// readSDKRoutes parses the client-go source in dir and returns, for every
-// struct a service method answers with, the endpoints those methods reach.
+// readSDKRoutes returns, for every struct a client-go service method answers
+// with, the endpoints those methods reach.
 //
-// It parses rather than type-checks because the question is textual: which
-// route template does this method name, and which verb does it send. Loading
-// client-go with types would cost seconds and answer the same thing. Every
-// route template is a package-level variable declared through route(), which
-// client-go's own test suite enforces, so the templates can be collected in one
-// pass and resolved in the next without following any identifier out of the
-// package.
-//
-// A directory that cannot be read, or a file that does not parse, contributes
+// A directory that cannot be read, or a source with no route in it, yields
 // nothing rather than failing the scope: this reads a module cache it does not
 // own the state of, and the join it feeds reports rather than gates.
 func readSDKRoutes(dir string) map[string][]sdkRoute {
-	files := parseSDKFiles(dir)
-	if len(files) == 0 {
-		return nil
-	}
-
-	templates := map[string]string{}
-	for _, file := range files {
-		collectRouteTemplates(file, templates)
-	}
-
-	found := map[string]map[sdkRoute]bool{}
-	for _, file := range files {
-		for _, declaration := range file.Decls {
-			function, isFunction := declaration.(*ast.FuncDecl)
-			if !isFunction || function.Recv == nil {
-				continue
-			}
-			collectMethodRoutes(function, templates, found)
+	return routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string {
+		if method.Answers == "" {
+			return nil
 		}
-	}
-	return sortedRoutes(found)
+		return []string{method.Answers}
+	}, true)
 }
 
-// parseSDKFiles parses every non-test Go file directly in dir.
-func parseSDKFiles(dir string) []*ast.File {
-	if dir == "" {
-		return nil
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	fileSet := token.NewFileSet()
-	var files []*ast.File
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, parseErr := parser.ParseFile(fileSet, filepath.Join(dir, name), nil, 0)
-		if parseErr != nil {
-			continue
-		}
-		files = append(files, file)
-	}
-	return files
-}
-
-// collectRouteTemplates records every `name = route("template")` declaration.
-//
-// The declaration's keyword is not consulted: only a var or a const holds a
-// value at all, so asking whether a spec is one is the same question and one
-// fewer place to keep in step with client-go.
-func collectRouteTemplates(file *ast.File, into map[string]string) {
-	for _, declaration := range file.Decls {
-		general, isGeneral := declaration.(*ast.GenDecl)
-		if !isGeneral {
-			continue
-		}
-		for _, spec := range general.Specs {
-			value, isValue := spec.(*ast.ValueSpec)
-			if !isValue {
-				continue
-			}
-			for i, name := range value.Names {
-				if i >= len(value.Values) {
-					continue
-				}
-				if template, ok := routeTemplate(value.Values[i]); ok {
-					into[name.Name] = template
-				}
-			}
-		}
-	}
-}
-
-// routeTemplate returns the template a route() call registers.
-func routeTemplate(expr ast.Expr) (string, bool) {
-	call, isCall := expr.(*ast.CallExpr)
-	if !isCall || len(call.Args) != 1 {
-		return "", false
-	}
-	if name, isName := call.Fun.(*ast.Ident); !isName || name.Name != routeFunc {
-		return "", false
-	}
-	return stringLiteral(call.Args[0])
-}
-
-// readSDKMethodRoutes parses the client-go source in dir and returns, for
-// every service method answering with a struct, the endpoints it reaches,
-// keyed "Service.Method" with the service spelled the way
+// readSDKMethodRoutes returns, for every client-go service method, the
+// endpoints it reaches, keyed "Service.Method" with the service spelled the way
 // shared.ServiceName spells the interface a handler calls it through: the
 // concrete MilestonesService behind MilestonesServiceInterface is
 // "Milestones". Every service interface client-go declares has its concrete
@@ -179,247 +58,53 @@ func routeTemplate(expr ast.Expr) (string, bool) {
 // issue list is filled from GET /projects/:id/milestones/:milestone_id/issues
 // and from nothing else client-go's Issue is answered by, and judging it
 // against all of them would hold six fields of a row to twenty endpoints it is
-// never read from.
-//
-// It fails the way [readSDKRoutes] does: a directory that cannot be read
-// contributes nothing.
+// never read from. A method answering with nothing but the pagination wrapper
+// is listed too, since its routes are a fact about the method whatever it
+// returns.
 func readSDKMethodRoutes(dir string) map[string][]sdkRoute {
-	files := parseSDKFiles(dir)
-	if len(files) == 0 {
-		return nil
-	}
+	return routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string {
+		return []string{method.Key()}
+	}, true)
+}
 
-	templates := map[string]string{}
-	for _, file := range files {
-		collectRouteTemplates(file, templates)
-	}
-
+// routesBy indexes every method's routes under the keys keysOf names for it,
+// with the method's Many flag when withMany is set.
+//
+// The reading is [sdkroutes]', the one the action request derivation reads
+// too: it follows a method into the helper, the field and the generic function
+// it delegates to, carries the constants it hands them into the route
+// template, and folds a path the legacy request form builds with fmt.Sprintf.
+// R-PATH used to read the source itself, method body by method body, and that
+// reading lost every route a method reaches through a helper and merged every
+// collection a helper is handed into one placeholder; two readers of one fact
+// are how a check ends up answering a narrower question than the one it
+// prints.
+func routesBy(sdk *sdkroutes.SDK, keysOf func(sdkroutes.Method) []string, withMany bool) map[string][]sdkRoute {
 	found := map[string]map[sdkRoute]bool{}
-	for _, file := range files {
-		for _, declaration := range file.Decls {
-			function, isFunction := declaration.(*ast.FuncDecl)
-			if !isFunction || function.Recv == nil {
-				continue
+	for _, method := range sdk.Methods() {
+		for _, key := range keysOf(method) {
+			for _, route := range method.Routes {
+				addRoute(found, key, sdkRoute{Method: route.Method, Path: route.Path, Many: withMany && method.Many})
 			}
-			service := serviceReceiver(function.Recv)
-			if service == "" {
-				continue
-			}
-			// A method reaching nothing adds nothing, and so is not listed.
-			_, routes := methodRoutes(function, templates)
-			addRoutes(found, service+"."+function.Name.Name, routes)
 		}
+	}
+	if len(found) == 0 {
+		return nil
 	}
 	return sortedRoutes(found)
 }
 
-// serviceSuffix closes the name of every concrete client-go service.
-const serviceSuffix = "Service"
-
-// serviceReceiver names the service a method is declared on, without its
-// suffix, or "" for a method of anything that is not a service.
-func serviceReceiver(receiver *ast.FieldList) string {
-	if len(receiver.List) == 0 {
-		return ""
+// addRoute records one route under one key.
+func addRoute(into map[string]map[sdkRoute]bool, key string, route sdkRoute) {
+	known := into[key]
+	if known == nil {
+		known = map[sdkRoute]bool{}
+		into[key] = known
 	}
-	name, _ := resultElement(receiver.List[0].Type)
-	if !strings.HasSuffix(name, serviceSuffix) || name == serviceSuffix {
-		return ""
-	}
-	return strings.TrimSuffix(name, serviceSuffix)
+	known[route] = true
 }
 
-// collectMethodRoutes records the endpoints one service method reaches, under
-// the name of the struct it answers with.
-func collectMethodRoutes(function *ast.FuncDecl, templates map[string]string, into map[string]map[sdkRoute]bool) {
-	name, routes := methodRoutes(function, templates)
-	addRoutes(into, name, routes)
-}
-
-// methodRoutes reads the struct one method answers with and the endpoints it
-// reaches. A method answering with nothing, with something that is not a
-// client-go struct, or with the pagination wrapper alone names no struct and
-// reaches nothing a caller could be answered with.
-func methodRoutes(function *ast.FuncDecl, templates map[string]string) (name string, routes []sdkRoute) {
-	if function.Type.Results == nil || len(function.Type.Results.List) == 0 {
-		return "", nil
-	}
-	name, many := resultElement(function.Type.Results.List[0].Type)
-	if name == "" || name == responseTypeName {
-		return "", nil
-	}
-
-	verb, paths := requestShape(function.Body, templates)
-	for _, path := range paths {
-		routes = append(routes, sdkRoute{Method: verb, Path: path, Many: many})
-	}
-	return name, routes
-}
-
-// addRoutes records routes under one key.
-func addRoutes(into map[string]map[sdkRoute]bool, key string, routes []sdkRoute) {
-	for _, route := range routes {
-		known := into[key]
-		if known == nil {
-			known = map[sdkRoute]bool{}
-			into[key] = known
-		}
-		known[route] = true
-	}
-}
-
-// requestShape reads the verb and the paths one method body names.
-//
-// Both are collected over the whole body rather than one call: a method that
-// branches names its route twice, and a verb named anywhere in it is the verb
-// the one request carries.
-func requestShape(body *ast.BlockStmt, templates map[string]string) (verb string, paths []string) {
-	verb = defaultVerb
-	seen := map[string]bool{}
-	ast.Inspect(body, func(node ast.Node) bool {
-		call, isCall := node.(*ast.CallExpr)
-		if !isCall {
-			return true
-		}
-		if found, ok := optionCall(call, templates); ok {
-			if !seen[found] {
-				seen[found] = true
-				paths = append(paths, found)
-			}
-			return true
-		}
-		if named, ok := namedVerb(call); ok {
-			verb = named
-			return true
-		}
-		if legacyVerb, legacyPath, ok := legacyCall(call); ok {
-			verb = legacyVerb
-			if !seen[legacyPath] {
-				seen[legacyPath] = true
-				paths = append(paths, legacyPath)
-			}
-		}
-		return true
-	})
-	sort.Strings(paths)
-	return verb, paths
-}
-
-// optionCall returns the path a withPath option names.
-func optionCall(call *ast.CallExpr, templates map[string]string) (string, bool) {
-	name, isName := call.Fun.(*ast.Ident)
-	if !isName || name.Name != pathOption || len(call.Args) == 0 {
-		return "", false
-	}
-	route, isRoute := call.Args[0].(*ast.Ident)
-	if !isRoute {
-		return "", false
-	}
-	template, known := templates[route.Name]
-	if !known {
-		return "", false
-	}
-	return routeShape(template), true
-}
-
-// namedVerb returns the verb a withMethod option names.
-func namedVerb(call *ast.CallExpr) (string, bool) {
-	name, isName := call.Fun.(*ast.Ident)
-	if !isName || name.Name != methodOption || len(call.Args) != 1 {
-		return "", false
-	}
-	return httpVerb(call.Args[0])
-}
-
-// legacyCall returns the verb and path of a client.NewRequest call, the form
-// the option helpers replaced and a handful of methods still use.
-//
-// Only a literal path is read. The rest build theirs by formatting into a local
-// variable, and a path this cannot resolve leaves its type with one route fewer
-// rather than with a wrong one.
-func legacyCall(call *ast.CallExpr) (verb, path string, ok bool) {
-	selector, isSelector := call.Fun.(*ast.SelectorExpr)
-	if !isSelector || selector.Sel.Name != legacyRequest || len(call.Args) < 2 {
-		return "", "", false
-	}
-	verb, ok = httpVerb(call.Args[0])
-	if !ok {
-		return "", "", false
-	}
-	literal, isLiteral := stringLiteral(call.Args[1])
-	if !isLiteral || literal == "" {
-		return "", "", false
-	}
-	return verb, routeShape(literal), true
-}
-
-// httpVerb reads a net/http method constant.
-func httpVerb(expr ast.Expr) (string, bool) {
-	selector, isSelector := expr.(*ast.SelectorExpr)
-	if !isSelector {
-		return "", false
-	}
-	pkg, isPkg := selector.X.(*ast.Ident)
-	if !isPkg || pkg.Name != httpPackage || !strings.HasPrefix(selector.Sel.Name, verbConstantPrefix) {
-		return "", false
-	}
-	return strings.ToUpper(strings.TrimPrefix(selector.Sel.Name, verbConstantPrefix)), true
-}
-
-// resultElement names the client-go struct a method answers with, and whether
-// it answered with many of them. A result qualified by another package, such as
-// bytes.Buffer, names no client-go struct and is left out.
-func resultElement(expr ast.Expr) (name string, many bool) {
-	for {
-		switch typed := expr.(type) {
-		case *ast.StarExpr:
-			expr = typed.X
-		case *ast.ArrayType:
-			many = true
-			expr = typed.Elt
-		case *ast.Ident:
-			return typed.Name, many
-		default:
-			return "", many
-		}
-	}
-}
-
-// routeShape reduces a route template to the spelling [pathShape] produces.
-//
-// It is client-go's own normalizeTemplate: a segment that is nothing but a
-// format verb stands for an identifier, and a verb embedded in a longer segment
-// is dropped so the literal part still names the route. Reproducing that rule
-// rather than inventing one is what keeps a template such as "archive%s"
-// meeting the same path the SDK's own route registry meets.
-func routeShape(template string) string {
-	segments := strings.Split(strings.Trim(template, "/"), "/")
-	for i, segment := range segments {
-		switch {
-		case segment == "":
-		case routeVerb.FindString(segment) == segment:
-			segments[i] = placeholder
-		default:
-			segments[i] = routeVerb.ReplaceAllString(segment, "")
-		}
-	}
-	return "/" + strings.Join(segments, "/")
-}
-
-// stringLiteral unquotes an untyped string literal.
-func stringLiteral(expr ast.Expr) (string, bool) {
-	literal, isLiteral := expr.(*ast.BasicLit)
-	if !isLiteral || literal.Kind != token.STRING {
-		return "", false
-	}
-	value, err := strconv.Unquote(literal.Value)
-	if err != nil {
-		return "", false
-	}
-	return value, true
-}
-
-// sortedRoutes flattens the collected set into a stable slice per type.
+// sortedRoutes flattens the collected set into a stable slice per key.
 func sortedRoutes(found map[string]map[sdkRoute]bool) map[string][]sdkRoute {
 	out := make(map[string][]sdkRoute, len(found))
 	for name, routes := range found {
