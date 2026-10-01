@@ -265,7 +265,7 @@ const resultTypeFix = "Retire the workaround in this same pull request. " +
 	"completeResultType from result_type.go) into it, or delete them with their users. " +
 	"Remove what is said about the label from the doc comments of AttachRateLimit (rate_limit.go), " +
 	"heldRequestsRefusal (held.go) and CallMiddleware (fine_grained.go), from the comment on row RTC-001 in " +
-	"internal/tenancy/decisions_allow.go and on row AUT-007 in internal/tenancy/decisions_authorize.go, from " +
+	"internal/tenancy/decisions_allow.go and on rows AUT-007 and AUT-008 in internal/tenancy/decisions_authorize.go, from " +
 	"the paragraph on F-20 in docs/development/tenant-policy-spec.md, from Transport end-to-end modules in CLAUDE.md, from " +
 	"HTTP transport module in test/e2e/README.md and from the header of test/e2e/http/result_type_test.go. " +
 	"Mark row 66 of docs/development/upstream-bugs.md merged with the version and retire its workaround, and " +

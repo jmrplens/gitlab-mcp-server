@@ -19,6 +19,10 @@
 //     ([Busy], busy.go), and which settings switch an authentication budget
 //     off and when the transport-source budget exists ([BudgetOn],
 //     [EscalationOn], [TransportSourceBudgetOn], budget.go);
+//   - the one rule issue 952 adds rather than moves: which boundary types one
+//     granular scope of a fine-grained token can cover when the call's target
+//     is not known yet ([CoverableAt], grants.go), with the vocabulary it is
+//     written in ([Boundary], [GrantAccess], [NamespaceKind]);
 //   - the table of authentication failures and what each is charged
 //     ([Failures]);
 //   - the channels go-sdk v1.8.0 carries for each method ([Carriages]);
@@ -52,7 +56,9 @@
 // and the function allocates nothing and leaves the site's lock profile as it
 // was: Busy reads the watcher count through [Holdings], which takes the
 // subscription manager's lock, and it does so exactly when the code it
-// replaced did, only when no stream is open.
+// replaced did, only when no stream is open. [CoverableAt] replaced no code,
+// so its oracle is GitLab's own table, transcribed case by case over the whole
+// of its input space, with its allocations pinned at none.
 //
 // # Findings
 //
