@@ -5825,7 +5825,20 @@ func fineGrainedEntry(t *testing.T, g *fineGrainedGitLab, options ...Option) (*S
 // revalidations.
 func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t *testing.T) {
 	g := newFineGrainedGitLab(t)
-	_, entry := fineGrainedEntry(t, g)
+	logs := captureLogs(t)
+	pool, entry := fineGrainedEntry(t, g)
+	if _, logged := logs.find(phaseAEntryLog); logged {
+		t.Error("a phase B entry was logged as a grant not evaluated")
+	}
+	unreadable := gitlabclient.FactsFromScopes([]string{gitlabclient.ScopeGranular}, 0)
+	if _, err := pool.GetOrCreateEntryWithFacts("glpat-no-grant-read", g.server.URL, &unreadable); err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+	}
+	if record, logged := logs.find(phaseAEntryLog); !logged {
+		t.Error("a fine-grained entry whose grant cannot be read was not logged as phase A")
+	} else if reason, _ := logAttr(record, "reason"); reason.String() != string(finegrained.FallbackGrantUnreadable) {
+		t.Errorf("phase A logged with reason %q, want %q", reason.String(), finegrained.FallbackGrantUnreadable)
+	}
 
 	authority := entry.Client().Authority()
 	if authority == nil || authority.Phase() != finegrained.PhaseGranted || authority.Reported() != "19.4.1-ee" {
@@ -5956,7 +5969,7 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 	records := slices.Clone(logs.records)
 	logs.mu.Unlock()
 	for _, record := range records {
-		if record.Message == "server pool: a fine-grained token's re-read did not answer; keeping what it was shown" {
+		if record.Message == rereadKeptLog {
 			kept++
 			if reason, _ := logAttr(record, "reason"); reason.String() != string(finegrained.FallbackVersionUnreadable) {
 				t.Errorf("kept with reason %q", reason.String())
@@ -5988,7 +6001,8 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 }
 
 // TestRevalidateAll_AClassicEntry_RereadsNothing verifies a classic token's
-// entry costs a revalidation nothing beyond the credential probe.
+// entry costs a revalidation nothing beyond the credential probe, and is not
+// logged as a fine-grained re-read that kept what it was shown.
 func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	cfg := testConfig(g.server.URL)
@@ -5997,8 +6011,19 @@ func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
 	if _, err := pool.GetOrCreateEntryWithFacts("glpat-classic", g.server.URL, &facts); err != nil {
 		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
 	}
+	logs := captureLogs(t)
 	pool.revalidateAll(context.Background())
 	if g.grants.Load()+g.versions.Load() != 0 {
 		t.Errorf("a classic entry's build and revalidation read %d grants and %d versions", g.grants.Load(), g.versions.Load())
 	}
+	if _, logged := logs.find(rereadKeptLog); logged {
+		t.Error("a classic entry's revalidation was logged as a fine-grained re-read that kept its authority")
+	}
 }
+
+// The two log lines a fine-grained entry may write: when it is built in phase
+// A, and when a re-read kept the authority it carried.
+const (
+	phaseAEntryLog = "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches"
+	rereadKeptLog  = "server pool: a fine-grained token's re-read did not answer; keeping what it was shown"
+)

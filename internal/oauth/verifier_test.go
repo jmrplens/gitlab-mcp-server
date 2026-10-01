@@ -2674,6 +2674,7 @@ func TestTokenIDFrom_ReadsOnlyAnExactPositiveWholeNumber(t *testing.T) {
 		want int64
 	}{
 		{"a whole number", float64(7), 7},
+		{"the smallest one", float64(1), 1},
 		{"the largest exact one", float64(maxExactTokenID), maxExactTokenID},
 		{"past it", float64(maxExactTokenID) * 2, 0},
 		{"zero", float64(0), 0},

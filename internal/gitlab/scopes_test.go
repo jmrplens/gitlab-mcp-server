@@ -74,6 +74,26 @@ func TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID(t *testing.T) {
 	}
 }
 
+// TestDetectToken_NoAnswer_IsNothingKnown verifies an instance that does not
+// answer the self request at all, a connection refused rather than any status,
+// is read as nothing known: a failure that carries no response is not GitLab's
+// refusal of a fine-grained token, and reading it as one would withhold actions
+// from a classic token whose instance was briefly away.
+func TestDetectToken_NoAnswer_IsNothingKnown(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close()
+
+	client, err := NewClientWithTokenRetries(url, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	got := DetectToken(context.Background(), client.GL())
+	if got.Scopes != nil || got.ID != 0 || got.FineGrained || got.GrantReadable {
+		t.Errorf("DetectToken() = %+v, want nothing known", got)
+	}
+}
+
 // TestFactsFromScopes_AppliesDetectTokensRule verifies the facts built from
 // scopes and an id read elsewhere follow the rule DetectToken applies: the
 // kind from the list, and the grant readable only for a fine-grained token

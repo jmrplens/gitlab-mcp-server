@@ -75,10 +75,13 @@ func WithResponseLimit(ctx context.Context, n int64) context.Context {
 // client's, lowered by a ceiling its context carries ([WithResponseLimit]).
 func requestLimit(req *http.Request, clientLimit int64) int64 {
 	limit, carried := req.Context().Value(responseLimitKey{}).(int64)
-	if !carried || limit <= 0 || clientLimit > 0 && clientLimit < limit {
+	if !carried || limit <= 0 {
 		return clientLimit
 	}
-	return limit
+	if clientLimit <= 0 {
+		return limit
+	}
+	return min(clientLimit, limit)
 }
 
 // responseLimitTransport caps every response body the GitLab SDK receives.

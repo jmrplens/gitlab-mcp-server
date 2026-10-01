@@ -585,8 +585,9 @@ func (c *Client) VersionRefusal() (string, bool) {
 // the fine-grained permission the endpoint needs (Metadata: Read): both say
 // what this token will be told, and both leave the version "" when it is not
 // one this server can read. A transport failure, a timeout, any other status
-// and a body naming no version are no answer, which a caller holding a version from an earlier read keeps,
-// rather than reading an instance that did not answer as one with no version.
+// and a body naming no version are no answer, which a caller holding a version
+// from an earlier read keeps, rather than reading an instance that did not
+// answer as one with no version.
 //
 // It is the read a fine-grained token's authority is chosen by (the bucket of
 // the recorded table it is matched against), made when a pool entry is built
