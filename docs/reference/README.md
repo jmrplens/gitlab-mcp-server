@@ -8,26 +8,28 @@ inventory of tools, resources, prompts, and capabilities the server exposes.
 Reference pages describe the product as it is — they don't teach workflows (see
 [Guides](../guides/README.md)) or explain rationale (see [Concepts](../concepts/README.md)).
 
-Several pages here are **generated** from the codebase (`tools/`, and the
-measurements block in `resource-benchmark.md`) and validated in CI — treat them
-as authoritative and edit the source, not the Markdown. The prompt and resource
+Several pages here are **generated** from the codebase (`tools/`,
+`fine-grained-permissions.md`, and the measurements block in
+`resource-benchmark.md`) and validated in CI, so treat them as authoritative
+and edit the source, not the Markdown. The prompt and resource
 inventories are hand-maintained and checked against `internal/prompts` and
 `internal/resources` by review.
 
 > **Diátaxis type**: Reference · **Audience**: 👤🔧 All users & integrators
 
-| Reference                                       | Covers                                                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [Configuration](configuration.md)               | Transport modes, dotenv setup, and how settings are loaded                                  |
-| [Environment Variables](env.md)                 | Every environment variable with defaults and descriptions                                   |
-| [CLI Reference](cli.md)                         | All command-line flags with usage examples                                                  |
-| [Output Format](output-format.md)               | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |
-| [Tools](tools/README.md)                        | Per-domain tool documentation across every catalog group                                    |
-| [Resources](resources.md)                       | MCP resources and URI templates, including the surface-aware tool manifest                  |
-| [Prompts](prompts.md)                           | Every prompt with its arguments and output format                                           |
-| [Capabilities](capabilities/README.md)          | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
-| [Resource Benchmark](resource-benchmark.md)     | What the server costs to run: memory, processor time, goroutines and latency, measured      |
-| [Resource Consumption](resource-consumption.md) | The same measurements read as capacity planning: what to give a container, per team size    |
+| Reference                                               | Covers                                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Configuration](configuration.md)                       | Transport modes, dotenv setup, and how settings are loaded                                  |
+| [Environment Variables](env.md)                         | Every environment variable with defaults and descriptions                                   |
+| [CLI Reference](cli.md)                                 | All command-line flags with usage examples                                                  |
+| [Output Format](output-format.md)                       | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |
+| [Tools](tools/README.md)                                | Per-domain tool documentation across every catalog group                                    |
+| [Resources](resources.md)                               | MCP resources and URI templates, including the surface-aware tool manifest                  |
+| [Prompts](prompts.md)                                   | Every prompt with its arguments and output format                                           |
+| [Fine-grained Permissions](fine-grained-permissions.md) | What a fine-grained personal access token needs for each action, in GitLab's words          |
+| [Capabilities](capabilities/README.md)                  | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
+| [Resource Benchmark](resource-benchmark.md)             | What the server costs to run: memory, processor time, goroutines and latency, measured      |
+| [Resource Consumption](resource-consumption.md)         | The same measurements read as capacity planning: what to give a container, per team size    |
 
 Both are a snapshot of one build on one host, re-measured for every release with
 no comparison against earlier runs; [Resource Hot
