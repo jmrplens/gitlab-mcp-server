@@ -64,9 +64,18 @@ func FineGrainedRefusal(ctx context.Context, req *mcp.CallToolRequest, callName,
 // token cannot see. They are written into the answer's own next steps, so the
 // tail every dispatcher applies afterwards ([FinishToolResult]) carries them
 // into next_steps as well.
+//
+// A safe-mode preview gets none: it is the answer to a call nothing sent to
+// GitLab, so there is no answer of GitLab's for a note to describe. The meta
+// and dynamic surfaces reach here with one, since safe mode replaces a
+// write's route there ([SafeModeActionFunc]); the individual surface answers
+// with its preview before it would.
 func FineGrainedNotes(ctx context.Context, actionID string, callResult *mcp.CallToolResult, result any) *mcp.CallToolResult {
 	authority := gitlabclient.AuthorityFrom(ctx)
 	if authority == nil || actionID == "" || callResult == nil {
+		return callResult
+	}
+	if _, preview := result.(SafeModePreview); preview {
 		return callResult
 	}
 	var notes []string

@@ -10682,6 +10682,61 @@ func auditWithheld() context.Context {
 	return gitlabclient.WithClient(context.Background(), client)
 }
 
+// inspectDegraded binds a client whose authority serves custom.inspect with a
+// part GitLab leaves empty for a fine-grained token.
+func inspectDegraded() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version:  "19.4.1-ee",
+		Elements: []finegrained.Element{{Path: "project.issueLinks.nodes", Type: "VulnerabilityIssueLink", Undeclared: true, Effect: finegrained.EffectRemoved}},
+		Actions:  []finegrained.Requirement{{ID: "custom.inspect", Degraded: []uint32{0}, GraphQL: true}},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// textCatalogForDynamicTest is a catalog of one write, custom.inspect, whose
+// group renders every answer as text, so a note added to the answer can be
+// read back from it.
+func textCatalogForDynamicTest(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
+		ToolName: "gitlab_custom",
+		FormatResult: func(result any) *mcp.CallToolResult {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%+v", result)}}}
+		},
+	})
+	group.SetAction(actioncatalog.Action{Name: "inspect", Route: customCatalogRouteForDynamicTest()})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	return catalog
+}
+
+// TestExecute_FineGrained_SafeModePreviewCarriesNoNote verifies execute
+// answers a fine-grained session's write in safe mode with the preview and no
+// note on what GitLab leaves empty in its answer, since nothing was sent to
+// GitLab; the same action executed outside safe mode carries the note, which is
+// what makes its absence from the preview about the preview.
+func TestExecute_FineGrained_SafeModePreviewCarriesNoNote(t *testing.T) {
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: ExecuteActionToolName}}
+	input := ExecuteInput{Action: "custom.inspect", Params: map[string]any{"target": "x"}}
+	const note = "leaves part of this answer empty"
+
+	served, _, err := NewRegistryFromCatalog(textCatalogForDynamicTest(t)).Execute(inspectDegraded(), req, input)
+	if err != nil || served == nil || !strings.Contains(served.Content[0].(*mcp.TextContent).Text, note) {
+		t.Fatalf("Execute(custom.inspect) = %+v, %v; want the degraded note: the control is broken", served, err)
+	}
+	previewed, _, err := NewRegistryFromCatalog(textCatalogForDynamicTest(t).WithSafeModePreviews()).Execute(inspectDegraded(), req, input)
+	if err != nil || previewed == nil {
+		t.Fatalf("Execute(custom.inspect) in safe mode = %+v, %v", previewed, err)
+	}
+	text := previewed.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "custom.inspect") || strings.Contains(text, note) {
+		t.Errorf("Execute(custom.inspect) in safe mode = %q, want the preview naming the action and no note", text)
+	}
+}
+
 // findIDs returns the action IDs a find answered with.
 func findIDs(t *testing.T, registry *Registry, ctx context.Context, query string) []string {
 	t.Helper()

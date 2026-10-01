@@ -212,6 +212,42 @@ func TestDispatchers_FineGrained_NoteWhatGitLabLeftEmpty(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_FineGrained_SafeModePreviewCarriesNoNote verifies the
+// meta dispatcher, which the dynamic surface also runs through, answers a
+// fine-grained session's write in safe mode with the preview alone: the call
+// was never sent to GitLab, so the note on what GitLab leaves empty in its
+// answer would describe an answer that does not exist. The same action served
+// carries the note, which is what makes its absence from the preview about the
+// preview.
+func TestMakeMetaHandler_FineGrained_SafeModePreviewCarriesNoNote(t *testing.T) {
+	served := Route(func(_ context.Context, _ map[string]any) (any, error) {
+		return map[string]string{"state": "confirmed"}, nil
+	})
+	served.ActionID = fgGraphQL
+	previewed := Route(SafeModeActionFunc(fgGraphQL))
+	previewed.ActionID = fgGraphQL
+	format := func(result any) *mcp.CallToolResult {
+		if _, preview := result.(SafeModePreview); preview {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "Safe mode blocked " + fgGraphQL}}}
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "Confirmed."}}}
+	}
+	handler := MakeMetaHandler("gitlab_demo", ActionMap{"served": served, "previewed": previewed}, format)
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "gitlab_demo"}}
+
+	result, _, err := handler(fineGrainedContext(), req, MetaToolInput{Action: "served"})
+	if err != nil || !strings.Contains(textOf(t, result), "leaves part of this answer empty") {
+		t.Fatalf("the served write = (%+v, %v), want the degraded note: the control is broken", result, err)
+	}
+	result, _, err = handler(fineGrainedContext(), req, MetaToolInput{Action: "previewed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := textOf(t, result); text != "Safe mode blocked "+fgGraphQL {
+		t.Errorf("the previewed write = %q, want the preview with no note", text)
+	}
+}
+
 // TestFineGrainedNotes_AddsEachNoteWhereItApplies verifies which note each
 // answer gets: a served answer the parts GitLab leaves empty and, when it is an
 // empty list of a GraphQL list action, the empty-list note; a not-found answer
@@ -252,6 +288,10 @@ func TestFineGrainedNotes_AddsEachNoteWhereItApplies(t *testing.T) {
 			want: []string{"not found may mean this token cannot see it"}, wantNot: []string{"leaves part"},
 		},
 		{name: "another error", ctx: session, actionID: fgGraphQL, result: failed("boom"), wantNot: []string{"Next steps"}},
+		{
+			name: "a safe-mode preview", ctx: session, actionID: fgGraphQL, result: text("body"),
+			output: NewSafeModePreview(fgGraphQL, map[string]any{}), wantNot: []string{"Next steps"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
