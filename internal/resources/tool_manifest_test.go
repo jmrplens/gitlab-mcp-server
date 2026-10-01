@@ -7,6 +7,7 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"reflect"
 	"regexp"
@@ -865,6 +866,84 @@ func TestToolManifest_FineGrained_WithheldDetailSaysWhy(t *testing.T) {
 		},
 		"the server's own read": func() ToolSurfaceDetail {
 			return snapshot.detailFor(toolutil.WithInternalInspection(projectGetWithheld()), "project.get", snapshot.details["project.get"])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := read(); got.Withheld != nil {
+				t.Errorf("detail carries %+v", got.Withheld)
+			}
+		})
+	}
+}
+
+// projectReadsWithheld binds a client whose authority withholds project.get
+// and project.list for two different reasons.
+func projectReadsWithheld() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version: "19.4.1-ee",
+		Actions: []finegrained.Requirement{
+			{ID: "project.get", Denied: &finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}},
+			{ID: "project.list", Denied: &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "projectList", Effect: finegrained.EffectNull}},
+		},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// TestToolManifest_FineGrained_MetaToolWithEveryActionWithheldSaysWhy verifies
+// the meta surface's detail of a tool a fine-grained session may run none of
+// the actions of, which tools/list and the manifest's visible tools leave out,
+// is served with why for each of its actions in the words a call is refused
+// with; and that a tool the session may run one action of, a classic read and
+// the server's own read carry nothing.
+func TestToolManifest_FineGrained_MetaToolWithEveryActionWithheldSaysWhy(t *testing.T) {
+	domain := domainSurfaceCatalog(t)
+	action, ok := domain.Action("project.get")
+	if !ok {
+		t.Fatal("the catalog has no project.get")
+	}
+	snapshot := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface: toolSurfaceMeta, Catalog: domain, MetaRoutes: domain.ActionMaps(),
+		Tools: []*mcp.Tool{{Name: action.ToolName}, {Name: "gitlab_partial"}},
+		ToolActions: map[string][]string{
+			action.ToolName:  {"project.get", "project.list"},
+			"gitlab_partial": {"project.get", "project.unrecorded"},
+		},
+	})
+	session := projectReadsWithheld()
+	if slices.Contains(visibleNames(snapshot.manifestFor(session)), action.ToolName) {
+		t.Fatalf("the narrowed manifest still lists %s, so this test is not about a withheld tool", action.ToolName)
+	}
+
+	detail := snapshot.detailFor(session, action.ToolName, snapshot.details[action.ToolName])
+	if detail.Withheld == nil || len(detail.Withheld.Actions) != 2 || detail.Withheld.Cause != "" || detail.Withheld.Message != "" {
+		t.Fatalf("the detail of %s carries %+v, want one reason per action and no reason of the tool's own", action.ToolName, detail.Withheld)
+	}
+	for i, want := range []struct{ id, cause string }{
+		{"project.get", string(finegrained.CauseTypeUndeclared)},
+		{"project.list", string(finegrained.CauseMutationUndeclared)},
+	} {
+		t.Run(want.id, func(t *testing.T) {
+			got := detail.Withheld.Actions[i]
+			prefix := fmt.Sprintf("action %q exists but is not available to a fine-grained personal access token", want.id)
+			if got.ID != want.id || got.Cause != want.cause || !strings.HasPrefix(got.Message, prefix) {
+				t.Errorf("action %d of the withheld block = %+v, want %s for %s in the words a call is refused with", i, got, want.cause, want.id)
+			}
+		})
+	}
+	if detail.ID != action.ToolName {
+		t.Errorf("the withheld detail lost the tool it describes: %+v", detail.ToolSurfaceEntry)
+	}
+
+	for name, read := range map[string]func() ToolSurfaceDetail{
+		"a tool the session may run one action of": func() ToolSurfaceDetail {
+			return snapshot.detailFor(session, "gitlab_partial", snapshot.details["gitlab_partial"])
+		},
+		"a classic read": func() ToolSurfaceDetail {
+			return snapshot.detailFor(context.Background(), action.ToolName, snapshot.details[action.ToolName])
+		},
+		"the server's own read": func() ToolSurfaceDetail {
+			return snapshot.detailFor(toolutil.WithInternalInspection(session), action.ToolName, snapshot.details[action.ToolName])
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

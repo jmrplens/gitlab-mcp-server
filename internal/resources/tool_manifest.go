@@ -75,9 +75,23 @@ type ToolSurfaceResourceOptions struct {
 // ToolSurfaceWithheld is what the detail of an action a fine-grained session
 // may not run carries in place of being absent: why, in the words a call to
 // it is refused with.
+//
+// The detail of a tool that runs several actions, a meta tool, carries it
+// when the session may run none of them, which is when tools/list leaves the
+// tool out: Actions then says why for each, in the same words, and Cause and
+// Message are empty, since the actions of one group need not share a reason.
 type ToolSurfaceWithheld struct {
+	Cause   string                      `json:"cause,omitempty"`
+	Message string                      `json:"message,omitempty"`
+	Actions []ToolSurfaceWithheldAction `json:"actions,omitempty"`
+}
+
+// ToolSurfaceWithheldAction is why one action of a withheld meta tool is
+// withheld, keyed by its canonical ID.
+type ToolSurfaceWithheldAction struct {
+	ID      string `json:"id"`
 	Cause   string `json:"cause"`
-	Message string `json:"message,omitempty"`
+	Message string `json:"message"`
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -293,7 +307,8 @@ type ToolSurfaceDetail struct {
 	// action needs; the listing and find results do not carry it.
 	FineGrained *finegrained.Description `json:"fine_grained,omitempty"`
 	// Withheld says why this session may not run the action, when it is a
-	// fine-grained session the action is withheld from; absent otherwise.
+	// fine-grained session the action is withheld from, or, on a meta tool's
+	// own detail, why it may run none of the tool's actions; absent otherwise.
 	// The detail is served rather than answered not found, because the detail
 	// is where a model looks up why it cannot find an action in the listing.
 	Withheld *ToolSurfaceWithheld `json:"withheld,omitempty"`
@@ -425,10 +440,20 @@ func (snapshot *toolSurfaceSnapshot) manifestFor(ctx context.Context) ToolSurfac
 
 // detailFor is the detail one read of key is served: the shared one, or for a
 // fine-grained session an action it may not run, a copy carrying why.
+//
+// A meta tool's own detail is narrowed by the rule tools/list applies to the
+// tool: it carries why when the session may run none of the actions the tool
+// runs, which is when the listing leaves the tool out, so a model that finds
+// the tool missing and looks it up is told why rather than served a detail
+// that reads as callable.
 func (snapshot *toolSurfaceSnapshot) detailFor(ctx context.Context, key string, detail ToolSurfaceDetail) ToolSurfaceDetail {
 	authority := gitlabclient.AuthorityFrom(ctx)
+	if authority == nil || toolutil.IsInternalInspection(ctx) {
+		return detail
+	}
 	id, runs := snapshot.entryActions[key]
-	if authority == nil || !runs || toolutil.IsInternalInspection(ctx) {
+	if !runs {
+		detail.Withheld = groupWithheld(authority, snapshot.toolActions[key])
 		return detail
 	}
 	decision := authority.Decide(id)
@@ -437,6 +462,24 @@ func (snapshot *toolSurfaceSnapshot) detailFor(ctx context.Context, key string, 
 	}
 	detail.Withheld = &ToolSurfaceWithheld{Cause: string(decision.Cause), Message: authority.WithheldText(id, decision)}
 	return detail
+}
+
+// groupWithheld is the withheld block of a tool that runs the actions ids,
+// saying why for each, when authority may run none of them; nil when it may
+// run one, and for a tool that runs no catalog action.
+func groupWithheld(authority *finegrained.Authority, ids []string) *ToolSurfaceWithheld {
+	if len(ids) == 0 {
+		return nil
+	}
+	actions := make([]ToolSurfaceWithheldAction, 0, len(ids))
+	for _, id := range ids {
+		decision := authority.Decide(id)
+		if decision.Listed {
+			return nil
+		}
+		actions = append(actions, ToolSurfaceWithheldAction{ID: id, Cause: string(decision.Cause), Message: authority.WithheldText(id, decision)})
+	}
+	return &ToolSurfaceWithheld{Actions: actions}
 }
 
 // registerToolManifestTemplate registers the URI-template resource that
