@@ -49,6 +49,7 @@ func resolveGID(ctx context.Context, client *gitlabclient.Client, fullPath strin
 		} `json:"data"`
 	}
 
+	//gitlab:request mandatory: an epic action resolves the epic's work item ID here and then sends its own request with it, so both run on every call
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query: queryResolveWorkItemGID,
 		Variables: map[string]any{

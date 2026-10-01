@@ -215,6 +215,7 @@ type BurndownChartEventsOutput struct {
 // required by the GitLab API. It lists milestones filtered by IID and
 // returns the first match's global ID.
 func resolveGroupIID(ctx context.Context, client *gitlabclient.Client, groupID toolutil.StringOrInt, iid int64) (int64, error) {
+	//gitlab:request mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call
 	milestones, _, err := client.GL().GroupMilestones.ListGroupMilestones(
 		string(groupID),
 		&gl.ListGroupMilestonesOptions{IIDs: new([]int64{iid})},

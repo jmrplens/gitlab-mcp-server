@@ -71,6 +71,7 @@ func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (Re
 	}
 
 	// Step 2: Get the pinned commit SHA from the tree entry
+	//gitlab:request mandatory: the file is read at the commit the parent's tree pins the submodule to, so the tree is listed on every call
 	commitSHA, err := getSubmoduleCommitSHA(ctx, client, projectID, ref, input.SubmodulePath)
 	if err != nil {
 		return ReadOutput{}, err
