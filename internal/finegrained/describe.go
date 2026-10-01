@@ -81,7 +81,9 @@ func (t *Table) Describe(row *Requirement) *Description {
 }
 
 // way words one path: the groups of every operation on it, the spine's
-// included, each once.
+// included, each once. An operation that opts out of the check leaves its own
+// requirement to GitLab, but the objects its answer is made of are still
+// checked, so its spine is worded with the rest.
 func (t *Table) way(path []uint32) Way {
 	var way Way
 	var groups []uint32
@@ -89,9 +91,9 @@ func (t *Table) way(path []uint32) Way {
 		op := &t.Operations[index]
 		if op.Skip {
 			way.NotJudged = true
-			continue
+		} else {
+			groups = append(groups, op.Groups...)
 		}
-		groups = append(groups, op.Groups...)
 		for _, element := range op.Spine {
 			groups = append(groups, t.Elements[element].Groups...)
 		}

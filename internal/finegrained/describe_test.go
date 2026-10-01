@@ -29,6 +29,7 @@ func describeTable() *Table {
 			{Name: "GET /skipped", Skip: true},
 			{Name: "query thing", Groups: []uint32{1}, Spine: []uint32{0}, OffSpine: []uint32{1, 1}},
 			{Name: "GET /twice", Groups: []uint32{0, 3, 4}},
+			{Name: "mutation skipped", Groups: []uint32{0}, Skip: true, Spine: []uint32{1}},
 		},
 		Elements: []Element{
 			{Path: "thing", Groups: []uint32{2}},
@@ -38,12 +39,15 @@ func describeTable() *Table {
 		Actions: []Requirement{
 			{ID: "a.denied", Denied: &Denial{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}},
 			{ID: "a.graphql", Paths: [][]uint32{{3, 0}}, Degraded: []uint32{2}},
+			{ID: "a.skipped", Paths: [][]uint32{{5}}},
 			{ID: "a.twice", Paths: [][]uint32{{4}}},
 			{ID: "a.ways", Paths: [][]uint32{{0}, {1}, {2}}},
 		},
 	}
 }
 
+// TestTable_Describe_NothingToDescribe_IsNil verifies a nil table and a nil
+// row describe nothing, so a detail with no row carries no block.
 func TestTable_Describe_NothingToDescribe_IsNil(t *testing.T) {
 	var none *Table
 	if got := none.Describe(&Requirement{}); got != nil {
@@ -54,6 +58,11 @@ func TestTable_Describe_NothingToDescribe_IsNil(t *testing.T) {
 	}
 }
 
+// TestTable_Describe_WordsEachRow verifies each kind of row is worded the way
+// the detail and the reference page print it: a denial with its cause, element
+// and effect, the ways of running an action in GitLab's words, the parts of
+// the answer served empty, a request the grant does not judge, and two paths
+// that need the same thing written once.
 func TestTable_Describe_WordsEachRow(t *testing.T) {
 	table := describeTable()
 	cases := []struct {
@@ -95,6 +104,15 @@ func TestTable_Describe_WordsEachRow(t *testing.T) {
 			},
 		},
 		{
+			// A mutation that opts out of the check leaves its own group to
+			// GitLab, while the object its answer is made of is still checked.
+			id: "a.skipped",
+			want: &Description{GitLabVersion: "19.4.1", AnyOf: []Way{{
+				Needs:     []Need{{Permissions: []string{"read_b"}, At: []string{"group"}}},
+				NotJudged: true,
+			}}},
+		},
+		{
 			// Two groups wording the same are one need; a permission past
 			// the end of the words reads as its raw name.
 			id: "a.twice",
@@ -126,6 +144,8 @@ func TestTable_Describe_DeniedIsACopy(t *testing.T) {
 	}
 }
 
+// TestSameWay_DiffersOnEitherHalf verifies two ways are the same only when
+// their needs and whether the grant judges them both agree.
 func TestSameWay_DiffersOnEitherHalf(t *testing.T) {
 	need := Need{Permissions: []string{"A: Read"}, At: []string{"project"}}
 	cases := []struct {
@@ -146,6 +166,8 @@ func TestSameWay_DiffersOnEitherHalf(t *testing.T) {
 	}
 }
 
+// TestSameNeed_DiffersOnEitherHalf verifies two needs are the same only when
+// their permissions and their boundaries both agree.
 func TestSameNeed_DiffersOnEitherHalf(t *testing.T) {
 	need := Need{Permissions: []string{"A: Read"}, At: []string{"project"}}
 	cases := []struct {

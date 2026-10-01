@@ -40,6 +40,9 @@ func testTable() *Table {
 	}
 }
 
+// TestParseBoundary_KnownAndUnknownNames_ReadAsGitLabSpellsThem verifies the
+// four boundary names are read exactly as GitLab spells them, and that any
+// other spelling, a capital included, is refused rather than guessed.
 func TestParseBoundary_KnownAndUnknownNames_ReadAsGitLabSpellsThem(t *testing.T) {
 	cases := []struct {
 		name string
@@ -63,6 +66,9 @@ func TestParseBoundary_KnownAndUnknownNames_ReadAsGitLabSpellsThem(t *testing.T)
 	}
 }
 
+// TestBoundary_NamesAndString_ReadInBitOrder verifies a set of boundaries is
+// named project, group, user, instance in that order whatever order it was
+// built in, so the same set always reads the same.
 func TestBoundary_NamesAndString_ReadInBitOrder(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -87,6 +93,9 @@ func TestBoundary_NamesAndString_ReadInBitOrder(t *testing.T) {
 	}
 }
 
+// TestCause_GraphQL_TellsTheGraphQLCausesApart verifies the four causes a
+// GraphQL position or mutation gives are told apart from the REST causes and
+// from a grant that lacks a permission.
 func TestCause_GraphQL_TellsTheGraphQLCausesApart(t *testing.T) {
 	cases := []struct {
 		cause Cause
@@ -109,6 +118,9 @@ func TestCause_GraphQL_TellsTheGraphQLCausesApart(t *testing.T) {
 	}
 }
 
+// TestTable_Requirement_FindsARowByBinarySearch verifies every row is found by
+// its ID and that an ID before the first row, between two rows or after the
+// last finds none.
 func TestTable_Requirement_FindsARowByBinarySearch(t *testing.T) {
 	table := testTable()
 	cases := []struct {
@@ -135,6 +147,8 @@ func TestTable_Requirement_FindsARowByBinarySearch(t *testing.T) {
 	}
 }
 
+// TestTable_Requirement_PointsIntoTheTable verifies a row found is the
+// table's own and not a copy, so every catalog that reads it shares one.
 func TestTable_Requirement_PointsIntoTheTable(t *testing.T) {
 	table := testTable()
 	if table.Requirement("merge_request.approve") != &table.Actions[1] {
@@ -142,6 +156,8 @@ func TestTable_Requirement_PointsIntoTheTable(t *testing.T) {
 	}
 }
 
+// TestTable_NilTable_AnswersNothing verifies a nil table finds no row and no
+// assignable permission, so a server built without one decides nothing.
 func TestTable_NilTable_AnswersNothing(t *testing.T) {
 	var table *Table
 	if table.Requirement("issue.list") != nil {
@@ -152,6 +168,10 @@ func TestTable_NilTable_AnswersNothing(t *testing.T) {
 	}
 }
 
+// TestTable_AssignableAndKnows_HoldAGrantToTheRecordedVocabulary verifies a
+// permission name is looked up in the vocabulary the table was recorded with,
+// a deprecated name kept as such, and that a grant is known only when every
+// name it holds is one the table records.
 func TestTable_AssignableAndKnows_HoldAGrantToTheRecordedVocabulary(t *testing.T) {
 	table := testTable()
 	if got := table.Assignable("read_issue"); got == nil || !got.Deprecated {
@@ -178,6 +198,9 @@ func TestTable_AssignableAndKnows_HoldAGrantToTheRecordedVocabulary(t *testing.T
 	}
 }
 
+// TestTable_DisplayVersion_DropsTheEditionSuffix verifies the release a page
+// names is the version without its edition suffix, and a version with none is
+// left as it is.
 func TestTable_DisplayVersion_DropsTheEditionSuffix(t *testing.T) {
 	cases := []struct{ version, want string }{
 		{"19.4.1-ee", "19.4.1"},
@@ -192,6 +215,9 @@ func TestTable_DisplayVersion_DropsTheEditionSuffix(t *testing.T) {
 	}
 }
 
+// TestBucket_ReadsMajorAndMinor verifies a version is bucketed by its major
+// and minor numbers, a suffix ignored, and that a version missing either
+// number, or carrying one that is not a number, has no bucket.
 func TestBucket_ReadsMajorAndMinor(t *testing.T) {
 	cases := []struct{ version, want string }{
 		{"19.4.1", "19.4"},

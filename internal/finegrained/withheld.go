@@ -55,8 +55,12 @@ func deniedReason(denial Denial, version string) string {
 		return fmt.Sprintf("%s declares no fine-grained permission on the GraphQL type %s this action's write answers with, and %s",
 			gitlab, denial.Element, effect)
 	case CauseBoundaryUnresolvable:
-		return fmt.Sprintf("%s declares the GraphQL type %s at a boundary the object this action reaches never resolves to, and %s",
-			gitlab, denial.Element, effect)
+		kind := "type"
+		if denial.Effect == EffectRefused {
+			kind = "mutation"
+		}
+		return fmt.Sprintf("%s declares the GraphQL %s %s at a boundary the object this action reaches never resolves to, and %s",
+			gitlab, kind, denial.Element, effect)
 	case CauseRESTTodo:
 		return fmt.Sprintf("%s has deferred the fine-grained permission of the route %s this action calls, and %s",
 			gitlab, denial.Element, effect)
@@ -92,6 +96,8 @@ func effectPhrase(cause Cause, effect Effect) string {
 
 // notGrantedText is the phase B answer: the groups the grant fails, named in
 // the words a user grants them by.
+//
+//gitlab:allow-unescaped strings.Join(names, ", "): the names are the table's, generated from GitLab's source at the recorded version and compiled into the binary rather than read from any instance, and a bracketed list followed by no link destination is not a link.
 func (a *Authority) notGrantedText(id string, decision Decision, version string) string {
 	var parts []string
 	count := 0

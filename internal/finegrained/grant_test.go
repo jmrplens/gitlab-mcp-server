@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestDecodeGrant_ReadsEveryNamespaceKind verifies each access level GitLab
+// writes is read with the namespace it names: a personal project scope at the
+// user, a selected membership at the project or group whose id it carries, and
+// the others at no namespace.
 func TestDecodeGrant_ReadsEveryNamespaceKind(t *testing.T) {
 	body := `{"granular":true,"granular_scopes":[
 		{"access":"personal_projects","permissions":["read_project"]},
@@ -31,6 +35,10 @@ func TestDecodeGrant_ReadsEveryNamespaceKind(t *testing.T) {
 	}
 }
 
+// TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone verifies two
+// scopes naming one namespace, or one access level with no namespace, are
+// read as one scope holding the permissions of both, each once and in the
+// order they first appeared.
 func TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone(t *testing.T) {
 	body := `{"granular_scopes":[
 		{"access":"selected_memberships","permissions":["read_issue","update_issue"],"project_id":7},
@@ -53,6 +61,9 @@ func TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone(t *testing.T) {
 	}
 }
 
+// TestDecodeGrant_AnEmptyListIsAGrantOfNothing verifies an empty list of
+// scopes is read as a grant that holds nothing, not as a grant that could not
+// be read.
 func TestDecodeGrant_AnEmptyListIsAGrantOfNothing(t *testing.T) {
 	grant, reason := DecodeGrant([]byte(`{"granular":true,"granular_scopes":[]}`), 10)
 	if reason != FallbackNone || grant.Scopes == nil || len(grant.Scopes) != 0 {
@@ -60,6 +71,12 @@ func TestDecodeGrant_AnEmptyListIsAGrantOfNothing(t *testing.T) {
 	}
 }
 
+// TestDecodeGrant_FallsBackRatherThanGuesses verifies every body the decoder
+// cannot read whole is answered with the reason it fell back and no grant:
+// a body that is not JSON or not a fine-grained token, scopes that are absent
+// or null, an access level it does not know, a scope naming both a project and
+// a group or a selected membership naming neither, and more scopes than the
+// bound.
 func TestDecodeGrant_FallsBackRatherThanGuesses(t *testing.T) {
 	cases := []struct {
 		name string
@@ -85,6 +102,8 @@ func TestDecodeGrant_FallsBackRatherThanGuesses(t *testing.T) {
 	}
 }
 
+// TestDecodeGrant_AtTheScopeBoundIsRead verifies a grant holding exactly as
+// many scopes as the bound is read, so the bound refuses only what exceeds it.
 func TestDecodeGrant_AtTheScopeBoundIsRead(t *testing.T) {
 	_, reason := DecodeGrant([]byte(`{"granular_scopes":[{"access":"user"},{"access":"instance"}]}`), 2)
 	if reason != FallbackNone {

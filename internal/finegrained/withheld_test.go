@@ -12,6 +12,10 @@ func deniedTable(denial Denial) *Table {
 	return table
 }
 
+// TestAuthority_WithheldText_PhaseANamesTheCauseAndWhatGitLabDoes verifies the
+// words a model is told for an action no fine-grained token can run name the
+// cause, the element that decides it and what GitLab does to the request,
+// cause by cause.
 func TestAuthority_WithheldText_PhaseANamesTheCauseAndWhatGitLabDoes(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -54,9 +58,16 @@ func TestAuthority_WithheldText_PhaseANamesTheCauseAndWhatGitLabDoes(t *testing.
 				"and answers such a read with null or an empty list.",
 		},
 		{
-			name:   "a boundary that does not resolve, written",
-			denial: Denial{Cause: CauseBoundaryUnresolvable, Element: "WorkItem", Effect: EffectRefused},
-			want:   "never resolves to, and refuses such a write.",
+			name:   "a boundary that does not resolve, in a write's answer",
+			denial: Denial{Cause: CauseBoundaryUnresolvable, Element: "WorkItem", Effect: EffectCommittedThenNull},
+			want: "declares the GraphQL type WorkItem at a boundary the object this action reaches never resolves to, " +
+				"and commits such a write and answers null.",
+		},
+		{
+			name:   "a mutation whose own boundary does not resolve",
+			denial: Denial{Cause: CauseBoundaryUnresolvable, Element: "workItemUpdate", Effect: EffectRefused},
+			want: "declares the GraphQL mutation workItemUpdate at a boundary the object this action reaches never resolves to, " +
+				"and refuses such a write.",
 		},
 		{
 			name:   "a deferred route",
@@ -83,6 +94,8 @@ func TestAuthority_WithheldText_PhaseANamesTheCauseAndWhatGitLabDoes(t *testing.
 	}
 }
 
+// TestAuthority_WithheldText_ACallThatPassesHasNoWords verifies a call the
+// decision lets through, with a row or without one, is told nothing.
 func TestAuthority_WithheldText_ACallThatPassesHasNoWords(t *testing.T) {
 	authority := Unevaluated(testTable(), FallbackNone, "")
 	for _, id := range []string{"merge_request.approve", "issue.list"} {
@@ -94,6 +107,9 @@ func TestAuthority_WithheldText_ACallThatPassesHasNoWords(t *testing.T) {
 	}
 }
 
+// TestAuthority_WithheldText_ARowWithNoDenialStillSaysWhy verifies a withheld
+// decision for an action whose row carries no denial is still told why, in
+// the general words, rather than in none.
 func TestAuthority_WithheldText_ARowWithNoDenialStillSaysWhy(t *testing.T) {
 	authority := Unevaluated(testTable(), FallbackNone, "")
 	got := authority.WithheldText("issue.list", Decision{Cause: CauseTypeUndeclared})
@@ -102,6 +118,10 @@ func TestAuthority_WithheldText_ARowWithNoDenialStillSaysWhy(t *testing.T) {
 	}
 }
 
+// TestAuthority_WithheldText_AppendsWhyTheGrantWasNotEvaluated verifies each
+// reason a grant was not evaluated is told after the refusal, in words that
+// say what the token or the instance would need for it to be, and that with
+// no such reason nothing is appended.
 func TestAuthority_WithheldText_AppendsWhyTheGrantWasNotEvaluated(t *testing.T) {
 	denial := Denial{Cause: CauseTypeUndeclared, Element: "Namespace", Effect: EffectNull}
 	cases := []struct {
@@ -128,6 +148,10 @@ func TestAuthority_WithheldText_AppendsWhyTheGrantWasNotEvaluated(t *testing.T) 
 	}
 }
 
+// TestAuthority_WithheldText_PhaseBNamesTheMissingPermissionsByTheirGrantableWords
+// verifies a call refused for what the grant lacks names each missing
+// permission by the words GitLab's token creation page grants it by, with the
+// boundary it is held at.
 func TestAuthority_WithheldText_PhaseBNamesTheMissingPermissionsByTheirGrantableWords(t *testing.T) {
 	authority := Unevaluated(testTable(), FallbackNone, "")
 	cases := []struct {
