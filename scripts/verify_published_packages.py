@@ -2,7 +2,7 @@
 """Compare what npm, PyPI and NuGet actually serve with the release's signed checksums.
 
 Usage:
-    python3 scripts/verify_published_packages.py <version> <checksums.txt>
+    python3 scripts/verify_published_packages.py <version> <checksums.txt> [--nuget-digests <file>]
 
 <checksums.txt> is the release's own manifest, after its cosign signature has
 been verified — in CI that is what scripts/fetch-release-assets.sh leaves
@@ -18,6 +18,19 @@ at it again. This runs after the publishes, in a job holding no publishing
 credential, and reads the packages back out of the registries. NuGet joined
 later with the same shape: six runtime-identifier packages each carrying one
 binary, read back from the flat container the SDK itself installs from.
+
+NuGet packages are also compared whole. The nuget job attests the seven
+.nupkg files before it pushes them and records their SHA-256 values
+(--nuget-digests, sha256sum's format). nuget.org adds its own repository
+signature, a .signature.p7s entry, to every package it serves, so the served
+bytes never match those values; a verifier removes that entry the way NuGet
+defines an unsigned package and looks up the digest of what is left. This
+does the same and compares the result with the recorded values, so a packer
+change that writes a layout the signing rearranges, or a signing change at
+nuget.org, fails here rather than leaving an attestation nobody can find.
+The attestation itself is not looked up: the comparison proves nuget.org
+serves exactly the bytes the job attested, and the job fails if the
+attestation step does.
 
 Standard library only, and anonymous: it talks to registry.npmjs.org, pypi.org
 and api.nuget.org and needs no credential of any kind, so it is also the
@@ -43,6 +56,8 @@ import hashlib
 import io
 import json
 import os
+import re
+import struct
 import sys
 import tarfile
 import time
@@ -91,6 +106,14 @@ NUGET_ASSETS = {
     "win-x64": "gitlab-mcp-server-windows-amd64.exe",
     "win-arm64": "gitlab-mcp-server-windows-arm64.exe",
 }
+
+# The entry nuget.org's repository signature adds, and the zip records the
+# unsigning below reads.
+NUGET_SIGNATURE_ENTRY = ".signature.p7s"
+ZIP_EOCD = b"PK\x05\x06"
+ZIP_EOCD_SIZE = 22
+ZIP_CENTRAL_HEADER = b"PK\x01\x02"
+ZIP_CENTRAL_HEADER_SIZE = 46
 
 TIMEOUT = 120
 
@@ -239,16 +262,110 @@ def nuget_versions(pkg_id, budget=None):
     return [v.lower() for v in index.get("versions", [])]
 
 
-def nuget_binary(rid, version, budget=None):
-    """Download the published runtime package and return its binary bytes."""
-    url = nuget_package_url(f"{NUGET_ID}.{rid}", version)
-    blob = fetch(url, budget)
+def nuget_package_file(pkg_id, version):
+    """The file name scripts/build_nuget.py writes for a package, which is the
+    name the nuget job records the package's attested digest under."""
+    return f"{pkg_id}.{version}.nupkg"
+
+
+def nuget_package(pkg_id, version, budget=None):
+    """Download one published package from the flat container."""
+    url = nuget_package_url(pkg_id, version)
+    return fetch(url, budget), url
+
+
+def nuget_binary(blob, rid, url):
+    """Return the binary bytes a downloaded runtime package carries."""
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         prefix = f"tools/any/{rid}/"
         for name in zf.namelist():
             if name.startswith(prefix) and os.path.basename(name) in ("gitlab-mcp-server", "gitlab-mcp-server.exe"):
-                return zf.read(name), url
+                return zf.read(name)
     raise LookupError(f"{url} ships no gitlab-mcp-server binary under {prefix}")
+
+
+def attested_nupkg_digests(path):
+    """Parse the `<sha256>  <file>.nupkg` lines the nuget job recorded for the
+    packages it attested. A line that is not one is ignored, as
+    released_digests ignores the assets it does not want."""
+    digests = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.replace("\r", "").strip().split(None, 1)
+            if len(parts) != 2:
+                continue
+            digest, name = parts[0].lower(), parts[1].lstrip("*")
+            if re.fullmatch(r"[0-9a-f]{64}", digest) and name.endswith(".nupkg"):
+                digests[name] = digest
+    return digests
+
+
+def nuget_unsigned(blob):
+    """Return a served package as it was before nuget.org signed it.
+
+    NuGet signs a package by writing a stored .signature.p7s local entry after
+    the last local entry and its central directory record after the last
+    record, and defines the unsigned package as what removing both gives back:
+    every byte before the signature's local header, the central directory
+    without its record, and the end record counted down by one with the
+    directory's new offset and size. That is the package as it was attested.
+    A package carrying no signature entry is returned unchanged. ValueError
+    names an archive that cannot be read that way.
+    """
+    eocd = blob.rfind(ZIP_EOCD)
+    if eocd < 0 or eocd + ZIP_EOCD_SIZE > len(blob):
+        raise ValueError("no end-of-central-directory record")
+    disk, cd_disk, n_disk, n_total, cd_size, cd_offset, comment_len = struct.unpack_from(
+        "<HHHHIIH", blob, eocd + 4)
+    if eocd + ZIP_EOCD_SIZE + comment_len != len(blob):
+        raise ValueError("bytes follow the end-of-central-directory record")
+    records = []
+    offset = cd_offset
+    for _ in range(n_total):
+        if blob[offset:offset + 4] != ZIP_CENTRAL_HEADER:
+            raise ValueError(f"no central directory record at offset {offset}")
+        name_len, extra_len, record_comment_len = struct.unpack_from("<HHH", blob, offset + 28)
+        local_offset = struct.unpack_from("<I", blob, offset + 42)[0]
+        name = blob[offset + ZIP_CENTRAL_HEADER_SIZE:offset + ZIP_CENTRAL_HEADER_SIZE + name_len]
+        size = ZIP_CENTRAL_HEADER_SIZE + name_len + extra_len + record_comment_len
+        records.append((name.decode("utf-8", errors="replace"), offset, size, local_offset))
+        offset += size
+    if offset != cd_offset + cd_size:
+        raise ValueError("the central directory is not the size its end record says")
+    signatures = [record for record in records if record[0] == NUGET_SIGNATURE_ENTRY]
+    if not signatures:
+        return blob
+    if len(signatures) > 1:
+        raise ValueError(f"more than one {NUGET_SIGNATURE_ENTRY} entry")
+    _, record_at, record_size, local_at = signatures[0]
+    if any(record[3] > local_at for record in records):
+        raise ValueError(f"{NUGET_SIGNATURE_ENTRY} is not the last local entry")
+    directory = blob[cd_offset:record_at] + blob[record_at + record_size:cd_offset + cd_size]
+    end = struct.pack("<4sHHHHIIH", ZIP_EOCD, disk, cd_disk, n_disk - 1, n_total - 1,
+                      cd_size - record_size, local_at, comment_len)
+    return blob[:local_at] + directory + end + blob[eocd + ZIP_EOCD_SIZE:]
+
+
+def check_attested_nupkg(label, blob, url, filename, attested, problems):
+    """Hold one served package, its repository signature removed, to the
+    digest the nuget job attested for it."""
+    want = attested.get(filename)
+    if want is None:
+        problems.append(f"nuget {label}: the nuget job recorded no attested digest for {filename}")
+        return
+    try:
+        unsigned = nuget_unsigned(blob)
+    except ValueError as exc:
+        problems.append(f"nuget {label}: {url} cannot be unsigned the way NuGet defines it: {exc}")
+        return
+    got = sha256(unsigned)
+    if got != want:
+        problems.append(
+            f"nuget {label}: {url} without its repository signature is sha256 {got}, "
+            f"but the nuget job attested {filename} as {want}"
+        )
+    else:
+        print(f"  ok  nuget {label:<32} unsigned, equals the attested {filename}")
 
 
 def check_npm(version, digests, problems, budget=None):
@@ -307,7 +424,9 @@ def check_pypi(version, digests, problems, budget=None):
         problems.append(f"pypi: no wheel published for {', '.join(missing)}")
 
 
-def check_nuget(version, digests, problems, budget=None):
+def check_nuget(version, digests, problems, budget=None, attested=None):
+    """Check the pointer is listed and each runtime package carries the signed
+    binary; with attested digests, hold all seven packages to them as well."""
     # The pointer carries no binary, so its check is that the version is
     # listed at all: a runtime package nobody points at is not installable,
     # and a pointer published without its runtime packages installs nothing.
@@ -320,13 +439,32 @@ def check_nuget(version, digests, problems, budget=None):
             problems.append(f"nuget {NUGET_ID}: version {version} is not listed on nuget.org")
         else:
             print(f"  ok  nuget {NUGET_ID:<32} lists {version}")
+    if attested is not None and not attested:
+        problems.append("nuget: the attested digests name no package, so nothing the nuget job attested "
+                        "can be compared; its nupkg_sha256 output did not reach this run")
+        attested = None
+    if attested is not None:
+        published = {nuget_package_file(NUGET_ID, version)}
+        published.update(nuget_package_file(f"{NUGET_ID}.{rid}", version) for rid in NUGET_ASSETS)
+        for name in sorted(set(attested) - published):
+            problems.append(f"nuget: the nuget job attested {name}, which is not one of the packages of {version}")
+        # The pointer is what dnx and dotnet tool install read first, and its
+        # DotnetToolSettings.xml decides which package runs, so it is held to
+        # its attestation like the packages that carry the binary.
+        try:
+            blob, url = nuget_package(NUGET_ID, version, budget)
+        except urllib.error.URLError as exc:
+            problems.append(f"nuget {NUGET_ID}: could not read the published package: {exc}")
+        else:
+            check_attested_nupkg(NUGET_ID, blob, url, nuget_package_file(NUGET_ID, version), attested, problems)
     for rid, asset in NUGET_ASSETS.items():
         want = digests.get(asset)
         if want is None:
             problems.append(f"nuget {rid}: checksums.txt does not name the release asset {asset}")
             continue
         try:
-            binary, url = nuget_binary(rid, version, budget)
+            blob, url = nuget_package(f"{NUGET_ID}.{rid}", version, budget)
+            binary = nuget_binary(blob, rid, url)
         except (urllib.error.URLError, LookupError, zipfile.BadZipFile) as exc:
             problems.append(f"nuget {rid}: could not read the published package: {exc}")
             continue
@@ -338,6 +476,9 @@ def check_nuget(version, digests, problems, budget=None):
             )
         else:
             print(f"  ok  nuget {rid:<32} matches {asset}")
+        if attested is not None:
+            check_attested_nupkg(rid, blob, url, nuget_package_file(f"{NUGET_ID}.{rid}", version), attested,
+                                 problems)
 
 
 def main():
@@ -347,6 +488,12 @@ def main():
     parser.add_argument("--skip-npm", action="store_true", help="do not check npm")
     parser.add_argument("--skip-pypi", action="store_true", help="do not check PyPI")
     parser.add_argument("--skip-nuget", action="store_true", help="do not check NuGet")
+    parser.add_argument(
+        "--nuget-digests",
+        metavar="FILE",
+        help="sha256sum lines of the .nupkg files the release attested; each served package, its repository "
+        "signature removed, must match its line (without it the NuGet packages are checked by their binaries only)",
+    )
     parser.add_argument(
         "--retry-budget",
         type=float,
@@ -377,8 +524,13 @@ def main():
         check_npm(args.version, digests, problems, budget)
     if not args.skip_pypi:
         check_pypi(args.version, digests, problems, budget)
+    attested = None
     if not args.skip_nuget:
-        check_nuget(args.version, digests, problems, budget)
+        if args.nuget_digests:
+            attested = attested_nupkg_digests(args.nuget_digests)
+        else:
+            print("  ..  nuget: no --nuget-digests given, so the packages are checked by the binaries they carry only")
+        check_nuget(args.version, digests, problems, budget, attested)
 
     if problems:
         print(f"\nFAILED ({len(problems)}):")
@@ -392,6 +544,8 @@ def main():
             )
         sys.exit(1)
     print("\nEvery published package carries the binary the release signed.")
+    if attested:
+        print("Every NuGet package nuget.org serves is, without its repository signature, the one the release attested.")
 
 
 if __name__ == "__main__":

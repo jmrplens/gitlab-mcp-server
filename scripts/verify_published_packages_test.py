@@ -16,18 +16,29 @@ asserted here:
   * a digest that does not match the signed checksums.txt is reported the
     first time it is seen, with no second attempt to launder it.
 
+The NuGet packages are also held whole to the digests the nuget job attested,
+once nuget.org's repository signature is removed, so the unsigning is pinned
+here against packages signed the way nuget.org signs them, against every
+archive it must refuse to guess about, and through the command line that hands
+it the digests.
+
 Run with:
 
     python3 -m unittest discover -s scripts -p 'verify_published_packages_test.py'
 """
 
+import contextlib
 import hashlib
 import importlib.util
 import io
 import os
+import struct
+import sys
 import tarfile
+import tempfile
 import unittest
 import urllib.error
+import warnings
 import zipfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -194,6 +205,34 @@ def nupkg(rid, payload):
     return blob.getvalue()
 
 
+def pointer_nupkg(readme=b"mcp-name: io.github.jmrplens/gitlab-mcp-server"):
+    """A .nupkg shaped like the published pointer package, with no binary."""
+    blob = io.BytesIO()
+    with zipfile.ZipFile(blob, "w") as zf:
+        zf.writestr("tools/net10.0/any/DotnetToolSettings.xml", "<DotNetCliTool Version=\"2\" />")
+        zf.writestr("README.md", readme)
+    return blob.getvalue()
+
+
+def sign(unsigned, name=".signature.p7s"):
+    """Sign a package the way nuget.org does: a stored signature entry after
+    the last local entry and its record after the last central record, every
+    byte before them left as it was. zipfile's append mode does exactly that."""
+    blob = io.BytesIO(unsigned)
+    with zipfile.ZipFile(blob, "a") as zf:
+        info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_STORED
+        zf.writestr(info, b"0\x82 nuget.org repository signature")
+    return blob.getvalue()
+
+
+def end_record(blob):
+    """The end record's offset and its (count, size, offset) of the directory."""
+    eocd = blob.rfind(vpp.ZIP_EOCD)
+    count, size, offset = struct.unpack_from("<HII", blob, eocd + 10)
+    return eocd, count, size, offset
+
+
 class MismatchIsNotRetriedTest(unittest.TestCase):
     """The finding this job exists to make is never waited out.
 
@@ -293,6 +332,296 @@ class MismatchIsNotRetriedTest(unittest.TestCase):
         vpp.check_nuget(self.VERSION, self.digests, problems, vpp.RetryBudget(seconds=0))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("is not listed on nuget.org", problems[0])
+
+
+class NugetUnsignedTest(unittest.TestCase):
+    """nuget_unsigned gives back the package as it was before nuget.org
+    signed it, which is the package the release attested."""
+
+    def test_removing_the_signature_gives_back_the_package_that_was_signed(self):
+        cases = [
+            ("a runtime package", nupkg("linux-x64", b"\x7fELFbinary")),
+            ("the pointer", pointer_nupkg()),
+        ]
+        for name, unsigned in cases:
+            with self.subTest(name):
+                signed = sign(unsigned)
+                self.assertNotEqual(signed, unsigned)
+                self.assertEqual(vpp.nuget_unsigned(signed), unsigned)
+
+    def test_an_archive_comment_is_kept_where_it_was(self):
+        blob = io.BytesIO()
+        with zipfile.ZipFile(blob, "w") as zf:
+            zf.writestr("README.md", b"readme")
+            zf.comment = b"kept"
+        unsigned = blob.getvalue()
+        self.assertEqual(vpp.nuget_unsigned(sign(unsigned)), unsigned)
+
+    def test_an_unsigned_package_is_returned_unchanged(self):
+        unsigned = pointer_nupkg()
+        self.assertIs(vpp.nuget_unsigned(unsigned), unsigned)
+
+    def test_an_entry_with_another_case_is_not_the_signature(self):
+        """NuGet names the entry exactly, so a look-alike stays in the package."""
+        signed = sign(pointer_nupkg(), name=".SIGNATURE.P7S")
+        self.assertIs(vpp.nuget_unsigned(signed), signed)
+
+    def test_a_package_that_cannot_be_unsigned_is_refused_with_the_reason(self):
+        signed = sign(pointer_nupkg())
+
+        def damaged_directory():
+            _, _, _, offset = end_record(signed)
+            return signed[:offset] + b"XXXX" + signed[offset + 4:]
+
+        def directory_size_off_by_one():
+            eocd, _, size, _ = end_record(signed)
+            data = bytearray(signed)
+            struct.pack_into("<I", data, eocd + 12, size + 1)
+            return bytes(data)
+
+        def two_signatures():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                return sign(signed)
+
+        def signature_first():
+            blob = io.BytesIO()
+            with zipfile.ZipFile(blob, "w") as zf:
+                zf.writestr(".signature.p7s", b"signature")
+                zf.writestr("README.md", b"readme")
+            return blob.getvalue()
+
+        cases = [
+            ("not a zip", lambda: b"not a package", "no end-of-central-directory record"),
+            ("an end record cut short", lambda: signed[:-4], "no end-of-central-directory record"),
+            ("bytes after the end record", lambda: signed + b"junk", "bytes follow"),
+            ("a damaged central record", damaged_directory, "no central directory record at offset"),
+            ("a directory of another size", directory_size_off_by_one, "not the size its end record says"),
+            ("two signatures", two_signatures, "more than one .signature.p7s"),
+            ("a signature before another entry", signature_first, "not the last local entry"),
+        ]
+        for name, build, want in cases:
+            with self.subTest(name):
+                with self.assertRaises(ValueError) as caught:
+                    vpp.nuget_unsigned(build())
+                self.assertIn(want, str(caught.exception))
+
+
+class AttestedNupkgDigestsTest(unittest.TestCase):
+    """The nuget job's output, read back in sha256sum's own format."""
+
+    def test_reads_the_lines_it_wants_and_ignores_the_rest(self):
+        a, b = "a" * 64, "B" * 64
+        text = (
+            f"{a}  gitlab-mcp-server.1.0.0.nupkg\r\n"
+            f"{b} *gitlab-mcp-server.linux-x64.1.0.0.nupkg\n"
+            f"{'c' * 64}  checksums.txt\n"
+            f"{'d' * 63}  gitlab-mcp-server.osx-x64.1.0.0.nupkg\n"
+            "lonely-token\n"
+            "\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "nupkg.sha256")
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            self.assertEqual(
+                vpp.attested_nupkg_digests(path),
+                {
+                    "gitlab-mcp-server.1.0.0.nupkg": a,
+                    "gitlab-mcp-server.linux-x64.1.0.0.nupkg": b.lower(),
+                },
+            )
+
+
+class NugetFixture(unittest.TestCase):
+    """Seven packages as nuget.org serves them, signed, and the digests the
+    nuget job would have recorded for them before the push."""
+
+    VERSION = "1.0.0"
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        self.digests = {asset: hashlib.sha256(self.binary).hexdigest() for asset in vpp.NUGET_ASSETS.values()}
+        self.unsigned = {vpp.nuget_package_file(vpp.NUGET_ID, self.VERSION): pointer_nupkg()}
+        for rid in vpp.NUGET_ASSETS:
+            self.unsigned[vpp.nuget_package_file(f"{vpp.NUGET_ID}.{rid}", self.VERSION)] = nupkg(rid, self.binary)
+        self.attested = {name: hashlib.sha256(blob).hexdigest() for name, blob in self.unsigned.items()}
+        self.served = {name: sign(blob) for name, blob in self.unsigned.items()}
+
+    def url(self, filename):
+        pkg_id = filename[: -len(f".{self.VERSION}.nupkg")]
+        return vpp.nuget_package_url(pkg_id, self.VERSION)
+
+    def serve(self):
+        script = {f"{vpp.NUGET_FLAT}/{vpp.NUGET_ID}/index.json": [b'{"versions": ["%s"]}' % self.VERSION.encode()]}
+        for filename, blob in self.served.items():
+            script[self.url(filename)] = [blob]
+        opener = FakeOpener(script)
+        vpp.urllib.request.urlopen = opener
+        return opener
+
+    def check(self, attested):
+        budget = vpp.RetryBudget(seconds=600, delay=20, sleep=lambda _: self.fail("a finding was retried"))
+        problems = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            vpp.check_nuget(self.VERSION, self.digests, problems, budget, attested)
+        return problems
+
+
+class NugetAttestedTest(NugetFixture):
+    """check_nuget holds every served package, signature removed, to the
+    digest the nuget job attested, and never waits a mismatch out."""
+
+    def test_served_packages_equal_to_the_attested_ones_pass_each_downloaded_once(self):
+        opener = self.serve()
+        self.assertEqual(self.check(self.attested), [])
+        for filename in self.served:
+            with self.subTest(filename):
+                self.assertEqual(opener.count(self.url(filename)), 1)
+
+    def test_each_departure_from_the_attestation_is_named(self):
+        pointer = vpp.nuget_package_file(vpp.NUGET_ID, self.VERSION)
+        linux = vpp.nuget_package_file(f"{vpp.NUGET_ID}.linux-x64", self.VERSION)
+
+        def pointer_rebuilt_differently():
+            self.served[pointer] = sign(pointer_nupkg(readme=b"another readme"))
+            return self.attested
+
+        def runtime_package_not_attested():
+            return {k: v for k, v in self.attested.items() if k != linux}
+
+        def another_package_attested():
+            return {**self.attested, "gitlab-mcp-server.linux-musl-x64.1.0.0.nupkg": "e" * 64}
+
+        def pointer_cannot_be_unsigned():
+            self.served[pointer] = self.served[pointer] + b"junk"
+            return self.attested
+
+        def pointer_not_served():
+            del self.served[pointer]
+            return self.attested
+
+        cases = [
+            ("the pointer differs from what was attested", pointer_rebuilt_differently,
+             "without its repository signature is sha256"),
+            ("a runtime package has no attested digest", runtime_package_not_attested,
+             f"recorded no attested digest for {linux}"),
+            ("a package nobody published was attested", another_package_attested,
+             "which is not one of the packages of 1.0.0"),
+            ("the pointer cannot be unsigned", pointer_cannot_be_unsigned,
+             "cannot be unsigned the way NuGet defines it"),
+            ("the pointer cannot be downloaded", pointer_not_served,
+             f"nuget {vpp.NUGET_ID}: could not read the published package"),
+        ]
+        for name, arrange, want in cases:
+            with self.subTest(name):
+                self.setUp()
+                attested = arrange()
+                self.serve()
+                budget = vpp.RetryBudget(seconds=0)
+                problems = []
+                with contextlib.redirect_stdout(io.StringIO()):
+                    vpp.check_nuget(self.VERSION, self.digests, problems, budget, attested)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(want, problems[0])
+
+    def test_a_mismatch_is_not_retried(self):
+        linux = vpp.nuget_package_file(f"{vpp.NUGET_ID}.linux-x64", self.VERSION)
+        attested = {**self.attested, linux: "0" * 64}
+        opener = self.serve()
+        problems = self.check(attested)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(f"attested {linux} as {'0' * 64}", problems[0])
+        self.assertEqual(opener.count(self.url(linux)), 1)
+
+    def test_no_attested_digests_at_all_is_one_finding_and_the_binaries_are_still_checked(self):
+        opener = self.serve()
+        problems = self.check({})
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("name no package", problems[0])
+        pointer = vpp.nuget_package_file(vpp.NUGET_ID, self.VERSION)
+        self.assertEqual(opener.count(self.url(pointer)), 0, "nothing to compare the pointer with")
+        for rid in vpp.NUGET_ASSETS:
+            with self.subTest(rid):
+                self.assertEqual(opener.count(self.url(vpp.nuget_package_file(f"{vpp.NUGET_ID}.{rid}", self.VERSION))), 1)
+
+    def test_a_runtime_package_without_its_binary_is_named_once(self):
+        """Read once for both checks, so a package with nothing to compare is
+        one finding, not one per comparison."""
+        linux = vpp.nuget_package_file(f"{vpp.NUGET_ID}.linux-x64", self.VERSION)
+        self.served[linux] = sign(pointer_nupkg())
+        self.serve()
+        problems = self.check(self.attested)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("nuget linux-x64: could not read the published package", problems[0])
+        self.assertIn("ships no gitlab-mcp-server binary under tools/any/linux-x64/", problems[0])
+
+    def test_without_attested_digests_the_pointer_is_not_downloaded(self):
+        opener = self.serve()
+        self.assertEqual(self.check(None), [])
+        pointer = vpp.nuget_package_file(vpp.NUGET_ID, self.VERSION)
+        self.assertEqual(opener.count(self.url(pointer)), 0)
+
+
+class MainTest(NugetFixture):
+    """The command line hands --nuget-digests to the NuGet check."""
+
+    def run_main(self, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            checksums = os.path.join(tmp, "checksums.txt")
+            with open(checksums, "w", encoding="utf-8") as fh:
+                for asset, digest in self.digests.items():
+                    fh.write(f"{digest}  {asset}\n")
+            digests_file = os.path.join(tmp, "nupkg.sha256")
+            with open(digests_file, "w", encoding="utf-8") as fh:
+                for name, digest in self.attested.items():
+                    fh.write(f"{digest}  {name}\n")
+            argv = ["verify_published_packages.py", "--skip-npm", "--skip-pypi", "--retry-budget", "0",
+                    *[digests_file if arg == "{digests}" else arg for arg in extra], self.VERSION, checksums]
+            out = io.StringIO()
+            real_argv = sys.argv
+            sys.argv = argv
+            try:
+                with contextlib.redirect_stdout(out):
+                    try:
+                        vpp.main()
+                        code = 0
+                    except SystemExit as exc:
+                        code = exc.code
+            finally:
+                sys.argv = real_argv
+            return code, out.getvalue()
+
+    def test_the_attested_digests_reach_the_check(self):
+        self.serve()
+        code, out = self.run_main("--nuget-digests", "{digests}")
+        self.assertEqual(code, 0, out)
+        self.assertIn("is, without its repository signature, the one the release attested", out)
+        self.assertIn("unsigned, equals the attested", out)
+
+    def test_a_package_that_departs_from_its_attestation_fails_the_run(self):
+        pointer = vpp.nuget_package_file(vpp.NUGET_ID, self.VERSION)
+        self.served[pointer] = sign(pointer_nupkg(readme=b"another readme"))
+        self.serve()
+        code, out = self.run_main("--nuget-digests", "{digests}")
+        self.assertEqual(code, 1, out)
+        self.assertIn("without its repository signature is sha256", out)
+
+    def test_skipping_nuget_reads_no_digests_and_downloads_nothing(self):
+        opener = self.serve()
+        code, out = self.run_main("--skip-nuget", "--nuget-digests", "{digests}")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(opener.calls, [])
+        self.assertNotIn("the one the release attested", out)
+
+    def test_without_the_flag_the_run_says_what_it_did_not_compare(self):
+        self.serve()
+        code, out = self.run_main()
+        self.assertEqual(code, 0, out)
+        self.assertIn("no --nuget-digests given", out)
+        self.assertNotIn("the one the release attested", out)
 
 
 if __name__ == "__main__":

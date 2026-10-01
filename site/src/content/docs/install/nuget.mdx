@@ -16,7 +16,9 @@ once the server is up.
 
 ## What you get
 
-Seven packages, published together at every release:
+Seven packages, published together at every release, each with a SLSA
+build provenance attestation made before it was pushed (from the first
+release after 3.1.0):
 
 - **`gitlab-mcp-server`** is the pointer package. It declares the
   `gitlab-mcp-server` command and names, for each runtime identifier, the
@@ -88,7 +90,7 @@ Check the install:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 2.8.0 (commit: ...)
+# gitlab-mcp-server <version> (commit: ...)
 ```
 
 With `dnx` no command lands on your PATH; `dnx gitlab-mcp-server -- --version`
@@ -137,7 +139,9 @@ self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
 `where gitlab-mcp-server` on Windows) prints it. To pin a release rather
 than follow the newest one with `dnx`, name it in the argument:
-`"gitlab-mcp-server@2.8.0"`.
+`"gitlab-mcp-server@<version>"`, with a version NuGet.org lists. Pinning
+does not let `dnx` start without NuGet.org (see
+[Upgrade and uninstall](#upgrade-and-uninstall)).
 
 One caution for a machine on which the .NET CLI has never run: its first-use
 welcome text goes to standard output, which is the stream the MCP protocol
@@ -147,6 +151,49 @@ launch, or add `"DOTNET_NOLOGO": "1"` to the `env` block.
 Per-client file locations and shapes (VS Code uses `servers` with
 `"type": "stdio"`, Zed uses `context_servers`) are in the
 [Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration).
+
+## Verify what you run
+
+The binary the SDK runs is the release asset byte for byte, so the build
+provenance attestation GitHub holds for that asset verifies it with the
+[GitHub CLI](https://cli.github.com/), wherever it was installed from:
+
+```bash
+# dnx: the NuGet package cache (<rid> and <version> as in the table above)
+gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server \
+  -R jmrplens/gitlab-mcp-server
+
+# dotnet tool install -g: on Linux and macOS the shim links into the tool store
+gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server
+```
+
+On Windows the cache is under `%USERPROFILE%\.nuget\packages` and the file
+is `gitlab-mcp-server.exe`. `dnx gitlab-mcp-server -- --version` prints the
+version you run. Both paths were checked on 3.1.0 against the release's
+signed `checksums.txt`.
+
+From the first release after 3.1.0 the seven packages are attested too, as
+they were before NuGet.org added the repository signature
+(`.signature.p7s`) it puts on every package it serves. Remove that entry
+from a downloaded copy and verify what is left:
+
+```bash
+v=<version>
+curl -sSLO "https://api.nuget.org/v3-flatcontainer/gitlab-mcp-server/$v/gitlab-mcp-server.$v.nupkg"
+zip -q -d "gitlab-mcp-server.$v.nupkg" .signature.p7s
+gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server
+```
+
+The same works for each `gitlab-mcp-server.<rid>` package. Info-ZIP's
+`zip -d` (zip 3.0) leaves every other byte where it was, which is NuGet's
+own definition of the unsigned package: on all seven 3.1.0 packages it gives
+back exactly what a rebuild from the tag produces. A tool that rewrites the
+archive gives other bytes, and `gh` then finds nothing. Rebuilding from the
+tag with `scripts/build_nuget.py` and the signed binaries matches byte for
+byte only on a Python linked against stock zlib: zlib-ng, which is what
+zlib is on Fedora 40 and later, compresses the same input to different
+bytes, so a rebuild there differs without saying anything about the
+published packages.
 
 ## Upgrade and uninstall
 
@@ -161,11 +208,17 @@ a pointer never resolves a binary from another release.
 `dnx` resolves the version against NuGet.org on every launch, so an
 unpinned `dnx gitlab-mcp-server` follows each release as it is published,
 and the download is skipped when the resolved version is already in the
-NuGet cache. The other side of that coin: every launch needs NuGet.org
-reachable, even for a version already cached, so a machine that is offline
-at times is better served by `dotnet tool install`. To stay on one release,
-name it: `dnx gitlab-mcp-server@2.8.0` (`@latest` is not a NuGet version and
-is refused).
+NuGet cache. To stay on one release, name it:
+`dnx gitlab-mcp-server@<version>` (`@latest` is not a NuGet version and is
+refused). The other side of that coin: every launch contacts NuGet.org,
+pinned or not, cached or not. Measured on the 10.0.401 SDK with 3.1.0
+already in the cache and no network, both `dnx gitlab-mcp-server@3.1.0` and
+`dnx gitlab-mcp-server` exit with
+`Resource temporarily unavailable (api.nuget.org:443)`, while the command
+`dotnet tool install -g` had placed starts. A machine that is offline at
+times, or a host that cannot reach NuGet.org at all, is served by
+`dotnet tool install` (with `--source <dir>` pointing at downloaded
+packages where the feed is out of reach).
 
 Nothing was installed, so there is nothing to uninstall beyond the entry in
 your client's configuration (and the cached packages under `~/.nuget`, if

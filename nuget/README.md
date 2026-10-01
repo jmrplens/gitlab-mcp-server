@@ -20,7 +20,7 @@ Or install it on your PATH:
 dotnet tool install -g gitlab-mcp-server
 ```
 
-Either way the command is `gitlab-mcp-server`. Two things about `dnx` worth knowing: it reads its own options anywhere on the command line, so arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`; without the separator, `--version` is read as `dnx`'s own option and prints its usage); and the .NET 10 SDK's `dnx` installs the tool without asking when its standard input is not a terminal, which is how an MCP client starts it, so a client configuration needs no extra flag.
+Either way the command is `gitlab-mcp-server`. Two things about `dnx` worth knowing: it reads its own options anywhere on the command line, so arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`; without the separator, `--version` is read as `dnx`'s own option and prints its usage); and the .NET 10 SDK's `dnx` installs the tool without asking when its standard input is not a terminal, which is how an MCP client starts it, so a client configuration needs no extra flag. A third: every `dnx` launch contacts NuGet.org, pinned (`dnx gitlab-mcp-server@<version>`) or not, cached or not: on a host that cannot reach NuGet.org, run the command `dotnet tool install` placed instead.
 
 Typical MCP client configuration (stdio):
 
@@ -40,6 +40,10 @@ Typical MCP client configuration (stdio):
 ```
 
 `GITLAB_TOKEN` is the only required setting. `GITLAB_URL` defaults to `https://gitlab.com`; point it at your own host for self-managed instances.
+
+## Verify what you run
+
+The binary the SDK runs is the release asset byte for byte, so the build provenance attestation GitHub holds for it verifies it with the [GitHub CLI](https://cli.github.com/): `gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server -R jmrplens/gitlab-mcp-server` for what `dnx` runs from the NuGet cache, and `gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server` after `dotnet tool install -g` on Linux and macOS, where the shim links into the tool store. From the first release after 3.1.0 the packages themselves are attested as they were before NuGet.org added its repository signature: remove `.signature.p7s` from a downloaded copy with `zip -d` and run `gh attestation verify` on what is left. The steps are in the [NuGet installation page](https://jmrp.io/docs/gitlab-mcp-server/install/nuget/#verify-what-you-run).
 
 ## Configuration
 

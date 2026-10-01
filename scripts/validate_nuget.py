@@ -22,6 +22,14 @@ packages:
   release's cosign-signed checksums.txt: the checks above are shape checks,
   and a wrong-but-plausible file of the right size with the right first bytes
   passes all of them for the five platforms this host cannot execute;
+- each archive is laid out so that nuget.org's repository signature can be
+  added and removed again without touching anything else: no entry with a
+  data descriptor (general purpose flag bit 3), nothing in zip64 form, no
+  archive comment, and no .signature.p7s already in it. The release attests
+  these bytes, and a verifier finds that attestation by removing the
+  signature from what nuget.org serves and hashing the rest, so a layout the
+  signing would rewrite leaves an attestation nobody can look up, and it
+  would do so silently;
 - the tool is installed from the packages with `dotnet tool install` into a
   throwaway directory and run again through `dnx`, and both must answer an
   MCP initialize handshake over stdio with pure JSON-RPC and the right server
@@ -70,6 +78,23 @@ TOKEN_PATTERN = re.compile(r"(^|\s)" + re.escape(MCP_NAME_TOKEN) + r"(?=\s|<|-->
 
 HANDSHAKE_TIMEOUT = 120
 
+# Zip records and markers the signable-layout check reads. NuGet signs a
+# package by appending a stored .signature.p7s entry after the last local
+# entry and its central directory record after the last one, and defines the
+# unsigned package as what removing both gives back; that holds byte for byte
+# only for an archive with none of the shapes refused below.
+ZIP_EOCD = b"PK\x05\x06"
+ZIP_EOCD_SIZE = 22
+ZIP64_EOCD_LOCATOR = b"PK\x06\x07"
+ZIP64_EOCD_LOCATOR_SIZE = 20
+ZIP_CENTRAL_HEADER = b"PK\x01\x02"
+ZIP_LOCAL_HEADER = b"PK\x03\x04"
+ZIP_DATA_DESCRIPTOR_FLAG = 0x0008
+ZIP64_EXTRA_ID = 0x0001
+ZIP64_SENTINEL_32 = 0xFFFFFFFF
+ZIP64_SENTINEL_16 = 0xFFFF
+SIGNATURE_ENTRY = ".signature.p7s"
+
 
 def bin_name_for(rid):
     return COMMAND + (".exe" if rid.startswith("win") else "")
@@ -101,6 +126,80 @@ def check_magic(rid, data):
         if machine != want:
             return "PE machine 0x{:x}, want 0x{:x}".format(machine, want)
     return None
+
+
+def extra_field_ids(extra):
+    """The header ids of a zip extra field, in the order they appear."""
+    ids = []
+    offset = 0
+    while offset + 4 <= len(extra):
+        header_id, size = struct.unpack_from("<HH", extra, offset)
+        ids.append(header_id)
+        offset += 4 + size
+    return ids
+
+
+def check_signable_layout(data, name, problems):
+    """Refuse an archive nuget.org's repository signature would not leave
+    intact, so that the attested bytes are the ones a verifier recovers.
+
+    It reads the records itself rather than through zipfile, which resolves
+    zip64 fields and data descriptors on the way in and so cannot say whether
+    an archive used them.
+    """
+    eocd = data.rfind(ZIP_EOCD)
+    if eocd < 0 or eocd + ZIP_EOCD_SIZE > len(data):
+        problems.append("{}: no end-of-central-directory record".format(name))
+        return
+    n_disk, n_total, cd_size, cd_offset = struct.unpack_from("<HHII", data, eocd + 8)
+    trailing = len(data) - (eocd + ZIP_EOCD_SIZE)
+    if trailing:
+        problems.append("{}: {} byte(s) of archive comment follow the end-of-central-directory record; "
+                        "the signed layout nuget.org produces carries none".format(name, trailing))
+    locator = eocd - ZIP64_EOCD_LOCATOR_SIZE
+    if (locator >= 0 and data[locator:locator + 4] == ZIP64_EOCD_LOCATOR) or ZIP64_SENTINEL_16 in (
+            n_disk, n_total) or ZIP64_SENTINEL_32 in (cd_size, cd_offset):
+        problems.append("{}: the archive ends in zip64 form".format(name))
+        return
+    if cd_offset + cd_size > eocd:
+        problems.append("{}: the central directory runs past the end-of-central-directory record".format(name))
+        return
+    offset = cd_offset
+    for _ in range(n_total):
+        if data[offset:offset + 4] != ZIP_CENTRAL_HEADER:
+            problems.append("{}: no central directory record at offset {}".format(name, offset))
+            return
+        flags = struct.unpack_from("<H", data, offset + 8)[0]
+        compressed, uncompressed = struct.unpack_from("<II", data, offset + 20)
+        name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, offset + 28)
+        local_offset = struct.unpack_from("<I", data, offset + 42)[0]
+        entry = data[offset + 46:offset + 46 + name_len].decode("utf-8", errors="replace")
+        extra = data[offset + 46 + name_len:offset + 46 + name_len + extra_len]
+        offset += 46 + name_len + extra_len + comment_len
+
+        if entry.lower() == SIGNATURE_ENTRY:
+            problems.append("{}: already carries {}, the entry nuget.org's signature adds and a verifier "
+                            "strips before it looks the package up".format(name, entry))
+        data_descriptor = flags & ZIP_DATA_DESCRIPTOR_FLAG
+        zip64 = (ZIP64_SENTINEL_32 in (compressed, uncompressed, local_offset)
+                 or ZIP64_EXTRA_ID in extra_field_ids(extra))
+        # A record in zip64 form keeps its real local offset in the extra
+        # field, so the header is read only when the record says where it is.
+        if not zip64:
+            if data[local_offset:local_offset + 4] != ZIP_LOCAL_HEADER:
+                problems.append("{}: {} names a local header at offset {} that is not one".format(
+                    name, entry, local_offset))
+                continue
+            local_flags = struct.unpack_from("<H", data, local_offset + 6)[0]
+            local_name_len, local_extra_len = struct.unpack_from("<HH", data, local_offset + 26)
+            local_extra_at = local_offset + 30 + local_name_len
+            data_descriptor |= local_flags & ZIP_DATA_DESCRIPTOR_FLAG
+            zip64 = ZIP64_EXTRA_ID in extra_field_ids(data[local_extra_at:local_extra_at + local_extra_len])
+        if data_descriptor:
+            problems.append("{}: {} is written with a data descriptor (general purpose flag bit 3)".format(
+                name, entry))
+        if zip64:
+            problems.append("{}: {} is stored in zip64 form".format(name, entry))
 
 
 def read_verified(packages_dir, version, problems):
@@ -345,6 +444,8 @@ def validate_packages(packages_dir, version):
         if not zipfile.is_zipfile(path):
             problems.append("{}: not a zip archive".format(fname))
             continue
+        with open(path, "rb") as fh:
+            check_signable_layout(fh.read(), fname, problems)
         rid = expected[fname]
         if rid is None:
             validate_pointer(path, version, problems)

@@ -36,7 +36,8 @@
 # job left behind.
 #
 # Invariants that must survive any edit here:
-#   * the release stays a draft until every artefact is attached AND attested;
+#   * the release stays a draft until every artefact is attached AND attested,
+#     and no NuGet package is pushed before all seven are attested;
 #   * release assets are staged under the exact names dist/artifacts.json gives
 #     them, because installers and package managers match names literally;
 #   * server.json's OCI entry is stamped with the digest the docker job pushed,
@@ -1273,7 +1274,12 @@ jobs:
     environment: release
     permissions:
       contents: read # download the published release assets
-      id-token: write # nuget.org trusted publishing (NuGet/login)
+      id-token: write # nuget.org trusted publishing (NuGet/login), and the attestation's signing identity
+      attestations: write # actions/attest-build-provenance (the .nupkg files)
+    # The digests attested, in sha256sum's format, for verify-published to
+    # hold what nuget.org serves to once its repository signature is removed.
+    outputs:
+      nupkg_sha256: ${{ steps.nupkg-digests.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1313,6 +1319,38 @@ jobs:
       # `dnx` run and an MCP handshake for the runner's own platform.
       - name: Build and validate NuGet packages
         run: make validate-nuget-local NUGET_BINARIES=dist
+
+      # SLSA build provenance over the seven packages as packed and validated,
+      # before anything is pushed, so a failed attestation stops the push the
+      # way it keeps the GitHub release a draft. The checksums.txt attestation
+      # covers only the binaries inside the runtime packages; this one names
+      # the packages themselves, with the nuspec, the pointer's
+      # DotnetToolSettings.xml (which decides what runs) and .mcp/server.json.
+      # nuget.org adds its own repository signature to every package it serves,
+      # so a verifier removes that entry the way NuGet defines an unsigned
+      # package and looks up the digest of what is left, which is these bytes.
+      # A re-run is safe: each attempt attests before it pushes, so whatever
+      # --skip-duplicate keeps was attested by the attempt that pushed it.
+      # Verify: gh attestation verify <unsigned .nupkg> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (NuGet packages)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: nuget/dist/*.nupkg
+
+      # The same seven digests, handed to verify-published as a job output.
+      # Recorded in a rehearsal too, where nothing reads them, so the step a
+      # real release depends on is one every rehearsal has run.
+      - name: Record the attested package digests
+        id: nupkg-digests
+        working-directory: nuget/dist
+        run: |
+          set -euo pipefail
+          {
+            echo "sha256<<NUPKG_SHA256_EOF"
+            sha256sum -- *.nupkg
+            echo "NUPKG_SHA256_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # nuget.org trusted publishing: the job's OIDC token is exchanged for an
       # API key that lives one hour and can be minted once per token, under
@@ -1587,6 +1625,14 @@ jobs:
       # step that inspects the bytes a user installs, and it runs in a job
       # holding no publishing credential of any kind.
       #
+      # The NuGet packages are also compared whole, with nuget.org's
+      # repository signature removed the way NuGet defines an unsigned
+      # package, against the digests the nuget job attested. That is the
+      # lookup a verifier makes, so a packer change into a layout the signing
+      # rearranges fails here instead of leaving an attestation nobody finds.
+      # The digests arrive as a job output and are written to a file rather
+      # than expanded into the command line.
+      #
       # The retry budget is the same allowance the mcp-registry publish step
       # gives itself, and for the same reason: this runs minutes after the
       # uploads, and a registry CDN that has not caught up answers 404. It is
@@ -1594,9 +1640,14 @@ jobs:
       # checksums fails on sight, with no second attempt.
       - name: Compare registry packages with the signed checksums
         if: env.REHEARSAL != 'true'
+        env:
+          NUPKG_SHA256: ${{ needs.nuget.outputs.nupkg_sha256 }}
         run: |
+          set -euo pipefail
+          printf '%s\n' "$NUPKG_SHA256" > "$RUNNER_TEMP/nupkg.sha256"
           python3 scripts/verify_published_packages.py \
             --retry-budget 480 --retry-delay 30 \
+            --nuget-digests "$RUNNER_TEMP/nupkg.sha256" \
             "${RELEASE_TAG#v}" dist/checksums.txt
 
       - name: Nothing to verify in a rehearsal

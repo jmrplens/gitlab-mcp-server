@@ -17,7 +17,9 @@ el paquete de tu sistema operativo y arquitectura, y no se ejecuta código
 
 ## Qué obtienes
 
-Siete paquetes, publicados juntos en cada release:
+Siete paquetes, publicados juntos en cada release, cada uno con una
+atestación de procedencia de compilación SLSA hecha antes de subirlo (desde
+la primera release posterior a la 3.1.0):
 
 - **`gitlab-mcp-server`** es el paquete puntero. Declara el comando
   `gitlab-mcp-server` y nombra, para cada identificador de runtime, el
@@ -92,7 +94,7 @@ Comprueba la instalación:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 2.8.0 (commit: ...)
+# gitlab-mcp-server <versión> (commit: ...)
 ```
 
 Con `dnx` no queda ningún comando en tu PATH;
@@ -144,7 +146,9 @@ a `env` solo para una instancia autogestionada. Un cliente que no herede el
 PATH de tu shell puede necesitar la ruta completa al comando;
 `which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
 imprime. Para fijar una release con `dnx` en lugar de seguir la más
-reciente, nómbrala en el argumento: `"gitlab-mcp-server@2.8.0"`.
+reciente, nómbrala en el argumento: `"gitlab-mcp-server@<versión>"`, con una
+versión que NuGet.org liste. Fijarla no permite a `dnx` arrancar sin
+NuGet.org (ver [Actualizar y desinstalar](#actualizar-y-desinstalar)).
 
 Una precaución para una máquina en la que la CLI de .NET nunca se ha
 ejecutado: su texto de bienvenida del primer uso sale por la salida
@@ -155,6 +159,51 @@ el cliente, o añade `"DOTNET_NOLOGO": "1"` al bloque `env`.
 Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
 `"type": "stdio"`, Zed usa `context_servers`) están en las
 <a href="/gitlab-mcp-server/es/getting-started/#configuración-manual">pestañas por cliente del Inicio rápido</a>.
+
+## Verifica lo que ejecutas
+
+El binario que ejecuta el SDK es el asset de la release byte a byte, así
+que la atestación de procedencia de compilación que GitHub guarda para ese
+asset lo verifica con la [CLI de GitHub](https://cli.github.com/), lo hayas
+instalado como lo hayas instalado:
+
+```bash
+# dnx: la caché de paquetes de NuGet (<rid> y <versión> como en la tabla de arriba)
+gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<versión>/tools/any/<rid>/gitlab-mcp-server \
+  -R jmrplens/gitlab-mcp-server
+
+# dotnet tool install -g: en Linux y macOS el shim enlaza con el almacén de herramientas
+gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server
+```
+
+En Windows la caché está bajo `%USERPROFILE%\.nuget\packages` y el archivo
+es `gitlab-mcp-server.exe`. `dnx gitlab-mcp-server -- --version` imprime la
+versión que ejecutas. Las dos rutas se comprobaron en la 3.1.0 contra el
+`checksums.txt` firmado de la release.
+
+Desde la primera release posterior a la 3.1.0 también están atestados los
+siete paquetes, tal como eran antes de que NuGet.org añadiera la firma de
+repositorio (`.signature.p7s`) que pone en todo paquete que sirve. Quita esa
+entrada de una copia descargada y verifica lo que queda:
+
+```bash
+v=<versión>
+curl -sSLO "https://api.nuget.org/v3-flatcontainer/gitlab-mcp-server/$v/gitlab-mcp-server.$v.nupkg"
+zip -q -d "gitlab-mcp-server.$v.nupkg" .signature.p7s
+gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server
+```
+
+Lo mismo vale para cada paquete `gitlab-mcp-server.<rid>`. El `zip -d` de
+Info-ZIP (zip 3.0) deja cada uno de los demás bytes donde estaba, que es la
+definición del propio NuGet del paquete sin firmar: en los siete paquetes de
+la 3.1.0 devuelve exactamente lo que produce una recompilación desde la
+etiqueta. Una herramienta que reescribe el archivo da otros bytes, y `gh`
+entonces no encuentra nada. Recompilar desde la etiqueta con
+`scripts/build_nuget.py` y los binarios firmados coincide byte a byte solo
+con un Python enlazado contra la zlib de siempre: zlib-ng, que es lo que es
+zlib en Fedora 40 y posteriores, comprime la misma entrada en bytes
+distintos, así que allí una recompilación difiere sin decir nada de los
+paquetes publicados.
 
 ## Actualizar y desinstalar
 
@@ -170,11 +219,17 @@ release.
 `dnx` resuelve la versión contra NuGet.org en cada arranque, así que un
 `dnx gitlab-mcp-server` sin versión sigue cada release según se publica, y
 la descarga se omite cuando la versión resuelta ya está en la caché de
-NuGet. La otra cara de la moneda: cada arranque necesita que NuGet.org sea
-accesible, incluso para una versión ya en caché, así que a una máquina que
-a veces está sin conexión le conviene más `dotnet tool install`. Para
-quedarte en una release, nómbrala: `dnx gitlab-mcp-server@2.8.0` (`@latest`
-no es una versión de NuGet y se rechaza).
+NuGet. Para quedarte en una release, nómbrala:
+`dnx gitlab-mcp-server@<versión>` (`@latest` no es una versión de NuGet y se
+rechaza). La otra cara de la moneda: cada arranque contacta con NuGet.org,
+con versión fijada o sin ella, en caché o no. Medido con el SDK 10.0.401,
+con la 3.1.0 ya en la caché y sin red, tanto
+`dnx gitlab-mcp-server@3.1.0` como `dnx gitlab-mcp-server` terminan con
+`Resource temporarily unavailable (api.nuget.org:443)`, mientras que el
+comando que dejó `dotnet tool install -g` arranca. A una máquina que a veces
+está sin conexión, o a un host que no llega a NuGet.org en absoluto, le
+sirve `dotnet tool install` (con `--source <directorio>` apuntando a los
+paquetes descargados donde el feed no está al alcance).
 
 No se instaló nada, así que no hay nada que desinstalar más allá de la
 entrada en la configuración de tu cliente (y los paquetes en caché bajo
