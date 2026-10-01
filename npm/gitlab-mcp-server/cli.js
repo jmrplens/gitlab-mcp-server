@@ -2,16 +2,53 @@
 // cli.js resolves the prebuilt gitlab-mcp-server binary for the current
 // platform and hands control to it. The binary ships inside a per-platform
 // optional dependency (see the package's optionalDependencies); npm installs
-// only the one whose os/cpu match, and this launcher execs it.
+// only the one whose os/cpu match, and this launcher runs it.
 //
 // It is a thin shim on purpose. The server speaks MCP over stdio, so stdio is
 // inherited untouched; argv is forwarded verbatim; the child's exit code and
 // terminating signal are mirrored so `npx` callers and process supervisors see
 // the real outcome.
+//
+// The one thing a shim cannot leave to the operating system is stopping the
+// server. A client or a supervisor signals the process it started, which is
+// this launcher, or npm under npx, and a signal sent to one process never
+// reaches its children. So the launcher waits for the server in the event loop
+// rather than blocking in spawnSync, where no handler of its own could run,
+// and on POSIX:
+//
+//   - SIGTERM, SIGINT and SIGHUP are passed on to the server, which then runs
+//     its own shutdown (and in HTTP mode its drain) instead of being orphaned;
+//   - under npm (npx, or an npm script) it also watches its parent. A signal
+//     sent to npx stops at npm's shell: npm passes it to the `sh -c` it runs
+//     this launcher through, the shell dies, and the launcher is reparented
+//     without ever being signalled. Its parent changing is how it learns that,
+//     and it then sends the server SIGTERM. Started any other way, the parent
+//     is the client or a shell, and a server deliberately left running after
+//     it (an HTTP server put in the background) is not stopped.
+//
+// On Windows neither applies, and the launcher does what it always did. There
+// are no POSIX signals there: Ctrl+C and closing the console reach every
+// process attached to the console, the server included, which shuts down on
+// its own, whereas child.kill would end it outright before it could; and a
+// process whose parent exits keeps that parent's id, so there is no change to
+// watch.
 "use strict";
 
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
+const { writeSync } = require("node:fs");
 const os = require("node:os");
+
+// The signals passed on to the server, which decides what each does: SIGTERM
+// and SIGINT start its shutdown, and SIGHUP ends it as it would end the binary
+// run directly. A Ctrl+C in a terminal already reaches the server through the
+// process group, so it sees that SIGINT twice; its handler starts the shutdown
+// on the first and ignores the rest.
+const FORWARDED = process.platform === "win32" ? [] : ["SIGTERM", "SIGINT", "SIGHUP"];
+
+// How often the parent is checked under npm. A second is the longest the
+// server outlives npm's shell, and the check costs nothing: the timer is
+// unref'd, so it never keeps the launcher alive by itself.
+const PARENT_POLL_MS = 1000;
 
 // platformKey maps Node's platform/arch names to the per-platform package
 // suffix. The suffixes follow Node's vocabulary (win32, x64), not Go's
@@ -84,22 +121,56 @@ if (!binary) {
 
 const env = { ...process.env };
 
-const result = spawnSync(binary, process.argv.slice(2), {
+// The handlers are installed before the server starts, so a signal that
+// arrives while it is starting is passed on rather than ending the launcher
+// with the server left behind. Node runs a handler on a later turn of the
+// event loop, by which time `child` is set.
+let child = null;
+for (const signal of FORWARDED) {
+  process.on(signal, () => child.kill(signal));
+}
+
+child = spawn(binary, process.argv.slice(2), {
   stdio: "inherit",
   env,
 });
 
-if (result.error) {
-  fail(`failed to start the binary: ${result.error.message}`);
+// npm sets npm_lifecycle_event for whatever it runs, npx included ("npx"),
+// and runs it through a shell whose death is the only sign the launcher gets
+// that npm was told to stop. The parent is read once, now, and polled.
+if (FORWARDED.length > 0 && process.env.npm_lifecycle_event) {
+  const parent = process.ppid;
+  const watch = setInterval(() => {
+    if (process.ppid === parent) return;
+    clearInterval(watch);
+    child.kill("SIGTERM");
+  }, PARENT_POLL_MS);
+  watch.unref();
 }
-// A child killed by a signal reports null status and a signal name. Re-raise it
-// so the launcher dies the same way rather than masking a SIGINT as exit 0.
-if (result.signal) {
-  process.kill(process.pid, result.signal);
-  // If the re-raise did not terminate us (signal ignored, or no default
-  // disposition), exit with the conventional 128+signal code so the caller
-  // still sees the child's terminating signal rather than a bare failure.
-  const signum = os.constants.signals[result.signal];
-  process.exit(signum ? 128 + signum : 1);
-}
-process.exit(result.status === null ? 1 : result.status);
+
+child.on("error", (err) => {
+  // Emitted when the binary could not be started, and, rarely, when a signal
+  // could not be delivered to it. Only the first ends the launcher here: a
+  // server that is running still ends with an "exit" event, mirrored below.
+  if (child.pid === undefined) fail(`failed to start the binary: ${err.message}`);
+  // Written to the descriptor directly: process.stderr would switch the pipe
+  // the server shares into non-blocking mode under its feet.
+  writeSync(2, `gitlab-mcp-server: ${err.message}\n`);
+});
+
+child.on("exit", (code, signal) => {
+  // A child killed by a signal reports null status and a signal name. Re-raise
+  // it so the launcher dies the same way rather than masking a SIGINT as exit
+  // 0. The handler that would pass it on goes first, or the launcher would
+  // catch its own signal and send it to a server that is already gone.
+  if (signal) {
+    process.removeAllListeners(signal);
+    process.kill(process.pid, signal);
+    // If the re-raise did not terminate us (signal ignored, or no default
+    // disposition), exit with the conventional 128+signal code so the caller
+    // still sees the child's terminating signal rather than a bare failure.
+    const signum = os.constants.signals[signal];
+    process.exit(signum ? 128 + signum : 1);
+  }
+  process.exit(code === null ? 1 : code);
+});

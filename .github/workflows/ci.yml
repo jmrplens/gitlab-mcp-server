@@ -947,6 +947,9 @@ jobs:
       # scripts/smoke_test_image_sh_test.py runs the image smoke test against
       # a stand-in docker, and holds it to refusing an image without this
       # repository's LICENSE or without third-party notices for its platform.
+      # scripts/npm_cli_js_test.py runs the npm launcher against a stand-in
+      # server and holds it to passing signals on, and to stopping the server
+      # when the shell npm runs it through dies, with the runner's node.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,

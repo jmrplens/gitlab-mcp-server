@@ -3256,6 +3256,109 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
 }
 
+// TestToolDescriptions_Examples_AreCallsTheCatalogAnswers holds the example
+// each dynamic tool's description ends with to the catalog: each is arguments
+// its own tool's input schema accepts and its input type decodes with no field
+// left over, the find query ranks the execute example's action first in the
+// real catalog, that action is a canonical ID rather than an alias, and the
+// execute example is, argument for argument, the call find publishes for it.
+// The descriptions are constants served on every listing, so without this a
+// renamed action, a new required parameter or a reranked search would leave
+// an example no call can follow.
+func TestToolDescriptions_Examples_AreCallsTheCatalogAnswers(t *testing.T) {
+	findArgs := descriptionExample(t, findToolDescription)
+	executeArgs := descriptionExample(t, executeActionToolDescription)
+	validateToolArguments(t, findToolName, findInputSchema(), findArgs)
+	validateToolArguments(t, executeActionToolName, executeActionInputSchema(), executeArgs)
+
+	var find FindInput
+	decodeToolArguments(t, findToolName, findArgs, &find)
+	var execute ExecuteInput
+	decodeToolArguments(t, executeActionToolName, executeArgs, &execute)
+
+	registry := realCatalogRegistry(t)
+	if _, canonical := registry.byID[execute.Action]; !canonical {
+		t.Fatalf("execute example action %q is not a canonical catalog ID", execute.Action)
+	}
+	_, found, err := registry.Find(t.Context(), nil, find)
+	if err != nil {
+		t.Fatalf("Find(%q) error = %v", find.Query, err)
+	}
+	if len(found.Results) == 0 || found.Results[0].ID != execute.Action {
+		t.Fatalf("Find(%q) results = %+v, want %q first, the action the execute example runs", find.Query, found.Results, execute.Action)
+	}
+	published := jsonObject(t, found.Results[0].Example.Arguments)
+	if !reflect.DeepEqual(executeArgs, published) {
+		t.Fatalf("execute example = %v, want the call find publishes for %s: %v", executeArgs, execute.Action, published)
+	}
+}
+
+// descriptionExample returns the JSON object a tool description ends with,
+// after its one "Example:" marker.
+func descriptionExample(t *testing.T, description string) map[string]any {
+	t.Helper()
+	const marker = " Example: "
+	if n := strings.Count(description, marker); n != 1 {
+		t.Fatalf("description %q carries %d examples, want 1", description, n)
+	}
+	_, raw, _ := strings.Cut(description, marker)
+	var args map[string]any
+	if err := json.Unmarshal([]byte(raw), &args); err != nil {
+		t.Fatalf("description example %q is not one JSON object: %v", raw, err)
+	}
+	return args
+}
+
+// validateToolArguments validates arguments against a copy of a tool's input
+// schema, so resolving it cannot touch the schema every server shares.
+func validateToolArguments(t *testing.T, tool string, schema *jsonschema.Schema, args map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("%s input schema: %v", tool, err)
+	}
+	var schemaCopy jsonschema.Schema
+	if err = json.Unmarshal(data, &schemaCopy); err != nil {
+		t.Fatalf("%s input schema copy: %v", tool, err)
+	}
+	resolved, err := schemaCopy.Resolve(nil)
+	if err != nil {
+		t.Fatalf("%s input schema does not resolve: %v", tool, err)
+	}
+	if err = resolved.Validate(args); err != nil {
+		t.Fatalf("%s example %v does not satisfy the tool's input schema: %v", tool, args, err)
+	}
+}
+
+// decodeToolArguments decodes arguments into a tool's input type, refusing a
+// field the type does not declare.
+func decodeToolArguments(t *testing.T, tool string, args map[string]any, into any) {
+	t.Helper()
+	data, err := json.Marshal(args)
+	if err != nil {
+		t.Fatalf("%s example: %v", tool, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(into); err != nil {
+		t.Fatalf("%s example %s does not decode into the tool's input: %v", tool, data, err)
+	}
+}
+
+// jsonObject is value as the JSON object a client would read it as.
+func jsonObject(t *testing.T, value any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal %v: %v", value, err)
+	}
+	var object map[string]any
+	if err = json.Unmarshal(data, &object); err != nil {
+		t.Fatalf("%s is not a JSON object: %v", data, err)
+	}
+	return object
+}
+
 // TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam verifies that the
 // gitlab_execute_action input schema carries the SEP-2243 x-mcp-header
 // annotation on its action property, and that the annotation survives JSON

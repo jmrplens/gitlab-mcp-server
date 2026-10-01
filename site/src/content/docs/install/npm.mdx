@@ -21,7 +21,13 @@ the model esbuild and Biome use:
   registered as the `gitlab-mcp-server` command. It resolves the binary for
   the current platform, starts it with your stdio and arguments untouched,
   and mirrors the binary's exit code and terminating signal, so the client
-  sees the real outcome.
+  sees the real outcome. From the first release after 3.1.0 it also stops
+  the server when it is told to stop: on Linux and macOS it passes SIGTERM,
+  SIGINT and SIGHUP on to it, and under `npx` it stops the server within a
+  second of npm's shell exiting, which is where a SIGTERM sent to the `npx`
+  process ends. Before that, an HTTP server started with `npx` kept its port
+  after its supervisor had stopped it. On Windows the console's Ctrl+C
+  reaches the server itself.
 - **`@jmrp.io/gitlab-mcp-server-<platform>`** packages carry the binary
   itself, one per platform: `linux-x64`, `linux-arm64`, `darwin-x64`,
   `darwin-arm64`, `win32-x64` and `win32-arm64`. They are declared as

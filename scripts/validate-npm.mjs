@@ -23,6 +23,18 @@
 //      project, confirms npm resolved only the matching package, then drives an
 //      MCP initialize handshake over stdio and asserts stdout carries pure
 //      JSON-RPC — the property a stray print would silently break.
+//   2b. Stopping, on a Linux host. The installed package is started the way
+//      a client configured with npx starts it, twice: in stdio mode with its
+//      stdin held open, and with --http on a loopback port. Each time SIGTERM
+//      goes to the npx process alone, as a supervisor sends it, and the server
+//      process must be gone within STOP_DEADLINE_MS (in HTTP mode its port
+//      closed too). npm hands the signal to the `sh -c` it runs the launcher
+//      through, the shell dies, and only the launcher's own parent watch can
+//      tell the server; up to 3.1.0 the launcher had none, and an HTTP server
+//      started this way kept its port and answered /health after the npx
+//      process was gone. The server process is found under /proc, which is
+//      also how the check knows it is the binary this project installed and
+//      not a copy npx fetched from the registry.
 //
 // Usage: node scripts/validate-npm.mjs --packages <dir> --main <dir> --version <x.y.z> [--no-install]
 //
@@ -32,10 +44,25 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { spawn } from "node:child_process";
+import { get as httpGet } from "node:http";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,6 +89,15 @@ const MAGIC = {
   win32: [[0x4d, 0x5a]], // MZ
 };
 const MIN_BINARY_BYTES = 5_000_000;
+
+// How long the server may outlive a SIGTERM to the npx process that started
+// it. The launcher checks its parent once a second and the server's own
+// shutdown takes well under one, so ten seconds fails only a server nothing
+// stopped.
+const STOP_DEADLINE_MS = 10_000;
+// How long npx may take to install nothing and start the server, which is
+// longer than it looks on a cold runner.
+const START_DEADLINE_MS = 30_000;
 
 const PLATFORMS = [
   { key: "linux-x64", os: "linux", cpu: "x64", libc: "glibc", exe: false },
@@ -243,6 +279,14 @@ async function runtimeCheck(packagesDir, mainDir, version, workDir) {
   const version_seen = await handshake(bin);
   check(version_seen === version, `runtime: handshake serverInfo.version ${version_seen}, want ${version}`);
   process.stdout.write(`  runtime: installed + MCP handshake on ${plat.key}, stdout pure JSON-RPC ✓\n`);
+
+  if (process.platform === "linux") {
+    const server = realpathSync(join(proj, "node_modules", "@jmrp.io", `gitlab-mcp-server-${plat.key}`, "gitlab-mcp-server"));
+    await stopUnderNpx("stdio", proj, server, version, workDir);
+    await stopUnderNpx("http", proj, server, version, workDir);
+  } else {
+    process.stdout.write(`  stop: skipped on ${process.platform}, which has no /proc to find the server process in\n`);
+  }
   return plat.key;
 }
 
@@ -280,6 +324,183 @@ function handshake(bin) {
       resolve(version);
     }, 4000);
   });
+}
+
+// procStat reads the state and parent of a process from /proc, or null when
+// there is no such process. The command name sits in parentheses and may
+// itself hold spaces and parentheses, so the fields are read after the last
+// closing one.
+function procStat(pid) {
+  let text;
+  try {
+    text = readFileSync(`/proc/${pid}/stat`, "utf8");
+  } catch {
+    return null;
+  }
+  const fields = text.slice(text.lastIndexOf(")") + 2).split(" ");
+  return { state: fields[0], ppid: Number(fields[1]) };
+}
+
+// alive is false for a process that is gone and for one that has exited and
+// waits only to be reaped, which is all an orphan may be left as in a
+// container whose first process does not reap.
+function alive(pid) {
+  const stat = procStat(pid);
+  return stat !== null && stat.state !== "Z";
+}
+
+// serverUnder finds the process running exe whose chain of parents reaches
+// ancestor, or null. Matching on the executable is what tells the binary this
+// project installed from one npx might have fetched from the registry.
+function serverUnder(ancestor, exe) {
+  for (const entry of readdirSync("/proc")) {
+    if (!/^\d+$/.test(entry)) continue;
+    let target;
+    try {
+      target = readlinkSync(`/proc/${entry}/exe`);
+    } catch {
+      continue;
+    }
+    if (target !== exe) continue;
+    for (let pid = Number(entry), hops = 0; pid > 1 && hops < 16; hops += 1) {
+      const stat = procStat(pid);
+      if (stat === null) break;
+      if (stat.ppid === ancestor) return Number(entry);
+      pid = stat.ppid;
+    }
+  }
+  return null;
+}
+
+async function freePort() {
+  const probe = createServer();
+  await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const { port } = probe.address();
+  await new Promise((resolve) => probe.close(resolve));
+  return port;
+}
+
+// healthStatus answers the status /health gave, or null when nothing
+// answered. agent:false closes the connection with the response, so the check
+// leaves no idle connection behind for the shutdown to wait on.
+function healthStatus(port) {
+  return new Promise((resolve) => {
+    const req = httpGet({ host: "127.0.0.1", port, path: "/health", agent: false }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on("error", () => resolve(null));
+    req.setTimeout(2000, () => req.destroy());
+  });
+}
+
+function portRefuses(port) {
+  return new Promise((resolve) => {
+    const socket = connect({ host: "127.0.0.1", port });
+    socket.on("connect", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on("error", () => resolve(true));
+  });
+}
+
+// until polls cond every interval until it is true or the deadline passes,
+// and answers the elapsed milliseconds or null.
+async function until(cond, deadlineMs, intervalMs = 100) {
+  const start = Date.now();
+  while (Date.now() - start < deadlineMs) {
+    if (await cond()) return Date.now() - start;
+    await sleep(intervalMs);
+  }
+  return null;
+}
+
+// stopUnderNpx starts the installed package through npx in one transport,
+// waits until the server answers, sends SIGTERM to the npx process alone and
+// requires the server to be gone within STOP_DEADLINE_MS. --offline keeps npx
+// from reaching the registry, where a published version of the same name
+// would otherwise be a candidate.
+//
+// The server's stdio is a FIFO and two files rather than Node's pipes, which
+// are socket pairs: npm shuts its stdio sockets down as it exits, and since
+// every process down the chain shares them, the server then reads an end of
+// input and dies writing to a closed stderr. That ends the server whatever the
+// launcher does, so a check over Node's pipes passes a launcher that forwards
+// nothing. A client holding ordinary pipes, or a supervisor logging to a file,
+// sees no such end, and that is the case the check stands for. The FIFO is
+// opened for reading and writing, so the server never sees the end of its
+// input while the check runs, as with a client that has not closed it.
+async function stopUnderNpx(mode, proj, exe, version, workDir) {
+  const label = `stop (${mode})`;
+  const env = { ...process.env, GITLAB_URL: "https://gitlab.com", GITLAB_TOKEN: "glpat-validate-invalid" };
+  const args = ["--offline", "--yes", `@jmrp.io/gitlab-mcp-server@${version}`];
+  const port = mode === "http" ? await freePort() : 0;
+  if (mode === "http") args.push("--http", "--http-addr", `127.0.0.1:${port}`, "--allow-any-gitlab-url");
+  const dir = mkdtempSync(join(workDir, `stop-${mode}-`));
+  const outPath = join(dir, "stdout");
+  const errPath = join(dir, "stderr");
+  let stdin = "ignore";
+  if (mode === "stdio") {
+    execFileSync("mkfifo", [join(dir, "stdin")]);
+    stdin = openSync(join(dir, "stdin"), "r+");
+  }
+  const outFd = openSync(outPath, "w");
+  const errFd = openSync(errPath, "w");
+  const npx = spawn("npx", args, { cwd: proj, env, stdio: [stdin, outFd, errFd] });
+  closeSync(outFd);
+  closeSync(errFd);
+  const out = () => readFileSync(outPath, "utf8");
+  const err = () => readFileSync(errPath, "utf8").slice(-2000);
+  const npxExited = new Promise((resolve) => {
+    npx.on("exit", resolve);
+    npx.on("error", (e) => {
+      failures.push(`${label}: npx could not be started: ${e.message}`);
+      resolve();
+    });
+  });
+
+  let server = null;
+  let launcher = null;
+  try {
+    if (mode === "stdio") {
+      const init = {
+        jsonrpc: "2.0", id: 1, method: "initialize",
+        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "validate", version: "1" } },
+      };
+      writeSync(stdin, JSON.stringify(init) + "\n");
+    }
+    const ready = await until(async () => {
+      server ??= serverUnder(npx.pid, exe);
+      if (server === null) return false;
+      if (mode === "http") return (await healthStatus(port)) === 200;
+      return out().split("\n").some((line) => line.includes('"id":1') && line.includes(`"version":"${version}"`));
+    }, START_DEADLINE_MS, 200);
+    if (!check(ready !== null, `${label}: through npx the server ${server === null ? "never started" : "never answered"} within ${START_DEADLINE_MS} ms; npx stderr: ${err().trim()}`)) return;
+    launcher = procStat(server)?.ppid ?? null;
+
+    npx.kill("SIGTERM");
+    const gone = await until(() => !alive(server), STOP_DEADLINE_MS);
+    if (!check(gone !== null, `${label}: the server outlived a SIGTERM to npx by ${STOP_DEADLINE_MS} ms (pid ${server}, state ${procStat(server)?.state})`)) return;
+    if (mode === "http") {
+      check(await portRefuses(port), `${label}: port ${port} still accepts connections after the server exited`);
+    }
+    process.stdout.write(`  ${label}: SIGTERM to npx ended the server in ${gone} ms ✓\n`);
+  } finally {
+    // Whatever a failed check left running is ended here, so the validator
+    // never leaves a server holding a port or a token behind it.
+    for (const pid of [server, launcher]) {
+      if (pid === null || !alive(pid)) continue;
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Gone between the look and the kill, which is the outcome wanted.
+      }
+    }
+    if (npx.exitCode === null && npx.signalCode === null) npx.kill("SIGKILL");
+    await npxExited;
+    if (typeof stdin === "number") closeSync(stdin);
+  }
 }
 
 async function main() {

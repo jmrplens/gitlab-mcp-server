@@ -22,7 +22,13 @@ siguiendo el modelo que usan esbuild y Biome:
   registrado como el comando `gitlab-mcp-server`. Resuelve el binario de la
   plataforma actual, lo arranca con tu stdio y tus argumentos intactos, y
   replica el código de salida y la señal de terminación del binario, de modo
-  que el cliente ve el resultado real.
+  que el cliente ve el resultado real. Desde la primera release posterior a
+  3.1.0 también detiene el servidor cuando se le pide: en Linux y macOS le
+  reenvía SIGTERM, SIGINT y SIGHUP, y bajo `npx` lo detiene en menos de un
+  segundo cuando termina la shell de npm, que es donde acaba un SIGTERM
+  enviado al proceso `npx`. Antes, un servidor HTTP arrancado con `npx`
+  conservaba su puerto después de que su supervisor lo hubiera detenido. En
+  Windows el Ctrl+C de la consola llega al propio servidor.
 - **`@jmrp.io/gitlab-mcp-server-<plataforma>`** son los paquetes que llevan
   el binario en sí, uno por plataforma: `linux-x64`, `linux-arm64`,
   `darwin-x64`, `darwin-arm64`, `win32-x64` y `win32-arm64`. Se declaran
