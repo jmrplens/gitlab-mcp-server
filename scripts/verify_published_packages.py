@@ -32,6 +32,17 @@ The attestation itself is not looked up: the comparison proves nuget.org
 serves exactly the bytes the job attested, and the job fails if the
 attestation step does.
 
+The third-party notices are compared too. From the first release after
+3.1.0, THIRD_PARTY_NOTICES is a release asset listed in checksums.txt, and
+every npm platform package and every wheel carries a copy beside LICENSE
+(package/THIRD_PARTY_NOTICES, and .dist-info/licenses/THIRD_PARTY_NOTICES);
+each copy read back must hash to the signed entry, and a package without one
+is a finding. A checksums.txt that names no notices is a release from before
+they were generated, so the comparison is skipped and says so. The NuGet
+packages are covered by the whole-package comparison above when the attested
+digests are given. LICENSE is not a release asset, so there is no signed
+digest to hold it to.
+
 Standard library only, and anonymous: it talks to registry.npmjs.org, pypi.org
 and api.nuget.org and needs no credential of any kind, so it is also the
 out-of-band check to run days later.
@@ -106,6 +117,10 @@ NUGET_ASSETS = {
     "win-x64": "gitlab-mcp-server-windows-amd64.exe",
     "win-arm64": "gitlab-mcp-server-windows-arm64.exe",
 }
+
+# The release asset holding the third-party notices, the name every package
+# carries its copy under.
+NOTICES = "THIRD_PARTY_NOTICES"
 
 # The entry nuget.org's repository signature adds, and the zip records the
 # unsigning below reads.
@@ -203,7 +218,7 @@ def sha256(data):
 
 def released_digests(checksums_path):
     """Parse `sha256  name` lines from the release's signed checksums.txt."""
-    wanted = set(NPM_ASSETS.values()) | set(WHEEL_ASSETS.values()) | set(NUGET_ASSETS.values())
+    wanted = set(NPM_ASSETS.values()) | set(WHEEL_ASSETS.values()) | set(NUGET_ASSETS.values()) | {NOTICES}
     digests = {}
     with open(checksums_path, encoding="utf-8") as fh:
         for line in fh:
@@ -216,18 +231,26 @@ def released_digests(checksums_path):
     return digests
 
 
-def npm_binary(suffix, version, budget=None):
-    """Download the published npm platform package and return its binary bytes."""
+def npm_package(suffix, version, budget=None):
+    """Download the published npm platform package and return its binary
+    bytes, its THIRD_PARTY_NOTICES bytes (None when it carries none) and the
+    tarball's URL."""
     name = f"{NPM_SCOPE}/gitlab-mcp-server-{suffix}"
     meta = json.loads(fetch(f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='')}/{version}", budget))
     tarball = meta["dist"]["tarball"]
     blob = fetch(tarball, budget)
+    binary = notices = None
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tar:
         for member in tar.getmembers():
-            base = os.path.basename(member.name)
-            if member.isfile() and base in ("gitlab-mcp-server", "gitlab-mcp-server.exe"):
-                return tar.extractfile(member).read(), tarball
-    raise LookupError(f"{name}@{version} ships no gitlab-mcp-server binary")
+            if not member.isfile():
+                continue
+            if os.path.basename(member.name) in ("gitlab-mcp-server", "gitlab-mcp-server.exe"):
+                binary = tar.extractfile(member).read()
+            elif member.name == "package/" + NOTICES:
+                notices = tar.extractfile(member).read()
+    if binary is None:
+        raise LookupError(f"{name}@{version} ships no gitlab-mcp-server binary")
+    return binary, notices, tarball
 
 
 def pypi_wheels(version, budget=None):
@@ -238,14 +261,38 @@ def pypi_wheels(version, budget=None):
             yield entry["filename"], entry["url"]
 
 
-def wheel_binary(url, version, budget=None):
+def wheel_contents(url, version, budget=None):
+    """Download one wheel and return its binary bytes and its
+    THIRD_PARTY_NOTICES bytes (None when it carries none)."""
     blob = fetch(url, budget)
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        names = zf.namelist()
+        notices_name = f"{PYPI_NORM}-{version}.dist-info/licenses/{NOTICES}"
+        notices = zf.read(notices_name) if notices_name in names else None
         prefix = f"{PYPI_NORM}-{version}.data/scripts/"
-        for name in zf.namelist():
+        for name in names:
             if name.startswith(prefix) and os.path.basename(name).startswith("gitlab-mcp-server"):
-                return zf.read(name)
+                return zf.read(name), notices
     raise LookupError(f"{url} ships no binary under {PYPI_NORM}-{version}.data/scripts/")
+
+
+def check_notices(label, notices, where, digests, problems):
+    """Hold one package's copy of THIRD_PARTY_NOTICES to the signed entry. A
+    release whose checksums.txt names no notices predates them, and main says
+    once that nothing is compared."""
+    want = digests.get(NOTICES)
+    if want is None:
+        return
+    if notices is None:
+        problems.append(f"{label}: {where} carries no {NOTICES}, but the release signed one")
+        return
+    got = sha256(notices)
+    if got != want:
+        problems.append(
+            f"{label}: {NOTICES} in {where} is sha256 {got}, but the signed checksums.txt says {want}"
+        )
+    else:
+        print(f"  ok  {label:<17} {NOTICES} matches the signed one")
 
 
 def nuget_package_url(pkg_id, version):
@@ -375,7 +422,7 @@ def check_npm(version, digests, problems, budget=None):
             problems.append(f"npm {suffix}: checksums.txt does not name the release asset {asset}")
             continue
         try:
-            binary, tarball = npm_binary(suffix, version, budget)
+            binary, notices, tarball = npm_package(suffix, version, budget)
         except (urllib.error.URLError, LookupError, KeyError) as exc:
             problems.append(f"npm {suffix}: could not read the published package: {exc}")
             continue
@@ -387,6 +434,7 @@ def check_npm(version, digests, problems, budget=None):
             )
         else:
             print(f"  ok  npm {suffix:<13} matches {asset}")
+        check_notices(f"npm {suffix}", notices, tarball, digests, problems)
 
 
 def check_pypi(version, digests, problems, budget=None):
@@ -407,7 +455,7 @@ def check_pypi(version, digests, problems, budget=None):
             problems.append(f"pypi {filename}: checksums.txt does not name the release asset {asset}")
             continue
         try:
-            binary = wheel_binary(url, version, budget)
+            binary, notices = wheel_contents(url, version, budget)
         except (urllib.error.URLError, LookupError) as exc:
             problems.append(f"pypi {filename}: could not read the wheel: {exc}")
             continue
@@ -419,6 +467,7 @@ def check_pypi(version, digests, problems, budget=None):
             )
         else:
             print(f"  ok  pypi {filename:<60} matches {asset}")
+        check_notices(f"pypi {filename}", notices, url, digests, problems)
     missing = sorted(set(WHEEL_ASSETS.values()) - seen)
     if missing:
         problems.append(f"pypi: no wheel published for {', '.join(missing)}")
@@ -514,10 +563,13 @@ def main():
     if os.path.isdir(checksums):
         checksums = os.path.join(checksums, "checksums.txt")
     digests = released_digests(checksums)
-    if not digests:
+    if not set(digests) - {NOTICES}:
         sys.exit(f"verify_published_packages: {checksums} names none of the release binaries")
 
     print(f"Comparing published packages for v{args.version} against {len(digests)} entries in {checksums}")
+    if NOTICES not in digests:
+        print(f"  ..  {checksums} names no {NOTICES}, a release from before they were generated, "
+              "so the packages' notices are not compared")
     budget = RetryBudget(args.retry_budget, args.retry_delay)
     problems = []
     if not args.skip_npm:
