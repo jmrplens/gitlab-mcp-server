@@ -56,22 +56,31 @@ func NewRouteIndex(routes []Route) *RouteIndex {
 // leaves the path as written.
 func ExpandOptional(path string) []string {
 	open, depth, escaped := 0, 0, false
+	// The cases are a sequence of ifs rather than an untagged switch so the
+	// mutation tool can measure each condition; it cannot see a case
+	// expression.
 	for i := range len(path) {
-		switch {
-		case escaped:
+		if escaped {
 			escaped = false
-		case path[i] == '\\':
+			continue
+		}
+		if path[i] == '\\' {
 			escaped = true
-		case path[i] == '(':
+			continue
+		}
+		if path[i] == '(' {
 			if depth == 0 {
 				open = i
 			}
 			depth++
-		case path[i] == ')' && depth > 0:
-			depth--
-			if depth == 0 {
-				return spellGroup(path[:open], path[open+1:i], path[i+1:])
-			}
+			continue
+		}
+		if path[i] != ')' || depth == 0 {
+			continue
+		}
+		depth--
+		if depth == 0 {
+			return spellGroup(path[:open], path[open+1:i], path[i+1:])
 		}
 	}
 	return []string{path}
