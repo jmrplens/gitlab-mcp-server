@@ -2044,9 +2044,11 @@ Where it runs: GoReleaser runs it once every release binary is built and before 
 
 ```bash
 go run ./cmd/gen_third_party_notices/ -o THIRD_PARTY_NOTICES \
-  -targets linux/amd64,windows/amd64 \
+  -targets darwin/amd64,darwin/arm64,linux/amd64,linux/arm64,windows/amd64,windows/arm64 \
   'dist/gitlab-mcp-server_*/gitlab-mcp-server*'
 ```
+
+The glob matches every per-target directory a GoReleaser build leaves in `dist/`, six of them, so `-targets` names all six, the list `.goreleaser.yml` passes; naming fewer is refused, since the binaries would cover targets the list does not.
 
 #### Flags
 
