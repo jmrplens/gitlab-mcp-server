@@ -474,3 +474,43 @@ func TestProjectIDParam_SpellsTheIDAsTheSchemaDeclaresIt(t *testing.T) {
 		t.Errorf("IDParam() = %q, want %q", got, want)
 	}
 }
+
+// TestCreateProject_OwnedBy_CreatesInTheUsersNamespace checks that a project
+// asked for in another user's namespace is created through the administrator
+// route that takes the user, with the options any project is created with,
+// and that one asked for with no owner goes to the ordinary route.
+func TestCreateProject_OwnedBy_CreatesInTheUsersNamespace(t *testing.T) {
+	cases := []struct {
+		name  string
+		opts  []ProjectOption
+		route string
+	}{
+		{name: "owned by a user", opts: []ProjectOption{OwnedBy(User{ID: 9})}, route: "/api/v4/projects/user/9"},
+		{name: "the run user's", route: "/api/v4/projects"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, e := detachedStub(t)
+			stub.answers(http.MethodPost, tc.route, stubCreated(map[string]any{
+				"id": 77, "name": "proj", "path_with_namespace": "someone/proj", "default_branch": DefaultBranch,
+				"namespace": map[string]any{"id": 33},
+			}))
+			spec := projectSpec{name: "proj", visibility: gl.PrivateVisibility, readme: true}
+			for _, opt := range tc.opts {
+				opt(&spec)
+			}
+
+			project, err := createProject(e, spec, func() string { return "proj-name" })
+			if err != nil {
+				t.Fatalf("createProject() error = %v", err)
+			}
+			if project.ID != 77 || project.NamespaceID != 33 || project.Path != "someone/proj" {
+				t.Errorf("createProject() = %+v, want the project the route answered with", project)
+			}
+			requests := stub.recordedRequests()
+			if len(requests) != 1 || requests[0].Body["name"] != "proj-name" || requests[0].Body["initialize_with_readme"] != true {
+				t.Errorf("the creation sent %+v, want one request carrying the name and the README", requests)
+			}
+		})
+	}
+}

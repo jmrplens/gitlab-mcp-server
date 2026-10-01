@@ -68,6 +68,9 @@ type projectSpec struct {
 	visibility  gl.VisibilityValue
 	readme      bool
 	namespaceID int64
+	// ownerID is the user whose personal namespace the project is created in,
+	// through the administrator route that creates one for another user.
+	ownerID int64
 }
 
 // ProjectOption adjusts one project builder.
@@ -78,6 +81,15 @@ type ProjectOption func(*projectSpec)
 // policies need a project with a group parent.
 func InGroup(group Group) ProjectOption {
 	return func(spec *projectSpec) { spec.namespaceID = group.ID }
+}
+
+// OwnedBy creates the project in the user's personal namespace rather than in
+// the run user's, through the administrator route that creates a project for
+// another user. A fine-grained grant at the personal-projects level covers
+// exactly the projects of its user's own namespace, so a scenario about one
+// needs a project there.
+func OwnedBy(user User) ProjectOption {
+	return func(spec *projectSpec) { spec.ownerID = user.ID }
 }
 
 // WithVisibility sets the project's visibility. Private is the default,
@@ -150,7 +162,14 @@ func createProject(e *harness.Env, spec projectSpec, nextName func() string) (Pr
 			if spec.namespaceID != 0 {
 				opts.NamespaceID = new(spec.namespaceID)
 			}
-			created, _, err := e.Client().GL().Projects.CreateProject(opts, gl.WithContext(e.Ctx))
+			var created *gl.Project
+			var err error
+			if spec.ownerID != 0 {
+				forUser := gl.CreateProjectForUserOptions(*opts)
+				created, _, err = e.Client().GL().Projects.CreateProjectForUser(spec.ownerID, &forUser, gl.WithContext(e.Ctx))
+			} else {
+				created, _, err = e.Client().GL().Projects.CreateProject(opts, gl.WithContext(e.Ctx))
+			}
 			if err != nil {
 				return Project{}, err
 			}
