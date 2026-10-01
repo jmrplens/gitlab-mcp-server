@@ -41,6 +41,10 @@ Typical MCP client configuration (stdio):
 
 `GITLAB_TOKEN` is the only required setting. `GITLAB_URL` defaults to `https://gitlab.com`; point it at your own host for self-managed instances.
 
+## Verify what you run
+
+The binary the SDK runs is the release asset byte for byte, so the build provenance attestation GitHub holds for it verifies it with the [GitHub CLI](https://cli.github.com/): `gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server -R jmrplens/gitlab-mcp-server` for what `dnx` runs from the NuGet cache, and `gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server` after `dotnet tool install -g` on Linux and macOS, where the shim links into the tool store. From the first release after 3.1.0 the packages themselves are attested as they were before NuGet.org added its repository signature: remove `.signature.p7s` from a downloaded copy with `zip -d` and run `gh attestation verify` on what is left. The steps are in the [NuGet installation page](https://jmrp.io/docs/gitlab-mcp-server/install/nuget/#verify-what-you-run).
+
 ## Configuration
 
 Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.

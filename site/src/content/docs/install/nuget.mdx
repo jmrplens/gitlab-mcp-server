@@ -150,6 +150,49 @@ Per-client file locations and shapes (VS Code uses `servers` with
 `"type": "stdio"`, Zed uses `context_servers`) are in the
 [Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration).
 
+## Verify what you run
+
+The binary the SDK runs is the release asset byte for byte, so the build
+provenance attestation GitHub holds for that asset verifies it with the
+[GitHub CLI](https://cli.github.com/), wherever it was installed from:
+
+```bash
+# dnx: the NuGet package cache (<rid> and <version> as in the table above)
+gh attestation verify ~/.nuget/packages/gitlab-mcp-server.<rid>/<version>/tools/any/<rid>/gitlab-mcp-server \
+  -R jmrplens/gitlab-mcp-server
+
+# dotnet tool install -g: on Linux and macOS the shim links into the tool store
+gh attestation verify "$(readlink -f "$(command -v gitlab-mcp-server)")" -R jmrplens/gitlab-mcp-server
+```
+
+On Windows the cache is under `%USERPROFILE%\.nuget\packages` and the file
+is `gitlab-mcp-server.exe`. `dnx gitlab-mcp-server -- --version` prints the
+version you run. Both paths were checked on 3.1.0 against the release's
+signed `checksums.txt`.
+
+From the first release after 3.1.0 the seven packages are attested too, as
+they were before NuGet.org added the repository signature
+(`.signature.p7s`) it puts on every package it serves. Remove that entry
+from a downloaded copy and verify what is left:
+
+```bash
+v=<version>
+curl -sSLO "https://api.nuget.org/v3-flatcontainer/gitlab-mcp-server/$v/gitlab-mcp-server.$v.nupkg"
+zip -q -d "gitlab-mcp-server.$v.nupkg" .signature.p7s
+gh attestation verify "gitlab-mcp-server.$v.nupkg" -R jmrplens/gitlab-mcp-server
+```
+
+The same works for each `gitlab-mcp-server.<rid>` package. Info-ZIP's
+`zip -d` (zip 3.0) leaves every other byte where it was, which is NuGet's
+own definition of the unsigned package: on all seven 3.1.0 packages it gives
+back exactly what a rebuild from the tag produces. A tool that rewrites the
+archive gives other bytes, and `gh` then finds nothing. Rebuilding from the
+tag with `scripts/build_nuget.py` and the signed binaries matches byte for
+byte only on a Python linked against stock zlib: zlib-ng, which is what
+zlib is on Fedora 40 and later, compresses the same input to different
+bytes, so a rebuild there differs without saying anything about the
+published packages.
+
 ## Upgrade and uninstall
 
 The server never checks for updates and never replaces its own binary; the

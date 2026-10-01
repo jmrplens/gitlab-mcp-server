@@ -41,6 +41,20 @@ Typical MCP client configuration (stdio):
 
 `GITLAB_TOKEN` is the only required setting. `GITLAB_URL` defaults to `https://gitlab.com`; point it at your own host for self-managed instances.
 
+## Verify what you run
+
+The `gitlab-mcp-server` command a wheel installs is the release binary byte for byte, so the build provenance attestation GitHub holds for that release asset verifies it directly with the [GitHub CLI](https://cli.github.com/) (releases after 2.7.5):
+
+```bash
+# pip, pipx or uv tool install: the command on your PATH is the binary
+gh attestation verify "$(command -v gitlab-mcp-server)" -R jmrplens/gitlab-mcp-server
+
+# uvx: the binary sits in uv's cache, and the package says where
+gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import gitlab_mcp_server as m; print(m.find_binary())')" -R jmrplens/gitlab-mcp-server
+```
+
+On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the first form. For a pinned `uvx`, name the same version in `--from` (`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own publish attestation (PEP 740), shown on each file's page on PyPI. The release signature and the other channels are covered in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+
 ## Configuration
 
 Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for the full reference.
