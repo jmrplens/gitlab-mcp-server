@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # smoke-test-image.sh — start the container image on every platform it claims
-# to support and check it prints the expected version, and that it carries the
-# licence and the third-party notices generated for its own binary.
+# to support and check it prints the expected version, that its binary records
+# that version in its build information, and that it carries the licence and
+# the third-party notices generated for its own binary.
 #
 # Usage:
 #   scripts/smoke-test-image.sh <expected-version> <image>=<platform> [...]
@@ -29,6 +30,16 @@
 # builder generates from the binary it just built, must name the platform the
 # image was built for: notices left over from another build, or a step that
 # stopped writing them, would otherwise ship without anything noticing.
+#
+# The binary's build information has to carry `-ldflags` with `-X
+# main.version=<version>`, which is what syft reads to give the server a
+# versioned purl in the image SBOM; without it no advisory against this module
+# can be matched to the image. -trimpath drops -ldflags from the build
+# information while --version still answers with the right version, so the
+# version check cannot tell, and the Dockerfile builds without it for that
+# reason. The binary is copied out with cat and the -ldflags line of its build
+# information read with grep -a, so the check needs no Go toolchain on the
+# runner.
 set -euo pipefail
 
 VERSION="${1:?Usage: $0 <expected-version> <image>=<platform> [...]}"
@@ -41,6 +52,11 @@ fi
 LICENSES_DIR=/usr/share/licenses/gitlab-mcp-server
 REPO_LICENSE="$(cd "$(dirname "$0")/.." && pwd)/LICENSE"
 NOTICES_HEADER="Third-party notices for gitlab-mcp-server"
+BINARY=/usr/local/bin/gitlab-mcp-server
+LDFLAGS_PREFIX=$'build\t-ldflags='
+
+workdir="$(mktemp -d)"
+trap 'rm -rf "$workdir"' EXIT
 
 failures=0
 for pair in "$@"; do
@@ -68,6 +84,23 @@ for pair in "$@"; do
   fi
 
   printf '    %s\n' "$output"
+
+  binfile="${workdir}/binary"
+  if ! docker run --rm --platform "$platform" --entrypoint /bin/cat "$image" "$BINARY" > "$binfile" 2> "${binfile}.err"; then
+    echo "FAIL: ${image} (${platform}) carries no ${BINARY} to read:" >&2
+    cat "${binfile}.err" >&2
+    failures=$((failures + 1))
+    continue
+  fi
+  ldflags=$(grep -a "^${LDFLAGS_PREFIX}" "$binfile" || true)
+  if [[ "$ldflags" != *"-X main.version=${VERSION}"[\ \"]* ]]; then
+    echo "FAIL: ${image} (${platform}) has a binary whose build information does not record -X main.version=${VERSION}" >&2
+    echo "      (a build with -trimpath leaves -ldflags out of it); its -ldflags line reads:" >&2
+    printf '      %s\n' "${ldflags:-(none)}" >&2
+    failures=$((failures + 1))
+    continue
+  fi
+  echo "    build information records -X main.version=${VERSION}"
 
   if ! licence=$(docker run --rm --platform "$platform" --entrypoint /bin/cat "$image" "$LICENSES_DIR/LICENSE" 2>&1); then
     echo "FAIL: ${image} (${platform}) carries no ${LICENSES_DIR}/LICENSE:" >&2
