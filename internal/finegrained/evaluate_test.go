@@ -163,18 +163,27 @@ func TestEvaluate_ListsWhatTheGrantCoversAndCallsWhatGitLabWouldServe(t *testing
 // TestEvaluate_NoPublicSetRecorded_LetsGitLabJudgeARESTCall verifies that,
 // while the table carries no evaluated public set, a REST group held at a
 // project or a group passes the call guard whatever the grant, while one held
-// at the user does not, and a GraphQL spine position is never let through on
-// the public question.
+// at the user does not, and neither a GraphQL spine position nor a GraphQL
+// query's or mutation's own group is ever let through on the public question.
 func TestEvaluate_NoPublicSetRecorded_LetsGitLabJudgeARESTCall(t *testing.T) {
 	table := phaseBTable()
 	table.PublicKnown = false
 	table.PublicAnonymous = [2][]uint64{}
+	table.Operations = append(table.Operations,
+		Operation{Name: "query approvals (approvalsQuery)", Groups: []uint32{1}},
+		Operation{Name: "mutation approve (mergeRequestApprove)", Groups: []uint32{1}})
+	// Appended after z.denied, in the order the lookup's binary search needs.
+	table.Actions = append(table.Actions,
+		Requirement{ID: "zz.mutation_group", Paths: [][]uint32{{8}}, GraphQL: true},
+		Requirement{ID: "zz.query_group", Paths: [][]uint32{{7}}, GraphQL: true})
 	authority := Evaluate(table, Grant{})
 	for id, callable := range map[string]bool{
 		"merge_request.approve": true,
 		"issue_link.list":       true,
 		"user.get":              false,
 		"vulnerability.get":     false,
+		"zz.query_group":        false,
+		"zz.mutation_group":     false,
 	} {
 		t.Run(id, func(t *testing.T) {
 			got := authority.Decide(id)
@@ -224,6 +233,27 @@ func TestAuthority_Decide_PhaseB_NamesWhatIsMissingAndWhatIsServedEmpty(t *testi
 	skipped := reader.Decide("skip.action")
 	if !skipped.Listed || skipped.Missing != nil {
 		t.Errorf("Decide(skip.action) = %+v, want listed with nothing missing", skipped)
+	}
+}
+
+// TestAuthority_Decide_PhaseB_MissingIsTheFirstClosestPathsUncoveredGroups
+// verifies the groups a refusal names: of two ways failing as many groups
+// each, the first; and of one operation needing a covered group, an uncovered
+// one and that uncovered one again, the uncovered group once, the covered one
+// never.
+func TestAuthority_Decide_PhaseB_MissingIsTheFirstClosestPathsUncoveredGroups(t *testing.T) {
+	table := phaseBTable()
+	table.Operations = append(table.Operations, Operation{Name: "GET /projects/:id/two", Groups: []uint32{0, 1, 1}})
+	table.Actions = []Requirement{
+		{ID: "x.tie", Paths: [][]uint32{{1}, {2}}},
+		{ID: "x.two", Paths: [][]uint32{{7}}},
+	}
+	authority := Evaluate(table, Grant{Scopes: []Scope{scope(AccessSelectedMemberships, NamespaceProject, "project_read")}})
+	if got := authority.Decide("x.tie").Missing; !slices.Equal(got, []uint32{1}) {
+		t.Errorf("Decide(x.tie).Missing = %v, want the first way's group 1 on a tie", got)
+	}
+	if got := authority.Decide("x.two").Missing; !slices.Equal(got, []uint32{1}) {
+		t.Errorf("Decide(x.two).Missing = %v, want the uncovered group 1 once, and not the covered group 0", got)
 	}
 }
 
