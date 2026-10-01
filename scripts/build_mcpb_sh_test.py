@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Tests scripts/build-mcpb.sh, which packs the Claude Desktop bundle and checks what it packed.
+"""Tests scripts/build-mcpb.sh, which packs the Claude Desktop bundles and checks what it packed.
 
-After packing, the script reads the archive back and removes a bundle that
-fails any of its checks, so that no later step and no developer picks it up.
-Two things are tested here. The rules on the packed manifest refuse each shape
-that would ship a bundle Claude Desktop cannot start on one of its platforms:
-a platform listed with no override (it would be handed the macOS binary, the
-base command), a platform left out of the list (Desktop marks the bundle
+One run packs four bundles: one per operating system, which server.json
+declares, and the universal one, kept under its old name for existing links.
+After packing, the script reads each archive back and removes the whole set
+when any bundle fails any of its checks, so that no later step and no
+developer picks up a bundle that failed, or the rest of a set one failed.
+Three things are tested here. Each bundle carries its own system's servers, the
+licence and a manifest that lists only the platforms it serves; a per-OS
+manifest is the committed one with that platform's command promoted to the
+base command. The rules on the packed manifest refuse each shape that would
+ship a bundle Claude Desktop cannot start on one of its platforms: a platform
+listed with no override (it would be handed the macOS binary, the base
+command), a platform left out of the list (Desktop marks the bundle
 incompatible there), an override for an unlisted platform, an override
 carrying `env` (it replaces the base env and drops `GITLAB_TOKEN`), and a path
-the archive does not carry. And every refusal ends with the bundle removed,
+the archive does not carry. And every refusal ends with the bundles removed,
 including one where an entry never reached the archive, which `zip` allows by
 exiting 0 when one of its inputs is missing, and one before anything was
-packed, which must not leave the previous run's bundle behind.
+packed, which must not leave the previous run's bundles behind.
 
 Each case runs the real script from a scratch tree laid out the way it expects,
 the repository root with mcpb/ and a dist/ of per-target builds, holding small
@@ -100,17 +106,30 @@ def stand_in(rel):
     a bundle packed from the wrong one is told apart. Nothing executes them."""
     return b"stand-in for dist/" + rel.encode() + b"\n" * 64
 
-ENTRIES = [
-    "manifest.json",
-    "icon.png",
-    "LICENSE",
-    "server/gitlab-mcp-server",
-    "server/gitlab-mcp-server.exe",
-    "server/linux/launch.sh",
-    "server/linux/gitlab-mcp-server-linux-amd64",
-    "server/linux/gitlab-mcp-server-linux-arm64",
-]
+# The four bundles one run packs, by the target name the script gives each.
+TARGETS = ("darwin", "windows", "linux", "universal")
+
+
+def bundle_name(target):
+    if target == "universal":
+        return "gitlab-mcp-server.mcpb"
+    return "gitlab-mcp-server-" + target + ".mcpb"
+
+
+SERVER_ENTRIES = {
+    "darwin": ["server/gitlab-mcp-server"],
+    "windows": ["server/gitlab-mcp-server.exe"],
+    "linux": [
+        "server/linux/launch.sh",
+        "server/linux/gitlab-mcp-server-linux-amd64",
+        "server/linux/gitlab-mcp-server-linux-arm64",
+    ],
+}
+SERVER_ENTRIES["universal"] = SERVER_ENTRIES["darwin"] + SERVER_ENTRIES["windows"] + SERVER_ENTRIES["linux"]
+ENTRIES = {target: ["manifest.json", "icon.png", "LICENSE"] + SERVER_ENTRIES[target] for target in TARGETS}
 NOT_EXECUTABLE = {"manifest.json", "icon.png", "LICENSE"}
+# The process.platform value each per-OS bundle serves.
+PLATFORM = {"darwin": "darwin", "windows": "win32", "linux": "linux"}
 
 # Stands in for zip and leaves out the entry DROP_ENTRY names, which is what
 # zip itself does, with exit status 0, when one of its inputs is missing.
@@ -162,6 +181,7 @@ class BuildMcpbTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.work, True)
         os.makedirs(os.path.join(self.work, "mcpb", "linux"))
         shutil.copyfile(os.path.join(ROOT, "mcpb", "icon.png"), os.path.join(self.work, "mcpb", "icon.png"))
+        shutil.copyfile(os.path.join(ROOT, "mcpb", "platform.jq"), os.path.join(self.work, "mcpb", "platform.jq"))
         self.licence = os.path.join(ROOT, "LICENSE")
         shutil.copyfile(self.licence, os.path.join(self.work, "LICENSE"))
         self.launcher = os.path.join(ROOT, "mcpb", "linux", "launch.sh")
@@ -170,7 +190,8 @@ class BuildMcpbTest(unittest.TestCase):
             self.manifest = json.load(fh)
         self.dist = os.path.join(self.work, "dist")
         self.lay_out_dist(MAKE_MCPB_DIST)
-        self.output = os.path.join(self.dist, "gitlab-mcp-server.mcpb")
+        self.outputs = {target: os.path.join(self.dist, bundle_name(target)) for target in TARGETS}
+        self.output = self.outputs["universal"]
 
     def lay_out_dist(self, files):
         """Replaces dist/ with the given files, each holding its stand-in bytes."""
@@ -186,24 +207,33 @@ class BuildMcpbTest(unittest.TestCase):
             fh.write(stand_in(rel))
 
     def assert_packed_from(self, sources):
-        with zipfile.ZipFile(self.output) as bundle:
-            for entry, rel in sources.items():
-                with self.subTest(entry=entry):
-                    self.assertEqual(bundle.read(entry), stand_in(rel), f"{entry} was not packed from dist/{rel}")
+        """Each bundle's servers are the dist/ files sources maps them to."""
+        for target in TARGETS:
+            with zipfile.ZipFile(self.outputs[target]) as bundle:
+                for entry, rel in sources.items():
+                    if entry not in SERVER_ENTRIES[target]:
+                        continue
+                    with self.subTest(bundle=target, entry=entry):
+                        self.assertEqual(bundle.read(entry), stand_in(rel), f"{entry} was not packed from dist/{rel}")
+
+    def install_stand_in(self, name, body, env):
+        """Puts a stand-in for the tool name first on env's PATH."""
+        bin_dir = os.path.join(self.work, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        wrapper = os.path.join(bin_dir, name)
+        with open(wrapper, "w", encoding="utf-8") as fh:
+            fh.write(body)
+        os.chmod(wrapper, 0o755)
+        if not env.get("PATH", "").startswith(bin_dir + os.pathsep):
+            env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
 
     def build(self, manifest=None, drop_entry=None):
         with open(os.path.join(self.work, "mcpb", "manifest.json"), "w", encoding="utf-8") as fh:
             json.dump(self.manifest if manifest is None else manifest, fh, indent=2, ensure_ascii=False)
         env = dict(os.environ)
         if drop_entry is not None:
-            bin_dir = os.path.join(self.work, "bin")
-            os.makedirs(bin_dir, exist_ok=True)
-            wrapper = os.path.join(bin_dir, "zip")
-            with open(wrapper, "w", encoding="utf-8") as fh:
-                fh.write(ZIP_DROPPING_AN_ENTRY)
-            os.chmod(wrapper, 0o755)
-            env.update(REAL_ZIP=shutil.which("zip"), DROP_ENTRY=drop_entry,
-                       PATH=bin_dir + os.pathsep + env.get("PATH", ""))
+            env.update(REAL_ZIP=shutil.which("zip"), DROP_ENTRY=drop_entry)
+            self.install_stand_in("zip", ZIP_DROPPING_AN_ENTRY, env)
         return subprocess.run(
             ["bash", SCRIPT, VERSION, "dist"],
             cwd=self.work,
@@ -219,48 +249,88 @@ class BuildMcpbTest(unittest.TestCase):
         for message in messages:
             self.assertIn(message, stderr)
         self.assertIn("was removed", stderr, "the script ended before its removal step")
-        self.assertFalse(os.path.exists(self.output), "a refused bundle was left in dist/")
+        for target, output in self.outputs.items():
+            self.assertFalse(os.path.exists(output), f"the {target} bundle was left in dist/ after a refusal")
 
-    def test_packs_the_committed_manifest_and_launcher(self):
-        result = self.build()
-        self.assertEqual(result.returncode, 0, result.stderr.decode())
-        with zipfile.ZipFile(self.output) as bundle:
-            self.assertEqual(bundle.namelist(), ENTRIES)
-            for info in bundle.infolist():
-                with self.subTest(entry=info.filename):
+    def assert_bundles(self, sources):
+        """Every bundle carries its own entries, modes, licence, launcher and
+        manifest, and its servers come from the dist/ files sources names."""
+        for target in TARGETS:
+            with self.subTest(bundle=target), zipfile.ZipFile(self.outputs[target]) as bundle:
+                self.assertEqual(bundle.namelist(), ENTRIES[target])
+                for info in bundle.infolist():
                     # Claude Desktop restores the execute bit only from an
                     # owner-execute bit recorded under Unix attributes.
-                    self.assertEqual(info.create_system, 3, "not recorded with Unix attributes")
+                    self.assertEqual(info.create_system, 3, f"{info.filename} not recorded with Unix attributes")
                     expected = 0o100644 if info.filename in NOT_EXECUTABLE else 0o100755
-                    self.assertEqual(oct(info.external_attr >> 16), oct(expected))
-            packed = json.loads(bundle.read("manifest.json"))
-            with open(self.launcher, "rb") as fh:
-                self.assertEqual(bundle.read("server/linux/launch.sh"), fh.read())
-            # The licence the binaries are distributed under, byte for byte.
-            with open(self.licence, "rb") as fh:
-                self.assertEqual(bundle.read("LICENSE"), fh.read())
-        self.assertEqual(packed["version"], VERSION)
-        expected_manifest = copy.deepcopy(self.manifest)
-        expected_manifest["version"] = VERSION
-        self.assertEqual(packed, expected_manifest)
-        self.assert_packed_from(MAKE_MCPB_SOURCES)
+                    self.assertEqual(oct(info.external_attr >> 16), oct(expected), info.filename)
+                with open(self.licence, "rb") as fh:
+                    self.assertEqual(bundle.read("LICENSE"), fh.read())
+                if "server/linux/launch.sh" in ENTRIES[target]:
+                    with open(self.launcher, "rb") as fh:
+                        self.assertEqual(bundle.read("server/linux/launch.sh"), fh.read())
+                packed = json.loads(bundle.read("manifest.json"))
+            self.assert_manifest(target, packed)
+        self.assert_packed_from(sources)
+
+    def assert_manifest(self, target, packed):
+        """The universal bundle packs the committed manifest; a per-OS bundle
+        packs it with that platform's command as the base command, no
+        override, the path that command names as its entry point, and only
+        that platform listed. Every other field is the committed one."""
+        expected = copy.deepcopy(self.manifest)
+        expected["version"] = VERSION
+        if target != "universal":
+            platform = PLATFORM[target]
+            config = expected["server"]["mcp_config"]
+            override = config.pop("platform_overrides").get(platform, {})
+            config.update({key: override[key] for key in ("command", "args") if key in override})
+            launch = [config["command"]] + config["args"]
+            expected["server"]["entry_point"] = next(
+                item[len("${__dirname}/"):] for item in launch if item.startswith("${__dirname}/"))
+            expected["compatibility"]["platforms"] = [platform]
+        with self.subTest(bundle=target, check="manifest"):
+            self.assertEqual(packed, expected)
+
+    def test_packs_each_bundle_from_the_make_mcpb_dist(self):
+        result = self.build()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assert_bundles(MAKE_MCPB_SOURCES)
+
+    def test_each_per_os_bundle_serves_its_own_system_only(self):
+        # Spelled out rather than derived, so a change to the derivation that
+        # still agrees with assert_manifest's reading of it is caught here.
+        expected = {
+            "darwin": ("server/gitlab-mcp-server", "${__dirname}/server/gitlab-mcp-server", []),
+            "windows": ("server/gitlab-mcp-server.exe", "${__dirname}/server/gitlab-mcp-server.exe", []),
+            "linux": ("server/linux/launch.sh", "/bin/sh", ["${__dirname}/server/linux/launch.sh"]),
+        }
+        result = self.build()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        for target, (entry_point, command, args) in expected.items():
+            with self.subTest(bundle=target), zipfile.ZipFile(self.outputs[target]) as bundle:
+                packed = json.loads(bundle.read("manifest.json"))
+                self.assertEqual(packed["compatibility"]["platforms"], [PLATFORM[target]])
+                self.assertEqual(packed["server"]["entry_point"], entry_point)
+                self.assertEqual(packed["server"]["mcp_config"]["command"], command)
+                self.assertEqual(packed["server"]["mcp_config"]["args"], args)
+                self.assertNotIn("platform_overrides", packed["server"]["mcp_config"])
+                self.assertEqual(packed["name"], self.manifest["name"], "a per-OS bundle must install as the same extension")
 
     def test_packs_each_server_from_the_release_jobs_dist(self):
-        # Every staged root copy and every build the bundle does not carry sits
-        # beside the four it does, so a discovery pattern that matched one of
+        # Every staged root copy and every build the bundles do not carry sits
+        # beside the four they do, so a discovery pattern that matched one of
         # them too would be refused as a duplicate, and one that matched none
         # of the four would be refused as missing.
         self.lay_out_dist(RELEASE_DIST)
         result = self.build()
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        with zipfile.ZipFile(self.output) as bundle:
-            self.assertEqual(bundle.namelist(), ENTRIES)
-        self.assert_packed_from(RELEASE_SOURCES)
+        self.assert_bundles(RELEASE_SOURCES)
 
-    def test_a_refusal_before_packing_removes_the_previous_bundle(self):
+    def test_a_refusal_before_packing_removes_the_previous_bundles(self):
         # make mcpb after make release leaves both layouts in dist/, which is
-        # the duplicate the first case refuses; the previous run's bundle must
-        # not survive the refusal under its old version.
+        # the duplicate the first case refuses; the previous run's bundles must
+        # not survive the refusal under their old version.
         def with_a_second_linux_amd64_build():
             self.add_to_dist("gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server")
 
@@ -270,25 +340,40 @@ class BuildMcpbTest(unittest.TestCase):
         def without_the_licence():
             os.remove(os.path.join(self.work, "LICENSE"))
 
+        def without_the_derivation():
+            os.remove(os.path.join(self.work, "mcpb", "platform.jq"))
+
         cases = [
             ("a binary found twice", with_a_second_linux_amd64_build, "remove the stale ones"),
             ("a missing input", without_the_icon, "mcpb/icon.png not found"),
             ("a missing licence", without_the_licence, "LICENSE not found"),
+            ("a missing derivation", without_the_derivation, "mcpb/platform.jq not found"),
         ]
         for name, break_the_tree, message in cases:
             with self.subTest(case=name):
                 self.lay_out_dist(MAKE_MCPB_DIST)
                 shutil.copyfile(os.path.join(ROOT, "mcpb", "icon.png"), os.path.join(self.work, "mcpb", "icon.png"))
                 shutil.copyfile(self.licence, os.path.join(self.work, "LICENSE"))
+                shutil.copyfile(os.path.join(ROOT, "mcpb", "platform.jq"), os.path.join(self.work, "mcpb", "platform.jq"))
                 first = self.build()
                 self.assertEqual(first.returncode, 0, first.stderr.decode())
-                self.assertTrue(os.path.exists(self.output))
+                for output in self.outputs.values():
+                    self.assertTrue(os.path.exists(output), output)
                 break_the_tree()
                 result = self.build()
                 stderr = result.stderr.decode()
                 self.assertEqual(result.returncode, 1, stderr)
                 self.assertIn(message, stderr)
-                self.assertFalse(os.path.exists(self.output), "the previous run's bundle was left in dist/")
+                for target, output in self.outputs.items():
+                    self.assertFalse(os.path.exists(output), f"the previous run's {target} bundle was left in dist/")
+
+    def test_refuses_a_platform_the_universal_bundle_has_no_server_for(self):
+        manifest = copy.deepcopy(self.manifest)
+        manifest["compatibility"]["platforms"].append("freebsd")
+        self.assert_refused(
+            self.build(manifest=manifest),
+            "compatibility.platforms lists freebsd, although the archive carries no server for it",
+        )
 
     def test_refuses_a_manifest_that_cannot_start_on_one_of_its_platforms(self):
         cases = [

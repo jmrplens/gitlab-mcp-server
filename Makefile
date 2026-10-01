@@ -1323,14 +1323,27 @@ MCPB_CLI_VERSION := 2.1.2
 ## on both sides of a push.
 GOLANGCI_LINT_VERSION := v2.13.2
 
-## check-mcpb: validate the Claude Desktop extension manifest (mcpb/manifest.json).
+## check-mcpb: validate the Claude Desktop extension manifests: mcpb/manifest.json,
+## which the universal bundle packs, and the darwin, win32 and linux manifests
+## mcpb/platform.jq derives from it for the per-OS bundles. The CLI looks for the
+## icon beside the manifest it validates, so each derived one gets a copy.
 check-mcpb:
 	npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate mcpb/manifest.json
+	@set -e; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	for platform in darwin win32 linux; do \
+		mkdir -p "$$tmp/$$platform"; \
+		cp mcpb/icon.png "$$tmp/$$platform/icon.png"; \
+		jq --arg platform "$$platform" -f mcpb/platform.jq mcpb/manifest.json > "$$tmp/$$platform/manifest.json"; \
+		echo "$$platform manifest (mcpb/platform.jq):"; \
+		npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate "$$tmp/$$platform/manifest.json"; \
+	done
 
-## mcpb: build the Claude Desktop extension bundle (dist/gitlab-mcp-server.mcpb).
-## Cross-compiles the darwin universal binary (lipo), the windows/amd64 binary and
-## the linux/amd64 and linux/arm64 binaries the Linux launcher chooses between,
-## then assembles and packs the bundle with scripts/build-mcpb.sh.
+## mcpb: build the Claude Desktop extension bundles: one per operating system
+## (dist/gitlab-mcp-server-darwin.mcpb, -windows.mcpb and -linux.mcpb) and the
+## universal dist/gitlab-mcp-server.mcpb. Cross-compiles the darwin universal
+## binary (lipo), the windows/amd64 binary and the linux/amd64 and linux/arm64
+## binaries the Linux launcher chooses between, then assembles and packs the
+## bundles with scripts/build-mcpb.sh.
 mcpb:
 	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
 	@set -e; \

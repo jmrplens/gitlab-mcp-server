@@ -1,9 +1,10 @@
 #!/bin/sh
-# Linux entry point of the Claude Desktop extension (gitlab-mcp-server.mcpb).
+# Linux entry point of the Claude Desktop extension: the Linux bundle
+# (gitlab-mcp-server-linux.mcpb) and the universal one (gitlab-mcp-server.mcpb).
 #
-# The manifest's platform_overrides are chosen by operating system only, and no
-# manifest version can choose by CPU architecture, so the bundle carries both
-# Linux release binaries beside this script and the linux override runs it as
+# A manifest chooses its command by operating system only, and no manifest
+# version can choose by CPU architecture, so the bundle carries both Linux
+# release binaries beside this script and its Linux command runs it as
 #
 #   /bin/sh ${__dirname}/server/linux/launch.sh
 #

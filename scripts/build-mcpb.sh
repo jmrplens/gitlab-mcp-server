@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
-# Build the Claude Desktop extension bundle (gitlab-mcp-server.mcpb).
+# Build the Claude Desktop extension bundles (.mcpb).
 #
-# Assembles a MCPB bundle directory from the checked-in manifest
-# (mcpb/manifest.json), the 512x512 icon (mcpb/icon.png), the Linux launcher
-# (mcpb/linux/launch.sh), the repository's LICENSE and the release binaries
-# produced by GoReleaser, then packs it as a zip:
+# One run builds four bundles from the same release binaries produced by
+# GoReleaser, the checked-in manifest (mcpb/manifest.json), the derivation of
+# its per-platform form (mcpb/platform.jq), the 512x512 icon (mcpb/icon.png),
+# the Linux launcher (mcpb/linux/launch.sh) and the repository's LICENSE:
+#
+#   gitlab-mcp-server-darwin.mcpb    macOS: the universal binary (arm64 + amd64)
+#   gitlab-mcp-server-windows.mcpb   Windows: the amd64 executable
+#   gitlab-mcp-server-linux.mcpb     Linux: the launcher and both Linux binaries
+#   gitlab-mcp-server.mcpb           all three servers, the universal bundle
+#
+# The three per-OS bundles are what server.json declares, one registry entry
+# each. A user downloads only the server their system runs, and each manifest
+# lists only its own platform, so Claude Desktop refuses one opened on another
+# system with a clear message instead of starting a binary that is not there.
+# The universal bundle keeps the name it has always had and is still published,
+# because links to it exist outside this repository; server.json does not
+# declare it, since a registry entry has no platform field and a client could
+# not tell it from the three that each serve one system.
+#
+# Every bundle uses the same layout, carrying the entries its system needs, so
+# a path means the same thing in all four:
 #
 #   bundle/
 #   ├── manifest.json                  (version stamped to <version>)
@@ -18,39 +35,58 @@
 #           ├── gitlab-mcp-server-linux-amd64
 #           └── gitlab-mcp-server-linux-arm64
 #
-# The manifest's platform_overrides are keyed by operating system only, so
-# macOS runs the universal binary, Windows the amd64 executable, and Linux the
-# launcher through /bin/sh, which chooses between the two Linux binaries.
+# The universal manifest's platform_overrides are keyed by operating system
+# only, so macOS runs the universal binary, Windows the amd64 executable, and
+# Linux the launcher through /bin/sh, which chooses between the two Linux
+# binaries. A per-OS manifest makes its own platform's command the base command
+# and carries no override (mcpb/platform.jq).
 #
 # Usage: build-mcpb.sh <version> [dist-dir]
 #
 #   <version>   Release version without the leading v (e.g. 2.5.0)
 #   [dist-dir]  GoReleaser output directory (default: dist)
 #
-# Output: <dist-dir>/gitlab-mcp-server.mcpb
+# Output: the four bundles above in <dist-dir>.
 
 set -euo pipefail
 
 VERSION="${1:?Usage: $0 <version> [dist-dir]}"
 DIST_DIR="${2:-dist}"
-OUTPUT="$DIST_DIR/gitlab-mcp-server.mcpb"
-# The previous run's bundle is removed before anything can refuse this run, so
-# a refusal on any path, from a missing input to a binary found twice, does not
-# leave it in dist/ under the old version for a later step or a developer to
-# take for this one. From here until every check below has passed, any exit
-# removes the bundle, including one set -e forces on a command nobody expected
-# to fail: a bundle that did not pass its own checks must not be left behind.
-rm -f "$OUTPUT"
-trap 'rm -f "$OUTPUT"' EXIT
+
+# Each bundle this run builds, by the name its target goes by below. The
+# per-OS ones come first so their sizes lead the report.
+TARGETS=(darwin windows linux universal)
+output_of() {
+  if [[ "$1" == universal ]]; then
+    echo "$DIST_DIR/gitlab-mcp-server.mcpb"
+  else
+    echo "$DIST_DIR/gitlab-mcp-server-$1.mcpb"
+  fi
+}
+OUTPUTS=()
+for target in "${TARGETS[@]}"; do
+  OUTPUTS+=("$(output_of "$target")")
+done
+# The previous run's bundles are removed before anything can refuse this run,
+# so a refusal on any path, from a missing input to a binary found twice, does
+# not leave them in dist/ under the old version for a later step or a
+# developer to take for this one. From here until every check below has
+# passed, any exit removes them, including one set -e forces on a command
+# nobody expected to fail: a bundle that did not pass its own checks must not
+# be left behind. They go as a set, since the release declares three of them
+# and a later step handed two would publish a registry entry short of a system.
+rm -f "${OUTPUTS[@]}"
+trap 'rm -f "${OUTPUTS[@]}"' EXIT
 
 MANIFEST="mcpb/manifest.json"
+PLATFORM_JQ="mcpb/platform.jq"
 ICON="mcpb/icon.png"
 LAUNCHER="mcpb/linux/launch.sh"
 # The licence travels with the binaries it covers: a bundle is a redistribution
 # of the server, and MIT asks for its notice to accompany every copy.
 LICENSE_FILE="LICENSE"
 
-for f in "$MANIFEST" "$ICON" "$LAUNCHER" "$LICENSE_FILE"; do
+for f in "$MANIFEST" "$PLATFORM_JQ" "$ICON" "$LAUNCHER" "$LICENSE_FILE"; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: $f not found (run from the repository root)" >&2
     exit 1
@@ -93,21 +129,22 @@ WINDOWS_BIN=$(find_binary "*windows_amd64*" "gitlab-mcp-server.exe")
 LINUX_AMD64_BIN=$(find_binary "*linux_amd64*" "gitlab-mcp-server")
 LINUX_ARM64_BIN=$(find_binary "*linux_arm64*" "gitlab-mcp-server")
 
-# Every entry the bundle carries, in archive order. The same list packs the
-# archive and is what the archive is checked against afterwards.
-ENTRIES=(
-  manifest.json
-  icon.png
-  LICENSE
-  server/gitlab-mcp-server
-  server/gitlab-mcp-server.exe
+# The entries the bundles carry, in archive order. The list a target selects
+# below packs its archive and is what that archive is checked against
+# afterwards. manifest.json comes first: a reader that streams the archive
+# finds the manifest before the multi-megabyte binaries.
+COMMON_ENTRIES=(manifest.json icon.png LICENSE)
+DARWIN_ENTRIES=(server/gitlab-mcp-server)
+WINDOWS_ENTRIES=(server/gitlab-mcp-server.exe)
+LINUX_ENTRIES=(
   server/linux/launch.sh
   server/linux/gitlab-mcp-server-linux-amd64
   server/linux/gitlab-mcp-server-linux-arm64
 )
 # The entries a host must be able to execute. Claude Desktop extracts every
 # file 0600 and restores the execute bit only for entries whose recorded mode
-# has owner-execute, so these are stored 0755 and checked after packing.
+# has owner-execute, so these are stored 0755 and checked after packing. The
+# Windows executable is stored 0755 too, which Windows ignores.
 EXECUTABLES=(
   server/gitlab-mcp-server
   server/linux/launch.sh
@@ -115,77 +152,114 @@ EXECUTABLES=(
   server/linux/gitlab-mcp-server-linux-arm64
 )
 
-BUNDLE_DIR="$DIST_DIR/mcpb-bundle"
-rm -rf "$BUNDLE_DIR"
-mkdir -p "$BUNDLE_DIR/server/linux"
+# Selects what one target carries and serves. PLATFORM is the value its
+# per-OS manifest is derived for, and empty for the universal bundle, whose
+# manifest is the committed one. PLATFORMS is the compatibility.platforms list
+# the packed manifest has to declare, exactly. BASE_PLATFORM is the platform
+# the manifest's base command serves, the one listed platform that needs no
+# override.
+select_target() {
+  case "$1" in
+    darwin)
+      ENTRIES=("${COMMON_ENTRIES[@]}" "${DARWIN_ENTRIES[@]}")
+      PLATFORM=darwin
+      PLATFORMS='["darwin"]'
+      ;;
+    windows)
+      ENTRIES=("${COMMON_ENTRIES[@]}" "${WINDOWS_ENTRIES[@]}")
+      PLATFORM=win32
+      PLATFORMS='["win32"]'
+      ;;
+    linux)
+      ENTRIES=("${COMMON_ENTRIES[@]}" "${LINUX_ENTRIES[@]}")
+      PLATFORM=linux
+      PLATFORMS='["linux"]'
+      ;;
+    universal)
+      ENTRIES=("${COMMON_ENTRIES[@]}" "${DARWIN_ENTRIES[@]}" "${WINDOWS_ENTRIES[@]}" "${LINUX_ENTRIES[@]}")
+      PLATFORM=""
+      PLATFORMS='["darwin","win32","linux"]'
+      ;;
+  esac
+  BASE_PLATFORM=${PLATFORM:-darwin}
+}
 
-jq --arg v "$VERSION" '.version = $v' "$MANIFEST" > "$BUNDLE_DIR/manifest.json"
-cp "$ICON" "$BUNDLE_DIR/icon.png"
-cp "$LICENSE_FILE" "$BUNDLE_DIR/LICENSE"
-cp "$DARWIN_BIN" "$BUNDLE_DIR/server/gitlab-mcp-server"
-cp "$WINDOWS_BIN" "$BUNDLE_DIR/server/gitlab-mcp-server.exe"
-cp "$LAUNCHER" "$BUNDLE_DIR/server/linux/launch.sh"
-cp "$LINUX_AMD64_BIN" "$BUNDLE_DIR/server/linux/gitlab-mcp-server-linux-amd64"
-cp "$LINUX_ARM64_BIN" "$BUNDLE_DIR/server/linux/gitlab-mcp-server-linux-arm64"
-# Every mode is set rather than inherited, since the zip records it and a mode
-# that follows the builder's umask would make the same inputs pack differently.
-(
-  cd "$BUNDLE_DIR"
-  chmod 0644 "${ENTRIES[@]}"
-  chmod 0755 server/gitlab-mcp-server.exe "${EXECUTABLES[@]}"
-)
+# Where each entry other than the manifest is copied from.
+source_of() {
+  case "$1" in
+    icon.png) echo "$ICON" ;;
+    LICENSE) echo "$LICENSE_FILE" ;;
+    server/gitlab-mcp-server) echo "$DARWIN_BIN" ;;
+    server/gitlab-mcp-server.exe) echo "$WINDOWS_BIN" ;;
+    server/linux/launch.sh) echo "$LAUNCHER" ;;
+    server/linux/gitlab-mcp-server-linux-amd64) echo "$LINUX_AMD64_BIN" ;;
+    server/linux/gitlab-mcp-server-linux-arm64) echo "$LINUX_ARM64_BIN" ;;
+  esac
+}
 
-# A .mcpb is a plain zip with manifest.json at its root — the layout above is
-# the whole specification, and `zip` produces it. This used to shell out to
-# `npx --yes @anthropic-ai/mcpb@<pin>`, which pinned the CLI's own version but
-# resolved its nine caret-ranged dependencies fresh from the registry on every
-# release, inside the job that holds the repository's signing and publishing
-# identities. Nothing about packing a zip justifies that.
-#
-# Fixed entry timestamps so the same inputs produce the same bytes: server.json
-# carries this file's SHA256, and a hash that changes because the clock moved
-# tells a verifier nothing.
-# 198001010000 is the zip epoch, and the -t form is the one both GNU and
-# BSD/macOS touch accept (`make mcpb` runs on macOS for lipo).
-find "$BUNDLE_DIR" -exec touch -t 198001010000 {} +
-(
-  cd "$BUNDLE_DIR"
-  # The entries are named rather than recursed into, so their order is the one
-  # ENTRIES gives and not the order the filesystem happens to list them in.
-  # manifest.json comes first: a reader that streams the archive finds the
-  # manifest before the multi-megabyte binaries.
-  zip -q -X -D "../$(basename "$OUTPUT")" "${ENTRIES[@]}"
-)
+STAGING="$DIST_DIR/mcpb-bundle"
+rm -rf "$STAGING"
+DIST_ABS=$(cd "$DIST_DIR" && pwd)
+
+# Stages and packs the selected target into $1.
+pack() {
+  local output="$1" stage entry
+  stage="$STAGING/$(basename "$output" .mcpb)"
+  mkdir -p "$stage"
+  if [[ -z "$PLATFORM" ]]; then
+    jq --arg v "$VERSION" '.version = $v' "$MANIFEST" > "$stage/manifest.json"
+  else
+    jq --arg platform "$PLATFORM" -f "$PLATFORM_JQ" "$MANIFEST" \
+      | jq --arg v "$VERSION" '.version = $v' > "$stage/manifest.json"
+  fi
+  for entry in "${ENTRIES[@]}"; do
+    [[ "$entry" == manifest.json ]] && continue
+    mkdir -p "$stage/$(dirname "$entry")"
+    cp "$(source_of "$entry")" "$stage/$entry"
+  done
+  # Every mode is set rather than inherited, since the zip records it and a
+  # mode that follows the builder's umask would make the same inputs pack
+  # differently.
+  (
+    cd "$stage"
+    chmod 0644 "${ENTRIES[@]}"
+    for entry in "${ENTRIES[@]}"; do
+      case "$entry" in
+        server/*) chmod 0755 "$entry" ;;
+      esac
+    done
+  )
+
+  # A .mcpb is a plain zip with manifest.json at its root: the layout above
+  # is the whole specification, and `zip` produces it. This used to shell out
+  # to `npx --yes @anthropic-ai/mcpb@<pin>`, which pinned the CLI's own version
+  # but resolved its nine caret-ranged dependencies fresh from the registry on
+  # every release, inside the job that holds the repository's signing and
+  # publishing identities. Nothing about packing a zip justifies that.
+  #
+  # Fixed entry timestamps so the same inputs produce the same bytes:
+  # server.json carries each declared bundle's SHA256, and a hash that changes
+  # because the clock moved tells a verifier nothing.
+  # 198001010000 is the zip epoch, and the -t form is the one both GNU and
+  # BSD/macOS touch accept (`make mcpb` runs on macOS for lipo).
+  find "$stage" -exec touch -t 198001010000 {} +
+  (
+    cd "$stage"
+    # The entries are named rather than recursed into, so their order is the
+    # one ENTRIES gives and not the order the filesystem happens to list them
+    # in.
+    zip -q -X -D "$DIST_ABS/$(basename "$output")" "${ENTRIES[@]}"
+  )
+}
 
 # --- What was packed -----------------------------------------------------------
-# The checks below read the archive, not the staging directory, because the
+# The checks below read each archive, not its staging directory, because the
 # archive is what ships.
 failures=0
 fail() {
-  echo "ERROR: $OUTPUT: $1" >&2
+  echo "ERROR: $1" >&2
   failures=$((failures + 1))
 }
-
-# Exactly the expected entries, in order.
-expected_list=$(printf '%s\n' "${ENTRIES[@]}")
-actual_list=$(unzip -Z1 "$OUTPUT")
-if [[ "$actual_list" != "$expected_list" ]]; then
-  fail "the archive does not carry exactly the expected entries"
-  diff <(echo "$expected_list") <(echo "$actual_list") >&2 || true
-fi
-
-# The executables are recorded as Unix files with mode 0755. A zip written
-# without Unix attributes extracts every file 0600 in Claude Desktop.
-for entry in "${EXECUTABLES[@]}"; do
-  # An entry the archive lacks was reported by the entry-list check, and
-  # zipinfo exits non-zero on it, which would end the script before the
-  # removal below. zip itself exits 0 when an input is missing.
-  grep -qxF "$entry" <<< "$actual_list" || continue
-  recorded=$(unzip -Z "$OUTPUT" "$entry" | awk -v name="$entry" '$NF == name { print $1, $3 }' || true)
-  if [[ "$recorded" != "-rwxr-xr-x unx" ]]; then
-    fail "$entry is recorded as '${recorded:-nothing}', expected '-rwxr-xr-x unx'"
-  fi
-done
 
 # What the packed manifest says, checked against what the archive carries.
 # Claude Desktop resolves platform_overrides[process.platform] and substitutes
@@ -197,15 +271,18 @@ done
 # base args.
 #
 # The platform rules run both ways. Every override has to be listed in
-# compatibility.platforms, and every listed platform other than darwin has to
-# have an override, since the base command is the macOS universal binary and a
-# platform without an override would be handed that. The list has to name all
-# three platforms the archive carries a server for: Desktop marks the bundle
-# incompatible on a platform the list leaves out, and on one it lists with no
-# override it would start the Mach-O binary.
-entries_json=$(printf '%s\n' "${ENTRIES[@]}" | jq -R . | jq -s .)
+# compatibility.platforms, and every listed platform other than the one the
+# base command serves has to have an override, since a platform without one
+# would be handed the base command: the macOS binary in the universal bundle.
+# The list has to name exactly the platforms the archive carries a server for:
+# Desktop marks the bundle incompatible on a platform the list leaves out, and
+# on one it lists that the archive has no server for it would start a command
+# that is not there.
 check_manifest() {
-  unzip -p "$OUTPUT" manifest.json | jq -r --arg v "$VERSION" --argjson entries "$entries_json" '
+  local output="$1" entries_json
+  entries_json=$(printf '%s\n' "${ENTRIES[@]}" | jq -R . | jq -s .)
+  unzip -p "$output" manifest.json | jq -r --arg v "$VERSION" --arg base "$BASE_PLATFORM" \
+    --argjson entries "$entries_json" --argjson expected "$PLATFORMS" '
   (.server.mcp_config.platform_overrides // {}) as $overrides
   | (.compatibility.platforms // []) as $platforms
   | ([ .server.mcp_config.command, (.server.mcp_config.args // [])[],
@@ -232,12 +309,15 @@ check_manifest() {
         | select(IN($platforms[]) | not)
         | "platform_overrides.\(.) is not listed in compatibility.platforms"),
       ($platforms[]
-        | select(. != "darwin")
+        | select(. != $base)
         | select(IN($overrides | keys[]) | not)
-        | "compatibility.platforms lists \(.) with no platform_overrides entry, so it would start the base command, the macOS binary"),
-      ("darwin", "win32", "linux"
+        | "compatibility.platforms lists \(.) with no platform_overrides entry, so it would start the base command, which serves \($base)"),
+      ($expected[]
         | select(IN($platforms[]) | not)
         | "compatibility.platforms does not list \(.), although the archive carries its server"),
+      ($platforms[]
+        | select(IN($expected[]) | not)
+        | "compatibility.platforms lists \(.), although the archive carries no server for it"),
       ($overrides | to_entries[] | select(.value | has("env"))
         | "platform_overrides.\(.key) declares env, which would replace the base env"),
       (select((.server.mcp_config.args // []) | length > 0)
@@ -246,28 +326,71 @@ check_manifest() {
     ]
   | .[]'
 }
-# A manifest the entry-list check already found missing is not read again:
-# unzip would exit non-zero on it and end the script before the removal below.
-if grep -qxF manifest.json <<< "$actual_list"; then
-  if manifest_errors=$(check_manifest); then
-    if [[ -n "$manifest_errors" ]]; then
-      while IFS= read -r line; do
-        fail "$line"
-      done <<< "$manifest_errors"
-    fi
-  else
-    fail "the packed manifest.json could not be read and checked"
+
+# Checks the entries, their modes and the manifest of the selected target's
+# archive $1.
+check_bundle() {
+  local output="$1" entry expected_list actual_list recorded manifest_errors line
+  # Exactly the expected entries, in order.
+  expected_list=$(printf '%s\n' "${ENTRIES[@]}")
+  actual_list=$(unzip -Z1 "$output")
+  if [[ "$actual_list" != "$expected_list" ]]; then
+    fail "$output: the archive does not carry exactly the expected entries"
+    diff <(echo "$expected_list") <(echo "$actual_list") >&2 || true
   fi
-fi
+
+  # The executables are recorded as Unix files with mode 0755. A zip written
+  # without Unix attributes extracts every file 0600 in Claude Desktop.
+  for entry in "${EXECUTABLES[@]}"; do
+    # Only the executables this bundle carries. An entry the archive lacks was
+    # reported by the entry-list check, and zipinfo exits non-zero on it,
+    # which would end the script before the removal below. zip itself exits 0
+    # when an input is missing.
+    grep -qxF "$entry" <<< "$expected_list" || continue
+    grep -qxF "$entry" <<< "$actual_list" || continue
+    recorded=$(unzip -Z "$output" "$entry" | awk -v name="$entry" '$NF == name { print $1, $3 }' || true)
+    if [[ "$recorded" != "-rwxr-xr-x unx" ]]; then
+      fail "$output: $entry is recorded as '${recorded:-nothing}', expected '-rwxr-xr-x unx'"
+    fi
+  done
+
+  # A manifest the entry-list check already found missing is not read again:
+  # unzip would exit non-zero on it and end the script before the removal
+  # below.
+  if grep -qxF manifest.json <<< "$actual_list"; then
+    if manifest_errors=$(check_manifest "$output"); then
+      if [[ -n "$manifest_errors" ]]; then
+        while IFS= read -r line; do
+          fail "$output: $line"
+        done <<< "$manifest_errors"
+      fi
+    else
+      fail "$output: the packed manifest.json could not be read and checked"
+    fi
+  fi
+}
+
+for target in "${TARGETS[@]}"; do
+  output=$(output_of "$target")
+  select_target "$target"
+  pack "$output"
+  before=$failures
+  check_bundle "$output"
+  if ((failures > before)); then
+    echo "ERROR: $output failed $((failures - before)) check(s)" >&2
+  fi
+done
 
 if [[ $failures -gt 0 ]]; then
   # Removed so that no later step, and no developer, picks up a bundle that
-  # failed its own checks.
-  rm -f "$OUTPUT"
-  echo "ERROR: $OUTPUT failed $failures check(s) and was removed" >&2
+  # failed its own checks, or the rest of a set one of them failed.
+  rm -f "${OUTPUTS[@]}"
+  echo "ERROR: the bundles failed $failures check(s) in all, and the whole set was removed" >&2
   exit 1
 fi
 
 trap - EXIT
-echo "Built $OUTPUT (version $VERSION)"
-unzip -Z -l "$OUTPUT"
+echo "Built ${#OUTPUTS[@]} bundles (version $VERSION)"
+for output in "${OUTPUTS[@]}"; do
+  unzip -Z -l "$output"
+done
