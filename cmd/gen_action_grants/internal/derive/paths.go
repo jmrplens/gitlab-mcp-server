@@ -34,7 +34,7 @@ func product(a, b pathSet) (pathSet, bool) {
 	if b.isUnit() {
 		return a, true
 	}
-	out := make(pathSet, 0, len(a)*len(b))
+	var out pathSet
 	for _, left := range a {
 		for _, right := range b {
 			out = append(out, merge(left, right))
@@ -44,25 +44,11 @@ func product(a, b pathSet) (pathSet, bool) {
 	return out, len(out) <= maxPaths
 }
 
-// merge joins two sorted index sets.
+// merge joins two index sets into one sorted set.
 func merge(a, b []int) []int {
-	out := make([]int, 0, len(a)+len(b))
-	i, j := 0, 0
-	for i < len(a) || j < len(b) {
-		switch {
-		case j == len(b) || i < len(a) && a[i] < b[j]:
-			out = append(out, a[i])
-			i++
-		case i == len(a) || b[j] < a[i]:
-			out = append(out, b[j])
-			j++
-		default:
-			out = append(out, a[i])
-			i++
-			j++
-		}
-	}
-	return out
+	out := slices.Concat(a, b)
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // minimize drops repeated paths and every path holding another, and orders

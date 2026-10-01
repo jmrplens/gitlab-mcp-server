@@ -236,14 +236,13 @@ func classify(index int, paths [][]int) Class {
 			in++
 		}
 	}
-	switch {
-	case in == 0:
+	if in == 0 {
 		return ClassOptional
-	case in == len(paths):
-		return ClassMandatory
-	default:
-		return ClassAlternative
 	}
+	if in == len(paths) {
+		return ClassMandatory
+	}
+	return ClassAlternative
 }
 
 // symbol names a function by its package and name, with its receiver's type
@@ -274,12 +273,12 @@ func (d *deriver) body(fn *types.Func) *node {
 	b := &builder{d: d, site: fn, fn: indexed, pkg: indexed.Package()}
 	// A body is a declared function's or a literal's block, or the expression
 	// a package-level variable is initialized with; the index holds no other.
-	built := emptyNode()
-	switch root := indexed.Root().(type) {
-	case *ast.BlockStmt:
-		built = b.block(root.List)
-	case ast.Expr:
-		built = b.expr(root)
+	var built *node
+	if block, isBlock := indexed.Root().(*ast.BlockStmt); isBlock {
+		built = b.block(block.List)
+	} else {
+		initializer, _ := indexed.Root().(ast.Expr)
+		built = b.expr(initializer)
 	}
 	d.bodies[fn] = built
 	return built
@@ -304,8 +303,9 @@ func (d *deriver) requestSeam(stand *types.Func) (*types.Func, bool) {
 	if !ok || selection.Kind() != types.MethodExpr {
 		return nil, false
 	}
-	fn, ok := selection.Obj().(*types.Func)
-	if !ok || !isRequestConstructor(fn) {
+	// A method expression selects a method, which is always a function.
+	fn, _ := selection.Obj().(*types.Func)
+	if !isRequestConstructor(fn) {
 		return nil, false
 	}
 	return fn, true

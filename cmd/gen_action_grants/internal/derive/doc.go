@@ -26,6 +26,11 @@
 //   - A construct one of whose arms ends in a return takes the rest of the
 //     block as the arm that did not return: `if final { return }; poll()`
 //     makes poll an alternative to returning, not a request of every call.
+//     A label changes nothing about it. A return is read where it ends an
+//     arm and not deeper: one nested in an inner construct of an arm that
+//     does not itself end the function ends only that inner construct, so a
+//     request after the outer construct reads as running on every path
+//     through the arm, the early one included, which a directive answers.
 //   - An arm that sends nothing and returns an error is a failed call, not a
 //     way the action runs, so it is not an alternative of its own: an error
 //     check after a request does not make the request optional.

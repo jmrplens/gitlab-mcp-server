@@ -89,14 +89,16 @@ func collectDirectives(position func(token.Pos) token.Position, pkgs []*packages
 
 // parseDirective reads what follows the prefix: " kind: reason".
 func parseDirective(rest string) (*Directive, error) {
-	kind, reason, found := strings.Cut(strings.TrimSpace(rest), ":")
+	// A directive with no colon has no reason either: Cut answers an empty
+	// one for it.
+	kind, reason, _ := strings.Cut(strings.TrimSpace(rest), ":")
 	kind, reason = strings.TrimSpace(kind), strings.TrimSpace(reason)
 	switch DirectiveKind(kind) {
 	case DirectiveOptional, DirectiveMandatory, DirectiveAlternatives:
 	default:
 		return nil, fmt.Errorf("%s names %q, which is not optional, mandatory or alternatives", DirectivePrefix, kind)
 	}
-	if !found || reason == "" {
+	if reason == "" {
 		return nil, fmt.Errorf("%s %s gives no reason", DirectivePrefix, kind)
 	}
 	return &Directive{Kind: DirectiveKind(kind), Reason: reason}, nil

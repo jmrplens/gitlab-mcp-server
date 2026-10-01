@@ -83,14 +83,17 @@ func emptyNode() *node { return &node{kind: seqNode} }
 func seqOf(parts ...*node) *node {
 	seq := emptyNode()
 	for _, part := range parts {
-		if part != nil && !part.isEmpty() {
+		if !part.isEmpty() {
 			seq.kids = append(seq.kids, part)
 		}
 	}
 	return seq
 }
 
-// isEmpty reports whether a node holds no leaf at all.
+// isEmpty reports whether a node holds no leaf at all. A directive on such a
+// node qualifies nothing whether the node is kept or dropped, so it is
+// dropped like any other: the directive is reported as qualifying nothing
+// either way.
 func (n *node) isEmpty() bool {
 	if n.kind == leafNode {
 		return false
@@ -100,7 +103,7 @@ func (n *node) isEmpty() bool {
 			return false
 		}
 	}
-	return n.directive == nil
+	return true
 }
 
 // builder reads one body into its structure.
@@ -114,11 +117,11 @@ type builder struct {
 
 // block reads a list of statements in order, taking the rest of the list as
 // the arm that did not return wherever a branching statement has an arm that
-// does.
+// does. A label changes nothing about how a statement branches.
 func (b *builder) block(stmts []ast.Stmt) *node {
 	seq := emptyNode()
 	for i, stmt := range stmts {
-		br, ok := b.branching(stmt)
+		br, ok := b.branching(unlabel(stmt))
 		if !ok {
 			seq.kids = append(seq.kids, b.stmt(stmt))
 			continue
@@ -148,6 +151,17 @@ func (b *builder) block(stmts []ast.Stmt) *node {
 		return seq
 	}
 	return seq
+}
+
+// unlabel returns the statement a label names, through any number of labels.
+func unlabel(stmt ast.Stmt) ast.Stmt {
+	for {
+		labeled, isLabeled := stmt.(*ast.LabeledStmt)
+		if !isLabeled {
+			return stmt
+		}
+		stmt = labeled.Stmt
+	}
 }
 
 // branch is a statement whose arms are alternatives.
@@ -239,7 +253,10 @@ func (b *builder) stmt(stmt ast.Stmt) *node {
 	return built
 }
 
-// statement reads one statement's structure, without its directive.
+// statement reads one statement's structure, without its directive. A
+// branching statement never reaches it: [builder.block] reads every one,
+// through its labels, and every other caller hands it a simple statement (an
+// init, a post, a type switch's assignment).
 func (b *builder) statement(stmt ast.Stmt) *node {
 	switch typed := stmt.(type) {
 	case *ast.ExprStmt:
@@ -250,9 +267,6 @@ func (b *builder) statement(stmt ast.Stmt) *node {
 		return b.decl(typed)
 	case *ast.ReturnStmt:
 		return b.exprs(typed.Results)
-	case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
-		br, _ := b.branching(stmt)
-		return b.fromBranch(br)
 	case *ast.ForStmt:
 		return seqOf(b.stmt(typed.Init), b.expr(typed.Cond), &node{kind: optNode, kids: []*node{seqOf(b.block(typed.Body.List), b.stmt(typed.Post))}})
 	case *ast.RangeStmt:
@@ -457,8 +471,9 @@ func (b *builder) composite(lit *ast.CompositeLit) *node {
 
 // literal reads a string literal that is a GraphQL document written inline.
 func (b *builder) literal(lit *ast.BasicLit) *node {
+	// The type checker records a constant for every literal it accepts.
 	value := b.pkg.TypesInfo.Types[lit].Value
-	if value == nil || value.Kind() != constant.String {
+	if value.Kind() != constant.String {
 		return emptyNode()
 	}
 	text := constant.StringVal(value)
@@ -567,13 +582,12 @@ func isRequestConstructor(fn *types.Func) bool {
 	if pointer, ok := typ.(*types.Pointer); ok {
 		typ = pointer.Elem()
 	}
-	named, ok := typ.(*types.Named)
-	return ok && named.Obj().Name() == "Client" && named.Obj().Pkg() != nil &&
-		named.Obj().Pkg().Path() == actionrequests.ClientGoPath
+	return types.TypeString(types.Unalias(typ), nil) == actionrequests.ClientGoPath+".Client"
 }
 
 // terminates reports whether a list of statements ends the function: a
-// return, a panic, or an if whose arms both end it.
+// return, a panic, or an if whose arms both end it, which an if with no else
+// never does, since its missing else is an empty list.
 func (b *builder) terminates(stmts []ast.Stmt) bool {
 	if len(stmts) == 0 {
 		return false
@@ -586,7 +600,7 @@ func (b *builder) terminates(stmts []ast.Stmt) bool {
 	case *ast.BlockStmt:
 		return b.terminates(last.List)
 	case *ast.IfStmt:
-		return last.Else != nil && b.terminates(last.Body.List) && b.terminates(stmtsOf(last.Else))
+		return b.terminates(last.Body.List) && b.terminates(stmtsOf(last.Else))
 	}
 	return false
 }
@@ -632,7 +646,9 @@ func (b *builder) failing(stmts []ast.Stmt) bool {
 // errorType is the predeclared error interface.
 var errorType = types.Universe.Lookup("error").Type()
 
-// isError reports whether a type is the error interface.
+// isError reports whether a type is the error interface. Every result a
+// return statement carries has a type, the untyped nil aside, which
+// [builder.failing] answers before asking.
 func isError(typ types.Type) bool {
-	return typ != nil && types.Identical(typ, errorType)
+	return types.Identical(typ, errorType)
 }

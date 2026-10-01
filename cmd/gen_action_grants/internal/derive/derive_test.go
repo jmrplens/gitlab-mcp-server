@@ -7,7 +7,9 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests/actionfixture"
@@ -147,6 +149,39 @@ var qualified = fmt.Sprint
 
 var baseURL = (*gl.Client).BaseURL
 
+// Client shares client-go's type name and its constructor's name, and is a
+// type of ours with a value receiver.
+type Client struct{}
+
+func (Client) NewRequest(method, path string) error {
+	_, _ = method, path
+	return nil
+}
+
+type holder struct{ run func() error }
+
+var held holder
+
+var fieldSeam = held.run
+
+func numbers() []int { return nil }
+
+// Sprintf shares fmt's name and is a function of ours.
+func Sprintf(format string, args ...any) string {
+	_, _ = format, args
+	return "own"
+}
+
+func variadic(head string, rest ...string) string {
+	_ = rest
+	return head + "/v"
+}
+
+func rawFor(client *gitlabclient.Client, id string) error {
+	_, err := client.GL().NewRequest(http.MethodGet, "things/"+id, nil, nil)
+	return err
+}
+
 func Nothing(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
 	_, _, _ = ctx, client, input
 	//gitlab:request alternatives: neither sends anything
@@ -171,6 +206,9 @@ func Refusals(ctx context.Context, client *gitlabclient.Client, input Input) (Ou
 func Seams(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
 	_ = qualified(input.ID)
 	_ = baseURL(client.GL())
+	_ = seam
+	_ = fieldSeam
+	_ = Client{}.NewRequest("GET", "own")
 	return Output{}, NewRequest(ctx, client, input.ID)
 }
 
@@ -379,6 +417,11 @@ func RawUnknowns(ctx context.Context, client *gitlabclient.Client, input Input) 
 	if err != nil {
 		return Output{}, err
 	}
+	var verb string
+	_, err = client.GL().NewRequest(verb, "projects", nil, nil)
+	if err != nil {
+		return Output{}, err
+	}
 	_, err = client.GL().NewRequestToURL("GET", &url.URL{}, nil, nil)
 	return Output{}, err
 }
@@ -404,7 +447,109 @@ func Folds(ctx context.Context, client *gitlabclient.Client, input Input) (Outpu
 	_, _ = client.GL().NewRequest("GET", "g/"+func() string { return "x" }(), nil, nil)
 	_, _ = client.GL().NewRequest("GET", "h/"+unset, nil, nil)
 	_, _ = client.GL().NewRequest("GET", fmt.Sprintf("i/%v/%d", get, number), nil, nil)
+	_, _ = client.GL().NewRequest("GET", "j/"+variadic("x"), nil, nil)
+	_, _ = client.GL().NewRequest("GET", "k/"+errors.New("e").Error(), nil, nil)
+	_, _ = client.GL().NewRequest("GET", fmt.Sprint("l/", input.N), nil, nil)
+	_, _ = client.GL().NewRequest("GET", Sprintf("m/%s", input.ID), nil, nil)
+	_, _ = client.GL().NewRequest("GET", fmt.Sprintf("n/%v", numbers()), nil, nil)
+	_, _ = client.GL().NewRequest("GET", fmt.Sprintf("o/%+d/%-5s/%%", input.N, input.ID), nil, nil)
+	dup := "q"
+	if input.N > 0 {
+		dup = "q"
+	}
+	_, _ = client.GL().NewRequest("GET", dup, nil, nil)
 	return Output{}, nil
+}
+
+func Compound(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_, _ = ctx, input
+	path := "r"
+	path += "/s"
+	_, err := client.GL().NewRequest("GET", path, nil, nil)
+	return Output{}, err
+}
+
+func Depths(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_, _ = ctx, input
+	d0 := "z"
+	d1 := d0
+	d2 := d1
+	d3 := d2
+	d4 := d3
+	d5 := d4
+	d6 := d5
+	d7 := d6
+	d8 := d7
+	d9 := d8
+	d10 := d9
+	d11 := d10
+	d12 := d11
+	d13 := d12
+	d14 := d13
+	_, _ = client.GL().NewRequest("GET", "k/"+d13, nil, nil)
+	_, _ = client.GL().NewRequest("GET", "l/"+d14, nil, nil)
+	return Output{}, nil
+}
+
+func Operators(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_ = input.N > 0 || get(ctx, client, input.ID) == nil
+	_ = nil == edit(ctx, client, input.ID)
+	return Output{}, nil
+}
+
+func Exits(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	if input.N == 1 {
+		_ = edit(ctx, client, input.ID)
+		print("one")
+	}
+	if input.N == 2 {
+		Bare(input)
+	}
+	if input.N == 3 {
+		_ = del(ctx, client, input.ID)
+		if input.ID == "" {
+			return Output{}, nil
+		} else {
+			return Output{}, nil
+		}
+	}
+	if input.N == 4 {
+		if input.ID == "" {
+			return Output{}, errors.New("empty")
+		} else {
+			_ = input
+		}
+	}
+	_ = get(ctx, client, input.ID)
+exit:
+	switch {
+	case input.N == 5:
+		return Output{}, nil
+	case input.N == 6:
+		break exit
+	}
+	return Output{}, edit(ctx, client, input.ID)
+}
+
+func Forced(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	//gitlab:request mandatory: the caller always asks for it
+	if input.N > 3 {
+		_ = get(ctx, client, input.ID)
+	}
+	//gitlab:request optional: the edit only enriches the answer
+	_ = edit(ctx, client, input.ID)
+	_ = edit(ctx, client, input.ID)
+	return Output{}, nil
+}
+
+func Documented(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_, _, err := client.GL().Projects.StarProject(input.ID, gl.WithContext(ctx))
+	return Output{}, err
+}
+
+func Helpers(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_ = ctx
+	return Output{}, rawFor(client, "fixed/"+input.ID)
 }
 
 func Overflow(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
@@ -539,6 +684,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		spec("refusals", toolutil.RouteAction(client, Refusals)),
 		spec("seams", toolutil.RouteAction(client, Seams)),
 		spec("spellings", toolutil.RouteAction(client, Spellings)),
+		spec("compound", toolutil.RouteAction(client, Compound)),
+		spec("depths", toolutil.RouteAction(client, Depths)),
+		spec("operators", toolutil.RouteAction(client, Operators)),
+		spec("exits", toolutil.RouteAction(client, Exits)),
+		spec("forced", toolutil.RouteAction(client, Forced)),
+		spec("documented", toolutil.RouteAction(client, Documented)),
+		spec("helpers", toolutil.RouteAction(client, Helpers)),
 		spec("twice", toolutil.RouteAction(client, Sequence)),
 		spec("twice", toolutil.RouteAction(client, Branches)),
 	}
@@ -576,6 +728,37 @@ func loadGrants(t *testing.T) *actionrequests.Program {
 	return prog
 }
 
+// derivationDeadline bounds one derivation of the fixture, which takes well
+// under a second once the fixture is loaded. A fold that fans out without
+// end, which is what a broken assignment rule does, is reported as a stall
+// rather than left to run until the binary's own timeout.
+const derivationDeadline = 30 * time.Second
+
+// stalled is set once a derivation passed the deadline, so every later one
+// is reported at once rather than waited for again.
+var stalled atomic.Bool
+
+// deriveWithin derives the fixture with the declarations given, on a
+// goroutine of its own, and fails the test when it does not finish within
+// [derivationDeadline].
+func deriveWithin(t *testing.T, declarations []Declaration) Result {
+	t.Helper()
+	prog := loadGrants(t)
+	if stalled.Load() {
+		t.Fatal("an earlier derivation of the fixture stalled")
+	}
+	done := make(chan Result, 1)
+	go func() { done <- Derive(prog, fixtureActions(), fixtureSDK(), declarations) }()
+	select {
+	case result := <-done:
+		return result
+	case <-time.After(derivationDeadline):
+		stalled.Store(true)
+		t.Fatalf("the fixture derivation did not finish within %s", derivationDeadline)
+		return Result{}
+	}
+}
+
 // stubSDK answers the derivation's client-go questions from a table.
 type stubSDK map[string]stubMethod
 
@@ -592,11 +775,13 @@ func (s stubSDK) Requests(key string) (routes, documents []Request, known bool) 
 }
 
 // fixtureSDK is the client-go the fixture compiles against, as far as the
-// fixture calls it: two of the methods route one way, the delete two ways,
-// and GetProject is left out so the walk meets a method it cannot read.
+// fixture calls it: the read and the edit route one way, the delete two
+// ways, the edit posts two documents and the star one document and no route,
+// and ListProjects is left out so the walk meets a method it cannot read.
 func fixtureSDK() stubSDK {
 	return stubSDK{
-		"Projects.GetProject": {routes: []Request{{Kind: KindREST, Method: "GET", Path: "/projects/:"}}},
+		"Projects.StarProject": {documents: []Request{{Kind: KindGraphQL, Document: "query three { c }", Name: "three"}}},
+		"Projects.GetProject":  {routes: []Request{{Kind: KindREST, Method: "GET", Path: "/projects/:"}}},
 		"Projects.DeleteProject": {routes: []Request{
 			{Kind: KindREST, Method: "DELETE", Path: "/projects/:"},
 			{Kind: KindREST, Method: "DELETE", Path: "/projects/:/full"},
@@ -617,6 +802,7 @@ func fixtureActions() []actionrequests.Action {
 		"sequence", "branches", "optional", "switches", "kinds", "loops", "directed", "closures", "tables",
 		"choices", "documents", "unsent", "raws", "raw_unknowns", "folds", "overflow", "statements",
 		"expressions", "terminations", "bound", "nothing", "refusals", "seams", "spellings", "twice", "missing",
+		"compound", "depths", "operators", "exits", "forced", "documented", "helpers",
 	}
 	actions := make([]actionrequests.Action, len(names))
 	for i, name := range names {
@@ -655,16 +841,18 @@ func actionByID(t *testing.T, result Result, id string) *Action {
 	return nil
 }
 
-// The two requests the fixture's delete routes to, its read, its edit and the
-// two documents the edit posts ("query one" and "query two", in that order),
-// spelled once for the expectations below.
+// The two requests the fixture's delete routes to, its read, its edit, the
+// two documents the edit posts ("query one" and "query two", in that order)
+// and the one the star posts ("query three"), spelled once for the
+// expectations below.
 const (
-	delete1  = "DELETE /projects/: "
-	delete2  = "DELETE /projects/:/full "
-	getRoute = "GET /projects/: "
-	putRoute = "PUT /projects/: "
-	queryOne = "graphql ff5e4aaea3a2 "
-	queryTwo = "graphql acc2030049ab "
+	delete1    = "DELETE /projects/: "
+	delete2    = "DELETE /projects/:/full "
+	getRoute   = "GET /projects/: "
+	putRoute   = "PUT /projects/: "
+	queryOne   = "graphql ff5e4aaea3a2 "
+	queryTwo   = "graphql acc2030049ab "
+	queryThree = "graphql dd6b4556305f "
 )
 
 // TestDerive_Fixture_ReadsEachShape holds the derivation of every fixture
@@ -673,14 +861,19 @@ const (
 // functions handed to one call are alternatives; an if with no else, a loop,
 // the right side of && and an early success are optional; a directive turns
 // each of those around; a client-go method with two routes is one of them and
-// one posting two documents posts both; a raw request's path is folded through
-// its locals, helpers and formats, and one nothing static names stays
-// unresolved for a declaration to answer. The requests are listed in the
-// order the walk meets them, which is the order the handler makes them: the
-// read before the delete in a sequence, and the edit's documents in the order
-// client-go posts them.
+// one posting two documents posts both, and one posting a document and no
+// route posts that; a raw request's path is folded through its locals,
+// helpers and formats, and one nothing static names stays unresolved for a
+// declaration to answer: a compound assignment, a chain of names deeper than
+// the bound. The left of || and either side of a comparison run on every
+// call. An arm ending in a call that is not panic, or in an if whose else
+// does not end the function, does not end it either, and a labeled switch
+// one of whose cases returns takes the rest as the arm that did not. The
+// requests are listed in the order the walk meets them, which is the order
+// the handler makes them: the read before the delete in a sequence, and the
+// edit's documents in the order client-go posts them.
 func TestDerive_Fixture_ReadsEachShape(t *testing.T) {
-	result := Derive(loadGrants(t), fixtureActions(), fixtureSDK(), nil)
+	result := deriveWithin(t, nil)
 	readThenDelete := getRoute + "[mandatory]\n" + delete1 + "[alternative]\n" + delete2 + "[alternative]\npath [0 1]\npath [0 2]\n"
 	oneOfFour := getRoute + "[alternative]\n" + delete1 + "[alternative]\n" + delete2 + "[alternative]\n" + putRoute + "[alternative]\n" +
 		queryOne + "[alternative]\n" + queryTwo + "[alternative]\npath [0]\npath [1]\npath [2]\npath [3 4 5]\n"
@@ -704,8 +897,19 @@ func TestDerive_Fixture_ReadsEachShape(t *testing.T) {
 			"GET /groups/: [mandatory]\npath [0 2 3]\npath [1 2 3]\n",
 		"raw_unknowns": "unresolved raw-path grants.RawUnknowns [mandatory]\nunresolved raw-url grants.RawUnknowns [mandatory]\npath [0 1]\n",
 		"folds": "GET /a/:/:/: [mandatory]\nGET /b/:/: [mandatory]\nunresolved raw-path grants.Folds [mandatory]\nGET /f/named [mandatory]\n" +
-			getRoute + "[mandatory]\npath [0 1 2 3 4]\n",
-		"overflow": "18 requests, 256 paths\n",
+			getRoute + "[mandatory]\nGET /j/x/v [mandatory]\nGET /k/: [mandatory]\nGET /: [mandatory]\nGET /own [mandatory]\n" +
+			"GET /n/: [mandatory]\nGET /o/:/:/% [mandatory]\nGET /q [mandatory]\npath [0 1 2 3 4 5 6 7 8 9 10 11]\n",
+		"compound": "unresolved raw-path grants.Compound [mandatory]\npath [0]\n",
+		"depths":   "GET /k/z [mandatory]\nunresolved raw-path grants.Depths [mandatory]\npath [0 1]\n",
+		"operators": getRoute + "[optional]\n" + putRoute + "[mandatory]\n" + queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\n" +
+			"path [1 2 3]\n",
+		"exits": putRoute + "[optional]\n" + queryOne + "[optional]\n" + queryTwo + "[optional]\n" + delete1 + "[alternative]\n" +
+			delete2 + "[alternative]\n" + getRoute + "[alternative]\npath [3]\npath [4]\npath [5]\n",
+		"forced": getRoute + "[mandatory]\n" + putRoute + "[mandatory]\n" + queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\n" +
+			"path [0 1 2 3]\n",
+		"documented": queryThree + "[mandatory]\npath [0]\n",
+		"helpers":    "GET /things/fixed/: [mandatory]\npath [0]\n",
+		"overflow":   "18 requests, 256 paths\n",
 		"statements": getRoute + "[mandatory]\n" + delete1 + "[alternative]\n" + delete2 + "[alternative]\n" + putRoute + "[mandatory]\n" +
 			queryOne + "[mandatory]\n" + queryTwo + "[mandatory]\npath [0 1 3 4 5]\npath [0 2 3 4 5]\n",
 		"expressions":  readThenDelete,
@@ -724,12 +928,47 @@ func TestDerive_Fixture_ReadsEachShape(t *testing.T) {
 	}
 }
 
+// TestDerive_Fixture_RecordsWhereEachRequestCameFrom verifies what a request
+// records beside its class: the client-go method that sends it, and none for a
+// raw request; whether it was qualified, which a method posting several
+// documents does for them of its own accord and one posting a single document
+// does not; and whether an optional directive made it optional, which a later
+// plain call of the same request does not undo.
+func TestDerive_Fixture_RecordsWhereEachRequestCameFrom(t *testing.T) {
+	result := deriveWithin(t, nil)
+	cases := []struct {
+		name, action, key string
+		sdk               []string
+		qualified         bool
+		declaredOptional  bool
+	}{
+		{name: "a method posting one document", action: "fixture.documented", key: "graphql dd6b4556305f", sdk: []string{"Projects.StarProject"}},
+		{name: "a method posting two documents", action: "fixture.seams", key: "graphql ff5e4aaea3a2", sdk: []string{"Projects.EditProject"}, qualified: true},
+		{name: "a raw request", action: "fixture.helpers", key: "GET /things/fixed/:"},
+		{name: "optional, then called plainly", action: "fixture.forced", key: "PUT /projects/:", sdk: []string{"Projects.EditProject"}, declaredOptional: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			act := actionByID(t, result, testCase.action)
+			index := slices.IndexFunc(act.Uses, func(use Use) bool { return use.Key() == testCase.key })
+			if index < 0 {
+				t.Fatalf("%s sends no %s", testCase.action, testCase.key)
+			}
+			use := act.Uses[index]
+			if !slices.Equal(use.SDKMethods, testCase.sdk) || use.Qualified != testCase.qualified || use.DeclaredOptional != testCase.declaredOptional {
+				t.Errorf("%s: sdk %q, qualified %t, declared optional %t; want %q, %t, %t", testCase.key,
+					use.SDKMethods, use.Qualified, use.DeclaredOptional, testCase.sdk, testCase.qualified, testCase.declaredOptional)
+			}
+		})
+	}
+}
+
 // TestDerive_Fixture_SpellingsStopAtTheBound verifies a path whose pieces
 // multiply past the bound keeps the first sixteen spellings rather than
 // growing without end, and that a local declared with a value, a string
 // helper and a closure inside it fold like any other piece.
 func TestDerive_Fixture_SpellingsStopAtTheBound(t *testing.T) {
-	act := actionByID(t, Derive(loadGrants(t), fixtureActions(), fixtureSDK(), nil), "fixture.spellings")
+	act := actionByID(t, deriveWithin(t, nil), "fixture.spellings")
 	if len(act.Uses) != maxSpellings {
 		t.Fatalf("fixture.spellings derives %d requests, want %d", len(act.Uses), maxSpellings)
 	}
@@ -743,7 +982,7 @@ func TestDerive_Fixture_SpellingsStopAtTheBound(t *testing.T) {
 // one expanding past the path bound, a directive naming no kind or giving no
 // reason, and one qualifying nothing any action reaches.
 func TestDerive_Fixture_ReportsWhatItCannotRead(t *testing.T) {
-	result := Derive(loadGrants(t), fixtureActions(), fixtureSDK(), nil)
+	result := deriveWithin(t, nil)
 	wantAction := map[string]string{
 		"fixture.twice":    "fixture.twice meets 2 ActionSpec constructions, so its handler cannot be read",
 		"fixture.missing":  "fixture.missing meets 0 ActionSpec constructions, so its handler cannot be read",
@@ -794,7 +1033,7 @@ func TestDerive_Declarations_AnswerWhatTheWalkCannotRead(t *testing.T) {
 		{Action: "fixture.sequence", Category: "sends-nothing"},
 		{Action: "fixture.raws", Category: "path-function-value", Replaces: "raw-path nowhere"},
 	}
-	result := Derive(loadGrants(t), fixtureActions(), fixtureSDK(), declarations)
+	result := deriveWithin(t, declarations)
 
 	unknowns := actionByID(t, result, "fixture.raw_unknowns")
 	want := "GET /a [mandatory]\nGET /b [mandatory]\nGET /c [alternative]\nGET /d [alternative]\npath [0 1 2]\npath [0 1 3]\n"

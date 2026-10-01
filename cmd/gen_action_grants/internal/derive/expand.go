@@ -43,15 +43,12 @@ func (e *expansion) call(fn *types.Func, call *ast.CallExpr, caller *frame, ctx 
 		return unit()
 	}
 	at := &frame{pkg: indexed.Package(), body: indexed.Root()}
-	switch {
-	case indexed.Decl() != nil:
-		at.body = indexed.Decl().Body
-		at.env = bind(indexed.Package(), indexed.Decl().Type.Params, call, caller)
-	default:
-		if lit, isLit := indexed.Root().(*ast.FuncLit); isLit {
-			at.body = lit.Body
-			at.env = bind(indexed.Package(), lit.Type.Params, call, caller)
-		}
+	if decl := indexed.Decl(); decl != nil {
+		at.body = decl.Body
+		at.env = bind(indexed.Package(), decl.Type.Params, call, caller)
+	} else if lit, isLit := indexed.Root().(*ast.FuncLit); isLit {
+		at.body = lit.Body
+		at.env = bind(indexed.Package(), lit.Type.Params, call, caller)
 	}
 	e.stack[fn] = true
 	defer delete(e.stack, fn)
@@ -222,11 +219,12 @@ func (e *expansion) raw(l *leaf, at *frame, ctx context) pathSet {
 
 // record adds a request to the action and returns the path that makes it. An
 // unresolved request a declaration of the action answers is replaced by the
-// declared requests.
+// declared requests. Every unresolved request carries its reason, so a
+// declaration replacing nothing never meets one.
 func (e *expansion) record(req Request, l *leaf, ctx context, sdk string) pathSet {
 	if req.Kind == KindUnresolved {
 		for _, entry := range e.declarations {
-			if entry.Replaces != "" && entry.Replaces == req.Reason {
+			if entry.Replaces == req.Reason {
 				entry.used = true
 				return e.declared(entry, l, ctx)
 			}

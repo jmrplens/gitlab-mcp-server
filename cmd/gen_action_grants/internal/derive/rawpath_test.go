@@ -38,6 +38,7 @@ func TestNormalizePath_SpellsARouteTheWayClientGoDoes(t *testing.T) {
 		{raw: "/api/v4/projects/:/issues/", want: "/projects/:/issues", ok: true},
 		{raw: "groups/x:y/members?page=1", want: "/groups/:/members", ok: true},
 		{raw: "users#fragment", want: "/users", ok: true},
+		{raw: "?page=1", want: "/", ok: true},
 		{raw: "projects/" + unknownPiece, ok: false},
 	}
 	for _, testCase := range cases {

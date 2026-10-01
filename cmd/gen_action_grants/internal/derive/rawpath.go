@@ -5,7 +5,9 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -34,8 +36,9 @@ const unknownPiece = "\x00"
 // literal segment of the route.
 const placeholder = ":"
 
-// maxFoldDepth bounds how far a fold follows names; real paths fold in two or
-// three steps, and the bound only keeps a cycle from hanging a run.
+// maxFoldDepth bounds how many folds deep one path follows names; real paths
+// fold in two or three steps, and the bound only keeps a cycle from hanging a
+// run. Each fold counts once, on entry, whatever it was reached through.
 const maxFoldDepth = 16
 
 // maxSpellings bounds how many spellings one expression folds to, so a path
@@ -50,8 +53,11 @@ const maxSpellings = 16
 // a string helper of the loaded source to what it returns. A field, an index,
 // a number and a call that formats a value (url.PathEscape, strconv.Itoa) fold
 // to the placeholder, since what they carry is an identifier. A string nothing
-// static names folds to [unknownPiece].
+// static names folds to [unknownPiece], and so does a local any compound
+// assignment (+=) writes, whose value depends on which statements ran before
+// it. depth is how many folds enclose this one.
 func (d *deriver) fold(expr ast.Expr, at *frame, depth int) []string {
+	depth++
 	if depth > maxFoldDepth || expr == nil {
 		return []string{unknownPiece}
 	}
@@ -69,7 +75,7 @@ func (d *deriver) fold(expr ast.Expr, at *frame, depth int) []string {
 		if typed.Op != token.ADD {
 			return []string{placeholder}
 		}
-		return combine(d.fold(typed.X, at, depth+1), d.fold(typed.Y, at, depth+1))
+		return combine(d.fold(typed.X, at, depth), d.fold(typed.Y, at, depth))
 	case *ast.CallExpr:
 		return d.foldCall(typed, at, depth)
 	case *ast.SelectorExpr, *ast.IndexExpr, *ast.StarExpr:
@@ -86,11 +92,15 @@ func (d *deriver) foldIdent(ident *ast.Ident, at *frame, depth int) []string {
 		return []string{unknownPiece}
 	}
 	if bound, isBound := at.env[variable]; isBound {
-		return d.fold(bound.expr, bound.at, depth+1)
+		return d.fold(bound.expr, bound.at, depth)
+	}
+	assignments := assignmentsTo(at.pkg, at.body, variable)
+	if slices.Contains(assignments, nil) {
+		return []string{unknownPiece}
 	}
 	var found []string
-	for _, assigned := range assignmentsTo(at.pkg, at.body, variable) {
-		found = append(found, d.fold(assigned, at, depth+1)...)
+	for _, assigned := range assignments {
+		found = append(found, d.fold(assigned, at, depth)...)
 	}
 	if len(found) > 0 {
 		return dedupe(found)
@@ -103,34 +113,39 @@ func (d *deriver) foldIdent(ident *ast.Ident, at *frame, depth int) []string {
 
 // foldCall folds a call: a conversion to its operand, fmt.Sprintf to its
 // format filled in, and a string helper of the loaded source to what it
-// returns with its parameters bound.
+// returns with its parameters bound. A conversion always has one operand and
+// fmt.Sprintf always a format, which the type checker holds a call to.
 func (d *deriver) foldCall(call *ast.CallExpr, at *frame, depth int) []string {
-	if typeAndValue, ok := at.pkg.TypesInfo.Types[call.Fun]; ok && typeAndValue.IsType() && len(call.Args) == 1 {
-		return d.fold(call.Args[0], at, depth+1)
+	if at.pkg.TypesInfo.Types[call.Fun].IsType() {
+		return d.fold(call.Args[0], at, depth)
 	}
 	callee := calleeOf(at.pkg, call)
 	if callee == nil {
 		return []string{unknownPiece}
 	}
-	if callee.Pkg() != nil && callee.Pkg().Path() == "fmt" && callee.Name() == "Sprintf" && len(call.Args) > 0 {
+	if callee.Pkg() != nil && callee.Pkg().Path() == "fmt" && callee.Name() == "Sprintf" {
 		var found []string
-		for _, format := range d.fold(call.Args[0], at, depth+1) {
+		for _, format := range d.fold(call.Args[0], at, depth) {
 			found = append(found, d.sprintf(format, call.Args[1:], at, depth)...)
 		}
 		return dedupe(found)
 	}
+	// The index holds a declared function with its body and a stand-in for a
+	// literal or an initializer, which no call names, so a function of ours a
+	// call names has a declaration.
 	fn, ours := d.prog.Function(callee.Origin())
-	if !ours || fn.Decl() == nil || !returnsString(callee) {
+	if !ours || !returnsString(callee) {
 		return []string{placeholder}
 	}
-	inner := &frame{pkg: fn.Package(), body: fn.Decl().Body, env: bind(fn.Package(), fn.Decl().Type.Params, call, at)}
+	decl := fn.Decl()
+	inner := &frame{pkg: fn.Package(), body: decl.Body, env: bind(fn.Package(), decl.Type.Params, call, at)}
 	var found []string
-	ast.Inspect(fn.Decl().Body, func(n ast.Node) bool {
+	ast.Inspect(decl.Body, func(n ast.Node) bool {
 		if _, isLit := n.(*ast.FuncLit); isLit {
 			return false
 		}
 		if ret, isReturn := n.(*ast.ReturnStmt); isReturn && len(ret.Results) > 0 {
-			found = append(found, d.fold(ret.Results[0], inner, depth+1)...)
+			found = append(found, d.fold(ret.Results[0], inner, depth)...)
 		}
 		return true
 	})
@@ -140,32 +155,34 @@ func (d *deriver) foldCall(call *ast.CallExpr, at *frame, depth int) []string {
 	return dedupe(found)
 }
 
-// sprintf fills a format's verbs with what each argument folds to.
+// sprintf fills a format's verbs with what each argument folds to: the text
+// up to a verb as written, a doubled percent sign as one, a verb's flags,
+// width and precision dropped with it, and a verb with no argument left as a
+// piece nothing static names.
 func (d *deriver) sprintf(format string, args []ast.Expr, at *frame, depth int) []string {
 	spellings := []string{""}
 	next := 0
-	for i := 0; i < len(format); i++ {
-		if format[i] != '%' {
-			spellings = combine(spellings, []string{format[i : i+1]})
-			continue
+	for {
+		literal, rest, found := strings.Cut(format, "%")
+		spellings = combine(spellings, []string{literal})
+		if !found {
+			return spellings
 		}
-		if i+1 < len(format) && format[i+1] == '%' {
+		if after, escaped := strings.CutPrefix(rest, "%"); escaped {
 			spellings = combine(spellings, []string{"%"})
-			i++
+			format = after
 			continue
 		}
-		for i+1 < len(format) && strings.IndexByte("+-# 0123456789.", format[i+1]) >= 0 {
-			i++
-		}
-		i++
+		rest = strings.TrimLeft(rest, "+-# 0123456789.")
+		_, verb := utf8.DecodeRuneInString(rest)
+		format = rest[verb:]
 		piece := []string{unknownPiece}
 		if next < len(args) {
-			piece = d.fold(args[next], at, depth+1)
+			piece = d.fold(args[next], at, depth)
 		}
 		next++
 		spellings = combine(spellings, piece)
 	}
-	return spellings
 }
 
 // combine concatenates every spelling of a with every spelling of b, up to
@@ -197,19 +214,20 @@ func dedupe(values []string) []string {
 }
 
 // bind binds a parameter list to a call's arguments, each evaluated in the
-// caller's frame. A call with fewer arguments binds what it passes.
+// caller's frame. A call with fewer arguments, a variadic one passing none,
+// binds what it passes. A function's parameter list is never nil, and every
+// name in it defines a variable.
 func bind(pkg *packages.Package, params *ast.FieldList, call *ast.CallExpr, at *frame) map[*types.Var]binding {
 	env := map[*types.Var]binding{}
-	if call == nil || params == nil {
+	if call == nil {
 		return env
 	}
 	index := 0
 	for _, field := range params.List {
 		for _, name := range field.Names {
 			if index < len(call.Args) {
-				if variable, ok := pkg.TypesInfo.Defs[name].(*types.Var); ok {
-					env[variable] = binding{expr: call.Args[index], at: at}
-				}
+				variable, _ := pkg.TypesInfo.Defs[name].(*types.Var)
+				env[variable] = binding{expr: call.Args[index], at: at}
 			}
 			index++
 		}
@@ -218,38 +236,63 @@ func bind(pkg *packages.Package, params *ast.FieldList, call *ast.CallExpr, at *
 }
 
 // assignmentsTo lists every expression a body assigns to a variable, through
-// := and =, and a var declaration with values.
+// := and =, and a var declaration with values. A compound assignment (+=) is
+// listed as a nil expression, which marks the variable as one no fold reads.
 func assignmentsTo(pkg *packages.Package, body ast.Node, variable *types.Var) []ast.Expr {
 	if body == nil {
 		return nil
 	}
-	var found []ast.Expr
 	assigns := func(ident *ast.Ident) bool {
-		return pkg.TypesInfo.Defs[ident] == variable || pkg.TypesInfo.Uses[ident] == variable
+		return pkg.TypesInfo.ObjectOf(ident) == variable
 	}
+	var found []ast.Expr
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch typed := n.(type) {
 		case *ast.AssignStmt:
-			if len(typed.Lhs) != len(typed.Rhs) {
-				return true
-			}
-			for i, lhs := range typed.Lhs {
-				if ident, ok := lhs.(*ast.Ident); ok && assigns(ident) {
-					found = append(found, typed.Rhs[i])
-				}
-			}
+			found = append(found, assignedBy(typed, assigns)...)
 		case *ast.ValueSpec:
-			if len(typed.Names) != len(typed.Values) {
-				return true
-			}
-			for i, name := range typed.Names {
-				if assigns(name) {
-					found = append(found, typed.Values[i])
-				}
-			}
+			found = append(found, declaredBy(typed, assigns)...)
 		}
 		return true
 	})
+	return found
+}
+
+// assignedBy lists what one assignment statement writes to the variable
+// assigns recognizes: the value := or = gives it, and a nil expression for a
+// compound assignment. A statement assigning a call's several results names
+// none.
+func assignedBy(stmt *ast.AssignStmt, assigns func(*ast.Ident) bool) []ast.Expr {
+	if len(stmt.Lhs) != len(stmt.Rhs) {
+		return nil
+	}
+	var found []ast.Expr
+	for i, lhs := range stmt.Lhs {
+		ident, ok := lhs.(*ast.Ident)
+		if !ok || !assigns(ident) {
+			continue
+		}
+		if stmt.Tok == token.ASSIGN || stmt.Tok == token.DEFINE {
+			found = append(found, stmt.Rhs[i])
+		} else {
+			found = append(found, nil)
+		}
+	}
+	return found
+}
+
+// declaredBy lists the values a var declaration gives the variable assigns
+// recognizes. A declaration taking a call's several results names none.
+func declaredBy(spec *ast.ValueSpec, assigns func(*ast.Ident) bool) []ast.Expr {
+	if len(spec.Names) != len(spec.Values) {
+		return nil
+	}
+	var found []ast.Expr
+	for i, name := range spec.Names {
+		if assigns(name) {
+			found = append(found, spec.Values[i])
+		}
+	}
 	return found
 }
 
@@ -274,10 +317,10 @@ func isString(typ types.Type) bool {
 	return ok && basic.Info()&types.IsString != 0
 }
 
-// returnsString reports whether a function's first result is a string.
+// returnsString reports whether a function's first result is a string. A
+// call that is folded is a value, so the function it calls has a result.
 func returnsString(fn *types.Func) bool {
-	results := fn.Signature().Results()
-	return results.Len() > 0 && isString(results.At(0).Type())
+	return isString(fn.Signature().Results().At(0).Type())
 }
 
 // normalizePath turns a folded request path into the route spelling client-go
