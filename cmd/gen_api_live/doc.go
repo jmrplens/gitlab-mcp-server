@@ -63,8 +63,11 @@
 //   - every GraphQL object type with whether the granular check runs on it,
 //     its abilities, its directives and the signature of every object-typed
 //     field, every union and interface with its possible types, every
-//     mutation and field-level directive, and the undeclared set computed with
-//     GitLab's own todo rule beside the authorization_todo.txt the image ships.
+//     mutation with the directives GitLab's runtime check reads (its class's)
+//     and, only where it differs, the reading GitLab's permission task makes
+//     of its field, every field-level directive, and the undeclared set
+//     computed with GitLab's own todo rule beside the authorization_todo.txt
+//     the image ships.
 //
 // -check refuses a version 4 record that lacks either block, falls below the
 // fine-grained floors, maps a raw permission to an assignable that is not its
@@ -72,10 +75,14 @@
 // define or no assignable expands to, declares permissions with no boundary,
 // names a boundary type GitLab does not resolve, carries a key or argument
 // nothing reads, holds a directive with both a skip and permissions or
-// neither, computes an undeclared set that differs from GitLab's list, leaves
-// an abstract type without members or a field leading nowhere, or holds a
-// public set that does not say how it was produced. The generator refuses to
-// write the same record.
+// neither, holds a mutation whose field and class GitLab's two readers would
+// disagree about, computes an undeclared set that differs from GitLab's list,
+// leaves an abstract type without members or a field leading nowhere, or
+// holds a public set that does not say how it was produced. The generator
+// refuses to write the same record. -check alone also refuses a source block
+// whose figures, the four the provenance always carried and the fine-grained
+// ones, are not what the content gives, since a passing run prints them as
+// the record's own.
 //
 // # What it cannot give
 //
