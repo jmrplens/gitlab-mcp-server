@@ -390,7 +390,7 @@ Alternatively, set `GITLAB_MCP_SAFE_MODE=true` for a dry-run mode: mutating tool
 <details>
 <summary><strong>What GitLab editions are supported?</strong></summary>
 
-Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate` in stdio mode to enable additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.); leave it unset to detect the tier from the instance license (fallback `free`). In HTTP mode, `--tier` can force the tier, otherwise it is detected per token+URL pool entry from the license.
+Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate` in stdio mode to enable additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.); leave it unset to detect the tier from the instance license, then from the plans of the namespaces the token administers (fallback `free`). In HTTP mode, `--tier` can force the tier, otherwise it is detected the same way per token+URL pool entry.
 </details>
 
 <details>

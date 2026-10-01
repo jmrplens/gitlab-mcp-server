@@ -10,7 +10,7 @@ In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **34 ba
 
 The `gitlab_server` meta-tool (actions `status` and `health_check`) comes from a maintenance group of its own rather than from the GitLab action catalog, but the server registers it on every tier, so it is counted here. It used to be left out of the published figures, which is why they said one tool fewer than a client receives.
 
-Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
+Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license, then from the namespace plans (fallback `free`).
 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
