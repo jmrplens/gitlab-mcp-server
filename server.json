@@ -220,19 +220,19 @@
         },
         {
           "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/files:/another/path/to/files"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/downloads:/another/path/to/downloads"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
@@ -377,19 +377,19 @@
         },
         {
           "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/files:/another/path/to/files"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/downloads:/another/path/to/downloads"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
@@ -536,19 +536,19 @@
         },
         {
           "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/files:/another/path/to/files"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/downloads:/another/path/to/downloads"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
@@ -696,19 +696,19 @@
         },
         {
           "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/files:/another/path/to/files"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/downloads:/another/path/to/downloads"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
@@ -856,19 +856,19 @@
         },
         {
           "name": "GITLAB_MCP_ALLOWED_UPLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may read a local file from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/files:/another/path/to/files"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS",
-          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories an action may write a downloaded file into; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/downloads:/another/path/to/downloads"
         },
         {
           "name": "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
-          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory and the OS temp directory are always allowed",
+          "description": "Extra OS path-list-separated directories a project or group import archive may be read from; the working directory (unless it is the filesystem root or your home directory) and the OS temp directory are always allowed. Unused in HTTP mode, which refuses local paths",
           "isRequired": false,
           "placeholder": "/path/to/exports:/another/path/to/exports"
         },
