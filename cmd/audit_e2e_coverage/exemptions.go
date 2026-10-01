@@ -60,6 +60,17 @@ var exemptedActions = map[string]actionExemption{}
 // runtime with no entry has no floor.
 var assertedFloors = map[string]int{}
 
+// fineGrainedFloors is the least each runtime's sessions on a fine-grained
+// token must show for -check to pass, keyed by the -runtime selector like
+// [assertedFloors], and applied to a live run alone ([checkFineGrained]).
+//
+// The figures are the first complete Docker runs of issue 952's scenarios,
+// rounded down to what every one of those runs reached, so a run passes them
+// only if the fine-grained scenarios ran and saw both halves: actions a grant
+// reaches served, and actions it does not refused before anything reached
+// GitLab.
+var fineGrainedFloors = map[string]fineGrainedFloor{}
+
 // declaredCategories is the set a category must belong to, so a typo does
 // not invent a fourth kind of exemption.
 var declaredCategories = map[string]bool{

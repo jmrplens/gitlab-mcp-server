@@ -81,12 +81,21 @@
 // trace id; a tool call whose span never came is unobserved on its own terms,
 // whatever its row says.
 //
+// A session on a fine-grained personal access token is kept out of all of
+// that (issue 952). It is listed a narrower surface on purpose and refused
+// where its grant does not reach, so its lines, which say credential
+// fine-grained, are counted in a section of their own (fine_grained.go):
+// per surface x mode x action, with every refusal under the reason the
+// server gave it.
+//
 // # The gates
 //
 // -check fails when an expected runtime left no run line, when no test call
 // was recorded, when a package refused to run, when a package ran under a
-// -run filter (a partial run is not a coverage claim about the rest), and
-// when the asserted count falls below the floor exemptions.go records. -baseline compares two shard
+// -run filter (a partial run is not a coverage claim about the rest), when
+// the asserted count falls below the floor exemptions.go records, and when
+// the actions a fine-grained session saw run, or saw refused for its
+// credential, fall below the floors recorded for them. -baseline compares two shard
 // directories and fails on any runtime x surface x mode x action x credit the
 // old suite reached in a passing test and the new one does not. The credits
 // order themselves: a cleanup credit is met by the same cell as cleanup, sweep

@@ -368,6 +368,7 @@ func classifyRuntime(opts options, rt *runtimeRecords, selectors []string, resul
 	}
 	if opts.check {
 		rep.Check = checkRuntime(rep, selectors)
+		checkFineGrained(rep, selectors, rep.Check)
 		if !rep.Check.Passed {
 			status = exitFindings
 		}
