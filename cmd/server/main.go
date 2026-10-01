@@ -2022,12 +2022,14 @@ func newServerShell(
 
 	// A fine-grained session's tools/list is narrowed to what it may run
 	// (register row AUT-007). Added right after the rate limit, so it runs
-	// outside it and outside the schema lockdown and the pagination bounds:
-	// the listing record RTC-007 charges in advance is one per server, and a
-	// filter inside it would let one narrow grant's listing lower what other
-	// credentials' wide ones are charged; and no narrow credential's first
-	// listing decides which tools get their schemas finalized. Inside the
-	// credential binding, which is what tells it whose listing this is.
+	// outside it: the listing record RTC-007 charges in advance is one per
+	// server, and a filter inside the limiter would let one narrow grant's
+	// listing lower what other credentials' wide ones are charged. Its place
+	// relative to the schema lockdown and the pagination bounds does not
+	// matter: they finalize the tools on the first listing they see, which is
+	// the server's own at registration, before any client lists, and the
+	// filter never narrows that one. Inside the credential binding, which is
+	// what tells it whose listing this is.
 	server.AddReceivingMiddleware(toolvisibility.ListingMiddleware(shell.toolActions.Load))
 
 	// Ceiling on the calls the process holds open across every credential

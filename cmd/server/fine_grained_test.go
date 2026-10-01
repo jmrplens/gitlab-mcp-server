@@ -109,11 +109,13 @@ func assertFinalized(t *testing.T, label string, tools []*mcp.Tool) {
 // server that a fine-grained session's listings leave out every tool it may
 // run none of the actions of, and only those, and that every listing, the
 // first and the next and a classic one after them, carries the schemas the
-// server finalizes, with an operator's description substitution active too.
-// The filter runs outside the schema lockdown, the pagination bounds and the
-// substitution, so a narrow first listing cannot decide which tools get
-// finalized: the classic listing that follows lists the tools the narrow one
-// left out, locked down and bounded all the same.
+// server finalizes, with an operator's description substitution active too:
+// the classic listing that follows lists the tools the narrow ones left out,
+// locked down and bounded all the same. What it holds is the result, not the
+// filter's place in the chain: the schema lockdown and the pagination bounds
+// finalize the tools on the first listing they see, which is the server's own
+// at registration, and the filter never narrows that one, so no client's
+// listing decides it wherever the filter sits relative to them.
 func TestCreateServer_FineGrained_EveryListingNarrowedAndFinalized(t *testing.T) {
 	t.Setenv(gatewaycompat.EnvVar, "GitLab=Gitlab")
 	client := newMockGitLabClient(t)
