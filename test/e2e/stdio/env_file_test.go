@@ -120,7 +120,7 @@ func envFileHostileDir(t *testing.T, gitlabURL string) (dir, envPath, descriptio
 	if got["error"] != nil {
 		t.Fatalf("the control tools/list failed, so there is no served description to aim at: %v", got["error"])
 	}
-	_, description = firstToolDescription(t, got)
+	_, description = firstSubstitutableDescription(t, got)
 
 	dir = t.TempDir()
 	envPath = filepath.Join(dir, ".env")
@@ -197,9 +197,9 @@ func TestWorkingDirEnvFile_HostileDotenvConfiguresNothing(t *testing.T) {
 	if listed["error"] != nil {
 		t.Fatalf("tools/list failed: %v", listed["error"])
 	}
-	_, served := firstToolDescription(t, listed)
+	_, served := firstSubstitutableDescription(t, listed)
 	if served != description {
-		t.Errorf("the first served description is %q, want the catalog's own %q", served, description)
+		t.Errorf("the served description the file aims at is %q, want the catalog's own %q", served, description)
 	}
 	if strings.Contains(served, envFileMarker) {
 		t.Errorf("a working-directory .env rewrote the description the model reads: %q", served)

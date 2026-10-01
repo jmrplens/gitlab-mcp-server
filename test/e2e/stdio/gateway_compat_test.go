@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 )
 
 // escapeSubstitutionHalf escapes one half of an old=new pair the way the
@@ -22,9 +24,14 @@ func escapeSubstitutionHalf(s string) string {
 	return strings.ReplaceAll(s, "=", `\=`)
 }
 
-// firstToolDescription returns the name and description of the first tool
-// with a non-empty description in a tools/list response.
-func firstToolDescription(t *testing.T, got map[string]any) (name, description string) {
+// firstSubstitutableDescription returns the name and description of the first
+// tool in a tools/list response whose description can be the pattern of a
+// substitution: not empty, and no longer than the bytes one half of a pair may
+// hold. A longer description is passed over rather than shortened, since the
+// substitution test asserts the whole served text is replaced, and since the
+// server refuses to start on a pattern over the limit, which is not the thing
+// any caller tests.
+func firstSubstitutableDescription(t *testing.T, got map[string]any) (name, description string) {
 	t.Helper()
 	result, ok := got["result"].(map[string]any)
 	if !ok {
@@ -40,13 +47,13 @@ func firstToolDescription(t *testing.T, got map[string]any) (name, description s
 			continue
 		}
 		desc, _ := tool["description"].(string)
-		if desc == "" {
+		if desc == "" || len(desc) > gatewaycompat.MaxSubstitutionBytes {
 			continue
 		}
 		toolName, _ := tool["name"].(string)
 		return toolName, desc
 	}
-	t.Fatal("no listed tool carries a description; the fixture surface changed")
+	t.Fatalf("no listed tool carries a description of 1 to %d bytes, which a substitution pattern needs; the fixture surface changed", gatewaycompat.MaxSubstitutionBytes)
 	return "", ""
 }
 
@@ -63,7 +70,7 @@ func TestDescriptionSubstitutions_RewriteReachesTheWire(t *testing.T) {
 	if got["error"] != nil {
 		t.Fatalf("control tools/list failed: %v", got["error"])
 	}
-	toolName, original := firstToolDescription(t, got)
+	toolName, original := firstSubstitutableDescription(t, got)
 
 	const rewritten = "REWRITTEN BY THE SUBSTITUTION KNOB"
 	env := baseEnv(gitlab.URL)
