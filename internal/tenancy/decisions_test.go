@@ -25,7 +25,7 @@ var specRequirementIDs = []string{
 	"HLD-008", "HLD-009", "HLD-010", "HLD-011",
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
-	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006",
+	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006", "AUT-007",
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
@@ -89,7 +89,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // twenty-ninth valued row, HLD-011, the held-request ceiling issue 951 added,
 // the thirtieth, and HLD-010, the session ceiling the same issue put in place
 // of the decision by absence that row used to record, the thirty-first, which
-// is also why there is one ruled row fewer.
+// is also why there was one ruled row fewer. AUT-007, the actions issue 952
+// withholds from a fine-grained session, is the thirty-fifth ruled row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -101,7 +102,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 31},
-		{"ruled", Ruled, 34},
+		{"ruled", Ruled, 35},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 10},
@@ -755,6 +756,13 @@ func rowPins() map[string]rowPin {
 		"AUT-005": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 		"AUT-006": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{methods: "tools/call", channel: ToolError, answer: AskOperator},
+		}},
+		"AUT-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
+			{
+				methods: "tools/call", channel: Withheld,
+				prefix: "exists but is not available to a fine-grained personal access token", answer: WidenScope,
+			},
+			{methods: "tools/list", channel: Absent, answer: WidenScope},
 		}},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
