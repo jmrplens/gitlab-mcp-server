@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -156,6 +157,7 @@ func runCheck(dir string, now time.Time) error {
 
 	problems := append(floorProblems(doc), conditionProblems(doc)...)
 	problems = append(problems, authorizationProblems(doc)...)
+	problems = append(problems, countProblems(doc)...)
 	problems = append(problems, provenance.Problems(provenance.Subject{
 		Noun: "live API record",
 		Consequence: "it can no longer say what a current GitLab sends, and the fields an audit " +
@@ -220,6 +222,50 @@ func floorProblems(doc apilive.Document) []string {
 		))
 	}
 	return problems
+}
+
+// sourceFigure is one figure of the source block beside the figure the
+// record's content gives.
+type sourceFigure struct {
+	name            string
+	stored, counted int64
+}
+
+// countProblems holds the figures the source block carries to the content
+// they count.
+//
+// The generator writes them from the content and every passing run prints them
+// as the record's own, while the floors recount the content and never read
+// them, so a hand edit, or a generator that counted one thing and wrote
+// another, would pass and then be reported as what the record holds. The
+// fine-grained figures are walked by reflection, so a figure added to
+// [apilive.AuthorizationCounts] later is held without anybody listing it here.
+func countProblems(doc apilive.Document) []string {
+	figures := []sourceFigure{
+		{"entities", int64(doc.Source.Entities), int64(len(doc.Entities))},
+		{"fields", int64(doc.Source.Fields), int64(doc.FieldCount())},
+		{"routes", int64(doc.Source.Routes), int64(len(doc.Routes))},
+		{"features", int64(doc.Source.Features), int64(len(doc.Features))},
+	}
+	stored, counted := reflect.ValueOf(doc.Source.AuthorizationCounts), reflect.ValueOf(doc.CountAuthorization())
+	for i := range stored.NumField() {
+		name, _, _ := strings.Cut(stored.Type().Field(i).Tag.Get("json"), ",")
+		figures = append(figures, sourceFigure{name, stored.Field(i).Int(), counted.Field(i).Int()})
+	}
+	var differing []string
+	for _, figure := range figures {
+		if figure.stored != figure.counted {
+			differing = append(differing, fmt.Sprintf("%s says %d and it holds %d", figure.name, figure.stored, figure.counted))
+		}
+	}
+	if len(differing) == 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf(
+		"its source block disagrees with what it holds (%s): the figures this gate reports would not be the record's, "+
+			"and only a regeneration writes them (make gen-api-live)",
+		strings.Join(differing, "; "),
+	)}
 }
 
 // conditionProblems reports the conditions that say nothing about what they

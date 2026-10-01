@@ -139,15 +139,28 @@ func writeDump(t *testing.T, payload dumped) string {
 // both at once.
 func writeRecordAt(t *testing.T, dir string, payload dumped, retrievedAt string) {
 	t.Helper()
+	writeRecordEdited(t, dir, payload, retrievedAt, func(*apilive.Source) {})
+}
+
+// writeRecordEdited is writeRecordAt with the source block's figures counted
+// from the content the way the generator counts them, then handed to edit
+// before the record is written, for the cases about a source block that says
+// something else.
+func writeRecordEdited(t *testing.T, dir string, payload dumped, retrievedAt string, edit func(*apilive.Source)) {
+	t.Helper()
 	doc := apilive.Document{
 		SchemaVersion: apilive.SchemaVersion,
 		Source: apilive.Source{
 			Image: "gitlab/gitlab-ee:latest", Version: payload.Version,
 			RetrievedAt: retrievedAt,
+			Entities:    len(payload.Entities), Routes: len(payload.Routes), Features: len(payload.Features),
 		},
 		Entities: payload.Entities, Routes: payload.Routes, Features: payload.Features,
 		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz,
 	}
+	doc.Source.Fields = doc.FieldCount()
+	doc.Source.AuthorizationCounts = doc.CountAuthorization()
+	edit(&doc.Source)
 	if err := apilive.Write(dir, doc); err != nil {
 		t.Fatalf("write the fixture: %v", err)
 	}
@@ -780,6 +793,89 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), testCase.wantsIn) {
 				t.Errorf("error = %q, want it to name %q", err, testCase.wantsIn)
+			}
+		})
+	}
+}
+
+// TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused
+// verifies that the figures a passing gate prints are the record's own.
+//
+// Every figure is held, the four the provenance always carried and each of the
+// fine-grained ones, and the refusal names each that differs, in the order the
+// source block holds them, with what it says and what the content gives. A
+// figure is set one above the truth rather than to zero, so a check that only
+// noticed a missing figure would pass it.
+func TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused(t *testing.T) {
+	payload := wholeEnough()
+	counted := documentOf(payload)
+	entities, fields := len(payload.Entities), counted.FieldCount()
+	routes, features := len(payload.Routes), len(payload.Features)
+	authorization := counted.CountAuthorization()
+	refusal := func(differing string) string {
+		return "the live API record cannot be rested on:\n  its source block disagrees with what it holds (" + differing +
+			"): the figures this gate reports would not be the record's, and only a regeneration writes them (make gen-api-live)"
+	}
+	for _, testCase := range []struct {
+		name string
+		edit func(*apilive.Source)
+		want string
+	}{
+		{name: "figures counted from the content pass", edit: func(*apilive.Source) {}},
+		{
+			name: "entities", edit: func(s *apilive.Source) { s.Entities++ },
+			want: refusal(fmt.Sprintf("entities says %d and it holds %d", entities+1, entities)),
+		},
+		{
+			name: "fields", edit: func(s *apilive.Source) { s.Fields++ },
+			want: refusal(fmt.Sprintf("fields says %d and it holds %d", fields+1, fields)),
+		},
+		{
+			name: "routes", edit: func(s *apilive.Source) { s.Routes++ },
+			want: refusal(fmt.Sprintf("routes says %d and it holds %d", routes+1, routes)),
+		},
+		{
+			name: "features", edit: func(s *apilive.Source) { s.Features++ },
+			want: refusal(fmt.Sprintf("features says %d and it holds %d", features+1, features)),
+		},
+		{
+			name: "the first fine-grained figure", edit: func(s *apilive.Source) { s.AuthorizedRoutes++ },
+			want: refusal(fmt.Sprintf("authorized_routes says %d and it holds %d",
+				authorization.AuthorizedRoutes+1, authorization.AuthorizedRoutes)),
+		},
+		{
+			name: "the last fine-grained figure", edit: func(s *apilive.Source) { s.GraphQLUndeclaredMutations++ },
+			want: refusal(fmt.Sprintf("graphql_undeclared_mutations says %d and it holds %d",
+				authorization.GraphQLUndeclaredMutations+1, authorization.GraphQLUndeclaredMutations)),
+		},
+		{
+			name: "every figure that differs is named, in the source block's order",
+			edit: func(s *apilive.Source) {
+				s.GraphQLUndeclaredTypes += 2
+				s.Routes--
+			},
+			want: refusal(fmt.Sprintf("routes says %d and it holds %d; graphql_undeclared_types says %d and it holds %d",
+				routes-1, routes, authorization.GraphQLUndeclaredTypes+2, authorization.GraphQLUndeclaredTypes)),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRecordEdited(t, dir, payload, today(), testCase.edit)
+			stdout := captureStdout(t)
+
+			err := runCheck(dir, time.Now())
+
+			if testCase.want == "" {
+				if err != nil {
+					t.Fatalf("runCheck: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != testCase.want {
+				t.Errorf("runCheck = %v, want %q", err, testCase.want)
+			}
+			if said := stdout(); said != "" {
+				t.Errorf("a refused record still reported its figures: %q", said)
 			}
 		})
 	}
