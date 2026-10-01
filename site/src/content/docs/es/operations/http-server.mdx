@@ -589,15 +589,15 @@ Un [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/mai
 
 La imagen sigue las guías OWASP Docker Top 10:
 
-| Propiedad               | Valor                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Imagen base             | `alpine:3.24` (mínima, parcheada regularmente)                                |
-| Usuario                 | `appuser` (UID 10001, no-root)                                                |
-| Sistema de archivos     | Solo lectura con `tmpfs` escribible para `/tmp`                               |
-| Capacidades de Linux    | Todas eliminadas (`--cap-drop=ALL`)                                           |
-| Escalada de privilegios | Deshabilitada (`no-new-privileges:true`)                                      |
-| Flags de compilación    | `-trimpath -buildmode=pie` (binario PIE, sin rutas de fuente en stack traces) |
-| Etiquetas OCI           | `org.opencontainers.image.*` con versión, commit, URL de origen               |
+| Propiedad               | Valor                                                                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Imagen base             | `alpine:3.24` (mínima, parcheada regularmente)                                                                                         |
+| Usuario                 | `appuser` (UID 10001, no-root)                                                                                                         |
+| Sistema de archivos     | Solo lectura con `tmpfs` escribible para `/tmp`                                                                                        |
+| Capacidades de Linux    | Todas eliminadas (`--cap-drop=ALL`)                                                                                                    |
+| Escalada de privilegios | Deshabilitada (`no-new-privileges:true`)                                                                                               |
+| Flags de compilación    | `-buildmode=pie` (binario PIE cuya información de compilación registra la versión del release, así que el SBOM de la imagen la nombra) |
+| Etiquetas OCI           | `org.opencontainers.image.*` con versión, commit, URL de origen                                                                        |
 
 ### Actualizar un contenedor
 

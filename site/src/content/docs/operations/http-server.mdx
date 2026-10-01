@@ -590,15 +590,15 @@ A reference [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server
 
 The image follows OWASP Docker Top 10 guidance:
 
-| Property             | Value                                                                    |
-| -------------------- | ------------------------------------------------------------------------ |
-| Base image           | `alpine:3.24` (minimal, regularly patched)                               |
-| User                 | `appuser` (UID 10001, non-root)                                          |
-| Filesystem           | Read-only with writable `tmpfs` for `/tmp`                               |
-| Capabilities         | All dropped (`--cap-drop=ALL`)                                           |
-| Privilege escalation | Disabled (`no-new-privileges:true`)                                      |
-| Build flags          | `-trimpath -buildmode=pie` (PIE binary, no source paths in stack traces) |
-| OCI labels           | `org.opencontainers.image.*` populated with version, commit, source URL  |
+| Property             | Value                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Base image           | `alpine:3.24` (minimal, regularly patched)                                                                    |
+| User                 | `appuser` (UID 10001, non-root)                                                                               |
+| Filesystem           | Read-only with writable `tmpfs` for `/tmp`                                                                    |
+| Capabilities         | All dropped (`--cap-drop=ALL`)                                                                                |
+| Privilege escalation | Disabled (`no-new-privileges:true`)                                                                           |
+| Build flags          | `-buildmode=pie` (PIE binary whose build information records the release version, so the image SBOM names it) |
+| OCI labels           | `org.opencontainers.image.*` populated with version, commit, source URL                                       |
 
 ### Updating a container
 
