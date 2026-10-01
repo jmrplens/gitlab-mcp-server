@@ -23,7 +23,7 @@
     {
       "name": "gitlab_execute_action",
       "title": "GitLab Execute Action",
-      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
+      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear. Example: {\"action\":\"issue.list\",\"params\":{\"project_id\":\"group/project\"}}",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -59,7 +59,7 @@
     {
       "name": "gitlab_find_action",
       "title": "GitLab Find Action",
-      "description": "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples.",
+      "description": "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples. Example: {\"query\":\"issue list\"}",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

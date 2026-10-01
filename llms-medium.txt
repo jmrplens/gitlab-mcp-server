@@ -13,7 +13,7 @@ Dynamic mode is the default when `GITLAB_MCP_TOOL_SURFACE` is unset or set to `d
 
 **GitLab Find Action**
 
-Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples.
+Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples. Example: {"query":"issue list"}
 
 **Parameters:**
 
@@ -27,7 +27,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **GitLab Execute Action**
 
-Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
+Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear. Example: {"action":"issue.list","params":{"project_id":"group/project"}}
 
 **Parameters:**
 
