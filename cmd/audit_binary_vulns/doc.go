@@ -42,10 +42,16 @@
 // only the keys this command reads or knows to leave the module set alone (id,
 // main, env, flags, goos, goarch, binary, ldflags, mod_timestamp and
 // overrides), an override only the keys that select its targets and ldflags,
-// and a global env is refused, since GoReleaser applies it to every build.
-// ignore, targets, tags, dir, gobinary and an override that sets env, flags or
-// tags each change what GoReleaser builds in a way this command would not
-// apply, and a decode that dropped them would scan binaries nobody ships.
+// and a global env is refused, since GoReleaser applies it to every build. So
+// is a gomod section that sets anything, since each of its keys changes how
+// every build fetches or builds the module (proxy builds from the module proxy
+// and ignores replace directives), and a before hook other than go mod
+// download, which runs ahead of every build and may change the source or
+// go.mod. ignore, targets, tags, dir, gobinary and an override that sets env,
+// flags or tags each change what GoReleaser builds in a way this command would
+// not apply, and a decode that dropped them would scan binaries nobody ships.
+// The rest of the configuration (archives, signing, the release itself)
+// decides what happens to a binary once it is built, and is not read.
 //
 // # How a finding is judged
 //

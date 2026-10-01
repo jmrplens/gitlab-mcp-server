@@ -28,8 +28,9 @@ func writeConfig(t *testing.T, content string) string {
 // It fails when the release gains a build, a target or a key this command does
 // not read, which is the moment to look at this command again rather than let
 // it scan a set of binaries nobody publishes. Its passing also says the
-// configuration's overrides change ldflags alone (the Linux loader paths),
-// since readBuilds refuses an override that sets anything else.
+// configuration's overrides change ldflags alone (the Linux loader paths), that
+// it sets no gomod and that its one before hook is go mod download, since
+// readBuilds refuses anything else in each place.
 func TestReadBuilds_TheRepositorysReleaseIsSixTargetsOfTheServer(t *testing.T) {
 	t.Parallel()
 
@@ -83,6 +84,33 @@ func TestReadBuilds_CrossesEveryGoosWithEveryGoarch(t *testing.T) {
 	}
 }
 
+// TestReadBuilds_AcceptsTopLevelSettingsThatLeaveTheModuleSetAlone covers the
+// shapes of gomod and before that set nothing this command would have to
+// apply: a gomod with no keys, a before with no value, and go mod download
+// reached through an alias, which GoReleaser reads as the command it names.
+func TestReadBuilds_AcceptsTopLevelSettingsThatLeaveTheModuleSetAlone(t *testing.T) {
+	t.Parallel()
+
+	const build = "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n"
+	for _, tc := range []struct {
+		name    string
+		content string
+	}{
+		{name: "an empty gomod", content: "gomod: {}\n" + build},
+		{name: "a before with no value", content: "before:\n" + build},
+		{name: "a hook reached through an alias", content: "download: &d go mod download\nbefore:\n  hooks: [*d]\n" + build},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			builds, err := readBuilds(writeConfig(t, tc.content))
+			if err != nil || len(builds) != 1 || builds[0].id != "x" {
+				t.Fatalf("readBuilds = %+v, %v; want the one build x", builds, err)
+			}
+		})
+	}
+}
+
 // TestReadBuilds_RefusesWhatItCannotReadExactly covers every refusal, each of
 // which is a configuration read half right if it were accepted instead.
 func TestReadBuilds_RefusesWhatItCannotReadExactly(t *testing.T) {
@@ -104,6 +132,11 @@ func TestReadBuilds_RefusesWhatItCannotReadExactly(t *testing.T) {
 		{name: "build dir", content: "builds:\n  - id: x\n    dir: sub\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "x sets dir, which this command does not read"},
 		{name: "go binary", content: "builds:\n  - id: x\n    main: .\n    gobinary: go1.20\n    goos: [linux]\n    goarch: [amd64]\n", want: "x sets gobinary, which this command does not read"},
 		{name: "global env", content: "env: [GOEXPERIMENT=boringcrypto]\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "sets a global env, which every build inherits"},
+		{name: "gomod proxy", content: "gomod:\n  proxy: true\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "sets gomod.proxy, which changes how every build fetches or builds the module"},
+		{name: "a before key other than hooks", content: "before:\n  hooks: [go mod download]\n  other: x\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "sets before.other, which this command does not read"},
+		{name: "a before that is not a mapping", content: "before: x\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: ".goreleaser.yml: before: yaml: unmarshal errors"},
+		{name: "a hook other than go mod download", content: "before:\n  hooks:\n    - go mod download\n    - go generate ./...\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "before.hooks[1] is not \"go mod download\"; a hook may change the source"},
+		{name: "a hook written with options", content: "before:\n  hooks:\n    - cmd: go mod download\n      dir: sub\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "before.hooks[0] is not \"go mod download\""},
 		{name: "override env", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        ldflags: [-s]\n      - goos: linux\n        env: [GOEXPERIMENT=boringcrypto]\n", want: "x overrides[1] sets env; an override may change ldflags and nothing else"},
 		{name: "override flags", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        flags: [-tags=other]\n", want: "x overrides[0] sets flags"},
 		{name: "override tags", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        tags: [extra]\n", want: "x overrides[0] sets tags"},

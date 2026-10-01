@@ -307,9 +307,12 @@ front of `docker`, the first job that publishes anything, so a finding stops the
 release before an image is pushed; after the push, a failure would leave the
 registry tags on an image that nothing signed or attested. It scans binaries it
 builds from `.goreleaser.yml` rather than GoReleaser's own output, which links
-the same modules because the command refuses any GoReleaser setting it does not
-read. It needs the network for the database and builds six binaries: one full
-run took 2m52s on five cores, about thirty seconds of it per build.
+the same modules because the command refuses every build setting it does not
+read: a key of a build entry or an override outside the ones it reads or knows
+to leave the module set alone, a global `env`, a `gomod` section that sets
+anything, and a `before` hook other than `go mod download`. It needs the network
+for the database and builds six binaries: one full run took 2m52s on five
+cores, about thirty seconds of it per build.
 
 ### markdownlint-cli2
 
