@@ -30,6 +30,19 @@ func fullRecord() Document {
 			Fields:      22,
 			Routes:      33,
 			Features:    44,
+			AuthorizationCounts: AuthorizationCounts{
+				AuthorizedRoutes:                101,
+				SkippedRoutes:                   102,
+				TodoRoutes:                      103,
+				UndeclaredRoutes:                104,
+				AssignablePermissions:           105,
+				DeprecatedAssignablePermissions: 106,
+				GraphQLDeclaredTypes:            107,
+				GraphQLUndeclaredTypes:          108,
+				GraphQLUncheckedUndeclaredTypes: 109,
+				GraphQLDeclaredMutations:        110,
+				GraphQLUndeclaredMutations:      111,
+			},
 		},
 		Entities: map[string]Entity{
 			"API::Entities::Project": {Fields: []Field{
@@ -58,8 +71,70 @@ func fullRecord() Document {
 			Params: map[string]Param{
 				"page": {Required: true, Type: "Integer", Default: "1", Desc: "the page wanted"},
 			},
+			Authorization: &RouteAuthorization{
+				Permissions:   []string{"read_project"},
+				BoundaryType:  "project",
+				BoundaryParam: "project_ref",
+				Boundaries: []Boundary{{
+					BoundaryType:  "group",
+					BoundaryParam: "namespace_id",
+					Boundary:      &Callable{Callable: true, File: "lib/api/a.rb", Line: 7, Text: "lambda { group }"},
+					UnknownKeys:   []string{"weight"},
+				}},
+				Boundary: &Callable{Callable: true, File: "lib/api/projects.rb", Line: 12, Text: "lambda { user_project }"},
+				AdditionalScopes: []AdditionalScope{{
+					Permissions:   []string{"read_group"},
+					BoundaryType:  "group",
+					BoundaryParam: "target_group",
+					Boundary:      &Callable{File: "lib/api/b.rb", Line: 9, Text: ":target"},
+					UnknownKeys:   []string{"priority"},
+				}},
+				Skip:           "public_endpoint",
+				Todo:           "decide later",
+				AssignableWhen: []string{"admin"},
+				UnknownKeys:    []string{"future_option"},
+			},
 		}},
 		Features: map[string]string{"merge_request_approvers": TierPremium},
+		Granular: &Granular{
+			Assignable: []Assignable{{
+				Name: "read_project", Category: "projects", CategoryName: "Projects",
+				Resource: "project", ResourceName: "Project", Action: "read", Display: "Project: Read",
+				Boundaries: []string{"group", "project"}, Permissions: []string{"read_project", "read_code"},
+				AvailableFor: []string{"granular_access_token"}, Deprecated: true,
+				AssignableWhen: []AssignableCondition{{Condition: "self_managed", Boundaries: []string{"instance"}}},
+			}},
+			RawPermissions:       []string{"read_code", "read_project"},
+			RawToAssignable:      map[string]AssignableMatch{"read_code": {First: "read_repository", FirstAvailable: "read_project"}},
+			PublicAnonymous:      &PublicAnonymous{Source: PublicSourceUnsaved, Licensed: true, Project: []string{"read_code"}, Group: []string{"read_group"}},
+			PublicAnonymousError: "NoMethodError: undefined method",
+			FlagDefaultEnabled:   new(true),
+		},
+		GraphQLAuthz: &GraphQLAuthz{
+			Types: map[string]GraphQLType{"WorkItem": {
+				Class: "Types::WorkItemType", Enforced: true, AuthorizedBy: "Types::Override",
+				Abilities: []string{"read_work_item"},
+				Granular: []Directive{{
+					Permissions: []string{"read_work_item"}, BoundaryType: "project", Boundary: "project",
+					BoundaryArgument: "full_path", RequirementGroup: "second", AssignableWhen: []string{"saas"},
+					SkipReason: "parent_authorizes", UnknownKeys: []string{"weight"},
+				}},
+				ObjectFields: map[string]ObjectField{"author": {Type: "UserCore", Connection: true}},
+			}},
+			Abstract: map[string]AbstractType{"Issuable": {Kind: "union", PossibleTypes: []string{"Issue"}}},
+			Mutations: map[string]Mutation{"workItemCreate": {
+				Name: "WorkItemCreate", Class: "Mutations::WorkItems::Create", Payload: "WorkItemCreatePayload",
+				Granular: []Directive{{Permissions: []string{"create_work_item"}}},
+			}},
+			Fields:               map[string][]Directive{"Issue.createNoteEmail": {{Permissions: []string{"create_note"}}}},
+			UndeclaredByTodoRule: TodoSet{Types: []string{"Namespace"}, Mutations: []string{"AiAction"}},
+			Todo: &Todo{
+				Digest:         "sha256:feedface",
+				Types:          []string{"PageInfo"},
+				Mutations:      []string{"BoardEpicCreate"},
+				UnknownEntries: []string{"widget:Thing"},
+			},
+		},
 	}
 }
 
@@ -421,11 +496,12 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 	})
 
 	t.Run("a record from the version before this one is refused too", func(t *testing.T) {
-		// The older direction is the one the guard was written for: version 2
-		// recorded every hash and symbol condition as its kind alone, so a
-		// reader that let it through would take the fields they gate for
-		// unconditional without a word, as version 1's merged exposures would
-		// have been resolved into the wrong keys.
+		// The older direction is the one the guard was written for: version 3
+		// records no route authorization at all, and a reader that let it
+		// through would take every route for one declaring nothing and deny
+		// it to a fine-grained token, as version 2's unreadable conditions
+		// read as unconditional and version 1's merged exposures resolved
+		// into the wrong keys.
 		other := want
 		other.SchemaVersion = SchemaVersion - 1
 		if writeErr := Write(dir, other); writeErr != nil {
@@ -523,7 +599,7 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
 	}
 
 	want := `{
- "schema_version": 3,
+ "schema_version": 4,
  "note": "taken from a booted instance, not from its source",
  "source": {
   "image": "gitlab/gitlab-ee:19.3.1-ee.0",
@@ -535,7 +611,18 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
   "entities": 11,
   "fields": 22,
   "routes": 33,
-  "features": 44
+  "features": 44,
+  "authorized_routes": 101,
+  "skipped_routes": 102,
+  "todo_routes": 103,
+  "undeclared_routes": 104,
+  "assignable_permissions": 105,
+  "deprecated_assignable_permissions": 106,
+  "graphql_declared_types": 107,
+  "graphql_undeclared_types": 108,
+  "graphql_unchecked_undeclared_types": 109,
+  "graphql_declared_mutations": 110,
+  "graphql_undeclared_mutations": 111
  },
  "entities": {
   "API::Entities::Broken": {
@@ -582,11 +669,207 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
      "default": "1",
      "desc": "the page wanted"
     }
+   },
+   "authorization": {
+    "permissions": [
+     "read_project"
+    ],
+    "boundary_type": "project",
+    "boundary_param": "project_ref",
+    "boundaries": [
+     {
+      "boundary_type": "group",
+      "boundary_param": "namespace_id",
+      "boundary": {
+       "callable": true,
+       "file": "lib/api/a.rb",
+       "line": 7,
+       "text": "lambda { group }"
+      },
+      "unknown_keys": [
+       "weight"
+      ]
+     }
+    ],
+    "boundary": {
+     "callable": true,
+     "file": "lib/api/projects.rb",
+     "line": 12,
+     "text": "lambda { user_project }"
+    },
+    "additional_scopes": [
+     {
+      "permissions": [
+       "read_group"
+      ],
+      "boundary_type": "group",
+      "boundary_param": "target_group",
+      "boundary": {
+       "callable": false,
+       "file": "lib/api/b.rb",
+       "line": 9,
+       "text": ":target"
+      },
+      "unknown_keys": [
+       "priority"
+      ]
+     }
+    ],
+    "skip": "public_endpoint",
+    "todo": "decide later",
+    "assignable_when": [
+     "admin"
+    ],
+    "unknown_keys": [
+     "future_option"
+    ]
    }
   }
  ],
  "features": {
   "merge_request_approvers": "premium"
+ },
+ "granular": {
+  "assignable": [
+   {
+    "name": "read_project",
+    "category": "projects",
+    "category_name": "Projects",
+    "resource": "project",
+    "resource_name": "Project",
+    "action": "read",
+    "display": "Project: Read",
+    "boundaries": [
+     "group",
+     "project"
+    ],
+    "permissions": [
+     "read_project",
+     "read_code"
+    ],
+    "available_for": [
+     "granular_access_token"
+    ],
+    "deprecated": true,
+    "assignable_when": [
+     {
+      "condition": "self_managed",
+      "boundaries": [
+       "instance"
+      ]
+     }
+    ]
+   }
+  ],
+  "raw_permissions": [
+   "read_code",
+   "read_project"
+  ],
+  "raw_to_assignable": {
+   "read_code": {
+    "first": "read_repository",
+    "first_available": "read_project"
+   }
+  },
+  "public_anonymous": {
+   "source": "unsaved",
+   "licensed": true,
+   "project": [
+    "read_code"
+   ],
+   "group": [
+    "read_group"
+   ]
+  },
+  "public_anonymous_error": "NoMethodError: undefined method",
+  "flag_default_enabled": true
+ },
+ "graphql_authz": {
+  "types": {
+   "WorkItem": {
+    "class": "Types::WorkItemType",
+    "enforced": true,
+    "authorized_by": "Types::Override",
+    "abilities": [
+     "read_work_item"
+    ],
+    "granular": [
+     {
+      "permissions": [
+       "read_work_item"
+      ],
+      "boundary_type": "project",
+      "boundary": "project",
+      "boundary_argument": "full_path",
+      "requirement_group": "second",
+      "assignable_when": [
+       "saas"
+      ],
+      "skip_reason": "parent_authorizes",
+      "unknown_keys": [
+       "weight"
+      ]
+     }
+    ],
+    "object_fields": {
+     "author": {
+      "type": "UserCore",
+      "connection": true
+     }
+    }
+   }
+  },
+  "abstract": {
+   "Issuable": {
+    "kind": "union",
+    "possible_types": [
+     "Issue"
+    ]
+   }
+  },
+  "mutations": {
+   "workItemCreate": {
+    "name": "WorkItemCreate",
+    "class": "Mutations::WorkItems::Create",
+    "payload": "WorkItemCreatePayload",
+    "granular": [
+     {
+      "permissions": [
+       "create_work_item"
+      ]
+     }
+    ]
+   }
+  },
+  "fields": {
+   "Issue.createNoteEmail": [
+    {
+     "permissions": [
+      "create_note"
+     ]
+    }
+   ]
+  },
+  "undeclared_by_todo_rule": {
+   "types": [
+    "Namespace"
+   ],
+   "mutations": [
+    "AiAction"
+   ]
+  },
+  "todo": {
+   "digest": "sha256:feedface",
+   "types": [
+    "PageInfo"
+   ],
+   "mutations": [
+    "BoardEpicCreate"
+   ],
+   "unknown_entries": [
+    "widget:Thing"
+   ]
+  }
  }
 }
 `
