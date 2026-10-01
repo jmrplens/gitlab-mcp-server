@@ -54,46 +54,44 @@ func newRouteIndex(routes []apilive.Route) *routeIndex {
 
 // expandOptional spells a Grape path with each optional group, written in
 // parentheses, taken and left out: `:id/(-/)epics` is both `:id/epics` and
-// `:id/-/epics`. An escaped parenthesis is a literal, not a group.
+// `:id/-/epics`. An escaped parenthesis is a literal, not a group, a closing
+// one outside every group is a literal too, and a group that never closes
+// leaves the path as written.
 func expandOptional(path string) []string {
-	open := -1
-	for i := 0; i < len(path); i++ {
-		if path[i] == '\\' {
-			i++
-			continue
-		}
-		if path[i] == '(' {
-			open = i
-			break
-		}
-	}
-	if open < 0 {
-		return []string{path}
-	}
-	depth := 0
-	for end := open; end < len(path); end++ {
-		switch path[end] {
-		case '\\':
-			end++
-		case '(':
+	open, depth, escaped := 0, 0, false
+	for i := range len(path) {
+		switch {
+		case escaped:
+			escaped = false
+		case path[i] == '\\':
+			escaped = true
+		case path[i] == '(':
+			if depth == 0 {
+				open = i
+			}
 			depth++
-		case ')':
+		case path[i] == ')' && depth > 0:
 			depth--
 			if depth == 0 {
-				inner := path[open+1 : end]
-				rest := path[end+1:]
-				var out []string
-				for _, tail := range expandOptional(rest) {
-					out = append(out, path[:open]+tail)
-					for _, middle := range expandOptional(inner) {
-						out = append(out, path[:open]+middle+tail)
-					}
-				}
-				return out
+				return spellGroup(path[:open], path[open+1:i], path[i+1:])
 			}
 		}
 	}
 	return []string{path}
+}
+
+// spellGroup spells a path whose first optional group, inner, sits between
+// head and rest: every spelling of rest with the group left out, and with
+// each spelling of the group taken.
+func spellGroup(head, inner, rest string) []string {
+	var out []string
+	for _, tail := range expandOptional(rest) {
+		out = append(out, head+tail)
+		for _, middle := range expandOptional(inner) {
+			out = append(out, head+middle+tail)
+		}
+	}
+	return out
 }
 
 // segmentsOf splits a path into segments, each identifier or splat collapsed
@@ -111,14 +109,15 @@ func segmentsOf(path string) []string {
 // match finds the record route a derived route is: the one spelling whose
 // segments equal the derived ones, a record placeholder standing for a
 // derived literal where it must; the closest, by literal segments in common,
-// when several do. It reports false for a route the record lacks.
+// when several do, and the first in the record's order among equally close
+// ones. It reports false for a route the record lacks.
 func (index *routeIndex) match(method, path string) (*apilive.Route, bool) {
 	derived := segmentsOf(path)
 	var best *apilive.Route
-	bestScore := -1
+	bestScore := 0
 	for _, candidate := range index.byMethod[method] {
 		score, ok := agree(candidate.segments, derived)
-		if ok && score > bestScore {
+		if ok && (best == nil || score > bestScore) {
 			best, bestScore = candidate.route, score
 		}
 	}

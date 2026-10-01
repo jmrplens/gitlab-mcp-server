@@ -1,6 +1,7 @@
 package join
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
 	"slices"
@@ -159,7 +160,7 @@ func Join(record *apilive.Document, schema *gqlast.Schema, actions []derive.Acti
 			table.Actions = append(table.Actions, *out[i].Row)
 		}
 	}
-	sort.Slice(table.Actions, func(a, b int) bool { return table.Actions[a].ID < table.Actions[b].ID })
+	slices.SortFunc(table.Actions, func(a, b finegrained.Requirement) int { return strings.Compare(a.ID, b.ID) })
 	sort.Strings(j.findings)
 	return Result{Table: table, Actions: out, Findings: j.findings, Fallbacks: j.fallbacks}
 }
@@ -414,10 +415,12 @@ type actionRules struct {
 	// elements holds a verdict per element of the operation, in its order.
 	elements []positionVerdict
 	// mutationUnresolvable is set when a declaration says the mutation's own
-	// boundary never resolves for the action.
+	// boundary never resolves for the action: the first root field it says so
+	// of, which is the one GitLab refuses first.
 	mutationUnresolvable string
-	// variant names how the verdicts depart from the rules, "" when they do
-	// not, so every action the rules hold for shares one operation.
+	// variant spells every verdict, so the actions holding the same verdicts
+	// on a document share one operation and an action a declaration departs
+	// for is given its own.
 	variant string
 }
 
@@ -425,31 +428,21 @@ type actionRules struct {
 // declaration that answers something.
 func (j *joiner) rulesFor(actionID string, op *Operation) actionRules {
 	rules := actionRules{elements: make([]positionVerdict, len(op.Elements))}
-	var departures []string
 	if op.Mutation {
 		for _, field := range op.RootFields {
-			if rules.mutationUnresolvable == "" && j.unresolvable(actionID, field) {
+			if j.unresolvable(actionID, field) {
 				rules.mutationUnresolvable = field
-				departures = append(departures, "unresolvable "+field)
+				break
 			}
 		}
 	}
 	for i, element := range op.Elements {
-		if element.Skip {
-			rules.elements[i] = positionVerdict{fatal: element.Fatal}
-			continue
-		}
-		rules.elements[i] = positionVerdict{fatal: j.fatalFor(actionID, element), unresolvable: j.unresolvable(actionID, element.Path)}
-		if rules.elements[i].fatal != element.Fatal {
-			departures = append(departures, fmt.Sprintf("fatal=%t %s", rules.elements[i].fatal, element.Path))
-		}
-		if rules.elements[i].unresolvable {
-			departures = append(departures, "unresolvable "+element.Path)
+		rules.elements[i] = positionVerdict{fatal: element.Fatal}
+		if !element.Skip {
+			rules.elements[i] = positionVerdict{fatal: j.fatalFor(actionID, element), unresolvable: j.unresolvable(actionID, element.Path)}
 		}
 	}
-	if len(departures) > 0 {
-		rules.variant = " for " + strings.Join(departures, ", ")
-	}
+	rules.variant = fmt.Sprintf(" %q %v", rules.mutationUnresolvable, rules.elements)
 	return rules
 }
 
@@ -592,8 +585,9 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 func (j *joiner) fatalFor(id string, element Element) bool {
 	for _, declaration := range j.decl.Effects {
 		if declaration.Action == id && declaration.Path == element.Path {
-			key := "effect " + id + " " + element.Path
-			j.usedDecl[key] = j.usedDecl[key] || declaration.Fatal != element.Fatal
+			if declaration.Fatal != element.Fatal {
+				j.usedDecl["effect "+id+" "+element.Path] = true
+			}
 			return declaration.Fatal
 		}
 	}
@@ -635,11 +629,8 @@ func (j *joiner) staleDeclarations() {
 
 // minimizeOps drops repeated paths and every path holding another.
 func minimizeOps(paths [][]uint32) [][]uint32 {
-	sort.Slice(paths, func(a, b int) bool {
-		if len(paths[a]) != len(paths[b]) {
-			return len(paths[a]) < len(paths[b])
-		}
-		return slices.Compare(paths[a], paths[b]) < 0
+	slices.SortFunc(paths, func(a, b []uint32) int {
+		return cmp.Or(cmp.Compare(len(a), len(b)), slices.Compare(a, b))
 	})
 	var out [][]uint32
 	for _, path := range paths {

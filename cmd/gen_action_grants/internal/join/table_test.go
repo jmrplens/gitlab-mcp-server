@@ -38,6 +38,7 @@ type Mutation {
   labelCreate(input: ThingInput!): LabelCreatePayload
   workItemUpdate(input: ThingInput!): WorkItemUpdatePayload
   emptyPayload(input: ThingInput!): EmptyPayload
+  bareThing(input: ThingInput!): EmptyPayload
 }
 
 input ThingInput { title: String }
@@ -82,7 +83,7 @@ type LocationDast { host: String }
 type VulnerabilityIssueLinkConnection { nodes: [VulnerabilityIssueLink] }
 type VulnerabilityIssueLink { id: ID! }
 type WorkItem { id: ID! title: String }
-type Plain { name: String items: [PlainItem!]! }
+type Plain { name: String items: [PlainItem!]! node: PlainItem }
 type PlainItem { name: String }
 `
 
@@ -160,7 +161,9 @@ func fixtureRecord() *apilive.Document {
 			route("PUT", "/projects/:id/integrations/slack", authorized("project", "update_integration")),
 			route("PUT", "/projects/:id/integrations/jira", authorized("project", "update_integration")),
 			route("PUT", "/projects/:id/integrations/other", authorized("group", "update_integration")),
+			route("PUT", "/projects/:id/hooks", authorized("group", "update_integration")),
 			{Method: "GET", Path: "/oauth/token"},
+			{Method: "PUT", Path: "/oauth/token"},
 		},
 		Granular: &apilive.Granular{
 			Assignable: []apilive.Assignable{
@@ -196,6 +199,7 @@ func fixtureRecord() *apilive.Document {
 					"issueCreate": "IssueCreatePayload", "undeclaredThing": "IssueCreatePayload",
 					"skippedThing": "IssueCreatePayload", "labelCreate": "LabelCreatePayload",
 					"workItemUpdate": "WorkItemUpdatePayload", "emptyPayload": "EmptyPayload",
+					"bareThing": "EmptyPayload",
 				}),
 				"IssueCreatePayload":    withFields(apilive.GraphQLType{}, map[string]string{"issue": "Issue"}),
 				"LabelCreatePayload":    withFields(apilive.GraphQLType{}, map[string]string{"label": "Label"}),
@@ -243,6 +247,7 @@ func fixtureRecord() *apilive.Document {
 				"labelCreate":    {Name: "labelCreate", Granular: []apilive.Directive{directive("default", "project", "create_label")}},
 				"workItemUpdate": {Name: "workItemUpdate", Granular: []apilive.Directive{directive("default", "project", "update_work_item")}},
 				"emptyPayload":   {Name: "emptyPayload", Granular: []apilive.Directive{directive("default", "project", "create_issue")}},
+				"bareThing":      {Name: "bareThing"},
 			},
 			Fields: map[string][]apilive.Directive{
 				"Project.counts":          {directive("default", "project", "read_project_counts")},
@@ -403,6 +408,18 @@ func fixtureActions() []derive.Action {
 		action("graphql.viewer", graphQL(`query { viewer { username } }`)),
 		action("graphql.labels", graphQL(`query { project(fullPath: "a") { name issues { nodes { id labels { title } } } } }`)),
 		action("graphql.sdk_named", derive.Use{Kind: derive.KindGraphQL, Document: `query { plain { name items { name } } }`, SDKMethods: []string{"Things.Get"}}),
+		action("graphql.document_named", derive.Use{
+			Kind: derive.KindGraphQL, Document: `query { plain { items { name } name } }`, Name: "plainQuery",
+			SDKMethods: []string{"Things.Get"}, Sites: []string{"fixture.Handler"},
+		}),
+		action("graphql.unplaced", derive.Use{Kind: derive.KindGraphQL, Document: `query { plain { node { name } } }`}),
+		action("graphql.scalar_root", graphQL(`query { version }`)),
+		action("graphql.partly_skipped", graphQL(`mutation { skippedThing(input: {title: "t"}) { errors } issueCreate(input: {title: "t"}) { errors issue { id } } }`)),
+		action("graphql.bare", graphQL(`mutation { bareThing(input: {title: "t"}) { errors } }`)),
+		action("graphql.two_undeclared", graphQL(`mutation { undeclaredThing(input: {title: "t"}) { errors } bareThing(input: {title: "t"}) { errors } }`)),
+		action("graphql.undeclared_beside_payload", graphQL(`mutation { undeclaredThing(input: {title: "t"}) { errors } labelCreate(input: {title: "t"}) { errors label { title } } }`)),
+		action("mixed.list_then_rest", graphQL(`query { users { nodes { username } } }`), rest("GET", "/projects/:/issues")),
+		{ID: "rest.no_way"},
 		{ID: "rest.either", Uses: []derive.Use{rest("GET", "/projects/:/issues"), rest("GET", "/groups/:/epics")}, Paths: [][]int{{0}, {1}}},
 		{ID: "rest.superset", Uses: []derive.Use{rest("GET", "/projects/:/issues"), rest("GET", "/groups/:/epics")}, Paths: [][]int{{0}, {0, 1}}},
 		action("rest.instance", rest("GET", "/instance/things")),
@@ -467,9 +484,14 @@ func fixtureDeclarations() Declarations {
 // union member read on the member (its record signature and its field-level
 // declaration), a redacted connection, and the mutations a fine-grained token
 // is refused or whose answer it loses; a group work item, declared at a
-// boundary it never resolves to, read and written; and an action one of whose
+// boundary it never resolves to, read and written; an action one of whose
 // ways no token passes, kept as a denied way beside the ways that run, each
-// denial once, with the GraphQL and collection flags read from every way.
+// denial once, with the GraphQL and collection flags read from every way; a
+// document named by its own name, its client-go method or its site, in that
+// order, and by none; a field named like a connection's items that is no
+// connection's; a document whose roots are all scalars, and mutations whose
+// roots disagree, which are left to GitLab only when every root opts out and
+// report the first refusal of several; and an action with no way at all.
 func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 	result := Join(fixtureRecord(), fixtureSchema(t), fixtureActions(), fixtureDeclarations())
 	issuesQuery := "path\n  query project (fixture.Handler)\n" +
@@ -521,12 +543,23 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 		"graphql.counts": "path\n  query project (fixture.Handler)\n" +
 			"    spine project Project null [read_project @ project]\n" +
 			"    spine project.counts Counts null [read_project_counts @ project]\ngraphql\n",
-		"graphql.users":       "path\n  query users (fixture.Handler)\n    spine users.nodes UserCore removed-items [read_user @ user]\ngraphql collection\n",
-		"graphql.fragment":    "path\n  query users (fixture.Handler)\n    spine users.nodes UserCore removed-items [read_user @ user]\ngraphql collection\n",
-		"graphql.plain":       "path\n  query plain (fixture.Handler)\ngraphql\n",
-		"graphql.plain_items": "path\n  query plain (fixture.Handler)\ngraphql collection\n",
-		"graphql.sdk_named":   "path\n  query plain (Things.Get)\ngraphql\n",
-		"graphql.viewer":      "path\n  query viewer (fixture.Handler)\n    spine viewer UserCore null [read_user @ user]\ngraphql\n",
+		"graphql.users":          "path\n  query users (fixture.Handler)\n    spine users.nodes UserCore removed-items [read_user @ user]\ngraphql collection\n",
+		"graphql.fragment":       "path\n  query users (fixture.Handler)\n    spine users.nodes UserCore removed-items [read_user @ user]\ngraphql collection\n",
+		"graphql.plain":          "path\n  query plain (fixture.Handler)\ngraphql\n",
+		"graphql.plain_items":    "path\n  query plain (fixture.Handler)\ngraphql collection\n",
+		"graphql.sdk_named":      "path\n  query plain (Things.Get)\ngraphql\n",
+		"graphql.document_named": "path\n  query plain (plainQuery)\ngraphql\n",
+		"graphql.unplaced":       "path\n  query plain\ngraphql\n",
+		"graphql.scalar_root":    "path\n  query  (fixture.Handler)\ngraphql\n",
+		"graphql.partly_skipped": "path\n  mutation skippedThing issueCreate (fixture.Handler)\n    group create_issue @ project\n" +
+			"    spine issueCreate.issue Issue null [read_issue @ project]\ngraphql\n",
+		"graphql.bare":                      "denied graphql-mutation-undeclared bareThing refused\ngraphql\n",
+		"graphql.two_undeclared":            "denied graphql-mutation-undeclared undeclaredThing refused\ngraphql\n",
+		"graphql.undeclared_beside_payload": "denied graphql-mutation-undeclared undeclaredThing refused\ngraphql\n",
+		"mixed.list_then_rest": issuesRoute +
+			"  query users (fixture.Handler)\n    spine users.nodes UserCore removed-items [read_user @ user]\ngraphql collection\n",
+		"rest.no_way":    "",
+		"graphql.viewer": "path\n  query viewer (fixture.Handler)\n    spine viewer UserCore null [read_user @ user]\ngraphql\n",
 		"graphql.labels": "path\n  query project (fixture.Handler)\n" +
 			"    spine project Project null [read_project @ project]\n" +
 			"    off project.issues.nodes Issue removed-items [read_issue @ project]\n" +
@@ -580,12 +613,31 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 		t.Errorf("findings =\n%s\nwant\n%s", strings.Join(result.Findings, "\n"), strings.Join(wantFindings, "\n"))
 	}
 	// The record describes neither the plain root field nor Plain, so their
-	// signatures are the pinned schema's: one document reaches plain alone
-	// and two reach plain and its items. The dependency a union member
-	// selects is read on the member, which the record describes, so it adds
-	// none.
-	if result.Fallbacks != 5 {
-		t.Errorf("fallbacks = %d, want 5", result.Fallbacks)
+	// signatures are the pinned schema's: one document reaches plain alone,
+	// three reach plain and its items and one plain and its node. The
+	// dependency a union member selects is read on the member, which the
+	// record describes, so it adds none.
+	if result.Fallbacks != 9 {
+		t.Errorf("fallbacks = %d, want 9", result.Fallbacks)
+	}
+	// The table is held in ID order, which is what Requirement's binary
+	// search reads it by, so every row is found under its own ID.
+	for i := range result.Actions {
+		act := &result.Actions[i]
+		if got := result.Table.Requirement(act.ID); (got == nil) != (act.Row == nil) || got != nil && got.ID != act.ID {
+			t.Errorf("Requirement(%q) = %+v, want the row the join wrote for it", act.ID, got)
+		}
+	}
+}
+
+// TestMinimizeOps_KeepsTheShortestWaysInOrder verifies a way holding another
+// is dropped and a repeated one kept once, and that what is kept is ordered
+// shortest first, then by its operations.
+func TestMinimizeOps_KeepsTheShortestWaysInOrder(t *testing.T) {
+	got := minimizeOps([][]uint32{{0, 1}, {2}, {0}, {0, 1}, {1, 3}})
+	want := [][]uint32{{0}, {2}, {1, 3}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("minimizeOps = %v, want %v", got, want)
 	}
 }
 
@@ -641,6 +693,11 @@ func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	}
 	if !table.PublicKnown {
 		t.Fatal("the anonymous policy the record carries is not known")
+	}
+	// Sixteen permissions fit one word, so each set is exactly one long.
+	if len(table.Permissions) != 16 || len(table.PublicAnonymous[finegrained.PublicProject]) != 1 || len(table.PublicAnonymous[finegrained.PublicGroup]) != 1 {
+		t.Errorf("%d permissions in sets of %d and %d words, want 16 in one word each",
+			len(table.Permissions), len(table.PublicAnonymous[finegrained.PublicProject]), len(table.PublicAnonymous[finegrained.PublicGroup]))
 	}
 	bit := func(set []uint64, name string) bool {
 		i := slices.Index(table.Permissions, name)

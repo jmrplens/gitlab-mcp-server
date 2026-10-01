@@ -28,10 +28,12 @@
 // whether a denied position takes its parent with it is decided by the
 // signature GitLab serves. A field is read on the type it is selected on, so
 // one in a fragment on a union member is looked up on the member, its
-// signature and its field-level declaration both. The answer spine starts at the root field (for a
-// mutation, at the first object its payload selects other than errors) and
-// follows the one object a position selects while nothing else but connection
-// framing is selected beside it. A position GitLab checks and that declares
+// signature and its field-level declaration both. The answer spine starts at
+// the root field (for a mutation, at the first object its payload selects,
+// its errors being strings) and follows the one object a position selects
+// while nothing else but connection framing is selected beside it. A field
+// named for a connection's items holds them only under a connection or an
+// edge. A position GitLab checks and that declares
 // nothing is fatal when its null lands on the spine, directly or through a
 // chain of non-null positions, and degraded otherwise; a declared position is
 // judged on the spine the same way, so a grant failing it withholds the

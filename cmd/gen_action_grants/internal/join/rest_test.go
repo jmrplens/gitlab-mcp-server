@@ -10,8 +10,10 @@ import (
 
 // TestExpandOptional_SpellsEveryWayAGrapePathCanBeWritten verifies a Grape
 // path is spelled with each optional group taken and left out, nested groups
-// one inside the other, an escaped parenthesis kept as the literal it is, and
-// a group that never closes left alone rather than guessed at.
+// one inside the other and a later group after an earlier one, a group at the
+// very start, an escaped parenthesis and a closing one outside every group
+// kept as the literals they are, and a group that never closes left alone
+// rather than guessed at.
 func TestExpandOptional_SpellsEveryWayAGrapePathCanBeWritten(t *testing.T) {
 	cases := []struct {
 		path string
@@ -20,8 +22,11 @@ func TestExpandOptional_SpellsEveryWayAGrapePathCanBeWritten(t *testing.T) {
 		{path: "/projects/:id/issues", want: []string{"/projects/:id/issues"}},
 		{path: "/groups/:id(/-)/epics", want: []string{"/groups/:id/epics", "/groups/:id/-/epics"}},
 		{path: "/a(/b(/c))", want: []string{"/a", "/a/b", "/a/b/c"}},
+		{path: "/a(/b)/c(/d)", want: []string{"/a/c", "/a/b/c", "/a/c/d", "/a/b/c/d"}},
+		{path: "(/a)/b", want: []string{"/b", "/a/b"}},
 		{path: `/a\(b\)/c(/d)`, want: []string{`/a\(b\)/c`, `/a\(b\)/c/d`}},
 		{path: `/a(/b\)c)`, want: []string{"/a", `/a/b\)c`}},
+		{path: "/a)b(/c)", want: []string{"/a)b", "/a)b/c"}},
 		{path: "/a(/b", want: []string{"/a(/b"}},
 	}
 	for _, testCase := range cases {
@@ -94,11 +99,42 @@ func TestLooselyAgree_APlaceholderOnEitherSideStandsForALiteral(t *testing.T) {
 	}
 }
 
+// TestRouteIndex_Match_TakesTheClosestSpellingAndTheFirstOfEqualOnes
+// verifies a derived route is matched to the spelling sharing the most
+// literal segments with it, a later one only when it is closer, the first in
+// the record's order among equally close ones, a spelling of placeholders
+// alone when nothing else meets it, and nothing when no spelling does.
+func TestRouteIndex_Match_TakesTheClosestSpellingAndTheFirstOfEqualOnes(t *testing.T) {
+	index := newRouteIndex([]apilive.Route{
+		route("GET", "/projects/:id/:kind", nil),
+		route("GET", "/projects/:id/things", nil),
+		route("GET", "/projects/:project_id/things", nil),
+		route("GET", "/:id", nil),
+	})
+	cases := []struct {
+		path string
+		want string
+	}{
+		{path: "/projects/:/things", want: "GET /projects/:id/things"},
+		{path: "/projects/:/stuff", want: "GET /projects/:id/:kind"},
+		{path: "/:", want: "GET /:id"},
+		{path: "/groups/:/things"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.path, func(t *testing.T) {
+			got, ok := index.match("GET", testCase.path)
+			if ok != (testCase.want != "") || ok && liveName(got) != testCase.want {
+				t.Errorf("match(%q) = %v, %t; want %q", testCase.path, got, ok, testCase.want)
+			}
+		})
+	}
+}
+
 // TestPrimaryBoundary_ReadsWhereARouteMayBeHeld verifies a route's primary
 // requirement is held at the boundary it declares, at any of its alternative
 // boundaries, at all four when a callable resolves it per request or when it
-// declares none, and that a callable declared beside a boundary type keeps
-// that type.
+// declares none, that a callable declared beside a boundary type keeps that
+// type, and that an alternative naming neither adds nothing.
 func TestPrimaryBoundary_ReadsWhereARouteMayBeHeld(t *testing.T) {
 	callable := &apilive.Callable{Callable: true}
 	cases := []struct {
@@ -119,6 +155,11 @@ func TestPrimaryBoundary_ReadsWhereARouteMayBeHeld(t *testing.T) {
 			want: finegrained.BoundaryProject,
 		},
 		{name: "none", auth: apilive.RouteAuthorization{}, want: finegrained.AllBoundaries},
+		{
+			name: "an alternative naming neither",
+			auth: apilive.RouteAuthorization{Boundaries: []apilive.Boundary{{BoundaryType: "group"}, {}}},
+			want: finegrained.BoundaryGroup,
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

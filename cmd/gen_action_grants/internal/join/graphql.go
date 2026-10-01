@@ -193,15 +193,14 @@ func (a *analyzer) mutation(root *position, out *Operation) (skipped bool) {
 }
 
 // payloadObject is where a mutation's answer spine starts: the first object
-// its payload selects other than errors, or nil for a payload that selects
-// none.
+// its payload selects, or nil for a payload that selects none. A payload's
+// errors are a list of strings in every type GitLab's schema defines, so they
+// are a scalar here and never the object the spine starts at.
 func payloadObject(root *position) *position {
-	for _, child := range root.children {
-		if child.field != "errors" {
-			return child
-		}
+	if len(root.children) == 0 {
+		return nil
 	}
-	return nil
+	return root.children[0]
 }
 
 // spineFrom follows the answer spine from a position: on, while the position
@@ -303,7 +302,7 @@ func (a *analyzer) judge(at *position, spine map[*position]bool) (Element, bool)
 	checked, allSkip := false, true
 	for _, member := range members {
 		recorded := a.authz.Types[member]
-		if !recorded.Enforced || member == "Query" || member == "Mutation" {
+		if !recorded.Enforced {
 			continue
 		}
 		checked = true
