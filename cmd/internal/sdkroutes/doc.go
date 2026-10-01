@@ -38,6 +38,12 @@
 //     package (the generic package routes are built by FormatPackageURL). A
 //     verb that is reassigned on the request afterwards (req.Method =
 //     http.MethodPut) is the verb the request carries.
+//   - A piece that folds to several spellings, such as a collection a method
+//     picks through a branched local, yields one route per spelling, whether
+//     it is a template argument, a format argument or a constant handed to a
+//     helper. Each way of combining the pieces is read, up to sixteen of them,
+//     and an empty spelling, which is what a helper's failure branch returns,
+//     is read only when the piece folds to nothing else.
 //
 // A segment that holds anything the reading cannot name becomes the placeholder
 // ":", which is client-go's own normalization of a route template, so the

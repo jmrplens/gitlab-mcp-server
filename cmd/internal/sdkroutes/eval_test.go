@@ -2,6 +2,7 @@ package sdkroutes
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -65,14 +66,47 @@ func TestShape_ReducesAPathToItsRoute(t *testing.T) {
 	}
 }
 
-// TestFirst_PrefersANonEmptySpelling verifies that a failure branch's empty
-// return is passed over, and taken only when there is nothing else.
-func TestFirst_PrefersANonEmptySpelling(t *testing.T) {
-	if got := first([]string{"", "a", "b"}); got != "a" {
-		t.Errorf("first() = %q, want %q", got, "a")
+// TestSpellings_PassesOverAnEmptySpelling verifies that a failure branch's
+// empty return is dropped beside any other spelling, and kept, once, only
+// when there is nothing else.
+func TestSpellings_PassesOverAnEmptySpelling(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{name: "empty beside others", values: []string{"", "a", "", "b"}, want: []string{"a", "b"}},
+		{name: "only empty", values: []string{"", ""}, want: []string{""}},
+		{name: "none empty", values: []string{"a"}, want: []string{"a"}},
 	}
-	if got := first([]string{"", ""}); got != "" {
-		t.Errorf("first() of only empty spellings = %q, want empty", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := spellings(tc.values); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("spellings(%q) = %q, want %q", tc.values, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCombinations_TakesOneSpellingPerPieceUpToTheBound verifies the order of
+// the combinations, the single empty combination of no pieces, and the bound,
+// which a piece with more spellings than it allows reaches on its own.
+func TestCombinations_TakesOneSpellingPerPieceUpToTheBound(t *testing.T) {
+	got := combinations([][]string{{"a", "b"}, {"1"}, {"x", "y"}})
+	want := [][]string{{"a", "1", "x"}, {"a", "1", "y"}, {"b", "1", "x"}, {"b", "1", "y"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("combinations() = %q, want %q", got, want)
+	}
+	if none := combinations(nil); len(none) != 1 || len(none[0]) != 0 {
+		t.Errorf("combinations(nil) = %q, want one empty combination", none)
+	}
+	wide := make([]string, maxFolds+3)
+	for i := range wide {
+		wide[i] = strconv.Itoa(i)
+	}
+	bounded := combinations([][]string{{"p"}, wide})
+	if len(bounded) != maxFolds || bounded[maxFolds-1][1] != strconv.Itoa(maxFolds-1) {
+		t.Errorf("combinations() of a %d-way piece = %d combinations ending %q, want the first %d", len(wide), len(bounded), bounded[len(bounded)-1], maxFolds)
 	}
 }
 

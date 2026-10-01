@@ -43,7 +43,7 @@ func (r *reading) resolve(entry *function) Method {
 	r.walk(entry, nil, map[string]bool{}, func(fn *function, env map[string]string) {
 		method.GraphQL = method.GraphQL || fn.graphQL
 		for _, use := range fn.templates {
-			if path, literal := r.templatePath(fn, use, env); literal {
+			for _, path := range r.templatePaths(fn, use, env) {
 				method.Routes = append(method.Routes, Route{Method: verbOf(fn.verb), Path: path})
 			}
 		}
@@ -73,34 +73,75 @@ func (r *reading) walk(fn *function, env map[string]string, onPath map[string]bo
 		if !ok {
 			continue
 		}
-		r.walk(callee, r.bind(fn, callee, call.args, env, map[string]bool{}), onPath, visit)
+		for _, bound := range r.bind(fn, callee, call.args, env, map[string]bool{}) {
+			r.walk(callee, bound, onPath, visit)
+		}
 	}
 }
 
-// bind maps a callee's parameters to the first spelling the caller's arguments
-// fold to.
-func (r *reading) bind(caller, callee *function, args []ast.Expr, env map[string]string, active map[string]bool) map[string]string {
-	bound := map[string]string{}
+// bind maps a callee's parameters to what the caller's arguments fold to, one
+// environment for each way of taking one spelling per argument, so a helper
+// handed a collection its caller picks through a branched local is entered
+// once per collection rather than once for the first. A callee taking nothing
+// is entered once, with nothing bound.
+func (r *reading) bind(caller, callee *function, args []ast.Expr, env map[string]string, active map[string]bool) []map[string]string {
+	var params []string
+	var pieces [][]string
 	for i, param := range callee.params {
 		if i >= len(args) {
 			break
 		}
-		bound[param] = first(r.fold(caller, args[i], env, active))
+		params = append(params, param)
+		pieces = append(pieces, spellings(r.fold(caller, args[i], env, active)))
 	}
-	return bound
+	var envs []map[string]string
+	for _, values := range combinations(pieces) {
+		bound := make(map[string]string, len(params))
+		for i, param := range params {
+			bound[param] = values[i]
+		}
+		envs = append(envs, bound)
+	}
+	return envs
 }
 
-// first is the spelling an argument is taken as when one value is wanted: the
-// first that is not empty. A helper's failure branch returns "" beside its
-// error (PathEscapeFileName does), and taking that as a path piece would drop
-// a segment from every route built with it.
-func first(values []string) string {
+// spellings is every spelling a piece folds to that is not empty, or the empty
+// one alone when it folds to nothing else. A helper's failure branch returns ""
+// beside its error (PathEscapeFileName does), and taking that as a path piece
+// beside what the success branch returns would add a route with a segment
+// missing.
+func spellings(values []string) []string {
+	var kept []string
 	for _, value := range values {
 		if value != "" {
-			return value
+			kept = append(kept, value)
 		}
 	}
-	return values[0]
+	if len(kept) == 0 {
+		return values[:1]
+	}
+	return kept
+}
+
+// combinations is every way of taking one spelling for each piece, in order,
+// at most [maxFolds] of them. Taking the first spelling of each instead would
+// keep one route of a path whose collection is picked through a branched local
+// and drop the rest without saying so.
+func combinations(pieces [][]string) [][]string {
+	out := [][]string{nil}
+	for _, options := range pieces {
+		var next [][]string
+		for _, prefix := range out {
+			for _, option := range options {
+				if len(next) == maxFolds {
+					break
+				}
+				next = append(next, append(slices.Clip(prefix), option))
+			}
+		}
+		out = next
+	}
+	return out
 }
 
 // verbOf is the verb a method sends, GET when it names none.
@@ -111,13 +152,21 @@ func verbOf(named string) string {
 	return named
 }
 
-// templatePath formats one withPath template and shapes it.
-func (r *reading) templatePath(fn *function, use templateUse, env map[string]string) (string, bool) {
-	values := make([]string, 0, len(use.args))
+// templatePaths formats one withPath template with every combination of the
+// spellings its arguments fold to, and keeps each shape that names something
+// static.
+func (r *reading) templatePaths(fn *function, use templateUse, env map[string]string) []string {
+	pieces := make([][]string, 0, len(use.args))
 	for _, arg := range use.args {
-		values = append(values, first(r.fold(fn, arg, env, map[string]bool{})))
+		pieces = append(pieces, spellings(r.fold(fn, arg, env, map[string]bool{})))
 	}
-	return shape(substitute(use.template, values))
+	var paths []string
+	for _, values := range combinations(pieces) {
+		if path, literal := shape(substitute(use.template, values)); literal {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 // legacyRoutes reads one NewRequest or UploadRequest: its verb, reassigned or
@@ -246,13 +295,15 @@ func (r *reading) foldAssigned(fn *function, assign *ast.AssignStmt, i int, env 
 // and anything else, PathEscape among them, as one unknown piece.
 func (r *reading) foldCall(fn *function, call *ast.CallExpr, index int, env map[string]string, active map[string]bool) []string {
 	if isSprintf(call) && len(call.Args) > 0 {
-		var values []string
+		var pieces [][]string
 		for _, arg := range call.Args[1:] {
-			values = append(values, first(r.fold(fn, arg, env, active)))
+			pieces = append(pieces, spellings(r.fold(fn, arg, env, active)))
 		}
 		var out []string
 		for _, format := range r.fold(fn, call.Args[0], env, active) {
-			out = append(out, substitute(format, values))
+			for _, values := range combinations(pieces) {
+				out = append(out, substitute(format, values))
+			}
 		}
 		return limit(out)
 	}
@@ -260,19 +311,21 @@ func (r *reading) foldCall(fn *function, call *ast.CallExpr, index int, env map[
 	if !ok || active[callee.key] {
 		return []string{unknown}
 	}
-	inner := r.bind(fn, callee, call.Args, env, active)
+	envs := r.bind(fn, callee, call.Args, env, active)
 	active[callee.key] = true
 	defer delete(active, callee.key)
 	var out []string
-	ast.Inspect(callee.decl.Body, func(node ast.Node) bool {
-		if _, isLiteral := node.(*ast.FuncLit); isLiteral {
-			return false
-		}
-		if ret, isReturn := node.(*ast.ReturnStmt); isReturn && index < len(ret.Results) {
-			out = append(out, r.fold(callee, ret.Results[index], inner, active)...)
-		}
-		return true
-	})
+	for _, inner := range envs {
+		ast.Inspect(callee.decl.Body, func(node ast.Node) bool {
+			if _, isLiteral := node.(*ast.FuncLit); isLiteral {
+				return false
+			}
+			if ret, isReturn := node.(*ast.ReturnStmt); isReturn && index < len(ret.Results) {
+				out = append(out, r.fold(callee, ret.Results[index], inner, active)...)
+			}
+			return true
+		})
+	}
 	if len(out) == 0 {
 		return []string{unknown}
 	}

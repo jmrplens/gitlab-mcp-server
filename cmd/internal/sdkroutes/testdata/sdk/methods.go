@@ -72,6 +72,30 @@ func (s *AwardEmojiService) getAwardEmoji(pid any, resource string, id, award in
 	)
 }
 
+// ListNotes picks the collection its template names through a branched local,
+// so it sends to one route per collection.
+func (s *IssuesService) ListNotes(pid any, mergeRequest bool) ([]*Issue, *Response, error) {
+	collection := "issues"
+	if mergeRequest {
+		collection = "merge_requests"
+	}
+	return do[[]*Issue](s.client, withPath(routeProjectsIDIDNotes, ProjectID{pid}, collection))
+}
+
+// ListDiscussions hands a collection picked the same way to a helper, which
+// is entered once per collection.
+func (s *IssuesService) ListDiscussions(pid any, mergeRequest bool) ([]*Issue, *Response, error) {
+	collection := awardIssue
+	if mergeRequest {
+		collection = "merge_requests"
+	}
+	return s.listDiscussions(pid, collection)
+}
+
+func (s *IssuesService) listDiscussions(pid any, collection string) ([]*Issue, *Response, error) {
+	return do[[]*Issue](s.client, withPath(routeProjectsIDIDDiscussions, ProjectID{pid}, collection))
+}
+
 // ListUploads delegates to a generic package function with a typed constant.
 func (s *ProjectUploadsService) ListUploads(pid any, options ...RequestOptionFunc) ([]*Upload, *Response, error) {
 	return listUploads[Upload](s.client, ProjectResource, ProjectID{pid})

@@ -50,7 +50,9 @@ func fixture(t *testing.T) *SDK {
 // stand-in to the requests it sends: the option form, delegation through the
 // receiver, through a field and through a generic package function with the
 // constant each caller hands over, the legacy form folded through Sprintf, a
-// helper and a reassigned verb, and the GraphQL transport.
+// helper and a reassigned verb, a collection picked through a branched local
+// (in a template, handed to a helper, formatted and returned by a helper), and
+// the GraphQL transport.
 func TestRead_FixturePackage_ResolvesEveryMethodShape(t *testing.T) {
 	sdk := fixture(t)
 	get := func(method, path string) Route { return Route{Method: method, Path: path} }
@@ -72,6 +74,21 @@ func TestRead_FixturePackage_ResolvesEveryMethodShape(t *testing.T) {
 			Service: "Issues", Name: "AddSpentTime", Answers: "TimeStats",
 			Options: []string{"AddSpentTimeOptions"},
 			Routes:  []Route{get("POST", "/projects/:/issues/:/add_spent_time")},
+		},
+		"Issues.ListNotes": {
+			Service: "Issues", Name: "ListNotes", Answers: "Issue", Many: true,
+			Routes: []Route{get("GET", "/projects/:/issues/notes"), get("GET", "/projects/:/merge_requests/notes")},
+		},
+		"Issues.ListDiscussions": {
+			Service: "Issues", Name: "ListDiscussions", Answers: "Issue", Many: true,
+			Routes: []Route{get("GET", "/projects/:/issues/discussions"), get("GET", "/projects/:/merge_requests/discussions")},
+		},
+		"Repositories.Stats": {
+			Service: "Repositories", Name: "Stats", Answers: "Upload",
+			Routes: []Route{
+				get("GET", "/projects/:/issues/time_stats"), get("GET", "/projects/:/merge_requests/time_stats"),
+				get("POST", "/stats/issues"), get("POST", "/stats/merge_requests"),
+			},
 		},
 		"AwardEmoji.GetIssueAwardEmoji": {
 			Service: "AwardEmoji", Name: "GetIssueAwardEmoji", Answers: "AwardEmoji",
@@ -214,8 +231,8 @@ func TestRead_FixturePackage_ReadsOnlyExportedServiceMethods(t *testing.T) {
 // and sorted.
 func TestSDK_Methods_ListsEveryEntryInKeyOrder(t *testing.T) {
 	methods := fixture(t).Methods()
-	if len(methods) != 31 {
-		t.Errorf("Methods() listed %d, want 31", len(methods))
+	if len(methods) != 34 {
+		t.Errorf("Methods() listed %d, want 34", len(methods))
 	}
 	for i := 1; i < len(methods); i++ {
 		if methods[i-1].Key() >= methods[i].Key() {

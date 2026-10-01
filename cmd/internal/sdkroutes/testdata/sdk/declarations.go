@@ -18,6 +18,8 @@ var (
 	routeSearch                      = route("search?scope=%s")
 	routeProjectsIDPackagesID        = route("projects/%s/packages/%s.%s")
 	routeOnlyPlaceholders            = route("%s/%s")
+	routeProjectsIDIDNotes           = route("projects/%s/%s/notes")
+	routeProjectsIDIDDiscussions     = route("projects/%s/%s/discussions")
 	notARoute                        = other("projects")
 	tooManyArgs                      = route("projects", "issues")
 	notALiteral                      = route(routeSearch)

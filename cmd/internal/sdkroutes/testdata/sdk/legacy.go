@@ -60,6 +60,24 @@ func (s *GenericPackagesService) PublishPackageFile(pid any, name, version, file
 	return nil, resp, err
 }
 
+// Stats builds two legacy paths from a collection picked through a branched
+// local: one formatted with fmt.Sprintf, and one returned by a helper of the
+// receiver the collection is handed to.
+func (s *RepositoriesService) Stats(pid any, mergeRequest bool) (*Upload, *Response, error) {
+	collection := "issues"
+	if mergeRequest {
+		collection = "merge_requests"
+	}
+	u := fmt.Sprintf("projects/%s/%s/time_stats", PathEscape(pid), collection)
+	s.client.NewRequest(http.MethodGet, u, nil, nil)
+	s.client.NewRequest(http.MethodPost, s.statsPath(collection), nil, nil)
+	return nil, nil, nil
+}
+
+func (s *RepositoriesService) statsPath(collection string) string {
+	return "stats/" + collection
+}
+
 // Fetch hands a parameter through whole, which folds to no static segment, and
 // names its verb through a parameter, which is no net/http constant.
 func (s *RepositoriesService) Fetch(path, method string) (*Upload, *Response, error) {
