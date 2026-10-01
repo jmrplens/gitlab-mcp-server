@@ -26,6 +26,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
@@ -1618,6 +1619,21 @@ func TestDefaultRevalidateInterval(t *testing.T) {
 	pool := New(cfg, testFactory())
 	if pool.revalidateInterval != DefaultRevalidateInterval {
 		t.Errorf("default revalidateInterval = %v, want %v", pool.revalidateInterval, DefaultRevalidateInterval)
+	}
+}
+
+// TestDefaultDurations_HoldTheRegistersValues verifies the two durations this
+// package keeps as pinned copies of the tenant policy register's values
+// (ADM-009 and POL-004) against the register rather than against themselves:
+// a copy that collapsed to zero would turn revalidation or idle eviction off
+// by default, and a test comparing the pool's field with the same constant
+// that set it would pass on it.
+func TestDefaultDurations_HoldTheRegistersValues(t *testing.T) {
+	if DefaultRevalidateInterval != tenancy.RevalidateInterval {
+		t.Errorf("DefaultRevalidateInterval = %v, want the register's %v", DefaultRevalidateInterval, tenancy.RevalidateInterval)
+	}
+	if DefaultIdleTimeout != tenancy.PoolIdleTimeout {
+		t.Errorf("DefaultIdleTimeout = %v, want the register's %v", DefaultIdleTimeout, tenancy.PoolIdleTimeout)
 	}
 }
 

@@ -552,14 +552,11 @@ func WithIdleTimeout(d time.Duration) Option {
 // default, and a value above [maxCredentialAgeCeiling] is clamped down to it.
 func WithMaxCredentialAge(d time.Duration) Option {
 	return func(p *ServerPool) {
-		switch {
-		case d <= 0:
+		if d <= 0 {
 			p.maxCredentialAge = DefaultMaxCredentialAge
-		case d > maxCredentialAgeCeiling:
-			p.maxCredentialAge = maxCredentialAgeCeiling
-		default:
-			p.maxCredentialAge = d
+			return
 		}
+		p.maxCredentialAge = min(d, maxCredentialAgeCeiling)
 	}
 }
 
@@ -665,25 +662,30 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 	// in this file, and it has to be: both arms of the switch below take the
 	// write lock — dropRejectedEntry directly, the stale arm through the slow
 	// path — and a read lock still held there deadlocks the process. The block
-	// under it is three field reads that cannot panic, so defer buys nothing
-	// here and costs the function.
+	// under it is a map read and, for an entry it finds, two field reads, none
+	// of which can panic, so defer buys nothing here and costs the function.
 	p.mu.RLock()
 	cached, ok := p.entries[key]
-	// Read under the same lock that guards the field: lastValidated is
-	// written by the revalidation and confirmation goroutines.
-	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
-	rejected := ok && cached.rejected.Load()
+	// Read only for an entry the pool holds, and under the same lock that
+	// guards the field: lastValidated is written by the revalidation and
+	// confirmation goroutines. Both stay false for a key the pool does not
+	// hold, which is what lets the cases below name them alone.
+	var stale, rejected bool
+	if ok {
+		stale = p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
+		rejected = cached.rejected.Load()
+	}
 	p.mu.RUnlock()
 
 	switch {
-	case ok && rejected:
+	case rejected:
 		// GitLab refused this entry's credential on a call and the eviction
 		// that follows has not taken the lock yet. Dropping it here, rather
 		// than serving it once more, sends this request down the slow path,
 		// which rebuilds and re-verifies; the pending eviction then finds
 		// nothing under the key and does nothing.
 		p.dropRejectedEntry(key, cached)
-	case ok && stale:
+	case stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
 		// sends this very request down the slow path, which rebuilds and

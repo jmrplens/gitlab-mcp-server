@@ -165,27 +165,9 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 		// block, which only a charge that arrives while none is on can be.
 		return false
 	}
-	switch {
-	case !ok:
-		if !b.roomForNewKeyLocked(now) {
-			return false
-		}
-		rec = &distinctRecord{
-			digests:         make(map[[distinctDigestLen]byte]struct{}, 1),
-			windowStartedAt: now,
-		}
-		b.addresses[address] = rec
-	case now.Sub(rec.lastSeenAt) >= b.resetAfter():
-		// Silence long enough to forget the ladder. The record is reused
-		// rather than replaced so that this path costs the same whether the
-		// table is at its cap or not: nothing new is being inserted.
-		*rec = distinctRecord{
-			digests:         make(map[[distinctDigestLen]byte]struct{}, 1),
-			windowStartedAt: now,
-		}
-	case now.Sub(rec.windowStartedAt) > b.window:
-		clear(rec.digests)
-		rec.windowStartedAt = now
+	rec, counted := b.countedRecordLocked(address, rec, ok, now)
+	if !counted {
+		return false
 	}
 	rec.lastSeenAt = now
 
@@ -204,6 +186,46 @@ func (b *DistinctTokenBudget) Charge(address, token string) bool {
 	}
 	rec.blockedUntil = now.Add(b.blockFor(rec.step))
 	return true
+}
+
+// countedRecordLocked returns the record a charge from address is counted on,
+// and false when the table has no room for an address it does not hold yet.
+// The caller holds b.mu and has already set aside an address that is blocked.
+//
+// An address the table does not hold gets a new record when there is room. A
+// held one that has been silent long enough to forget its ladder is reset in
+// place, rather than replaced, so that this path costs the same whether the
+// table is at its cap or not: nothing new is being inserted. A held one whose
+// window has ended starts a new window and keeps its ladder.
+//
+// It is written as separate returns rather than as the tagless switch it
+// replaced, whose case expressions carry no statement counter, so the mutation
+// tool could measure none of the comparisons that decide which of the three
+// a charge meets.
+func (b *DistinctTokenBudget) countedRecordLocked(address string, rec *distinctRecord, held bool, now time.Time) (*distinctRecord, bool) {
+	if !held {
+		if !b.roomForNewKeyLocked(now) {
+			return nil, false
+		}
+		rec = &distinctRecord{
+			digests:         make(map[[distinctDigestLen]byte]struct{}, 1),
+			windowStartedAt: now,
+		}
+		b.addresses[address] = rec
+		return rec, true
+	}
+	if now.Sub(rec.lastSeenAt) >= b.resetAfter() {
+		*rec = distinctRecord{
+			digests:         make(map[[distinctDigestLen]byte]struct{}, 1),
+			windowStartedAt: now,
+		}
+		return rec, true
+	}
+	if now.Sub(rec.windowStartedAt) > b.window {
+		clear(rec.digests)
+		rec.windowStartedAt = now
+	}
+	return rec, true
 }
 
 // blockFor is how long the step-th block lasts.
