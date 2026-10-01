@@ -64,7 +64,8 @@ type Action struct {
 	ID string
 	// Handlers are the functions its route runs.
 	Handlers []string
-	// Uses are its requests, sorted by key.
+	// Uses are its requests, in the order the walk first met them, which is
+	// the order the handler makes them along any one path.
 	Uses []Use
 	// Paths are the ways it runs, each a set of indices into Uses, minimal and
 	// sorted.
@@ -200,29 +201,20 @@ func (d *deriver) sendsGraphQL(roots []*types.Func) bool {
 	return false
 }
 
-// finish sorts an action's requests by key, renumbers its paths, and
-// classifies each request by the paths that make it.
+// finish orders an action's paths and classifies each request by the paths
+// that make it. The requests keep the order the walk first met them in, which
+// is the order a handler makes them along any one path: a statement before
+// the next, a callee's requests where it is called, and client-go's documents
+// in the order it posts them. What a caller meets first on a path is decided
+// by that order (a lookup that a fine-grained token cannot pass stops the
+// write after it from ever being sent), so a sort by anything else would
+// throw away the one fact the join needs to say which refusal comes first.
 func finish(out *Action) {
-	order := make([]int, len(out.Uses))
-	for i := range order {
-		order[i] = i
-	}
-	sort.Slice(order, func(a, b int) bool { return out.Uses[order[a]].Key() < out.Uses[order[b]].Key() })
-	renumber := make([]int, len(order))
-	uses := make([]Use, len(order))
-	for to, from := range order {
-		renumber[from] = to
-		uses[to] = out.Uses[from]
-	}
-	out.Uses = uses
 	paths := make([][]int, 0, len(out.Paths))
 	for _, path := range out.Paths {
-		moved := make([]int, len(path))
-		for i, index := range path {
-			moved[i] = renumber[index]
-		}
-		slices.Sort(moved)
-		paths = append(paths, moved)
+		sorted := slices.Clone(path)
+		slices.Sort(sorted)
+		paths = append(paths, sorted)
 	}
 	out.Paths = minimize(paths)
 	for i := range out.Uses {
@@ -280,14 +272,14 @@ func (d *deriver) body(fn *types.Func) *node {
 	}
 	indexed, _ := d.prog.Function(fn)
 	b := &builder{d: d, site: fn, fn: indexed, pkg: indexed.Package()}
-	var built *node
+	// A body is a declared function's or a literal's block, or the expression
+	// a package-level variable is initialized with; the index holds no other.
+	built := emptyNode()
 	switch root := indexed.Root().(type) {
 	case *ast.BlockStmt:
 		built = b.block(root.List)
 	case ast.Expr:
 		built = b.expr(root)
-	default:
-		built = emptyNode()
 	}
 	d.bodies[fn] = built
 	return built

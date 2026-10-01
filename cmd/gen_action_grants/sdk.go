@@ -37,7 +37,7 @@ func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, kn
 	if !method.GraphQL {
 		return routes, nil, true
 	}
-	for _, document := range s.sdk.Documents(key, s.documents) {
+	for _, document := range postingOrder(s.sdk.Documents(key, s.documents)) {
 		if graphqldocs.IsTemplate(document) {
 			documents = append(documents, derive.Request{Kind: derive.KindUnresolved, Reason: templateClass(document) + " " + key})
 			continue
@@ -45,6 +45,27 @@ func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, kn
 		documents = append(documents, derive.Request{Kind: derive.KindGraphQL, Document: document.Text, Name: document.Name})
 	}
 	return routes, documents, true
+}
+
+// postingOrder puts a client-go method's documents in the order it posts
+// them, which the reading of client-go does not keep (it lists them in the
+// order they are declared): every query before every mutation, each kind in
+// the order it came. A client-go method that posts both looks up what the
+// write needs first; at v3.14.0 those are WorkItems.UpdateWorkItem and
+// DeleteWorkItem, each of which reads the item's global ID with
+// getWorkItemIDQuery and then writes. The order decides which refusal a caller
+// meets: a fine-grained token that cannot pass the lookup stops the action
+// before the write is sent, so nothing commits.
+func postingOrder(documents []graphqldocs.Document) []graphqldocs.Document {
+	var queries, mutations []graphqldocs.Document
+	for _, document := range documents {
+		if graphqldocs.DefinesMutation(document.Text) {
+			mutations = append(mutations, document)
+			continue
+		}
+		queries = append(queries, document)
+	}
+	return append(queries, mutations...)
 }
 
 // templateClass names how a client-go document is assembled at run time: a

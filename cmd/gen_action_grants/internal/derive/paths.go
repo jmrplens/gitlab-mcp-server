@@ -44,11 +44,6 @@ func product(a, b pathSet) (pathSet, bool) {
 	return out, len(out) <= maxPaths
 }
 
-// union runs either part.
-func union(a, b pathSet) pathSet {
-	return minimize(append(slices.Clone(a), b...))
-}
-
 // merge joins two sorted index sets.
 func merge(a, b []int) []int {
 	out := make([]int, 0, len(a)+len(b))

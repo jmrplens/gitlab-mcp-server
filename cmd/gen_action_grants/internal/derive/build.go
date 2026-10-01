@@ -5,6 +5,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"slices"
 
 	"golang.org/x/tools/go/packages"
 
@@ -161,13 +162,8 @@ type branch struct {
 }
 
 // anyTerminates reports whether some arm ends the function.
-func (br branch) anyTerminates(b *builder) bool {
-	for _, arm := range br.arms {
-		if b.terminates(arm) {
-			return true
-		}
-	}
-	return false
+func (br *branch) anyTerminates(b *builder) bool {
+	return slices.ContainsFunc(br.arms, b.terminates)
 }
 
 // branching reads a statement whose arms are alternatives, and reports false
@@ -196,7 +192,7 @@ func (b *builder) branching(stmt ast.Stmt) (branch, bool) {
 	case *ast.SelectStmt:
 		br := branch{prefix: emptyNode(), implicit: true}
 		for _, clause := range typed.Body.List {
-			comm := clause.(*ast.CommClause)
+			comm, _ := clause.(*ast.CommClause)
 			br.arms = append(br.arms, append(stmtsOf(comm.Comm), comm.Body...))
 		}
 		return br, true
@@ -208,7 +204,7 @@ func (b *builder) branching(stmt ast.Stmt) (branch, bool) {
 // some arm is always taken.
 func (br *branch) addClauses(body *ast.BlockStmt) {
 	for _, clause := range body.List {
-		cases := clause.(*ast.CaseClause)
+		cases, _ := clause.(*ast.CaseClause)
 		if cases.List == nil {
 			br.implicit = false
 		}
