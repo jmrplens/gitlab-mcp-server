@@ -73,7 +73,9 @@ func describeUse(use *derive.Use) string {
 // running that sends none, unless every request it sends was declared
 // optional.
 func pathWithoutRequest(act *derive.Action) string {
-	if len(act.Uses) == 0 || !slices.ContainsFunc(act.Paths, func(path []int) bool { return len(path) == 0 }) {
+	// An action sending nothing has no request to name, which the loop below
+	// answers on its own.
+	if !slices.ContainsFunc(act.Paths, func(path []int) bool { return len(path) == 0 }) {
 		return ""
 	}
 	for i := range act.Uses {

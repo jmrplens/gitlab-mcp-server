@@ -113,7 +113,7 @@ func needText(need finegrained.Need) string {
 // servedEmptyText names the parts of the answer a fine-grained token may be
 // served empty.
 func servedEmptyText(description *finegrained.Description) string {
-	parts := make([]string, 0, len(description.AlwaysEmpty)+len(description.EmptyWithout))
+	var parts []string
 	for _, selection := range description.AlwaysEmpty {
 		parts = append(parts, "`"+selection+"` (always)")
 	}
