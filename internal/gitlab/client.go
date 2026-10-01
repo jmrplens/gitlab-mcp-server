@@ -577,6 +577,31 @@ func (c *Client) VersionRefusal() (string, bool) {
 	return "", false
 }
 
+// ReadVersion asks /api/v4/version now, through the health client, and returns
+// the version the instance reported when it is one ([Client.Version]'s rule),
+// with whether the instance answered at all.
+//
+// An answer is a 200 naming a version, readable or not, or GitLab's refusal of
+// the fine-grained permission the endpoint needs (Metadata: Read): both say
+// what this token will be told, and both leave the version "" when it is not
+// one this server can read. A transport failure, a timeout, any other status
+// and a body naming no version are no answer, which a caller holding a version from an earlier read keeps,
+// rather than reading an instance that did not answer as one with no version.
+//
+// It is the read a fine-grained token's authority is chosen by (the bucket of
+// the recorded table it is matched against), made when a pool entry is built
+// and again on each accepted revalidation, and on stdio by the same timer.
+func (c *Client) ReadVersion(ctx context.Context) (string, bool) {
+	_, err := c.versionDirect(ctx)
+	if _, refused := errors.AsType[*versionRefusedError](err); refused {
+		return "", true
+	}
+	if err != nil {
+		return "", false
+	}
+	return c.Version(), true
+}
+
 // versionPattern is the shape of a version GitLab reports: three numbers and
 // an optional suffix (19.4.1-ee, 19.5.0-pre). versionMaxBytes bounds it,
 // since the pattern alone lets a suffix run on.

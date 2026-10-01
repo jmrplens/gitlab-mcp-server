@@ -338,7 +338,7 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			cfg := ServerConfig{Surface: testCase.surface}.normalized()
-			expected, err := expectedSurface(inst, cfg.Surface, serverConfigFor(inst, cfg, inst.credential()))
+			expected, err := expectedSurface(inst, cfg.Surface, serverConfigFor(inst, cfg, inst.credential()), inst.credential().authority)
 			if err != nil {
 				t.Fatalf("expectedSurface(%s): %v", testCase.surface, err)
 			}
@@ -425,11 +425,11 @@ func TestServerConfigFor_CredentialTier_DecidesTheCatalog(t *testing.T) {
 	if licensed.Tier != edition.Ultimate || unlicensed.Tier != edition.Free {
 		t.Fatalf("tiers = %s and %s, want the credential's: ultimate and free", licensed.Tier, unlicensed.Tier)
 	}
-	withLicense, err := expectedSurface(inst, SurfaceMeta, licensed)
+	withLicense, err := expectedSurface(inst, SurfaceMeta, licensed, nil)
 	if err != nil {
 		t.Fatalf("expectedSurface(ultimate): %v", err)
 	}
-	withoutLicense, err := expectedSurface(inst, SurfaceMeta, unlicensed)
+	withoutLicense, err := expectedSurface(inst, SurfaceMeta, unlicensed, nil)
 	if err != nil {
 		t.Fatalf("expectedSurface(free): %v", err)
 	}
@@ -628,7 +628,7 @@ func TestExpectedSurface_AssemblerThatFails_StopsTheExpectation(t *testing.T) {
 		t.Run(string(surface), func(t *testing.T) {
 			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
 
-			_, err := expectedSurface(inst, surface, serverCfg)
+			_, err := expectedSurface(inst, surface, serverCfg, nil)
 
 			if !errors.Is(err, cause) {
 				t.Fatalf("expectedSurface(%s) error = %v, want the assembler's own", surface, err)
@@ -640,7 +640,7 @@ func TestExpectedSurface_AssemblerThatFails_StopsTheExpectation(t *testing.T) {
 	}
 
 	t.Run("a surface nothing serves", func(t *testing.T) {
-		_, err := expectedSurface(inst, Surface("carrier pigeon"), &config.ServerConfig{})
+		_, err := expectedSurface(inst, Surface("carrier pigeon"), &config.ServerConfig{}, nil)
 		if err == nil || !strings.Contains(err.Error(), "unknown tool surface") {
 			t.Errorf("expectedSurface(unknown) error = %v, want the surface refused by name", err)
 		}
@@ -676,7 +676,7 @@ func TestExpectedSurface_ProjectionThatCannotBeBuilt_FailsTheExpectation(t *test
 		t.Run(string(surface), func(t *testing.T) {
 			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
 
-			_, err := expectedSurface(inst, surface, serverCfg)
+			_, err := expectedSurface(inst, surface, serverCfg, nil)
 
 			if !errors.Is(err, failing.err) {
 				t.Fatalf("expectedSurface(%s) error = %v, want the projection's own", surface, err)

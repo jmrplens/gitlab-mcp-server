@@ -31,11 +31,13 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/toolvisibility"
 )
 
 // servedSets is what one session listed when it started.
@@ -245,8 +247,25 @@ var (
 //
 // The client it builds the catalogs with is the harness's own. Binding rebuilds
 // the handlers for that client and touches nothing this reads, so the names and
-// the action IDs are the ones the binary's own catalog carries.
-func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerConfig) (surfaceExpectation, error) {
+// the action IDs are the ones the binary's own catalog carries. What the
+// assemblers say is then narrowed to what a fine-grained credential is listed
+// ([listedFor]), the step the binary takes per request after registration.
+func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerConfig, authority *finegrained.Authority) (surfaceExpectation, error) {
+	expectation, catalog, err := assembledSurface(inst, surface, serverCfg)
+	if err != nil {
+		return surfaceExpectation{}, err
+	}
+	var tools *toolvisibility.ToolActions
+	if surface != SurfaceDynamic {
+		tools = toolvisibility.NewToolActions(string(surface), catalog)
+	}
+	return listedFor(expectation, authority, tools), nil
+}
+
+// assembledSurface is what the server's own assemblers say a configuration
+// registers, before any credential narrows the listing, with the catalog it
+// was registered from.
+func assembledSurface(inst *instance, surface Surface, serverCfg *config.ServerConfig) (surfaceExpectation, *actioncatalog.Catalog, error) {
 	client := inst.client
 	standalone := standaloneToolNames(client)
 
@@ -254,7 +273,7 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 	case SurfaceDynamic:
 		catalog, _, err := assembleDynamicCatalog(client, serverCfg)
 		if err != nil {
-			return surfaceExpectation{}, fmt.Errorf("assemble the dynamic catalog: %w", err)
+			return surfaceExpectation{}, nil, fmt.Errorf("assemble the dynamic catalog: %w", err)
 		}
 		// The dynamic surface registers two tools whatever the catalog holds;
 		// the catalog decides which actions they reach, which is what the
@@ -263,11 +282,11 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 			tools:      []string{dynamictools.ExecuteActionToolName, dynamictools.FindActionToolName},
 			actions:    catalogActionIDs(catalog),
 			standalone: standalone,
-		}, nil
+		}, catalog, nil
 	case SurfaceMeta:
 		catalog, _, err := assembleMetaCatalog(client, serverCfg)
 		if err != nil {
-			return surfaceExpectation{}, fmt.Errorf("assemble the meta catalog: %w", err)
+			return surfaceExpectation{}, nil, fmt.Errorf("assemble the meta catalog: %w", err)
 		}
 		names := make([]string, 0, catalog.CountGroups())
 		for _, group := range catalog.Groups() {
@@ -276,21 +295,21 @@ func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerCo
 		slices.Sort(names)
 		actions := catalogActionIDs(catalog)
 		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
-			return surfaceExpectation{}, standaloneErr
+			return surfaceExpectation{}, nil, standaloneErr
 		}
-		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, nil
+		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, catalog, nil
 	case SurfaceIndividual:
 		catalog, _, err := assembleIndividualCatalog(client, serverCfg)
 		if err != nil {
-			return surfaceExpectation{}, fmt.Errorf("assemble the individual catalog: %w", err)
+			return surfaceExpectation{}, nil, fmt.Errorf("assemble the individual catalog: %w", err)
 		}
 		names, actions := individualRegistrations(catalog, serverCfg.ReadOnly)
 		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
-			return surfaceExpectation{}, standaloneErr
+			return surfaceExpectation{}, nil, standaloneErr
 		}
-		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, nil
+		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, catalog, nil
 	default:
-		return surfaceExpectation{}, fmt.Errorf("unknown tool surface %q", surface)
+		return surfaceExpectation{}, nil, fmt.Errorf("unknown tool surface %q", surface)
 	}
 }
 
@@ -352,12 +371,43 @@ func standaloneActions(projected *projection, serverCfg *config.ServerConfig) ma
 type credentialFacts struct {
 	scopes []string
 	tier   edition.Tier
+	// authority is what the binary attaches to a fine-grained token's client
+	// (register rows AUT-007 and AUT-008), nil for any other token. The
+	// expectation is narrowed by it with the listing decision the server's
+	// own middleware reads, so a session is held to the tools such a token is
+	// listed rather than to the catalog it would be served without one.
+	authority *finegrained.Authority
 }
 
 // credential returns what the binary learns from the run's own token, which
-// the probe already resolved.
+// the probe already resolved. The run's own token is the classic token the
+// fixtures are made with, which no authority narrows; a session that runs with
+// a fine-grained token is given one of its own and learns it in
+// [sessionCredential].
 func (inst *instance) credential() credentialFacts {
 	return credentialFacts{scopes: inst.facts.Scopes, tier: inst.facts.Tier}
+}
+
+// listedFor narrows an expectation to what a credential holding authority is
+// listed: the tools [toolvisibility.ToolActions.Listed] lists, which is the
+// decision the server's listing middleware takes, and the actions the
+// authority lists, which is what a session can be asked to reach and what a
+// sweep walks. An action withheld from the listing is then one [Withheld]
+// asserts. A nil authority narrows nothing, and tools may be nil for the
+// dynamic surface, whose two tools are listed whatever the catalog holds.
+func listedFor(expectation surfaceExpectation, authority *finegrained.Authority, tools *toolvisibility.ToolActions) surfaceExpectation {
+	if authority == nil {
+		return expectation
+	}
+	if tools != nil {
+		expectation.tools = slices.DeleteFunc(slices.Clone(expectation.tools), func(name string) bool {
+			return !tools.Listed(authority, name)
+		})
+	}
+	maps.DeleteFunc(expectation.actions, func(id ActionID, _ struct{}) bool {
+		return !authority.Lists(string(id))
+	})
+	return expectation
 }
 
 // serverConfigFor builds the configuration the binary builds for itself from

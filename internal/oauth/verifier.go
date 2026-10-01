@@ -755,6 +755,9 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 			"username": user.Username,
 		},
 	}
+	if result.tokenID != 0 {
+		info.Extra[TokenIDKey] = result.tokenID
+	}
 
 	if cache != nil {
 		cache.Put(gitlabURL, token, info, ttl)
@@ -802,7 +805,23 @@ type introspection struct {
 	// fallback below is deliberately fail-open and reusing its shape would let
 	// anything that breaks introspection walk past the pin.
 	answered bool
+	// tokenID is a personal access token's own id, as the self endpoint
+	// reported it, and 0 for anything else. It is what lets the pool read a
+	// fine-grained token's grant without asking the self endpoint again
+	// ([TokenIDKey]).
+	tokenID int64
 }
+
+// TokenIDKey is the key of the verified [auth.TokenInfo]'s Extra under which a
+// personal access token's own id travels, as an int64, when the self endpoint
+// reported one. It is absent for an OAuth access token.
+//
+// The pool reads it from the request's token info, which came out of this
+// package's cache, keyed on the instance and the token, never from anything
+// keyed on the token alone, so the id an entry reads a grant by is the one the
+// same instance gave for the same token. It is never logged: it names the
+// token as well as its value does for a reader of the instance's audit log.
+const TokenIDKey = "token_id"
 
 // introspectToken returns the token's real scopes and its own expiry.
 //
@@ -826,6 +845,7 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 				scopes:   expandImpliedScopes(scopes),
 				expiry:   expiryFromDate(payload["expires_at"]),
 				answered: true,
+				tokenID:  tokenIDFrom(payload["id"]),
 			}
 		}
 	}
@@ -866,6 +886,22 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 	slog.DebugContext(ctx, "token scope introspection unavailable; assuming api scope")
 	return introspection{scopes: expandImpliedScopes([]string{"api"})}
 }
+
+// tokenIDFrom reads a token's id from the self endpoint's decoded body, where
+// encoding/json decoded the number as a float64, and 0 for anything that is
+// not a positive whole number an int64 holds exactly.
+func tokenIDFrom(raw any) int64 {
+	id, isNumber := raw.(float64)
+	if !isNumber || id < 1 || id > maxExactTokenID || id != float64(int64(id)) {
+		return 0
+	}
+	return int64(id)
+}
+
+// maxExactTokenID is the largest id a float64 carries exactly, 2^53: past it
+// the decoded number may not be the one GitLab sent, and an id read wrong
+// would ask for another token's grant.
+const maxExactTokenID = 1 << 53
 
 // applicationUID reads the uid of the OAuth application a token was issued to,
 // from the nested "application" object /oauth/token/info returns.

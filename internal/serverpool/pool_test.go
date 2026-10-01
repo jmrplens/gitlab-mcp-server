@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
@@ -5732,5 +5734,271 @@ func TestGetOrCreate_FineGrainedTokenGetsAnAuthorityOnItsClient(t *testing.T) {
 				t.Errorf("the entry's client carries an authority = %v, want %v", got, tc.wantAuthority)
 			}
 		})
+	}
+}
+
+// fineGrainedTokenID is the id the stand-in reports for its fine-grained
+// token, chosen so a log line carrying it would be told from anything else.
+const fineGrainedTokenID = 424242
+
+// fineGrainedGitLab is a stand-in instance for a fine-grained token that may
+// read its own grant: it accepts the credential, describes the token, answers
+// the grant read and the version read as the test sets them, and counts each.
+type fineGrainedGitLab struct {
+	server      *httptest.Server
+	version     atomic.Pointer[string]
+	grantStatus atomic.Int64
+	self        atomic.Int64
+	grants      atomic.Int64
+	versions    atomic.Int64
+	// onSelf, when set, runs inside the self request, after the tier was
+	// detected and before the fine-grained reads.
+	onSelf atomic.Pointer[func()]
+	// onGrant, when set, runs inside the grant read.
+	onGrant atomic.Pointer[func()]
+}
+
+// newFineGrainedGitLab starts the stand-in at 19.4.1-ee with a grant of
+// Project: Read on one project.
+func newFineGrainedGitLab(t *testing.T) *fineGrainedGitLab {
+	t.Helper()
+	g := &fineGrainedGitLab{}
+	version := "19.4.1-ee"
+	g.version.Store(&version)
+	g.grantStatus.Store(http.StatusOK)
+	run := func(hook *atomic.Pointer[func()]) {
+		if fn := hook.Load(); fn != nil {
+			(*fn)()
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":5,"username":"grantee"}`))
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		g.self.Add(1)
+		run(&g.onSelf)
+		_, _ = fmt.Fprintf(w, `{"id":%d,"scopes":["granular"],"active":true}`, fineGrainedTokenID)
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/"+strconv.Itoa(fineGrainedTokenID), func(w http.ResponseWriter, _ *http.Request) {
+		g.grants.Add(1)
+		run(&g.onGrant)
+		w.WriteHeader(int(g.grantStatus.Load()))
+		_, _ = fmt.Fprintf(w, `{"id":%d,"granular":true,"granular_scopes":[`+
+			`{"access":"selected_memberships","permissions":["read_project"],"project_id":7}]}`, fineGrainedTokenID)
+	})
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		g.versions.Add(1)
+		if v := *g.version.Load(); v != "" {
+			_, _ = fmt.Fprintf(w, `{"version":%q}`, v)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	g.server = httptest.NewServer(mux)
+	t.Cleanup(g.server.Close)
+	return g
+}
+
+// setVersion changes the version the stand-in reports; "" answers 500.
+func (g *fineGrainedGitLab) setVersion(v string) { g.version.Store(&v) }
+
+// fineGrainedEntry builds the pool entry of the stand-in's token, detecting
+// the token itself, with the options given.
+func fineGrainedEntry(t *testing.T, g *fineGrainedGitLab, options ...Option) (*ServerPool, *Entry) {
+	t.Helper()
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	pool := New(cfg, testFactory(), options...)
+	entry, err := pool.GetOrCreateEntry("glpat-fine-grained", g.server.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry() error: %v", err)
+	}
+	return pool, entry
+}
+
+// TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches
+// verifies an entry whose token may read its grant is judged from the grant
+// and the version, read once each when it is built: its client carries a phase
+// B authority at the reported version, which lists what Project: Read reaches
+// and leaves out what it does not, and the entry keeps the token's id for its
+// revalidations.
+func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	_, entry := fineGrainedEntry(t, g)
+
+	authority := entry.Client().Authority()
+	if authority == nil || authority.Phase() != finegrained.PhaseGranted || authority.Reported() != "19.4.1-ee" {
+		t.Fatalf("authority = %+v, want phase B at 19.4.1-ee", authority)
+	}
+	if authority.Lists("issue.create") {
+		t.Error("issue.create is listed for a grant of Project: Read alone")
+	}
+	if g.self.Load() != 1 || g.grants.Load() != 1 || g.versions.Load() != 1 {
+		t.Errorf("requests: self %d, grant %d, version %d; want one each", g.self.Load(), g.grants.Load(), g.versions.Load())
+	}
+	if entry.token.ID != fineGrainedTokenID || !entry.token.GrantReadable {
+		t.Errorf("entry token facts = %+v", entry.token)
+	}
+}
+
+// TestGetOrCreate_FineGrainedTokenUnderIgnoreScopes_IsStillJudged verifies
+// --ignore-scopes skips the scope filter and the read-only narrowing and
+// nothing else: the token is still asked about, so a fine-grained token's
+// client still carries its authority, while the entry's configuration holds no
+// scopes.
+func TestGetOrCreate_FineGrainedTokenUnderIgnoreScopes_IsStillJudged(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	cfg := testConfig(g.server.URL)
+	var entryCfg *config.ServerConfig
+	factory := func(_ *gitlabclient.Client, built *config.ServerConfig) (*mcp.Server, error) {
+		entryCfg = built
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}
+	entry, err := New(cfg, factory).GetOrCreateEntry("glpat-ignored", g.server.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry() error: %v", err)
+	}
+	if entry.Client().Authority() == nil || entryCfg.TokenScopes != nil || g.self.Load() != 1 {
+		t.Errorf("authority %v, scopes %v, self requests %d; want an authority, no scopes, one request",
+			entry.Client().Authority(), entryCfg.TokenScopes, g.self.Load())
+	}
+}
+
+// TestGetOrCreateEntryWithFacts_TakesTheVerifiersFacts verifies an entry
+// handed what the OAuth verifier learned about the token asks the self
+// endpoint nothing and reads the grant by the id it was handed.
+func TestGetOrCreateEntryWithFacts_TakesTheVerifiersFacts(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	facts := gitlabclient.FactsFromScopes([]string{gitlabclient.ScopeGranular}, fineGrainedTokenID)
+	entry, err := New(cfg, testFactory()).GetOrCreateEntryWithFacts("gloas-or-pat", g.server.URL, &facts)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+	}
+	if g.self.Load() != 0 || g.grants.Load() != 1 || entry.Client().Authority().Phase() != finegrained.PhaseGranted {
+		t.Errorf("self %d, grant %d, phase %v; want none, one, phase B", g.self.Load(), g.grants.Load(), entry.Client().Authority().Phase())
+	}
+}
+
+// TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves verifies
+// the build's two fine-grained reads take one of the pool's probe slots and
+// that the slot is not yet held while the token is being detected, which
+// comes after the tier: the slot is taken around the reads and given back.
+func TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	var pool *ServerPool
+	var heldAtSelf, heldAtGrant atomic.Int64
+	onSelf := func() { heldAtSelf.Store(int64(len(pool.probes))) }
+	onGrant := func() { heldAtGrant.Store(int64(len(pool.probes))) }
+	g.onSelf.Store(&onSelf)
+	g.onGrant.Store(&onGrant)
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	pool = New(cfg, testFactory())
+	if _, err := pool.GetOrCreateEntry("glpat-slot", g.server.URL, nil); err != nil {
+		t.Fatalf("GetOrCreateEntry() error: %v", err)
+	}
+	if heldAtSelf.Load() != 0 || heldAtGrant.Load() != 1 || len(pool.probes) != 0 {
+		t.Errorf("slots held: %d at the token's description, %d at the grant read, %d after; want 0, 1, 0",
+			heldAtSelf.Load(), heldAtGrant.Load(), len(pool.probes))
+	}
+}
+
+// TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused verifies a
+// build whose fine-grained reads find every probe slot taken past the wait is
+// answered ErrCredentialProbeBusy, the retryable 503 POL-006 declares, and
+// builds no entry.
+func TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	var pool *ServerPool
+	fill := func() {
+		for range cap(pool.probes) {
+			pool.probes <- struct{}{}
+		}
+	}
+	g.onSelf.Store(&fill)
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	pool = New(cfg, testFactory(), func(p *ServerPool) { p.probeQueueTimeout = 20 * time.Millisecond })
+	_, err := pool.GetOrCreateEntry("glpat-busy", g.server.URL, nil)
+	if !errors.Is(err, ErrCredentialProbeBusy) || pool.Size() != 0 || g.grants.Load() != 0 {
+		t.Errorf("error %v, size %d, grant reads %d; want busy, nothing built, nothing read", err, pool.Size(), g.grants.Load())
+	}
+}
+
+// TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot verifies an accepted
+// revalidation re-reads a fine-grained entry's grant and version with every
+// probe slot taken, since the sweep takes none, and that the authority it
+// carries is replaced only by reads that answered: a version read that failed
+// keeps it, and is logged once with its reason and never the token's id; an
+// upgrade to a release the table does not record moves it to phase A; and a
+// return to the recorded release with the grant read moves it back.
+func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	pool, entry := fineGrainedEntry(t, g)
+	first := entry.Client().Authority()
+	for range cap(pool.probes) {
+		pool.probes <- struct{}{}
+	}
+	logs := captureLogs(t)
+
+	g.setVersion("")
+	pool.revalidateAll(context.Background())
+	pool.revalidateAll(context.Background())
+	if entry.Client().Authority() != first || g.versions.Load() != 3 {
+		t.Errorf("after two failed re-reads: authority replaced %v, version reads %d; want kept and three reads",
+			entry.Client().Authority() != first, g.versions.Load())
+	}
+	kept := 0
+	logs.mu.Lock()
+	records := slices.Clone(logs.records)
+	logs.mu.Unlock()
+	for _, record := range records {
+		if record.Message == "server pool: a fine-grained token's re-read did not answer; keeping what it was shown" {
+			kept++
+			if reason, _ := logAttr(record, "reason"); reason.String() != string(finegrained.FallbackVersionUnreadable) {
+				t.Errorf("kept with reason %q", reason.String())
+			}
+		}
+		record.Attrs(func(attr slog.Attr) bool {
+			if strings.Contains(attr.Value.String(), strconv.Itoa(fineGrainedTokenID)) {
+				t.Errorf("log %q carries the token's id in %s", record.Message, attr.Key)
+			}
+			return true
+		})
+	}
+	if kept != 1 {
+		t.Errorf("the kept re-read was logged %d times, want once", kept)
+	}
+
+	g.setVersion("19.6.0-ee")
+	pool.revalidateAll(context.Background())
+	upgraded := entry.Client().Authority()
+	if upgraded.Phase() != finegrained.PhaseUnknown || upgraded.Fallback() != finegrained.FallbackVersionOutside {
+		t.Errorf("after the upgrade: phase %v, fallback %q; want phase A outside the record", upgraded.Phase(), upgraded.Fallback())
+	}
+
+	g.setVersion("19.4.2-ee")
+	pool.revalidateAll(context.Background())
+	if got := entry.Client().Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.2-ee" {
+		t.Errorf("back at the recorded release: phase %v at %q; want phase B at 19.4.2-ee", got.Phase(), got.Reported())
+	}
+}
+
+// TestRevalidateAll_AClassicEntry_RereadsNothing verifies a classic token's
+// entry costs a revalidation nothing beyond the credential probe.
+func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	cfg := testConfig(g.server.URL)
+	facts := gitlabclient.FactsFromScopes([]string{"api"}, 3)
+	pool := New(cfg, testFactory())
+	if _, err := pool.GetOrCreateEntryWithFacts("glpat-classic", g.server.URL, &facts); err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+	}
+	pool.revalidateAll(context.Background())
+	if g.grants.Load()+g.versions.Load() != 0 {
+		t.Errorf("a classic entry's build and revalidation read %d grants and %d versions", g.grants.Load(), g.versions.Load())
 	}
 }

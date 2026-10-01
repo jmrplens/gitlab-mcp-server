@@ -163,7 +163,7 @@ func productionRules() rules {
 		leafImports: []string{"errors", "fmt", "strings", "time"},
 		server:      "cmd/server",
 		valueFiles:  []string{"values.go", "codes.go"},
-		ruleFiles:   []string{"meter.go", "busy.go", "budget.go"},
+		ruleFiles:   []string{"meter.go", "busy.go", "budget.go", "grants.go"},
 	}
 }
 
@@ -250,6 +250,7 @@ var notADecision = map[string]exemption{
 	// Throttles on what the server writes to its own log.
 	"cmd/server:refusalLogWindow":             {categoryLogging, "how often one refusal message is logged at most"},
 	"internal/toolutil:defaultThrottleWindow": {categoryLogging, "how often the rate limiter reports its refusals"},
+	"internal/finegrained:unknownSampleSize":  {categoryLogging, "how many of the permission names a grant held that the table does not define the log line saying why it was not evaluated names"},
 
 	// Bounds a tool call's own arguments carry.
 	"internal/toolutil:GraphQLMaxFirst":     {categoryToolArgument, "the largest GraphQL page a tool asks for"},
@@ -272,6 +273,7 @@ var notADecision = map[string]exemption{
 	"internal/oauth:insufficientScopeLimit":      {categoryParsing, "how much of a 403 body is read to name its error code"},
 	"internal/oauth:maxQuotedDescriptionBytes":   {categoryParsing, "how much of GitLab's refusal sentence a door quotes, and the rejected-token cache keeps beside the refusal"},
 	"internal/oauth:verificationBodyLimit":       {categoryParsing, "how much of a verification response is read"},
+	"internal/oauth:maxExactTokenID":             {categoryParsing, "the largest token id a decoded JSON number carries exactly"},
 	"internal/toolutil:minInt64AsFloat":          {categoryParsing, "the lowest float that converts to an int64 exactly"},
 	"internal/toolutil:maxInt64AsFloatExclusive": {categoryParsing, "the first float above the int64 range"},
 
@@ -283,6 +285,8 @@ var notADecision = map[string]exemption{
 	"internal/gitlab:maxRedirects":               {categoryRoundTrip, "the redirects one request to GitLab may follow"},
 	"internal/oauth:maxVerificationRedirects":    {categoryRoundTrip, "the redirects one token verification may follow"},
 	"internal/serverpool:credentialCheckTimeout": {categoryRoundTrip, "one credential probe's round trip, which does not retry"},
+	"internal/serverpool:entryDetectTimeout":     {categoryRoundTrip, "how long one entry build's tier, token and grant reads, and one revalidation's probe and re-reads, take together"},
+	"cmd/server:stdioRereadTimeout":              {categoryRoundTrip, "one stdio re-read of a fine-grained token's grant and the instance version"},
 
 	// Refusals about the process rather than a caller.
 	"cmd/server:readinessGate.abandoned": {categoryServerState, "answers -32000 to a request that ended while the tool catalog was still building, a fact about the process"},

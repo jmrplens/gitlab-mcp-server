@@ -2,7 +2,9 @@ package gitlab
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"slices"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -10,18 +12,76 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
-// DetectScopes queries the GitLab PAT self endpoint to retrieve the scopes
-// of the currently authenticated token. Returns nil on failure or when the
-// endpoint is unavailable (GitLab < 16.0), allowing graceful fallback to
-// registering all tools.
-func DetectScopes(ctx context.Context, client *gl.Client) []string {
+// TokenFacts is what the personal access token self endpoint says about the
+// token a client authenticates with.
+type TokenFacts struct {
+	// Scopes are the token's scopes, nil when they are not known: the endpoint
+	// failed, or does not answer for this kind of token (an OAuth access token,
+	// an instance older than 16.0). A fine-grained token's list is the single
+	// value [ScopeGranular].
+	Scopes []string
+	// ID is the token's own id, 0 when it is not known. It is held to read the
+	// token's grant ([ReadGrant]) and is never logged.
+	ID int64
+	// FineGrained is set for a fine-grained personal access token.
+	FineGrained bool
+	// GrantReadable is set when the token may read its own description, which
+	// is the permission (Personal Access Token: Read) its grant is read with
+	// too, and its id is known.
+	GrantReadable bool
+}
+
+// DetectToken asks the GitLab personal access token self endpoint what the
+// token the client authenticates with is: its scopes, its id, and whether it
+// is a fine-grained token whose grant it may read.
+//
+// It is one request, the one scope detection has always made. A 403 carrying
+// insufficient_granular_scope is an answer and not a failure: the route's
+// boundary is the user and names no root namespace, so no enforcement of
+// fine-grained tokens applies to it, and only a fine-grained token is refused a
+// grant there. Such a token lacks Personal Access Token: Read, so its grant
+// cannot be read, and it is reported with its one scope and no id. Any other
+// failure is reported as nothing known, which serves every tool, as a failed
+// scope detection always has (ADR-0018).
+//
+// The log line names the scopes and whether the token is fine-grained, never
+// its id.
+func DetectToken(ctx context.Context, client *gl.Client) TokenFacts {
 	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 	if err != nil {
+		if refusedAGrant(err) {
+			slog.InfoContext(ctx, "the token is a fine-grained personal access token that may not read its own grant",
+				"scopes", []string{ScopeGranular})
+			return TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}
+		}
 		slog.WarnContext(ctx, "failed to detect PAT scopes, all tools will be registered", "error", err)
-		return nil
+		return TokenFacts{}
 	}
-	slog.InfoContext(ctx, "detected PAT scopes", "scopes", token.Scopes)
-	return token.Scopes
+	facts := FactsFromScopes(token.Scopes, token.ID)
+	slog.InfoContext(ctx, "detected PAT scopes", "scopes", token.Scopes, "fine_grained", facts.FineGrained)
+	return facts
+}
+
+// FactsFromScopes builds the token facts of a token whose scopes and id were
+// read elsewhere, by the OAuth verifier's introspection of the same token on
+// the same instance, with the one rule [DetectToken] applies: the kind from
+// the scope list, and the grant readable when the token is fine-grained and
+// its id is known.
+func FactsFromScopes(scopes []string, id int64) TokenFacts {
+	facts := TokenFacts{Scopes: scopes, ID: id, FineGrained: FineGrained(scopes)}
+	facts.GrantReadable = facts.FineGrained && facts.ID != 0
+	return facts
+}
+
+// refusedAGrant reports whether err is GitLab's 403 refusing a fine-grained
+// token a permission its grant lacks ([PermissionRefusal]).
+func refusedAGrant(err error) bool {
+	refusal, isResponse := errors.AsType[*gl.ErrorResponse](err)
+	if !isResponse || refusal.StatusCode != http.StatusForbidden {
+		return false
+	}
+	_, missing := PermissionRefusal(refusal.Body)
+	return missing
 }
 
 // ScopeAPI is the GitLab scope that permits writes.
@@ -63,8 +123,8 @@ const ScopeGranular = "granular"
 //
 // The list reaches this predicate only when the token may read itself: the
 // self endpoint requires Personal Access Token: Read of a fine-grained token,
-// and without it GitLab answers 403, DetectScopes returns nil, and the token is
-// unknown authority by that route instead.
+// and without it GitLab answers 403, [DetectToken] reports nil scopes, and the
+// token is unknown authority by that route instead.
 func FineGrained(scopes []string) bool {
 	return len(scopes) == 1 && scopes[0] == ScopeGranular
 }

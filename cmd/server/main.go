@@ -32,6 +32,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
@@ -1586,13 +1587,22 @@ func prepareStdioCatalog(
 		serverCfg.Tier = client.DetectTier(ctx)
 	}
 
-	// Detect PAT scopes for scope-based tool filtering, and narrow the surface
-	// the way the HTTP pool does per entry (ADR-0018): a token that cannot
-	// write is served the read-only catalog, which withholds every write
-	// action and says why, instead of listing actions GitLab would refuse one
-	// by one with its own 403.
+	// Detect what the token is, for scope-based tool filtering and for what a
+	// fine-grained token is withheld, and narrow the surface the way the HTTP
+	// pool does per entry (ADR-0018): a token that cannot write is served the
+	// read-only catalog, which withholds every write action and says why,
+	// instead of listing actions GitLab would refuse one by one with its own
+	// 403. The token is asked about under --ignore-scopes too, which skips the
+	// filter and the narrowing and has nothing to say about the token's kind,
+	// unless the start could not reach GitLab: then the only reason to ask is
+	// the kind, an instance that did not answer cannot tell it, and the request
+	// would spend the lazy re-initialization's first attempt for nothing.
+	var facts gitlabclient.TokenFacts
+	if !cfg.IgnoreScopes || client.IsInitialized() {
+		facts = gitlabclient.DetectToken(ctx, client.GL())
+	}
 	if !cfg.IgnoreScopes {
-		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
+		serverCfg.TokenScopes = facts.Scopes
 		if serverCfg.TokenScopes == nil {
 			slog.DebugContext(ctx, "PAT scope detection unavailable. All tools will be registered")
 		}
@@ -1608,13 +1618,72 @@ func prepareStdioCatalog(
 	// After registration, whose own listings must see the whole surface, and
 	// before the gate opens, because the handshake is already answered and a
 	// tools/list parked in the gate would otherwise be served unfiltered and
-	// kept by the client for the listing's cache lifetime (register row
-	// AUT-007). A classic token gets nil and nothing changes for it.
-	client.SetAuthority(actiongrants.Build(gitlabclient.FineGrained(serverCfg.TokenScopes)))
+	// kept by the client for the listing's cache lifetime (register rows
+	// AUT-007 and AUT-008). A classic token gets nil and nothing changes for it.
+	client.SetAuthority(stdioAuthority(ctx, client, facts))
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
+	// Re-read at the interval an HTTP pool entry is revalidated at by default
+	// (register row ADM-009), so the two transports follow an instance
+	// upgraded under a running session alike.
+	go refreshStdioAuthority(ctx, client, facts, serverpool.DefaultRevalidateInterval)
 	return nil
 }
+
+// stdioAuthority is what the process's fine-grained token may be shown, judged
+// from its grant and the version [gitlabclient.Client.Initialize] already read,
+// and nil for any other token. A start that could not reach GitLab asks the
+// version again, since Initialize left none.
+func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) *finegrained.Authority {
+	if !facts.FineGrained {
+		return nil
+	}
+	var reading finegrained.Reading
+	if client.IsInitialized() {
+		reading = client.ReadFineGrainedAt(ctx, facts, client.Version())
+	} else {
+		reading = client.ReadFineGrained(ctx, facts)
+	}
+	authority := actiongrants.Build(true, reading)
+	if authority.Phase() == finegrained.PhaseUnknown {
+		slog.InfoContext(ctx, "the fine-grained token's grant was not evaluated; withholding what no grant reaches",
+			authority.LogArgs()...)
+	}
+	return authority
+}
+
+// refreshStdioAuthority re-reads, every interval until ctx ends, the grant of
+// the process's fine-grained token and the instance version, and replaces the
+// authority its client carries when the reads answered
+// ([gitlabclient.Client.RefreshAuthority]). A token that may not read its grant
+// is never asked, so the goroutine returns at once. A re-read that kept the
+// authority is logged once, with its reason.
+func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration) {
+	if !facts.GrantReadable {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	logged := false
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
+			_, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())
+			cancel()
+			if reason != "" && !logged {
+				logged = true
+				slog.InfoContext(ctx, "a fine-grained token's re-read did not answer; keeping what it was shown", "reason", reason)
+			}
+		}
+	}
+}
+
+// stdioRereadTimeout bounds one stdio re-read of a fine-grained token's grant
+// and the instance version, as an HTTP pool entry's revalidation is bounded.
+const stdioRereadTimeout = 10 * time.Second
 
 // sharedSchemaCache caches resolved tool schemas across every MCP server
 // created by this process (stdio startup and the per-token-and-URL servers of the

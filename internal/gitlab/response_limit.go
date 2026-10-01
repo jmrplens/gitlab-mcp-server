@@ -3,6 +3,7 @@ package gitlab
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -48,6 +49,36 @@ func (c *Client) maxResponseBytes() int64 {
 		return DefaultMaxResponseBytes
 	}
 	return c.maxResponse.Load()
+}
+
+// responseLimitKey is the context key a per-request response ceiling travels
+// under.
+type responseLimitKey struct{}
+
+// WithResponseLimit returns a context under which a request this client makes
+// reads at most n bytes of its response body, or fewer when the client's own
+// ceiling is lower, and fails with [ErrResponseTooLarge] past it. Pass the
+// context to the SDK call with gl.WithContext, as with [WithResponseCapture].
+//
+// It exists for a response whose size is the caller's to choose rather than the
+// instance's, which a ceiling set on the whole client cannot bound without
+// bounding every other call the client makes: a fine-grained token's grant
+// ([ReadGrant]) is as large as its minter made it. The ceiling applies where
+// the body is read, under the response capture and the SDK's decoder alike, so
+// neither holds more of it than the bound, and a value of zero or less sets
+// none.
+func WithResponseLimit(ctx context.Context, n int64) context.Context {
+	return context.WithValue(ctx, responseLimitKey{}, n)
+}
+
+// requestLimit is the ceiling one request reads its response under: the
+// client's, lowered by a ceiling its context carries ([WithResponseLimit]).
+func requestLimit(req *http.Request, clientLimit int64) int64 {
+	limit, carried := req.Context().Value(responseLimitKey{}).(int64)
+	if !carried || limit <= 0 || clientLimit > 0 && clientLimit < limit {
+		return clientLimit
+	}
+	return limit
 }
 
 // responseLimitTransport caps every response body the GitLab SDK receives.
@@ -100,7 +131,7 @@ func (t *responseLimitTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if resp.Body == nil {
 		return resp, nil
 	}
-	limit := t.client.maxResponseBytes()
+	limit := requestLimit(req, t.client.maxResponseBytes())
 	if limit <= 0 {
 		return resp, nil
 	}

@@ -811,7 +811,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		return nil, err
 	}
 	serverCfg := serverConfigFor(inst, cfg, cred)
-	expectation, err := expectedSurface(inst, cfg.Surface, serverCfg)
+	expectation, err := expectedSurface(inst, cfg.Surface, serverCfg, cred.authority)
 	if err != nil {
 		return nil, err
 	}
@@ -903,15 +903,18 @@ func privateSessionNumber(key string) int64 {
 }
 
 // sessionCredential returns what the binary learns from the credential a
-// session runs with: the token's scopes, and the tier it can read.
+// session runs with: the token's scopes, the tier it can read, and for a
+// fine-grained token what its grant lets it be listed.
 //
 // The run's own token was probed at bootstrap; a session given another one is
-// probed here, with the two calls the binary makes at startup, because both
-// answers decide the catalog. The scopes decide which groups are registered
-// at all, and the tier decides which exist: the license endpoint answers
+// probed here, with the calls the binary makes at startup, because every
+// answer decides the catalog. The scopes decide which groups are registered at
+// all, and the tier decides which exist: the license endpoint answers
 // administrators only, so a token belonging to anyone else reads no license
 // and is served the Free catalog on a licensed instance, exactly as the
-// binary serves it.
+// binary serves it. A fine-grained token's grant and the instance version are
+// read with the binary's two requests and judged by the binary's own table
+// ([credentialAuthority]), so the expectation is what that token is listed.
 func sessionCredential(ctx context.Context, inst *instance, token string) (credentialFacts, error) {
 	if token == inst.settings.get(envGitLabToken) {
 		return inst.credential(), nil
@@ -921,9 +924,11 @@ func sessionCredential(ctx context.Context, inst *instance, token string) (crede
 	if err != nil {
 		return credentialFacts{}, fmt.Errorf("building a client for the session's own credential: %w", err)
 	}
+	facts := gitlabclient.DetectToken(ctx, client.GL())
 	return credentialFacts{
-		scopes: gitlabclient.DetectScopes(ctx, client.GL()),
-		tier:   client.DetectTier(ctx),
+		scopes:    facts.Scopes,
+		tier:      client.DetectTier(ctx),
+		authority: credentialAuthority(ctx, client, facts),
 	}, nil
 }
 

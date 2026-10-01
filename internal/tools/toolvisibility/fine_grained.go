@@ -113,13 +113,13 @@ func (t *ToolActions) Listed(authority *finegrained.Authority, name string) bool
 		return true
 	}
 	if id, single := t.single[name]; single {
-		return authority.Decide(id).Listed
+		return authority.Lists(id)
 	}
 	group, grouped := t.groups[name]
 	if !grouped {
 		return true
 	}
-	return slices.ContainsFunc(group.ids, func(id string) bool { return authority.Decide(id).Listed })
+	return slices.ContainsFunc(group.ids, authority.Lists)
 }
 
 // Filter returns tools without the ones authority is not listed, in their

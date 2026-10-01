@@ -4,7 +4,6 @@ package gitlab
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,49 +12,90 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
-// TestDetectScopes_Success verifies that DetectScopes returns the scopes reported by the /personal_access_tokens/self endpoint.
-func TestDetectScopes_Success(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":     1,
-			"scopes": []string{"api", "read_user"},
-			"active": true,
-		})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID verifies what the self
+// endpoint's answers are read as: a classic token's scopes and id with no
+// grant to read; a fine-grained token's single scope and its id with its grant
+// readable; a fine-grained token with no id reported, whose grant cannot be
+// asked for; GitLab's 403 refusing a fine-grained token Personal Access Token:
+// Read, read as that token with no id and its grant unreadable; and every
+// other failure, a 404 and a classic 403 among them, as nothing known.
+func TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID(t *testing.T) {
+	refusal := `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a ` +
+		`fine-grained personal access token with the following user permissions: [read_personal_access_token]"}`
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   TokenFacts
+	}{
+		{
+			name: "classic", status: http.StatusOK, body: `{"id":7,"scopes":["api","read_user"],"active":true}`,
+			want: TokenFacts{Scopes: []string{"api", "read_user"}, ID: 7},
+		},
+		{
+			name: "fine-grained", status: http.StatusOK, body: `{"id":9,"scopes":["granular"],"active":true}`,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true},
+		},
+		{
+			name: "fine-grained with no id", status: http.StatusOK, body: `{"scopes":["granular"],"active":true}`,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true},
+		},
+		{
+			name: "fine-grained refused its own description", status: http.StatusForbidden, body: refusal,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true},
+		},
+		{
+			name: "classic refused", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`,
+			want: TokenFacts{},
+		},
+		{name: "not available", status: http.StatusNotFound, body: `{}`, want: TokenFacts{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
 
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if len(scopes) != 2 {
-		t.Fatalf("expected 2 scopes, got %d: %v", len(scopes), scopes)
-	}
-	if scopes[0] != "api" || scopes[1] != "read_user" {
-		t.Errorf("unexpected scopes: %v", scopes)
+			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			if err != nil {
+				t.Fatalf("NewClient() error: %v", err)
+			}
+			got := DetectToken(context.Background(), client.GL())
+			if !slices.Equal(got.Scopes, tc.want.Scopes) || got.ID != tc.want.ID ||
+				got.FineGrained != tc.want.FineGrained || got.GrantReadable != tc.want.GrantReadable {
+				t.Errorf("DetectToken() = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
-// TestDetectScopes_EndpointNotAvailable verifies that DetectScopes returns nil when the scope endpoint responds with 404.
-func TestDetectScopes_EndpointNotAvailable(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if scopes != nil {
-		t.Errorf("expected nil scopes on 404, got %v", scopes)
+// TestFactsFromScopes_AppliesDetectTokensRule verifies the facts built from
+// scopes and an id read elsewhere follow the rule DetectToken applies: the
+// kind from the list, and the grant readable only for a fine-grained token
+// whose id is known.
+func TestFactsFromScopes_AppliesDetectTokensRule(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		scopes []string
+		id     int64
+		want   TokenFacts
+	}{
+		{"classic with an id", []string{"api"}, 3, TokenFacts{Scopes: []string{"api"}, ID: 3}},
+		{"fine-grained with an id", []string{ScopeGranular}, 3, TokenFacts{Scopes: []string{ScopeGranular}, ID: 3, FineGrained: true, GrantReadable: true}},
+		{"fine-grained without one", []string{ScopeGranular}, 0, TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FactsFromScopes(tc.scopes, tc.id)
+			if !slices.Equal(got.Scopes, tc.want.Scopes) || got.ID != tc.want.ID ||
+				got.FineGrained != tc.want.FineGrained || got.GrantReadable != tc.want.GrantReadable {
+				t.Errorf("FactsFromScopes() = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -214,32 +254,5 @@ func TestCatalogScopes_FineGrainedReadsAsUnknown(t *testing.T) {
 				t.Errorf("CatalogScopes(%#v) = %#v, want %#v", tt.scopes, got, tt.want)
 			}
 		})
-	}
-}
-
-// TestDetectScopes_FineGrainedTokenReportsItsSingleScope verifies that a
-// fine-grained token's list reaches the callers as GitLab reports it, so the
-// predicates above see the shape they are written for: detection names the
-// scopes and never interprets them.
-func TestDetectScopes_FineGrainedTokenReportsItsSingleScope(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":     1,
-			"scopes": []string{ScopeGranular},
-			"active": true,
-		})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if !FineGrained(scopes) {
-		t.Errorf("DetectScopes() = %#v, want the fine-grained list", scopes)
 	}
 }
