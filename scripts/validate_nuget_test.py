@@ -178,6 +178,18 @@ class PackedFixture(unittest.TestCase):
     def problems(self):
         return validate_nuget.validate_packages(self.out, VERSION)
 
+    def relicense_mode(self, rid, mode):
+        """Rewrite one package with its LICENSE entry carrying `mode`."""
+        path = self.package(rid)
+        tmp = path + ".tmp"
+        with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w") as dst:
+            for info in src.infolist():
+                data = src.read(info.filename)
+                if info.filename == "LICENSE":
+                    info.external_attr = mode << 16
+                dst.writestr(info, data)
+        os.replace(tmp, path)
+
 
 class BuildNugetTest(PackedFixture):
     """What the packer emits, checked by opening the packages directly."""
@@ -228,6 +240,20 @@ class BuildNugetTest(PackedFixture):
                     self.assertIn('EntryPoint="{}" Runner="executable"'.format(bin_name), settings)
                     nuspec = zf.read("gitlab-mcp-server.{}.nuspec".format(rid)).decode()
                     self.assertIn('<packageType name="DotnetToolRidPackage" />', nuspec)
+
+    def test_every_package_carries_the_licence(self):
+        with open(os.path.join(ROOT, "LICENSE"), "rb") as fh:
+            want = fh.read()
+        for rid in [None] + list(RIDS.values()):
+            with self.subTest(rid or "pointer"):
+                with zipfile.ZipFile(self.package(rid)) as zf:
+                    self.assertEqual(zf.read("LICENSE"), want)
+                    self.assertEqual(zf.getinfo("LICENSE").external_attr >> 16, 0o100644)
+
+    def test_a_missing_licence_stops_the_pack(self):
+        with self.assertRaises(SystemExit) as caught:
+            build_nuget.read_licenses([("LICENSE", os.path.join(self.work, "absent"))])
+        self.assertIn("licence file LICENSE not found", str(caught.exception))
 
     def test_is_deterministic(self):
         first = {}
@@ -331,6 +357,13 @@ class ValidateNugetTest(PackedFixture):
              lambda: rewrite(self.package("linux-x64"), comment=b"built by hand"), "archive comment"),
             ("a package is already signed", lambda: sign_like_nuget(self.package("osx-arm64")),
              "already carries .signature.p7s"),
+            ("a runtime package lost its licence",
+             lambda: repack(self.package("linux-arm64"), drop=("LICENSE",)), "no LICENSE at the package root"),
+            ("the pointer carries another licence text",
+             lambda: repack(self.package(), {"LICENSE": "Not the MIT License\n"}),
+             "LICENSE is not the repository's LICENSE"),
+            ("a licence entry without its file type", lambda: self.relicense_mode("win-x64", 0o644),
+             "LICENSE is not a regular file (mode 644)"),
         ]
         for name, tamper, want in cases:
             with self.subTest(name):

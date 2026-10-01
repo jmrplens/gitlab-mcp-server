@@ -25,6 +25,11 @@ there is genuinely no manifest (never in CI).
 
 Packages land in --out (default nuget/dist), which is wiped first so a rebuild
 cannot mix versions.
+
+Every package carries the repository's LICENSE at its root beside the nuspec's
+MIT expression: the expression is what NuGet.org reads, and the text is what
+MIT asks to travel with each copy. It is a plain file rather than a
+<license type="file">, since a nuspec declares one licence form or the other.
 """
 
 import argparse
@@ -63,6 +68,12 @@ RIDS = {
 # Deterministic zip entry timestamp (zip's epoch): rebuilding the same
 # inputs yields byte-identical packages.
 ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+# The licence texts every package carries at its root, by entry name and
+# where they are read from.
+LICENSE_FILES = [("LICENSE", os.path.join(ROOT, "LICENSE"))]
 
 NUSPEC_NS = "http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd"
 
@@ -256,7 +267,24 @@ def package_name(pkg_id, version):
     return "{}.{}.nupkg".format(pkg_id, version)
 
 
-def build_pointer(out_dir, version, readme, icon, server_doc):
+def read_licenses(files):
+    """Read each (name, path) of `files` into (name, bytes), refusing a
+    missing one rather than packing a package without it."""
+    texts = []
+    for name, path in files:
+        if not os.path.isfile(path):
+            sys.exit("build_nuget: licence file {} not found at {}".format(name, path))
+        with open(path, "rb") as fh:
+            texts.append((name, fh.read()))
+    return texts
+
+
+def add_licenses(zf, licenses):
+    for name, text in licenses:
+        add_file(zf, name, text)
+
+
+def build_pointer(out_dir, version, readme, icon, server_doc, licenses):
     name = package_name(PKG_ID, version)
     with zipfile.ZipFile(os.path.join(out_dir, name), "w") as zf:
         add_file(zf, "[Content_Types].xml", CONTENT_TYPES)
@@ -269,10 +297,11 @@ def build_pointer(out_dir, version, readme, icon, server_doc):
         add_file(zf, "README.md", readme)
         if icon is not None:
             add_file(zf, "icon.png", icon)
+        add_licenses(zf, licenses)
     return name
 
 
-def build_rid_package(out_dir, version, plat_key, rid, binary_path):
+def build_rid_package(out_dir, version, plat_key, rid, binary_path, licenses):
     pkg_id = "{}.{}".format(PKG_ID, rid)
     name = package_name(pkg_id, version)
     bin_name = COMMAND + (".exe" if plat_key.startswith("windows") else "")
@@ -286,6 +315,7 @@ def build_rid_package(out_dir, version, plat_key, rid, binary_path):
         add_file(zf, "tools/any/{}/DotnetToolSettings.xml".format(rid), rid_settings(bin_name))
         add_file(zf, "tools/any/{}/{}".format(rid, bin_name), binary, executable=True)
         add_file(zf, "README.md", RID_README.format(rid=rid))
+        add_licenses(zf, licenses)
     return name
 
 
@@ -304,14 +334,14 @@ def main():
     if not re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?", args.version):
         sys.exit("build_nuget: version {!r} does not look like a release version".format(args.version))
 
-    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    with open(os.path.join(root, "nuget", "README.md"), encoding="utf-8") as fh:
+    licenses = read_licenses(LICENSE_FILES)
+    with open(os.path.join(ROOT, "nuget", "README.md"), encoding="utf-8") as fh:
         readme = fh.read()
     if MCP_NAME_TOKEN not in readme:
         sys.exit("build_nuget: nuget/README.md lost the mcp-name ownership token the MCP Registry validates")
-    with open(os.path.join(root, "server.json"), encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "server.json"), encoding="utf-8") as fh:
         server_doc = mcp_server_json(json.load(fh), args.version)
-    icon_path = os.path.join(root, "mcpb", "icon.png")
+    icon_path = os.path.join(ROOT, "mcpb", "icon.png")
     icon = None
     if os.path.isfile(icon_path):
         with open(icon_path, "rb") as fh:
@@ -339,8 +369,8 @@ def main():
             sys.exit("build_nuget: missing release binary {}".format(binary_path))
         if checksums is not None:
             digests[plat_key] = verify_binary(binary_path, checksums)
-        built.append(build_rid_package(args.out, args.version, plat_key, rid, binary_path))
-    built.append(build_pointer(args.out, args.version, readme, icon, server_doc))
+        built.append(build_rid_package(args.out, args.version, plat_key, rid, binary_path, licenses))
+    built.append(build_pointer(args.out, args.version, readme, icon, server_doc, licenses))
 
     # Record what was verified so validate_nuget.py can confirm the packages
     # still carry those exact bytes. Written beside the packages, never inside

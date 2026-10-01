@@ -18,6 +18,8 @@ packages:
 - each runtime package holds exactly one binary, at the path its settings
   name, with the right magic number and machine type for its runtime
   identifier, the executable bit set, and a size floor;
+- every package carries the repository's LICENSE at its root, a regular
+  file holding that text byte for byte;
 - every embedded binary is the exact one build_nuget.py verified against the
   release's cosign-signed checksums.txt: the checks above are shape checks,
   and a wrong-but-plausible file of the right size with the right first bytes
@@ -61,6 +63,10 @@ TOOL_FRAMEWORK = "net10.0"
 MIN_BINARY_BYTES = 20 * 1024 * 1024
 NUSPEC_NS = "{http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd}"
 VERIFIED_MANIFEST = "verified-binaries.json"
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+# Entry name at a package's root -> the repository file it must equal.
+LICENSE_SOURCES = {"LICENSE": os.path.join(ROOT, "LICENSE")}
 
 # Runtime identifier -> the plat_key build_nuget.py records digests under.
 RID_PLAT_KEYS = {
@@ -310,6 +316,22 @@ def parse_settings(zf, arcname, name, problems):
     return root
 
 
+def check_licenses(zf, name, problems):
+    """Every package carries each licence text at its root, as a regular
+    file, holding the repository's own file byte for byte."""
+    for entry, source in LICENSE_SOURCES.items():
+        if entry not in zf.namelist():
+            problems.append("{}: no {} at the package root".format(name, entry))
+            continue
+        mode = zf.getinfo(entry).external_attr >> 16
+        if mode & 0o170000 != 0o100000:
+            problems.append("{}: {} is not a regular file (mode {:o})".format(name, entry, mode))
+        with open(source, "rb") as fh:
+            want = fh.read()
+        if zf.read(entry) != want:
+            problems.append("{}: {} is not the repository's {}".format(name, entry, entry))
+
+
 def check_readme_token(zf, readme_name, name, problems):
     text = zf.read(readme_name).decode("utf-8", errors="replace")
     if not TOKEN_PATTERN.search(text):
@@ -324,6 +346,7 @@ def validate_pointer(path, version, problems):
         if metadata is None:
             return
         check_metadata(metadata, name, PKG_ID, version, ("DotnetTool", "McpServer"), problems)
+        check_licenses(zf, name, problems)
 
         readme_name = check_declared_file(zf, metadata, name, "readme", problems)
         if readme_name is None:
@@ -381,6 +404,7 @@ def validate_rid_package(path, version, rid, verified, problems):
             return
         check_metadata(metadata, name, pkg_id, version, ("DotnetToolRidPackage",), problems)
         check_declared_file(zf, metadata, name, "readme", problems)
+        check_licenses(zf, name, problems)
 
         settings = parse_settings(zf, "tools/any/{}/DotnetToolSettings.xml".format(rid), name, problems)
         if settings is not None:
