@@ -2032,7 +2032,7 @@ go run ./cmd/gen_icon_webp/ --check
 
 ### gen_third_party_notices
 
-Writes `THIRD_PARTY_NOTICES`: the license, notice and patent texts of the Go standard library and of every module the release binaries link, which BSD-3-Clause, Apache-2.0 and MPL-2.0 ask to accompany a binary redistribution. The SBOMs name each license and carry none of the texts, and until 3.1.0 no channel shipped them.
+Writes `THIRD_PARTY_NOTICES`: the license, notice and patent texts of the Go standard library and of every module the release binaries link, which BSD-3-Clause, Apache-2.0 and MPL-2.0 ask to accompany a binary redistribution. The SBOMs name each license and carry none of the texts, and no channel shipped them up to and including 3.1.0.
 
 What a binary links is read from its own build information, the list `go version -m` prints, through `debug/buildinfo`, never from `go.mod`, which also names modules only tests, tools or other platforms use. The modules of every binary named are merged, and a module that only some targets link says which (at 3.1.0 `github.com/ebitengine/purego` is darwin's and `github.com/go-ole/go-ole` windows'). Each module's texts are read from its directory in the module cache, escaped the way the go command spells it on disk: every regular file at the module's root named LICENSE in either spelling, COPYING, COPYRIGHT, NOTICE or PATENTS, alone or with a prefix or suffix (`LICENSE.md`, `LICENSE-APACHE`, `MIT-LICENSE`), never a Go file, a directory or a symbolic link. The standard library's are read from GOROOT, after GOROOT's `VERSION` is held to the toolchain the binaries record. Line endings are normalized and the texts are otherwise reproduced as published.
 
