@@ -9,7 +9,9 @@
 #   <version>          release version without the leading v (e.g. 2.7.6)
 #   <dest-dir>         directory the assets are downloaded into (created)
 #   [asset-pattern]    gh release download --pattern globs; default: every
-#                      gitlab-mcp-server-* binary
+#                      gitlab-mcp-server-<os>-* binary and its SBOM, which
+#                      leaves out the Claude Desktop bundles
+#                      (gitlab-mcp-server-<os>.mcpb and gitlab-mcp-server.mcpb)
 #
 # Requires GH_TOKEN with read access to the repository's releases, and cosign
 # on PATH. REPO defaults to $GITHUB_REPOSITORY.
@@ -50,7 +52,11 @@ DEST="${2:?Usage: $0 [--checksums-only] <version> <dest-dir> [asset-pattern ...]
 shift 2
 PATTERNS=("$@")
 if [ ${#PATTERNS[@]} -eq 0 ] && [ "$CHECKSUMS_ONLY" -eq 0 ]; then
-  PATTERNS=("gitlab-mcp-server-*")
+  # One glob per operating system rather than gitlab-mcp-server-*, which also
+  # matches the per-OS Claude Desktop bundles (gitlab-mcp-server-linux.mcpb):
+  # the jobs that take the default package the binaries and have no use for
+  # some 75 MB of bundles, nor for the attestation round trips below.
+  PATTERNS=("gitlab-mcp-server-darwin-*" "gitlab-mcp-server-linux-*" "gitlab-mcp-server-windows-*")
 fi
 
 REPO="${REPO:-${GITHUB_REPOSITORY:-jmrplens/gitlab-mcp-server}}"
@@ -107,12 +113,12 @@ fi
 
 # The exit status of --ignore-missing is not trusted either way. On an empty
 # intersection it is 1 with "no file was verified", and the empty intersection
-# is a normal case: the registry and manifest jobs fetch the bundle alone, and
-# the bundle is deliberately absent from checksums.txt. Read as a failure, that
-# status stopped both jobs before the bundle's own verification below could
-# run, which the first rehearsal to reach them found. So a FAILED line fails
-# here, and what was actually checked is counted, with the bundle joining the
-# count on its own evidence.
+# is a normal case: the registry and manifest jobs fetch the bundles alone, and
+# the bundles are deliberately absent from checksums.txt. Read as a failure,
+# that status stopped both jobs before the bundles' own verification below
+# could run, which the first rehearsal to reach them found. So a FAILED line
+# fails here, and what was actually checked is counted, with each bundle
+# joining the count on its own evidence.
 echo "Verifying assets against checksums.txt"
 (
   cd "$DEST"
@@ -128,20 +134,24 @@ verified=$(grep -c ": OK$" "$DEST/sha256-check.log" || true)
 rm -f "$DEST/sha256-check.log"
 echo "Verified ${verified} asset(s) against checksums.txt"
 
-# The .mcpb is built outside GoReleaser, so it is absent from checksums.txt and
-# is the one asset a job can legitimately fetch on its own. Its integrity comes
-# from the build-provenance attestation instead, and it counts towards the
-# "something was actually verified" floor below. A rehearsal attests nothing,
-# and the bundle it unpacked was built by a job of the same run.
-if [ -f "$DEST/gitlab-mcp-server.mcpb" ]; then
+# The .mcpb bundles are built outside GoReleaser, so they are absent from
+# checksums.txt and are the one kind of asset a job can legitimately fetch on
+# its own. Their integrity comes from the build-provenance attestation instead,
+# one per bundle, and each counts towards the "something was actually
+# verified" floor below: every bundle in <dest-dir> is checked, the per-OS ones
+# a registry job fetches and the universal one alike, so a bundle nobody
+# attested fails here whichever pattern brought it. A rehearsal attests
+# nothing, and the bundles it unpacked were built by a job of the same run.
+for bundle in "$DEST"/*.mcpb; do
+  [ -f "$bundle" ] || continue
   if [ -n "$ARCHIVE" ]; then
-    echo "Rehearsal: the .mcpb came from this run's own build; its attestation is minted at release"
+    echo "Rehearsal: $(basename "$bundle") came from this run's own build; its attestation is minted at release"
   else
-    echo "Verifying the .mcpb build-provenance attestation"
-    gh attestation verify "$DEST/gitlab-mcp-server.mcpb" --repo "$REPO"
+    echo "Verifying the build-provenance attestation of $(basename "$bundle")"
+    gh attestation verify "$bundle" --repo "$REPO"
   fi
   verified=$((verified + 1))
-fi
+done
 
 if [ "$verified" -eq 0 ]; then
   echo "ERROR: nothing here could be verified — checksums.txt matched no file and no bundle was found" >&2

@@ -38,8 +38,8 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 # Every request here talks to a third-party registry, so each one is bounded:
 # a stalled response would otherwise hang this gate until the workflow's own
-# timeout fires, with no indication of which host went quiet. The bundle needs
-# a longer transfer window than the metadata calls because it is tens of MB.
+# timeout fires, with no indication of which host went quiet. A bundle needs a
+# longer transfer window than the metadata calls because each is tens of MB.
 CURL_CONNECT_TIMEOUT=10
 CURL_MAX_TIME=60
 CURL_DOWNLOAD_MAX_TIME=300
@@ -63,9 +63,17 @@ server_name=$(jq -r '.name' "$SERVER_JSON")
 # --- mcpb packages -----------------------------------------------------------
 # A .mcpb is a zip carrying manifest.json plus the server binaries. Declaring a
 # bare executable under this registryType parses fine and installs nowhere.
+#
+# The platforms each bundle's manifest lists are recorded as it passes, for the
+# coverage check after the loop: a release declares one bundle per operating
+# system, and server.json declared the single universal bundle before that, so
+# either shape is accepted as long as each system is served exactly once.
+mcpb_failed=0
+mcpb_served=()
 while read -r identifier; do
   [[ -z "$identifier" ]] && continue
   checked=$((checked + 1))
+  mcpb_failed=$((mcpb_failed + 1))
   echo "mcpb: $identifier"
 
   declared_hash=$(jq -r --arg id "$identifier" \
@@ -141,8 +149,61 @@ print("  %d entries; every path the manifest names is in the archive" % len(name
     continue
   fi
 
-  echo "  OK: ${actual_hash:0:16}..., valid bundle"
+  # The archive was read above, so its manifest is JSON; a platforms value
+  # that is not a list serves nothing, and says so in the coverage below.
+  platforms=$(python3 -c '
+import json, sys, zipfile
+manifest = json.loads(zipfile.ZipFile(sys.argv[1]).read("manifest.json"))
+platforms = (manifest.get("compatibility") or {}).get("platforms") or []
+print(" ".join(p for p in platforms if isinstance(p, str)) if isinstance(platforms, list) else "")
+' "$bundle")
+  for platform in $platforms; do
+    mcpb_served+=("$platform $identifier")
+  done
+  mcpb_failed=$((mcpb_failed - 1))
+  echo "  OK: ${actual_hash:0:16}..., valid bundle for ${platforms:-no platform}"
 done < <(jq -r '.packages[] | select(.registryType == "mcpb") | .identifier' "$SERVER_JSON")
+
+# Which declared bundle serves each system. A registry entry has no platform
+# field, so a client cannot choose between bundles by system: each of darwin,
+# win32 and linux has to be served by exactly one declared bundle. None is a
+# system the listing offers nothing it can install; two is a system offered
+# two bundles with nothing to tell them apart, which is what declaring the
+# universal bundle beside the per-OS ones would do. Judged only once every
+# declared bundle passed, since a bundle that failed above has no platforms to
+# count and its failure is already reported.
+mcpb_declared=$(jq '[.packages[] | select(.registryType == "mcpb")] | length' "$SERVER_JSON")
+if [[ "$mcpb_declared" -gt 0 && "$mcpb_failed" -eq 0 ]]; then
+  echo "mcpb: platforms served"
+  coverage_ok=1
+  for platform in darwin win32 linux; do
+    serving=()
+    for served in "${mcpb_served[@]}"; do
+      if [[ "${served%% *}" == "$platform" ]]; then
+        serving+=("${served#* }")
+      fi
+    done
+    if [[ ${#serving[@]} -eq 0 ]]; then
+      fail "no declared bundle serves $platform, so a client there is offered nothing it can install"
+      coverage_ok=0
+    elif [[ ${#serving[@]} -gt 1 ]]; then
+      fail "$platform is served by ${#serving[@]} declared bundles (${serving[*]}), and a registry entry has no platform field to choose between them"
+      coverage_ok=0
+    fi
+  done
+  for served in "${mcpb_served[@]}"; do
+    case "${served%% *}" in
+      darwin | win32 | linux) ;;
+      *)
+        fail "${served#* } lists ${served%% *}, which is not a platform Claude Desktop reports"
+        coverage_ok=0
+        ;;
+    esac
+  done
+  if [[ "$coverage_ok" -eq 1 ]]; then
+    echo "  OK: darwin, win32 and linux are each served by exactly one declared bundle"
+  fi
+fi
 
 # --- oci packages ------------------------------------------------------------
 # The registry validates ownership through an image label, and rejects version,

@@ -1070,29 +1070,35 @@ jobs:
               done
           ls -1 dist/
 
-      # The bundle is built before the stamp because server.json declares it and
-      # needs its SHA256. GoReleaser does not produce it, so it is absent from
-      # the signed checksums.txt and its hash cannot be appended there; its
-      # integrity comes from the build-provenance attestation below instead.
-      - name: Build and upload Claude Desktop extension (.mcpb)
+      # The bundles are built before the stamp because server.json declares
+      # the three per-OS ones and needs their SHA256. GoReleaser does not
+      # produce them, so they are absent from the signed checksums.txt and
+      # their hashes cannot be appended there; their integrity comes from the
+      # build-provenance attestation below instead. The script builds one
+      # bundle per operating system and the universal gitlab-mcp-server.mcpb,
+      # which keeps the name links outside this repository use and is uploaded
+      # but not declared. It prints each bundle's download and unpacked size
+      # and writes them to this job's summary.
+      - name: Build and upload Claude Desktop extensions (.mcpb)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
           bash scripts/build-mcpb.sh "${VERSION}"
-          sha256sum dist/gitlab-mcp-server.mcpb
+          sha256sum dist/*.mcpb
           if [ "$REHEARSAL" = "true" ]; then
-            echo "rehearsal: the bundle was built and not uploaded"
+            echo "rehearsal: the bundles were built and not uploaded"
             exit 0
           fi
-          gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
+          gh release upload "v${VERSION}" dist/*.mcpb --clobber
 
       # A rehearsal hands its build to the publisher jobs the way a release
       # hands them the published assets: the staged binaries, checksums.txt
-      # and the bundle, which fetch-release-assets.sh unpacks and checks in
-      # place of downloading. One tar rather than the files, so the executable
-      # bits survive the trip.
+      # and the bundles (the universal one by name, the per-OS ones through
+      # the gitlab-mcp-server-* glob), which fetch-release-assets.sh unpacks
+      # and checks in place of downloading. One tar rather than the files, so
+      # the executable bits survive the trip.
       - name: Hand the rehearsal's build to the publishers
         if: env.REHEARSAL == 'true'
         run: |
@@ -1109,7 +1115,10 @@ jobs:
           if-no-files-found: error
 
       # SLSA build provenance for every GoReleaser artifact, keyed by the exact
-      # asset names in checksums.txt, plus the .mcpb built outside GoReleaser.
+      # asset names in checksums.txt, plus the .mcpb bundles built outside
+      # GoReleaser: all four, by one glob, since a directory looks a declared
+      # bundle's attestation up by its digest and a user of the universal
+      # bundle verifies it the same way.
       # Stored in GitHub's attestation store — no release asset changes.
       # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
       - name: Attest build provenance (release binaries)
@@ -1118,11 +1127,11 @@ jobs:
         with:
           subject-checksums: dist/checksums.txt
 
-      - name: Attest build provenance (Claude Desktop extension)
+      - name: Attest build provenance (Claude Desktop extensions)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
-          subject-path: dist/gitlab-mcp-server.mcpb
+          subject-path: dist/*.mcpb
 
       # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
       # attached and attested before the release becomes visible: a client
@@ -1492,16 +1501,20 @@ jobs:
           name: rehearsal-assets
           path: ${{ runner.temp }}/rehearsal
 
+      # The three per-OS bundles are the ones server.json declares; the
+      # universal one is published for existing links and declared nowhere.
       - name: Fetch and verify release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
-        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist gitlab-mcp-server-darwin.mcpb gitlab-mcp-server-windows.mcpb gitlab-mcp-server-linux.mcpb
 
       # Stamp the working tree only — the commit to main is a separate job with
       # a separate credential. The OCI digest comes from the docker job, so
       # server.json pins the exact image this release published rather than a
-      # tag that could later be moved.
+      # tag that could later be moved. The stamp writes one mcpb entry per
+      # bundle it is given, and refuses a set that does not serve darwin,
+      # win32 and linux once each.
       - name: Stamp server.json with this release's hashes and digest
         env:
           OCI_DIGEST: ${{ needs.docker.outputs.digest }}
@@ -1511,7 +1524,9 @@ jobs:
             echo "::error::the docker job published no image digest; server.json cannot be pinned"
             exit 1
           fi
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${RELEASE_TAG#v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${RELEASE_TAG#v}" \
+            dist/gitlab-mcp-server-darwin.mcpb,dist/gitlab-mcp-server-windows.mcpb,dist/gitlab-mcp-server-linux.mcpb \
+            "${OCI_DIGEST}"
 
       - name: Publish to MCP Registry
         env:
@@ -1706,7 +1721,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
-        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist "gitlab-mcp-server.mcpb"
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist gitlab-mcp-server-darwin.mcpb gitlab-mcp-server-windows.mcpb gitlab-mcp-server-linux.mcpb
 
       - name: Commit updated server.json and plugin.json to main
         env:
@@ -1747,10 +1762,15 @@ jobs:
           git reset --hard origin/main
 
           # The script is idempotent and reads checksums.txt + version + the
-          # bundle, all of which were verified against the release's cosign
-          # signature above, so re-running it on the current main produces the
-          # same result without inheriting anything from a dirty tree.
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+          # three per-OS bundles, verified above against the release's cosign
+          # signature and their build-provenance attestations, so re-running
+          # it on the current main produces the same result without inheriting
+          # anything from a dirty tree. It rebuilds the mcpb entries from the
+          # bundles, so the first release to run it replaces main's single
+          # universal entry with the three.
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" \
+            dist/gitlab-mcp-server-darwin.mcpb,dist/gitlab-mcp-server-windows.mcpb,dist/gitlab-mcp-server-linux.mcpb \
+            "${OCI_DIGEST}"
 
           git add server.json
           [ -f plugin.json ] && git add plugin.json

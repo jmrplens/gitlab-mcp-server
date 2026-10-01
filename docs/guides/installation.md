@@ -20,7 +20,7 @@ Every channel ends with the same program: one `gitlab-mcp-server` binary that yo
 | [npm and npx](#npm-and-npx)                     | A launcher package carrying the binary            | Node.js 18+        | `npm update -g`                                     | Linux (glibc), macOS, Windows; x64 and arm64                          |
 | [PyPI, uvx and pipx](#pypi-uvx-and-pipx)        | A platform wheel carrying the binary              | Python 3.9+ or uv  | `pipx upgrade`, `uv tool upgrade`, `pip install -U` | Linux (glibc), macOS, Windows; x86_64 and arm64                       |
 | [NuGet and dnx](#nuget-and-dnx)                 | A .NET tool whose entry point is the binary       | .NET 10 SDK        | `dotnet tool update -g`                             | Linux (glibc), macOS, Windows; x64 and arm64                          |
-| [Claude Desktop (.mcpb)](#claude-desktop-mcpb)  | A desktop extension with the binary inside        | Claude Desktop     | Install the newer extension version                 | macOS (universal), Windows (x64 binary), Linux (glibc; x64 and arm64) |
+| [Claude Desktop (.mcpb)](#claude-desktop-mcpb)  | A desktop extension per OS with the binary inside | Claude Desktop     | Install the newer extension version                 | macOS (universal), Windows (x64 binary), Linux (glibc; x64 and arm64) |
 | [Agent Plugins](#agent-plugins)                 | A plugin manifest that runs the container image   | A host + Docker    | Pull a newer tag                                    | Wherever the host and Docker run                                      |
 | [Hosted endpoint](#hosted-endpoint)             | Nothing installed; an HTTP endpoint on GitLab.com | A GitLab.com token | Nothing to upgrade                                  | Any HTTP-capable client                                               |
 
@@ -30,7 +30,7 @@ Not sure? Docker or the one-line installer for a first try, Homebrew or winget i
 
 ## What every channel shares
 
-- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the `.mcpb` is assembled in the build job from the same outputs, and the npm, PyPI and NuGet packages are assembled afterwards in separate jobs that download the published release assets and check them against the signed `checksums.txt` before packing. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
+- **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the `.mcpb` bundles are assembled in the build job from the same outputs, and the npm, PyPI and NuGet packages are assembled afterwards in separate jobs that download the published release assets and check them against the signed `checksums.txt` before packing. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
 - **Two values configure it.** `GITLAB_TOKEN` is the only required setting: a Personal Access Token (`glpat-...`) with the `api` scope. A `read_api` token also works: the server detects the scope at startup and serves a read-only surface for it, on stdio as in HTTP mode, so `GITLAB_MCP_READ_ONLY=true` is only needed to keep an `api` token from writing. `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance. Everything else is optional and listed in the [configuration reference](../reference/configuration.md).
 - **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, `dotnet tool update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
 - **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
@@ -44,20 +44,23 @@ Release binaries are built by GoReleaser with `CGO_ENABLED=0`, `-trimpath` and `
 
 ### Assets
 
-| Asset                                 | Platform                                                    |
-| ------------------------------------- | ----------------------------------------------------------- |
-| `gitlab-mcp-server-linux-amd64`       | Linux x86_64                                                |
-| `gitlab-mcp-server-linux-arm64`       | Linux arm64                                                 |
-| `gitlab-mcp-server-darwin-amd64`      | macOS Intel                                                 |
-| `gitlab-mcp-server-darwin-arm64`      | macOS Apple Silicon                                         |
-| `gitlab-mcp-server-darwin-all`        | macOS universal (arm64 + amd64 in one file)                 |
-| `gitlab-mcp-server-windows-amd64.exe` | Windows x64                                                 |
-| `gitlab-mcp-server-windows-arm64.exe` | Windows arm64                                               |
-| `checksums.txt`                       | SHA-256 of each of the seven binaries                       |
-| `checksums.txt.sigstore.json`         | Keyless Cosign signature of `checksums.txt`                 |
-| `gitlab-mcp-server.mcpb`              | Claude Desktop extension, see [below](#claude-desktop-mcpb) |
+| Asset                                 | Platform                                                                                           |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `gitlab-mcp-server-linux-amd64`       | Linux x86_64                                                                                       |
+| `gitlab-mcp-server-linux-arm64`       | Linux arm64                                                                                        |
+| `gitlab-mcp-server-darwin-amd64`      | macOS Intel                                                                                        |
+| `gitlab-mcp-server-darwin-arm64`      | macOS Apple Silicon                                                                                |
+| `gitlab-mcp-server-darwin-all`        | macOS universal (arm64 + amd64 in one file)                                                        |
+| `gitlab-mcp-server-windows-amd64.exe` | Windows x64                                                                                        |
+| `gitlab-mcp-server-windows-arm64.exe` | Windows arm64                                                                                      |
+| `checksums.txt`                       | SHA-256 of each of the seven binaries                                                              |
+| `checksums.txt.sigstore.json`         | Keyless Cosign signature of `checksums.txt`                                                        |
+| `gitlab-mcp-server-darwin.mcpb`       | Claude Desktop extension for macOS, see [below](#claude-desktop-mcpb)                              |
+| `gitlab-mcp-server-windows.mcpb`      | Claude Desktop extension for Windows, see [below](#claude-desktop-mcpb)                            |
+| `gitlab-mcp-server-linux.mcpb`        | Claude Desktop extension for Linux, see [below](#claude-desktop-mcpb)                              |
+| `gitlab-mcp-server.mcpb`              | Claude Desktop extension for all three, kept for existing links, see [below](#claude-desktop-mcpb) |
 
-`gitlab-mcp-server-darwin-all` exists because the `.mcpb` manifest overrides the command per operating system, not per architecture, so its macOS entry point has to run on both; it is just as usable on its own. The bundle's Linux entry answers the same limit another way: it carries `gitlab-mcp-server-linux-amd64` and `gitlab-mcp-server-linux-arm64` beside a small launcher that picks one by `uname -m`.
+`gitlab-mcp-server-darwin-all` exists because a `.mcpb` manifest chooses the command per operating system, not per architecture, so the macOS bundle's entry point has to run on both; it is just as usable on its own. The Linux bundle answers the same limit another way: it carries `gitlab-mcp-server-linux-amd64` and `gitlab-mcp-server-linux-arm64` beside a small launcher that picks one by `uname -m`. Releases up to 3.1.0 publish only `gitlab-mcp-server.mcpb`.
 
 Download URLs have two forms: `https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/<asset>` always resolves to the newest release, and `https://github.com/jmrplens/gitlab-mcp-server/releases/download/v<version>/<asset>` pins one.
 
@@ -374,7 +377,9 @@ Two `dnx` habits worth knowing. It parses its own options anywhere on the comman
 
 ## Claude Desktop (.mcpb)
 
-Download [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb). On macOS and Windows, open it with Claude Desktop (double-click it, or drag it onto the Settings window). On Linux, use **Extensions > Install Extension...** in Claude Desktop and select the file: the Linux app registers no handler for `.mcpb` files, so a double-click does not open it. Then review the install dialog and fill in the settings. The bundle contains a macOS universal binary, a Windows executable and the Linux amd64 and arm64 binaries, so it needs no Docker, Node.js or Python; its manifest (v0.4, `server.type: binary`) declares `darwin`, `win32` and `linux` and Claude Desktop 0.10.0 or newer. The Windows binary is amd64 only, so a Windows arm64 machine receives the x64 executable. Carrying four binaries makes the download about 75 MB; the v3.0.0 bundle, without the Linux pair, was 44 MB.
+Download the bundle for your system: [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb) for macOS (the universal binary, about 30 MB), [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) for Windows (about 15 MB), or [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb) for Linux (both architectures, about 31 MB). On macOS and Windows, open it with Claude Desktop (double-click it, or drag it onto the Settings window). On Linux, use **Extensions > Install Extension...** in Claude Desktop and select the file: the Linux app registers no handler for `.mcpb` files, so a double-click does not open it. Then review the install dialog and fill in the settings. A bundle needs no Docker, Node.js or Python; its manifest (v0.4, `server.type: binary`) declares only its own platform (`darwin`, `win32` or `linux`) and Claude Desktop 0.10.0 or newer, so Claude Desktop refuses one opened on another system with a message. All three install as the same extension and carry the `LICENSE`. The Windows binary is amd64 only, so a Windows arm64 machine receives the x64 executable.
+
+[`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb) carries all three systems' servers in one file, about 77 MB to download and 299 MB on disk. Every release publishes it under that name so that links to it keep working, and it installs as the same extension; releases up to 3.1.0 publish only this one. `server.json` declares the three per-OS bundles and not this one.
 
 On Linux the manifest starts `/bin/sh` with the bundled `server/linux/launch.sh`, which picks the binary for the machine by `uname -m` (x86_64 or aarch64; anything else is refused with a message in Claude Desktop's MCP log), sets its execute bit if extraction dropped it, and then replaces itself with the server, so the process Claude Desktop stops is the server itself. The Linux binaries need glibc, which every system Claude Desktop's Linux beta supports (Ubuntu 22.04 or newer, Debian 12 or newer) has.
 
@@ -382,7 +387,7 @@ The settings map to environment variables: GitLab URL (`GITLAB_URL`, default `ht
 
 To check the install, ask Claude "What GitLab user am I authenticated as?"; on the default dynamic surface it calls `gitlab_find_action` and then `gitlab_execute_action` with the `user.current` action and returns your username.
 
-**Verify the bundle.** The `.mcpb` is built outside GoReleaser, so it is not in `checksums.txt`. For v2.7.5, compare its SHA-256 with the `fileSha256` recorded in `server.json`, `c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe`. Releases after v2.7.5 attest the bundle separately, which `gh attestation verify gitlab-mcp-server.mcpb -R jmrplens/gitlab-mcp-server` checks. Building and packing are covered in the [Claude Desktop Extension guide](claude-desktop-extension.md).
+**Verify the bundle.** The bundles are built outside GoReleaser, so they are not in `checksums.txt`. Releases after v2.7.5 attest each bundle separately, which `gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server` checks (with the name of the bundle you downloaded); the SHA-256 of each declared bundle is also the `fileSha256` that release's `server.json` records. For v2.7.5, compare the bundle's SHA-256 with `c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe`. Building and packing are covered in the [Claude Desktop Extension guide](claude-desktop-extension.md).
 
 **Upgrade and uninstall.** Updates arrive as new extension versions published with each release; the installed one runs until Claude Desktop installs a newer extension. Uninstall it from Claude Desktop's extension settings; that step belongs to Claude Desktop and is not documented in this repository.
 

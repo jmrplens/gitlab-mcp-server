@@ -7,18 +7,34 @@ datePublished: "2026-07-08"
 import { Steps } from "@astrojs/starlight/components";
 
 GitLab MCP Server se distribuye como **extensión de escritorio** (`.mcpb`) de
-instalación en un clic para Claude Desktop en macOS, Windows y Linux. El
-paquete contiene un binario universal de macOS (Apple Silicon + Intel), un
-ejecutable de Windows y los binarios de Linux x64 y arm64 con un pequeño
-lanzador que elige el adecuado. No hace falta Docker, Node.js ni Python. Al
-llevar cuatro binarios, la descarga ocupa unos 75 MB.
+instalación en un clic para Claude Desktop en macOS, Windows y Linux, con un
+paquete por sistema operativo. No hace falta Docker, Node.js ni Python.
+
+| Tu sistema                    | Paquete                                                                                                                                   | Descarga   | Contiene                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------- |
+| macOS (Apple Silicon e Intel) | [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb)   | unos 30 MB | el binario universal                                          |
+| Windows (x64)                 | [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) | unos 15 MB | el ejecutable x64                                             |
+| Linux (x64 y arm64)           | [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb)     | unos 31 MB | los dos binarios de Linux y un lanzador que elige el adecuado |
+
+Cada paquete declara solo su propio sistema, así que Claude Desktop rechaza con
+un mensaje el que se abra en otro sistema. Los tres se instalan como la misma
+extensión.
+
+:::note[El paquete universal]
+[`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
+lleva los servidores de los tres sistemas en un solo archivo, con una descarga
+de unos 77 MB. Cada release lo sigue publicando para que los enlaces que
+apuntan a él sigan funcionando, y se instala como la misma extensión, pero el
+paquete de tu sistema es una fracción de esa descarga. Las releases hasta la
+3.1.0 solo publican este.
+:::
 
 ## Instalación
 
 <Steps>
 
-1. Descarga [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
-   desde la última release.
+1. Descarga el paquete de tu sistema de la tabla anterior, o de la
+   [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 
 2. Abre el archivo con Claude Desktop. En macOS y Windows, haz doble clic o
    arrástralo a la ventana de Ajustes de Claude Desktop. En Linux, usa

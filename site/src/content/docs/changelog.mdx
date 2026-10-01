@@ -8,7 +8,7 @@ faq:
   - q: "How does GitLab MCP Server version its releases?"
     a: "It follows semantic versioning. The patch number changes for fixes and internal work with no interface change. The minor number changes when tools, actions, resources or prompts are added, or when configuration gains an option — additive changes that leave existing calls working. One narrow case is not additive and is still minor: a parameter, a combination of parameters, or a response field that the GitLab endpoint behind a tool could not honor may be withdrawn, because what was published was answered with the wrong page rather than an error. The major number changes only for a breaking change to the MCP surface or to configuration, such as removing an action or changing a required parameter."
   - q: "What does each release publish?"
-    a: "Every release publishes binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), the npm packages, and checksums.txt. The checksums are signed keylessly with Cosign/Sigstore, every binary ships an SPDX SBOM, and the release artifacts carry SLSA build provenance attestations, so you can verify what you downloaded before running it."
+    a: "Every release publishes binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, Claude Desktop extensions (.mcpb, one per operating system and one for all three), the npm packages, and checksums.txt. The checksums are signed keylessly with Cosign/Sigstore, every binary ships an SPDX SBOM, and the release artifacts carry SLSA build provenance attestations, so you can verify what you downloaded before running it."
   - q: "How do I get notified about new GitLab MCP Server releases?"
     a: "Two ways. Watch the repository on GitHub with the Releases filter, or subscribe a feed reader to https://github.com/jmrplens/gitlab-mcp-server/releases.atom. Installing a release is then a step you take: the server does not check for updates and never replaces its own binary, so you upgrade through whichever channel installed it (npm, Homebrew, winget, a newer image tag, a newer Claude Desktop extension) or download the new asset from the Releases page."
   - q: "How do I roll back to an earlier version?"
@@ -44,7 +44,7 @@ The one exception is the withdrawal row, and it is deliberate. It covers three s
 | ------------------------ | --------------------------------------------------------------------------------- |
 | Binaries                 | Linux, macOS and Windows; amd64 and arm64; plus a macOS universal build           |
 | Container image          | GHCR and Docker Hub                                                               |
-| Claude Desktop extension | A one-click `.mcpb` package                                                       |
+| Claude Desktop extension | A one-click `.mcpb` package per operating system, and one for all three           |
 | npm packages             | `@jmrp.io/gitlab-mcp-server` plus a per-platform binary package                   |
 | Checksums                | `checksums.txt` with the SHA-256 hash of every binary                             |
 | Signature                | `checksums.txt.sigstore.json` — a keyless Cosign/Sigstore bundle, no key to fetch |
