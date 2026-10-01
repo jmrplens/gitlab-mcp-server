@@ -25,9 +25,11 @@ func writeConfig(t *testing.T, content string) string {
 // TestReadBuilds_TheRepositorysReleaseIsSixTargetsOfTheServer pins what the
 // gate reads from the configuration the release actually uses.
 //
-// It fails when the release gains a build, a target or a way of selecting
-// targets this command does not read, which is the moment to look at this
-// command again rather than let it scan a set of binaries nobody publishes.
+// It fails when the release gains a build, a target or a key this command does
+// not read, which is the moment to look at this command again rather than let
+// it scan a set of binaries nobody publishes. Its passing also says the
+// configuration's overrides change ldflags alone (the Linux loader paths),
+// since readBuilds refuses an override that sets anything else.
 func TestReadBuilds_TheRepositorysReleaseIsSixTargetsOfTheServer(t *testing.T) {
 	t.Parallel()
 
@@ -96,8 +98,18 @@ func TestReadBuilds_RefusesWhatItCannotReadExactly(t *testing.T) {
 		{name: "no main package", content: "builds:\n  - id: x\n    goos: [linux]\n    goarch: [amd64]\n", want: "x names no main package"},
 		{name: "no goos", content: "builds:\n  - id: x\n    main: .\n    goarch: [amd64]\n", want: "x lists no goos or no goarch"},
 		{name: "no goarch", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n", want: "x lists no goos or no goarch"},
-		{name: "ignore", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    ignore:\n      - goos: linux\n", want: "x selects its targets with ignore or targets"},
-		{name: "targets", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    targets: [linux_amd64]\n", want: "x selects its targets with ignore or targets"},
+		{name: "ignore", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    ignore:\n      - goos: linux\n", want: "x sets ignore, which this command does not read"},
+		{name: "targets", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    targets: [linux_amd64]\n", want: "x sets targets, which this command does not read"},
+		{name: "build tags", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    tags: [netgo]\n", want: "x sets tags, which this command does not read"},
+		{name: "build dir", content: "builds:\n  - id: x\n    dir: sub\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "x sets dir, which this command does not read"},
+		{name: "go binary", content: "builds:\n  - id: x\n    main: .\n    gobinary: go1.20\n    goos: [linux]\n    goarch: [amd64]\n", want: "x sets gobinary, which this command does not read"},
+		{name: "global env", content: "env: [GOEXPERIMENT=boringcrypto]\nbuilds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n", want: "sets a global env, which every build inherits"},
+		{name: "override env", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        ldflags: [-s]\n      - goos: linux\n        env: [GOEXPERIMENT=boringcrypto]\n", want: "x overrides[1] sets env; an override may change ldflags and nothing else"},
+		{name: "override flags", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        flags: [-tags=other]\n", want: "x overrides[0] sets flags"},
+		{name: "override tags", content: "builds:\n  - id: x\n    main: .\n    goos: [linux]\n    goarch: [amd64]\n    overrides:\n      - goos: linux\n        tags: [extra]\n", want: "x overrides[0] sets tags"},
+		{name: "a key reached through an alias", content: "base: &b\n  id: x\n  main: .\n  goos: [linux]\n  goarch: [amd64]\n  tags: [netgo]\nbuilds:\n  - *b\n", want: "x sets tags"},
+		{name: "a merge key", content: "base: &b\n  goos: [linux]\n  goarch: [amd64]\nbuilds:\n  - id: x\n    main: .\n    <<: *b\n", want: "x sets <<"},
+		{name: "an entry that is not a mapping", content: "builds:\n  - ./cmd/x\n", want: "builds[0]: yaml: unmarshal errors"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
