@@ -35,9 +35,18 @@ const (
 	// FallbackGrantShape is a grant holding something this server cannot
 	// read without guessing.
 	FallbackGrantShape FallbackReason = "grant-shape-unknown"
-	// FallbackVersionUnreadable is an instance whose version was not read or
-	// did not validate.
+	// FallbackVersionUnreadable is an instance that answered the request for
+	// its version and named none this server can read: it refused the
+	// token's grant Metadata: Read, or it reported a string that does not
+	// validate. Neither changes while the token and the instance stay what
+	// they are, so the grant is not asked for.
 	FallbackVersionUnreadable FallbackReason = "version-unreadable"
+	// FallbackVersionUnanswered is a version read the instance did not
+	// answer: a transport failure, a timeout, a status that is no verdict on
+	// the read. Like an unanswered grant read, it says nothing about the
+	// token, and a later read lifts it; the grant is not asked for, since no
+	// grant is evaluated without a version.
+	FallbackVersionUnanswered FallbackReason = "version-unanswered"
 	// FallbackVersionOutside is an instance whose version no recorded table
 	// describes.
 	FallbackVersionOutside FallbackReason = "version-outside-record"

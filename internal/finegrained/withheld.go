@@ -193,6 +193,8 @@ func (a *Authority) fallbackText() string {
 		return " The token's grant holds a scope this server cannot read without guessing" + notEvaluated
 	case FallbackVersionUnreadable:
 		return " The instance did not report a version this server can read (a token granted Metadata: Read lets it)" + notEvaluated
+	case FallbackVersionUnanswered:
+		return " The instance did not answer the request for its version" + notEvaluated
 	case FallbackVersionOutside:
 		return fmt.Sprintf(" The instance reports GitLab %s and the permissions are recorded for %s only%s",
 			a.reported, a.table.Bucket, notEvaluated)

@@ -46,7 +46,10 @@ type Reading struct {
 	// Grant is the token's grant, as [DecodeGrant] read it.
 	Grant Grant
 	// Fallback is why the grant cannot be evaluated, or [FallbackNone] when it
-	// can.
+	// can: a reason the grant read gave, or, when the version read left no
+	// version to judge at, the reason it gave instead
+	// ([FallbackVersionUnanswered], [FallbackVersionUnreadable]), since a
+	// reader does not ask for a grant no answer could let it evaluate.
 	Fallback FallbackReason
 	// Version is the version the instance reported, validated by its reader,
 	// and "" when it was not read or was not one.
@@ -57,8 +60,9 @@ type Reading struct {
 // against a recorded table: phase B, the grant evaluated, when every guard
 // holds, and phase A with the reason when one does not (issue 952).
 //
-// The guards, in the order a reason is chosen: the grant was read and decoded
-// within its bounds; the instance reported a version; the version's
+// The guards, in the order a reason is chosen: the reading carries no reason
+// (the grant was read and decoded within its bounds, and the version read left
+// a version to judge at); the instance reported a version; the version's
 // major.minor is the table's; and every assignable name the grant holds is one
 // the table defines, deprecated ones included, so a rename or a new
 // assignable falls back rather than being read as nothing granted. Any of
@@ -68,12 +72,13 @@ type Reading struct {
 // there.
 //
 // One release outside the record is let in for the listing only: the
-// prerelease of the minor right after the table's, which is what GitLab.com
-// reports while releases stop at the table's minor (19.5.0-pre against
-// 19.4). Such a session is listed what its grant reaches as the table
-// declares it and may call everything phase A allows, so a requirement that
-// changed in that one milestone is GitLab's own answer to the call rather than
-// a refusal here with a stale name.
+// prerelease of the release right after the table's ([nextPrerelease]), which
+// is what GitLab.com reports while releases stop at the table's minor
+// (19.5.0-pre against 19.4, 20.0.0-pre against 19.11). Such a session is
+// listed what its grant reaches as the table declares it and may call
+// everything phase A allows, so a requirement that changed in that one
+// milestone is GitLab's own answer to the call rather than a refusal here with
+// a stale name.
 //
 // It is pure: it reads nothing but its arguments, and returns a new authority.
 func Judge(t *Table, r Reading) *Authority {
@@ -116,12 +121,12 @@ func Judge(t *Table, r Reading) *Authority {
 // version whose major.minor differs from the one current was judged at (the
 // instance was upgraded, which moves the token to that release's verdict,
 // phase A when no table records it). Anything else keeps current: a version
-// that was not read, and a grant that was not answered, was too large, could
-// not be decoded or was refused. Falling back to phase A on a transient
-// failure would make what a session is listed change with upstream
-// availability rather than with its authorization (INV-009), and the grant
-// cannot have changed in the meantime, since nothing edits one after the token
-// is created.
+// that was not answered or not readable, and a grant that was not answered,
+// was too large, could not be decoded or was refused. Falling back to phase A
+// on a transient failure would make what a session is listed change with
+// upstream availability rather than with its authorization (INV-009), and the
+// grant cannot have changed in the meantime, since nothing edits one after
+// the token is created.
 func Rejudge(t *Table, current *Authority, r Reading) (*Authority, bool) {
 	if r.Version == "" {
 		return current, false
@@ -132,18 +137,42 @@ func Rejudge(t *Table, current *Authority, r Reading) (*Authority, bool) {
 	return Judge(t, r), true
 }
 
-// nextPrerelease reports whether version is the prerelease of the minor right
-// after bucket's, in the same major ("19.5.0-pre" after "19.4").
+// Moved reports whether replacing from with to changes the verdict a log line
+// about the authority states ([Authority.LogArgs]): its phase, the reason it
+// stayed in phase A, or the major.minor it was judged at. A re-read that
+// answered replaces the authority on every revalidation, so this is what keeps
+// the line a re-read logs to the ones that moved a token: an instance upgraded
+// to a release no table records or back to the recorded one, or GitLab.com
+// moving onto or past the listing-only prerelease. A nil from is an authority
+// nothing had judged yet, which any verdict moves.
+func Moved(from, to *Authority) bool {
+	return from == nil || from.phase != to.phase || from.fallback != to.fallback || Bucket(from.reported) != Bucket(to.reported)
+}
+
+// lastMinor is the last minor of a GitLab major. GitLab releases a minor each
+// month and a major each May (doc/policy/maintenance.md at v19.4.1-ee), so a
+// major runs from .0 to .11 and the release after x.11 is (x+1).0.
+const lastMinor = 11
+
+// nextPrerelease reports whether version is the prerelease of the release
+// right after bucket's: the next minor of the same major ("19.5.0-pre" after
+// "19.4"), or the next major's first after the last minor of one
+// ("20.0.0-pre" after "19.11", as 19.0 followed 18.11).
 func nextPrerelease(version, bucket string) bool {
 	if !strings.HasSuffix(version, "-pre") {
 		return false
 	}
-	major, minor, _ := strings.Cut(bucket, ".")
-	next, err := strconv.Atoi(minor)
-	if err != nil {
+	majorText, minorText, _ := strings.Cut(bucket, ".")
+	major, majorErr := strconv.Atoi(majorText)
+	minor, minorErr := strconv.Atoi(minorText)
+	if majorErr != nil || minorErr != nil {
 		return false
 	}
-	return Bucket(version) == major+"."+strconv.Itoa(next+1)
+	next := strconv.Itoa(major) + "." + strconv.Itoa(minor+1)
+	if minor >= lastMinor {
+		next = strconv.Itoa(major+1) + ".0"
+	}
+	return Bucket(version) == next
 }
 
 // unknownSampleSize and unknownNameBytes bound what an authority keeps of the

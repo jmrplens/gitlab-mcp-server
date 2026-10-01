@@ -167,6 +167,7 @@ func TestAuthority_WithheldText_AppendsWhyTheGrantWasNotEvaluated(t *testing.T) 
 		{FallbackGrantTooLarge, "", " The token's grant is larger than this server reads, so the grant was not evaluated."},
 		{FallbackGrantShape, "", " The token's grant holds a scope this server cannot read without guessing, so the grant was not evaluated."},
 		{FallbackVersionUnreadable, "", " The instance did not report a version this server can read (a token granted Metadata: Read lets it), so the grant was not evaluated."},
+		{FallbackVersionUnanswered, "", " The instance did not answer the request for its version, so the grant was not evaluated."},
 		{FallbackVersionOutside, "19.5.0-pre", " The instance reports GitLab 19.5.0-pre and the permissions are recorded for 19.4 only, so the grant was not evaluated."},
 		{FallbackUnknownPermission, "", " The token's grant names a permission GitLab 19.4.1 does not define, so the grant was not evaluated."},
 	}

@@ -368,6 +368,7 @@ func TestJudge_EachGuardFallsBackWithItsReason(t *testing.T) {
 		reported string
 	}{
 		{"the grant's own reason", Reading{Fallback: FallbackGrantTooLarge, Version: "19.4.1-ee"}, PhaseUnknown, FallbackGrantTooLarge, "19.4.1-ee"},
+		{"the version read's reason", Reading{Fallback: FallbackVersionUnanswered}, PhaseUnknown, FallbackVersionUnanswered, ""},
 		{"no version", Reading{}, PhaseUnknown, FallbackVersionUnreadable, ""},
 		{"another release", Reading{Version: "19.3.2-ee"}, PhaseUnknown, FallbackVersionOutside, "19.3.2-ee"},
 		{"a release two minors on", Reading{Version: "19.6.0-pre"}, PhaseUnknown, FallbackVersionOutside, "19.6.0-pre"},
@@ -413,9 +414,11 @@ func TestJudge_ThePrereleasePastTheRecord_ListsByTheGrantAndCallsByPhaseA(t *tes
 	}
 }
 
-// TestNextPrerelease_IsOnlyTheMinorRightAfterTheBucket verifies which reported
-// versions count as the prerelease right after a recorded major.minor.
-func TestNextPrerelease_IsOnlyTheMinorRightAfterTheBucket(t *testing.T) {
+// TestNextPrerelease_IsOnlyTheReleaseRightAfterTheBucket verifies which
+// reported versions count as the prerelease right after a recorded
+// major.minor: the next minor, or after the last minor of a major the next
+// major's first, and nothing else.
+func TestNextPrerelease_IsOnlyTheReleaseRightAfterTheBucket(t *testing.T) {
 	for _, tc := range []struct {
 		version, bucket string
 		want            bool
@@ -426,6 +429,13 @@ func TestNextPrerelease_IsOnlyTheMinorRightAfterTheBucket(t *testing.T) {
 		{"20.0.0-pre", "19.4", false},
 		{"19.4.0-pre", "19.4", false},
 		{"19.5.0-pre", "19.x", false},
+		{"20.5.0-pre", "x.4", false},
+		{"19.11.0-pre", "19.10", true},
+		{"20.0.0-pre", "19.10", false},
+		{"20.0.0-pre", "19.11", true},
+		{"19.12.0-pre", "19.11", false},
+		{"18.0.0-pre", "19.11", false},
+		{"14.0.0-pre", "13.12", true},
 	} {
 		t.Run(tc.version+" after "+tc.bucket, func(t *testing.T) {
 			if got := nextPrerelease(tc.version, tc.bucket); got != tc.want {
@@ -470,6 +480,37 @@ func TestRejudge_ReplacesOnlyOnReadsThatAnswered(t *testing.T) {
 			}
 			if replaced && (got == tc.current || got.Fallback() != tc.fallback) {
 				t.Errorf("Rejudge = %+v, want a new authority with fallback %q", got, tc.fallback)
+			}
+		})
+	}
+}
+
+// TestMoved_IsAChangeOfWhatALogLineStates verifies which replacements count
+// as a move: one from nothing, and a change of phase, of the reason, or of
+// the major.minor judged at; a replacement that states what the one before it
+// did, a patch release or the same verdict read again, is not.
+func TestMoved_IsAChangeOfWhatALogLineStates(t *testing.T) {
+	table := phaseBTable()
+	recorded := Judge(table, Reading{Grant: Grant{}, Version: "19.4.1-ee"})
+	outside := Judge(table, Reading{Grant: Grant{}, Version: "19.6.0-ee"})
+	cases := []struct {
+		name     string
+		from, to *Authority
+		want     bool
+	}{
+		{"from nothing", nil, recorded, true},
+		{"a patch release", recorded, Judge(table, Reading{Grant: Grant{}, Version: "19.4.2"}), false},
+		{"the same verdict read again", outside, Judge(table, Reading{Grant: Grant{}, Version: "19.6.0-ee"}), false},
+		{"an upgrade past the record", recorded, outside, true},
+		{"back to the recorded release", outside, recorded, true},
+		{"another upgrade outside the record", outside, Judge(table, Reading{Grant: Grant{}, Version: "19.7.0-ee"}), true},
+		{"onto the listing-only prerelease", recorded, Judge(table, Reading{Grant: Grant{}, Version: "19.5.0-pre"}), true},
+		{"another reason at the same release", outside, Unevaluated(table, FallbackGrantShape, "19.6.0-ee"), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Moved(tc.from, tc.to); got != tc.want {
+				t.Errorf("Moved = %v, want %v", got, tc.want)
 			}
 		})
 	}
