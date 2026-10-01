@@ -49,6 +49,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                                                                                                                                                                               | `make gen-testing-docs`                                                                                                                                                 |
 | `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                                                                                                                                                                               | `make brand`, `make brand-check`                                                                                                                                        |
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                                                                                                                                                                                 | `make gen-icon-webp`                                                                                                                                                    |
+| `gen_third_party_notices`      | Generators                    | Writes `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the release binaries link, read from their build information and the module cache                                                                                                                                                                                      | Release time: GoReleaser's `sboms`, the Dockerfile, `make mcpb`                                                                                                         |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                                                                                                                                                                      | part of `make audit-docs`                                                                                                                                               |
 | `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential), draws the published charts, measures whether a bound leaves a quiet tenant better off, and measures what a held call and a stateful session cost the process and what the process does with each past its descriptor limit                                                  | `make bench-resources`, `make bench-fairness`, `make bench-held`, `make bench-sessions`                                                                                 |
 | `gen_model_corpus`             | Evaluation                    | Renders the model evaluation corpus breadth ledger: what the corpus asks about, counted against the action catalog                                                                                                                                                                                                                                        | `make gen-model-corpus`, `make check-model-corpus`                                                                                                                      |
@@ -2028,6 +2029,43 @@ go run ./cmd/gen_icon_webp/ --check
 
 - `make gen-icon-webp`
 - `make check-icon-webp` — same external-tool requirement, so it is not part of CI.
+
+### gen_third_party_notices
+
+Writes `THIRD_PARTY_NOTICES`: the license, notice and patent texts of the Go standard library and of every module the release binaries link, which BSD-3-Clause, Apache-2.0 and MPL-2.0 ask to accompany a binary redistribution. The SBOMs name each license and carry none of the texts, and until 3.1.0 no channel shipped them.
+
+What a binary links is read from its own build information, the list `go version -m` prints, through `debug/buildinfo`, never from `go.mod`, which also names modules only tests, tools or other platforms use. The modules of every binary named are merged, and a module that only some targets link says which (at 3.1.0 `github.com/ebitengine/purego` is darwin's and `github.com/go-ole/go-ole` windows'). Each module's texts are read from its directory in the module cache, escaped the way the go command spells it on disk: every regular file at the module's root named LICENSE in either spelling, COPYING, COPYRIGHT, NOTICE or PATENTS, alone or with a prefix or suffix (`LICENSE.md`, `LICENSE-APACHE`, `MIT-LICENSE`), never a Go file, a directory or a symbolic link. The standard library's are read from GOROOT, after GOROOT's `VERSION` is held to the toolchain the binaries record. Line endings are normalized and the texts are otherwise reproduced as published.
+
+It refuses rather than write a file short of something: a pattern matching no file, a binary with no build information or no GOOS/GOARCH, binaries built from another main module or version, by another toolchain or twice for one target, one module at two versions or replaced in one binary only, a target list other than `-targets` names, a module the cache does not hold or replaced by a local directory, and a module or GOROOT publishing no license file. It reproduces texts and classifies none: the SPDX identifiers stay in the SBOMs.
+
+Where it runs: GoReleaser runs it once every release binary is built and before `checksums.txt` is computed and signed, as the `third-party-notices` entry of `sboms` (`artifacts: any`, the one hook placed there), so `THIRD_PARTY_NOTICES` is a release asset in the signed `checksums.txt`; the npm, PyPI and NuGet packages and the Claude Desktop bundles carry that file. The image's builder stage runs it against the image's own binary, and `make mcpb` against the binaries it builds.
+
+#### Usage
+
+```bash
+go run ./cmd/gen_third_party_notices/ -o THIRD_PARTY_NOTICES \
+  -targets linux/amd64,windows/amd64 \
+  'dist/gitlab-mcp-server_*/gitlab-mcp-server*'
+```
+
+#### Flags
+
+| Flag        | Type     | Default               | Description                                                                          |
+| ----------- | -------- | --------------------- | ------------------------------------------------------------------------------------ |
+| `-o`        | `string` | `THIRD_PARTY_NOTICES` | File the notices are written to                                                      |
+| `-targets`  | `string` | (empty)               | Comma-separated GOOS/GOARCH pairs the binaries must cover exactly; empty accepts any |
+| `-goroot`   | `string` | (empty)               | Go root whose license covers the standard library; empty asks `go env GOROOT`        |
+| `-modcache` | `string` | (empty)               | Module cache the license files are read from; empty asks `go env GOMODCACHE`         |
+
+The arguments are binaries or globs of them; a glob is expanded by the command, so GoReleaser can pass one without a shell.
+
+#### Output
+
+A header naming the main module, the toolchain and the builds, a list of contents, then the standard library and each module in path order with every text in full, a replacement and a module only some targets link said so. Exit 0 once written, 1 when the notices could not be generated, 2 for arguments that do not parse. A one-line summary on stdout names the file, the module count and the targets.
+
+#### Make targets
+
+None of its own: `make release` and the release workflow reach it through GoReleaser, `make mcpb` and `docker build` call it directly.
 
 ## Formatters
 
