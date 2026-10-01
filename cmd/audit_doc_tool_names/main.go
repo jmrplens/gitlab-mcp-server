@@ -44,6 +44,7 @@ var allowed = map[string]string{
 	"gitlab_ci_ymls":     "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
 	"gitlab_duo":         "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
 	"gitlab_status":      "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
+	"gitlab_version":     "a key of the fine_grained block gitlab://tools/{id} serves (json:\"gitlab_version\"), quoted in the resources reference",
 	"gitlab_test":        "client-go's integration test directory (gitlab_test/), quoted in upstream-bugs.md",
 	"gitlab_mcp_server":  "the Python import package of the PyPI distribution (python -m gitlab_mcp_server), not a tool",
 	"gitlab_interactive": "the guided flows' catalog group name, which --exclude-tools accepts on every surface; no surface registers a tool of that name, since meta and individual register the four gitlab_interactive_* flows one by one",
@@ -65,11 +66,25 @@ var historicalDocs = []string{
 	"docs/development/adr/",
 }
 
+// osExit is os.Exit behind a variable, so a test can run main and read the
+// code it would exit with.
+var osExit = os.Exit
+
+// buildIDs builds the catalog's action IDs. It is a variable because the
+// failure run answers it with cannot be produced from a catalog this binary
+// compiles in, and a branch nothing reaches is a branch nothing holds.
+var buildIDs = actionids.Build
+
+// walkDir walks a documentation tree. It is a variable because the walk's own
+// error, a directory that cannot be listed, cannot be produced for a process
+// that ignores directory permissions, which is what the checks run as.
+var walkDir = filepath.WalkDir
+
 func main() {
 	check := flag.Bool("check", false, "exit non-zero when the docs name a tool the server does not register or an action ID the catalog does not publish, or when a declaration excuses neither")
 	flag.Parse()
 
-	os.Exit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))
+	osExit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))
 }
 
 // run audits roots against the names collectNames returns and the action IDs
@@ -82,7 +97,7 @@ func main() {
 // can, and they are the only things that can send run home with a 1 it did not
 // intend.
 func run(check bool, roots []string, collectNames func() map[string]struct{}, stdout, stderr io.Writer) int {
-	ids, err := actionids.Build()
+	ids, err := buildIDs()
 	if err != nil {
 		fmt.Fprintf(stderr, "build the action catalog: %v\n", err)
 		return 1
@@ -273,7 +288,7 @@ func (s *docScan) scanRoot(root string) error {
 		return s.scanFile(root)
 	}
 
-	return filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+	return walkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
