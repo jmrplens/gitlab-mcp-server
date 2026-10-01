@@ -22,6 +22,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -10666,4 +10667,79 @@ func TestAmbiguousTargetsFromFindResults_UsesTheFirstPopulatedSet(t *testing.T) 
 			t.Errorf("ambiguousTargetsFromFindResults() = %v, want nil", got)
 		}
 	})
+}
+
+// auditWithheld binds a client whose authority withholds custom.audit, which
+// is what a fine-grained session's requests carry.
+func auditWithheld() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version: "19.4.1-ee",
+		Actions: []finegrained.Requirement{{ID: "custom.audit", Denied: &finegrained.Denial{
+			Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull,
+		}}},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// findIDs returns the action IDs a find answered with.
+func findIDs(t *testing.T, registry *Registry, ctx context.Context, query string) []string {
+	t.Helper()
+	_, output, err := registry.Find(ctx, nil, FindInput{Query: query, Limit: 5})
+	if err != nil {
+		t.Fatalf("Find(%q) error = %v", query, err)
+	}
+	ids := make([]string, 0, len(output.Results))
+	for _, result := range output.Results {
+		ids = append(ids, result.ID)
+	}
+	return ids
+}
+
+// TestFind_FineGrained_ListsOnlyWhatTheSessionMayRun verifies find leaves out
+// of a fine-grained session's results an action it may not run, offers it to
+// a classic session and to the server's own inspection, and still publishes a
+// related-actions link to it, since following that link explains the
+// narrowing.
+func TestFind_FineGrained_ListsOnlyWhatTheSessionMayRun(t *testing.T) {
+	registry := NewRegistryFromCatalog(customCatalogForDynamicTest(t))
+	if ids := findIDs(t, registry, auditWithheld(), "audit"); slices.Contains(ids, "custom.audit") {
+		t.Errorf("a fine-grained find = %v, want custom.audit left out", ids)
+	}
+	for name, ctx := range map[string]context.Context{
+		"a classic session":       context.Background(),
+		"the server's inspection": toolutil.WithInternalInspection(auditWithheld()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if ids := findIDs(t, registry, ctx, "audit"); !slices.Contains(ids, "custom.audit") {
+				t.Errorf("find = %v, want custom.audit offered", ids)
+			}
+		})
+	}
+	_, output, err := registry.Find(auditWithheld(), nil, FindInput{Query: "bespoke", Limit: 1})
+	if err != nil || len(output.Results) != 1 || !slices.Contains(output.Results[0].RelatedActions, "custom.audit") {
+		t.Errorf("Find(bespoke) = %+v, %v; want custom.inspect still linking custom.audit", output, err)
+	}
+}
+
+// TestExecute_FineGrained_WithholdsBeforeTheParametersAreChecked verifies
+// execute answers a fine-grained session's call to an action it may not run
+// with the reason, prefixed with its own tool name, before it checks the
+// parameters, so a call missing a required one is still told the action is
+// withheld; and that an action it may run is executed.
+func TestExecute_FineGrained_WithholdsBeforeTheParametersAreChecked(t *testing.T) {
+	registry := NewRegistryFromCatalog(customCatalogForDynamicTest(t))
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: ExecuteActionToolName}}
+	result, _, err := registry.Execute(auditWithheld(), req, ExecuteInput{Action: "custom.audit"})
+	if err != nil || result == nil || !result.IsError {
+		t.Fatalf("Execute(custom.audit) = %+v, %v; want the withheld answer", result, err)
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	if !strings.HasPrefix(text, `gitlab_execute_action: action "custom.audit" exists but is not available to a fine-grained personal access token`) {
+		t.Errorf("Execute(custom.audit) text = %q", text)
+	}
+	result, _, err = registry.Execute(auditWithheld(), req, ExecuteInput{Action: "custom.inspect", Params: map[string]any{"target": "x"}})
+	if err != nil || result == nil || result.IsError {
+		t.Errorf("Execute(custom.inspect) = %+v, %v; want it run", result, err)
+	}
 }

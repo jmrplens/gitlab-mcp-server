@@ -39,6 +39,9 @@ const (
 	RefusalInvalidParams     = "invalid_params"
 	RefusalUnknownAction     = "unknown_action"
 	RefusalRateLimited       = "rate_limited"
+	// RefusalFineGrained is an action a fine-grained personal access token
+	// may not run (issue 952), declined before anything of it ran.
+	RefusalFineGrained = "fine_grained"
 )
 
 // LogToolCallAll logs a tool call to stderr (slog). It is the standard logging

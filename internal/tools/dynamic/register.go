@@ -17,6 +17,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
@@ -826,6 +827,13 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	// the span would otherwise carry no action at all. The meta handler
 	// overwrites this with the final route when it runs.
 	mcpotel.RecordDispatch(ctx, entry.Tool, entry.Action)
+	// Right after the action is resolved and before its parameters are
+	// validated or its confirmation asked for, so a fine-grained session is
+	// told an action it may not run is withheld, with the reason, whatever
+	// the parameters it was sent with. See [toolutil.FineGrainedRefusal].
+	if withheld := toolutil.FineGrainedRefusal(ctx, req, executeCallName(entry.ID), entry.ID, ExecuteActionToolName+": "); withheld != nil {
+		return withheld, nil, nil
+	}
 
 	params := maps.Clone(input.Params)
 	if params == nil {
@@ -2020,6 +2028,7 @@ func (r *Registry) searchMatches(ctx context.Context, query string, limit int, e
 		matches = mergeBestMatches(matches, segmented)
 	}
 	matches = adjustServiceAccountVerbScores(matches, terms)
+	matches = listedMatches(ctx, matches)
 	matches = sortAndLimitMatches(matches, limit)
 	matches = computeConfidence(matches)
 	lowConfidence := len(matches) > 0 && matches[0].lowConfidence
@@ -2256,6 +2265,25 @@ func (r *Registry) annotateAmbiguousMatches(query string, matches []scoredAction
 		}
 	}
 	return matches
+}
+
+// listedMatches keeps the matches a fine-grained session is listed, and all of
+// them for any other session (issue 952).
+//
+// It runs before the limit is applied, so a session that may not run the best
+// match is offered the next best rather than one result fewer. An action
+// withheld here is still resolved by execute, which answers it with the
+// reason, and a related-actions link to one is still published, since
+// following it explains the narrowing. The server's own listings, which no
+// caller makes, are never narrowed ([toolutil.IsInternalInspection]).
+func listedMatches(ctx context.Context, matches []scoredActionEntry) []scoredActionEntry {
+	authority := gitlabclient.AuthorityFrom(ctx)
+	if authority == nil || toolutil.IsInternalInspection(ctx) {
+		return matches
+	}
+	return slices.DeleteFunc(matches, func(match scoredActionEntry) bool {
+		return !authority.Decide(match.entry.ID).Listed
+	})
 }
 
 func sortAndLimitMatches(matches []scoredActionEntry, limit int) []scoredActionEntry {

@@ -294,6 +294,10 @@ func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
 		t.Fatalf("Actions() error = %v", err)
 	}
 
+	// The catalog stamps each route with the canonical ID of its action, which
+	// is how a dispatcher that sees only the route names the action it runs.
+	readRoute.ActionID = "fixture.read"
+	writeRoute.ActionID = "fixture.write"
 	want := []Action{
 		{ID: "fixture.read", Owner: "readerpkg", ReadOnly: true, Route: readRoute},
 		{ID: "fixture.write", Owner: "writerpkg", ReadOnly: false, Route: writeRoute},

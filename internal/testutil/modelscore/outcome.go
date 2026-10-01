@@ -107,6 +107,7 @@ var dispatcherRefusals = map[string]bool{
 	toolutil.RefusalInvalidParams:     true,
 	toolutil.RefusalUnknownAction:     true,
 	toolutil.RefusalRateLimited:       true,
+	toolutil.RefusalFineGrained:       true,
 }
 
 // refusedFor reports whether an outcome is this server's refusal for one

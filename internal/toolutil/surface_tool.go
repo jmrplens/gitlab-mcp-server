@@ -47,6 +47,9 @@ func RegisterSurfaceToolFromSpec(server *mcp.Server, spec ActionSpec, opts Surfa
 func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatResultFunc) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		start := time.Now()
+		if withheld := FineGrainedRefusal(ctx, req, toolName, route.ActionID, ""); withheld != nil {
+			return withheld, nil, nil
+		}
 		if route.Destructive {
 			message := fmt.Sprintf("Confirm destructive action %q?", toolName)
 			guard, guardErr := ConfirmDestructiveAction(ctx, req, input, message)
@@ -73,9 +76,9 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 		}
 		LogToolCallAll(ctx, req, toolName, start, result, err)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, FineGrainedErrorNote(ctx, route.ActionID, err)
 		}
-		callResult, structured := FinishToolResult(formatResult(result), result, route, input)
+		callResult, structured := FinishToolResult(FineGrainedNotes(ctx, route.ActionID, formatResult(result), result), result, route, input)
 		if callResult.IsError {
 			return callResult, nil, nil
 		}

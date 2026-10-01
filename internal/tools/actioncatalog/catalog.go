@@ -852,6 +852,9 @@ func normalizeAction(toolName, baseDomain string, action Action) (Action, error)
 	if action.FineGrained == nil {
 		action.FineGrained = actiongrants.Requirement(string(action.ID))
 	}
+	// The route carries the ID for the dispatchers, which see the route and
+	// not the action, and decide by it what a fine-grained session may run.
+	action.Route.ActionID = string(action.ID)
 	return cloneAction(action), nil
 }
 
