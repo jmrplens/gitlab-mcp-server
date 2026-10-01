@@ -145,9 +145,12 @@ system,
 [macOS](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb),
 [Windows](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb)
 or [Linux](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb),
-and open it with Claude Desktop. See the
-[Claude Desktop Extension guide](guides/claude-desktop-extension.md), which
-also covers the universal `gitlab-mcp-server.mcpb` that carries all three.
+and open it with Claude Desktop. The per-OS bundles are published from the
+first release after 3.1.0, and every release publishes the universal
+[`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb),
+which carries all three: it is the one to download while the latest release
+is 3.1.0. See the
+[Claude Desktop Extension guide](guides/claude-desktop-extension.md) for both.
 
 The server reads `~/.gitlab-mcp-server.env` for values its environment does not already carry, one `KEY=value` per line, which is why the registration command names no token. Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to that same file (and `GITLAB_MCP_SKIP_TLS_VERIFY=true` for self-signed certs). The per-client JSON for every supported client is in [Step 2](#step-2-configure-your-mcp-client).
 
