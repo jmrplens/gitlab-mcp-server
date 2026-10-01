@@ -20,7 +20,7 @@ Or install it on your PATH:
 dotnet tool install -g gitlab-mcp-server
 ```
 
-Either way the command is `gitlab-mcp-server`. Two things about `dnx` worth knowing: it reads its own options anywhere on the command line, so arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`; without the separator, `--version` is read as `dnx`'s own option and prints its usage); and the .NET 10 SDK's `dnx` installs the tool without asking when its standard input is not a terminal, which is how an MCP client starts it, so a client configuration needs no extra flag.
+Either way the command is `gitlab-mcp-server`. Two things about `dnx` worth knowing: it reads its own options anywhere on the command line, so arguments meant for the server go after `--` (`dnx gitlab-mcp-server -- --version`; without the separator, `--version` is read as `dnx`'s own option and prints its usage); and the .NET 10 SDK's `dnx` installs the tool without asking when its standard input is not a terminal, which is how an MCP client starts it, so a client configuration needs no extra flag. A third: every `dnx` launch contacts NuGet.org, pinned (`dnx gitlab-mcp-server@<version>`) or not, cached or not: on a host that cannot reach NuGet.org, run the command `dotnet tool install` placed instead.
 
 Typical MCP client configuration (stdio):
 

@@ -90,7 +90,7 @@ Check the install:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 2.8.0 (commit: ...)
+# gitlab-mcp-server <version> (commit: ...)
 ```
 
 With `dnx` no command lands on your PATH; `dnx gitlab-mcp-server -- --version`
@@ -139,7 +139,9 @@ self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
 `where gitlab-mcp-server` on Windows) prints it. To pin a release rather
 than follow the newest one with `dnx`, name it in the argument:
-`"gitlab-mcp-server@2.8.0"`.
+`"gitlab-mcp-server@<version>"`, with a version NuGet.org lists. Pinning
+does not let `dnx` start without NuGet.org (see
+[Upgrade and uninstall](#upgrade-and-uninstall)).
 
 One caution for a machine on which the .NET CLI has never run: its first-use
 welcome text goes to standard output, which is the stream the MCP protocol
@@ -206,11 +208,17 @@ a pointer never resolves a binary from another release.
 `dnx` resolves the version against NuGet.org on every launch, so an
 unpinned `dnx gitlab-mcp-server` follows each release as it is published,
 and the download is skipped when the resolved version is already in the
-NuGet cache. The other side of that coin: every launch needs NuGet.org
-reachable, even for a version already cached, so a machine that is offline
-at times is better served by `dotnet tool install`. To stay on one release,
-name it: `dnx gitlab-mcp-server@2.8.0` (`@latest` is not a NuGet version and
-is refused).
+NuGet cache. To stay on one release, name it:
+`dnx gitlab-mcp-server@<version>` (`@latest` is not a NuGet version and is
+refused). The other side of that coin: every launch contacts NuGet.org,
+pinned or not, cached or not. Measured on the 10.0.401 SDK with 3.1.0
+already in the cache and no network, both `dnx gitlab-mcp-server@3.1.0` and
+`dnx gitlab-mcp-server` exit with
+`Resource temporarily unavailable (api.nuget.org:443)`, while the command
+`dotnet tool install -g` had placed starts. A machine that is offline at
+times, or a host that cannot reach NuGet.org at all, is served by
+`dotnet tool install` (with `--source <dir>` pointing at downloaded
+packages where the feed is out of reach).
 
 Nothing was installed, so there is nothing to uninstall beyond the entry in
 your client's configuration (and the cached packages under `~/.nuget`, if
