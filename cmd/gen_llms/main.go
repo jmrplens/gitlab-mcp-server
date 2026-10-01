@@ -441,12 +441,9 @@ func describeSize(bytes int) string {
 	if bytes <= 0 {
 		return "size unknown"
 	}
-	var size string
-	switch {
-	case bytes >= 1024*1024:
+	size := fmt.Sprintf("%d KB", (bytes+512)/1024)
+	if bytes >= 1024*1024 {
 		size = fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
-	default:
-		size = fmt.Sprintf("%d KB", (bytes+512)/1024)
 	}
 	tokens := float64(bytes) / 4
 	if tokens >= 1_000_000 {
@@ -629,11 +626,17 @@ func buildLLMSFullTxt(version string, catalog llmsCatalog) (generatedFile, error
 	writeLLMSFullPrompts(&b, catalog.Prompts)
 
 	content := b.String()
-	if err := validateLLMSFullTxt(content); err != nil {
+	if err := validateFullText(content); err != nil {
 		return generatedFile{}, fmt.Errorf("validate llms-full.txt: %w", err)
 	}
 	return generatedFile{name: llmsFullFileName, content: content}, nil
 }
+
+// validateFullText is [validateLLMSFullTxt] behind a seam. Every section that
+// validator demands is written whatever the catalog holds, so no content
+// reaches its failing arm; a test swaps it to drive the refusal through
+// buildLLMSFullTxt, buildLLMSReferenceFiles and run.
+var validateFullText = validateLLMSFullTxt
 
 // llmsHeader renders the shared title + one-line summary every companion file
 // opens with, so a consumer that fetched only one of them still knows the
@@ -821,7 +824,9 @@ func compactToolDescription(description string) string {
 	if utf8.RuneCountInString(desc) <= maxFullDescRunes {
 		return desc
 	}
-	if sentence := firstSentence(desc); sentence != "" && utf8.RuneCountInString(sentence) <= maxFullDescRunes {
+	// The sentence is never empty here, since desc is not
+	// (TestFirstSentence_IsNeverEmptyForTextThatHasAny).
+	if sentence := firstSentence(desc); utf8.RuneCountInString(sentence) <= maxFullDescRunes {
 		return sentence
 	}
 	return truncateRunes(desc, maxFullDescRunes)
@@ -1152,10 +1157,7 @@ func firstParagraph(s string) string {
 // firstSentence returns text up to the first sentence-ending period or newline.
 // It skips common abbreviations (e.g., i.e., etc., vs.) to avoid false splits.
 func firstSentence(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
-	}
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
 	if i := findSentenceEnd(s); i >= 0 {
 		return s[:i+1]
 	}

@@ -1847,15 +1847,16 @@ func TestWriteLLMSTxt_RefusesContentItsOwnValidatorRejects(t *testing.T) {
 }
 
 // TestBuildLLMSReferenceFiles_EmptyCatalogStillCarriesEverySection pins the
-// property that makes three error branches above it unreachable: every section
-// llms-full.txt is validated for is written unconditionally, so an empty
-// catalog still produces a document its own validator accepts.
+// property that makes three error branches above it unreachable from content:
+// every section llms-full.txt is validated for is written unconditionally, so
+// an empty catalog still produces a document its own validator accepts.
 //
-// That is why no fixture drives the failing arm of buildLLMSFullTxt's
+// That is why no catalog drives the failing arm of buildLLMSFullTxt's
 // validation, of buildLLMSReferenceFiles' check on it, or of run's check on
-// that: the arms are kept, and the reason they cannot fire is asserted here
-// instead. A section that started depending on catalog content would fail this
-// test rather than silently make those arms reachable.
+// that: TestRun_StopsOnAFullReferenceItsValidatorRejects reaches them through
+// the validateFullText seam, and the reason no content can is asserted here. A
+// section that started depending on catalog content would fail this test
+// rather than silently make those arms reachable.
 func TestBuildLLMSReferenceFiles_EmptyCatalogStillCarriesEverySection(t *testing.T) {
 	files, err := buildLLMSReferenceFiles(cannedVersion, llmsCatalog{})
 	if err != nil {
@@ -1877,13 +1878,34 @@ func TestBuildLLMSReferenceFiles_EmptyCatalogStillCarriesEverySection(t *testing
 	}
 }
 
+// TestRun_StopsOnAFullReferenceItsValidatorRejects drives the refusal the test
+// above shows no catalog can reach: with the validator swapped for one that
+// rejects, run reports the validation step by name and writes none of the
+// files, since every reference is rendered before anything is written.
+func TestRun_StopsOnAFullReferenceItsValidatorRejects(t *testing.T) {
+	dir := projectRootWithVersion(t, cannedVersion)
+	validateFullText = func(string) error { return errors.New("planted refusal") }
+	t.Cleanup(func() { validateFullText = validateLLMSFullTxt })
+
+	err := run(newCanned(cannedCatalog()).surface, false)
+
+	if err == nil || !strings.Contains(err.Error(), "validate llms-full.txt: planted refusal") {
+		t.Fatalf("run() error = %v, want the llms-full.txt validation refusal", err)
+	}
+	for _, name := range generatedFileNames {
+		if _, statErr := os.Stat(filepath.Join(dir, name)); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Errorf("run() wrote %s although llms-full.txt was refused", name)
+		}
+	}
+}
+
 // TestFirstSentence_IsNeverEmptyForTextThatHasAny pins the property
-// compactToolDescription's "sentence != \"\"" guard rests on: firstSentence
-// trims its input and then returns either a prefix ending at a boundary or the
-// whole thing, so a description long enough to reach that guard can never yield
-// an empty sentence. The guard therefore decides nothing, which is why no
-// fixture drives its false arm; the shapes that look like they might are
-// listed here instead.
+// compactToolDescription rests on when it returns the first sentence without
+// checking it for emptiness: firstSentence trims its input and then returns
+// either a prefix ending at a boundary or the whole thing, so a description
+// long enough to need shortening can never yield an empty sentence. It carried
+// a "sentence != \"\"" guard that therefore decided nothing and was removed;
+// the shapes that look like they might yield one are listed here instead.
 func TestFirstSentence_IsNeverEmptyForTextThatHasAny(t *testing.T) {
 	long := strings.Repeat("x", maxFullDescRunes+1)
 	tests := []struct {
