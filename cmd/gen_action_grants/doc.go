@@ -1,0 +1,37 @@
+// Command gen_action_grants derives what every catalog action sends GitLab
+// from its handlers and joins each request to what the live GitLab record
+// says a fine-grained personal access token needs for it.
+//
+// The derivation reads the handlers the catalog names through
+// [github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests] and
+// what each client-go method sends through
+// [github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sdkroutes], and
+// reads the statements of each handler as sequences, alternatives and
+// optional requests, keeping them in the order the handler makes them. A
+// //gitlab:request directive beside a request says what the syntax cannot,
+// and a declaration in request_declarations.go answers a request the walk
+// reaches and cannot read. The join matches each REST request to a route of
+// docs/development/gitlab-api-live.json and judges each GraphQL document
+// position by position against the authorization recorded for it, and a
+// declaration in grant_declarations.go answers what the record cannot place.
+//
+// It writes three artifacts: docs/development/action-requests.json, what
+// each action sends; internal/tools/actiongrants/table_gen.go, the table the
+// server reads, written as keyed literals of constants so that building it
+// costs the server nothing at startup; and
+// docs/reference/fine-grained-permissions.md, the same table for a person
+// minting a token. -check compares the three with what the tree derives now,
+// and -check-derivation fails on every finding and on the three gates of
+// [gateFindings] without writing anything.
+//
+// The command loads and builds itself with table_gen.go replaced by
+// table_stub.go.txt through the go command's -overlay, which the Makefile
+// targets pass, so a table a change to the finegrained types no longer
+// compiles against cannot stop its own regeneration.
+//
+// Usage:
+//
+//	make gen-action-grants
+//	make check-action-grants
+//	make check-action-grants-derivation
+package main
