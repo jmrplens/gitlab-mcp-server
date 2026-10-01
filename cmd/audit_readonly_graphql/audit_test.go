@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests/actionfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
 
@@ -268,11 +270,11 @@ func TestAudit_FindingNamesTheActionAndTheFile(t *testing.T) {
 	if message == "" {
 		t.Fatal("the constructed violation produced no finding")
 	}
-	file := fixtureDir + "/vuln/vuln.go:"
+	file := actionfixture.Dir + "/vuln/vuln.go:"
 	want := []string{
 		"vuln.read_dismiss is classified ReadOnly but its handler sends a GraphQL mutation.",
-		fmt.Sprintf("    action declared at %s%d\n", file, lineOf(t, vulnFixture, `readSpec("read_dismiss",`)),
-		fmt.Sprintf("    Dismiss sends dismissMutation at %s%d\n", file, lineOf(t, vulnFixture, "return send(ctx, client, dismissMutation, input)")),
+		fmt.Sprintf("    action declared at %s%d\n", file, lineOf(t, actionfixture.Vuln, `readSpec("read_dismiss",`)),
+		fmt.Sprintf("    Dismiss sends dismissMutation at %s%d\n", file, lineOf(t, actionfixture.Vuln, "return send(ctx, client, dismissMutation, input)")),
 	}
 	for _, line := range want {
 		t.Run(strings.TrimSpace(line), func(t *testing.T) {
@@ -433,7 +435,7 @@ func TestAudit_TwoFindingsForOneAction_AreOrderedByMessage(t *testing.T) {
 // as findings, they fail the run and name the file; skipped, the run would end
 // with the same sentence it prints when every document really was classified.
 func TestAudit_DocumentsNothingCanBeHeldTo_AreReported(t *testing.T) {
-	prog := &program{unattributed: []graphqldocs.Document{
+	unattributed := []graphqldocs.Document{
 		{
 			Package:  "internal/tools/customemoji",
 			Name:     "create.graphql",
@@ -445,9 +447,9 @@ func TestAudit_DocumentsNothingCanBeHeldTo_AreReported(t *testing.T) {
 			Position: token.Position{Filename: "/repo/internal/tools/widgets/widgets.go", Line: 42},
 			Text:     "mutation { widgetDelete { errors } }",
 		},
-	}}
+	}
 
-	findings := unattributedFindings(prog, "/repo")
+	findings := unattributedFindings(unattributed, "/repo")
 
 	if len(findings) != 2 {
 		t.Fatalf("unattributedFindings() returned %d finding(s), want one per document", len(findings))
@@ -487,43 +489,52 @@ func TestAudit_DocumentsNothingCanBeHeldTo_AreReported(t *testing.T) {
 // Both fixtures declare "quiet": the shapes one touches no GraphQL, the other
 // one sends a mutation. An owner filter that selected the wrong site, or that
 // selected both, would report a mutation against an action whose handler makes
-// no request at all, and the fallback for an owner no site matches would hide
-// that behind the same answer.
+// no request at all.
+//
+// An owner neither package is joins the action to both sites, and that is a
+// finding of its own: two actions' handlers classified as one is an answer
+// about their union, so the mutation one of them sends would be charged to an
+// action whose handler sends nothing, or the exception of one would excuse the
+// other.
 func TestAudit_OwnerPackageDecidesAmongSameNamedSites(t *testing.T) {
 	prog := loadFixture(t, mainSources())
 
 	cases := []struct {
-		name         string
-		act          action
-		wantFindings int
+		name        string
+		act         action
+		wantMessage []string
 	}{
 		{
 			name: "the owner whose handler is quiet",
 			act:  action{ID: "shapes.quiet", Name: "quiet", Owner: "shapes", ReadOnly: true},
 		},
 		{
-			name:         "the owner whose handler writes",
-			act:          action{ID: "other.quiet", Name: "quiet", Owner: "other", ReadOnly: true},
-			wantFindings: 1,
+			name:        "the owner whose handler writes",
+			act:         action{ID: "other.quiet", Name: "quiet", Owner: "other", ReadOnly: true},
+			wantMessage: []string{"quietMutation"},
 		},
 		{
-			name:         "an owner neither of them is",
-			act:          action{ID: "elsewhere.quiet", Name: "quiet", Owner: "elsewhere", ReadOnly: true},
-			wantFindings: 1,
+			name: "an owner neither of them is",
+			act:  action{ID: "elsewhere.quiet", Name: "quiet", Owner: "elsewhere", ReadOnly: true},
+			wantMessage: []string{
+				"elsewhere.quiet resolves to 2 ActionSpec constructions",
+				"    declared at " + actionfixture.Dir + "/other/other.go:",
+				"    declared at " + actionfixture.Dir + "/shapes/shapes.go:",
+				"the individual tool name the catalog holds",
+			},
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			result := audit(prog, []action{testCase.act}, repoRoot(t))
 
-			if len(result.findings) != testCase.wantFindings {
-				t.Fatalf("audit() reported %d finding(s), want %d: %v", len(result.findings), testCase.wantFindings, findingActions(result))
+			if len(result.findings) != min(len(testCase.wantMessage), 1) {
+				t.Fatalf("audit() reported %d finding(s): %v", len(result.findings), findingActions(result))
 			}
-			if testCase.wantFindings == 0 {
-				return
-			}
-			if !strings.Contains(result.findings[0].message, "quietMutation") {
-				t.Errorf("the finding does not name the mutation the other package sends:\n%s", result.findings[0].message)
+			for _, want := range testCase.wantMessage {
+				if !strings.Contains(result.findings[0].message, want) {
+					t.Errorf("the finding does not carry %q:\n%s", want, result.findings[0].message)
+				}
 			}
 		})
 	}
@@ -540,23 +551,28 @@ func TestAudit_OwnerPackageDecidesAmongSameNamedSites(t *testing.T) {
 // every run rather than on the runs the map happens to favor.
 func TestClassifyReached_MutationSites_AreOrderedBySourcePosition(t *testing.T) {
 	handler := types.NewFunc(token.NoPos, types.NewPackage("example.com/domain", "domain"), "Handle", nil)
-	prog := &program{funcs: map[*types.Func]*function{handler: {
-		sendsGraphQL: true,
-		docs: []docRef{
-			{kind: writeDocument, name: "lastMutation", pos: 300},
-			{kind: readDocument, name: "middleQuery", pos: 200},
-			{kind: writeDocument, name: "firstMutation", pos: 100},
+	elsewhere := types.NewFunc(token.NoPos, types.NewPackage("example.com/elsewhere", "elsewhere"), "Unindexed", nil)
+	bodies := map[*types.Func]*actionrequests.Function{handler: {
+		SendsGraphQL: true,
+		Documents: []actionrequests.DocumentUse{
+			{Text: "mutation { last { errors } }", Name: "lastMutation", Pos: 300},
+			{Text: "query { middle { id } }", Name: "middleQuery", Pos: 200},
+			{Text: "mutation { first { errors } }", Name: "firstMutation", Pos: 100},
 		},
-	}}}
+	}}
+	index := func(fn *types.Func) (*actionrequests.Function, bool) {
+		body, ok := bodies[fn]
+		return body, ok
+	}
 
-	sends, mutations := classifyReached(prog, map[*types.Func]bool{handler: true})
+	sends, mutations := classifyReached(index, map[*types.Func]bool{handler: true, elsewhere: true})
 
 	if !sends {
 		t.Error("classifyReached() did not report the transport the function reaches")
 	}
 	var names []string
 	for _, site := range mutations {
-		names = append(names, site.doc.name)
+		names = append(names, site.doc.Name)
 	}
 	if !equalOrdered(names, []string{"firstMutation", "lastMutation"}) {
 		t.Errorf("classifyReached() listed %v, want the two mutations in position order and no query", names)
@@ -626,54 +642,71 @@ func TestAudit_Findings_AreOrderedByActionThenMessage(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			result := audit(&program{unattributed: testCase.inventory}, nil, "/repo")
+			findings := unattributedFindings(testCase.inventory, "/repo")
+			sortFindings(findings)
 
-			if len(result.findings) != len(want) {
-				t.Fatalf("audit() reported %d finding(s), want %d", len(result.findings), len(want))
+			if len(findings) != len(want) {
+				t.Fatalf("unattributedFindings() made %d finding(s), want %d", len(findings), len(want))
 			}
 			for i, document := range want {
-				if !strings.Contains(result.findings[i].message, document) {
-					t.Errorf("finding %d is not the one about %s:\n%s", i, document, result.findings[i].message)
+				if !strings.Contains(findings[i].message, document) {
+					t.Errorf("finding %d is not the one about %s:\n%s", i, document, findings[i].message)
 				}
 			}
 		})
 	}
 }
 
-// TestIndexLiteral_Roots_AreOrderedBySourcePosition verifies the functions a
-// function-literal route stands in for come back in the order the source
-// declares them, on every call. They are collected from a map, so leaving them
-// in its order would make the roots of one handler differ between runs, and
-// the reachable set is where every classification below starts.
-//
-// The literal is indexed a dozen times because the map's order is the one
-// input the test cannot choose: three roots have six orders, only one of
-// which is already the declared one, and asking repeatedly is what puts the
-// sort in front of the orders that need work rather than the one that does
-// not.
-func TestIndexLiteral_Roots_AreOrderedBySourcePosition(t *testing.T) {
-	prog := loadFixture(t, mainSources())
-	var literal handlerRef
-	for _, resolved := range (&resolver{prog: prog}).collectSites()["closure"] {
-		for _, handler := range resolved.handlers {
-			if handler.lit != nil {
-				literal = handler
-			}
-		}
-	}
-	if literal.lit == nil {
-		t.Fatal("the shapes fixture no longer routes an action through a function literal")
-	}
-	want := []string{"closureBody", "closureCleanup", "closureAudit"}
+// TestAudit_ADocumentNoHandlerCanBeHeldTo_IsReportedEndToEnd verifies the
+// tripwire on the real loader: a document assembled in a package-level
+// initializer is read by the inventory and placed by nothing, and the audit
+// fails on it naming the file, rather than printing the sentence it prints
+// when every document really was classified.
+func TestAudit_ADocumentNoHandlerCanBeHeldTo_IsReportedEndToEnd(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"unplaced": actionfixture.Unplaced})
 
-	for attempt := range 12 {
-		var names []string
-		for _, root := range prog.indexLiteral(literal.pkg, literal.lit) {
-			names = append(names, root.Name())
-		}
-		if !equalOrdered(names, want) {
-			t.Fatalf("attempt %d: indexLiteral() = %v, want %v, the order the fixture declares them", attempt, names, want)
-		}
+	result := audit(prog, nil, repoRoot(t))
+
+	if len(result.findings) != 1 {
+		t.Fatalf("audit() reported %d finding(s), want the unattributed document: %+v", len(result.findings), result.findings)
+	}
+	if !strings.Contains(result.findings[0].message, "unplaced/unplaced.go") {
+		t.Errorf("the finding does not name the file:\n%s", result.findings[0].message)
+	}
+}
+
+// edgeActions is the catalog the edge-shape test hands to [audit]: both actions
+// read-only, which is what makes the mutation one a finding.
+func edgeActions() []action {
+	return []action{
+		{ID: "edges.read_touch", Name: "read_touch", Owner: "edges", ReadOnly: true},
+		{ID: "edges.typename", Name: "typename", Owner: "edges", ReadOnly: true},
+	}
+}
+
+// TestAudit_TheShapesTheTwoRulesDisagreedAbout_AreClassified holds the
+// convergence the two rules were reduced to, end to end. One rule decided
+// what a document is and another what it asks for, and a mutation written
+// under a header line, or a one-field selection set written without a space,
+// left the inventory and was judged by nothing while the gate reported that no
+// read-only action reaches a mutation. The real loader is asked here, because
+// that narrowing was invisible to every test that put a string to one rule at
+// a time.
+func TestAudit_TheShapesTheTwoRulesDisagreedAbout_AreClassified(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"edges": actionfixture.Edge})
+
+	result := audit(prog, edgeActions(), repoRoot(t))
+
+	if len(result.findings) != 1 {
+		t.Fatalf("audit() reported %d finding(s), want the read-only action that sends the headed mutation: %+v",
+			len(result.findings), result.findings)
+	}
+	if !strings.Contains(result.findings[0].message, "edges.read_touch") ||
+		!strings.Contains(result.findings[0].message, "headedMutation") {
+		t.Errorf("the finding names neither the action nor the document:\n%s", result.findings[0].message)
+	}
+	if !equalOrdered(result.graphQL, []string{"edges.read_touch", "edges.typename"}) {
+		t.Errorf("actions reported as sending GraphQL = %v, want both", result.graphQL)
 	}
 }
 

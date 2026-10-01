@@ -1,4 +1,4 @@
-package main
+package actionrequests
 
 import (
 	"go/ast"
@@ -9,33 +9,70 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// maxResolveDepth bounds the interprocedural walk. The real chains are three
-// or four calls deep (spec helper, NewReadActionSpec, NewActionSpec, the
-// composite literal), so this is slack rather than a limit anyone reaches; it
-// exists so a cyclic helper cannot hang the audit.
+// maxResolveDepth bounds the interprocedural resolution of a spec. The real
+// chains are three or four calls deep (spec helper, NewReadActionSpec,
+// NewActionSpec, the composite literal), so this is slack rather than a limit
+// anyone reaches; it exists so a cyclic helper cannot hang a run. It bounds
+// the resolution of a construction site only: the walk from a handler to what
+// it calls is [Program.Reachable], which has no bound.
 const maxResolveDepth = 32
 
-// specTypeName and routeTypeName are the toolutil types the resolver follows.
-const (
-	specTypeName  = "ActionSpec"
-	routeTypeName = "ActionRoute"
-)
-
-// handlerRef is one function an action routes to: either a declared function
-// or a literal written at the route site.
-type handlerRef struct {
-	fn  *types.Func
-	lit *ast.FuncLit
-	pkg *packages.Package
+// tooDeep reports whether a resolution has gone past [maxResolveDepth]. Every
+// recursive resolver asks it on entry, so the bound is written once: most of
+// them answer only through a deeper step, which is refused one level later
+// whichever side of the bound they stand on, and only a resolver that can
+// answer at its own depth, such as the string leaf, can show where the bound
+// is.
+func tooDeep(depth int) bool {
+	return depth > maxResolveDepth
 }
 
-// site is one resolved ActionSpec construction: the action name it declares
-// and the handlers its route runs.
-type site struct {
-	pkgName  string
-	name     string
-	handlers []handlerRef
-	pos      token.Pos
+// The toolutil types the resolver follows.
+const (
+	specTypeName     = "ActionSpec"
+	routeTypeName    = "ActionRoute"
+	optionsTypeName  = "ActionSpecOptions"
+	toolSpecTypeName = "IndividualToolSpec"
+)
+
+// The fields of those types the resolver reads.
+const (
+	nameField           = "Name"
+	routeField          = "Route"
+	handlerField        = "Handler"
+	individualToolField = "IndividualTool"
+)
+
+// Handler is one function an action routes to: a declared function, or a
+// function literal written at the route site.
+type Handler struct {
+	// Func is the declared function, or nil for a literal.
+	Func *types.Func
+	// Lit is the literal, or nil for a declared function.
+	Lit *ast.FuncLit
+	pkg *packages.Package
+	// at is the frame a literal was written in. A route helper that wraps the
+	// handler it was handed in a literal of its own (the award emoji deletes)
+	// calls that handler through a parameter, and the frame is what says which
+	// function the parameter was bound to.
+	at frame
+}
+
+// Site is one resolved ActionSpec construction.
+type Site struct {
+	// Package is the name of the package the construction is written in.
+	Package string
+	// Name is the action name it declares.
+	Name string
+	// Tool is the individual tool name its options declare, or "" when the
+	// options could not be followed to one. It is what joins a site to one
+	// canonical ID where two sites share a name: the project and group badge
+	// actions are declared by one package under one set of names.
+	Tool string
+	// Handlers is every function its route runs.
+	Handlers []Handler
+	// Pos is where the construction is written.
+	Pos token.Pos
 }
 
 // frame is where an expression is being resolved: the package it was written
@@ -54,17 +91,24 @@ type binding struct {
 	frame frame
 }
 
-// resolver resolves ActionSpec construction sites to (action name, handlers).
+// resolver resolves ActionSpec construction sites to (action name, tool name,
+// handlers).
 //
 // It is a small interprocedural constant propagation rather than a pattern
 // match on one spelling, because the specs are not written in one spelling:
 // most domains call a package-local helper that adds shared options and
 // forwards to toolutil, so the action name and the handler arrive at the
 // toolutil constructor as parameters. Following the parameters is what makes
-// the audit hold for a domain written in a shape nobody anticipated, and an
+// a reader hold for a domain written in a shape nobody anticipated, and an
 // action it cannot follow is reported rather than skipped.
 type resolver struct {
-	prog *program
+	prog *Program
+}
+
+// Sites resolves every ActionSpec construction the loaded packages contain,
+// keyed by the action name it declares.
+func (p *Program) Sites() map[string][]Site {
+	return (&resolver{prog: p}).collectSites()
 }
 
 // collectSites resolves every ActionSpec construction the loaded packages
@@ -73,8 +117,8 @@ type resolver struct {
 // Every package is walked, none skipped: the shared loader refuses one that
 // did not type-check, so each of them has the type information the resolution
 // below reads.
-func (r *resolver) collectSites() map[string][]site {
-	sites := make(map[string][]site)
+func (r *resolver) collectSites() map[string][]Site {
+	sites := make(map[string][]Site)
 	for _, pkg := range r.prog.order {
 		for _, file := range pkg.Syntax {
 			r.collectFileSites(pkg, file, sites)
@@ -85,7 +129,7 @@ func (r *resolver) collectSites() map[string][]site {
 
 // collectFileSites resolves the spec expressions in one file: the elements of
 // every []ActionSpec literal and the elements appended to one.
-func (r *resolver) collectFileSites(pkg *packages.Package, file *ast.File, sites map[string][]site) {
+func (r *resolver) collectFileSites(pkg *packages.Package, file *ast.File, sites map[string][]Site) {
 	var enclosing *ast.FuncDecl
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch typed := node.(type) {
@@ -105,7 +149,7 @@ func (r *resolver) collectFileSites(pkg *packages.Package, file *ast.File, sites
 }
 
 // resolveElements resolves each expression that evaluates to one ActionSpec.
-func (r *resolver) resolveElements(pkg *packages.Package, enclosing *ast.FuncDecl, elements []ast.Expr, sites map[string][]site) {
+func (r *resolver) resolveElements(pkg *packages.Package, enclosing *ast.FuncDecl, elements []ast.Expr, sites map[string][]Site) {
 	for _, element := range elements {
 		if !isSpecType(pkg.TypesInfo.TypeOf(element)) {
 			continue
@@ -115,19 +159,20 @@ func (r *resolver) resolveElements(pkg *packages.Package, enclosing *ast.FuncDec
 		if name == "" {
 			continue
 		}
-		sites[name] = append(sites[name], site{
-			pkgName:  pkg.Name,
-			name:     name,
-			handlers: handlers,
-			pos:      element.Pos(),
+		sites[name] = append(sites[name], Site{
+			Package:  pkg.Name,
+			Name:     name,
+			Tool:     strings.TrimSpace(r.resolveSpecTool(element, start, 0)),
+			Handlers: handlers,
+			Pos:      element.Pos(),
 		})
 	}
 }
 
 // resolveSpec resolves one ActionSpec expression to the action name it
 // declares and the handlers its route runs.
-func (r *resolver) resolveSpec(expr ast.Expr, at frame, depth int) (string, []handlerRef) {
-	if depth > maxResolveDepth {
+func (r *resolver) resolveSpec(expr ast.Expr, at frame, depth int) (string, []Handler) {
+	if tooDeep(depth) {
 		return "", nil
 	}
 	switch typed := ast.Unparen(expr).(type) {
@@ -142,9 +187,9 @@ func (r *resolver) resolveSpec(expr ast.Expr, at frame, depth int) (string, []ha
 }
 
 // resolveSpecIdent follows a spec held in a parameter or a local variable.
-func (r *resolver) resolveSpecIdent(ident *ast.Ident, at frame, depth int) (string, []handlerRef) {
+func (r *resolver) resolveSpecIdent(ident *ast.Ident, at frame, depth int) (string, []Handler) {
 	var name string
-	var handlers []handlerRef
+	var handlers []Handler
 	for _, next := range r.follow(ident, at) {
 		nextName, nextHandlers := r.resolveSpec(next.expr, next.frame, depth+1)
 		name, handlers = merge(name, handlers, nextName, nextHandlers)
@@ -155,7 +200,7 @@ func (r *resolver) resolveSpecIdent(ident *ast.Ident, at frame, depth int) (stri
 // merge combines two partial resolutions of the same spec. The first name wins
 // and every handler is kept: a variable assigned in two branches routes to
 // both, and dropping either would leave a mutation unclassified.
-func merge(name string, handlers []handlerRef, nextName string, nextHandlers []handlerRef) (string, []handlerRef) {
+func merge(name string, handlers []Handler, nextName string, nextHandlers []Handler) (string, []Handler) {
 	if name == "" {
 		name = nextName
 	}
@@ -163,9 +208,9 @@ func merge(name string, handlers []handlerRef, nextName string, nextHandlers []h
 }
 
 // resolveSpecLiteral reads the Name and Route fields of an ActionSpec literal.
-func (r *resolver) resolveSpecLiteral(lit *ast.CompositeLit, at frame, depth int) (string, []handlerRef) {
+func (r *resolver) resolveSpecLiteral(lit *ast.CompositeLit, at frame, depth int) (string, []Handler) {
 	var name string
-	var handlers []handlerRef
+	var handlers []Handler
 	for _, element := range lit.Elts {
 		kv, ok := element.(*ast.KeyValueExpr)
 		if !ok {
@@ -176,9 +221,9 @@ func (r *resolver) resolveSpecLiteral(lit *ast.CompositeLit, at frame, depth int
 			continue
 		}
 		switch key.Name {
-		case "Name":
+		case nameField:
 			name = r.resolveString(kv.Value, at, depth+1)
-		case "Route":
+		case routeField:
 			handlers = r.resolveRoute(kv.Value, at, depth+1)
 		}
 	}
@@ -191,7 +236,7 @@ func (r *resolver) resolveSpecLiteral(lit *ast.CompositeLit, at frame, depth int
 // base case: its first two arguments are the answer. Anything else with a body
 // is entered with its parameters bound to the arguments, and its return
 // expressions resolved there.
-func (r *resolver) resolveSpecCall(call *ast.CallExpr, at frame, depth int) (string, []handlerRef) {
+func (r *resolver) resolveSpecCall(call *ast.CallExpr, at frame, depth int) (string, []Handler) {
 	callee := calleeFunc(at.pkg, call)
 	if callee == nil {
 		return "", nil
@@ -200,7 +245,7 @@ func (r *resolver) resolveSpecCall(call *ast.CallExpr, at frame, depth int) (str
 		return r.resolveString(nameArg, at, depth+1), r.resolveRoute(routeArg, at, depth+1)
 	}
 	var name string
-	var handlers []handlerRef
+	var handlers []Handler
 	for _, ret := range r.returnsOf(callee, call, at, specTypeName) {
 		retName, retHandlers := r.resolveSpec(ret.expr, ret.frame, depth+1)
 		name, handlers = merge(name, handlers, retName, retHandlers)
@@ -217,13 +262,13 @@ func (r *resolver) resolveSpecCall(call *ast.CallExpr, at frame, depth int) (str
 }
 
 // resolveRoute resolves an ActionRoute expression to the handlers it runs.
-func (r *resolver) resolveRoute(expr ast.Expr, at frame, depth int) []handlerRef {
-	if depth > maxResolveDepth {
+func (r *resolver) resolveRoute(expr ast.Expr, at frame, depth int) []Handler {
+	if tooDeep(depth) {
 		return nil
 	}
 	switch typed := ast.Unparen(expr).(type) {
 	case *ast.Ident:
-		var found []handlerRef
+		var found []Handler
 		for _, next := range r.follow(typed, at) {
 			found = append(found, r.resolveRoute(next.expr, next.frame, depth+1)...)
 		}
@@ -237,14 +282,14 @@ func (r *resolver) resolveRoute(expr ast.Expr, at frame, depth int) []handlerRef
 }
 
 // resolveRouteLiteral reads the Handler field of an ActionRoute literal.
-func (r *resolver) resolveRouteLiteral(lit *ast.CompositeLit, at frame, depth int) []handlerRef {
-	var found []handlerRef
+func (r *resolver) resolveRouteLiteral(lit *ast.CompositeLit, at frame, depth int) []Handler {
+	var found []Handler
 	for _, element := range lit.Elts {
 		kv, ok := element.(*ast.KeyValueExpr)
 		if !ok {
 			continue
 		}
-		if key, isIdent := kv.Key.(*ast.Ident); isIdent && key.Name == "Handler" {
+		if key, isIdent := kv.Key.(*ast.Ident); isIdent && key.Name == handlerField {
 			found = append(found, r.resolveHandler(kv.Value, at, depth+1)...)
 		}
 	}
@@ -265,13 +310,13 @@ func (r *resolver) resolveRouteLiteral(lit *ast.CompositeLit, at frame, depth in
 // classified the twenty not-found wrappers by what they do with a 404 and never
 // by the get handler behind them, and a wrapper whose builder calls nothing
 // resolved to no handler at all.
-func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []handlerRef {
+func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []Handler {
 	callee := calleeFunc(at.pkg, call)
 	if callee == nil {
 		return nil
 	}
 	if isToolutilFunc(callee) {
-		var found []handlerRef
+		var found []Handler
 		for _, arg := range call.Args {
 			found = append(found, r.resolveHandler(arg, at, depth+1)...)
 		}
@@ -282,7 +327,7 @@ func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []h
 			return found
 		}
 	}
-	var found []handlerRef
+	var found []Handler
 	for _, ret := range r.returnsOf(callee, call, at, routeTypeName) {
 		found = append(found, r.resolveRoute(ret.expr, ret.frame, depth+1)...)
 	}
@@ -298,14 +343,14 @@ func (r *resolver) resolveRouteCall(call *ast.CallExpr, at frame, depth int) []h
 // resolveHandler resolves one argument to the function it names, if it names
 // one. Arguments that are not functions (the GitLab client, an options value)
 // resolve to nothing.
-func (r *resolver) resolveHandler(expr ast.Expr, at frame, depth int) []handlerRef {
-	if depth > maxResolveDepth {
+func (r *resolver) resolveHandler(expr ast.Expr, at frame, depth int) []Handler {
+	if tooDeep(depth) {
 		return nil
 	}
 	unwrapped := ast.Unparen(expr)
 	switch typed := unwrapped.(type) {
 	case *ast.FuncLit:
-		return []handlerRef{{lit: typed, pkg: at.pkg}}
+		return []Handler{{Lit: typed, pkg: at.pkg, at: at}}
 	case *ast.IndexExpr:
 		return r.resolveHandler(typed.X, at, depth+1)
 	case *ast.IndexListExpr:
@@ -317,16 +362,16 @@ func (r *resolver) resolveHandler(expr ast.Expr, at frame, depth int) []handlerR
 	switch typed := unwrapped.(type) {
 	case *ast.Ident:
 		if fn, ok := at.pkg.TypesInfo.Uses[typed].(*types.Func); ok {
-			return []handlerRef{{fn: fn, pkg: at.pkg}}
+			return []Handler{{Func: fn, pkg: at.pkg}}
 		}
-		var found []handlerRef
+		var found []Handler
 		for _, next := range r.follow(typed, at) {
 			found = append(found, r.resolveHandler(next.expr, next.frame, depth+1)...)
 		}
 		return found
 	case *ast.SelectorExpr:
 		if fn, ok := at.pkg.TypesInfo.Uses[typed.Sel].(*types.Func); ok {
-			return []handlerRef{{fn: fn, pkg: at.pkg}}
+			return []Handler{{Func: fn, pkg: at.pkg}}
 		}
 	}
 	return nil
@@ -339,7 +384,7 @@ func (r *resolver) resolveHandler(expr ast.Expr, at frame, depth int) []handlerR
 // so they are followed to the argument the caller passed, and the one
 // pass-through the constructors apply (strings.TrimSpace) is followed through.
 func (r *resolver) resolveString(expr ast.Expr, at frame, depth int) string {
-	if depth > maxResolveDepth {
+	if tooDeep(depth) {
 		return ""
 	}
 	unwrapped := ast.Unparen(expr)

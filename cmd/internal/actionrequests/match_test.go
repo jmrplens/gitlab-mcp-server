@@ -1,0 +1,237 @@
+package actionrequests
+
+import (
+	"go/ast"
+	"go/token"
+	"go/types"
+	"slices"
+	"sort"
+	"testing"
+)
+
+// siteNamed builds a site with the identity Match reads and nothing else.
+func siteNamed(pkg, name, tool string, pos token.Pos) Site {
+	return Site{Package: pkg, Name: name, Tool: tool, Pos: pos}
+}
+
+// sitePositions returns the positions of the sites Match picked, so a case
+// can say which of a set of candidates it wants.
+func sitePositions(sites []Site) []token.Pos {
+	positions := make([]token.Pos, 0, len(sites))
+	for _, site := range sites {
+		positions = append(positions, site.Pos)
+	}
+	return positions
+}
+
+// TestMatch_TheJoinOnTheCanonicalID verifies each rule of the join. The tool
+// name decides first, and a site whose tool name was read and is another
+// action's is never taken; where no tool name could be read the owner decides;
+// and where the owner is none of the packages every site with the name is
+// taken, because a wrong guess must not be the quiet one.
+func TestMatch_TheJoinOnTheCanonicalID(t *testing.T) {
+	sites := map[string][]Site{
+		"badge_get": {
+			siteNamed("badges", "badge_get", "gitlab_get_project_badge", 1),
+			siteNamed("badges", "badge_get", "gitlab_get_group_badge", 2),
+		},
+		"license_get": {
+			siteNamed("adminspecs", "license_get", "", 3),
+			siteNamed("licensetemplates", "license_get", "", 4),
+		},
+		"mixed": {
+			siteNamed("one", "mixed", "gitlab_other_mixed", 5),
+			siteNamed("one", "mixed", "", 6),
+		},
+	}
+
+	cases := []struct {
+		name string
+		act  Action
+		want []token.Pos
+	}{
+		{
+			name: "the tool name picks one of two sites of one package",
+			act:  Action{Name: "badge_get", Owner: "badges", Tool: "gitlab_get_group_badge"},
+			want: []token.Pos{2},
+		},
+		{
+			name: "a tool name is compared trimmed",
+			act:  Action{Name: "badge_get", Owner: "badges", Tool: "  gitlab_get_project_badge "},
+			want: []token.Pos{1},
+		},
+		{
+			name: "no site carries the action's tool name and every one names another",
+			act:  Action{Name: "badge_get", Owner: "badges", Tool: "gitlab_badge_elsewhere"},
+		},
+		{
+			name: "the owner decides among sites with no tool name",
+			act:  Action{Name: "license_get", Owner: "licensetemplates"},
+			want: []token.Pos{4},
+		},
+		{
+			name: "an owner none of them is takes every one",
+			act:  Action{Name: "license_get", Owner: "license"},
+			want: []token.Pos{3, 4},
+		},
+		{
+			name: "a site another action's tool name claims is left out",
+			act:  Action{Name: "mixed", Owner: "elsewhere", Tool: "gitlab_mixed"},
+			want: []token.Pos{6},
+		},
+		{
+			name: "a name no site declares",
+			act:  Action{Name: "never_declared", Owner: "badges"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := sitePositions(Match(sites, testCase.act)); !slices.Equal(got, testCase.want) {
+				t.Errorf("Match() picked sites at %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach verifies the join
+// on source written the way the badge twins are: two lists of one package
+// declaring one name, the tool name reaching the constructor through a helper
+// that amends the options, a field assignment of the whole tool spec, and a
+// field assignment of its name.
+func TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach(t *testing.T) {
+	prog := loadFixture(t, requestSources())
+	sites := prog.Sites()
+
+	cases := []struct {
+		act     Action
+		handler string
+	}{
+		{act: Action{Name: "twin_get", Owner: "requests", Tool: "gitlab_project_twin_get"}, handler: "Direct"},
+		{act: Action{Name: "twin_get", Owner: "requests", Tool: "gitlab_group_twin_get"}, handler: "Pair"},
+		{act: Action{Name: "twin_field", Owner: "requests", Tool: "gitlab_project_twin_field"}, handler: "Raw"},
+		{act: Action{Name: "twin_field", Owner: "requests", Tool: "gitlab_group_twin_field"}, handler: "Table"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.act.Tool, func(t *testing.T) {
+			matched := Match(sites, testCase.act)
+			if len(matched) != 1 {
+				t.Fatalf("Match() joined %d site(s), want one", len(matched))
+			}
+			if len(matched[0].Handlers) != 1 || matched[0].Handlers[0].Func.Name() != testCase.handler {
+				t.Errorf("the site joined routes to %+v, want %s", matched[0].Handlers, testCase.handler)
+			}
+		})
+	}
+}
+
+// rootsReach returns the names of the functions the walk from one action's
+// roots reaches that the program holds a body for, and the service methods
+// they name, sorted.
+func rootsReach(t *testing.T, prog *Program, act Action) (names, methods []string) {
+	t.Helper()
+	matched := Match(prog.Sites(), act)
+	if len(matched) != 1 {
+		t.Fatalf("%s joined %d site(s), want one", act.Name, len(matched))
+	}
+	for fn := range prog.Reachable(prog.Roots(matched)) {
+		body, ok := prog.Function(fn)
+		if !ok {
+			continue
+		}
+		names = append(names, fn.Name())
+		methods = append(methods, body.SDKMethods...)
+	}
+	sort.Strings(names)
+	sort.Strings(methods)
+	return names, methods
+}
+
+// TestRoots_ALiteralCallingABoundParameter_ReachesWhatItsCallerBound verifies
+// the shape of the award emoji deletes: a route helper wraps the delete it was
+// handed in a literal of its own, and the literal calls it through a
+// parameter. The literal is one node bound to a different delete at each
+// call, so it is indexed per call: indexed once, every action routed through
+// it would reach the first one's delete.
+func TestRoots_ALiteralCallingABoundParameter_ReachesWhatItsCallerBound(t *testing.T) {
+	prog := loadFixture(t, requestSources())
+
+	cases := []struct {
+		action      string
+		wantReached string
+		wantMethods []string
+	}{
+		{action: "delete_project", wantReached: "DeleteProject", wantMethods: []string{"Projects.DeleteProject"}},
+		{action: "delete_issue", wantReached: "DeleteIssue", wantMethods: []string{"Issues.DeleteIssue"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.action, func(t *testing.T) {
+			names, methods := rootsReach(t, prog, Action{Name: testCase.action, Owner: "requests"})
+			if !slices.Contains(names, literalName) || !slices.Contains(names, testCase.wantReached) {
+				t.Errorf("%s reaches %v, want the literal and %s", testCase.action, names, testCase.wantReached)
+			}
+			if !slices.Equal(methods, testCase.wantMethods) {
+				t.Errorf("%s reaches service methods %v, want only %v", testCase.action, methods, testCase.wantMethods)
+			}
+		})
+	}
+}
+
+// TestRoots_ALiteralHandler_IsARootOfItsOwn verifies a handler written as a
+// literal is walked from a stand-in holding its own body, so what the literal
+// names directly is reached as well as what its callees do.
+func TestRoots_ALiteralHandler_IsARootOfItsOwn(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	matched := Match(prog.Sites(), Action{Name: "closure", Owner: "shapes"})
+
+	roots := prog.Roots(matched)
+
+	if len(roots) != 1 || roots[0].Name() != literalName {
+		t.Fatalf("Roots() = %v, want the literal's stand-in", roots)
+	}
+	reached := prog.Reachable(roots)
+	for _, want := range []string{"closureAudit", "closureBody", "closureCleanup"} {
+		t.Run(want, func(t *testing.T) {
+			if !reached[lookupFunc(t, prog, "shapes", want)] {
+				t.Errorf("the literal's walk does not reach %s", want)
+			}
+		})
+	}
+}
+
+// TestRoots_ALiteralReachedTwiceInOneWalk_IsIndexedOnce verifies the guard
+// that ends a literal bound back to itself: within one call a literal seen
+// again is the stand-in already made, not a second indexing.
+func TestRoots_ALiteralReachedTwiceInOneWalk_IsIndexedOnce(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	matched := Match(prog.Sites(), Action{Name: "closure", Owner: "shapes"})
+	twice := Site{Handlers: []Handler{matched[0].Handlers[0], matched[0].Handlers[0]}}
+
+	roots := prog.Roots([]Site{twice})
+
+	if len(roots) != 2 || roots[0] != roots[1] {
+		t.Errorf("Roots() = %v, want one stand-in twice", roots)
+	}
+}
+
+// TestBoundHandlers_ANameBoundToNothing_IsPassedOver verifies the literal's
+// parameters are resolved through the frame only where the frame binds them:
+// a variable the literal names that its frame holds no binding for, and a
+// bound one named a second time, add nothing.
+func TestBoundHandlers_ANameBoundToNothing_IsPassedOver(t *testing.T) {
+	info := synthInfo()
+	handlerType := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+	bound, at := synthBound(info, "fn", handlerType, &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}})
+	again := ast.NewIdent("fn")
+	info.Uses[again] = info.Uses[bound]
+	unbound := ast.NewIdent("other")
+	info.Uses[unbound] = types.NewVar(token.NoPos, nil, "other", handlerType)
+	lit := &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ExprStmt{X: bound}, &ast.ExprStmt{X: again}, &ast.ExprStmt{X: unbound},
+	}}}
+
+	found := synthResolver().boundHandlers(Handler{Lit: lit, pkg: at.pkg, at: at})
+
+	if len(found) != 1 || found[0].Lit == nil {
+		t.Errorf("boundHandlers() = %+v, want the one literal fn is bound to", found)
+	}
+}
