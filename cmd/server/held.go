@@ -218,7 +218,7 @@ func heldRequestsMiddleware(held *processSlots) mcp.Middleware {
 				return next(ctx, method, req)
 			}
 			if !held.acquire() {
-				return heldRequestsRefusal(ctx, method, held.limit)
+				return heldRequestsRefusal(ctx, req, method, held.limit)
 			}
 			defer held.release()
 			return next(ctx, method, req)
@@ -236,16 +236,23 @@ func heldRequestsMiddleware(held *processSlots) mcp.Middleware {
 // that says which bound refused.
 const heldRefusalText = "This server is busy. Retry later."
 
-// heldRequestsRefusal refuses a call the middleware counted, carried the way
-// the rate limit carries its own refusal of the same method: a tools/call as a
-// result flagged with isError, so the model reads a retryable diagnostic; a
-// completion as an empty completion; any other method as a JSON-RPC error with
-// the in-band "retry later" code.
-func heldRequestsRefusal(ctx context.Context, method string, limit int64) (mcp.Result, error) {
+// heldRequestsRefusal refuses req, a call the middleware counted, carried the
+// way the rate limit carries its own refusal of the same method: a tools/call
+// as a result flagged with isError, so the model reads a retryable diagnostic,
+// carrying the resultType req's revision requires, which the SDK adds only to
+// what its own dispatcher answers ([toolutil.LabelForRevision]); a completion
+// as an empty completion; any other method as a JSON-RPC error with the
+// in-band "retry later" code.
+//
+// The gate takes the slot of a POST of 2026-07-28 or later itself, or refuses
+// it, before the SDK reads a byte of it, so a call of that revision meets this
+// refusal only where it reaches the middleware with no slot of the gate's to
+// claim; the label is for that call.
+func heldRequestsRefusal(ctx context.Context, req mcp.Request, method string, limit int64) (mcp.Result, error) {
 	logHeldRefusal(ctx, limit)
 	switch tenancy.MeterFor(method) {
 	case tenancy.MeterToolResult:
-		return toolutil.ErrorResultAnnotated(heldRefusalText, toolutil.ContentMutate), nil
+		return toolutil.LabelForRevision(req, toolutil.ErrorResultAnnotated(heldRefusalText, toolutil.ContentMutate)), nil
 	case tenancy.MeterCompletion:
 		return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{}}}, nil
 	default:

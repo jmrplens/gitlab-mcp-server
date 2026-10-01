@@ -138,7 +138,7 @@ readable without opening the tracker:
 | 63 | client-go | [`ApproveOrRejectProjectDeployment` discards the approval GitLab records](#approveorrejectprojectdeployment-discards-the-approval-gitlab-records) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 64 | client-go | [`ShareProjectWithGroup` discards the link GitLab creates](#shareprojectwithgroup-discards-the-link-gitlab-creates) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 65 | client-go | [`GroupRelationStatus` misses the object count, and a relation's status does not decode](#grouprelationstatus-does-not-model-the-object-count-and-a-relations-status-does-not-decode) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
-| 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No, but it breaks a MUST | None taken |
+| 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No; without the workaround it breaks a MUST | Yes, until the bump that carries it |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), open | No | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes, except `merge_request.commits`, `search.commits` and the readers of an embedded commit, resources, prompts and completions included |
@@ -4811,57 +4811,101 @@ neither, and the ADR now says so.
 - **Merged**: **yes, unreleased.** The merge landed thirteen minutes before
   v1.8.0 was published, but v1.8.0 is tagged on the commit v1.8.0-pre.2 was,
   3f3b699, four commits before it, so the v1.8.0 pin does not carry it. No later
-  tag exists as of 2026-09-27.
-- **Blocking**: no client is known to refuse it, but it breaks a MUST. The
-  2026-07-28 schema says a server implementing that revision MUST include
-  `resultType` (`Result.resultType` in `schema.ts`), and its rule that a client
-  reads an absent field as `complete` covers only a result from a server
-  implementing an earlier revision. Until the bump, every `tools/call` this
-  server's rate limiter refuses at 2026-07-28 is nonconformant, and a client
-  that holds a 2026-07-28 server to the schema is entitled to reject it. It is
-  "no" in the summary on practical grounds alone: the Go SDK client reads an
-  empty `resultType` as complete (`CallToolResult.NeedsInput` in
-  `mcp/protocol.go`), which is how `channels_integration_test.go` receives the
-  refusal as the tool error it is.
-- **Workaround**: none taken. The limiter could refuse a `tools/call` the way it
-  refuses every other metered method, with the `-42900` JSON-RPC error
-  `rateLimitedError` writes, which is not a result and needs no `resultType`.
-  Row RTC-001 of the tenant policy register declares the ToolError channel for
-  `tools/call` instead, so that a model reads the refusal as a tool result it can
-  back off from (`rateLimitedResult`'s comment), and moving the refusal to
-  another channel to supply a field the SDK labels once the bump lands would
-  trade that away. What is not possible is labelling the result the middleware
-  builds: `CallToolResult` keeps `resultType` in an unexported field behind an
-  unexported setter (`mcp/protocol.go`), and the SDK's own labelling of a
-  `tools/call` result (`handleMultiRoundTripResult`, called from
-  `Server.callTool`) runs only in the dispatcher the refusal is made to avoid.
-  The bump to the first tag carrying e40f35d retires the entry.
+  tag exists as of 2026-10-01.
+- **Blocking**: no client is known to refuse it, and with the workaround below
+  none meets it; without it this server breaks a MUST. The 2026-07-28 schema
+  says a server implementing that revision MUST include `resultType`
+  (`Result.resultType` in `schema.ts`), and its rule that a client reads an
+  absent field as `complete` covers only a result from a server implementing an
+  earlier revision. Until the workaround, every `tools/call` this server's rate
+  limiter refused at 2026-07-28 was nonconformant, and a client that holds a
+  2026-07-28 server to the schema was entitled to reject it. It was "no" in the
+  summary on practical grounds alone: the Go SDK client reads an empty
+  `resultType` as complete (`CallToolResult.NeedsInput` in `mcp/protocol.go`),
+  which is how `channels_integration_test.go` receives the refusal as the tool
+  error it is.
+- **Workaround**: yes, until the bump to the first tag carrying e40f35d.
+  `toolutil.LabelForRevision` (`internal/toolutil/result_type.go`) labels a tool
+  result a receiving middleware returns. When the request names 2026-07-28 or
+  later in its `_meta`, compared as a string, the result is written with every
+  field it has and the `resultType` the SDK's dispatcher would have given it,
+  `"input_required"` when it carries `InputRequests` and `"complete"` otherwise,
+  and read back through `CallToolResult.UnmarshalJSON`, which is public and
+  copies the wire `resultType` into the unexported field (`mcp/protocol.go`);
+  the fields decoding rebuilds rather than keeps (the content, the structured
+  content, the input requests and the `_meta`) are then put back as they were.
+  An earlier revision gets the result as it is. The `_meta` test is the one
+  v1.8.0 applies to the results it labels once the middleware chain returns
+  (`validateRequestMeta` in `mcp/shared.go`, then `setCompleteResultType`), and
+  the one e40f35d applies to every result; v1.8.0's tool dispatcher reads
+  instead the revision the session recorded when it began
+  (`clientSupportsMultiRoundTrip` in `mcp/mrtr.go`), and the two differ only
+  where that revision and a request's `_meta` disagree: a client negotiated down
+  from 2026-07-28 gets the dispatcher's label and not this one, which its
+  revision does not require, and a client that negotiated an earlier revision
+  and then names 2026-07-28 in a request's `_meta`, which v1.8.0 accepts over
+  stdio, gets this label and not the dispatcher's, which is what that revision
+  requires and what e40f35d sends. The params are read by their concrete type, because a typed
+  nil behind the `Params` interface panics in `GetMeta`. It is applied to the
+  two tool results a receiving middleware here makes: the rate limiter's
+  refusal, where it leaves the middleware (`attachRateLimitFunc` in
+  `internal/toolutil/rate_limit.go`, the ToolError channel of row RTC-001), and
+  the held-call ceiling's (`heldRequestsRefusal` in `cmd/server/held.go`, row
+  HLD-011), whose 2026-07-28 calls the gate counts, or refuses, before the SDK
+  reads them, so its label is defensive. No middleware here makes a
+  `prompts/get` or `resources/read` result. Each refusal keeps its channel, its
+  text and its error flag: row RTC-001 declares the ToolError channel for
+  `tools/call` so that a model reads the refusal as a tool result it can back
+  off from, which moving it to the `-42900` JSON-RPC error the limiter writes
+  for the other metered methods would have traded away. This entry used to say
+  the field could not be set from outside the SDK, because the setter is
+  unexported; the public decoder sets it, which is how the sibling project
+  libgen-mcp labels its own refusals
+  ([jmrplens/libgen-mcp@af1cdef](https://github.com/jmrplens/libgen-mcp/commit/af1cdef3cf2b6436087d63f706ab7aac68e143df)).
+  The bump to the first tag carrying e40f35d retires the workaround and the
+  entry: `TestSDK_MiddlewareToolResult_GoesOutUnlabeled` fails on it and says
+  what to delete.
 
 **What**: 2026-07-28 puts `resultType` on every result, and a server
 implementing it MUST send it. go-sdk v1.8.0 labels a
 `tools/call`, `prompts/get` or `resources/read` result only inside its own
 dispatcher, because each of those can also be `input_required`; the result
-types that can only be complete embed a labelled field and are labelled after
+types that can only be complete embed a labeled field and are labeled after
 the middleware chain returns (`setCompleteResultType`), and `CallToolResult` is
 not one of them. The rate limiter's refusal of a `tools/call`
 (`rateLimitedResult` in `internal/toolutil/rate_limit.go`) is a tool-error
 result a middleware returns before that dispatcher runs, so at 2026-07-28 it
-reaches the client with no `resultType`, while a call the same server serves
-carries `"complete"`. The tenant policy specification records it as F-20, on
-row RTC-001.
+reached the client with no `resultType`, while a call the same server serves
+carries `"complete"`, until the middleware labeled it. The tenant policy
+specification recorded it as F-20, on row RTC-001, which no longer carries it:
+the finding is answered, and
+[issue 961](https://github.com/jmrplens/gitlab-mcp-server/issues/961) stays
+open for F-21, F-22 and F-24.
 
 **How we found it**: writing the tenant policy specification of issue 565, which
 read every refusal channel against go-sdk v1.8.0. The upstream issue already
 existed.
 
-**Pinned by**: `TestRateLimitedToolCall_ModernRevision_CarriesNoResultTypeWhereTheServedOneDoes`
-in `test/e2e/http`, which asserts the absence on the real binary beside a served
-call that carries `"complete"`. It was run on 2026-09-27 against a go-sdk that
-carries e40f35d (the head of
-[modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300),
-which is based on a `main` that contains it) and failed there with the message
-that names this entry and F-20, so the bump that retires the entry cannot land
-without updating both.
+**Pinned by**: `TestSDK_MiddlewareToolResult_GoesOutUnlabeled` in
+`internal/toolutil`, which drives a bare SDK server over the in-memory transport
+at 2026-07-28 and asserts that a result the tool dispatcher makes carries
+`"complete"` while one a receiving middleware makes carries none. It is a unit
+test rather than a case in `test/e2e/http` because what it pins is the SDK
+alone, on a server of the SDK's own, and the real binary no longer shows the
+defect. It was run on 2026-10-01 against go-sdk at e40f35d
+(`v1.8.1-0.20260914075210-e40f35d137b7`) and failed there with the message that
+names this entry and what to delete, while the tests of the workaround passed.
+`TestLabelForRevision_OverTheSDK_ReachesTheWireAsTheServedCallDoes` beside it
+drives the workaround through the same server, and
+`TestRateLimitedToolCall_EachRevision_CarriesTheResultTypeTheServedCallDoes` in
+`test/e2e/http` holds the answer on the real binary: at 2026-07-28 the
+limiter's refusal carries `"complete"`, as the call served before it does, and
+at 2025-11-25 neither carries the field. That test failed on the code before
+the workaround, with the refusal's `resultType` absent at 2026-07-28, and passed
+on a binary built against e40f35d, where the SDK labels the refusal with the
+same value; it replaces the pin of the absence that test module held, which
+failed on 2026-09-27 against the head of
+[modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300).
 
 ### A Go SDK client never sees a `subscriptions/listen` refusal
 
