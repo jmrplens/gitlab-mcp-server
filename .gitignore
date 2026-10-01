@@ -167,6 +167,9 @@ test/e2e/.bitbucket-admin-pass
 /npm/packages/
 /npm/**/node_modules/
 /npm/**/*.tgz
+# The launcher's licence texts are copied in by scripts/build-npm.mjs at
+# assembly time, so the repository holds each text once.
+/npm/gitlab-mcp-server/LICENSE
 
 # Scratch files from local investigation: throwaway drive scripts, captured
 # JSON-RPC exchanges, stub servers. They belong to one debugging session and

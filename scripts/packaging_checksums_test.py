@@ -82,20 +82,27 @@ class BuilderChecksumTestCase(unittest.TestCase):
 class BuildNpmTest(BuilderChecksumTestCase):
     """Verifies scripts/build-npm.mjs will not package an unverified binary.
 
-    build-npm.mjs also rewrites the committed launcher package.json, so the
-    test pins the repository's own VERSION (making that write a no-op) and
-    restores the file regardless.
+    build-npm.mjs also rewrites the committed launcher package.json and
+    copies the licence texts beside it, so the test pins the repository's own
+    VERSION (making that write a no-op), restores the file regardless, and
+    removes any licence copy the run left that was not there before.
     """
 
     def setUp(self):
         super().setUp()
-        launcher = os.path.join(ROOT, "npm", "gitlab-mcp-server", "package.json")
+        launcher_dir = os.path.join(ROOT, "npm", "gitlab-mcp-server")
+        launcher = os.path.join(launcher_dir, "package.json")
         with open(launcher, "rb") as fh:
             original = fh.read()
+        copies = [os.path.join(launcher_dir, name) for name in ("LICENSE",)]
+        absent = [path for path in copies if not os.path.exists(path)]
 
         def restore():
             with open(launcher, "wb") as fh:
                 fh.write(original)
+            for path in absent:
+                if os.path.exists(path):
+                    os.remove(path)
 
         self.addCleanup(restore)
 

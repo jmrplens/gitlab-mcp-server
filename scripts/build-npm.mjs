@@ -29,6 +29,12 @@
 // optionalDependency pins) and builds nothing. It needs no binaries, so the
 // release version-stamp step can keep the checked-in file honest between
 // releases without staging a whole distribution.
+//
+// Every package, the launcher included, carries the repository's LICENSE: the
+// packages are copies of this project, and MIT's one condition is that its
+// notice travels with each copy. The launcher's copy is written into the
+// checked-in npm/gitlab-mcp-server at build time and is git-ignored there, so
+// the text has one source.
 
 import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -36,6 +42,21 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// The licence texts every package carries, by the name they take in it and
+// where they are read from.
+const LICENSE_FILES = [{ name: "LICENSE", src: join(repoRoot, "LICENSE") }];
+
+// copyLicenses writes each licence text into dir. A missing source is an
+// error rather than a package without it.
+function copyLicenses(dir) {
+  for (const file of LICENSE_FILES) {
+    if (!existsSync(file.src)) throw new Error(`licence file ${file.name} not found at ${file.src}`);
+    copyFileSync(file.src, join(dir, file.name));
+    chmodSync(join(dir, file.name), 0o644);
+  }
+  return LICENSE_FILES.map((file) => file.name);
+}
 
 // PLATFORMS is the whole distribution matrix. `key` is the npm suffix and the
 // runtime lookup the launcher performs; `os`/`cpu` gate the install; `asset` is
@@ -127,6 +148,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
   // so a binary packed without the executable bit installs un-runnable on the
   // consumer's machine.
   chmodSync(dst, 0o755);
+  const licenses = copyLicenses(dir);
 
   const pkg = {
     name: `@jmrp.io/gitlab-mcp-server-${plat.key}`,
@@ -140,7 +162,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
     os: [plat.os],
     cpu: [plat.cpu],
     ...(plat.libc ? { libc: [plat.libc] } : {}),
-    files: [binaryName],
+    files: [binaryName, ...licenses],
     preferUnplugged: true,
   };
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
@@ -195,6 +217,7 @@ function main() {
     writePlatformPackage(p, args.version, args.binaries, args.out, checksums),
   );
   const mainPackage = syncMainPackage(args.version, args.out);
+  copyLicenses(mainPackage.dir);
 
   // Record what was verified so validate-npm.mjs can confirm the packed
   // tarballs still carry those exact bytes. Written beside the package

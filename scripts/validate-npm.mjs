@@ -7,7 +7,8 @@
 //   1. Structural, for all seven packages. What actually ships in each tarball:
 //      the exact file set, the executable bit on the binary, the binary's magic
 //      number for the platform it claims, a size floor, and the package.json
-//      os/cpu/name/version. This runs anywhere; it does not execute anything.
+//      os/cpu/name/version. Every tarball carries the repository's LICENSE,
+//      byte for byte. This runs anywhere; it does not execute anything.
 //   1b. Provenance: every packed binary is compared against the digest
 //      build-npm.mjs recorded when it verified that binary against the
 //      release's signed checksums.txt. Without this, the checks below are
@@ -21,14 +22,26 @@
 //      MCP initialize handshake over stdio and asserts stdout carries pure
 //      JSON-RPC — the property a stray print would silently break.
 //
-// Usage: node scripts/validate-npm.mjs --packages <dir> --main <dir> --version <x.y.z>
+// Usage: node scripts/validate-npm.mjs --packages <dir> --main <dir> --version <x.y.z> [--no-install]
+//
+// --no-install runs tier 1 alone: nothing is installed or executed, which is
+// what a test of the structural checks over stand-in binaries needs. The
+// release never passes it.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// The licence texts every tarball carries, by name, and the repository file
+// each must equal byte for byte, so a package can never carry a licence the
+// source does not.
+const LICENSE_FILES = [{ name: "LICENSE", src: join(repoRoot, "LICENSE") }];
 
 // Magic numbers by target OS: ELF for linux, Mach-O 64-bit LE for darwin, PE/MZ
 // for windows. A binary whose first bytes do not match is one built for the
@@ -55,6 +68,7 @@ function parseArgs(argv) {
     if (argv[i] === "--packages") out.packages = argv[++i];
     else if (argv[i] === "--main") out.main = argv[++i];
     else if (argv[i] === "--version") out.version = argv[++i];
+    else if (argv[i] === "--no-install") out.noInstall = true;
     else throw new Error(`unknown argument: ${argv[i]}`);
   }
   for (const k of ["packages", "main", "version"]) {
@@ -94,6 +108,16 @@ function entryBytes(tgz, entryName) {
   return execFileSync("tar", ["-xzOf", tgz, entryName], { maxBuffer: 1 << 30 });
 }
 
+// checkLicenses holds each licence text a tarball ships to the repository's
+// own file. The file set check above already requires each to be present.
+function checkLicenses(label, tgz, shipped) {
+  for (const file of LICENSE_FILES) {
+    if (!shipped.includes(file.name)) continue;
+    const packed = entryBytes(tgz, `package/${file.name}`);
+    check(packed.equals(readFileSync(file.src)), `${label}: ${file.name} in the tarball is not the repository's ${file.name}`);
+  }
+}
+
 // readVerifiedBinaries loads the digests build-npm.mjs recorded after checking
 // each binary against the release's signed checksums.txt. Absent means the
 // packages were assembled by something that skipped that check.
@@ -118,11 +142,12 @@ function validatePlatform(plat, packagesDir, version, workDir, verified) {
   const binaryName = plat.exe ? "gitlab-mcp-server.exe" : "gitlab-mcp-server";
   const { tgz, entries } = packAndList(dir, workDir);
   const shipped = entries.map((e) => e.name.replace(/^package\//, "")).filter((n) => n && !n.endsWith("/"));
-  const want = new Set([binaryName, "package.json", "README.md"]);
+  const want = new Set([binaryName, "package.json", "README.md", ...LICENSE_FILES.map((f) => f.name)]);
   check(
     shipped.length === want.size && shipped.every((n) => want.has(n)),
     `${plat.key}: tarball ships ${JSON.stringify(shipped)}, want ${JSON.stringify([...want])}`,
   );
+  checkLicenses(plat.key, tgz, shipped);
 
   const binEntry = entries.find((e) => e.name.endsWith("/" + binaryName));
   if (check(binEntry, `${plat.key}: binary ${binaryName} not in tarball`)) {
@@ -153,13 +178,14 @@ function validateMain(mainDir, version, workDir) {
     const dep = `@jmrp.io/gitlab-mcp-server-${plat.key}`;
     check(pkg.optionalDependencies?.[dep] === version, `main: optionalDependency ${dep} pinned to ${pkg.optionalDependencies?.[dep]}, want ${version}`);
   }
-  const { entries } = packAndList(mainDir, workDir);
+  const { tgz, entries } = packAndList(mainDir, workDir);
   const shipped = entries.map((e) => e.name.replace(/^package\//, "")).filter((n) => n && !n.endsWith("/"));
-  const want = new Set(["cli.js", "package.json", "README.md"]);
+  const want = new Set(["cli.js", "package.json", "README.md", ...LICENSE_FILES.map((f) => f.name)]);
   check(
     shipped.length === want.size && shipped.every((n) => want.has(n)),
     `main: tarball ships ${JSON.stringify(shipped)}, want ${JSON.stringify([...want])}`,
   );
+  checkLicenses("main", tgz, shipped);
 }
 
 // runtimeCheck installs the launcher plus the host-native platform package from
@@ -254,8 +280,9 @@ async function main() {
   try {
     for (const plat of PLATFORMS) validatePlatform(plat, args.packages, args.version, workDir, verified);
     validateMain(args.main, args.version, workDir);
-    process.stdout.write(`  structural: 7 packages checked (files, exec bit, magic, sha256 vs checksums.txt, os/cpu, pins)${failures.length ? "" : " ✓"}\n`);
-    await runtimeCheck(args.packages, args.main, args.version, workDir);
+    process.stdout.write(`  structural: 7 packages checked (files, licence, exec bit, magic, sha256 vs checksums.txt, os/cpu, pins)${failures.length ? "" : " ✓"}\n`);
+    if (args.noInstall) process.stdout.write("  runtime: skipped (--no-install)\n");
+    else await runtimeCheck(args.packages, args.main, args.version, workDir);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
