@@ -38,11 +38,13 @@ func TestDecodeGrant_ReadsEveryNamespaceKind(t *testing.T) {
 // TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone verifies two
 // scopes naming one namespace, or one access level with no namespace, are
 // read as one scope holding the permissions of both, each once and in the
-// order they first appeared.
+// order they first appeared, while the same access on another project stays a
+// scope of its own.
 func TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone(t *testing.T) {
 	body := `{"granular_scopes":[
 		{"access":"selected_memberships","permissions":["read_issue","update_issue"],"project_id":7},
 		{"access":"selected_memberships","permissions":["update_issue","create_note"],"project_id":7},
+		{"access":"selected_memberships","permissions":["read_issue"],"project_id":8},
 		{"access":"user","permissions":["read_user"]},
 		{"access":"instance","permissions":["read_metadata"]},
 		{"access":"user","permissions":["read_personal_access_token"]}
@@ -53,6 +55,7 @@ func TestDecodeGrant_UnionsARepeatedNamespaceAndScopesWithNone(t *testing.T) {
 	}
 	want := []Scope{
 		{Access: AccessSelectedMemberships, Namespace: NamespaceProject, NamespaceID: 7, Permissions: []string{"read_issue", "update_issue", "create_note"}},
+		{Access: AccessSelectedMemberships, Namespace: NamespaceProject, NamespaceID: 8, Permissions: []string{"read_issue"}},
 		{Access: AccessUser, Permissions: []string{"read_user", "read_personal_access_token"}},
 		{Access: AccessInstance, Permissions: []string{"read_metadata"}},
 	}

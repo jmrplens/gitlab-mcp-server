@@ -108,13 +108,17 @@ func TestAuthority_WithheldText_ACallThatPassesHasNoWords(t *testing.T) {
 }
 
 // TestAuthority_WithheldText_ARowWithNoDenialStillSaysWhy verifies a withheld
-// decision for an action whose row carries no denial is still told why, in
-// the general words, rather than in none.
+// decision for an action the table holds no row for, or whose row carries no
+// denial, is still told why, in the general words, rather than in none.
 func TestAuthority_WithheldText_ARowWithNoDenialStillSaysWhy(t *testing.T) {
 	authority := Unevaluated(testTable(), FallbackNone, "")
-	got := authority.WithheldText("issue.list", Decision{Cause: CauseTypeUndeclared})
-	if !strings.Contains(got, "GitLab 19.4.1 declares no fine-grained permission this action can be granted.") {
-		t.Errorf("WithheldText = %s", got)
+	for _, id := range []string{"issue.list", "merge_request.approve"} {
+		t.Run(id, func(t *testing.T) {
+			got := authority.WithheldText(id, Decision{Cause: CauseTypeUndeclared})
+			if !strings.Contains(got, "GitLab 19.4.1 declares no fine-grained permission this action can be granted.") {
+				t.Errorf("WithheldText = %s", got)
+			}
+		})
 	}
 }
 

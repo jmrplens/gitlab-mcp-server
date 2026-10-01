@@ -307,29 +307,19 @@ func (t *Table) DisplayVersion() string {
 // what a recorded table is chosen by, or "" for anything that does not start
 // with two numbers.
 func Bucket(version string) string {
-	major, rest, ok := strings.Cut(version, ".")
-	if !ok || !digits(major) {
-		return ""
-	}
-	minor := rest
-	if end := strings.IndexFunc(rest, func(r rune) bool { return r < '0' || r > '9' }); end >= 0 {
-		minor = rest[:end]
-	}
-	if !digits(minor) {
+	major, rest, _ := strings.Cut(version, ".")
+	minor := leadingDigits(rest)
+	if major == "" || leadingDigits(major) != major || minor == "" {
 		return ""
 	}
 	return major + "." + minor
 }
 
-// digits reports whether s is a non-empty run of ASCII digits.
-func digits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+// leadingDigits returns the run of ASCII digits s starts with, "" when it
+// starts with anything else.
+func leadingDigits(s string) string {
+	return s[:len(s)-len(strings.TrimLeftFunc(s, isDigit))]
 }
+
+// isDigit reports whether r is an ASCII digit.
+func isDigit(r rune) bool { return '0' <= r && r <= '9' }

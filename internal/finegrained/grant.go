@@ -102,7 +102,9 @@ func DecodeGrant(body []byte, maxScopes int) (Grant, FallbackReason) {
 	if token.Granular != nil && !*token.Granular {
 		return Grant{}, FallbackGrantShape
 	}
-	if token.GranularScopes == nil || *token.GranularScopes == nil {
+	// encoding/json decodes an absent key and a null alike into a nil pointer,
+	// so this one test reads both as unreadable.
+	if token.GranularScopes == nil {
 		return Grant{}, FallbackGrantUnreadable
 	}
 	raw := *token.GranularScopes
