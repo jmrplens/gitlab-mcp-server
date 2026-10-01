@@ -22,6 +22,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
@@ -109,6 +110,11 @@ type Client struct {
 	// unauthorizedOnce makes a 401 naming the credential reach the hook once:
 	// the verdict is final, so a second one would only repeat it.
 	unauthorizedOnce sync.Once
+
+	// authority is what this client's credential may do as a fine-grained
+	// personal access token, nil for any other credential. See
+	// [Client.Authority].
+	authority atomic.Pointer[finegrained.Authority]
 }
 
 // SetOnUnauthorized registers fn to run when GitLab answers a call made with

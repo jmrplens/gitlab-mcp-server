@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // TestTable_IsTheSameTableOnEveryCall verifies every reader shares the one
@@ -37,6 +39,27 @@ func TestRequirement_AnswersByCanonicalID(t *testing.T) {
 	}
 	if got := Requirement("no.such_action"); got != nil {
 		t.Errorf("Requirement(no.such_action) = %+v, want nil", got)
+	}
+}
+
+// TestBuild_OnlyAFineGrainedTokenGetsAnAuthority verifies a classic credential
+// is decided by nothing here, and that a fine-grained one is given phase A over
+// the generated table: what no fine-grained token reaches is withheld, the
+// rest is left to GitLab, and nothing is said about a grant it never read.
+func TestBuild_OnlyAFineGrainedTokenGetsAnAuthority(t *testing.T) {
+	if got := Build(false); got != nil {
+		t.Errorf("Build(false) = %+v, want nil for a classic credential", got)
+	}
+	authority := Build(true)
+	if authority == nil {
+		t.Fatal("Build(true) = nil, want phase A for a fine-grained token")
+	}
+	if authority.Table() != Table() || authority.Phase() != finegrained.PhaseUnknown ||
+		authority.Fallback() != finegrained.FallbackNone || authority.Reported() != "" {
+		t.Errorf("Build(true) = %+v, want phase A over the generated table with no fallback", authority)
+	}
+	if Build(true) == authority {
+		t.Error("Build(true) returned the same authority twice; each credential gets its own")
 	}
 }
 
