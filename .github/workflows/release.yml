@@ -538,7 +538,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.DOCKERHUB_IMAGE }}
-          short-description: "MCP server exposing 1,000+ GitLab operations as AI-accessible tools. By jmrp.io"
+          short-description: "MCP server for GitLab: ~868 tools on Free/CE, up to ~1094 on Ultimate. By jmrp.io"
           readme-filepath: ./.github/dockerhub-description.md
 
   # Signing and attestation, in a job of their own, for two reasons that both

@@ -116,7 +116,7 @@ const dateModified = (() => {
 // they never drift from the rest of the site. These feed AI "what can it do?" and
 // "what do I need?" queries directly from structured data.
 const featureList = [
-	`Exposes over 1,000 GitLab REST v4 and GraphQL operations as MCP tools (${stats.tools.free} on Community Edition, up to ${stats.tools.gitlab_com} on GitLab.com)`,
+	`Exposes GitLab REST v4 and GraphQL operations as MCP tools: ${stats.tools.free} on Free/CE, up to ${stats.tools.gitlab_com} on GitLab.com Ultimate`,
 	`Three tool surfaces: a 2-tool dynamic low-token mode, ${stats.meta.base} domain meta-tools, or one tool per operation`,
 	`${stats.resources} MCP resources and ${stats.prompts} prompt templates`,
 	"stdio and multi-user HTTP transport with per-token isolation",
@@ -304,8 +304,7 @@ const jsonLd = JSON.stringify({
 					"@id": "http://www.wikidata.org/entity/Q133436854",
 				},
 			],
-			description:
-				"Model Context Protocol server that exposes more than 1,000 GitLab operations as AI-accessible tools.",
+			description: `Model Context Protocol server that exposes GitLab operations as AI-accessible tools: ${stats.tools.free} on Free/CE, up to ${stats.tools.gitlab_com} on GitLab.com Ultimate.`,
 			offers: {
 				"@type": "Offer",
 				price: "0",
