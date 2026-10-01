@@ -71,7 +71,8 @@ The [latest release](https://github.com/jmrplens/gitlab-mcp-server/releases/late
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                   |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                              |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                              |
-| Integrity             | `checksums.txt`, `checksums.txt.sigstore.json`                                                                                                                                                     |
+| Integrity             | `checksums.txt` (the binaries, their SBOMs and the notices), `checksums.txt.sigstore.json`, and an SPDX SBOM per binary, `<asset>.sbom.json`                                                       |
+| Licenses              | `THIRD_PARTY_NOTICES`, from the first release after 3.1.0                                                                                                                                          |
 | Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` or `-linux.mcpb` (one per operating system), and `gitlab-mcp-server.mcpb` for all three; see [Claude Desktop](/gitlab-mcp-server/claude-desktop/) |
 
 `gitlab-mcp-server-darwin-all` is a universal binary (arm64 and amd64 in one file), produced for the macOS Claude Desktop extension because its manifest can only pick a file per operating system, not per architecture. On macOS you can use it or the single-architecture asset; all three are listed in `checksums.txt`.
@@ -101,7 +102,7 @@ On Windows, rename the file to `gitlab-mcp-server.exe` and place it in a folder 
 
 ## Verify what you downloaded
 
-The install scripts already compare the download with `checksums.txt`, and check the signature on it when `cosign` or `gh` is installed. Done by hand, that check plus the signature on the checksums file takes two commands. `checksums.txt` lists the SHA-256 of the seven binaries, and `checksums.txt.sigstore.json` is a keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) signature of that file, made by the release workflow under GitHub's OIDC identity, so there is no key to distribute.
+The install scripts already compare the download with `checksums.txt`, and check the signature on it when `cosign` or `gh` is installed. Done by hand, that check plus the signature on the checksums file takes two commands. `checksums.txt` lists the SHA-256 of the seven binaries, of their SBOMs and, from the first release after 3.1.0, of `THIRD_PARTY_NOTICES`, and `checksums.txt.sigstore.json` is a keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) signature of that file, made by the release workflow under GitHub's OIDC identity, so there is no key to distribute.
 
 1. Download `checksums.txt` and `checksums.txt.sigstore.json` from the same release as the binary.
 2. Verify the signature. The identity is the release workflow at the tag you downloaded:

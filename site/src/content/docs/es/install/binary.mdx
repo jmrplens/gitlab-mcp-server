@@ -71,7 +71,8 @@ La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/late
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                         |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                    |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                    |
-| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                                                                                                                                           |
+| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, y un SBOM SPDX por binario, `<archivo>.sbom.json`                                                                  |
+| Licencias             | `THIRD_PARTY_NOTICES`, a partir de la primera release posterior a 3.1.0                                                                                                                                  |
 | Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo), y `gitlab-mcp-server.mcpb` para los tres; consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 `gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop para macOS porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
@@ -101,7 +102,7 @@ En Windows, renombra el archivo a `gitlab-mcp-server.exe` y colócalo en una car
 
 ## Verifica lo que has descargado
 
-Los scripts de instalación ya comparan la descarga con `checksums.txt`, y comprueban su firma cuando `cosign` o `gh` están instalados. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
+Los scripts de instalación ya comparan la descarga con `checksums.txt`, y comprueban su firma cuando `cosign` o `gh` están instalados. Hecho a mano, esa comprobación más la firma del archivo de checksums son dos comandos. `checksums.txt` lista el SHA-256 de los siete binarios, de sus SBOM y, a partir de la primera release posterior a 3.1.0, de `THIRD_PARTY_NOTICES`, y `checksums.txt.sigstore.json` es una firma keyless de [Cosign](https://docs.sigstore.dev/cosign/installation/) sobre ese archivo, hecha por el workflow de release con la identidad OIDC de GitHub, así que no hay ninguna clave que distribuir.
 
 1. Descarga `checksums.txt` y `checksums.txt.sigstore.json` de la misma release que el binario.
 2. Verifica la firma. La identidad es el workflow de release en la etiqueta que has descargado:

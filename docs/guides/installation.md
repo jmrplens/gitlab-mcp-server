@@ -44,21 +44,23 @@ Release binaries are built by GoReleaser with `CGO_ENABLED=0`, `-trimpath` and `
 
 ### Assets
 
-| Asset                                 | Platform                                                                                           |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `gitlab-mcp-server-linux-amd64`       | Linux x86_64                                                                                       |
-| `gitlab-mcp-server-linux-arm64`       | Linux arm64                                                                                        |
-| `gitlab-mcp-server-darwin-amd64`      | macOS Intel                                                                                        |
-| `gitlab-mcp-server-darwin-arm64`      | macOS Apple Silicon                                                                                |
-| `gitlab-mcp-server-darwin-all`        | macOS universal (arm64 + amd64 in one file)                                                        |
-| `gitlab-mcp-server-windows-amd64.exe` | Windows x64                                                                                        |
-| `gitlab-mcp-server-windows-arm64.exe` | Windows arm64                                                                                      |
-| `checksums.txt`                       | SHA-256 of each of the seven binaries                                                              |
-| `checksums.txt.sigstore.json`         | Keyless Cosign signature of `checksums.txt`                                                        |
-| `gitlab-mcp-server-darwin.mcpb`       | Claude Desktop extension for macOS, see [below](#claude-desktop-mcpb)                              |
-| `gitlab-mcp-server-windows.mcpb`      | Claude Desktop extension for Windows, see [below](#claude-desktop-mcpb)                            |
-| `gitlab-mcp-server-linux.mcpb`        | Claude Desktop extension for Linux, see [below](#claude-desktop-mcpb)                              |
-| `gitlab-mcp-server.mcpb`              | Claude Desktop extension for all three, kept for existing links, see [below](#claude-desktop-mcpb) |
+| Asset                                 | Platform                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `gitlab-mcp-server-linux-amd64`       | Linux x86_64                                                                                           |
+| `gitlab-mcp-server-linux-arm64`       | Linux arm64                                                                                            |
+| `gitlab-mcp-server-darwin-amd64`      | macOS Intel                                                                                            |
+| `gitlab-mcp-server-darwin-arm64`      | macOS Apple Silicon                                                                                    |
+| `gitlab-mcp-server-darwin-all`        | macOS universal (arm64 + amd64 in one file)                                                            |
+| `gitlab-mcp-server-windows-amd64.exe` | Windows x64                                                                                            |
+| `gitlab-mcp-server-windows-arm64.exe` | Windows arm64                                                                                          |
+| `checksums.txt`                       | SHA-256 of each of the seven binaries, of their SBOMs and of `THIRD_PARTY_NOTICES` once it ships       |
+| `checksums.txt.sigstore.json`         | Keyless Cosign signature of `checksums.txt`                                                            |
+| `<asset>.sbom.json`                   | SPDX SBOM of each binary                                                                               |
+| `THIRD_PARTY_NOTICES`                 | License, notice and patent texts of every module the binaries link, from the first release after 3.1.0 |
+| `gitlab-mcp-server-darwin.mcpb`       | Claude Desktop extension for macOS, see [below](#claude-desktop-mcpb)                                  |
+| `gitlab-mcp-server-windows.mcpb`      | Claude Desktop extension for Windows, see [below](#claude-desktop-mcpb)                                |
+| `gitlab-mcp-server-linux.mcpb`        | Claude Desktop extension for Linux, see [below](#claude-desktop-mcpb)                                  |
+| `gitlab-mcp-server.mcpb`              | Claude Desktop extension for all three, kept for existing links, see [below](#claude-desktop-mcpb)     |
 
 `gitlab-mcp-server-darwin-all` exists because a `.mcpb` manifest chooses the command per operating system, not per architecture, so the macOS bundle's entry point has to run on both; it is just as usable on its own. The Linux bundle answers the same limit another way: it carries `gitlab-mcp-server-linux-amd64` and `gitlab-mcp-server-linux-arm64` beside a small launcher that picks one by `uname -m`. Releases up to 3.1.0 publish only `gitlab-mcp-server.mcpb`.
 
