@@ -140,10 +140,14 @@ claude mcp add gitlab -- gitlab-mcp-server
 
 ### Claude Desktop one-click extension (.mcpb)
 
-Claude Desktop users can skip all of the above: download
-[`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
-and open it with Claude Desktop — see the
-[Claude Desktop Extension guide](guides/claude-desktop-extension.md).
+Claude Desktop users can skip all of the above: download the bundle for your
+system,
+[macOS](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb),
+[Windows](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb)
+or [Linux](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb),
+and open it with Claude Desktop. See the
+[Claude Desktop Extension guide](guides/claude-desktop-extension.md), which
+also covers the universal `gitlab-mcp-server.mcpb` that carries all three.
 
 The server reads `~/.gitlab-mcp-server.env` for values its environment does not already carry, one `KEY=value` per line, which is why the registration command names no token. Self-managed GitLab? Add `GITLAB_URL=https://gitlab.example.com` to that same file (and `GITLAB_MCP_SKIP_TLS_VERIFY=true` for self-signed certs). The per-client JSON for every supported client is in [Step 2](#step-2-configure-your-mcp-client).
 

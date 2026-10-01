@@ -62,19 +62,19 @@ Un cambio en el PATH solo llega a los procesos nuevos. Cierra y vuelve a abrir P
 
 La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) incluye estos archivos:
 
-| Plataforma            | Archivo                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                            |
-| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                            |
-| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                             |
-| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                           |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                           |
-| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                      |
-| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                      |
-| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                             |
-| Claude Desktop        | `gitlab-mcp-server.mcpb`, consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
+| Plataforma            | Archivo                                                                                                                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                                                                                                                                          |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                                                                                                                                          |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                                                                                                                           |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                                                                                                                                         |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                         |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                    |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                    |
+| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                                                                                                                                           |
+| Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo), y `gitlab-mcp-server.mcpb` para los tres; consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
-`gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
+`gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop para macOS porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
 
 Dos formas de URL cubren todos los archivos: `releases/latest/download/<archivo>` resuelve siempre a la release más nueva, y `releases/download/v<versión>/<archivo>` fija una concreta.
 
