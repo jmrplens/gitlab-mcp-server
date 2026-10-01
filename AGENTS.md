@@ -208,7 +208,7 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 
 1. `make release` — GoReleaser snapshot, flattens `dist/` to GitHub asset names.
 2. **Release link names must be exact filenames** (e.g.
-   `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add
+   `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add
    descriptive suffixes like `(GPG signature)` — the Homebrew formula,
    winget, the installers and `scripts/fetch-release-assets.sh` look
    assets up by exact name and will not find a decorated one.
