@@ -67,8 +67,16 @@ const (
 	// xMCPHeaderKeyword is the JSON Schema keyword defined by SEP-2243.
 	xMCPHeaderKeyword = "x-mcp-header"
 
-	findToolDescription          = "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples."
-	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
+	// Each description ends with one example of its tool's arguments, in the
+	// shape a model is likeliest to get wrong: params as one object beside
+	// action, never its fields flattened beside it. The two examples are one
+	// sequence, since the query finds issue.list first and the call is the
+	// one find publishes for it, and a test holds both to the catalog
+	// (TestToolDescriptions_Examples_AreCallsTheCatalogAnswers). A
+	// description is served on every listing, so each example is the
+	// shortest that shows the shape.
+	findToolDescription          = `Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples. Example: {"query":"issue list"}`
+	executeActionToolDescription = `Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear. Example: {"action":"issue.list","params":{"project_id":"group/project"}}`
 	dynamicExecuteEnvelopeHint   = "Execute an action with top-level `action` and one `params` object; every required parameter name belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
 
 	defaultLimit = 20
