@@ -424,16 +424,16 @@ most often meets are not the first ones listed.
 
 - **A boundary whose two sides agree at the boundary.** Flipping `>` to `>=`
   where both branches assign the same value at the boundary changes nothing.
-  `internal/gitlab`'s `tierFromNamespaces` keeps one, `tier > best`, where a
-  second namespace on the tier already held assigns `best` the value it has
-  and changes nothing but one more debug line. Six more there were this shape
-  until issue 952 rewrote them with `min` and `max`, the answer the end of
-  this bullet gives: five retry clamps in `retry.go` (`reset > wait`, both
-  `wait > b.ceiling`, `wait < minWait` and `rateLimitResetWait`'s
-  `wait < 0`; a sixth was the `reset <= 0` guard that the bullet on a guard
-  made unobservable describes deleting) and `limitedBody.Read`'s
-  `int64(len(p)) > b.remaining+1`, where a buffer of exactly that length is
-  cut to the length it already has. So are three of `cmd/internal/apidocs`' four:
+  Seven in `internal/gitlab` were this shape until issue 952 rewrote them
+  with `min` and `max`, the answer the end of this bullet gives: five retry
+  clamps in `retry.go` (`reset > wait`, both `wait > b.ceiling`,
+  `wait < minWait` and `rateLimitResetWait`'s `wait < 0`; a sixth was the
+  `reset <= 0` guard that the bullet on a guard made unobservable describes
+  deleting), `limitedBody.Read`'s `int64(len(p)) > b.remaining+1`, where a
+  buffer of exactly that length is cut to the length it already has, and
+  `tierFromNamespaces`' `tier > best`, where a second namespace on the tier
+  already held assigned `best` the value it had and changed nothing but
+  whether one more debug line was written. So are three of `cmd/internal/apidocs`' four:
   `if secs <= 0 { return 0 }` is followed by `return time.Duration(secs) * time.Second`, `if d := time.Until(t);
   d > 0 { return d }` falls through to `return 0`, and `sleepCtx`'s
   `if d <= 0 { return ctx.Err() }` falls through to a zero timer that fires at
@@ -457,8 +457,13 @@ most often meets are not the first ones listed.
   1901-12-13, so `time.Time.Sub` never reaches the saturation that would pin
   both sides to `math.MaxInt64`), and the wall clock moves between the write
   and the comparison. Killing it would mean indirecting the clock in production
-  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check and
-  `internal/gitlab`'s initialization cooldown are the two here.
+  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check is the
+  one here. `internal/gitlab`'s initialization cooldown was the second until
+  issue 952 tested it in a `testing/synctest` bubble: there both ends of the
+  comparison are the bubble's clock, which moves only when the test sleeps,
+  so the test lands on the boundary to the nanosecond. A boundary whose other
+  end is a time the program holds, rather than one the filesystem stamps, can
+  be scheduled that way, and is no longer this kind.
 - **A guard that a second guard makes unobservable.** The negative token
   cache used to check "disabled" in `Lookup` and `Contains` as well as in
   `RecordKind`, the only place an entry is stored, so removing either copy

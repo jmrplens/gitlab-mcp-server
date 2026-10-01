@@ -780,11 +780,14 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 			if ns == nil || !namespacePlanAnswers(ns.Plan) {
 				continue
 			}
+			// Free is the lowest tier and best starts there, so max needs no
+			// case for the first answer. Every namespace that answers is
+			// logged, which is what the line says; logging only a raise left
+			// a comparison whose boundary decided nothing but whether a
+			// second namespace on the tier already held was named.
 			tier := edition.TierFromPlan(ns.Plan)
-			if !found || tier > best {
-				best, found = tier, true
-				slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
-			}
+			best, found = max(best, tier), true
+			slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
 		}
 
 		// Nothing a later page carries can raise the answer past the highest
