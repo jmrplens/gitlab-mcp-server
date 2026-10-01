@@ -368,6 +368,13 @@ reproduced below in full, read from the module at the version the
 binaries link. cmd/gen_third_party_notices writes this file from the
 build information the binaries record.
 
+The source code of each module is available at the version listed, or
+at the replacement's where one is named, from the Go module proxy: the
+command go mod download -json <module>@<version> fetches it, from
+https://proxy.golang.org unless GOPROXY names another. The source code
+of the Go standard library is part of the Go release named under
+Toolchain, published at https://go.dev/dl/.
+
 Contents
 
 `)
