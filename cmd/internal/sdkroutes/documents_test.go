@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
 
 // inline places a document written inline in a fixture file at the line that
