@@ -304,6 +304,8 @@ Every GitHub Release ships with three integrity artifacts:
 - `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
 - `<asset>.sbom.json` — an SPDX software bill of materials for each binary
 
+From the first release after 3.1.0 a release also ships `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the binaries link, which the SBOMs name without carrying. It is generated from the binaries at release time and listed in `checksums.txt`, so the steps below verify it like a binary.
+
 Nothing verifies these for you: the server never downloads or replaces its own binary, so whoever puts a binary on the machine is the one who checks it. Package managers do their own verification (Homebrew pins a checksummed formula, npm and the container registry pin digests). For a binary you download yourself, verify both the signature and the checksum before running it.
 
 ### 1. Install Cosign
