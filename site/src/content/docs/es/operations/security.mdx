@@ -425,7 +425,7 @@ Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer rel
 
 ## Vulnerabilidades conocidas en un binario
 
-Los escáneres que leen un binario o el SBOM de una imagen (Trivy, Grype, osv-scanner, Docker Scout) informan de cada aviso contra cualquier módulo de Go que el binario nombre en su información de compilación, se enlace o no el código vulnerable. La CI hace ahora esa misma pregunta a cada binario que compila el release, en cada push y en cada pull request: compila cada uno y lo contrasta con la base de datos de vulnerabilidades de Go a nivel de módulo, y un hallazgo hace fallar la compilación salvo que lo acepte una declaración revisada del repositorio. Puedes hacérsela a un binario que hayas descargado:
+Los escáneres que leen un binario o el SBOM de una imagen (Trivy, Grype, osv-scanner, Docker Scout) informan de cada aviso contra cualquier módulo de Go que el binario nombre en su información de compilación, se enlace o no el código vulnerable. La CI hace ahora esa misma pregunta a cada binario que compila el release, en cada pull request y en cada push a main, y el workflow de release la repite sobre el árbol etiquetado antes de publicar nada: compila cada uno y lo contrasta con la base de datos de vulnerabilidades de Go a nivel de módulo, y un hallazgo hace fallar la compilación salvo que lo acepte una declaración revisada del repositorio. Puedes hacérsela a un binario que hayas descargado:
 
 ```bash
 go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitlab-mcp-server-linux-amd64

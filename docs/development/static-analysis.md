@@ -298,12 +298,18 @@ that no finding of the run matches fails the run too, since every run scans
 every target the release builds, so an entry is removed the day what it excused
 goes away.
 
-It runs in CI's govulncheck job, on every push and pull request, and as step 25
-of `make analyze`. It needs the network for the database and builds six
-binaries: one full run took 2m52s on five cores, about thirty seconds of it per
-build. It is deliberately not in
-the release workflow after the image is pushed: a failure there would leave the
-registry tags on an image that nothing signed or attested.
+It runs in CI's govulncheck job, on every pull request and every push to main,
+and as step 25 of `make analyze`. The release workflow runs it again, in the
+`binary-vulns` job, on the tree being released: a tag can be cut from a commit
+whose last CI run is days old, and an advisory published in between would
+otherwise reach every channel. That job stands beside the E2E and race gates in
+front of `docker`, the first job that publishes anything, so a finding stops the
+release before an image is pushed; after the push, a failure would leave the
+registry tags on an image that nothing signed or attested. It scans binaries it
+builds from `.goreleaser.yml` rather than GoReleaser's own output, which links
+the same modules because the command refuses any GoReleaser setting it does not
+read. It needs the network for the database and builds six binaries: one full
+run took 2m52s on five cores, about thirty seconds of it per build.
 
 ### markdownlint-cli2
 

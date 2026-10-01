@@ -172,11 +172,43 @@ jobs:
     permissions:
       contents: read
 
+  # The release binaries at module grain, asked of the tree being released at
+  # the moment it is released. ci.yml asks it on every pull request and push to
+  # main, but a tag can be cut from a commit whose last CI run is days old, and
+  # an advisory published in between would otherwise reach every channel. It
+  # builds the targets .goreleaser.yml names with the toolchain go.mod names,
+  # as the release job does, and cmd/audit_binary_vulns refuses a GoReleaser
+  # setting it does not read, so what it scans links the modules the published
+  # binaries link. It stands in front of `docker`, the first job that
+  # publishes anything, beside the E2E and race gates, and runs in a rehearsal
+  # too. No credential: it reads the tree and the public vulnerability
+  # database and nothing else.
+  binary-vulns:
+    name: "🛡️ Binary vulnerability gate"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [preflight]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          # No Actions cache, as in the release job: the gate's verdict is on
+          # what the repository fixes, modules checked against go.sum, not on
+          # a build cache a run on main wrote.
+          cache: false
+      - name: Release binaries at module grain
+        run: make check-binary-vulns
+
   docker:
     name: "🐳 Docker"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [preflight, e2e, race]
+    needs: [preflight, e2e, race, binary-vulns]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     # No `environment:` — this job never ran under one, and adding it would
@@ -974,7 +1006,7 @@ jobs:
     # critical path, which is the right trade. A rehearsal is unaffected: the job
     # runs and succeeds with its steps skipped, rather than being skipped itself,
     # which a needs edge would propagate.
-    needs: [preflight, e2e, docker, sign-attest]
+    needs: [preflight, e2e, binary-vulns, docker, sign-attest]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:

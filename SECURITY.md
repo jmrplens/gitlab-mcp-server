@@ -277,7 +277,7 @@ from a model that may have read attacker-influenced content.
 - Minimal dependency footprint.
 - Dependencies are tracked in `go.sum` with cryptographic checksums.
 - Regular dependency updates are performed to address known vulnerabilities (`govulncheck` runs in CI).
-- Every release binary is also checked in CI at module grain, the way scanners that read a binary or an image SBOM check it: an advisory against any module a binary links fails the build unless a reviewed declaration accepts it (`make check-binary-vulns`).
+- The release binaries are also checked at module grain, the way scanners that read a binary or an image SBOM check them: every target the release configuration names is built from the tree and scanned, and an advisory against any module a binary links fails the check unless a reviewed declaration accepts it (`make check-binary-vulns`). CI runs it on every pull request and every push to main, and the release workflow runs it again on the tagged tree before anything is published.
 - Automated dependency scanning via Dependabot.
 
 ### Release Integrity
