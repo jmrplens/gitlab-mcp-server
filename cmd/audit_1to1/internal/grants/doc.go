@@ -1,0 +1,49 @@
+// Package grants is R-GRANT, the dimension of the 1:1 audit that says what a
+// fine-grained personal access token needs for each action this server offers
+// (issue 952).
+//
+// The other dimensions compare what the server publishes or sends with what
+// client-go and GitLab offer. This one reads the answer the fine-grained
+// derivation (cmd/gen_action_grants) committed and holds it to GitLab and to
+// what the suites were seen sending. It deliberately loads no program: the
+// questions that need the handlers' source are asked by the generator, which
+// loads it and gates them (make check-action-grants-derivation). What is read
+// here is committed:
+//
+//   - the table the server compiles in, through actiongrants.Table;
+//   - docs/development/action-requests.json, what each action sends and what
+//     shaped it, through actionrequests.ReadRecord;
+//   - docs/development/gitlab-api-live.json, what GitLab 19.4.1 declares;
+//   - docs/development/request-inventory.json, what the unit suite sent;
+//   - and, when a directory is named, the dispatch lines an end-to-end run
+//     recorded.
+//
+// # What it gates
+//
+// The committed artifacts' consistency with the live record and with each
+// other: the table was joined at the record's release, names the record's
+// permission vocabulary and public sets, denies nothing on an element the
+// record does not hold as the kind its cause says (the derivation's gate 2,
+// read back from the table), and covers the actions the request record
+// covers. A table that fails one of these was joined from another record or
+// left behind by one, and every answer below would be read from it. It runs
+// where the other committed-artifact gates run, under the FRESHNESS deferral
+// in CI.
+//
+// # What it reports and never gates
+//
+// Per action, the permissions in GitLab's words, worded by the same
+// finegrained.Table.Describe the reference page and gitlab://tools/{id} use,
+// with the directive or declaration that shaped each request; the actions no
+// fine-grained token reaches at the recorded release, by cause (the set a
+// fine-grained session is withheld, and issue 1054's inventory where the cause
+// is GraphQL's); the positions served empty; the REST operations a public
+// project or group serves with no grant at all; the GraphQL worklist of issue
+// 1055, each undeclared type or mutation this server reaches with the actions
+// it blocks and, as a lead and never a verdict, the REST routes this server
+// already calls that declare a permission for the same resource; and two
+// cross-checks of the derivation, at package grain against the request
+// inventory and at action grain against an end-to-end run's request counts.
+// Both cross-checks are leads: the inventory names a package and never an
+// action, and a count is a floor that cannot say which route was sent.
+package grants
