@@ -1103,16 +1103,17 @@ jobs:
           gh release upload "v${VERSION}" dist/*.mcpb --clobber
 
       # A rehearsal hands its build to the publisher jobs the way a release
-      # hands them the published assets: the staged binaries, checksums.txt
-      # and the bundles (the universal one by name, the per-OS ones through
-      # the gitlab-mcp-server-* glob), which fetch-release-assets.sh unpacks
-      # and checks in place of downloading. One tar rather than the files, so
-      # the executable bits survive the trip.
+      # hands them the published assets: the staged binaries, checksums.txt,
+      # THIRD_PARTY_NOTICES (which every package carries and the fetch
+      # requires) and the bundles (the universal one by name, the per-OS ones
+      # through the gitlab-mcp-server-* glob), which fetch-release-assets.sh
+      # unpacks and checks in place of downloading. One tar rather than the
+      # files, so the executable bits survive the trip.
       - name: Hand the rehearsal's build to the publishers
         if: env.REHEARSAL == 'true'
         run: |
           set -euo pipefail
-          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt gitlab-mcp-server.mcpb gitlab-mcp-server-*)
+          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt THIRD_PARTY_NOTICES gitlab-mcp-server.mcpb gitlab-mcp-server-*)
           tar -tf "${RUNNER_TEMP}/rehearsal-assets.tar"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -1142,8 +1143,9 @@ jobs:
         with:
           subject-path: dist/*.mcpb
 
-      # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
-      # attached and attested before the release becomes visible: a client
+      # Every asset (binaries, checksums.txt + signature, SBOMs,
+      # THIRD_PARTY_NOTICES, .mcpb) is attached and attested before the
+      # release becomes visible: a client
       # never sees a partial release, and this is the draft-then-publish flow
       # immutable releases require. GoReleaser creates the release as a draft
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads

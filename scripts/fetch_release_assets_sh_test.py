@@ -43,6 +43,7 @@ BINARIES = [
     "gitlab-mcp-server-windows-amd64.exe",
 ]
 SBOMS = [name + ".sbom.json" for name in BINARIES]
+NOTICES = "THIRD_PARTY_NOTICES"
 PER_OS_BUNDLES = [
     "gitlab-mcp-server-darwin.mcpb",
     "gitlab-mcp-server-windows.mcpb",
@@ -111,10 +112,10 @@ class FetchReleaseAssetsBundleTest(unittest.TestCase):
         self.release = os.path.join(self.work, "release")
         os.makedirs(self.release)
         sums = []
-        for name in BINARIES + SBOMS:
+        for name in BINARIES + SBOMS + [NOTICES]:
             body = ("stand-in for " + name).encode()
             self.write(os.path.join(self.release, name), body)
-            if name in BINARIES:
+            if name in BINARIES + [NOTICES]:
                 sums.append(hashlib.sha256(body).hexdigest() + "  " + name)
         for name in PER_OS_BUNDLES + [UNIVERSAL_BUNDLE]:
             self.write(os.path.join(self.release, name), ("bundle " + name).encode())
@@ -164,15 +165,63 @@ class FetchReleaseAssetsBundleTest(unittest.TestCase):
     def fetched(self):
         return sorted(os.listdir(self.dest))
 
-    def test_the_default_patterns_fetch_the_binaries_and_no_bundle(self):
+    def test_the_default_patterns_fetch_the_binaries_and_notices_and_no_bundle(self):
         result = self.fetch()
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertEqual(
             self.fetched(),
-            sorted(BINARIES + SBOMS + ["checksums.txt", "checksums.txt.sigstore.json"]),
+            sorted(BINARIES + SBOMS + [NOTICES, "checksums.txt", "checksums.txt.sigstore.json"]),
         )
         self.assertFalse([call for call in self.calls() if call.startswith("attestation")])
-        self.assertIn(f"Verified {len(BINARIES)} asset(s) against checksums.txt", result.stdout.decode())
+        self.assertIn(f"Verified {len(BINARIES) + 1} asset(s) against checksums.txt", result.stdout.decode())
+
+    def test_the_default_patterns_refuse_a_release_without_the_notices(self):
+        # gh says nothing about a pattern that matched nothing, so the
+        # notices are required by name.
+        os.remove(os.path.join(self.release, NOTICES))
+        result = self.fetch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("has no " + NOTICES + " listed in checksums.txt", result.stderr.decode())
+
+    def test_the_default_patterns_refuse_notices_checksums_txt_does_not_list(self):
+        sums = os.path.join(self.release, "checksums.txt")
+        with open(sums, encoding="utf-8") as fh:
+            kept = [line for line in fh.read().splitlines() if not line.endswith("  " + NOTICES)]
+        self.write(sums, ("\n".join(kept) + "\n").encode())
+        result = self.fetch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("has no " + NOTICES + " listed in checksums.txt", result.stderr.decode())
+
+    def test_the_default_patterns_refuse_altered_notices(self):
+        self.write(os.path.join(self.release, NOTICES), b"something else")
+        result = self.fetch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("an asset does not match checksums.txt", result.stderr.decode())
+
+    def test_named_patterns_do_not_require_the_notices(self):
+        # The registry and manifest jobs fetch the bundles alone.
+        os.remove(os.path.join(self.release, NOTICES))
+        result = self.fetch(*PER_OS_BUNDLES)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_a_rehearsal_takes_the_notices_from_its_own_build(self):
+        archive = os.path.join(self.work, "rehearsal-assets.tar")
+        with tarfile.open(archive, "w") as tar:
+            for name in ["checksums.txt", NOTICES] + BINARIES:
+                tar.add(os.path.join(self.release, name), arcname=name)
+        result = self.fetch(archive=archive)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn(NOTICES, self.fetched())
+        self.assertIn(f"Verified {len(BINARIES) + 1} asset(s) against checksums.txt", result.stdout.decode())
+
+    def test_a_rehearsal_without_the_notices_stops_the_default_fetch(self):
+        archive = os.path.join(self.work, "rehearsal-assets.tar")
+        with tarfile.open(archive, "w") as tar:
+            for name in ["checksums.txt"] + BINARIES:
+                tar.add(os.path.join(self.release, name), arcname=name)
+        result = self.fetch(archive=archive)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("has no " + NOTICES + " listed in checksums.txt", result.stderr.decode())
 
     def test_every_fetched_bundle_is_held_to_its_own_attestation(self):
         result = self.fetch(*PER_OS_BUNDLES)

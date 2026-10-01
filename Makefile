@@ -2355,7 +2355,8 @@ fmt:
 	golangci-lint fmt
 
 ## release: build release binaries using GoReleaser (local snapshot, no publish).
-## Produces flat binaries in dist/ matching GitHub Release asset names.
+## Produces flat binaries in dist/ matching GitHub Release asset names, beside
+## the THIRD_PARTY_NOTICES GoReleaser's sboms step generates from them.
 release:
 	goreleaser release --snapshot --clean
 	@# Flatten dist/: move binaries out of subdirs, remove GoReleaser metadata
