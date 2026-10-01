@@ -183,13 +183,17 @@ type Decision struct {
 // action asked about.
 func (a *Authority) Decide(id string) Decision {
 	index, row := a.table.requirementIndex(id)
-	switch {
-	case row == nil:
+	// Separate ifs rather than a tagless switch: a case expression carries no
+	// statement counter, so the mutation tool reports every mutant of one as
+	// not covered whatever the tests assert.
+	if row == nil {
 		logUnknownOnce(id)
 		return Decision{Listed: true, Callable: true}
-	case row.Denied != nil:
+	}
+	if row.Denied != nil {
 		return Decision{Cause: row.Denied.Cause, Known: true}
-	case a.phase == PhaseUnknown:
+	}
+	if a.phase == PhaseUnknown {
 		return Decision{Listed: true, Callable: true, Degraded: row.Degraded, Known: true}
 	}
 	decision := Decision{Listed: a.listed.has(index), Callable: a.callable.has(index), Known: true}
@@ -210,13 +214,14 @@ func (a *Authority) Decide(id string) Decision {
 // surface registers, so it asks this instead and computes neither.
 func (a *Authority) Lists(id string) bool {
 	index, row := a.table.requirementIndex(id)
-	switch {
-	case row == nil:
+	if row == nil {
 		logUnknownOnce(id)
 		return true
-	case row.Denied != nil:
+	}
+	if row.Denied != nil {
 		return false
-	case a.phase == PhaseUnknown:
+	}
+	if a.phase == PhaseUnknown {
 		return true
 	}
 	return a.listed.has(index)

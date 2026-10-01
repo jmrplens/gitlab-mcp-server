@@ -134,16 +134,21 @@ func decodeScope(entry rawScope) (Scope, bool) {
 		return Scope{}, false
 	}
 	scope := Scope{Access: access, Permissions: slices.Clone(entry.Permissions)}
-	switch {
-	case entry.ProjectID != nil:
+	if entry.ProjectID != nil {
 		scope.Namespace, scope.NamespaceID = NamespaceProject, *entry.ProjectID
-	case entry.GroupID != nil:
+		return scope, true
+	}
+	if entry.GroupID != nil {
 		scope.Namespace, scope.NamespaceID = NamespaceGroup, *entry.GroupID
-	case access == AccessPersonalProjects:
+		return scope, true
+	}
+	if access == AccessPersonalProjects {
 		// Both creation paths attach a personal projects scope to the creating
 		// user's namespace, which the entity exposes as neither id.
 		scope.Namespace = NamespaceUser
-	case access == AccessSelectedMemberships:
+		return scope, true
+	}
+	if access == AccessSelectedMemberships {
 		return Scope{}, false
 	}
 	return scope, true

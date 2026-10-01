@@ -54,12 +54,15 @@ const (
 func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Grant, finegrained.FallbackReason, error) {
 	ctx, capture := WithResponseCapture(WithResponseLimit(ctx, GrantMaxBytes))
 	_, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessTokenByID(id, gl.WithContext(ctx))
-	switch {
-	case errors.Is(err, ErrResponseTooLarge):
+	// Separate ifs rather than a tagless switch, whose case expressions carry
+	// no statement counter for the mutation tool to measure.
+	if errors.Is(err, ErrResponseTooLarge) {
 		return finegrained.Grant{}, finegrained.FallbackGrantTooLarge, nil
-	case isStatus(err, http.StatusForbidden):
+	}
+	if isStatus(err, http.StatusForbidden) {
 		return finegrained.Grant{}, finegrained.FallbackGrantUnreadable, nil
-	case err != nil:
+	}
+	if err != nil {
 		return finegrained.Grant{}, finegrained.FallbackNone, fmt.Errorf("read the token's grant: %w", err)
 	}
 	var body json.RawMessage

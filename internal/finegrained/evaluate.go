@@ -82,10 +82,10 @@ type Reading struct {
 //
 // It is pure: it reads nothing but its arguments, and returns a new authority.
 func Judge(t *Table, r Reading) *Authority {
-	switch {
-	case r.Fallback != FallbackNone:
+	if r.Fallback != FallbackNone {
 		return Unevaluated(t, r.Fallback, r.Version)
-	case r.Version == "":
+	}
+	if r.Version == "" {
 		return Unevaluated(t, FallbackVersionUnreadable, "")
 	}
 	listingOnly := Bucket(r.Version) != t.Bucket
@@ -272,17 +272,28 @@ func Evaluate(t *Table, g Grant) *Authority {
 	authority.listed = newBitset(len(t.Actions))
 	authority.callable = newBitset(len(t.Actions))
 	for i := range t.Actions {
-		row := &t.Actions[i]
-		switch {
-		case row.Denied != nil:
-		case authority.reaches(row, authority.groupListed):
-			authority.listed.set(i)
-			authority.callable.set(i)
-		case authority.reaches(row, authority.groupCallable):
-			authority.callable.set(i)
-		}
+		authority.classify(i, &t.Actions[i])
 	}
 	return authority
+}
+
+// classify sets the bits of action i: listed and callable when the grant alone
+// reaches it, callable alone when only the call guard passes it, and neither
+// for a denied action. It returns early rather than branching through a
+// tagless switch, whose case expressions carry no statement counter for the
+// mutation tool to measure.
+func (a *Authority) classify(i int, row *Requirement) {
+	if row.Denied != nil {
+		return
+	}
+	if a.reaches(row, a.groupListed) {
+		a.listed.set(i)
+		a.callable.set(i)
+		return
+	}
+	if a.reaches(row, a.groupCallable) {
+		a.callable.set(i)
+	}
 }
 
 // groupPass judges one group of an operation; rest says whether the operation
