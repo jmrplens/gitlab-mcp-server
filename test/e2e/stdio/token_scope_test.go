@@ -134,7 +134,7 @@ func TestTokenScope_FineGrainedTokenIsNotReadOnly(t *testing.T) {
 // denies.
 //
 // The unknown-scope session is the fake instance with its self endpoint left
-// unanswered, which is what DetectScopes reads as unknown; the write and the
+// unanswered, which is what DetectToken reads as unknown; the write and the
 // admin tool checked on it hold that the reference is the unfiltered listing
 // and not one that happens to be narrowed the same way.
 func TestTokenScope_FineGrainedTokenIsListedWhatUnknownScopesAreLessWhatNoGrantReaches(t *testing.T) {
@@ -456,5 +456,74 @@ func TestTokenScope_DynamicSurfaceNamesTheTokenAsTheReason(t *testing.T) {
 	}
 	if strings.Contains(text, "unknown action") {
 		t.Fatalf("issue.create under read_api was reported as unknown: %q", text)
+	}
+}
+
+// workItemCreateGrant is a grant of Work Item: Create, which expands to
+// create_issue, on every membership: it reaches issue.create and does not
+// reach branch.create, which needs Branch: Create.
+const workItemCreateGrant = `[{"access":"all_memberships","permissions":["create_work_item"]}]`
+
+// phaseBBranchRefusal is how branch.create is refused to that grant, as the
+// recorded release declares what it needs.
+const phaseBBranchRefusal = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
+	`what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it.`
+
+// TestTokenScope_FineGrainedToken_PhaseBServesWhatTheGrantReaches verifies a
+// fine-grained token that may read its grant, against an instance reporting
+// the release the table records, is served what that grant reaches and
+// nothing else: the individual listing holds the issue creation tool and not
+// the branch creation one, a call to the latter is answered with the
+// permission it needs in the words the token creation page offers, and a call
+// to the former reaches GitLab. The grant is read once.
+func TestTokenScope_FineGrainedToken_PhaseBServesWhatTheGrantReaches(t *testing.T) {
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	fake.version = "19.4.1-ee"
+	fake.grantScopes = workItemCreateGrant
+	env := baseEnv(fake.URL)
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
+	s := startSession(t, env)
+
+	names := toolNames(t, s.call(t, request(1, "tools/list", "")))
+	if !contains(names, "gitlab_issue_create") || contains(names, "gitlab_branch_create") {
+		t.Fatalf("listing holds gitlab_issue_create %v and gitlab_branch_create %v; want only the first",
+			contains(names, "gitlab_issue_create"), contains(names, "gitlab_branch_create"))
+	}
+	refused := resultText(t, s.call(t, request(2, "tools/call",
+		`{"name":"gitlab_branch_create","arguments":{"project_id":"42","branch_name":"b","ref":"main"}}`)))
+	if !strings.HasPrefix(refused, phaseBBranchRefusal) {
+		t.Errorf("gitlab_branch_create = %q, want it to begin %q", refused, phaseBBranchRefusal)
+	}
+	served := s.call(t, request(3, "tools/call", `{"name":"gitlab_issue_create","arguments":{"project_id":"42","title":"sent"}}`))
+	if text := resultText(t, served); strings.Contains(text, "fine-grained") || fake.issuesCreated.Load() != 1 {
+		t.Errorf("gitlab_issue_create = %q with %d issues created; want it sent to GitLab once", text, fake.issuesCreated.Load())
+	}
+	if reads := fake.grantReads.Load(); reads != 1 {
+		t.Errorf("the grant was read %d times, want once", reads)
+	}
+}
+
+// TestTokenScope_FineGrainedToken_PhaseBTheFirstListingIsAlreadyNarrowed
+// verifies a tools/list sent while the grant is still being read, which the
+// server holds until the catalog is ready, is answered narrowed by the grant:
+// it leaves out a tool phase A would have listed, so it is phase B's listing
+// and not one taken before the grant was judged.
+func TestTokenScope_FineGrainedToken_PhaseBTheFirstListingIsAlreadyNarrowed(t *testing.T) {
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	fake.version = "19.4.1-ee"
+	fake.grantScopes = workItemCreateGrant
+	fake.grantHold = make(chan struct{})
+	env := baseEnv(fake.URL)
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
+	s := startSession(t, env)
+
+	s.send(t, request(1, "tools/list", ""))
+	close(fake.grantHold)
+	names := toolNames(t, s.readMessage(t, 60*time.Second))
+	if contains(names, "gitlab_branch_create") || !contains(names, "gitlab_issue_create") {
+		t.Errorf("the first listing holds gitlab_branch_create %v and gitlab_issue_create %v; want only the second",
+			contains(names, "gitlab_branch_create"), contains(names, "gitlab_issue_create"))
 	}
 }

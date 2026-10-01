@@ -293,3 +293,116 @@ func TestFineGrained_WithheldExecute_ModernRevision_IsLabeledLikeAServedCall(t *
 		t.Errorf("execute's refusal carried resultType %v (present: %t), want \"complete\": a refusal made in a handler goes out labeled", got, ok)
 	}
 }
+
+// The phase B credentials and what the assertions name: the fine-grained
+// token may read its grant, Work Item: Create (which expands to create_issue)
+// on every membership, so it reaches issue.create and not branch.create, which
+// needs Branch: Create.
+const (
+	phaseBClassicToken = "glpat-classic-phase-b"
+	phaseBFineToken    = "glpat-fine-grained-phase-b"
+	phaseBWithheldTool = "gitlab_branch_create"
+	phaseBRefusal      = `action "branch.create" exists but this fine-grained personal access token was not granted ` +
+		`what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it.`
+)
+
+// phaseBGitLab is a stand-in at the release the table records that describes
+// the fine-grained token with its id, answers its grant, and counts the issues
+// each credential asked it to create and the grant reads.
+type phaseBGitLab struct {
+	URL     string
+	created map[string]*atomic.Int32
+	grants  atomic.Int32
+}
+
+func startPhaseBGitLab(t *testing.T) *phaseBGitLab {
+	t.Helper()
+	fake := &phaseBGitLab{created: map[string]*atomic.Int32{phaseBClassicToken: {}, phaseBFineToken: {}}}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.4.1-ee","revision":"26212baa"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":9,"username":"grantee"}`))
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("PRIVATE-TOKEN") != phaseBFineToken {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":31,"name":"fine","active":true,"scopes":["granular"]}`))
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/31", func(w http.ResponseWriter, _ *http.Request) {
+		fake.grants.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":31,"granular":true,"granular_scopes":[{"access":"all_memberships","permissions":["create_work_item"]}]}`))
+	})
+	mux.HandleFunc("POST /api/v4/projects/42/issues", func(w http.ResponseWriter, r *http.Request) {
+		if counter, known := fake.created[r.Header.Get("PRIVATE-TOKEN")]; known {
+			counter.Add(1)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"iid":1,"project_id":42,"title":"sent","state":"opened","web_url":"http://example.invalid/g/p/-/issues/1"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	fake.URL = srv.URL
+	return fake
+}
+
+// TestFineGrained_TwoCredentialsOnOneShape_PhaseBIsDecidedPerRequest verifies,
+// on one process and one individual-surface shape, that a fine-grained
+// credential whose grant the server reads is listed and shown in gitlab://tools
+// only what that grant reaches, while the classic credential beside it is
+// served the whole surface; that its call to a tool the grant does not reach
+// is answered naming the permission it needs, as the recorded release declares
+// it; and that its call to a tool the grant does reach is sent to GitLab. The
+// grant is read once, when the credential's entry is built.
+func TestFineGrained_TwoCredentialsOnOneShape_PhaseBIsDecidedPerRequest(t *testing.T) {
+	gitlab := startPhaseBGitLab(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--tool-surface=individual", "--capability-surface=full")
+
+	classic := listedAs(t, srv, phaseBClassicToken)
+	fine := listedAs(t, srv, phaseBFineToken)
+	if !slices.Contains(classic, phaseBWithheldTool) || !slices.Contains(classic, servedWriteTool) {
+		t.Fatalf("the classic listing lacks %s or %s, so it is not the whole surface:\n%s", phaseBWithheldTool, servedWriteTool, srv.logs())
+	}
+	if slices.Contains(fine, phaseBWithheldTool) || !slices.Contains(fine, servedWriteTool) {
+		t.Errorf("the fine-grained listing holds %s %v and %s %v; want only the second",
+			phaseBWithheldTool, slices.Contains(fine, phaseBWithheldTool), servedWriteTool, slices.Contains(fine, servedWriteTool))
+	}
+	if len(fine) >= len(classic)/2 {
+		t.Errorf("the fine-grained listing holds %d of the classic one's %d tools, which is not a grant of one permission", len(fine), len(classic))
+	}
+
+	classicEntries := manifestEntriesAs(t, srv, phaseBClassicToken)
+	fineEntries := manifestEntriesAs(t, srv, phaseBFineToken)
+	if !slices.Contains(classicEntries, phaseBWithheldTool) || slices.Contains(fineEntries, phaseBWithheldTool) ||
+		!slices.Contains(fineEntries, servedWriteTool) {
+		t.Errorf("gitlab://tools: %s to the classic credential %v and to the fine-grained one %v, %s to the fine-grained one %v",
+			phaseBWithheldTool, slices.Contains(classicEntries, phaseBWithheldTool), slices.Contains(fineEntries, phaseBWithheldTool),
+			servedWriteTool, slices.Contains(fineEntries, servedWriteTool))
+	}
+
+	branch := `{"project_id":"42","branch_name":"b","ref":"main"}`
+	if text := callAs(t, srv, phaseBFineToken, phaseBWithheldTool, branch); !strings.HasPrefix(text, phaseBRefusal) {
+		t.Errorf("the fine-grained call to %s = %q, want it to begin %q", phaseBWithheldTool, text, phaseBRefusal)
+	}
+	if text := callAs(t, srv, phaseBClassicToken, phaseBWithheldTool, branch); strings.Contains(text, "fine-grained") {
+		t.Errorf("the classic call to %s was answered as a fine-grained one: %q", phaseBWithheldTool, text)
+	}
+
+	callAs(t, srv, phaseBFineToken, servedWriteTool, `{"project_id":"42","title":"sent"}`)
+	if got := gitlab.created[phaseBFineToken].Load(); got != 1 {
+		t.Errorf("GitLab was asked for %d issues by the fine-grained credential, want 1", got)
+	}
+	if got := gitlab.grants.Load(); got != 1 {
+		t.Errorf("the grant was read %d times, want once, when the entry was built", got)
+	}
+}

@@ -650,6 +650,21 @@ type fakeGitLab struct {
 	// subscription; empty leaves the listing unanswered. Set it before the
 	// server starts.
 	namespacePlan string
+	// version is the version the version endpoint reports; empty reports
+	// 17.0.0, a release no fine-grained table records. Set it before the
+	// server starts.
+	version string
+	// grantScopes, when set, is the granular_scopes array GET
+	// /personal_access_tokens/1 answers with, the grant of the token the self
+	// endpoint describes with id 1; empty leaves the read unanswered. Set it
+	// before the server starts.
+	grantScopes string
+	// grantHold, when set, holds every answer of the grant read until it is
+	// closed, as versionHold does for the version. Set it before the server
+	// starts.
+	grantHold chan struct{}
+	// grantReads counts the requests that reached the grant read.
+	grantReads atomic.Int32
 }
 
 // awaitInFlightCall blocks until a call has reached the blocking endpoint.
@@ -672,24 +687,8 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	blocked := make(chan struct{})
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, r *http.Request) {
-		fake.versionReads.Add(1)
-		if fake.versionHold != nil {
-			select {
-			case <-fake.versionHold:
-			case <-r.Context().Done():
-				return
-			}
-		}
-		if fake.versionRefusal != "" {
-			refusal, _ := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": fake.versionRefusal})
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write(refusal)
-			return
-		}
-		writeJSON(w, `{"version":"17.0.0","revision":"abcdef"}`)
-	})
+	mux.HandleFunc("/api/v4/version", fake.serveVersion)
+	mux.HandleFunc("/api/v4/personal_access_tokens/1", fake.serveGrant)
 	mux.HandleFunc("/api/v4/namespaces", func(w http.ResponseWriter, _ *http.Request) {
 		if fake.namespacePlan == "" {
 			w.WriteHeader(http.StatusNotFound)
@@ -764,6 +763,61 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	// outstanding requests, and one parked on this channel would hold it.
 	t.Cleanup(func() { close(blocked) })
 	return fake
+}
+
+// serveVersion answers the version endpoint: held while versionHold is open,
+// refused as GitLab refuses a fine-grained token without Metadata: Read when
+// versionRefusal is set, and otherwise the version the fake reports.
+func (f *fakeGitLab) serveVersion(w http.ResponseWriter, r *http.Request) {
+	f.versionReads.Add(1)
+	if !released(f.versionHold, r) {
+		return
+	}
+	if f.versionRefusal != "" {
+		refusal, err := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": f.versionRefusal})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write(refusal)
+		return
+	}
+	version := f.version
+	if version == "" {
+		version = "17.0.0"
+	}
+	writeJSON(w, `{"version":"`+version+`","revision":"abcdef"}`)
+}
+
+// serveGrant answers the grant read of the token the self endpoint describes
+// with id 1: held while grantHold is open, and unanswered while grantScopes is
+// empty.
+func (f *fakeGitLab) serveGrant(w http.ResponseWriter, r *http.Request) {
+	f.grantReads.Add(1)
+	if !released(f.grantHold, r) {
+		return
+	}
+	if f.grantScopes == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	writeJSON(w, `{"id":1,"granular":true,"granular_scopes":`+f.grantScopes+`}`)
+}
+
+// released waits on hold, when there is one, and reports whether the request
+// may be answered: false when its caller went away first.
+func released(hold chan struct{}, r *http.Request) bool {
+	if hold == nil {
+		return true
+	}
+	select {
+	case <-hold:
+		return true
+	case <-r.Context().Done():
+		return false
+	}
 }
 
 func writeJSON(w http.ResponseWriter, body string) {
