@@ -89,22 +89,23 @@ gotestsum --version
 
 ### Individual Targets
 
-| Target               | Description                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `make golangci-lint` | Verify `.golangci.yml`, check configured Go formatting, and run configured Go linters |
-| `make fmt`           | Apply configured Go formatters through `golangci-lint fmt`                            |
-| `make govulncheck`   | Scan Go dependencies and reachable calls for known CVEs                               |
-| `make mdlint`        | Lint all Markdown files, excluding `plan/`                                            |
-| `make mdlint-fix`    | Auto-fix Markdown lint issues                                                         |
+| Target                    | Description                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `make golangci-lint`      | Verify `.golangci.yml`, check configured Go formatting, and run configured Go linters         |
+| `make fmt`                | Apply configured Go formatters through `golangci-lint fmt`                                    |
+| `make govulncheck`        | Scan Go dependencies and reachable calls for known CVEs                                       |
+| `make check-binary-vulns` | Build every release target and hold each binary to the vulnerability database at module grain |
+| `make mdlint`             | Lint all Markdown files, excluding `plan/`                                                    |
+| `make mdlint-fix`         | Auto-fix Markdown lint issues                                                                 |
 
 ### Combined Targets
 
-| Target                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make analyze`        | Run, in order: `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, the unread-constant gate, `govulncheck`, `markdownlint`, the test-goroutine abort gate, the subtest gate, the supply-chain policy gate, the Markdown escaping gate, the published-action-ID gate, the pinned GraphQL schema, the GraphQL document gate, the request-path gate, the meta-description gate, the pinned GitLab API record, the GraphQL response-shape gate, the catalog-first gate, the static e2e coverage gate, the e2e coverage record, the MCP tool surface quality gate, the SDK context gate, the tenant policy gate and the recorded Orbit answers |
-| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Target                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make analyze`        | Run, in order: `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, the unread-constant gate, `govulncheck`, `markdownlint`, the test-goroutine abort gate, the subtest gate, the supply-chain policy gate, the Markdown escaping gate, the published-action-ID gate, the pinned GraphQL schema, the GraphQL document gate, the request-path gate, the meta-description gate, the pinned GitLab API record, the GraphQL response-shape gate, the catalog-first gate, the static e2e coverage gate, the e2e coverage record, the MCP tool surface quality gate, the SDK context gate, the tenant policy gate, the recorded Orbit answers and the release binaries at module grain |
+| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### Project Audit Targets
 
@@ -222,13 +223,30 @@ ours.
 
 Be precise about what did **not** happen, because the shorter version of this
 story is wrong. The advisory is keyed to the module `golang.org/x/crypto`, not to
-the `openpgp` package, and that module is still a direct requirement:
+the `openpgp` package, so what a scanner reports depends on whether the module
+is in a binary, not on whether openpgp is. Removing the self-update subsystem
+took openpgp out of the server and left the module in it: `internal/telemetry`
+derived its pseudonymisation keys with `golang.org/x/crypto/hkdf`, so every
+server binary up to and including 3.1.0 named the module in its build
+information, every image SBOM listed it, and every scanner that reads either
+(`govulncheck -mode binary -scan module`, Trivy, Grype, osv-scanner, Docker
+Scout, verifymcp.io) reported `GO-2026-5932` against a binary that does not link
+the package the advisory is about. The keyring now derives its keys with the
+standard library's `crypto/hkdf`, which produces the same bytes, and no server
+binary links the module at all: `go list -deps ./cmd/server` names none of its
+packages outside the standard library's own vendored copies, which are not a
+module in the build information.
+
+The module is still a direct requirement, for test code alone:
 `test/e2e/internal/fixture/user.go` imports `golang.org/x/crypto/ssh` to build
-the SSH keys its fixtures need.
-So `govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
-results, and always will. What changed is the only thing that was ever
-actionable: nothing in this repository calls into openpgp any more, so the
-package is not linked into any shipped binary.
+the SSH keys its fixtures need, and the tests of `internal/telemetry` hold the
+key derivation to `golang.org/x/crypto/hkdf` byte for byte. So
+`govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
+results, and will for as long as that is so. There it is information rather
+than a failure, because the source scan gates on what our code calls, and
+nothing in this repository calls into openpgp. What a shipped binary carries
+is a different question, and `make check-binary-vulns` (below) is the gate
+that asks it.
 
 That distinction is also what the wrapper gates on. It defers to govulncheck's
 own exit status, which reports whether **our code calls** a vulnerable symbol,
@@ -243,6 +261,49 @@ An entry here is a vulnerability shipped on purpose in code we actually call.
 To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one
 (e.g. once a fix ships), remove it from both.
+
+#### The release binaries, at module grain
+
+`make check-binary-vulns` ([`cmd/audit_binary_vulns`](cmd-utilities.md#audit_binary_vulns))
+asks the question every scanner outside this repository asks. Trivy, Grype,
+osv-scanner, Docker Scout, Dependency-Track and verifymcp.io read the modules a
+binary's build information names, or the SBOM generated from it, and report
+every advisory against any of them, called or not. The source scan above cannot
+see that: it passed on 3.0.0 and 3.1.0 while each of those scanners reported
+`GO-2026-5932` against every binary and image of both.
+
+The command reads the targets from `.goreleaser.yml`, so a target added to the
+release is checked without anyone adding it here: every build entry, each
+`goos` crossed with each `goarch`, built from the entry's main package with its
+`env` and `flags` into a temporary directory. The operating system decides the
+module set, which is why one linux build would not do: at 3.1.0 the darwin
+builds link `github.com/ebitengine/purego` and the windows builds
+`github.com/go-ole/go-ole` and `github.com/yusufpapurcu/wmi`, none of which a
+linux build carries. Each binary is then scanned with `govulncheck -mode binary
+-scan module` run in process, at the version the `tool` directive in `go.mod`
+pins, and the findings are merged across the six binaries by advisory and module.
+The entry's `ldflags` are not passed: they carry GoReleaser templates and set two
+strings and strip the symbol table, none of which changes which modules a binary
+links.
+
+A finding fails the run unless
+[`cmd/audit_binary_vulns/declarations.go`](../../cmd/audit_binary_vulns/declarations.go)
+accepts it, keyed by the advisory id and the module, with a category and a
+reason. Two categories exist: `not-linked`, for an advisory whose packages the
+binaries do not link although they link its module (what `GO-2026-5932` was
+before the keyring stopped importing `golang.org/x/crypto/hkdf`), and
+`fix-not-yet-adoptable`, for a fixed version that cannot be taken yet, such as a
+Go point release the CI images do not carry. The table is empty. A declaration
+that no finding of the run matches fails the run too, since every run scans
+every target the release builds, so an entry is removed the day what it excused
+goes away.
+
+It runs in CI's govulncheck job, on every push and pull request, and as step 25
+of `make analyze`. It needs the network for the database and builds six
+binaries: one full run took 2m52s on five cores, about thirty seconds of it per
+build. It is deliberately not in
+the release workflow after the image is pushed: a failure there would leave the
+registry tags on an image that nothing signed or attested.
 
 ### markdownlint-cli2
 
@@ -279,7 +340,7 @@ make sonar-status                # just print the latest gate (no re-scan)
 GitHub Actions uses the same separation as Make:
 
 - The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its analysis cache is deliberately not kept between runs, so a result depends on the tree being linted and nothing else: a pull request restores a cache from its own ref first, which after a rebase holds the analysis of the branch's previous tree, and that once failed a cascaded layer on an unused `//nolint` in a file it never touched (issue 945). The action is given `skip-cache: true` for that, because `install-only` does not stop it restoring that cache before the install and saving it after the job; the first fix removed a cache step of the workflow's own and left the action's in place, whose key names only the runner OS, a seven-day interval and the hash of `go.mod`, so a pull request that leaves `go.mod` alone can restore `main`'s analysis of another tree. The Go build and module caches are still restored, since their keys are content hashes.
-- The `govulncheck` job installs the `govulncheck` named by the `tool` directive in `go.mod` (a bare `go install`, so the pin lives in one place) and runs `make govulncheck`.
+- The `govulncheck` job installs the `govulncheck` named by the `tool` directive in `go.mod` (a bare `go install`, so the pin lives in one place) and runs `make govulncheck`, then `make check-binary-vulns` over the six release binaries.
 - The `Markdown` job runs `markdownlint-cli2` for Markdown and MDX content through the linter's own action, which bundles the tool and touches no registry.
 
 Separate jobs for `goimports`, `gofmt`, `go vet`, `modernize`, `gosec`, and `staticcheck` are intentionally omitted because `golangci-lint` already covers them with the repository configuration.

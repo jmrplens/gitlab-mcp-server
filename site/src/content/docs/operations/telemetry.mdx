@@ -317,6 +317,11 @@ The key is expanded with HKDF-SHA256 into two independent keys, one for callers
 and one for resource URIs, so the value you supply is never used as a key
 itself and a digest of a user cannot be compared against a digest of a resource.
 
+Under `GODEBUG=fips140=only`, HKDF takes no key shorter than 112 bits, so a key
+of fewer than 14 bytes is refused at startup: the server logs the refusal and
+records nothing about callers, as it does whenever it cannot derive its
+pseudonymisation keys. 3.1.0 stopped the process with a panic on the same key.
+
 ### What is never recorded
 
 Not by default and not by any setting, because there is no setting:

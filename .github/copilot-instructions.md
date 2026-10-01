@@ -28,6 +28,7 @@ gitlab-mcp-server/
 │   ├── audit_edition_tier/ # Doc-grounded licensing tier vs binary gating
 │   ├── audit_gateway_chars/ # Served descriptions/titles vs strict gateway validators (make check-gateway-chars)
 │   ├── audit_install_buttons/ # One-click install payloads decode to one configuration per command
+│   ├── audit_binary_vulns/ # Every release binary against the vulnerability database at module grain (make check-binary-vulns)
 │   ├── audit_surface_quality/ # MCP surface metadata + output quality (-view; was audit_tools + audit_output)
 │   ├── audit_supply_chain/ # Release-configuration invariants (SHA-pinned uses:, Dependabot cooldowns, SECURITY.md, installers)
 │   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)

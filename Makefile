@@ -6,7 +6,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
@@ -939,6 +939,12 @@ golangci-lint:
 govulncheck:
 	./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
+## check-binary-vulns: build every target .goreleaser.yml names and hold each binary to the vulnerability database at module grain, which is how a scanner reading a shipped binary or its SBOM judges it.
+## Fails on an advisory cmd/audit_binary_vulns/declarations.go does not accept, and on a declaration that no longer matches anything.
+## The source scan above answers whether our code calls a vulnerable symbol; this one answers what every published binary carries, and the two diverged for 3.0.0 and 3.1.0 (GO-2026-5932 through golang.org/x/crypto).
+check-binary-vulns:
+	go run ./cmd/audit_binary_vulns/
+
 ## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
 ## upload via sonar-scanner, poll the Compute Engine task, then print the quality
 ## gate and key measures. Reads SONARQUBE_TOKEN from .env; analyzes the current
@@ -1020,30 +1026,31 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/24] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/24] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/24] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/24] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/24] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/24] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/24] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/24] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/24] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/24] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/24] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/24] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/24] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/24] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/24] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/24] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/24] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/24] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/24] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/24] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/24] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/24] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/24] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/24] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[1/25] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/25] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/25] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/25] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/25] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/25] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/25] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/25] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/25] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/25] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/25] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/25] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/25] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/25] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/25] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/25] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/25] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/25] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/25] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/25] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/25] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/25] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/25] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/25] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/25] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \

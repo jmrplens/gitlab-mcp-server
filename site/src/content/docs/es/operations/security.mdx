@@ -416,6 +416,16 @@ oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:3.0.0
 Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer release posterior al 3.0.0. Sobre el propio 3.0.0 los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
 :::
 
+## Vulnerabilidades conocidas en un binario
+
+Los escáneres que leen un binario o el SBOM de una imagen (Trivy, Grype, osv-scanner, Docker Scout) informan de cada aviso contra cualquier módulo de Go que el binario nombre en su información de compilación, se enlace o no el código vulnerable. La CI hace ahora esa misma pregunta a cada binario que compila el release, en cada push y en cada pull request: compila cada uno y lo contrasta con la base de datos de vulnerabilidades de Go a nivel de módulo, y un hallazgo hace fallar la compilación salvo que lo acepte una declaración revisada del repositorio. Puedes hacérsela a un binario que hayas descargado:
+
+```bash
+go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitlab-mcp-server-linux-amd64
+```
+
+Los releases 3.0.0 y 3.1.0 llevan `golang.org/x/crypto` en su información de compilación, así que esos escáneres informan de `GO-2026-5932` sobre ellos, aunque ninguno enlaza los paquetes openpgp a los que se refiere el aviso: el módulo estaba ahí por una única función HKDF, que los releases posteriores toman de la biblioteca estándar de Go, de modo que ya no llevan el módulo. Los releases anteriores al 3.0.0 sí enlazaban openpgp, a través del subsistema de autoactualización que el 3.0.0 eliminó.
+
 ## ¿El token aparece en los logs?
 
 El servidor no registra el token. El logging de llamadas a herramientas es estructurado y escribe un conjunto fijo de campos en stderr: el nombre de la herramienta, la duración de la llamada, el error cuando lo hay y, si la petición lleva una identidad autenticada, el nombre de usuario y el ID de GitLab con fines de auditoría. El token no es uno de esos campos, y se envía a GitLab como cabecera de la petición y no en la URL, así que tampoco aparece en las rutas registradas.

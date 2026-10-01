@@ -639,7 +639,9 @@ jobs:
   govulncheck:
     name: "🛡️ govulncheck"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The binary check builds the six release targets and scans each, which
+    # took 2m52s on five cores where it was measured, on top of the source scan.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -652,6 +654,16 @@ jobs:
       # us would change what "no known vulnerability" meant last week.
       - run: go install golang.org/x/vuln/cmd/govulncheck
       - run: make govulncheck
+      # The source scan asks whether our code calls a vulnerable symbol. This
+      # asks what the release binaries carry, at module grain, which is what
+      # every scanner reading a binary or an image SBOM reports: the two
+      # disagreed on 3.0.0 and 3.1.0 (GO-2026-5932 through
+      # golang.org/x/crypto). It runs here, before anything is pushed, and
+      # never after an image push, when a failure would leave the tags on an
+      # image nothing signed. The scanner is the golang.org/x/vuln go.mod pins,
+      # run in process by cmd/audit_binary_vulns.
+      - name: Release binaries at module grain
+        run: make check-binary-vulns
 
   # This job took six and a half minutes on a day the npm registry was slow, of
   # which the lint itself was eight seconds: `npx --yes` resolved and installed

@@ -28,6 +28,17 @@ ARG TARGETARCH
 # "Could not open '/lib/ld-linux-aarch64.so.1'". Name the interpreter
 # explicitly instead of letting the linker guess from the wrong filesystem, and
 # refuse to build an architecture whose musl name we have not spelled out.
+#
+# No -trimpath here, unlike the GoReleaser build. With it Go leaves -ldflags
+# out of the binary's build information, and .git is not in the build context,
+# so the main module's version is (devel) and nothing in the binary says which
+# release it is: the image SBOM listed the server with no version, which no
+# advisory against this module could ever be matched to. Without it the build
+# information records -X main.version, which syft (the version release.yml
+# pins) reads as the module's version and writes into a versioned purl. What
+# it costs is the paths of this stage, /src for our packages, /go/pkg/mod for
+# the dependencies and /usr/local/go for the standard library, none of which
+# says anything about the host that ran the build.
 RUN --mount=type=cache,target=/go/pkg/mod \
 	--mount=type=cache,target=/root/.cache/go-build \
 	set -eu; \
@@ -37,7 +48,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	*) echo "unsupported TARGETARCH=${TARGETARCH}: no musl loader name for it" >&2; exit 1 ;; \
 	esac; \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-	-trimpath -buildmode=pie \
+	-buildmode=pie \
 	-ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -I /lib/ld-musl-${MUSL_ARCH}.so.1" \
 	-o /out/gitlab-mcp-server ./cmd/server; \
 	grep -a -q "/lib/ld-musl-${MUSL_ARCH}.so.1" /out/gitlab-mcp-server || \

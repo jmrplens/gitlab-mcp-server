@@ -1150,6 +1150,34 @@ func TestErrorTypeName_AWrapperWithNothingUnderIt_KeepsItsOwnName(t *testing.T) 
 	}
 }
 
+// TestErrorTypeName_AChainOfWrappersPastTheBound_IsNamedGenerically covers the
+// walk running out of depth rather than out of chain.
+//
+// The bound is there because an error chain is built by whatever wrapped it,
+// and a cyclic Unwrap would otherwise be a hang. A chain that is still generic
+// after sixteen unwraps is reported as "error", which says nothing more than it
+// knows; one wrapper fewer reaches the bottom inside the bound and reports the
+// type found there, which is what pins the bound at sixteen rather than
+// somewhere near it.
+func TestErrorTypeName_AChainOfWrappersPastTheBound_IsNamedGenerically(t *testing.T) {
+	t.Parallel()
+
+	wrapped := func(depth int) error {
+		err := errors.New("collector refused the batch")
+		for range depth {
+			err = fmt.Errorf("exporting: %w", err)
+		}
+		return err
+	}
+
+	if got := errorTypeName(wrapped(maxUnwrapDepth - 1)); got != "*errors.errorString" {
+		t.Errorf("a chain that ends inside the bound = %q, want the type at its bottom", got)
+	}
+	if got := errorTypeName(wrapped(maxUnwrapDepth)); got != "error" {
+		t.Errorf("a chain still generic at the bound = %q, want \"error\"", got)
+	}
+}
+
 // TestTruncateForExport_AtTheBound_AddsNoMarker covers the same bound one layer
 // down, where the marker rather than the kind is what differs.
 //

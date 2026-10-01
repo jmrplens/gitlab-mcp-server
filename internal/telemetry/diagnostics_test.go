@@ -448,6 +448,46 @@ func TestRedactingHandler_DescendsIntoAGroup(t *testing.T) {
 	}
 }
 
+// TestRedactingHandler_ADerivedHandlerStillRedacts covers the two ways a
+// handler is derived, which is how logr's WithValues and WithName reach it.
+//
+// A derived handler that dropped the substitution would print whatever was
+// attached to it before the record arrived, and an exporter attaches its
+// endpoint and headers exactly that way: once, up front, rather than on every
+// line. So both the attributes bound by With and the ones logged inside a
+// group opened by WithGroup have to come out substituted, and the derivation
+// has to hand back a handler that keeps doing it.
+func TestRedactingHandler_ADerivedHandlerStillRedacts(t *testing.T) {
+	const secret = "SUPERSECRET-COLLECTOR-TOKEN-9f3a"
+
+	var buf bytes.Buffer
+	handler := &redactingHandler{
+		Handler: slog.NewJSONHandler(&buf, nil),
+		redact:  func(text string) string { return strings.ReplaceAll(text, secret, redactedPlaceholder) },
+	}
+
+	slog.New(handler).
+		With(slog.String("authorization", "Bearer "+secret), slog.Int("attempts", 7)).
+		WithGroup("exporter").
+		Info("export failed", slog.String("header", "Bearer "+secret))
+
+	printed := buf.String()
+	if strings.Contains(printed, secret) {
+		t.Errorf("a credential attached to a derived handler reached the terminal: %s", printed)
+	}
+	for _, want := range []string{
+		`"authorization":"Bearer ` + redactedPlaceholder + `"`,
+		`"attempts":7`,
+		`"exporter":{"header":"Bearer ` + redactedPlaceholder + `"}`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(printed, want) {
+				t.Errorf("the derived handler's line lacks %s: %s", want, printed)
+			}
+		})
+	}
+}
+
 // TestClampSDKLevel_MapsTheSDKVerbosityScaleOntoLevels pins the mapping at
 // every boundary it has.
 //
