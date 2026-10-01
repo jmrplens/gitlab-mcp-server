@@ -15,7 +15,8 @@ import (
 // generated table rather than a copy, which is what lets each catalog action
 // point into it for free.
 func TestTable_IsTheSameTableOnEveryCall(t *testing.T) {
-	if Table() != Table() {
+	first, second := Table(), Table()
+	if first != second {
 		t.Fatal("Table() answered two different tables")
 	}
 	if Table().Version == "" {
@@ -86,7 +87,7 @@ func TestTable_CompilesToDataWithNoInitWork(t *testing.T) {
 // `go list -export`, and returns the size of its init functions.
 func initBytes(t *testing.T, command ...string) int {
 	t.Helper()
-	exported, err := exec.CommandContext(t.Context(), command[0], command[1:]...).Output()
+	exported, err := exec.CommandContext(t.Context(), command[0], command[1:]...).Output() // #nosec G204 -- the go command, with the arguments this test writes
 	if err != nil {
 		t.Fatalf("%s: %v", strings.Join(command, " "), err)
 	}

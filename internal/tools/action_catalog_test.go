@@ -1160,18 +1160,24 @@ func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 func TestTable_CoversTheCatalog(t *testing.T) {
 	freshness.SkipIfDeferred(t)
 	built := map[string]bool{}
-	for _, client := range []*gitlabclient.Client{nil, newGitLabDotComClient(t)} {
-		catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
-		catalog, err := dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-		if err != nil {
-			t.Fatalf("AddStandaloneCatalog() error = %v", err)
-		}
-		for _, action := range catalog.Actions() {
-			built[string(action.ID)] = true
-			if action.FineGrained == nil || action.FineGrained != actiongrants.Requirement(string(action.ID)) {
-				t.Errorf("%s carries no fine-grained row; run make gen-action-grants", action.ID)
+	instances := []struct {
+		name   string
+		client *gitlabclient.Client
+	}{{name: "self-managed"}, {name: "GitLab.com", client: newGitLabDotComClient(t)}}
+	for _, instance := range instances {
+		t.Run(instance.name, func(t *testing.T) {
+			catalog := mustBuildActionCatalog(t, instance.client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+			catalog, err := dynamictools.AddStandaloneCatalog(catalog, instance.client, dynamictools.StandaloneOptions{})
+			if err != nil {
+				t.Fatalf("AddStandaloneCatalog() error = %v", err)
 			}
-		}
+			for _, action := range catalog.Actions() {
+				built[string(action.ID)] = true
+				if action.FineGrained == nil || action.FineGrained != actiongrants.Requirement(string(action.ID)) {
+					t.Errorf("%s carries no fine-grained row; run make gen-action-grants", action.ID)
+				}
+			}
+		})
 	}
 	for _, row := range actiongrants.Table().Actions {
 		if !built[row.ID] {
