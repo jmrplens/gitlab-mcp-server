@@ -159,6 +159,9 @@ func fixtureRecord() *apilive.Document {
 			route("GET", "/projects/:id/unknown", authorized("project", "read_nowhere")),
 			route("GET", "/projects/:id/files/:file_path/raw", authorized("project", "read_repository_file")),
 			route("PUT", "/projects/:id/integrations/slack", authorized("project", "update_integration")),
+			// Another method on the same path is no route the slug
+			// declaration stands for, whatever it declares.
+			route("DELETE", "/projects/:id/integrations/slack", authorized("group", "update_integration")),
 			route("PUT", "/projects/:id/integrations/jira", authorized("project", "update_integration")),
 			route("PUT", "/projects/:id/integrations/other", authorized("group", "update_integration")),
 			route("PUT", "/projects/:id/hooks", authorized("group", "update_integration")),

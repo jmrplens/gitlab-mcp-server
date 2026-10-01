@@ -465,6 +465,10 @@ func Compound(ctx context.Context, client *gitlabclient.Client, input Input) (Ou
 	_, _ = ctx, input
 	path := "r"
 	path += "/s"
+	// A field written beside the variable is no assignment to it.
+	var box struct{ s string }
+	box.s = path
+	_ = box.s
 	_, err := client.GL().NewRequest("GET", path, nil, nil)
 	return Output{}, err
 }

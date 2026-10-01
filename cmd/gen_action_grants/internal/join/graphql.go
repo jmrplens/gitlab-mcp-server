@@ -431,7 +431,10 @@ func dedupeRequirements(groups []requirement) []requirement {
 	return out
 }
 
-// fields flattens a selection set to its fields, fragments spread in.
+// fields flattens a selection set to its fields, fragments spread in. A
+// selection is one of three types, since the parser's interface carries an
+// unexported method, so what is neither a field nor an inline fragment is a
+// spread.
 func fields(set gqlast.SelectionSet) []*gqlast.Field {
 	var out []*gqlast.Field
 	for _, selection := range set {
@@ -440,8 +443,9 @@ func fields(set gqlast.SelectionSet) []*gqlast.Field {
 			out = append(out, typed)
 		case *gqlast.InlineFragment:
 			out = append(out, fields(typed.SelectionSet)...)
-		case *gqlast.FragmentSpread:
-			out = append(out, fields(typed.Definition.SelectionSet)...)
+		default:
+			spread, _ := typed.(*gqlast.FragmentSpread)
+			out = append(out, fields(spread.Definition.SelectionSet)...)
 		}
 	}
 	return out
