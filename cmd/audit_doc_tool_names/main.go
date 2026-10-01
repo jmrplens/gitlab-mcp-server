@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"io"
@@ -150,11 +151,8 @@ func writeToolFindings(out io.Writer, findings map[string][]string) {
 	for name := range findings {
 		names = append(names, name)
 	}
-	sort.Slice(names, func(i, j int) bool {
-		if len(findings[names[i]]) != len(findings[names[j]]) {
-			return len(findings[names[i]]) > len(findings[names[j]])
-		}
-		return names[i] < names[j]
+	slices.SortFunc(names, func(a, b string) int {
+		return cmp.Or(cmp.Compare(len(findings[b]), len(findings[a])), strings.Compare(a, b))
 	})
 
 	fmt.Fprintf(out, "\n%d unregistered tool name(s) referenced:\n", len(names))
