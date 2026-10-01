@@ -121,10 +121,12 @@ const ScopeGranular = "granular"
 // tokens. A list that carries the scope beside others is not this shape, and is
 // read as the classic scopes it spells.
 //
-// The list reaches this predicate only when the token may read itself: the
-// self endpoint requires Personal Access Token: Read of a fine-grained token,
-// and without it GitLab answers 403, [DetectToken] reports nil scopes, and the
-// token is unknown authority by that route instead.
+// The list reaches this predicate from the self endpoint only when the token
+// may read itself: that endpoint requires Personal Access Token: Read of a
+// fine-grained token, and without it GitLab answers 403
+// insufficient_granular_scope, which [DetectToken] reads as a fine-grained
+// token with no id whose grant cannot be read, reporting this list for it
+// without asking this predicate.
 func FineGrained(scopes []string) bool {
 	return len(scopes) == 1 && scopes[0] == ScopeGranular
 }
