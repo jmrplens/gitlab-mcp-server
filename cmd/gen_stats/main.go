@@ -437,19 +437,29 @@ func updateSourceLineStats(line, trimmed string, s *repoStats) {
 }
 
 // isTODOComment reports whether trimmed is a task-annotation comment.
-// It requires a word boundary after the marker so that identifiers like
-// "TodoOutput" or "toDomainOutput" are not mistaken for task annotations.
+//
+// The marker counts written in capitals at a word boundary, so identifiers
+// like "TodoOutput" or "TODO_LATER" are not mistaken for task annotations.
+// Written in any other case it counts only when a colon or a parenthesis
+// follows it ("hack(x):", "todo:"), the shape of an annotation: GitLab's own
+// word begins sentences here ("todo list", "todo, and time-tracking routes")
+// and the doc comment of an identifier named Todo begins with that name, and
+// neither is a task left to do.
 func isTODOComment(trimmed string) bool {
 	if !strings.HasPrefix(trimmed, "//") {
 		return false
 	}
-	keyword := strings.ToUpper(strings.TrimLeft(trimmed[2:], " \t"))
+	text := strings.TrimLeft(trimmed[2:], " \t")
 	for _, marker := range []string{"TODO", "FIXME", "HACK"} {
-		if strings.HasPrefix(keyword, marker) {
-			rest := keyword[len(marker):]
-			if rest == "" || (!unicode.IsLetter(rune(rest[0])) && rest[0] != '_') {
-				return true
-			}
+		if len(text) < len(marker) || !strings.EqualFold(text[:len(marker)], marker) {
+			continue
+		}
+		rest := text[len(marker):]
+		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "(") {
+			return true
+		}
+		if text[:len(marker)] == marker && (rest == "" || (!unicode.IsLetter(rune(rest[0])) && rest[0] != '_')) {
+			return true
 		}
 	}
 	return false

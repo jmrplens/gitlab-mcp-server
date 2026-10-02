@@ -544,7 +544,10 @@ func TestUpdateFunctionStats_ShorterNames_KeepLongestRecord(t *testing.T) {
 
 // TestIsTODOComment_MarkerShapes_RequireWordBoundary verifies the three task
 // markers are recognized only as comments and only at a word boundary, so
-// identifiers that merely start with a marker are not counted.
+// identifiers that merely start with a marker are not counted, and that a
+// marker not written in capitals counts only when a colon or a parenthesis
+// follows it, so a doc comment of an identifier named Todo and a sentence
+// beginning with GitLab's word "todo" are not counted either.
 func TestIsTODOComment_MarkerShapes_RequireWordBoundary(t *testing.T) {
 	tests := []struct {
 		line string
@@ -552,10 +555,19 @@ func TestIsTODOComment_MarkerShapes_RequireWordBoundary(t *testing.T) {
 	}{
 		{line: "// TODO: later", want: true},
 		{line: "//TODO", want: true},
+		{line: "// HACK", want: true},
 		{line: "// fixme(x): later", want: true},
+		{line: "// todo: later", want: true},
 		{line: "//\tHACK - workaround", want: true},
+		{line: "// TODO(dynamic-search): remove this", want: true},
 		{line: "// TodoOutput is a struct", want: false},
 		{line: "// TODO_LATER", want: false},
+		{line: "// TODOS are counted elsewhere", want: false},
+		{line: "// Todo defers the decision", want: false},
+		{line: "// todo list GitLab ships", want: false},
+		{line: "// todo, and time-tracking routes", want: false},
+		{line: "// fixme", want: false},
+		{line: "// TO", want: false},
 		{line: "// nothing here", want: false},
 		{line: "x := TODO", want: false},
 	}

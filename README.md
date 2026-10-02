@@ -475,10 +475,10 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,467 |       348,502 |
-| Unit tests (`_test.go`)  |     1,016 |       662,177 |
+| Source (`.go`, non-test) |     1,467 |       348,512 |
+| Unit tests (`_test.go`)  |     1,016 |       662,196 |
 | End-to-end tests         |       517 |       112,584 |
-| **Total**                | **3,000** | **1,123,263** |
+| **Total**                | **3,000** | **1,123,292** |
 
 ### Functions
 
@@ -498,7 +498,7 @@ and the workaround this server carries until it ships.
 | Test lines vs source lines         | 1.90× more tests than code |
 | Average source file length         |                 ~238 lines |
 | Average test file length           |                 ~652 lines |
-| Comment lines in source            |  84,763 (~24.3% of source) |
+| Comment lines in source            |  84,769 (~24.3% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -509,7 +509,7 @@ and the workaround this server carries until it ships.
 | `defer` statements                 |  1,366 |
 | `struct` types defined             |  3,734 |
 | `//nolint` suppressions            |    249 |
-| `TODO` / `FIXME` / `HACK` comments |      6 |
+| `TODO` / `FIXME` / `HACK` comments |      0 |
 
 ### Project
 
@@ -531,7 +531,7 @@ and the workaround this server carries until it ships.
 | Fact                                 | Value                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~6,336 pages of A4                                                                                      |
-| Source lines mentioning `"gitlab"`   | 15,802 (impossible to avoid)                                                                            |
+| Source lines mentioning `"gitlab"`   | 15,803 (impossible to avoid)                                                                            |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                        |
 | Longest test function name           | `TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor` (90 chars) |
 
