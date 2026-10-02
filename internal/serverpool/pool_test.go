@@ -2098,6 +2098,18 @@ func (c *capturedRecords) find(message string) (slog.Record, bool) {
 	return slog.Record{}, false
 }
 
+// findLevel returns the first captured record at the given level.
+func (c *capturedRecords) findLevel(level slog.Level) (slog.Record, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, record := range c.records {
+		if record.Level == level {
+			return record, true
+		}
+	}
+	return slog.Record{}, false
+}
+
 // captureLogs installs a recording handler as the default logger for the length
 // of the test.
 func captureLogs(t *testing.T) *capturedRecords {
@@ -5765,9 +5777,13 @@ type fineGrainedGitLab struct {
 	server      *httptest.Server
 	version     atomic.Pointer[string]
 	grantStatus atomic.Int64
-	self        atomic.Int64
-	grants      atomic.Int64
-	versions    atomic.Int64
+	// selfStatus, when not zero, is the status the token's description is
+	// refused with; selfScopes is the scope list it describes otherwise.
+	selfStatus atomic.Int64
+	selfScopes atomic.Pointer[string]
+	self       atomic.Int64
+	grants     atomic.Int64
+	versions   atomic.Int64
 	// onSelf, when set, runs inside the self request, after the tier was
 	// detected and before the fine-grained reads.
 	onSelf atomic.Pointer[func()]
@@ -5783,6 +5799,8 @@ func newFineGrainedGitLab(t *testing.T) *fineGrainedGitLab {
 	version := "19.4.1-ee"
 	g.version.Store(&version)
 	g.grantStatus.Store(http.StatusOK)
+	granular := `["granular"]`
+	g.selfScopes.Store(&granular)
 	run := func(hook *atomic.Pointer[func()]) {
 		if fn := hook.Load(); fn != nil {
 			(*fn)()
@@ -5795,7 +5813,11 @@ func newFineGrainedGitLab(t *testing.T) *fineGrainedGitLab {
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
 		g.self.Add(1)
 		run(&g.onSelf)
-		_, _ = fmt.Fprintf(w, `{"id":%d,"scopes":["granular"],"active":true}`, fineGrainedTokenID)
+		if status := g.selfStatus.Load(); status != 0 {
+			w.WriteHeader(int(status))
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"id":%d,"scopes":%s,"active":true}`, fineGrainedTokenID, *g.selfScopes.Load())
 	})
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/"+strconv.Itoa(fineGrainedTokenID), func(w http.ResponseWriter, _ *http.Request) {
 		g.grants.Add(1)
@@ -5867,8 +5889,8 @@ func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t
 	if g.self.Load() != 1 || g.grants.Load() != 1 || g.versions.Load() != 1 {
 		t.Errorf("requests: self %d, grant %d, version %d; want one each", g.self.Load(), g.grants.Load(), g.versions.Load())
 	}
-	if entry.token.ID != fineGrainedTokenID || !entry.token.GrantReadable {
-		t.Errorf("entry token facts = %+v", entry.token)
+	if facts := entry.tokenFacts(); facts.ID != fineGrainedTokenID || !facts.GrantReadable {
+		t.Errorf("entry token facts = %+v", facts)
 	}
 }
 
@@ -6053,6 +6075,109 @@ func assertMovedLogs(t *testing.T, logs *capturedRecords, want []string) {
 	}
 }
 
+// TestGetOrCreate_AKindNothingAnswered_IsAskedAtTheBuildAndKeptUnknown verifies
+// what a build does with a token whose kind it was not told: one the self
+// endpoint does not describe is built with the kind unknown and no authority;
+// one the OAuth verifier handed with assumed scopes is asked about too, and
+// the self endpoint's answer replaces the assumption, a fine-grained token
+// then carrying its authority from the build; and an assumption the self
+// endpoint does not answer either is kept, with the kind still unknown.
+func TestGetOrCreate_AKindNothingAnswered_IsAskedAtTheBuildAndKeptUnknown(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	g.selfStatus.Store(http.StatusServiceUnavailable)
+	_, undescribed := fineGrainedEntry(t, g)
+	if facts := undescribed.tokenFacts(); !facts.KindUnknown || undescribed.Client().Authority() != nil {
+		t.Errorf("an undescribed token: facts %+v, authority %v; want the kind unknown and none", facts, undescribed.Client().Authority())
+	}
+
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	pool := New(cfg, testFactory())
+	assumed := gitlabclient.FactsFromScopes([]string{"api", "read_api"}, 0)
+	assumed.KindUnknown = true
+	kept, err := pool.GetOrCreateEntryWithFacts("glpat-assumed-kept", g.server.URL, &assumed)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+	}
+	if facts := kept.tokenFacts(); !facts.KindUnknown || !slices.Equal(facts.Scopes, assumed.Scopes) || kept.Config().TokenScopes == nil {
+		t.Errorf("an assumption nothing answered: facts %+v, scopes served %v; want the assumption kept", facts, kept.Config().TokenScopes)
+	}
+
+	g.selfStatus.Store(0)
+	asked := g.self.Load()
+	replaced, err := pool.GetOrCreateEntryWithFacts("glpat-assumed-replaced", g.server.URL, &assumed)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+	}
+	if facts := replaced.tokenFacts(); facts.KindUnknown || !facts.FineGrained || g.self.Load() != asked+1 {
+		t.Errorf("an assumption the self endpoint answered: facts %+v after %d requests; want the fine-grained answer after one",
+			facts, g.self.Load()-asked)
+	}
+	if got := replaced.Client().Authority(); got == nil || got.Phase() != finegrained.PhaseGranted {
+		t.Errorf("an assumption the self endpoint answered: authority %v, want phase B from the build", got)
+	}
+}
+
+// TestRevalidateAll_AnUnknownKind_IsAskedUntilGitLabAnswers verifies an
+// accepted revalidation asks the self endpoint again about an entry whose
+// token's kind its build could not learn: a round it does not answer changes
+// nothing and warns about nothing; the round it answers that the token is a
+// fine-grained one gives the entry's client its authority with every probe
+// slot taken, since the sweep takes none, and says so once without the
+// token's id; the rounds after that re-read the grant like any fine-grained
+// entry's and do not ask the kind again. A token it learns is a classic one is
+// given nothing and never asked again.
+func TestRevalidateAll_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	g.selfStatus.Store(http.StatusBadGateway)
+	pool, entry := fineGrainedEntry(t, g)
+	for range cap(pool.probes) {
+		pool.probes <- struct{}{}
+	}
+	logs := captureLogs(t)
+
+	pool.revalidateAll(context.Background())
+	if entry.Client().Authority() != nil || g.self.Load() != 2 {
+		t.Fatalf("an unanswered round: authority %v after %d descriptions asked; want none after two",
+			entry.Client().Authority(), g.self.Load())
+	}
+	if record, warned := logs.findLevel(slog.LevelWarn); warned {
+		t.Errorf("an unanswered round warned %q", record.Message)
+	}
+
+	g.selfStatus.Store(0)
+	pool.revalidateAll(context.Background())
+	if got := entry.Client().Authority(); got == nil || got.Phase() != finegrained.PhaseGranted {
+		t.Fatalf("the round that answered: authority %v, want phase B", got)
+	}
+	record, logged := logs.find(kindLearnedLog)
+	if !logged {
+		t.Error("learning the token's kind was not logged")
+	} else if phase, _ := logAttr(record, "phase"); phase.String() != "B" {
+		t.Errorf("the kind was logged as learned in phase %q, want B", phase.String())
+	}
+	grants := g.grants.Load()
+	pool.revalidateAll(context.Background())
+	if g.self.Load() != 3 || g.grants.Load() != grants+1 {
+		t.Errorf("the round after: %d descriptions asked in all and %d grant reads more; want three and one",
+			g.self.Load(), g.grants.Load()-grants)
+	}
+
+	classicGitLab := newFineGrainedGitLab(t)
+	classicGitLab.selfStatus.Store(http.StatusBadGateway)
+	classicPool, classicEntry := fineGrainedEntry(t, classicGitLab)
+	api := `["api"]`
+	classicGitLab.selfScopes.Store(&api)
+	classicGitLab.selfStatus.Store(0)
+	classicPool.revalidateAll(context.Background())
+	classicPool.revalidateAll(context.Background())
+	if facts := classicEntry.tokenFacts(); facts.KindUnknown || facts.FineGrained || classicEntry.Client().Authority() != nil ||
+		classicGitLab.self.Load() != 2 {
+		t.Errorf("a token learned to be classic: facts %+v, authority %v, %d descriptions asked; want it known, none, two",
+			facts, classicEntry.Client().Authority(), classicGitLab.self.Load())
+	}
+}
+
 // TestRevalidateAll_AClassicEntry_RereadsNothing verifies a classic token's
 // entry costs a revalidation nothing beyond the credential probe, and is not
 // logged as a fine-grained re-read that kept what it was shown.
@@ -6074,11 +6199,13 @@ func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
 	}
 }
 
-// The three log lines a fine-grained entry may write: when it is built in
-// phase A, when a re-read moved it to another verdict, and when a re-read
-// kept the authority it carried.
+// The four log lines a fine-grained entry may write: when it is built in
+// phase A, when a re-read moved it to another verdict, when a re-read kept the
+// authority it carried, and when a revalidation learns that a token whose kind
+// was not known is a fine-grained one.
 const (
 	phaseAEntryLog = "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches"
 	rereadMovedLog = "server pool: a fine-grained token's re-read moved what it is shown"
 	rereadKeptLog  = "server pool: a fine-grained token's re-read could not be used; keeping what it was shown"
+	kindLearnedLog = "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown"
 )

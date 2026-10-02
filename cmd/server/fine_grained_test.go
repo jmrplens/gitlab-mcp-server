@@ -375,15 +375,21 @@ func TestBindProcessClient_BindsTheServersOneClient(t *testing.T) {
 	}
 }
 
-// phaseBGitLab is a stand-in instance serving three tokens: two fine-grained
+// phaseBGitLab is a stand-in instance serving four tokens: two fine-grained
 // ones that may read their grants, of Project: Read on one project and of Work
-// Item: Create (which expands to create_issue) on every membership, and a
-// classic one whose scopes it does not describe. It reports version, which a test may change, and counts the
-// version reads.
+// Item: Create (which expands to create_issue) on every membership, a classic
+// one whose scopes it does not describe, and a classic one it describes as
+// api. It reports version, which a test may change, and counts the version
+// reads; it counts the token descriptions too, and answers them 503 while a
+// test says so, and every request 503 while a test says the whole instance is
+// down.
 type phaseBGitLab struct {
 	url      string
 	version  atomic.Pointer[string]
 	versions atomic.Int64
+	selves   atomic.Int64
+	selfDown atomic.Bool
+	down     atomic.Bool
 }
 
 // phaseBTokens are the stand-in's tokens, by what they are.
@@ -391,6 +397,7 @@ const (
 	phaseBProjectReader = "glpat-project-reader"
 	phaseBIssueCreator  = "glpat-issue-creator"
 	phaseBClassic       = "glpat-classic-unknown"
+	phaseBClassicAPI    = "glpat-classic-api"
 )
 
 // newPhaseBGitLab starts the stand-in at 19.4.1-ee.
@@ -417,12 +424,19 @@ func newPhaseBGitLab(t *testing.T) *phaseBGitLab {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
-		id, fine := ids[r.Header.Get("PRIVATE-TOKEN")]
-		if !fine {
+		g.selves.Add(1)
+		token := r.Header.Get("PRIVATE-TOKEN")
+		id, fine := ids[token]
+		switch {
+		case g.selfDown.Load():
+			w.WriteHeader(http.StatusServiceUnavailable)
+		case token == phaseBClassicAPI:
+			_, _ = w.Write([]byte(`{"id":13,"scopes":["api"],"active":true}`))
+		case !fine:
 			w.WriteHeader(http.StatusNotFound)
-			return
+		default:
+			_, _ = w.Write([]byte(`{"id":` + strconv.Itoa(id) + `,"scopes":["granular"],"active":true}`))
 		}
-		_, _ = w.Write([]byte(`{"id":` + strconv.Itoa(id) + `,"scopes":["granular"],"active":true}`))
 	})
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
 		scope, known := grants[r.PathValue("id")]
@@ -432,7 +446,13 @@ func newPhaseBGitLab(t *testing.T) *phaseBGitLab {
 		}
 		_, _ = w.Write([]byte(`{"id":` + r.PathValue("id") + `,"granular":true,"granular_scopes":[` + scope + `]}`))
 	})
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if g.down.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	t.Cleanup(srv.Close)
 	g.url = srv.URL
 	return g
@@ -587,7 +607,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		refreshStdioAuthority(ctx, client, facts, 5*time.Millisecond)
+		refreshStdioAuthority(ctx, client, facts, 5*time.Millisecond, nil)
 	}()
 
 	// Each wait is for the refresh goroutine: the upgrade moving the token to
@@ -614,7 +634,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	unread := make(chan struct{})
 	go func() {
 		defer close(unread)
-		refreshStdioAuthority(context.Background(), client, gitlabclient.TokenFacts{FineGrained: true}, time.Millisecond)
+		refreshStdioAuthority(context.Background(), client, gitlabclient.TokenFacts{FineGrained: true}, time.Millisecond, nil)
 	}()
 	select {
 	case <-unread:
@@ -623,9 +643,140 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	}
 }
 
+// TestRefreshStdioAuthority_AnUnknownKind_IsAskedUntilGitLabAnswers verifies
+// the stdio timer asks again what a token is while the start could not tell:
+// each round the self endpoint does not answer leaves the token served as a
+// classic one, with no authority, and is logged at DEBUG and never warned
+// about again; the round it answers that the token is a fine-grained one gives
+// the client its authority, judged at the version the start already read, and
+// says so once with the phase; and the rounds after that re-read the grant
+// like any fine-grained token's.
+func TestRefreshStdioAuthority_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testing.T) {
+	g := newPhaseBGitLab(t)
+	g.selfDown.Store(true)
+	client, err := gitlabclient.NewClientWithTokenRetries(g.url, phaseBProjectReader, false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries: %v", err)
+	}
+	if _, initErr := client.Initialize(t.Context()); initErr != nil {
+		t.Fatalf("Initialize: %v", initErr)
+	}
+	logs := captureFineGrainedLogs(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		refreshStdioAuthority(ctx, client, gitlabclient.TokenFacts{KindUnknown: true}, 5*time.Millisecond, nil)
+	}()
+
+	waitFor(t, func() bool { return g.selves.Load() >= 2 })
+	if client.Authority() != nil {
+		t.Error("a token the self endpoint did not describe was given an authority")
+	}
+	readsBefore := g.versions.Load()
+	g.selfDown.Store(false)
+	waitFor(t, func() bool { return client.Authority() != nil })
+	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.1-ee" {
+		t.Errorf("once described: phase %v at %q; want phase B at the version the start read", got.Phase(), got.Reported())
+	}
+	waitFor(t, func() bool { return g.versions.Load() > readsBefore })
+	cancel()
+	<-done
+
+	text := logs.String()
+	if strings.Contains(text, "level=WARN") || !strings.Contains(text, "level=DEBUG msg=\"the token's kind is still unknown\"") {
+		t.Errorf("the unanswered rounds logged:\n%s\nwant DEBUG lines and no warning", text)
+	}
+	learned := "the token whose kind was not known is a fine-grained one; serving it what it may be shown\" phase=B"
+	if count := strings.Count(text, "the token whose kind was not known"); count != 1 || !strings.Contains(text, learned) {
+		t.Errorf("the kind was logged as learned %d times, want once as %q:\n%s", count, learned, text)
+	}
+}
+
+// TestPrepareStdioCatalog_ADegradedStart_AsksTheTokensKindOnceItRecovers
+// covers the start the timer alone would leave open for its whole interval: a
+// stdio process that could not reach GitLab registers the catalog without
+// knowing what its token is, and the client's lazy re-initialization, once
+// GitLab answers, has the token's kind asked at once, so a fine-grained token
+// is given its authority then rather than at the next round, fifteen minutes
+// on.
+func TestPrepareStdioCatalog_ADegradedStart_AsksTheTokensKindOnceItRecovers(t *testing.T) {
+	g := newPhaseBGitLab(t)
+	g.down.Store(true)
+	cfg := &config.Config{
+		GitLabURL: g.url, GitLabToken: phaseBProjectReader, ToolSurface: config.ToolSurfaceDynamic,
+		Tier: edition.Free, TierExplicit: true, IgnoreScopes: true, DisableRetries: true,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+	if client.IsInitialized() || client.Authority() != nil {
+		t.Fatalf("a start against an unreachable GitLab: initialized %v, authority %v; want neither",
+			client.IsInitialized(), client.Authority())
+	}
+
+	g.down.Store(false)
+	client.EnsureInitialized(t.Context())
+	waitFor(t, func() bool { return client.Authority() != nil })
+	if got := client.Authority(); got.Phase() != finegrained.PhaseGranted || got.Reported() != "19.4.1-ee" {
+		t.Errorf("once recovered: phase %v at %q; want phase B at 19.4.1-ee", got.Phase(), got.Reported())
+	}
+}
+
+// TestRefreshStdioAuthority_AKindLearned_EndsOrStartsTheReReads verifies what
+// follows the round that answers: a classic token gets no authority and the
+// goroutine returns, since nothing more is asked about it; and a closed
+// recovered channel, which a degraded start's client closes once it recovers,
+// asks at once rather than at the next round of a long interval.
+func TestRefreshStdioAuthority_AKindLearned_EndsOrStartsTheReReads(t *testing.T) {
+	g := newPhaseBGitLab(t)
+	newClient := func(token string) *gitlabclient.Client {
+		client, err := gitlabclient.NewClientWithTokenRetries(g.url, token, false, true)
+		if err != nil {
+			t.Fatalf("NewClientWithTokenRetries: %v", err)
+		}
+		return client
+	}
+
+	classic := newClient(phaseBClassicAPI)
+	returned := make(chan struct{})
+	go func() {
+		defer close(returned)
+		refreshStdioAuthority(t.Context(), classic, gitlabclient.TokenFacts{KindUnknown: true}, time.Millisecond, nil)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the refresh of a token learned to be a classic one did not return")
+	}
+	if classic.Authority() != nil {
+		t.Error("a token learned to be a classic one was given an authority")
+	}
+
+	fine := newClient(phaseBProjectReader)
+	recovered := make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		refreshStdioAuthority(ctx, fine, gitlabclient.TokenFacts{KindUnknown: true}, time.Hour, recovered)
+	}()
+	close(recovered)
+	waitFor(t, func() bool { return fine.Authority() != nil })
+	cancel()
+	<-done
+	if got := fine.Authority(); got.Phase() != finegrained.PhaseGranted {
+		t.Errorf("asked on recovery: phase %v, want phase B", got.Phase())
+	}
+}
+
 // TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes verifies the gate
 // hands the pool what the OAuth layer learned: nothing when it learned no
-// scopes, and the scopes with the token's id when the verifier read one.
+// scopes, the scopes with the token's id when the verifier read one, and the
+// kind unknown when the scopes were the verifier's assumption.
 func TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -646,6 +797,14 @@ func TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes(t *testing.T) {
 			info: &auth.TokenInfo{UserID: "5", Scopes: []string{"api"}, Expiration: time.Now().Add(time.Hour)},
 			want: &gitlabclient.TokenFacts{Scopes: []string{"api"}},
 		},
+		{
+			name: "scopes the verifier assumed",
+			info: &auth.TokenInfo{
+				UserID: "5", Scopes: []string{"api", "read_api"}, Expiration: time.Now().Add(time.Hour),
+				Extra: map[string]any{oauth.ScopesAssumedKey: true},
+			},
+			want: &gitlabclient.TokenFacts{Scopes: []string{"api", "read_api"}, KindUnknown: true},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -658,7 +817,7 @@ func TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer token")
 			handler.ServeHTTP(httptest.NewRecorder(), req)
 			if (got == nil) != (tc.want == nil) || got != nil && (got.ID != tc.want.ID || got.GrantReadable != tc.want.GrantReadable ||
-				got.FineGrained != tc.want.FineGrained || !slices.Equal(got.Scopes, tc.want.Scopes)) {
+				got.FineGrained != tc.want.FineGrained || got.KindUnknown != tc.want.KindUnknown || !slices.Equal(got.Scopes, tc.want.Scopes)) {
 				t.Errorf("verifiedFacts = %+v, want %+v", got, tc.want)
 			}
 		})

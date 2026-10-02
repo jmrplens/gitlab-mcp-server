@@ -2663,6 +2663,28 @@ func TestIntrospectToken_SelfReportsTheTokensID_TravelsInTheAdmission(t *testing
 	}
 }
 
+// TestAdmitToken_AssumedScopes_SaySoInTheAdmission verifies an admission whose
+// scopes are the assumption an unanswered introspection falls back to carries
+// ScopesAssumedKey, so the pool asks the token's kind itself rather than read
+// the assumption as a classic token, and that one whose scopes GitLab answered
+// carries no such key.
+func TestAdmitToken_AssumedScopes_SaySoInTheAdmission(t *testing.T) {
+	t.Parallel()
+	user := gitlabUserResponse{ID: 1, Username: "u"}
+	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := down.URL
+	down.Close()
+
+	assumed := admitToken(nil, url, "glpat-x", time.Minute, user, introspectToken(t.Context(), http.DefaultClient, url, "glpat-x"))
+	if flag, _ := assumed.Extra[ScopesAssumedKey].(bool); !flag {
+		t.Errorf("an admission on assumed scopes carries Extra[%s] = %v, want true", ScopesAssumedKey, assumed.Extra[ScopesAssumedKey])
+	}
+	answered := admitToken(nil, url, "glpat-y", time.Minute, user, introspection{scopes: []string{"api"}, answered: true})
+	if _, carried := answered.Extra[ScopesAssumedKey]; carried {
+		t.Errorf("an admission on answered scopes carries Extra[%s] = %v", ScopesAssumedKey, answered.Extra[ScopesAssumedKey])
+	}
+}
+
 // TestTokenIDFrom_ReadsOnlyAnExactPositiveWholeNumber verifies the id is read
 // from the decoded number only when it is a positive whole number a float64
 // carries exactly, and is 0 for anything else, a string included.

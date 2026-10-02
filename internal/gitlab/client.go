@@ -110,6 +110,10 @@ type Client struct {
 	// unauthorizedOnce makes a 401 naming the credential reach the hook once:
 	// the verdict is final, so a second one would only repeat it.
 	unauthorizedOnce sync.Once
+	// onRecovered is told when a lazy re-initialization succeeds. A stdio
+	// start uses it to ask again what it could not ask while the instance was
+	// away. See [Client.SetOnRecovered].
+	onRecovered atomic.Pointer[func()]
 
 	// authority is what this client's credential may do as a fine-grained
 	// personal access token, nil for any other credential. See
@@ -152,6 +156,20 @@ func (c *Client) notifyUnauthorized(answer UnauthorizedAnswer) {
 		return
 	}
 	(*fn)(answer)
+}
+
+// SetOnRecovered registers fn to run each time a lazy re-initialization
+// succeeds ([Client.EnsureInitialized]); a nil fn clears it. fn runs on the
+// goroutine whose SDK request recovered the client, holding the
+// initialization lock and before that request is sent, so it must be cheap
+// and must not block: a stdio start hands it a send that does not wait, and
+// asks GitLab what it could not ask at startup on a goroutine of its own.
+func (c *Client) SetOnRecovered(fn func()) {
+	if fn == nil {
+		c.onRecovered.Store(nil)
+		return
+	}
+	c.onRecovered.Store(&fn)
 }
 
 // initCooldown is the minimum interval between lazy re-initialization attempts
@@ -527,6 +545,9 @@ func (c *Client) EnsureInitialized(ctx context.Context) {
 	}
 	c.needsLazyInit.Store(false)
 	slog.InfoContext(ctx, "gitlab client recovered. Lazy initialization succeeded")
+	if fn := c.onRecovered.Load(); fn != nil {
+		(*fn)()
+	}
 }
 
 // EnableLazyInit enables lazy re-initialization on subsequent API calls.

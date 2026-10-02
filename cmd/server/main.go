@@ -1541,10 +1541,18 @@ func prepareStdioCatalog(
 	identity *deferredIdentity,
 ) error {
 	slog.InfoContext(ctx, "connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
+	// Closed once a degraded start recovers, so what the start could not ask
+	// GitLab, the token's kind, is asked then rather than at the next timer
+	// round. Registered before anything below can recover the client, and
+	// closed rather than sent on, under a once, so the recovering request
+	// never waits on it.
+	recovered := make(chan struct{})
 	gitlabVersion, err := client.Initialize(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode",
 			"url", cfg.GitLabURL, "error", err)
+		var once sync.Once
+		client.SetOnRecovered(func() { once.Do(func() { close(recovered) }) })
 		client.EnableLazyInit()
 	} else {
 		if sentence, refused := client.VersionRefusal(); refused {
@@ -1596,8 +1604,9 @@ func prepareStdioCatalog(
 	// filter and the narrowing and has nothing to say about the token's kind,
 	// unless the start could not reach GitLab: then the only reason to ask is
 	// the kind, an instance that did not answer cannot tell it, and the request
-	// would spend the lazy re-initialization's first attempt for nothing.
-	var facts gitlabclient.TokenFacts
+	// would spend the lazy re-initialization's first attempt for nothing. The
+	// kind is then unknown, and asked once the client recovers.
+	facts := gitlabclient.TokenFacts{KindUnknown: true}
 	if !cfg.IgnoreScopes || client.IsInitialized() {
 		facts = gitlabclient.DetectToken(ctx, client.GL())
 	}
@@ -1627,7 +1636,7 @@ func prepareStdioCatalog(
 	// (ADM-009's value, read here by register row AUT-008), so the two
 	// transports follow an instance upgraded under a running session alike.
 	// Stdio reads no revalidation setting, so nothing moves it or turns it off.
-	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval)
+	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval, recovered)
 	return nil
 }
 
@@ -1656,35 +1665,65 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // refreshStdioAuthority re-reads, every interval until ctx ends, the grant of
 // the process's fine-grained token and the instance version, and replaces the
 // authority its client carries when the reads answered
-// ([gitlabclient.Client.RefreshAuthority]). A token that may not read its grant
-// is never asked, so the goroutine returns at once. A re-read that moved the
-// token to another verdict is logged with the arguments the start logs a phase
-// A authority with, and one that kept the authority is logged once, with its
-// reason.
-func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration) {
-	if !facts.GrantReadable {
-		return
-	}
+// ([gitlabclient.Client.RefreshAuthority]). A token whose kind is not known
+// yet is asked its kind on those rounds instead, and also as soon as recovered
+// is closed, which a degraded start's client does once it recovers
+// ([redetectStdioToken]). A token that may not read its grant, or that is
+// learned to be a classic one, is not asked anything more, so the goroutine
+// returns. A re-read that moved the token to another verdict is logged with
+// the arguments the start logs a phase A authority with, and one that kept the
+// authority is logged once, with its reason.
+func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration, recovered <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	logged := false
-	for {
+	for facts.GrantReadable || facts.KindUnknown {
 		select {
 		case <-ctx.Done():
 			return
+		case <-recovered:
+			// Asked once: a nil channel is never ready again.
+			recovered = nil
 		case <-ticker.C:
-			readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
-			moved, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())
+		}
+		readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
+		if facts.KindUnknown {
+			facts = redetectStdioToken(readCtx, client)
 			cancel()
-			if moved != nil {
-				slog.InfoContext(ctx, "the fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
-			}
-			if reason != "" && !logged {
-				logged = true
-				slog.InfoContext(ctx, "the fine-grained token's re-read could not be used; keeping what it was shown", "reason", reason)
-			}
+			continue
+		}
+		moved, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())
+		cancel()
+		if moved != nil {
+			slog.InfoContext(ctx, "the fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
+		}
+		if reason != "" && !logged {
+			logged = true
+			slog.InfoContext(ctx, "the fine-grained token's re-read could not be used; keeping what it was shown", "reason", reason)
 		}
 	}
+}
+
+// redetectStdioToken asks the self endpoint again what the process's token is,
+// when nothing has said yet ([gitlabclient.RedetectToken]), and returns what it
+// learned, the kind still unknown when GitLab did not answer. A token it learns
+// is a fine-grained one is given its authority at once, judged from its grant
+// and the version as the start judges it ([stdioAuthority]), so the calls after
+// it are decided as a fine-grained session's are; the catalog the start
+// registered, and its scope narrowing, stay what the start decided, since they
+// were registered before the gate opened. The line written then names the
+// phase and the reason, never the token's id.
+func redetectStdioToken(ctx context.Context, client *gitlabclient.Client) gitlabclient.TokenFacts {
+	facts := gitlabclient.RedetectToken(ctx, client.GL())
+	if facts.FineGrained {
+		authority := stdioAuthority(ctx, client, facts)
+		// Written before the authority is attached, so whatever waits on the
+		// authority finds the line already written.
+		slog.InfoContext(ctx, "the token whose kind was not known is a fine-grained one; serving it what it may be shown",
+			authority.LogArgs()...)
+		client.SetAuthority(authority)
+	}
+	return facts
 }
 
 // stdioRereadTimeout bounds one stdio re-read of a fine-grained token's grant

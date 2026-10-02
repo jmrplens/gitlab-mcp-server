@@ -29,6 +29,16 @@ type TokenFacts struct {
 	// is the permission (Personal Access Token: Read) its grant is read with
 	// too, and its id is known.
 	GrantReadable bool
+	// KindUnknown is set when nothing has said whether the token is a
+	// fine-grained one: the self endpoint gave neither a description nor
+	// GitLab's refusal of Personal Access Token: Read ([DetectToken]), it was
+	// not asked, or the OAuth verifier's scopes are its own assumption rather
+	// than an answer. Such a token is served as a classic one whose scopes are
+	// what the rest of these facts say, and its kind is asked again
+	// ([RedetectToken]) until GitLab answers, because a fine-grained token
+	// served as a classic one is served every action, the ones no grant reaches
+	// among them.
+	KindUnknown bool
 }
 
 // DetectToken asks the GitLab personal access token self endpoint what the
@@ -41,25 +51,52 @@ type TokenFacts struct {
 // fine-grained tokens applies to it, and only a fine-grained token is refused a
 // grant there. Such a token lacks Personal Access Token: Read, so its grant
 // cannot be read, and it is reported with its one scope and no id. Any other
-// failure is reported as nothing known, which serves every tool, as a failed
-// scope detection always has (ADR-0018).
+// failure is reported as nothing known, its kind included
+// ([TokenFacts.KindUnknown]), which serves every tool, as a failed scope
+// detection always has (ADR-0018), until the kind is asked again.
 //
 // The log line names the scopes and whether the token is fine-grained, never
 // its id.
 func DetectToken(ctx context.Context, client *gl.Client) TokenFacts {
+	facts, err := detectToken(ctx, client)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to detect PAT scopes, all tools will be registered", "error", err)
+	}
+	return facts
+}
+
+// RedetectToken is [DetectToken] for a token whose kind an earlier read left
+// unknown, which a caller asks again on every revalidation round, on the stdio
+// timer and once a degraded stdio start recovers, until GitLab answers. Its
+// failure is logged at DEBUG rather than WARN, since the first one was already
+// a warning and the rounds can repeat for as long as the instance does not
+// answer. A round whose context was cancelled is not logged at all: the
+// process ended it, which says nothing about whether GitLab answers, and a line
+// written then would outlive whatever ended it.
+func RedetectToken(ctx context.Context, client *gl.Client) TokenFacts {
+	facts, err := detectToken(ctx, client)
+	if err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+		slog.DebugContext(ctx, "the token's kind is still unknown", "error", err)
+	}
+	return facts
+}
+
+// detectToken is the one request of [DetectToken] and [RedetectToken], with
+// the error that left the token's kind unknown returned for the caller to log
+// at its own level.
+func detectToken(ctx context.Context, client *gl.Client) (TokenFacts, error) {
 	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 	if err != nil {
 		if refusedAGrant(err) {
 			slog.InfoContext(ctx, "the token is a fine-grained personal access token that may not read its own grant",
 				"scopes", []string{ScopeGranular})
-			return TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}
+			return TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}, nil
 		}
-		slog.WarnContext(ctx, "failed to detect PAT scopes, all tools will be registered", "error", err)
-		return TokenFacts{}
+		return TokenFacts{KindUnknown: true}, err
 	}
 	facts := FactsFromScopes(token.Scopes, token.ID)
 	slog.InfoContext(ctx, "detected PAT scopes", "scopes", token.Scopes, "fine_grained", facts.FineGrained)
-	return facts
+	return facts, nil
 }
 
 // FactsFromScopes builds the token facts of a token whose scopes and id were

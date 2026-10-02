@@ -758,6 +758,9 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 	if result.tokenID != 0 {
 		info.Extra[TokenIDKey] = result.tokenID
 	}
+	if !result.answered {
+		info.Extra[ScopesAssumedKey] = true
+	}
 
 	if cache != nil {
 		cache.Put(gitlabURL, token, info, ttl)
@@ -823,6 +826,16 @@ type introspection struct {
 // token as well as its value does for a reader of the instance's audit log.
 const TokenIDKey = "token_id"
 
+// ScopesAssumedKey is the key of the verified [auth.TokenInfo]'s Extra under
+// which true travels when no introspection endpoint answered and the scopes
+// are this package's assumption (api, kept so a deployment whose instance does
+// not describe its tokens still works) rather than GitLab's answer. Nothing has
+// then said whether the token is a fine-grained one, so the pool asks the self
+// endpoint itself, at the entry's build and on each accepted revalidation until
+// it answers, instead of reading the assumption as a classic token for the
+// entry's life. It is absent whenever an endpoint answered.
+const ScopesAssumedKey = "scopes_assumed"
+
 // introspectToken returns the token's real scopes and its own expiry.
 //
 // The expiry is what stops a cached admission from outliving the credential it
@@ -882,7 +895,9 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 	}
 	// Nothing answered at all: an older instance, an unreachable endpoint, a
 	// timeout. The question could not be put, so refusing every such token
-	// would lock out deployments that work.
+	// would lock out deployments that work. answered stays false, which the
+	// admission records ([ScopesAssumedKey]) so the pool does not read the
+	// assumption as the token's kind.
 	slog.DebugContext(ctx, "token scope introspection unavailable; assuming api scope")
 	return introspection{scopes: expandImpliedScopes([]string{"api"})}
 }

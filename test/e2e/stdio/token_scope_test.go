@@ -241,6 +241,47 @@ func TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed(t *testi
 	}
 }
 
+// TestTokenScope_FineGrainedToken_ADegradedStartIsJudgedOnceGitLabAnswers
+// starts the binary against an instance that answers nothing yet, so the start
+// cannot tell what kind of token it holds and serves it as a classic one. The
+// first call once the instance is up recovers the client, and that recovery is
+// what has the token's kind asked, at once rather than at the stdio timer's
+// next round fifteen minutes on: within moments an action no fine-grained token
+// can reach is answered withheld, with the reason, rather than sent to GitLab.
+func TestTokenScope_FineGrainedToken_ADegradedStartIsJudgedOnceGitLabAnswers(t *testing.T) {
+	fake := startFakeGitLab(t)
+	fake.scopes = []string{"granular"}
+	fake.down.Store(true)
+	env := baseEnv(fake.URL)
+	// No request is made at the start, so the first call's is the client's
+	// first lazy initialization, which nothing has put into its cooldown.
+	env["GITLAB_MCP_IGNORE_SCOPES"] = "true"
+	s := startSession(t, env)
+	listing := s.call(t, request(1, "tools/list", ""))
+	if _, listed := listing["result"]; !listed {
+		t.Fatalf("tools/list on a degraded start = %v", listing)
+	}
+
+	fake.down.Store(false)
+	recovering := `{"name":"gitlab_execute_action","arguments":{"action":"project.get","params":{"project_id":"42"}}}`
+	if text := resultText(t, s.call(t, request(2, "tools/call", recovering))); strings.Contains(text, "fine-grained") {
+		t.Fatalf("the call that recovers the client was answered as a fine-grained session's: %q", text)
+	}
+
+	withheld := `{"name":"gitlab_execute_action","arguments":{"action":"custom_emoji.list","params":{"group_path":"g"}}}`
+	deadline := time.Now().Add(10 * time.Second)
+	for id := 3; ; id++ {
+		text := resultText(t, s.call(t, request(id, "tools/call", withheld)))
+		if strings.Contains(text, withheldPrefix) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("custom_emoji.list was still not withheld %s after the instance answered: %q", 10*time.Second, text)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // TestTokenScope_FineGrainedToken_TheFirstListingIsAlreadyNarrowed verifies
 // that a tools/list sent while the catalog is still being prepared, which the
 // server holds until it is ready, is answered narrowed for a fine-grained

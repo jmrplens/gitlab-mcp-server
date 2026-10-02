@@ -821,6 +821,58 @@ func TestEnsureInitialized_Recovery(t *testing.T) {
 	}
 }
 
+// TestSetOnRecovered_RunsOnlyWhenALazyInitializationSucceeds verifies the
+// recovery hook a stdio start registers: it is not told about an attempt the
+// instance did not answer, it is told once when the next attempt recovers the
+// client, and a nil hook clears it, so a recovery after that tells nobody.
+func TestSetOnRecovered_RunsOnlyWhenALazyInitializationSucceeds(t *testing.T) {
+	var up atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.4.1-ee","revision":"abc"}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	var told atomic.Int64
+	client.SetOnRecovered(func() { told.Add(1) })
+	client.EnableLazyInit()
+
+	client.EnsureInitialized(context.Background())
+	if told.Load() != 0 || client.IsInitialized() {
+		t.Fatalf("after an attempt the instance did not answer: told %d times, initialized %v; want neither",
+			told.Load(), client.IsInitialized())
+	}
+
+	up.Store(true)
+	client.lastInitAttempt = time.Time{}
+	client.EnsureInitialized(context.Background())
+	if told.Load() != 1 || !client.IsInitialized() {
+		t.Fatalf("after the attempt that recovered: told %d times, initialized %v; want once and initialized",
+			told.Load(), client.IsInitialized())
+	}
+
+	cleared, clearErr := NewClient(newTestConfig(srv.URL, testValidToken))
+	if clearErr != nil {
+		t.Fatalf(fmtNewClientErr, clearErr)
+	}
+	cleared.SetOnRecovered(func() { told.Add(1) })
+	cleared.SetOnRecovered(nil)
+	cleared.EnableLazyInit()
+	cleared.EnsureInitialized(context.Background())
+	if told.Load() != 1 || !cleared.IsInitialized() {
+		t.Errorf("a cleared hook: told %d times in all, initialized %v; want still once and initialized",
+			told.Load(), cleared.IsInitialized())
+	}
+}
+
 // TestEnsureInitialized_Cooldown verifies that [Client.EnsureInitialized]
 // respects the 30-second cooldown between re-initialization attempts.
 func TestEnsureInitialized_Cooldown(t *testing.T) {

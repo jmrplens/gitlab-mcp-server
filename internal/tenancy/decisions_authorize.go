@@ -213,7 +213,12 @@ func authorizeDecisions() []Decision {
 			// is this row's own use of that value (the Arg site below): stdio
 			// reads no revalidation setting, so nothing moves the timer or
 			// turns it off, and what it costs is the two reads, once per
-			// interval, of the one token the process serves. A withheld call
+			// interval, of the one token the process serves. A token whose kind
+			// nothing has told yet (the self endpoint did not answer, or the
+			// OAuth verifier's scopes are its assumption) is asked its kind on
+			// those same rounds instead, and on stdio once a degraded start
+			// recovers, and is given its authority the round GitLab answers; it
+			// is served as a classic token until then. A withheld call
 			// charges no failure budget (INV-007) and spends its token of the
 			// credential's rate bucket like every other refused call. A call
 			// GitLab would serve on a public project or group, permission by
@@ -249,8 +254,10 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.RefreshAuthority"),
 				enforce(pkgPool, "ServerPool.fineGrainedAuthority"),
 				enforce(pkgPool, "ServerPool.refreshAuthority"),
+				enforce(pkgPool, "redetectKind"),
 				enforce(pkgServer, "stdioAuthority"),
 				enforce(pkgServer, "refreshStdioAuthority"),
+				enforce(pkgServer, "redetectStdioToken"),
 				arg(pkgServer, "prepareStdioCatalog", "refreshStdioAuthority", 3, 1, "RevalidateInterval"),
 				enforce(pkgVisibility, "CallMiddleware"),
 				enforce(pkgToolutil, "FineGrainedRefusal"),

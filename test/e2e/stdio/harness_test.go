@@ -665,6 +665,10 @@ type fakeGitLab struct {
 	grantHold chan struct{}
 	// grantReads counts the requests that reached the grant read.
 	grantReads atomic.Int32
+	// down, while set, answers every request 503, as an instance that is not
+	// up yet does, so a test can start the server against it and bring it up
+	// afterwards.
+	down atomic.Bool
 }
 
 // awaitInFlightCall blocks until a call has reached the blocking endpoint.
@@ -756,7 +760,13 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fake.down.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	fake.URL = srv.URL
 	t.Cleanup(srv.Close)
 	// Registered after srv.Close so it runs before it: Close waits for

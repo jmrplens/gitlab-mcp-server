@@ -342,14 +342,19 @@ func verifiedScopes(r *http.Request) []string {
 // layer's introspection read one from the self endpoint ([oauth.TokenIDKey]):
 // what the pool needs to read a fine-grained token's grant without asking the
 // self endpoint a second time. It is nil whenever verifiedScopes is, so the
-// pool detects the token itself exactly when it used to.
+// pool detects the token itself exactly when it used to. When no introspection
+// endpoint answered, the scopes are the verifier's assumption
+// ([oauth.ScopesAssumedKey]) and say nothing of the token's kind, so the facts
+// say the kind is unknown, which has the pool ask the self endpoint itself.
 func verifiedFacts(r *http.Request) *gitlabclient.TokenFacts {
 	scopes := verifiedScopes(r)
 	if scopes == nil {
 		return nil
 	}
-	id, _ := auth.TokenInfoFromContext(r.Context()).Extra[oauth.TokenIDKey].(int64)
+	extra := auth.TokenInfoFromContext(r.Context()).Extra
+	id, _ := extra[oauth.TokenIDKey].(int64)
 	facts := gitlabclient.FactsFromScopes(scopes, id)
+	facts.KindUnknown, _ = extra[oauth.ScopesAssumedKey].(bool)
 	return &facts
 }
 
