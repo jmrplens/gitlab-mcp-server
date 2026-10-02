@@ -1001,9 +1001,9 @@ test/e2e/
 │   └── fixture/              # Resource builders, one file per kind, each
 │                             # registering the undo for what it creates
 ├── gitlab/                   # The suite, one package per runtime
-│   ├── common/               # What any instance serves (169 test files)
+│   ├── common/               # What any instance serves (170 test files)
 │   ├── ce/                   # What only an unlicensed instance does (4)
-│   └── ee/                   # Premium and Ultimate (45)
+│   └── ee/                   # Premium and Ultimate (46)
 ├── http/                     # HTTP transport module (httpe2e)
 ├── stdio/                    # stdio transport module (stdioe2e)
 ├── collector/                # OTLP collector acceptance (collectore2e)

@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>180 internal/tools packages<br/>(170 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>180 internal/tools packages<br/>(149 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>868 Free/CE / 1022 Premium / 1088 Ultimate / 1094 GitLab.com Ultimate tools]
@@ -167,7 +167,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v3` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family contains 1088 self-managed Ultimate MCP tool implementations (868 on Free/CE, 1022 on Premium), plus 6 GitLab.com-only Orbit handlers for 1094 total in the GitLab.com Ultimate catalog, organized across 178 sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`, which lists 179: the 178 sub-packages plus the `internal/tools` root package itself.
+The largest package family contains 1088 self-managed Ultimate MCP tool implementations (868 on Free/CE, 1022 on Premium), plus 6 GitLab.com-only Orbit handlers for 1094 total in the GitLab.com Ultimate catalog, organized across 180 sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`, which lists 181: the 180 sub-packages plus the `internal/tools` root package itself.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 

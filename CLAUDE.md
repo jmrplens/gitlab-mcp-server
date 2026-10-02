@@ -201,9 +201,9 @@ gitlab-mcp-server/
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait, Bitbucket, EE activation)
 │   ├── internal/harness/        # The one route from a test to a server: the binary, the session, the fixtures, the ledger, the waits, the surfaces and the coverage shards. Carries `e2e`, so only the packages below can import it
 │   └── gitlab/                  # The suite that drives the real binary against a real GitLab, one package per runtime
-│       ├── common/              # What any instance serves (169 test files)
+│       ├── common/              # What any instance serves (170 test files)
 │       ├── ce/                  # What only an unlicensed instance does (4)
-│       └── ee/                  # Premium and Ultimate (45)
+│       └── ee/                  # Premium and Ultimate (46)
 ├── plan/                        # Untracked working area for plans and audit reports: ignored by git and never committed. `make check-plan-untracked` (a CI step beside the em dash check) fails on a file force-added there
 ├── mcpb/                        # Claude Desktop extension (.mcpb) manifest, icon, platform.jq (which derives the manifest of each per-OS bundle from the universal one) and linux/launch.sh, the Linux entry point that picks the amd64 or arm64 binary by uname -m (packed, measured and checked by scripts/build-mcpb.sh, one bundle per operating system plus the universal one; tests in scripts/mcpb_launch_sh_test.py for the launcher, scripts/mcpb_manifest_test.py for the manifest and its derivation and scripts/build_mcpb_sh_test.py for the build script's checks, size limits and the files it packs from both dist/ layouts)
 ├── .github/                     # AI assistance infrastructure
@@ -1015,7 +1015,7 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 The suite drives the **real `cmd/server` binary** over stdio against a real GitLab, so a tool call crosses a process boundary and then the network. Nothing about it is in memory: the suite this replaced built the server in the test process and drove an in-memory transport, which is why no defect of the binary's own startup, middleware chain or shutdown could ever fail it.
 
-It is one build and three packages under `test/e2e/gitlab`, and **the package decides the runtime, not a build tag**: `common` for what any instance serves (169 test files), `ce` for what only an unlicensed one does (4), `ee` for Premium and Ultimate (45). Every test file carries `e2e` alone and each package's `doc.go` carries no constraint (the harness's race seam pair under `test/e2e/internal` carries `e2e && race` and `e2e && !race`), so one compile and one analysis pass see all three. Read `test/e2e/README.md` before changing any of it; it holds the reasoning this summary leaves out.
+It is one build and three packages under `test/e2e/gitlab`, and **the package decides the runtime, not a build tag**: `common` for what any instance serves (170 test files), `ce` for what only an unlicensed one does (4), `ee` for Premium and Ultimate (46). Every test file carries `e2e` alone and each package's `doc.go` carries no constraint (the harness's race seam pair under `test/e2e/internal` carries `e2e && race` and `e2e && !race`), so one compile and one analysis pass see all three. Read `test/e2e/README.md` before changing any of it; it holds the reasoning this summary leaves out.
 
 **Self-hosted** needs a `.env` with `GITLAB_URL` and `GITLAB_TOKEN`, for a user who may create and delete projects. **Docker** boots an ephemeral instance with a CI runner and the fixture services, which is what makes pipeline, job, webhook, custom-emoji and mirror scenarios deterministic. Every target stages the binary first, so none of them is a bare `go test`:
 
