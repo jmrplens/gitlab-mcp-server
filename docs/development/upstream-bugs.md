@@ -56,7 +56,9 @@ for the fork, branch, fix, test and MR workflow.
   - [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one)
   - [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two)
   - [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields)
+  - [A WithOptions delegation sends null as the request body](#a-withoptions-delegation-sends-null-as-the-request-body)
   - [UpdatePackageProtectionRulesOptions sends two explicit nulls on every partial update](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update)
+  - [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call)
   - [Five response keys and three parameters GitLab 19.4 added that v3.14.0 does not model](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model)
   - [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts)
   - [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries)
@@ -78,6 +80,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The negotiated protocol version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four)
   - [Application code cannot send notifications/cancelled for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream)
   - [`Mcp-Name` is compared without decoding the base64 sentinel](#mcp-name-is-compared-without-decoding-the-base64-sentinel)
+  - [A receiving middleware cannot read the JSON-RPC request id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id)
   - [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params)
   - [The protocol version is classified by string ordering](#the-protocol-version-is-classified-by-string-ordering)
   - [A resource update cannot be delivered to one session](#a-resource-update-cannot-be-delivered-to-one-session)
@@ -104,6 +107,9 @@ for the fork, branch, fix, test and MR workflow.
   - [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500)
   - [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding)
   - [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name)
+  - [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403)
+  - [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing)
+  - [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500)
   - [The admin token route takes no granular scopes, and no client-go create option carries them](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them)
   - [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)
   - [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)
@@ -112,12 +118,6 @@ for the fork, branch, fix, test and MR workflow.
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
 - [Other](#other)
   - [go-selfupdate depends on the deprecated x/crypto/openpgp](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp)
-  - [A receiving middleware cannot read the JSON-RPC request id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id)
-  - [A WithOptions delegation sends null as the request body](#a-withoptions-delegation-sends-null-as-the-request-body)
-  - [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call)
-  - [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403)
-  - [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing)
-  - [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500)
   - [gobco type-checks every file of a package directory, whatever its build constraints say](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
   - [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding)
 
@@ -3066,6 +3066,121 @@ the listing takes, with the same CE-safe default, or the template drops the
 five widgets into fragments the caller opts into. The decoder already
 tolerates their absence, since the listing runs without them today.
 
+### A WithOptions delegation sends null as the request body
+
+`Client.NewRequestToURL` decides whether a request carries a body with
+`if opt != nil`, where `opt` is an `any`. A typed nil pointer held in an
+interface is not equal to `nil`, so any caller that reaches it with a nil
+`*SomeOptions` marshals that pointer instead of sending nothing, and
+`json.Marshal` of a nil pointer is the four bytes `null`.
+
+The SDK reaches it on its own wherever a method delegates to its `WithOptions`
+sibling with a nil options pointer, as `CancelJob` has since v2.32.0,
+`GetJobArtifacts` since v3.8.0 and `PublishAllDraftNotes` since v3.12.0:
+
+```go
+func (s *DraftNotesService) PublishAllDraftNotes(pid any, mergeRequest int64, options ...RequestOptionFunc) (*Response, error) {
+	return s.PublishAllDraftNotesWithOptions(pid, mergeRequest, nil, options...)
+}
+```
+
+The sibling passes that nil through `withAPIOpts(opt)`, so
+`POST /projects/:id/merge_requests/:iid/draft_notes/bulk_publish` went from a
+body-less request under v3.0.0 to one carrying `null` with `Content-Length: 4`.
+Measured against an `httptest` server with both versions:
+
+| Method                            | v3.0.0                         | v3.12.0                            |
+| --------------------------------- | ------------------------------ | ---------------------------------- |
+| `DraftNotes.PublishAllDraftNotes` | body `""`, `Content-Length: 0` | body `"null"`, `Content-Length: 4` |
+| `Jobs.GetJobArtifacts`            | query `""`                     | query `""`                         |
+
+`GetJobArtifacts` takes the same delegation and is unharmed only by accident:
+its request is a GET, so the nil goes to `query.Values`, which returns early on
+a nil pointer, and the empty `RawQuery` adds no `?`. That empty `RawQuery` does
+replace a query already on the URL handed to `NewRequestToURL`, which is the
+query branch's half of the defect, but `NewRequest` adds none to the URL it
+builds, so among the SDK's own delegations the defect is confined to the
+methods whose verb makes `NewRequestToURL` take the marshalling branch.
+
+Nothing is expected to break at GitLab, which is why it is not blocking:
+`Grape::Middleware::Formatter` sets the form hash only `if body.is_a?(Hash)`,
+and `null` parses to `nil`, so the endpoint sees the same empty parameter set
+either way. That is read from Grape's formatter rather than measured against a
+live instance, so it is the reason this is not urgent and not a claim that the
+bytes are identical. It is still a request the SDK did not mean to send, and it
+will reach any future delegation of the same shape on a POST, PUT or PATCH.
+
+The fix is a nil-pointer check where the decision is made, in
+`NewRequestToURL`, rather than at each delegation, since the next one will be
+written the same way. It changes what every caller passing a nil options
+pointer sends, so the merge request now puts it behind an opt-in client
+option, and 4.0 makes it the default.
+
+- **Reported**: yes, first as commit 2 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, and since 2026-09-30 on its own in
+  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065),
+  at the review's request.
+- **In review**: yes, open, in
+  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065).
+  Commit 2 of the joint merge request first applied that check to every
+  caller, and on 2026-09-29 the maintainer answered that it has to be a
+  toggle, since nobody can know whether a caller relies on the `null`. It is
+  now
+  `feat(client): add option to treat nil options pointers as no options`:
+  `WithNilOptionsOmitted()`, a client option off by default and modelled on
+  `WithOnlyIdempotentRetries`, makes a nil pointer in the options mean no
+  options, in the query branch as well as the body branch, so with it
+  `CancelJob` and `PublishAllDraftNotes` send no body at all. Without it no
+  request changes, and the tests pin both sides.
+  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
+  carries the rest in its section 6: 4.0 makes the option's behavior the
+  default, where the option has no effect, and 5.0 removes the option. At
+  22:06 UTC on 2026-09-29 the review asked for the change to be reviewed on
+  its own, as a library-level change rather than a field sync, so on
+  2026-09-30 it left the joint merge request for
+  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065):
+  the commit reviewed there, cherry-picked unchanged onto v3.15.0, and
+  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
+  now names that merge request as the one carrying the option. At 02:11 UTC
+  on 2026-10-01 @PatrickRice reviewed it and requested changes, with two
+  suggestions and nothing else: a comment at the call site saying where
+  `WithNilOptionsOmitted` sets the behavior, and the helper inverted from
+  `isNilOptions` to `isNonNilOptions`, since its one caller always negates
+  it. Both went in at 20:36 UTC as one commit on top,
+  `3dafd822`, the comment typed in the reviewer's words rather than applied
+  as a suggestion so that it is tab-indented and wrapped as the project's
+  `AGENTS.md` asks; no test names the helper, so none changed. Each thread
+  was answered, the description names `isNonNilOptions`, its fork pipeline
+  passed, and a `@gitlab-bot ready @PatrickRice` at 20:44 UTC put it back at
+  `workflow::ready for review`. It waits on that review, whose
+  requested-changes state stays until the reviewer clears it, and on its one
+  required approval.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes, and neither route the SDK sends it on is reached from
+  this repository, because both handlers call the `WithOptions` sibling with
+  a non-nil options value. `job.cancel` passes a `CancelJobOptions` whether
+  or not the caller asks for force, so a call without force sends `{}`; until
+  2026-09-29 it called `CancelJob` whenever force was not asked for and sent
+  `null`, which this entry had missed.
+  `TestJobCancel_Body_CarriesForceOnlyWhenAsked` in `internal/tools/jobs`
+  pins the body with and without force. `mr_review.draft_note_publish_all`
+  offers the route's `note`, `internal` and `reviewer_state`, which only
+  `PublishAllDraftNotesWithOptions` carries, so it passes a non-nil options
+  value as before and a call naming none of the three sends `{}`;
+  `TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven` in
+  `internal/tools/mrdraftnotes` pins the body for each combination. Both
+  calls carry a `//nolint:staticcheck` for SA1019, because client-go marks
+  the two methods `Deprecated:` only until v4 folds the options into
+  `CancelJob` and `PublishAllDraftNotes`, and says to use them meanwhile when
+  the options are needed. 4.0, which makes that fold and makes a nil pointer
+  send no body, retires the workaround. The defect itself is untouched and
+  still reaches any other delegation of the same shape on a POST, PUT or
+  PATCH.
+
 ### UpdatePackageProtectionRulesOptions sends two explicit nulls on every partial update
 
 - **Reported**: yes, as commit 33 of
@@ -3149,6 +3264,164 @@ it.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
+
+### Seven more option structs send an optional param on every call
+
+- **Reported**: yes, as commit 34 of
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  opened on 2026-09-27, the joint merge request
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes.
+- **In review**: yes, open. The commit gives each of the seven fields
+  `omitempty` on both halves of the tag, and its message records the one case
+  where the null changes what GitLab stores: the pipeline schedule variable
+  edit hands every declared param the request carries to the update service,
+  so an edit that changes only the variable type also sets the value to null.
+  The one merge request the **Effort** below asks for is that one, carrying
+  entries 6 and 52 as commits 32 and 33.
+- **Merged**: no.
+- **Blocking**: no, field by field in the second table below. For five of the
+  seven, GitLab reads a null exactly as it reads the key left out, or never
+  receives one. `label_id` is latent: a null would be refused beside another
+  board list type, which neither the struct nor the handler offers today.
+  `value` narrows an action: GitLab would store the null over the variable's
+  value, and what keeps it from doing so is that the handler requires a value,
+  which GitLab does not, so an edit of the type alone cannot be made. Entries
+  [6](#setfeatureflagoptions-fields-lack-omitempty) and
+  [52](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update)
+  hold the fields of this class GitLab refuses outright: every feature flag
+  set sent through the SDK, and a package protection rule update that leaves
+  out either of its two fields.
+- **Workaround**: none needed for five. Two handlers never leave the field
+  unset, because they require it, and neither requirement was written for this
+  defect. `groupboards.CreateGroupBoardList` requires `label_id`, the only
+  list type the struct models, so that requirement is not a workaround and
+  stays until client-go models the milestone, iteration and assignee lists. `pipelineschedules.EditVariable` has required `value` since
+  the domain was written, and the requirement is what keeps the null from
+  reaching GitLab and what costs the action an edit of the type alone. It
+  retires with the tag: `value` then becomes optional in the handler, in its
+  check and in the `required` of its input schema, as GitLab declares it. A
+  handler could also get past the tag today, contrary to what this entry first
+  said, in two ways: a request option, since client-go runs the request
+  options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
+  and an option can read the body and replace it, which is how client-go's own
+  GraphQL pagination option works; or a request the handler builds itself, as
+  `features.Set` does for entry 6. Neither is carried.
+
+**Where**: seven option structs across client-go.
+
+**What**: the same defect as entries 6 and 52, found systematically rather
+than one at a time. `audit_1to1 -scope=paths` compares the keys
+`encoding/json` writes whatever a handler set against the params GitLab's live
+record marks optional, and reports eleven rows over nine fields in eight option
+types. Two of the rows are entry 52. These are the other seven types, with the
+handler here that sends each:
+
+| Option type                           | Field        | Param         | Endpoint                                                  | Handler here                       |
+| ------------------------------------- | ------------ | ------------- | --------------------------------------------------------- | ---------------------------------- |
+| `CreateDependencyListExportOptions`   | `ExportType` | `export_type` | `POST /pipelines/:id/dependency_list_exports`             | `dependencies.CreateExport`        |
+| `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       | `groupboards.CreateGroupBoardList` |
+| `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                | `groupmembers.AddMember`           |
+| `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              | `members.Add`                      |
+| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/share`                                  | `groupmembers.ShareGroup`          |
+| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`                                | `projects.ShareProjectWithGroup`   |
+| `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    | `issuelinks.Create`                |
+| `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` | `pipelineschedules.EditVariable`   |
+
+Six of the eight handlers set the pointer only when the caller named a value,
+which is the safe side of the choice they have. For five of them the null is
+what the tag adds when the caller did not; for `dependencies.CreateExport` it
+is not, because client-go fills in `"sbom"` when the pointer is nil, so no null
+is ever sent there. The other two, `groupboards.CreateGroupBoardList` and
+`pipelineschedules.EditVariable`, require the field and always set it.
+
+**What GitLab does with the null**, read from the GitLab 19.4.1-ee source (the
+release the live record was taken from) and, for `expires_at`, from the
+end-to-end suite as well. The sources the table cites are linked below it,
+each pinned to that tag.
+
+| Param         | Route                        | How the route reads it                                                                                                                                                                                                                             | Null against the key left out                                                  | Blocking                                                 |
+| ------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `export_type` | pipeline export              | never sent as null: client-go fills in `"sbom"` when the caller named none, which is the route's own default (`ee/lib/api/dependency_list_exports.rb:81`)                                                                                          | not reached                                                                    | No                                                       |
+| `label_id`    | group board list create      | EE replaces the CE `requires` with `exactly_one_of :label_id, :milestone_id, :iteration_id, :assignee_id` (`ee/lib/ee/api/boards_responses.rb:16`), and Grape 2.4.0 counts the keys present, a null included (`MultipleParamsBase#keys_in_common`) | differs beside another list type: refused as mutually exclusive                | Latent: the struct models no other list type             |
+| `expires_at`  | group and project member add | the raw `params` hash with the source added to it (`lib/api/members.rb:146`), read by the create service as `params[:expires_at]` (`app/services/members/create_service.rb:112`)                                                                   | the same: nil either way, no expiry                                            | No                                                       |
+| `expires_at`  | group share                  | `expires_at: params[:expires_at]` (`lib/api/groups.rb:769`)                                                                                                                                                                                        | the same                                                                       | No                                                       |
+| `expires_at`  | project share                | `declared_params(include_missing: false)` (`lib/api/projects.rb:985`): the null is passed as nil and the missing key is not passed, and a new link has no expiry either way                                                                        | the same on a create                                                           | No                                                       |
+| `link_type`   | issue link create            | `declared_params[:link_type]` (`lib/api/issue_links.rb:68`), nil either way, so both take the documented default, `relates_to`                                                                                                                     | the same                                                                       | No                                                       |
+| `value`       | schedule variable edit       | `declared_params(include_missing: false)` (`lib/api/ci/pipeline_schedules.rb:378`), then `variable.assign_attributes(params)` (`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`), and nothing validates the value             | differs: the null is assigned over the stored value, the missing key leaves it | Narrows `pipeline.schedule_edit_variable` to value edits |
+
+Sources, at `v19.4.1-ee`, and Grape at 2.4.0, the release that tag's
+`Gemfile.lock` resolves:
+[`ee/lib/api/dependency_list_exports.rb:81`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/api/dependency_list_exports.rb#L81),
+[`ee/lib/ee/api/boards_responses.rb:16`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/ee/api/boards_responses.rb#L16),
+[`MultipleParamsBase#keys_in_common`](https://github.com/ruby-grape/grape/blob/v2.4.0/lib/grape/validations/validators/multiple_params_base.rb#L22),
+[`lib/api/members.rb:146`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/members.rb#L146),
+[`app/services/members/create_service.rb:112`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/members/create_service.rb#L112),
+[`lib/api/groups.rb:769`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/groups.rb#L769),
+[`lib/api/projects.rb:985`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/projects.rb#L985),
+[`lib/api/issue_links.rb:68`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/issue_links.rb#L68),
+[`lib/api/ci/pipeline_schedules.rb:378`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/ci/pipeline_schedules.rb#L378)
+and
+[`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/ci/pipeline_schedules/variables_base_save_service.rb#L9).
+
+The `expires_at` rows are also measured, on both Docker runtimes: the committed
+coverage record (`docs/development/e2e-coverage.json`, 2026-09-26, GitLab
+19.4.1 CE and 19.3.1-ee) holds `group.group_member_add`, `project.member_add`,
+`group.group_member_share` and `project.share_with_group` at L3, asserted on
+all three surfaces, and the five scenarios behind them
+(`TestGroupMembers_Lifecycle_AddEditListAndRemove`,
+`TestGroupMembers_AddDeveloper_AnswersTheMembership`,
+`TestProjectMembers_Lifecycle_AddEditAndRemove`,
+`TestGroupSharing_TwoSurfaces_ShareAndUnshare` and
+`TestProjectSharing_WithGroup_ListsAndRemoves`) name no expiry, so each call
+sent `"expires_at": null` and GitLab created the membership or the share. The
+`link_type`, `label_id` and `value` rows are read and not measured: the issue
+link scenario always names a type, and the other two handlers always send
+their field.
+
+**Two of them are a split tag, not a missing one**, which is worth separating
+because it reads as a fix somebody began and did not finish:
+
+```go
+ExpiresAt *string `url:"expires_at,omitempty" json:"expires_at"`
+```
+
+That is `AddGroupMemberOptions` and `AddProjectMemberOptions`. The `url` half
+omits the key and the `json` half does not, so the same field is absent from a
+query-encoded call and present as `null` in a JSON body. Every other field of
+both structs carries `omitempty` on both halves.
+
+The remaining five simply lack it.
+`EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
+with the tag and one without (`VariableType` carries it, `Value` does not).
+`CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
+is affected. `ShareWithGroupOptions` is the one reached from two packages:
+`projects` passes it to `Projects.ShareProjectWithGroup` and `groupmembers`
+to `GroupMembers.ShareWithGroup`. The audit also lists it under `groups`,
+which is the join and not a third caller: `groups.ShareGroupWithGroup`
+passes `ShareGroupWithGroupOptions`, whose
+`expires_at` already carries `omitempty`, to the same `POST /groups/:id/share`,
+and the check asks about every option struct that reaches a recorded route.
+That row, and the `export_type` one above, which client-go never sends as
+null, are the rule's reading of a tag rather than a request this server sends
+wrongly; both leave the report the day the tags change.
+
+**Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
+defect and does not appear, because the audit reads the request this server
+**recorded** and `internal/tools/features.Set` builds its body by hand to
+avoid the bug. The workaround hides the defect from the check that would have
+found it, which is a property worth knowing before trusting the count: the
+eight are the ones we still send through the SDK, not the eight that exist.
+
+**Effort**: small, and one merge request covers all nine structs of entries 6,
+52 and these seven. Every case is a struct tag plus a test that the key is
+absent when the field is nil. `omitempty` is the right tag for every one of
+them, and `Nullable[T]` for none: the table above finds no field where a null
+is how a caller asks GitLab for something. An expiry is cleared by an edit
+route, and every `expires_at` field here is on a create route; a schedule
+variable's value is emptied with an empty string, which a set pointer still
+sends under `omitempty`. Changing a field's type would also break every caller
+of the struct, where a tag breaks none.
 
 ### Five response keys and three parameters GitLab 19.4 added that v3.14.0 does not model
 
@@ -4427,6 +4700,36 @@ shipped HTTP default with a base64 `Mcp-Name` on `tools/call`, `resources/read`
 and `prompts/get`, all three answered `-32020` where the plain-ASCII control was
 served. It is upstream by this file's own test: it happens to any caller of
 `StreamableHTTPHandler` with no setting of ours.
+
+### A receiving middleware cannot read the JSON-RPC request id
+
+`mcp.Request` exposes `GetSession`, `GetParams` and `GetExtra`, and nothing that
+returns the JSON-RPC `id` of the message being handled. A receiving middleware
+therefore cannot see it, and neither can anything built on one.
+
+That is what stops this server from emitting `jsonrpc.request.id`, which the MCP
+semantic convention marks Conditionally Required "When the client executes a
+request". The attribute is what distinguishes a request span from a notification
+span, and the Go semantic-conventions package already ships the key
+(`semconv.JSONRPCRequestID`), so the only missing piece is an accessor.
+
+The id is not secret and is already on the wire in both directions; the SDK
+decodes it to route the response and then discards it before application code
+runs, the same shape as
+[the cancellation reason](#the-cancellation-reason-is-discarded-before-any-handler-sees-it). Adding `GetID()` to the `Request` interface, or a
+field on `RequestExtra`, would close it.
+
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264),
+  on 2026-09-13, as a proposal: `GetID()` on the `Request` interface or a field
+  on `RequestExtra`, with the trade-off between them stated, since adding a
+  method to an exported interface breaks anything outside the package that
+  implements it.
+- **In review**: no. Waiting on the maintainers to say which shape they want.
+- **Merged**: no.
+- **Blocking**: no. One Conditionally Required attribute is omitted; the span is
+  otherwise complete and the metric does not carry the attribute at all.
+- **Workaround**: none possible. Nothing in the public API exposes the value.
 
 ### A middleware cannot ask whether a request carries params
 
@@ -6335,6 +6638,251 @@ older than the release that added it.
 payload's `errors`, the way the mutation already returns the attach
 service's own errors.
 
+### A permission refusal is answered 401 rather than 403
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The call is correctly refused and nothing is served that
+  should not be. What breaks is the explanation a client can give.
+- **Workaround**: yes, in two places that read one rule,
+  `UnauthorizedNamesCredential` in `internal/gitlab/credential_refusal.go`: a
+  401 names the credential when its REST body carries the RFC 6750 code
+  `invalid_token`, which only GitLab's API guard writes, or when the GraphQL
+  endpoint answered it, which has no permission 401 to confuse it with.
+  `internal/toolutil/errors.go` reads it to describe a 401:
+  `ClassifyHTTPStatus(401)` names both causes and how to tell them apart, and
+  `ClassifyError` names the credential alone when the rule says GitLab did.
+  The HTTP pool (`internal/serverpool`) reads it to decide what a refused call
+  means for the caller's pooled credential: a 401 naming the credential ends
+  the entry at once, and one naming nothing is first put to the credential
+  probe (`GET /api/v4/user`, at most once per 30 seconds per credential),
+  which keeps the entry when GitLab still accepts the token. A handler's hint
+  then names the permission, keyed on `toolutil.IsPermissionRefusal`, which
+  reads the same file's `RefusalMayBePermission`: a REST 401 or 403 whose body
+  carries no RFC 6750 error code and whose message is not the API guard's
+  refusal of an account it will not serve (blocked, deactivated and the
+  like), so it is never true of an answer the rule above says names the
+  credential, and a hint keyed on it never follows the verdict that the token
+  itself was refused
+  ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
+  Two kinds of action are not keyed on it. The four group SAML link actions
+  still add their hint to every error, a rejected token included, because the
+  licensed end-to-end suite quotes that wording; and the two self-rotations
+  keep a 401 hint about the calling token, which agrees with that verdict
+  rather than contradicting it.
+  `TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint` in
+  `internal/tools/action_catalog_test.go` drives every served action of the
+  Where list below, one row per action and site: all of them must carry a
+  suggestion on Grape's refusal, and all but those six must carry none after
+  a revoked token, the six being exempt from that half. What retires it is
+  GitLab answering 403 at these sites, after which a REST 401 without that
+  code would again mean an unusable credential alone and the probe would have
+  nothing left to tell apart. A handler that keys one hint on the predicate
+  alone needs no change then, since the predicate reads a plain 403 the same
+  way. The handlers that pair it with a status do, because each reads the
+  status as the cause: the three security settings routes read a 403 first as
+  the license, an archive or an enforced setting, so a role refusal moved to
+  403 would get the license hint; the three external status check merge
+  request routes read a 403 as the role, so the license refusal moved to 403
+  would get the role hint; the fork link would give a target namespace refusal
+  the Owner hint; and the merge train add would lose its hint. They are the
+  ones to revisit when this entry is retired.
+
+**Where**: `lib/api/merge_request_approvals.rb:105` and 148,
+`lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
+`lib/api/resource_access_tokens.rb:32`, 63 and 200,
+`lib/api/resource_access_tokens/self_rotation.rb:46`,
+`lib/api/personal_access_tokens.rb:73` and 107,
+`lib/api/helpers/personal_access_tokens_helpers.rb:80`,
+`lib/api/award_emoji.rb:124`, `lib/api/groups.rb:90`,
+`lib/api/projects.rb:925`, `ee/lib/api/status_checks.rb:16` and 67,
+`ee/app/services/external_status_checks/update_service.rb:40`,
+`ee/lib/api/merge_trains.rb:168`, `ee/lib/api/security_scans.rb:54`,
+`ee/lib/api/project_security_settings.rb:30` and 53,
+`ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
+(four sites), `ee/lib/ee/api/helpers.rb:193`, and
+`lib/api/ml/mlflow/api_helpers.rb:15` and 23. Read at 19.4.0-pre
+(`b183f4fad4bd`, 2026-09-22). Of these thirty, this server serves an action
+for every one but `security_scans.rb:54` (client-go has no wrapper for it),
+`ee/lib/ee/api/helpers.rb:193` (defined, and called from nowhere at that
+commit) and the two MLflow helpers.
+
+**What**: GitLab's API helper `unauthorized!` (`lib/api/helpers.rb`)
+renders 401 through Grape's `error!`, and these sites call it to
+refuse an **authenticated** user who lacks a permission. Eighteen of them
+guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
+calls it on a falsy service result, which is the same thing one layer down.
+The three sites read on the second pass, `resource_access_tokens.rb:200`
+and `personal_access_tokens.rb:73` and 107 (rotating a resource access token,
+and reading or rotating a personal access token by id), refuse the same way
+behind `Ability.allowed?`, and tell only an administrator `not_found!`
+instead. The eight read on the third pass, while fixing the handlers
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)),
+are the same refusal under other guards: `personal_access_tokens_helpers.rb:80`
+behind `Ability.allowed?` for a `user_id` naming someone else; `groups.rb:90`
+behind the group permission check a runner administrator passes only for the
+runner setting; `award_emoji.rb:124` for an award somebody else gave;
+`projects.rb:925` for a fork target namespace, with the reason
+`Target Namespace`; `merge_trains.rb:168` for a service that said
+`:forbidden`; `resource_access_tokens/self_rotation.rb:46` for a bot token
+that is not one of the resource's; `update_service.rb:40`, a service that
+builds its own 401 for a missing role and hands it to `render_api_error!`;
+and `status_checks.rb:16`, a before-block that answers every external status
+check route with 401 when the project's namespace lacks the licensed feature,
+which is a license rather than a role and is reachable on GitLab.com, where
+the plan is the namespace's. RFC 9110 gives 401 for a request that lacks
+valid authentication credentials and 403 for one the server understood and
+refuses to authorize, so every one of these is the second answered as the
+first.
+
+It is not accidental, at least at the approve endpoint, whose own `desc` block
+declares the failure:
+
+```ruby
+failure [
+  { code: 404, message: 'Not found' },
+  { code: 401, message: 'Unauthorized' }
+]
+```
+
+So this is a design complaint rather than a bug report, which is the honest
+way to file it. GitLab's own REST API is not consistent with itself here:
+`forbidden!` appears 221 times against `unauthorized!`'s 94, and the
+neighbouring endpoints of several of these sites use it.
+
+**What it costs a client.** A refusal that says 401 is indistinguishable from
+an expired token unless the reader knows the endpoint, so a generic client
+tells its user to check their credentials when the real answer is "you wrote
+this merge request". Measured here: the licensed end-to-end run approves a
+merge request with the credential that opened it, a licensed instance ships
+"Prevent approval by author" on, and GitLab answers
+
+```text
+POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthorized}
+```
+
+which this server rendered as `authentication failed: GITLAB_TOKEN may be
+invalid or expired` followed by the hint that contradicts it. The list above
+is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
+adding to a merge train, project mirrors, access token reads, lists and
+rotation, external status checks, security settings, group SAML links, award
+emoji removal, group updates and fork links, all of which this server serves.
+
+**Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
+mapped 401 to a sentence about the token, which was right for a genuine
+authentication failure and wrong for every site above. It was fixed without
+waiting for upstream in
+[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905), as the
+Workaround field describes, since it is the half a model actually reads. Two
+local consequences of the same upstream choice were tracked apart. HTTP mode
+evicted a valid credential's pool entry on a permission 401, which ended its
+subscriptions with a false "re-authenticate" and counted a revocation that
+never happened; that is fixed
+([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)) by
+confirming a 401 that names nothing with the credential probe before the
+entry goes, as the Workaround field describes. The handlers' own hints were
+the third: most of the handlers behind these sites scoped their permission
+hint to the 403 GitLab never sends there, or carried none, and the one that
+hinted on any 401 (the approve) followed the rejected-token verdict with a
+self-approval suggestion. They are fixed
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)) by
+keying each hint on `toolutil.IsPermissionRefusal`, except the group SAML
+links and the self-rotations the Workaround field names, and reading the fix
+against GitLab's source corrected what several hints and served usages said
+as well: push mirrors are available on every tier, external status checks
+need Ultimate rather than Premium, a group's security settings need
+Maintainer or Security Manager rather than Owner, the approval reset is
+refused with 401 for a person's token rather than 404 and admits a service
+account's, a rotation by id is refused whatever the role when the calling
+token is itself a project or group access token, and the reads and rotations
+of project and group access tokens are all refused whatever the role when an
+administrator has disabled personal access tokens on the instance. The same
+reading found two status check routes whose role refusal never arrives as a
+401: the delete discards it and answers 204 (entry 56), and the create
+answers it with 500 (entry 57).
+
+### Deleting an external status check without the role answers 204 and deletes nothing
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, but the answer is false: a caller told the check was
+  deleted goes on as if it were.
+- **Workaround**: partial. Nothing on the wire tells this refusal apart from
+  a real deletion, so the handler cannot report it. The action's served usage
+  says so instead, and asks the caller to confirm a deletion with
+  `external_status_check.list_project`; and
+  `DeleteProjectExternalStatusCheck` in
+  `internal/tools/externalstatuschecks/external_status_checks.go` hints only
+  the license on a refusal, never the role, since GitLab never refuses the
+  role there. What retires it is GitLab rendering the service's refusal.
+
+**What**: `DELETE /projects/:id/external_status_checks/:check_id`
+(`ee/lib/api/status_checks.rb:122-132`) wraps
+`ExternalStatusChecks::DestroyService#execute` in `destroy_conditionally!`.
+The service refuses a caller without `delete_external_status_check`, which
+is the Maintainer role, by returning an error response with
+`http_status: :unauthorized`
+(`ee/app/services/external_status_checks/destroy_service.rb:8` and 27-33).
+`destroy_conditionally!` (`lib/api/helpers.rb:53-65`) sets the status to 204
+and the body to empty **before** it yields, and discards what the block
+returns, so the refusal never reaches the response: a Developer's delete is
+answered 204 and the check is still there. The update beside it hands the
+same kind of service error to `render_api_error!` and answers 401 correctly
+(`status_checks.rb:106-110`), which is the shape the delete is missing. Read
+at 19.4.0-pre (`b183f4fad4bd`, 2026-09-22).
+
+**How we found it**: reading every 401 the status check routes can answer
+while fixing their hints
+([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)). The
+delete's service builds a 401 like the update's, and following it to the
+response showed it goes nowhere.
+
+### Creating an external status check without the role answers 500
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The check is correctly not created. What breaks is the
+  answer: a refusal of the caller arrives as a fault of the instance, which a
+  client retries or reports as an outage.
+- **Workaround**: yes. `CreateProjectExternalStatusCheck` in
+  `internal/tools/externalstatuschecks/external_status_checks.go` reads a 500
+  whose message carries the service's `Not allowed` as the role refusal it is
+  (`createRefusedForRole`) and hints the Maintainer role, and
+  `TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole`
+  holds it, beside a 500 without that message, which names no role. What
+  retires it is the service giving its refusal a status.
+
+**Where**: `ee/app/services/external_status_checks/create_service.rb:32-38`,
+rendered by `ee/lib/api/status_checks.rb:53`. Read at 19.4.0-pre
+(`b183f4fad4bd`, 2026-09-22).
+
+**What**: `POST /projects/:id/external_status_checks` runs
+`ExternalStatusChecks::CreateService#execute`, which refuses a caller without
+`create_external_status_check`, granted to the Maintainer role
+(`config/authz/roles/maintainer.yml:84`), with `access_denied_error`: a `ServiceResponse.error`
+carrying `reason: :access_denied`, the errors `['Not allowed']`, and no
+`http_status`, which `ServiceResponse.error` defaults to `nil`
+(`app/services/service_response.rb:13`). The route hands that status to
+`render_api_error!(response.payload[:errors], response.http_status)`, which
+reaches Grape's `error!` with a `nil` status (`lib/api/helpers.rb:720-733`),
+and Grape 2.4.0 answers a `nil` status with its default error status, 500.
+So a Developer's create is answered `500 {"message":["Not allowed"]}`. The
+update beside it builds its refusal with `http_status: :unauthorized` and is
+answered 401 (`ee/app/services/external_status_checks/update_service.rb:40`),
+and the delete loses it the other way (entry 56). The route's own spec
+(`ee/spec/requests/api/status_checks_spec.rb`, "when feature is disabled,
+unlicensed or user has permission") drives only the owner and a user who is
+not a member, whom `user_project` answers 404 before the service runs, so no
+test of GitLab's reaches the service's refusal.
+
+**How we found it**: reviewing the fix for
+[issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908), by
+reading where each status check route's role refusal ends up, after entry 56
+had shown one of them going nowhere.
+
 ### The admin token route takes no granular scopes, and no client-go create option carries them
 
 - **Reported**: the GitLab half yes, by GitLab itself,
@@ -7312,554 +7860,6 @@ choice.
   `make check-binary-vulns` holds every release binary to the database at
   that grain. The upstream PR stays worth merging for the module's other
   users.
-
-### A receiving middleware cannot read the JSON-RPC request id
-
-`mcp.Request` exposes `GetSession`, `GetParams` and `GetExtra`, and nothing that
-returns the JSON-RPC `id` of the message being handled. A receiving middleware
-therefore cannot see it, and neither can anything built on one.
-
-That is what stops this server from emitting `jsonrpc.request.id`, which the MCP
-semantic convention marks Conditionally Required "When the client executes a
-request". The attribute is what distinguishes a request span from a notification
-span, and the Go semantic-conventions package already ships the key
-(`semconv.JSONRPCRequestID`), so the only missing piece is an accessor.
-
-The id is not secret and is already on the wire in both directions; the SDK
-decodes it to route the response and then discards it before application code
-runs, the same shape as
-[the cancellation reason](#the-cancellation-reason-is-discarded-before-any-handler-sees-it). Adding `GetID()` to the `Request` interface, or a
-field on `RequestExtra`, would close it.
-
-- **Reported**: yes,
-  [modelcontextprotocol/go-sdk#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264),
-  on 2026-09-13, as a proposal: `GetID()` on the `Request` interface or a field
-  on `RequestExtra`, with the trade-off between them stated, since adding a
-  method to an exported interface breaks anything outside the package that
-  implements it.
-- **In review**: no. Waiting on the maintainers to say which shape they want.
-- **Merged**: no.
-- **Blocking**: no. One Conditionally Required attribute is omitted; the span is
-  otherwise complete and the metric does not carry the attribute at all.
-- **Workaround**: none possible. Nothing in the public API exposes the value.
-
-### A WithOptions delegation sends null as the request body
-
-`Client.NewRequestToURL` decides whether a request carries a body with
-`if opt != nil`, where `opt` is an `any`. A typed nil pointer held in an
-interface is not equal to `nil`, so any caller that reaches it with a nil
-`*SomeOptions` marshals that pointer instead of sending nothing, and
-`json.Marshal` of a nil pointer is the four bytes `null`.
-
-The SDK reaches it on its own wherever a method delegates to its `WithOptions`
-sibling with a nil options pointer, as `CancelJob` has since v2.32.0,
-`GetJobArtifacts` since v3.8.0 and `PublishAllDraftNotes` since v3.12.0:
-
-```go
-func (s *DraftNotesService) PublishAllDraftNotes(pid any, mergeRequest int64, options ...RequestOptionFunc) (*Response, error) {
-	return s.PublishAllDraftNotesWithOptions(pid, mergeRequest, nil, options...)
-}
-```
-
-The sibling passes that nil through `withAPIOpts(opt)`, so
-`POST /projects/:id/merge_requests/:iid/draft_notes/bulk_publish` went from a
-body-less request under v3.0.0 to one carrying `null` with `Content-Length: 4`.
-Measured against an `httptest` server with both versions:
-
-| Method                            | v3.0.0                         | v3.12.0                            |
-| --------------------------------- | ------------------------------ | ---------------------------------- |
-| `DraftNotes.PublishAllDraftNotes` | body `""`, `Content-Length: 0` | body `"null"`, `Content-Length: 4` |
-| `Jobs.GetJobArtifacts`            | query `""`                     | query `""`                         |
-
-`GetJobArtifacts` takes the same delegation and is unharmed only by accident:
-its request is a GET, so the nil goes to `query.Values`, which returns early on
-a nil pointer, and the empty `RawQuery` adds no `?`. That empty `RawQuery` does
-replace a query already on the URL handed to `NewRequestToURL`, which is the
-query branch's half of the defect, but `NewRequest` adds none to the URL it
-builds, so among the SDK's own delegations the defect is confined to the
-methods whose verb makes `NewRequestToURL` take the marshalling branch.
-
-Nothing is expected to break at GitLab, which is why it is not blocking:
-`Grape::Middleware::Formatter` sets the form hash only `if body.is_a?(Hash)`,
-and `null` parses to `nil`, so the endpoint sees the same empty parameter set
-either way. That is read from Grape's formatter rather than measured against a
-live instance, so it is the reason this is not urgent and not a claim that the
-bytes are identical. It is still a request the SDK did not mean to send, and it
-will reach any future delegation of the same shape on a POST, PUT or PATCH.
-
-The fix is a nil-pointer check where the decision is made, in
-`NewRequestToURL`, rather than at each delegation, since the next one will be
-written the same way. It changes what every caller passing a nil options
-pointer sends, so the merge request now puts it behind an opt-in client
-option, and 4.0 makes it the default.
-
-- **Reported**: yes, first as commit 2 of
-  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
-  opened on 2026-09-27, the joint merge request
-  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  describes, and since 2026-09-30 on its own in
-  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065),
-  at the review's request.
-- **In review**: yes, open, in
-  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065).
-  Commit 2 of the joint merge request first applied that check to every
-  caller, and on 2026-09-29 the maintainer answered that it has to be a
-  toggle, since nobody can know whether a caller relies on the `null`. It is
-  now
-  `feat(client): add option to treat nil options pointers as no options`:
-  `WithNilOptionsOmitted()`, a client option off by default and modelled on
-  `WithOnlyIdempotentRetries`, makes a nil pointer in the options mean no
-  options, in the query branch as well as the body branch, so with it
-  `CancelJob` and `PublishAllDraftNotes` send no body at all. Without it no
-  request changes, and the tests pin both sides.
-  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
-  carries the rest in its section 6: 4.0 makes the option's behavior the
-  default, where the option has no effect, and 5.0 removes the option. At
-  22:06 UTC on 2026-09-29 the review asked for the change to be reviewed on
-  its own, as a library-level change rather than a field sync, so on
-  2026-09-30 it left the joint merge request for
-  [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065):
-  the commit reviewed there, cherry-picked unchanged onto v3.15.0, and
-  [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
-  now names that merge request as the one carrying the option. At 02:11 UTC
-  on 2026-10-01 @PatrickRice reviewed it and requested changes, with two
-  suggestions and nothing else: a comment at the call site saying where
-  `WithNilOptionsOmitted` sets the behavior, and the helper inverted from
-  `isNilOptions` to `isNonNilOptions`, since its one caller always negates
-  it. Both went in at 20:36 UTC as one commit on top,
-  `3dafd822`, the comment typed in the reviewer's words rather than applied
-  as a suggestion so that it is tab-indented and wrapped as the project's
-  `AGENTS.md` asks; no test names the helper, so none changed. Each thread
-  was answered, the description names `isNonNilOptions`, its fork pipeline
-  passed, and a `@gitlab-bot ready @PatrickRice` at 20:44 UTC put it back at
-  `workflow::ready for review`. It waits on that review, whose
-  requested-changes state stays until the reviewer clears it, and on its one
-  required approval.
-- **Merged**: no.
-- **Blocking**: no.
-- **Workaround**: yes, and neither route the SDK sends it on is reached from
-  this repository, because both handlers call the `WithOptions` sibling with
-  a non-nil options value. `job.cancel` passes a `CancelJobOptions` whether
-  or not the caller asks for force, so a call without force sends `{}`; until
-  2026-09-29 it called `CancelJob` whenever force was not asked for and sent
-  `null`, which this entry had missed.
-  `TestJobCancel_Body_CarriesForceOnlyWhenAsked` in `internal/tools/jobs`
-  pins the body with and without force. `mr_review.draft_note_publish_all`
-  offers the route's `note`, `internal` and `reviewer_state`, which only
-  `PublishAllDraftNotesWithOptions` carries, so it passes a non-nil options
-  value as before and a call naming none of the three sends `{}`;
-  `TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven` in
-  `internal/tools/mrdraftnotes` pins the body for each combination. Both
-  calls carry a `//nolint:staticcheck` for SA1019, because client-go marks
-  the two methods `Deprecated:` only until v4 folds the options into
-  `CancelJob` and `PublishAllDraftNotes`, and says to use them meanwhile when
-  the options are needed. 4.0, which makes that fold and makes a nil pointer
-  send no body, retires the workaround. The defect itself is untouched and
-  still reaches any other delegation of the same shape on a POST, PUT or
-  PATCH.
-
-### Seven more option structs send an optional param on every call
-
-- **Reported**: yes, as commit 34 of
-  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
-  opened on 2026-09-27, the joint merge request
-  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
-  describes.
-- **In review**: yes, open. The commit gives each of the seven fields
-  `omitempty` on both halves of the tag, and its message records the one case
-  where the null changes what GitLab stores: the pipeline schedule variable
-  edit hands every declared param the request carries to the update service,
-  so an edit that changes only the variable type also sets the value to null.
-  The one merge request the **Effort** below asks for is that one, carrying
-  entries 6 and 52 as commits 32 and 33.
-- **Merged**: no.
-- **Blocking**: no, field by field in the second table below. For five of the
-  seven, GitLab reads a null exactly as it reads the key left out, or never
-  receives one. `label_id` is latent: a null would be refused beside another
-  board list type, which neither the struct nor the handler offers today.
-  `value` narrows an action: GitLab would store the null over the variable's
-  value, and what keeps it from doing so is that the handler requires a value,
-  which GitLab does not, so an edit of the type alone cannot be made. Entries
-  [6](#setfeatureflagoptions-fields-lack-omitempty) and
-  [52](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update)
-  hold the fields of this class GitLab refuses outright: every feature flag
-  set sent through the SDK, and a package protection rule update that leaves
-  out either of its two fields.
-- **Workaround**: none needed for five. Two handlers never leave the field
-  unset, because they require it, and neither requirement was written for this
-  defect. `groupboards.CreateGroupBoardList` requires `label_id`, the only
-  list type the struct models, so that requirement is not a workaround and
-  stays until client-go models the milestone, iteration and assignee lists. `pipelineschedules.EditVariable` has required `value` since
-  the domain was written, and the requirement is what keeps the null from
-  reaching GitLab and what costs the action an edit of the type alone. It
-  retires with the tag: `value` then becomes optional in the handler, in its
-  check and in the `required` of its input schema, as GitLab declares it. A
-  handler could also get past the tag today, contrary to what this entry first
-  said, in two ways: a request option, since client-go runs the request
-  options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
-  and an option can read the body and replace it, which is how client-go's own
-  GraphQL pagination option works; or a request the handler builds itself, as
-  `features.Set` does for entry 6. Neither is carried.
-
-**Where**: seven option structs across client-go.
-
-**What**: the same defect as entries 6 and 52, found systematically rather
-than one at a time. `audit_1to1 -scope=paths` compares the keys
-`encoding/json` writes whatever a handler set against the params GitLab's live
-record marks optional, and reports eleven rows over nine fields in eight option
-types. Two of the rows are entry 52. These are the other seven types, with the
-handler here that sends each:
-
-| Option type                           | Field        | Param         | Endpoint                                                  | Handler here                       |
-| ------------------------------------- | ------------ | ------------- | --------------------------------------------------------- | ---------------------------------- |
-| `CreateDependencyListExportOptions`   | `ExportType` | `export_type` | `POST /pipelines/:id/dependency_list_exports`             | `dependencies.CreateExport`        |
-| `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       | `groupboards.CreateGroupBoardList` |
-| `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                | `groupmembers.AddMember`           |
-| `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              | `members.Add`                      |
-| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/share`                                  | `groupmembers.ShareGroup`          |
-| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`                                | `projects.ShareProjectWithGroup`   |
-| `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    | `issuelinks.Create`                |
-| `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` | `pipelineschedules.EditVariable`   |
-
-Six of the eight handlers set the pointer only when the caller named a value,
-which is the safe side of the choice they have. For five of them the null is
-what the tag adds when the caller did not; for `dependencies.CreateExport` it
-is not, because client-go fills in `"sbom"` when the pointer is nil, so no null
-is ever sent there. The other two, `groupboards.CreateGroupBoardList` and
-`pipelineschedules.EditVariable`, require the field and always set it.
-
-**What GitLab does with the null**, read from the GitLab 19.4.1-ee source (the
-release the live record was taken from) and, for `expires_at`, from the
-end-to-end suite as well. The sources the table cites are linked below it,
-each pinned to that tag.
-
-| Param         | Route                        | How the route reads it                                                                                                                                                                                                                             | Null against the key left out                                                  | Blocking                                                 |
-| ------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `export_type` | pipeline export              | never sent as null: client-go fills in `"sbom"` when the caller named none, which is the route's own default (`ee/lib/api/dependency_list_exports.rb:81`)                                                                                          | not reached                                                                    | No                                                       |
-| `label_id`    | group board list create      | EE replaces the CE `requires` with `exactly_one_of :label_id, :milestone_id, :iteration_id, :assignee_id` (`ee/lib/ee/api/boards_responses.rb:16`), and Grape 2.4.0 counts the keys present, a null included (`MultipleParamsBase#keys_in_common`) | differs beside another list type: refused as mutually exclusive                | Latent: the struct models no other list type             |
-| `expires_at`  | group and project member add | the raw `params` hash with the source added to it (`lib/api/members.rb:146`), read by the create service as `params[:expires_at]` (`app/services/members/create_service.rb:112`)                                                                   | the same: nil either way, no expiry                                            | No                                                       |
-| `expires_at`  | group share                  | `expires_at: params[:expires_at]` (`lib/api/groups.rb:769`)                                                                                                                                                                                        | the same                                                                       | No                                                       |
-| `expires_at`  | project share                | `declared_params(include_missing: false)` (`lib/api/projects.rb:985`): the null is passed as nil and the missing key is not passed, and a new link has no expiry either way                                                                        | the same on a create                                                           | No                                                       |
-| `link_type`   | issue link create            | `declared_params[:link_type]` (`lib/api/issue_links.rb:68`), nil either way, so both take the documented default, `relates_to`                                                                                                                     | the same                                                                       | No                                                       |
-| `value`       | schedule variable edit       | `declared_params(include_missing: false)` (`lib/api/ci/pipeline_schedules.rb:378`), then `variable.assign_attributes(params)` (`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`), and nothing validates the value             | differs: the null is assigned over the stored value, the missing key leaves it | Narrows `pipeline.schedule_edit_variable` to value edits |
-
-Sources, at `v19.4.1-ee`, and Grape at 2.4.0, the release that tag's
-`Gemfile.lock` resolves:
-[`ee/lib/api/dependency_list_exports.rb:81`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/api/dependency_list_exports.rb#L81),
-[`ee/lib/ee/api/boards_responses.rb:16`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/ee/api/boards_responses.rb#L16),
-[`MultipleParamsBase#keys_in_common`](https://github.com/ruby-grape/grape/blob/v2.4.0/lib/grape/validations/validators/multiple_params_base.rb#L22),
-[`lib/api/members.rb:146`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/members.rb#L146),
-[`app/services/members/create_service.rb:112`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/members/create_service.rb#L112),
-[`lib/api/groups.rb:769`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/groups.rb#L769),
-[`lib/api/projects.rb:985`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/projects.rb#L985),
-[`lib/api/issue_links.rb:68`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/issue_links.rb#L68),
-[`lib/api/ci/pipeline_schedules.rb:378`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/ci/pipeline_schedules.rb#L378)
-and
-[`app/services/ci/pipeline_schedules/variables_base_save_service.rb:9`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/services/ci/pipeline_schedules/variables_base_save_service.rb#L9).
-
-The `expires_at` rows are also measured, on both Docker runtimes: the committed
-coverage record (`docs/development/e2e-coverage.json`, 2026-09-26, GitLab
-19.4.1 CE and 19.3.1-ee) holds `group.group_member_add`, `project.member_add`,
-`group.group_member_share` and `project.share_with_group` at L3, asserted on
-all three surfaces, and the five scenarios behind them
-(`TestGroupMembers_Lifecycle_AddEditListAndRemove`,
-`TestGroupMembers_AddDeveloper_AnswersTheMembership`,
-`TestProjectMembers_Lifecycle_AddEditAndRemove`,
-`TestGroupSharing_TwoSurfaces_ShareAndUnshare` and
-`TestProjectSharing_WithGroup_ListsAndRemoves`) name no expiry, so each call
-sent `"expires_at": null` and GitLab created the membership or the share. The
-`link_type`, `label_id` and `value` rows are read and not measured: the issue
-link scenario always names a type, and the other two handlers always send
-their field.
-
-**Two of them are a split tag, not a missing one**, which is worth separating
-because it reads as a fix somebody began and did not finish:
-
-```go
-ExpiresAt *string `url:"expires_at,omitempty" json:"expires_at"`
-```
-
-That is `AddGroupMemberOptions` and `AddProjectMemberOptions`. The `url` half
-omits the key and the `json` half does not, so the same field is absent from a
-query-encoded call and present as `null` in a JSON body. Every other field of
-both structs carries `omitempty` on both halves.
-
-The remaining five simply lack it.
-`EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
-with the tag and one without (`VariableType` carries it, `Value` does not).
-`CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
-is affected. `ShareWithGroupOptions` is the one reached from two packages:
-`projects` passes it to `Projects.ShareProjectWithGroup` and `groupmembers`
-to `GroupMembers.ShareWithGroup`. The audit also lists it under `groups`,
-which is the join and not a third caller: `groups.ShareGroupWithGroup`
-passes `ShareGroupWithGroupOptions`, whose
-`expires_at` already carries `omitempty`, to the same `POST /groups/:id/share`,
-and the check asks about every option struct that reaches a recorded route.
-That row, and the `export_type` one above, which client-go never sends as
-null, are the rule's reading of a tag rather than a request this server sends
-wrongly; both leave the report the day the tags change.
-
-**Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
-defect and does not appear, because the audit reads the request this server
-**recorded** and `internal/tools/features.Set` builds its body by hand to
-avoid the bug. The workaround hides the defect from the check that would have
-found it, which is a property worth knowing before trusting the count: the
-eight are the ones we still send through the SDK, not the eight that exist.
-
-**Effort**: small, and one merge request covers all nine structs of entries 6,
-52 and these seven. Every case is a struct tag plus a test that the key is
-absent when the field is nil. `omitempty` is the right tag for every one of
-them, and `Nullable[T]` for none: the table above finds no field where a null
-is how a caller asks GitLab for something. An expiry is cleared by an edit
-route, and every `expires_at` field here is on a create route; a schedule
-variable's value is emptied with an empty string, which a set pointer still
-sends under `omitempty`. Changing a field's type would also break every caller
-of the struct, where a tag breaks none.
-
-### A permission refusal is answered 401 rather than 403
-
-- **Reported**: no.
-- **In review**: no.
-- **Merged**: no.
-- **Blocking**: no. The call is correctly refused and nothing is served that
-  should not be. What breaks is the explanation a client can give.
-- **Workaround**: yes, in two places that read one rule,
-  `UnauthorizedNamesCredential` in `internal/gitlab/credential_refusal.go`: a
-  401 names the credential when its REST body carries the RFC 6750 code
-  `invalid_token`, which only GitLab's API guard writes, or when the GraphQL
-  endpoint answered it, which has no permission 401 to confuse it with.
-  `internal/toolutil/errors.go` reads it to describe a 401:
-  `ClassifyHTTPStatus(401)` names both causes and how to tell them apart, and
-  `ClassifyError` names the credential alone when the rule says GitLab did.
-  The HTTP pool (`internal/serverpool`) reads it to decide what a refused call
-  means for the caller's pooled credential: a 401 naming the credential ends
-  the entry at once, and one naming nothing is first put to the credential
-  probe (`GET /api/v4/user`, at most once per 30 seconds per credential),
-  which keeps the entry when GitLab still accepts the token. A handler's hint
-  then names the permission, keyed on `toolutil.IsPermissionRefusal`, which
-  reads the same file's `RefusalMayBePermission`: a REST 401 or 403 whose body
-  carries no RFC 6750 error code and whose message is not the API guard's
-  refusal of an account it will not serve (blocked, deactivated and the
-  like), so it is never true of an answer the rule above says names the
-  credential, and a hint keyed on it never follows the verdict that the token
-  itself was refused
-  ([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)).
-  Two kinds of action are not keyed on it. The four group SAML link actions
-  still add their hint to every error, a rejected token included, because the
-  licensed end-to-end suite quotes that wording; and the two self-rotations
-  keep a 401 hint about the calling token, which agrees with that verdict
-  rather than contradicting it.
-  `TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint` in
-  `internal/tools/action_catalog_test.go` drives every served action of the
-  Where list below, one row per action and site: all of them must carry a
-  suggestion on Grape's refusal, and all but those six must carry none after
-  a revoked token, the six being exempt from that half. What retires it is
-  GitLab answering 403 at these sites, after which a REST 401 without that
-  code would again mean an unusable credential alone and the probe would have
-  nothing left to tell apart. A handler that keys one hint on the predicate
-  alone needs no change then, since the predicate reads a plain 403 the same
-  way. The handlers that pair it with a status do, because each reads the
-  status as the cause: the three security settings routes read a 403 first as
-  the license, an archive or an enforced setting, so a role refusal moved to
-  403 would get the license hint; the three external status check merge
-  request routes read a 403 as the role, so the license refusal moved to 403
-  would get the role hint; the fork link would give a target namespace refusal
-  the Owner hint; and the merge train add would lose its hint. They are the
-  ones to revisit when this entry is retired.
-
-**Where**: `lib/api/merge_request_approvals.rb:105` and 148,
-`lib/api/merge_requests.rb:896` and 945, `lib/api/remote_mirrors.rb:12`,
-`lib/api/resource_access_tokens.rb:32`, 63 and 200,
-`lib/api/resource_access_tokens/self_rotation.rb:46`,
-`lib/api/personal_access_tokens.rb:73` and 107,
-`lib/api/helpers/personal_access_tokens_helpers.rb:80`,
-`lib/api/award_emoji.rb:124`, `lib/api/groups.rb:90`,
-`lib/api/projects.rb:925`, `ee/lib/api/status_checks.rb:16` and 67,
-`ee/app/services/external_status_checks/update_service.rb:40`,
-`ee/lib/api/merge_trains.rb:168`, `ee/lib/api/security_scans.rb:54`,
-`ee/lib/api/project_security_settings.rb:30` and 53,
-`ee/lib/api/group_security_settings.rb:36`, `ee/lib/api/saml_group_links.rb`
-(four sites), `ee/lib/ee/api/helpers.rb:193`, and
-`lib/api/ml/mlflow/api_helpers.rb:15` and 23. Read at 19.4.0-pre
-(`b183f4fad4bd`, 2026-09-22). Of these thirty, this server serves an action
-for every one but `security_scans.rb:54` (client-go has no wrapper for it),
-`ee/lib/ee/api/helpers.rb:193` (defined, and called from nowhere at that
-commit) and the two MLflow helpers.
-
-**What**: GitLab's API helper `unauthorized!` (`lib/api/helpers.rb`)
-renders 401 through Grape's `error!`, and these sites call it to
-refuse an **authenticated** user who lacks a permission. Eighteen of them
-guard a `can?` or `can_*?` predicate on `current_user`; the approve endpoint
-calls it on a falsy service result, which is the same thing one layer down.
-The three sites read on the second pass, `resource_access_tokens.rb:200`
-and `personal_access_tokens.rb:73` and 107 (rotating a resource access token,
-and reading or rotating a personal access token by id), refuse the same way
-behind `Ability.allowed?`, and tell only an administrator `not_found!`
-instead. The eight read on the third pass, while fixing the handlers
-([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)),
-are the same refusal under other guards: `personal_access_tokens_helpers.rb:80`
-behind `Ability.allowed?` for a `user_id` naming someone else; `groups.rb:90`
-behind the group permission check a runner administrator passes only for the
-runner setting; `award_emoji.rb:124` for an award somebody else gave;
-`projects.rb:925` for a fork target namespace, with the reason
-`Target Namespace`; `merge_trains.rb:168` for a service that said
-`:forbidden`; `resource_access_tokens/self_rotation.rb:46` for a bot token
-that is not one of the resource's; `update_service.rb:40`, a service that
-builds its own 401 for a missing role and hands it to `render_api_error!`;
-and `status_checks.rb:16`, a before-block that answers every external status
-check route with 401 when the project's namespace lacks the licensed feature,
-which is a license rather than a role and is reachable on GitLab.com, where
-the plan is the namespace's. RFC 9110 gives 401 for a request that lacks
-valid authentication credentials and 403 for one the server understood and
-refuses to authorize, so every one of these is the second answered as the
-first.
-
-It is not accidental, at least at the approve endpoint, whose own `desc` block
-declares the failure:
-
-```ruby
-failure [
-  { code: 404, message: 'Not found' },
-  { code: 401, message: 'Unauthorized' }
-]
-```
-
-So this is a design complaint rather than a bug report, which is the honest
-way to file it. GitLab's own REST API is not consistent with itself here:
-`forbidden!` appears 221 times against `unauthorized!`'s 94, and the
-neighbouring endpoints of several of these sites use it.
-
-**What it costs a client.** A refusal that says 401 is indistinguishable from
-an expired token unless the reader knows the endpoint, so a generic client
-tells its user to check their credentials when the real answer is "you wrote
-this merge request". Measured here: the licensed end-to-end run approves a
-merge request with the credential that opened it, a licensed instance ships
-"Prevent approval by author" on, and GitLab answers
-
-```text
-POST /api/v4/projects/109/merge_requests/1/approve: 401 {message: 401 Unauthorized}
-```
-
-which this server rendered as `authentication failed: GITLAB_TOKEN may be
-invalid or expired` followed by the hint that contradicts it. The list above
-is not a corner: it covers merge, cancel auto-merge, approve, reset approvals,
-adding to a merge train, project mirrors, access token reads, lists and
-rotation, external status checks, security settings, group SAML links, award
-emoji removal, group updates and fork links, all of which this server serves.
-
-**Our half of it.** `httpStatusDescriptions` in `internal/toolutil/errors.go`
-mapped 401 to a sentence about the token, which was right for a genuine
-authentication failure and wrong for every site above. It was fixed without
-waiting for upstream in
-[issue 905](https://github.com/jmrplens/gitlab-mcp-server/issues/905), as the
-Workaround field describes, since it is the half a model actually reads. Two
-local consequences of the same upstream choice were tracked apart. HTTP mode
-evicted a valid credential's pool entry on a permission 401, which ended its
-subscriptions with a false "re-authenticate" and counted a revocation that
-never happened; that is fixed
-([issue 907](https://github.com/jmrplens/gitlab-mcp-server/issues/907)) by
-confirming a 401 that names nothing with the credential probe before the
-entry goes, as the Workaround field describes. The handlers' own hints were
-the third: most of the handlers behind these sites scoped their permission
-hint to the 403 GitLab never sends there, or carried none, and the one that
-hinted on any 401 (the approve) followed the rejected-token verdict with a
-self-approval suggestion. They are fixed
-([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)) by
-keying each hint on `toolutil.IsPermissionRefusal`, except the group SAML
-links and the self-rotations the Workaround field names, and reading the fix
-against GitLab's source corrected what several hints and served usages said
-as well: push mirrors are available on every tier, external status checks
-need Ultimate rather than Premium, a group's security settings need
-Maintainer or Security Manager rather than Owner, the approval reset is
-refused with 401 for a person's token rather than 404 and admits a service
-account's, a rotation by id is refused whatever the role when the calling
-token is itself a project or group access token, and the reads and rotations
-of project and group access tokens are all refused whatever the role when an
-administrator has disabled personal access tokens on the instance. The same
-reading found two status check routes whose role refusal never arrives as a
-401: the delete discards it and answers 204 (entry 56), and the create
-answers it with 500 (entry 57).
-
-### Deleting an external status check without the role answers 204 and deletes nothing
-
-- **Reported**: no.
-- **In review**: no.
-- **Merged**: no.
-- **Blocking**: no, but the answer is false: a caller told the check was
-  deleted goes on as if it were.
-- **Workaround**: partial. Nothing on the wire tells this refusal apart from
-  a real deletion, so the handler cannot report it. The action's served usage
-  says so instead, and asks the caller to confirm a deletion with
-  `external_status_check.list_project`; and
-  `DeleteProjectExternalStatusCheck` in
-  `internal/tools/externalstatuschecks/external_status_checks.go` hints only
-  the license on a refusal, never the role, since GitLab never refuses the
-  role there. What retires it is GitLab rendering the service's refusal.
-
-**What**: `DELETE /projects/:id/external_status_checks/:check_id`
-(`ee/lib/api/status_checks.rb:122-132`) wraps
-`ExternalStatusChecks::DestroyService#execute` in `destroy_conditionally!`.
-The service refuses a caller without `delete_external_status_check`, which
-is the Maintainer role, by returning an error response with
-`http_status: :unauthorized`
-(`ee/app/services/external_status_checks/destroy_service.rb:8` and 27-33).
-`destroy_conditionally!` (`lib/api/helpers.rb:53-65`) sets the status to 204
-and the body to empty **before** it yields, and discards what the block
-returns, so the refusal never reaches the response: a Developer's delete is
-answered 204 and the check is still there. The update beside it hands the
-same kind of service error to `render_api_error!` and answers 401 correctly
-(`status_checks.rb:106-110`), which is the shape the delete is missing. Read
-at 19.4.0-pre (`b183f4fad4bd`, 2026-09-22).
-
-**How we found it**: reading every 401 the status check routes can answer
-while fixing their hints
-([issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908)). The
-delete's service builds a 401 like the update's, and following it to the
-response showed it goes nowhere.
-
-### Creating an external status check without the role answers 500
-
-- **Reported**: no.
-- **In review**: no.
-- **Merged**: no.
-- **Blocking**: no. The check is correctly not created. What breaks is the
-  answer: a refusal of the caller arrives as a fault of the instance, which a
-  client retries or reports as an outage.
-- **Workaround**: yes. `CreateProjectExternalStatusCheck` in
-  `internal/tools/externalstatuschecks/external_status_checks.go` reads a 500
-  whose message carries the service's `Not allowed` as the role refusal it is
-  (`createRefusedForRole`) and hints the Maintainer role, and
-  `TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole`
-  holds it, beside a 500 without that message, which names no role. What
-  retires it is the service giving its refusal a status.
-
-**Where**: `ee/app/services/external_status_checks/create_service.rb:32-38`,
-rendered by `ee/lib/api/status_checks.rb:53`. Read at 19.4.0-pre
-(`b183f4fad4bd`, 2026-09-22).
-
-**What**: `POST /projects/:id/external_status_checks` runs
-`ExternalStatusChecks::CreateService#execute`, which refuses a caller without
-`create_external_status_check`, granted to the Maintainer role
-(`config/authz/roles/maintainer.yml:84`), with `access_denied_error`: a `ServiceResponse.error`
-carrying `reason: :access_denied`, the errors `['Not allowed']`, and no
-`http_status`, which `ServiceResponse.error` defaults to `nil`
-(`app/services/service_response.rb:13`). The route hands that status to
-`render_api_error!(response.payload[:errors], response.http_status)`, which
-reaches Grape's `error!` with a `nil` status (`lib/api/helpers.rb:720-733`),
-and Grape 2.4.0 answers a `nil` status with its default error status, 500.
-So a Developer's create is answered `500 {"message":["Not allowed"]}`. The
-update beside it builds its refusal with `http_status: :unauthorized` and is
-answered 401 (`ee/app/services/external_status_checks/update_service.rb:40`),
-and the delete loses it the other way (entry 56). The route's own spec
-(`ee/spec/requests/api/status_checks_spec.rb`, "when feature is disabled,
-unlicensed or user has permission") drives only the owner and a user who is
-not a member, whom `user_project` answers 404 before the service runs, so no
-test of GitLab's reaches the service's refusal.
-
-**How we found it**: reviewing the fix for
-[issue 908](https://github.com/jmrplens/gitlab-mcp-server/issues/908), by
-reading where each status check route's role refusal ends up, after entry 56
-had shown one of them going nowhere.
 
 ### gobco type-checks every file of a package directory, whatever its build constraints say
 
