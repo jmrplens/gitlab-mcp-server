@@ -5,7 +5,7 @@
 // bundled with ChatGPT.app (verified on codex-cli 0.148.0-alpha.9) fail any
 // result whose annotations carry a non-integer priority, and every affected
 // call surfaces as "Unexpected response type". rmcp types the field correctly,
-// at 3.2.0, the version Codex pins, as on its main branch; the defect is
+// at 3.2.0 and 3.3.0, which Codex's releases and main pin; the defect is
 // Codex's build, where Cargo feature unification turns serde_json's
 // arbitrary_precision on for the whole binary, so a buffered decimal reaches
 // the float field as serde_json's private number map, the field refuses it and
@@ -20,10 +20,11 @@
 // era, HTTP with --stateless=false, and any session at 2026-07-28, whose
 // requests each carry clientInfo in _meta. Over the default stateless HTTP
 // transport a client on 2025-11-25 or earlier reports clientInfo only in an
-// initialize no later POST's session saw, so it is sent the fraction. Whether
-// ChatGPT connector sessions, reported upstream to identify as openai-mcp,
-// escape the "codex" match is unverified, and is recorded with the rest in row
-// 17 until an initialize captured from one settles it.
+// initialize no later POST's session saw, so it is sent the fraction. OpenAI's
+// hosted client reports openai-mcp, which the "codex" match does not catch,
+// and needs no profile: measured on 2026-09-28 (issue 1044), it reads a
+// fractional priority without error. Row 17 records that and the one label
+// still unmeasured.
 //
 // Choosing a response from clientInfo is a deliberate deviation from MCP
 // 2026-07-28, which says implementations SHOULD NOT use it "to change the

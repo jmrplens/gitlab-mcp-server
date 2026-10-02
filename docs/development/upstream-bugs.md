@@ -89,7 +89,7 @@ readable without opening the tracker:
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
-| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, rmcp 3.5.0**; Codex still pins 3.2.0 | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, rmcp 3.5.0**; Codex's `main` pins 3.3.0 since 2026-09-30, which predates it | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | Yes | Yes, [gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066), open | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
@@ -118,14 +118,14 @@ readable without opening the tracker:
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Yes, on Community Edition | None possible |
-| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) merged and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704) open; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Half, unreleased**: the new endpoint, in milestone 19.5 | Was yes | Yes |
+| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), both merged; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Yes, unreleased**: both halves, in milestone 19.5 | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572) | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, unreleased** | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No issue; named as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065), open | No | No | Yes |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | Partly | Partial |
-| 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open | No | No | Yes |
+| 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), open; the backend review approved it, the maintainer approvals are still to come | No | No | Yes |
 | 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | No | No | No | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | No | No | No | No | Partial |
@@ -146,8 +146,8 @@ readable without opening the tracker:
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, unreleased** | Yes | Partial |
 | 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
-| 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), open | No | No | Not yet, with issue 1031 |
-| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329) | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), open | No | No | Not yet, with issue 1031 |
+| 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), open, approved by the writer and the Orbit team | No | No | Not yet, with issue 1031 |
+| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), open | **Yes, unreleased**: `374c457c` on `main`, after v0.136.0 | No | Not yet, with issue 1031 |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330) | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), open | No | No, but results can be silently incomplete | Not yet, with issue 1031 |
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | No | No | No | No | Yes |
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | No | No | No | No | Yes |
@@ -158,6 +158,7 @@ readable without opening the tracker:
 | 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
+| 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -406,6 +407,43 @@ before those three are reviewed, row 83's issue goes before row 84's, which
 cites it, and nothing goes out anywhere without the maintainer's approval and
 an independent review of its exact text.
 
+Re-verified on 2026-10-02 against the trackers and the tags: every merge
+request, pull request and issue the file links, the tags of each dependency,
+and every merge request and issue this project's accounts touched upstream on
+2026-09-30, 2026-10-01 and 2026-10-02, read from the account's event list so
+that nothing done there is missing here. Two rows moved furthest.
+[gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704)
+merged at 12:25 UTC on 2026-10-02, so both halves of row 46 are merged and
+unreleased, and
+[gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650)
+merged at 10:15 UTC the same day and closed row 75's issue, with the schema
+change its review suggested opened afterwards as a merge request of its own.
+Row 92 is new: a GitLab Duo finding on row 46's merge request turned out to be
+a refusal the REST API page did not describe, and the merge request documenting
+it was opened and merged the same day. It is numbered 92 because rows 86 to 91
+are written on the branches for
+[issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952) and
+arrive with them. Row 17 moved a step without moving its
+state: Codex's `main` pins rmcp 3.3.0 since 2026-09-30, a release that predates
+the fix. Rows 19, 34, 47, 51, 53, 68, 74 and 76 each moved a step, recorded in
+their sections: the client-go merge request that row 19's section proposed
+merged and the project's integration job runs its 132 tests again; row 34's
+deploy key documentation merge request had its technical review, and a second
+merge request took the two older problems on the page that it leaves alone; a
+documentation change by one of row 47's approvers merged;
+row 51's merge request had its first review and its changes are in; row 53's
+was approved by its backend reviewer; row 68's pull request had a review from
+another contributor; row 74's was approved by its writer and by the Orbit
+team; and row 76's was rebased, handed to another reviewer, and asked by that
+reviewer for one more rebase, which is owed from here. The go-sdk pull
+requests of rows 8, 11 and 12 are nine commits behind `main` again, unchanged
+since they were brought up to date on 2026-09-29. No release moved anything: GitLab 19.4.1, client-go
+v3.15.0 and go-sdk v1.8.0 are still each project's newest release, go-sdk's
+`main` is 39 commits ahead of v1.8.0, and the Orbit knowledge graph's newest
+tag, v0.136.0 of 2026-09-30, predates its merge, so every merge recorded here
+as unreleased still is. The Go change of row 81, gobco, go-selfupdate and the
+client-go umbrella and 4.0 issues are where their sections left them.
+
 ## GitLab (`gitlab-org/gitlab`)
 
 ### No endpoint reports the instance plan to a non-administrator
@@ -465,6 +503,24 @@ an independent review of its exact text.
   pipeline on `8ee91f87` passed, and a second `@gitlab-bot ready` put it back
   in front of @narendran-kannan and @rsarangadharan; the requested-changes
   state stays until the reviewer clears it.
+
+  **On 2026-09-30** @narendran-kannan approved it for the backend (07:19 UTC),
+  after accepting the answer on the experiment marker ("let's leave it
+  as-is") and passing on the AppSec reviewer's one finding: that
+  `doc/api/openapi/openapi_v2.yaml` listed `plan` as required while
+  GitLab.com answers it `null`. The answer, at 09:45 UTC, agreed that the v2
+  document described a string that is never `null`
+  and fixed that at its source in `be9abac4`, where `expose :plan` now
+  documents `x: { nullable: true }` and the regenerated document carries
+  `x-nullable: true`. It kept `plan` in `required`, since the key is in every
+  response and v2's `required` says only that, as the request specs' own
+  response schema already does for `plan` and for two `kas` keys, and offered
+  `required: false` instead if the reviewer prefers it. The fork pipeline on
+  `be9abac4` failed one Duo Agentic Chat spec in `jest-msw-integration vue3`,
+  which this change does not touch. Read on 2026-10-02 it carries that one
+  approval, under the `All Members` rule, and still needs a maintainer's for
+  each of the `/app/`, `/ee/`, `/ee/spec/`, `/lib/`, `/spec/` and `/public/`
+  code-owner rules; the AppSec thread, answered by us, waits on the reviewer.
 - **Merged**: no.
 - **Blocking**: no. The tier can always be pinned with `--tier` or
   `GITLAB_MCP_TIER`, which skips detection entirely.
@@ -999,7 +1055,14 @@ both approximated, and Rails writes the sign in front (`-1,234`).
   ([job 16821904079](https://gitlab.com/gitlab-org/api/client-go/-/jobs/16821904079),
   2026-09-29).
   [gitlab-org/api/client-go!3067](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3067)
-  proposes the one-line fix, passing the same token under both names.
+  proposed the one-line fix, passing the same token under both names, and
+  @PatrickRice merged it at 15:01 UTC on 2026-09-30 (merge commit
+  `b7187981`). It changes only the CI configuration, so no release carries it
+  or needs to: the `main` pipeline on that commit and the scheduled ones since
+  report `DONE 132 tests` in `tests:integration`, none skipped.
+  `gitlab-org/api/client-go!3066` itself still waits on its review: nobody
+  has commented on it since it was readied on 2026-09-30, and @aharadon gave
+  it its group label on 2026-10-01.
 - **Merged**: no.
 - **Blocking**: no. It is why the eight mutations stay on raw GraphQL, not a
   fix we need to ship.
@@ -1952,7 +2015,8 @@ change.
 
 The one still open is
 [gitlab-org/gitlab!254540](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254540)
-(the deploy key fields), in no milestone and no tag, and what held it up was
+(the deploy key fields), in milestone 19.5 since the writer set it at 12:24
+UTC on 2026-09-24 and in no tag, and what held it up was
 how it was readied rather than anything in it. The machine-learning labeller
 had put the `Technical Writing` label on it on 2026-09-10, before the first
 ready. On a documentation-only merge request a bare `@gitlab-bot ready`
@@ -1980,6 +2044,49 @@ green, every thread resolved, and the writer still to approve and merge it.
 Nothing is owed on it from here. Read on 2026-09-29, unchanged: untouched
 since 2026-09-24, three working days now, with no approval required and none
 given.
+
+Later that day, at 11:37 UTC, the writer asked @narendran-kannan, a backend
+reviewer, for a review of its technical accuracy, and after the bot's
+inactivity nudge of 2026-09-30 it came at 13:05 UTC on 2026-10-02. One finding
+blocked: a deploy key's `usage_type` is always `auth_and_signing`, the
+column's default, since no deploy key create path accepts the parameter, so
+the eleven `auth` values the merge request had added were wrong. `auth` is the
+example of `API::Entities::SSHKey`, which deploy keys share with user keys, and
+`doc/api/keys.md` carried the same mistake. A second, non-blocking note listed
+seven problems already on the page, for a follow-up. The answer went in at
+16:11 UTC as five commits on top of `b2b900f7`: `c19b91b4` sets all eleven to
+`auth_and_signing`; `b2e394bc` corrects `doc/api/keys.md`, whose example now
+shows `auth_and_signing` and whose table no longer offers `auth`; `5338f331`
+removes the unlabelled example response the note listed in "List project
+deploy keys for user", a block this merge request already edits, so a
+follow-up removing it would conflict; and two found while checking what the
+entity sends, `2cc91577`, which adds the `fingerprint` and
+`fingerprint_sha256` that the add, update and enable examples and the deploy
+key table and example of `doc/api/keys.md` left out, and `cf255773`, which
+drops the `SHA256:` prefix every `fingerprint_sha256` on both pages carried
+and the API never returns, since `Key#generate_fingerprint` strips it before
+saving. The title became "Make the deploy key example responses match what
+the API returns", and the description was rewritten to match. Of the seven
+problems, four were already fixed on `master` by another contributor's
+[gitlab-org/gitlab!256496](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256496),
+merged on 2026-09-21 after this branch was cut, and one is the block above.
+The other two went to
+[gitlab-org/gitlab!259375](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259375),
+"Fix the Retrieve and Update sections of the deploy keys API page", opened
+from the community fork at 16:08 UTC: the Retrieve example now requests key
+`1`, the key its response shows, and the Update table gains its `key_id` row
+and a note that the request needs at least one of `can_push` or `title`,
+which the route enforces with `at_least_one_of`. The two change different
+lines of the page, so they merge in either order. Its first
+`@gitlab-bot ready`, seconds after it opened, was undone when the bot
+labelled it a community contribution; the second, at 17:13 UTC, set
+`workflow::ready for review`, and the documentation automation requested
+@rsarangadharan, the page's writer. Read at the end of 2026-10-02:
+`gitlab-org/gitlab!254540` is on head `cf255773` with a green fork pipeline,
+both review threads answered and waiting on the reviewer, and a
+`@gitlab-bot ready @narendran-kannan` asking for the re-review;
+`gitlab-org/gitlab!259375` has a green fork pipeline and no milestone. Neither
+needs an approval, and each waits on its reviewer.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -4173,7 +4280,8 @@ was filed on 2026-09-25.
   its nine checks are green, it has had no review yet, and nothing is owed on
   it from here. On 2026-09-29 it was six commits behind `main`; I updated it
   from `main` (merge commit `4bb3af60`) and its nine checks passed. It has
-  still had no review.
+  still had no review. Read on 2026-10-02 it is nine commits behind `main`
+  again, unchanged since.
 - **Merged**: in part, and by somebody else:
   [modelcontextprotocol/go-sdk#1232](https://github.com/modelcontextprotocol/go-sdk/pull/1232)
   added `StreamableHTTPOptions.StreamKeepAlive` on 2026-09-21, in no tag yet,
@@ -4283,7 +4391,8 @@ passing if the SDK ever fixes this and the filter is removed.
   still up to date with `main`, its ten checks are green, and its one review
   thread, answered on 2026-09-20, waits on the reviewer. On 2026-09-29 it was
   six commits behind `main`; I updated it from `main` (merge commit
-  `761b52b2`) and its ten checks passed. The thread still waits.
+  `761b52b2`) and its ten checks passed. The thread still waits. Read on
+  2026-10-02 it is nine commits behind `main` again, unchanged since.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -4380,7 +4489,8 @@ the server's output.
   commits the same morning, and at 12:42 UTC I updated it again with GitHub's
   Update branch (merge commit `bb0e7c5a`), which merges `main` in and so kept
   `85f855fd`, where a rebase would have dropped it; its nine checks passed
-  again. It has had no review since 2026-09-15.
+  again. It has had no review since 2026-09-15. Read on 2026-10-02 it is nine
+  commits behind `main` again, unchanged since.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
@@ -4999,7 +5109,16 @@ the code. The release that reports the refusal fails it.
   appended to the same two `mcpgodebug` documents on 2026-09-28; its checks
   have never run, the workflows of its first head waiting for a maintainer's
   approval and its second head having none; and no maintainer has reviewed
-  it. The conflict is the author's to resolve.
+  it. The conflict is the author's to resolve. At 13:46 UTC on 2026-10-02
+  another contributor reviewed it, in a comment marked AI-assisted and checked
+  against `3e21beb4`: `reinitialize()` keeps the new session whenever the
+  fresh `initialize` negotiates the same protocol version, and updates only
+  the session ID, so a restarted server advertising other capabilities,
+  server info or instructions on that version leaves the client deciding from
+  the old result. It asks that the new session be adopted only when the result
+  stays compatible, or that the fresh result reach the `ClientSession`. Read
+  the same day the pull request still conflicts with `main`, now 15 commits
+  behind it, and no maintainer has reviewed it.
 - **Merged**: no.
 - **Blocking**: no, and only under `--stateless=false`, the one mode that mints
   session IDs. There the gate answers 404 (row ADM-007) to any request carrying
@@ -5136,11 +5255,22 @@ three paths that was not kept.
   which lists it under Fixed. It reaches users through a chain of three: an rmcp
   release carrying it, which now exists, a Codex release built on that rmcp, and
   a ChatGPT.app that bundles that Codex. Codex has not taken the second step:
-  `codex-rs/Cargo.toml` on its `main` still pins `rmcp = "=3.2.0"` on
+  `codex-rs/Cargo.toml` on its `main` still pinned `rmcp = "=3.2.0"` on
   2026-09-28, and the comment owed once 3.5.0 was tagged was posted the same day
   ([openai/codex#38979, comment 5874158831](https://github.com/openai/codex/issues/38979#issuecomment-5874158831)),
-  naming the release and what the bump from 3.2.0 involves. No Codex maintainer
-  has commented on the issue since it was opened on 2026-08-17.
+  naming the release and what the bump from 3.2.0 involves. On 2026-09-30 a
+  Codex change for another reason,
+  [openai/codex#49473](https://github.com/openai/codex/pull/49473) ("Use the
+  rmcp SDK for enterprise-managed token exchanges", commit `c9b3924a`), moved
+  the pin to rmcp 3.3.0, taken from git at the `rmcp-v3.3.0` release commit
+  (`3e636cab`, 2026-09-10) for the enterprise authorization helpers that
+  release added. That commit is 31 commits behind the fix's merge and
+  carries none of it, so read on 2026-10-02 Codex's `main` still builds
+  without the fix. So do its releases: `rust-v0.160.0`, the newest stable one
+  (2026-10-01), still pins 3.2.0, and every alpha since
+  `rust-v0.161.0-alpha.4` (2026-09-30), the `rust-v0.162.0` ones included,
+  pins 3.3.0. No Codex maintainer has commented on the issue since it was
+  opened on 2026-08-17.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
@@ -5437,6 +5567,41 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   review, on the `/lib/` and `/spec/` maintainer approvals, and on its five
   unresolved threads, the four above and the ready note's, being resolved.
 
+  **It merged on 2026-10-02.** @marc_shaw approved it at 09:45 UTC on
+  2026-09-30, with one non-blocking suggestion: delete the auto-merge
+  `before` block of the endpoint's spec and the original example, now that
+  the block was known to do nothing, rather than describe them in a comment.
+  @uchandran approved the documentation half again at 13:48 UTC on
+  2026-10-01, and @marc_shaw resolved every thread and set it to join the
+  merge train at 16:10. The suggestion was taken at 20:40 UTC in `78b2ba7a`,
+  with `45697162` after it: the block had been creating a merge request in
+  every example, which moved the id sequence along before `returns 404 if the
+  merge request id is used instead of iid` ran, and without it that example,
+  run on its own against a fresh test database, creates a merge request whose
+  id and iid are both `1` and answers `201`, so it now creates one in another
+  project first. Both commits touch only
+  `spec/requests/api/merge_requests_spec.rb`, so @uchandran's approval stood;
+  the push reset @marc_shaw's and took it off the train, which the ready note
+  that followed said, asking for the approval, a pipeline and the train
+  again. On 2026-10-02 @marc_shaw asked GitLab Duo to review it, whose one
+  finding (09:18 UTC) was that the rewritten status table leaves out the
+  `405 Method not allowed` the endpoint's `failure` list declares. Our answer
+  (10:32 UTC) kept the `405` in the `failure` list and out of the table: it
+  is not a routing answer but `find_project!` refusing a non-`GET` request
+  that names a moved project by its old path, which most project endpoints do
+  the same way, so a row on this endpoint alone would read as particular to
+  it, and the REST API page, which describes only the `GET` redirect, is where
+  it belongs; that is
+  [row 92](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405).
+  @marc_shaw approved it again at 11:21 UTC with one non-blocking note, that
+  the other "id is used instead of iid" examples in that spec file share the
+  same dependence on a fresh sequence (three he tried answer `201` after
+  restarting `merge_requests_id_seq`), so the guard fixes one of thirteen,
+  offered as a follow-up if we want one; it has not been opened. He resolved
+  every thread at 11:24 and started a merge train at 12:23, and it merged at
+  12:25 UTC (merge commit `acc7dd86`, squash commit `d1cd3e49`), in milestone
+  19.5.
+
   **The first attempt,
   [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), was
   closed unmerged, and why is the useful part.** It changed the handler to match
@@ -5454,14 +5619,15 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
   documentation notice and **not** an entry in `doc/api/rest/deprecations.md`,
   which promises removals, and why a symmetric `add_to_auto_merge` was declined
   in the same breath.
-- **Merged**: half of it, and unreleased.
+- **Merged**: yes, both halves, and unreleased.
   [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702),
   the new `cancel_auto_merge` endpoint, merged into `master` on 2026-09-29
-  (milestone 19.5, merge commit `043d425d`). Held to the tags that contain
-  that commit, read on 2026-09-30, it is in no release yet; 19.5 is due on
-  2026-10-15.
+  (milestone 19.5, merge commit `043d425d`), and
   [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704),
-  the old endpoint's documentation and deprecation, is in review.
+  the old endpoint's documentation and deprecation, on 2026-10-02 (milestone
+  19.5, merge commit `acc7dd86`). Held to the tags that contain those
+  commits, read on 2026-10-02, neither is in a release yet, the newest being
+  `v19.4.1-ee`; 19.5 is due on 2026-10-15.
 - **Blocking**: it was, for the action. `merge_request.cancel_auto_merge`
   answered a model with an object carrying no IID, no state and no title, so a
   caller could not tell a cancelled auto-merge from a broken call.
@@ -5533,6 +5699,71 @@ handler's unit test mocked a full merge request body, which is why the server's
 contract was wrong in the same direction as the record and no gate could see
 the disagreement.
 
+### The REST API page does not say a non-GET request to a moved project's old path is answered 405
+
+- **Reported**: yes, by the merge request below; a documentation-only change
+  needs no issue first.
+- **In review**: yes,
+  [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297),
+  "Document the 405 for non-GET requests to a moved project", opened from the
+  community fork at 10:32 UTC on 2026-10-02 and readied at 10:36. The
+  documentation automation requested the technical writer @fneill, who
+  approved it at 14:41 UTC and set it to join the merge train.
+- **Merged**: yes, at 14:50 UTC on 2026-10-02 (merge commit `804725ee`), in
+  milestone 19.5. Held to the tags that contain that commit, read the same
+  day, it is in no release yet; 19.5 is due on 2026-10-15.
+- **Blocking**: no. A request that names the project by its ID or by its
+  current path is never refused this way.
+- **Workaround**: not yet.
+  [Issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) is
+  for this server to describe the refusal, so that a model retries with the
+  project's ID instead of reading the generic 405 sentence of
+  `internal/toolutil/errors.go`, "the action cannot be performed on this
+  resource in its current state", as a statement about the merge request,
+  issue or branch it was acting on.
+
+**Where**: the [Redirects](https://docs.gitlab.com/api/rest/#redirects)
+section of `doc/api/rest/_index.md`, and `find_project!` in
+`lib/api/helpers.rb`.
+
+**What**: the page said that after a path change the API answers with a
+redirect to the new location. That holds for `GET` only. For any other method,
+`find_project!` answers a caller who can read a moved project and names it by
+its old path with `405 Method Not Allowed` and the message
+`Non GET methods are not allowed for moved projects`, which
+`spec/requests/api/projects_spec.rb` pins for the archive endpoint. A caller
+who cannot read the project is answered `404` before that check, which the
+same spec pins.
+`project_moved?` is true only when `:id` is a path other than the project's
+current one. Most project endpoints look `:id` up through that helper; a few
+use `find_project`, which follows the redirect without the check, so a
+non-`GET` request with the old path is processed there as usual
+(`POST /projects/:id/trigger/pipeline` is one). `HEAD` is refused too, since
+the helper's `get?` check is false for it whether Grape serves it through a
+`GET` route, as for a raw file, or through one declared with `head`, as for a
+file's metadata, and its refusal has no body.
+
+**Fix merged**: the merge request adds to the section which methods are
+refused, the response body and what to send instead. It leaves `HEAD` out of
+the list of methods because its answer has no body to show, and says most
+endpoints rather than all of them, for the `find_project` exceptions above.
+
+**What it costs this server**: it passes `project_id` to GitLab as given, so a
+model that names a project by a path it saw before the move can read the
+project and then fail every write to it, and two reads as well,
+`repository.file_metadata` and `repository.file_raw_metadata`, which are
+`HEAD` requests. The error leads with the generic 405 sentence, with GitLab's
+message after it, and three handlers that key on the status alone give a wrong
+cause instead: `merge_request.merge`, `merge_request.cancel_auto_merge` and
+`access.token_project_rotate_self`. Issue 1133 records each.
+
+**How we found it**: answering GitLab Duo's one finding on
+[gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704)
+([row 46](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation)),
+that its status table left out the `405` the endpoint's `failure` list
+declares. Tracing where that `405` comes from showed it was this helper, not
+the endpoint, and that the REST API page did not describe it.
+
 ### A revoked GPG UID is still offered for verification and still verifies commits
 
 - **Reported**: yes, by another user, before us, as
@@ -5548,7 +5779,17 @@ the disagreement.
   2026-10-15. The issue it names is still open, since its `Closes` line
   closed nothing, and nothing is owed until 19.5 is tagged. Then one comment
   on the issue saying which release carries the fix lets someone with the
-  permission close it.
+  permission close it. Read again on 2026-10-02 nothing of that has changed.
+  The documentation followed from somebody else: @brendan777, one of the
+  merge request's three approvers, opened
+  [gitlab-org/gitlab!255357](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255357),
+  "Distinguish revoking a GPG key from revoking a user ID", which cites it
+  and was merged on 2026-10-01 (milestone 19.5, merge commit `612f032e`). It
+  adds to the "Revoke a GPG key" section of
+  `doc/user/project/repository/signed_commits/gpg.md` that revoking a key in
+  GitLab marks every commit signed with it unverified while revoking one of
+  its user IDs with GnuPG affects only the commits using that ID's address,
+  and corrects the procedure's last step.
 - **Blocking**: no.
 - **Workaround**: none possible. The verdict is computed inside GitLab and
   served as one string; nothing on this side can tell a signature verified
@@ -5825,7 +6066,12 @@ reason would still leave a view nobody follows.
 - **In review**: yes,
   [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241),
   opened 2026-09-28 from the community fork and readied naming the technical
-  writer @fneill, whom the bot set as reviewer.
+  writer @fneill, whom the bot set as reviewer. @fneill approved it at 10:26
+  UTC on 2026-09-30 and asked @aalgutifan, of the Orbit team, for the
+  technical review, who approved it at 17:22 UTC on 2026-10-02 without a
+  comment. Read that evening it has both approvals, needs no other, has a
+  green fork pipeline and no milestone, and its one open thread is the ready
+  note's; it waits on being merged.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. This server never points a model at the page's
@@ -6708,13 +6954,24 @@ needs `0.32.4`. Nothing in the project's pipeline will flag it: the two
 branches merge cleanly, since both make the same change to the version, and
 `skill-version-bump-check` compares a branch with its merge request's diff
 base, where the skill stays at `0.32.2` until the branch is rebased. The
-commit that updated each branch's tests (below) says so in its message.
+commit that updated each branch's tests (below) says so in its message. The
+numbers have moved since: on 2026-10-01 both branches were rebased onto a
+`main` where
+[gitlab-org/orbit/knowledge-graph!2672](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2672),
+merged that day, had taken the skill to `0.33.0` and added a GQL copy,
+`SKILL.gql.md`, versioned as the JSON skill's version plus
+`+gql`, and they took `0.33.1` and `0.33.2`, each with the four tests that pin
+the two versions. Row 75's merged at `0.33.1`, and row 76's was rebased onto
+that on 2026-10-02 and keeps `0.33.2`, one above `main`. On 2026-10-02
+[gitlab-org/orbit/knowledge-graph!2692](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2692)
+stopped those tests hardcoding the version, so a bump no longer edits them.
 
 ### The DSL schema says a path query may omit `rel_types`
 
 - **Reported**: yes,
   [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329),
-  opened 2026-09-28, mentioning the author of the rule and of the current text.
+  opened 2026-09-28, mentioning the author of the rule and of the current text,
+  and closed by the merge on 2026-10-02.
 - **In review**: yes,
   [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650),
   opened the same day from the community fork, which closes the issue; the
@@ -6760,7 +7017,57 @@ commit that updated each branch's tests (below) says so in its message.
   pins now. At 22:37 UTC the same day `@gitlab-bot ready` went up with a note
   giving the two jobs' real causes, and the bot requested review from
   `kerrizor`, a merge request coach, and set `workflow::ready for review`.
-- **Merged**: no.
+
+  On 2026-09-30 @kerrizor passed the review to @dgruzd and had GitLab Duo
+  review it, which found nothing to comment on. @dgruzd approved it at 13:05
+  UTC on 2026-10-01, asked @michaelusa for the maintainer review, and
+  suggested in a non-blocking note that the schema itself mark `rel_types`
+  required, in `PathConfig.required` and with `"minItems": 1`, so that
+  schema-driven clients and `get_query_dsl` stop getting a mixed signal. The
+  reply (20:36 UTC) agreed and offered it as a follow-up once this merged,
+  noting that a JSON path query without `rel_types` would then get the
+  schema's required-property error instead of `check_path`'s fan-out message.
+  The rebase that evening (21:51 UTC, above) reset the approval. @dgruzd
+  approved again at 10:04 UTC on 2026-10-02, set it to merge when its checks
+  pass, leaving any feedback from @michaelusa to a follow-up, and started the
+  pipeline in the canonical project, which passed; it merged at 10:15.
+
+  The follow-up is
+  [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691),
+  "fix(dsl): require rel_types in the path_finding schema", opened from the
+  community fork at 17:13 UTC on 2026-10-02 and readied naming @dgruzd at
+  17:43. It adds `rel_types` to `PathConfig.required` with `"minItems": 1`,
+  bumps `query_dsl` from 12.1.9 to 12.1.10 and pins the new shape in a test.
+  Its description discloses one narrowing beyond what was agreed: the
+  top-level `path` references `PathConfig` for every query type, so a
+  traversal or neighbors query carrying an unused `path` without `rel_types`,
+  which compiled before, is now refused by the schema; it keeps the patch bump
+  because that `path` has no effect on those queries, and offers another bump
+  if the maintainers read the narrowing as a change of contract. Three
+  integration tests whose JSON `path` had no `rel_types` gain `["*"]`, which
+  is what the untyped edge of their GQL counterparts lowers to. Like this
+  merge request it needs a pipeline in the canonical project, which only a
+  project member can start.
+
+  Read again on 2026-10-02, the two pipeline defects above are where they
+  were, and `pinned-version-check`'s turned out to depend on the branch
+  rather than on the fork. `lint:prose` failed in every fork pipeline since,
+  on this branch, on
+  row 76's and on the follow-up's, with the same empty revision.
+  `pinned-version-check` passed in each of those pipelines: on the two
+  branches that carry the marker it skipped before looking for a merge base,
+  and on the follow-up's, which carries none, the depth 1 fetch of `main` held
+  the freshly rebased branch's base and the check found the bump. It stops at
+  `no merge base` on a branch whose base `main` has moved past and whose
+  description carries no marker.
+- **Merged**: yes, at 10:15 UTC on 2026-10-02, by @dgruzd, as squash commit
+  `374c457c` (merge commit `edfa149d`), which closed
+  [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329).
+  It is in no release yet: the project's newest tag, `v0.136.0`, was cut on
+  2026-09-30, before the merge. The follow-up that makes the schema itself
+  require `rel_types`,
+  [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691),
+  is open.
 - **Blocking**: no.
 - **Workaround**: not yet. `orbit.dsl` hands the model GitLab's schema text
   verbatim, so it repeats the wrong condition; `orbit.query`'s own guidance
@@ -6785,11 +7092,12 @@ bound fan-out". The guide's path example also runs from a project to a user
 through relationship types that point the other way, so it returns no rows;
 reversed, the same query returns two paths.
 
-**Fix in review**: the merge request states the rule in the schema, the guide,
+**Fix merged**: the merge request states the rule in the schema, the guide,
 the skill copy and the recipe, turns the guide's example round, and bumps the
-skill. It changes no accepted query, so it leaves the `query_dsl` version
-alone and puts that choice, and making `rel_types` required in the schema
-itself, to the maintainers in the issue.
+skill. It changes no accepted query, so it left the `query_dsl` version
+alone and put that choice, and making `rel_types` required in the schema
+itself, to the maintainers in the issue. Its review suggested the second,
+which is the follow-up in review above.
 
 **How we found it**: sending the query the description allows to GitLab.com
 while rewriting `orbit.query` for issue 1031.
@@ -6819,7 +7127,20 @@ while rewriting `orbit.query` for issue 1031.
   declared default as part of the contract. At 22:37 UTC `@gitlab-bot ready`
   went up with a note giving the same two causes as row 75's, and the bot
   requested review from `ms.mondrian`, a merge request coach, and set
-  `workflow::ready for review`.
+  `workflow::ready for review`. At 19:44 UTC on 2026-10-01 @ms.mondrian
+  handed the review to @aalgutifan. The branch was rebased that evening with
+  row 75's, taking the skill to `0.33.2`, and again at 17:12 UTC on
+  2026-10-02 onto the `main` that carries row 75's merge, where only the two
+  version lines and the four tests that pin them conflicted and the neighbors
+  change stayed the same. The note posted with the second rebase (17:43 UTC)
+  tells @aalgutifan that it needs a pipeline in the canonical project, which
+  only a project member can start, since a fork pipeline cannot pass
+  `lint:prose`. Its fork pipeline on that head fails only that job. At 17:53
+  UTC @aalgutifan replied that
+  [gitlab-org/orbit/knowledge-graph!2692](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2692),
+  merged a minute earlier, stops the project's tests hardcoding the skill
+  version, asked for one more rebase onto it, and said the change looks good
+  otherwise. It has no approval, and the next step is ours: that rebase.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
@@ -6988,7 +7309,20 @@ option, and 4.0 makes it the default.
   [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065):
   the commit reviewed there, cherry-picked unchanged onto v3.15.0, and
   [gitlab-org/api/client-go#2301](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2301)
-  now names that merge request as the one carrying the option.
+  now names that merge request as the one carrying the option. At 02:11 UTC
+  on 2026-10-01 @PatrickRice reviewed it and requested changes, with two
+  suggestions and nothing else: a comment at the call site saying where
+  `WithNilOptionsOmitted` sets the behavior, and the helper inverted from
+  `isNilOptions` to `isNonNilOptions`, since its one caller always negates
+  it. Both went in at 20:36 UTC as one commit on top,
+  `3dafd822`, the comment typed in the reviewer's words rather than applied
+  as a suggestion so that it is tab-indented and wrapped as the project's
+  `AGENTS.md` asks; no test names the helper, so none changed. Each thread
+  was answered, the description names `isNonNilOptions`, its fork pipeline
+  passed, and a `@gitlab-bot ready @PatrickRice` at 20:44 UTC put it back at
+  `workflow::ready for review`. It waits on that review, whose
+  requested-changes state stays until the reviewer clears it, and on its one
+  required approval.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, and neither route the SDK sends it on is reached from
