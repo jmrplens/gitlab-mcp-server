@@ -195,6 +195,12 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	spanAttrs := append(append([]attribute.KeyValue(nil), shared...),
 		attrServerAddress.String(host), attrServerPort.Int(port))
 
+	ctx, span := t.tracer.Start(req.Context(), req.Method,
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(spanAttrs...),
+	)
+	defer span.End()
+
 	// The convention's client span name is "{method} {url.template}" when a
 	// low-cardinality template is known and the method alone when it is not.
 	// The path itself is never one: every GitLab path carries a project or
@@ -202,17 +208,21 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// name per project. The template is one of the binary's own
 	// (routeTemplates), and it stays off the metric, whose dimensions this
 	// change does not widen.
-	name := req.Method
-	if template := routeTemplateOf(req); template != "" {
-		spanAttrs = append(spanAttrs, AttrURLTemplate.String(template))
-		name = req.Method + " " + template
+	//
+	// It is looked up only for a span something records. This transport
+	// wraps every GitLab call whether or not telemetry is on, and with it off,
+	// which is the default, the span records nothing, so matching the path
+	// against every route of the table would be work no reader ever sees. The
+	// span starts named by its method, which is the convention's name with no
+	// template, and is renamed once the template is known; every sampler
+	// OTEL_TRACES_SAMPLER can name for the SDK this server links decides on
+	// the trace and its parent, never on a span's name.
+	if span.IsRecording() {
+		if template := routeTemplateOf(req); template != "" {
+			span.SetName(req.Method + " " + template)
+			span.SetAttributes(AttrURLTemplate.String(template))
+		}
 	}
-
-	ctx, span := t.tracer.Start(req.Context(), name,
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(spanAttrs...),
-	)
-	defer span.End()
 
 	started := time.Now()
 	// Clone rather than mutate: a RoundTripper "should not modify the request",

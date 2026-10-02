@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -465,6 +467,49 @@ func TestNewTransport_ADeclaredRouteNamesTheSpanAndNeverThePath(t *testing.T) {
 			t.Errorf("url.template = %q with no function declared", value.AsString())
 		}
 	})
+}
+
+// TestNewTransport_ASpanNothingRecordsAsksForNoRoute covers what the lookup
+// costs a deployment that exports nothing, which is the default: the
+// transport wraps every GitLab call whatever telemetry says, and a span
+// nothing records is never read, so the route function is not asked, while
+// the request still reaches GitLab.
+func TestNewTransport_ASpanNothingRecordsAsksForNoRoute(t *testing.T) {
+	previousRoutes := routeTemplates.Load()
+	t.Cleanup(func() { routeTemplates.Store(previousRoutes) })
+	previousTracer := otel.GetTracerProvider()
+	t.Cleanup(func() { otel.SetTracerProvider(previousTracer) })
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample())))
+
+	asked := 0
+	SetRouteTemplates(func(string, string) (string, bool) {
+		asked++
+		return "/api/v4/projects/:id/issues", true
+	})
+	var reached atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	client := &http.Client{Transport: NewTransport(nil)}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, upstream.URL+"/api/v4/projects/1/issues", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("the request failed: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if got := reached.Load(); got != 1 {
+		t.Errorf("GitLab was reached %d times, want once", got)
+	}
+	if asked != 0 {
+		t.Errorf("the route function was asked %d times for a span nothing records, want none", asked)
+	}
 }
 
 // clientSpanOf sends one GET to url, with a query a template must never
