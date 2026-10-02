@@ -63,11 +63,14 @@ type fineGrainedCellRow struct {
 	Action  string `json:"action"`
 	// Asserted counts the calls a passing test saw run.
 	Asserted int `json:"asserted,omitempty"`
-	// Refused counts the refusals a passing test saw, by reason.
+	// Refused counts the refusals a passing test saw, by the class the call
+	// was recorded under: the server's own withholding as fine_grained, and
+	// GitLab's 403 or 404 for a call the server let through, which is what a
+	// scenario asserts for a grant that does not reach the object, as
+	// forbidden or not_found.
 	Refused map[string]int `json:"refused,omitempty"`
-	// ErrorPath counts the errors a passing test wanted: GitLab's own refusal
-	// of a call the server let through, which is what a scenario asserts for a
-	// grant that does not reach the object.
+	// ErrorPath counts the errors a passing test wanted that carry no class:
+	// a tool error the harness names no refusal for, or a JSON-RPC error.
 	ErrorPath int `json:"error_path,omitempty"`
 	// Unjudged counts the calls of a test that did not pass, one whose span
 	// never arrived, or one that came back in a way that says nothing about
