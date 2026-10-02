@@ -68,11 +68,22 @@ var assertedFloors = map[string]int{}
 // on GitLab 19.4.1 both as the latest images and pinned, each runtime's the
 // fewest any of its runs reached, so a run passes them only if the
 // fine-grained scenarios ran and saw both halves: actions a grant reaches
-// served, and actions a grant does not reach refused for the credential
-// before anything reached GitLab.
+// served, and actions no fine-grained token reaches refused for the
+// credential before anything reached GitLab.
+//
+// They have to hold on a release the table was not recorded from as well,
+// since the complete runs and CI's run pull the latest images and a scenario
+// asserts phase A there rather than skipping. So the refused floor counts
+// only the cells of actions the table denies to every fine-grained token,
+// which both phases withhold: on CE the branch rule list and the work item
+// create, on EE those and the epic read, the security attribute create and
+// the vulnerability count, three surfaces each. The write a grant does not
+// reach (a branch create) is withheld only in phase B and is GitLab's own
+// refusal in phase A, so its three cells are not counted; every asserted
+// cell is an action the scenario's grant reaches, served in either phase.
 var fineGrainedFloors = map[string]fineGrainedFloor{
-	"ce": {Asserted: 24, Refused: 9},
-	"ee": {Asserted: 27, Refused: 18},
+	"ce": {Asserted: 24, Refused: 6},
+	"ee": {Asserted: 27, Refused: 15},
 }
 
 // declaredCategories is the set a category must belong to, so a typo does
