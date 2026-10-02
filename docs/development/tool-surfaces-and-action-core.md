@@ -72,6 +72,8 @@ The core pieces are:
 | `internal/tools/dynamic/register.go`          | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog             |
 | `internal/tools/dynamic/standalone.go`        | Adds dynamic-only catalog actions that do not fit the normal meta route model                                                 |
 | `cmd/audit_catalog_first`                     | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
+| `internal/tools/actiongrants`                 | The generated fine-grained table (`table_gen.go`) and its readers; the catalog sets each action's `FineGrained` from it       |
+| `internal/tools/toolvisibility`               | The post-registration pass, and the per-tool action sets, listing middleware and call middleware of a fine-grained session    |
 
 The catalog stores executable routes with input schemas, output schemas,
 destructive flags, read-only status, icons, descriptions, aliases, tags, usage
@@ -239,6 +241,7 @@ client. The relevant policies are:
   name nothing.
 - Token-scope filtering.
 - `GITLAB_MCP_READ_ONLY` / `--read-only` filtering.
+- A fine-grained session's narrowing, per request (below).
 - `GITLAB_MCP_SAFE_MODE` / `--safe-mode` previews.
 - Capability surface selection for resources and prompts.
 
@@ -247,6 +250,99 @@ so search and execute cannot see hidden actions. Meta mode registers visible
 meta-tools from the filtered catalog. After tools are registered, the server
 exposes `gitlab://tools` and `gitlab://tools/{id}` as the public, surface-aware
 manifest for accepted call shapes and input schemas.
+
+Every filter above but one is applied to the catalog, before anything is
+registered, and keyed on what the configuration shape holds. The fine-grained
+narrowing cannot be: a fine-grained token's grant is a value its caller mints,
+so it never reaches a catalog, shape or manifest key, and one server serves a
+classic token and any number of fine-grained ones. It is applied per request
+instead, at the points the next section names, over the surface the other
+filters left.
+
+## Fine-grained Sessions
+
+A fine-grained personal access token is judged per action against what GitLab
+declares ([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)).
+The requirement of every action is derived from its handlers and joined to
+GitLab's record by `cmd/gen_action_grants`, which writes it as
+`internal/tools/actiongrants/table_gen.go`; nothing is written by hand on an
+`ActionSpec`.
+
+- **The field.** `actioncatalog.Action` carries `FineGrained
+  *finegrained.Requirement`, set from `actiongrants.Requirement` by canonical
+  ID wherever an action is added to a catalog, the standalone actions that join
+  one after it is built included. It is one pointer into the one table, the same in every
+  shared catalog. `gitlab://tools/{id}` serves it, worded by
+  `finegrained.Table.Describe`, as the `fine_grained` block of every session.
+  The decision reads the table by ID and never the field, so an action that
+  joined late is still judged.
+- **The authority.** A fine-grained credential's client carries a
+  `*finegrained.Authority` (`gitlabclient.Client.SetAuthority`, read back with
+  `gitlabclient.AuthorityFrom(ctx)`), built per pool entry, or once per process
+  on stdio, and replaced whole on a re-read. A classic token's client carries
+  none, and every point below returns at once for it. `Authority.Lists(id)` is
+  the listing verdict and `Authority.Decide(id)` the call verdict, with the
+  missing permission groups and the parts served empty; an ID the table has no
+  row for is listed and callable (unknown authority, `INV-008`).
+- **The call middleware.** `toolvisibility.CallMiddleware` answers a
+  `tools/call` to an individual, meta or standalone tool whose action the
+  session may not call, with `Authority.WithheldText`, before the argument limit
+  and the SDK's schema validation, so one cause gets one refusal whatever the
+  arguments. It is added after `toolutil.AttachArgumentLimits` and before the
+  rate limiter in `cmd/server`, so it runs inside the rate limiter and the
+  held-call count: a withheld call spends one rate token and charges no failure
+  budget. A meta tool's `action` member is read alone with a streaming decoder
+  and resolved through the group's routes as the meta handler resolves it; a
+  call it cannot name is left to the dispatcher.
+- **The dispatcher check.** `toolutil.FineGrainedRefusal` is called by every
+  dispatcher before anything it does on the action's behalf: the meta handler
+  after it resolves and validates the action and before destructive
+  confirmation and the route's safe-mode preview, the individual handler before
+  safe mode, dynamic execute right after it resolves the action and before
+  parameter validation, and the standalone handler first. A withheld write is
+  therefore never offered for confirmation or previewed. The canonical ID
+  reaches the dispatchers as `toolutil.ActionRoute.ActionID`, set by the catalog
+  for every action. It logs the refusal class `toolutil.RefusalFineGrained`
+  (`fine_grained`). On dynamic execute it is the only check, since execute's
+  schema is a string and an object and refuses nothing a withheld action would
+  be answered for.
+- **The listing middleware.** `toolvisibility.ListingMiddleware` narrows a
+  fine-grained session's `tools/list`: an individual or standalone tool whose
+  action is not listed is dropped, a meta tool only when no action of its group
+  is, and the dynamic surface's two tools never. It copies the SDK's result with
+  the tools replaced, so the cursor, the cache scope and `_meta` survive. It is
+  added right after the rate-limit block, so it runs outside the rate limiter:
+  `RTC-007` charges the next listing up front with what the last one carried,
+  and a filter inside the limiter would let one narrow grant lower what other
+  credentials' wide listings are charged. The per-tool action sets it reads
+  (`toolvisibility.NewToolActions`) are computed once per server at
+  registration.
+- **Find and the manifest.** `gitlab_find_action` leaves out of a fine-grained
+  session's results what it may not list, before the limit is applied, and
+  `gitlab://tools` is narrowed per read with the same per-tool sets, a copy of
+  the shared snapshot. `gitlab://tools/{id}` of an action the listing leaves out
+  is served with a `withheld` block rather than as not found.
+- **The notes.** `toolutil.FineGrainedNotes` adds to a served answer the next
+  steps that say what GitLab left empty for the credential
+  (`Authority.DegradedNote`), that a GraphQL not-found may be the grant
+  (`NullNote`) and that a GraphQL empty list may be the grant (`EmptyNote`). A
+  safe-mode preview gets none.
+- **The server's own listings** are never narrowed: each filter returns the
+  whole surface under `toolutil.IsInternalInspection`, so the registration pass
+  (`toolvisibility.Apply`), the tool count and the `gitlab://tools` snapshot see
+  every tool. On stdio the authority is attached after registration and before
+  the readiness gate opens, so the first `tools/list` a client sends is already
+  narrowed.
+
+Resources, prompts, completions and subscriptions are not narrowed: each reads
+GitLab over REST with the caller's credential, and GitLab's own `403` answers
+what the grant does not reach.
+
+The words of every refusal and note live in `internal/finegrained`, so every
+surface says the same thing; they name actions by canonical ID and never by a
+`gitlab_*` tool name, which `make check-action-ids` holds. Register rows
+`AUT-007` (what no fine-grained token can reach) and `AUT-008` (what the grant
+does not reach) declare the sites, and `make check-tenancy` holds them.
 
 ## Tool Manifest Resources
 

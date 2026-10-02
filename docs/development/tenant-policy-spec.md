@@ -55,11 +55,11 @@ within one instance.
 
 ### Per mode
 
-| Mode        | Credential source                                         | Admission                                                                            | Where the tenant is resolved                                             | Today's per-caller key |
-| ----------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------- |
-| stdio       | `GITLAB_TOKEN` from the environment                       | The operator's configuration; no admission refusal exists                            | Once per process, after the handshake starts (`IDN-008`)                 | The process            |
-| HTTP legacy | `PRIVATE-TOKEN`, then `Authorization: Bearer` (`IDN-001`) | GitLab did not answer `GET /user` with 401 or 403 (`ADM-001`)                        | When the pool entry is built, and put on the request context by the gate | The entry              |
-| HTTP OAuth  | `Authorization: Bearer` only (`IDN-001`)                  | Verified against the selected instance, introspected, `read_api` minimum (`ADM-002`) | The verifier's resolved user, and the pool per entry                     | The entry              |
+| Mode        | Credential source                                         | Admission                                                                                                                                | Where the tenant is resolved                                             | Today's per-caller key |
+| ----------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------- |
+| stdio       | `GITLAB_TOKEN` from the environment                       | The operator's configuration; no admission refusal exists                                                                                | Once per process, after the handshake starts (`IDN-008`)                 | The process            |
+| HTTP legacy | `PRIVATE-TOKEN`, then `Authorization: Bearer` (`IDN-001`) | GitLab did not answer `GET /user` with 401 or 403; a 403 refusing a fine-grained token User: Read is answered 403, uncharged (`ADM-001`) | When the pool entry is built, and put on the request context by the gate | The entry              |
+| HTTP OAuth  | `Authorization: Bearer` only (`IDN-001`)                  | Verified against the selected instance, introspected, `read_api` minimum, which a fine-grained token meets (`ADM-002`)                   | The verifier's resolved user, and the pool per entry                     | The entry              |
 
 On stdio, process, entry and tenant are one. Over HTTP one tenant maps to one entry per
 credential per instance, one entry to one tenant or to unknown and to one owner for the
@@ -215,7 +215,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   not cause.
 - **INV-008 Admission at the minimum, authority per action.** A limit does not raise the
   admission minimum; authority is applied per action; unknown scopes count as
-  write-capable; a detected tier is the highest paid plan found (ADR-0018).
+  write-capable; a detected tier is the highest paid plan found (ADR-0018). A
+  fine-grained token's scope list, the single value `granular`, is unknown scopes, and
+  its grant decides per action what it is shown and may call, judged against what GitLab
+  declares (`AUT-007`, `AUT-008`, ADR-0024); an action the generated table has no row for
+  is unknown authority, listed and callable.
 - **INV-009 The surface varies only with the authorization.** A listing may vary with the
   authorization on the request and never with the connection or other requests on it, and
   a listing is never shrunk to express a refusal.
@@ -390,7 +394,7 @@ itself, and a row that adds a channel adds it here.
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Retry later      | A gate 429 with `Retry-After`; a gate 503, with `Retry-After` where GitLab's verification failed, no verification slot came free or the process holds as many requests as it serves at once; in-band `-42900`, `-32000`, or `-32603` for a request no credential was bound to; a tool error saying to back off, or saying the call could not be attributed; an empty completion; a listen ended with `shutdown` |
 | Reauthorize      | A gate 401 with a challenge, `invalid_token` where GitLab refused the credential; a listen ended with `credential_revoked`                                                                                                                                                                                                                                                                                      |
-| Widen the scope  | A gate 403 with `insufficient_scope`; a surface narrowed by the credential's scope                                                                                                                                                                                                                                                                                                                              |
+| Widen the scope  | A gate 403 with `insufficient_scope`; a gate 403 for a fine-grained token GitLab accepted and refused User: Read, uncharged and remembered; a surface narrowed by the credential's scope; a surface narrowed for a fine-grained token, a call to which names the permission its grant lacks or why no fine-grained token reaches the action                                                                     |
 | Ask the operator | A surface narrowed by the operator; a gate 400 refusing a destination the caller named; a gate 403 for an untrusted origin or host, or for an instance the deployment does not publish; a tool error naming an allow-list variable or a refused destination; the process refusing to start                                                                                                                      |
 | Fix the request  | In-band `-32602` or `-32600`; a gate 400 for a missing or invalid instance header; a listen ended with `resource_gone`                                                                                                                                                                                                                                                                                          |
 | Start over       | A gate 404 for a foreign session; a closed session; a listen ended with `credential_evicted`, `credential_reset`, `lifetime_reached` or `watcher_evicted`                                                                                                                                                                                                                                                       |
@@ -520,7 +524,7 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Seven findings are answered, and stay in the list with their issues. F-03, the listing
+Eight findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -709,11 +713,40 @@ does not require, and a client that negotiated an earlier revision and then name
 2026-07-28 in a request's `_meta`, which v1.8.0 accepts over stdio, gets this label and
 not the dispatcher's, which is what that revision requires and what the fix sends. The
 refusal keeps its channel, its text and its error flag, and
-`HLD-011`'s refusal of a `tools/call` is labeled the same way. `RTC-001` records the
-issue and no longer carries F-20. Four more have been carried by no row since the
-register landed, because each records something no row decides: F-18 a budget GitLab.com
-keeps that the process does not account for, F-24 a message the SDK gives the server no
-way to send, and F-23 and F-27 stale statements.
+`HLD-011`'s refusal of a `tools/call` is labeled the same way, as is the third tool result
+a middleware here makes, the refusal of a withheld call that `AUT-007` and `AUT-008`
+declare (below). `RTC-001` records the issue and no longer carries F-20.
+F-17, that a fine-grained personal access token was misread, is answered by issue 952
+([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)). Its scope list is
+the single value `granular`, which names no authority: read as scopes, it narrowed such a
+token to the read-only surface (`AUT-001`), and both doors misread it, the legacy gate
+taking the probe's 403 for a refused credential, charged and answered 401, and the OAuth
+door refusing it for want of `read_api` (`ADM-001`, `ADM-002`). It is now unknown
+authority. The doors answer a token GitLab accepted and refused User: Read with an
+uncharged 403 under a stable prefix, its body quoting GitLab's sentence filtered and cut
+at 512 bytes and the bearer challenge's description a constant of this server's, and
+remember the verdict in `ADM-006`'s cache for its five minutes, since nothing at GitLab
+19.4 edits a grant after its token is created; what stays bounded in concurrency alone is
+a flood of distinct minted tokens, each a genuine credential. What a fine-grained session
+is shown is two rows of their own. `AUT-007` withholds the actions no fine-grained token
+can reach at the GitLab release the server's permission table was recorded from, and
+`AUT-008` the actions the token's grant does not reach when the server can read the
+grant, through the rule `tenancy.CoverableAt`, which says what one granted scope covers
+before a call's target is known. Both refuse a
+`tools/call` on the `Withheld` channel with a stable prefix and leave the action out of
+`tools/list` on the `Absent` channel, answered Widen the scope, charge no failure budget
+and key nothing on the grant (`INV-010`), the authority going with the pool entry
+`POL-001` and `POL-002` already bound; neither carries F-20, since the call middleware
+labels its refusal of a withheld call as `RTC-001`'s middleware labels its own. `RQB-011`
+bounds the read of the grant, 1 MiB and 1000 scopes, under a per-request ceiling below
+`RQB-009`'s, because every project or group a scope names becomes a scope of its own and
+the minter sizes the grant. `AUT-001`, `ADM-001` and `ADM-002` carry F-17 no longer and
+record the decision; `ADM-001` and `ADM-002` still carry F-08, and `AUT-003` and `ADM-003`
+F-09, which issue 952's other decision, on the admission minimum in legacy HTTP and on
+stdio and on the tier fallback, is still to answer. Four more
+have been carried by no row since the register landed, because each records something no
+row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
+message the SDK gives the server no way to send, and F-23 and F-27 stale statements.
 `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue` holds both sets: a finding no
 row carries fails unless it is one of those four or a row records its issue in `Decided`,
 and the answered set is named, so a finding dropped from a row by mistake fails too.

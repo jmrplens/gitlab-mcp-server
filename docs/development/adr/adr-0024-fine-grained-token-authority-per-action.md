@@ -4,9 +4,13 @@
 
 Accepted, 2026-09-30. It records the decisions
 [issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952) took on 2026-09-28
-and the four answers its maintainer gave on 2026-09-30. The mechanisms it names land in
-stages under that issue; the first, reading the token kind as unknown authority, lands
-with this record.
+and the four answers its maintainer gave on 2026-09-30. The mechanisms it names landed in
+stages under that issue, in this order: reading the token kind as unknown authority, with
+this record; the doors' uncharged answer to a missing User: Read; GitLab's refusal texts
+quoted with their way out; what a fine-grained token needs recorded in the live GitLab
+record; the derivation of each action's requests and its join to that record, with the
+1:1 audit's dimension for it; phase A; phase B; and the end-to-end suite holding every
+surface to tokens minted on a real instance.
 
 ## Context
 
@@ -243,7 +247,45 @@ shape.
   warning, the version asked once over twenty calls, and the tier still detected.
 - `make check-tenancy` holds the register rows `AUT-001` and `AUT-002` to the sites that
   read the token kind, and `ADM-001` to `ADM-004`, `ADM-006` and the failure table to
-  the door's refusal, its sites and its charges.
+  the door's refusal, its sites and its charges; `AUT-007` and `AUT-008` to the points
+  that withhold an action and the words they withhold it with, and `RQB-011` to the
+  bounds on reading a grant.
+- `make check-api-live` holds the record of what GitLab 19.4.1 declares for each route,
+  GraphQL type and mutation to the shape the derivation reads; `make
+  check-action-grants-derivation` holds every catalog action to a derived or declared
+  set of requests, every request to the record and every multi-request action to a
+  stated combination, and is never deferred; `make check-action-grants` holds the three
+  generated artifacts to the tree; and `make audit-1to1-grants` (R-GRANT) holds the
+  committed table to the record and the catalog.
+  `TestTable_CoversTheCatalog` in `internal/tools` holds both directions between the
+  table and the catalog, and `TestTable_CompilesToDataWithNoInitWork` in
+  `internal/tools/actiongrants` that the table costs the server no start-up work.
+- In `internal/finegrained`, `TestAuthority_Decide_PhaseAWithholdsOnlyTheDenied`,
+  `TestJudge_EachGuardFallsBackWithItsReason`,
+  `TestJudge_ThePrereleasePastTheRecord_ListsByTheGrantAndCallsByPhaseA`,
+  `TestRejudge_ReplacesOnlyOnReadsThatAnswered` and
+  `TestEvaluate_ListsWhatTheGrantCoversAndCallsWhatGitLabWouldServe` hold the phases and
+  the version guard; `FuzzEvaluate_IsSoundAgainstGitLab` holds the evaluation to a
+  reference that applies GitLab's own rule per target, `FuzzEvaluate_IsMonotone` holds
+  that granting more never lists less, and
+  `TestEvaluate_GeneratedTable_AnAuthorityHoldsUnderTwoKiB` the memory one authority
+  keeps. `TestServerKeys_AGrantReachesNoKey` in `cmd/server` holds that no shape,
+  catalog or manifest key reads the grant.
+- `TestListingMiddleware_NarrowsOnlyAFineGrainedListing` and
+  `TestCallMiddleware_AnswersAWithheldCallBeforeTheArgumentsAreRead` in
+  `internal/tools/toolvisibility`, and
+  `TestCreateServer_FineGrained_WithheldCallIsAnsweredBeforeValidationAndSpendsItsToken`,
+  `TestCreateServer_FineGrained_EveryListingNarrowedAndFinalized` and
+  `TestPrepareStdioCatalog_FineGrainedToken_AListingParkedAtStartupIsAlreadyNarrowed` in
+  `cmd/server` hold where the checks sit; `test/e2e/http` holds one process serving a
+  classic and a fine-grained credential on one shape in both phases
+  (`TestFineGrained_TwoCredentialsOnOneShape_PhaseAIsDecidedPerRequest` and its phase B
+  twin), and `test/e2e/stdio` the binary on each phase.
+- `test/e2e/gitlab/common/fine_grained_tokens_test.go` and
+  `test/e2e/gitlab/ee/fine_grained_graphql_test.go` hold every surface to fine-grained
+  tokens minted on a Docker GitLab, asserting what the instance's release decides, and
+  their direct probes hold the record to what GitLab answers a fine-grained token,
+  bypassing the server.
 
 ## Related
 
