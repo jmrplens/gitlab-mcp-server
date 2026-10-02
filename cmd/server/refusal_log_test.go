@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -53,12 +54,16 @@ func TestLineThrottle_OnePerMessagePerWindow(t *testing.T) {
 // TestLineThrottle_Log verifies what reaches the log: the line itself, the
 // attributes, and the count of held-back writes on the next line.
 //
-// Not parallel: it replaces the process-wide default logger.
+// Not parallel: it replaces the process-wide default logger. A goroutine an
+// earlier test left behind can still write through that logger while this
+// test holds it (a subscription's session ending writes "resource
+// unsubscribed" once its session is gone), so the output is written under a
+// lock and only this throttle's own lines are counted.
 func TestLineThrottle_Log(t *testing.T) {
-	var out bytes.Buffer
+	out := &lockedLog{}
 	previous := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(previous) })
-	slog.SetDefault(slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	clock := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 	throttle := newLineThrottle(time.Minute)
@@ -73,7 +78,12 @@ func TestLineThrottle_Log(t *testing.T) {
 	// Below the handler's level: neither written nor counted.
 	throttle.log(ctx, slog.LevelDebug, "request rejected: debug only")
 
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var lines []string
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+		if strings.Contains(line, "request rejected") {
+			lines = append(lines, line)
+		}
+	}
 	if len(lines) != 2 {
 		t.Fatalf("got %d lines, want 2:\n%s", len(lines), out.String())
 	}
@@ -86,6 +96,27 @@ func TestLineThrottle_Log(t *testing.T) {
 	if strings.Contains(out.String(), "debug only") {
 		t.Error("a line below the handler's level was written")
 	}
+}
+
+// lockedLog is a log destination safe to write from a goroutine other than
+// the test's and to read from the test's own.
+type lockedLog struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+// Write appends p.
+func (l *lockedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.Write(p)
+}
+
+// String returns what was written.
+func (l *lockedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.String()
 }
 
 // TestRefusalLog_HoldsEachMessageForAMinuteOnTheWallClock pins the throttle
