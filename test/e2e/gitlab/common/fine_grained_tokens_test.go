@@ -30,6 +30,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -37,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -397,13 +399,12 @@ func newRawMetadataFixture(e *harness.Env) rawMetadataFixture {
 // served and answers the instance's settings, so a fine-grained token reaches
 // an instance-boundary permission.
 //
-// It says nothing about Admin Mode. The Docker instance does not enforce it
-// (the application setting is off unless an operator turns it on, and nothing
-// here does), and with it off GitLab treats every administrator as one in
-// admin mode, so this passes whatever GitLab does with Admin Mode for a
-// fine-grained token. That reading rests on GitLab's source, and turning the
-// setting on for one scenario would take every other test's administrator
-// calls with it for as long as GitLab caches the setting.
+// It says nothing about Admin Mode: the Docker instance does not enforce it
+// (the application setting is off unless an operator turns it on), and with it
+// off GitLab treats every administrator as one in admin mode, so this passes
+// whatever GitLab does with Admin Mode for a fine-grained token.
+// TestFineGrained_AdministratorGrant_IsInAdminModeWhereAdminModeIsEnforced
+// turns the setting on and asks.
 func TestFineGrained_AdministratorGrant_ReadsTheApplicationSettings(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -421,6 +422,116 @@ func TestFineGrained_AdministratorGrant_ReadsTheApplicationSettings(t *testing.T
 			e.T.Errorf("the admin read answered no settings")
 		}
 	})
+}
+
+// adminModeFixture is an administrator's fine-grained token granted
+// Application Setting: Read at the instance, and a classic token of the same
+// administrator with the api scope and not admin_mode.
+type adminModeFixture struct {
+	fineGrained, classic fixture.Token
+}
+
+// TestFineGrained_AdministratorGrant_IsInAdminModeWhereAdminModeIsEnforced
+// turns Admin Mode on for the instance and holds GitLab to the reading the
+// listing of instance-boundary admin actions rests on (ADR-0024): an
+// administrator's fine-grained token is in admin mode for API calls, because
+// the API guard takes a token that passes the admin_mode scope check out of
+// the session, and the check skips the scope comparison for a fine-grained
+// token (lib/api/api_guard.rb and app/services/access_token_validation_service.rb
+// at 19.4.1). The same administrator's classic token without admin_mode is
+// the control: GitLab refuses it the admin read, which is what shows Admin Mode
+// was enforced while the fine-grained token's read was served on every
+// surface.
+//
+// Serial, since every administrator's classic token without admin_mode is
+// refused admin calls while the setting is on, and the setting reaches every
+// GitLab process only after the minute each keeps its settings for, on the way
+// on and on the way off.
+func TestFineGrained_AdministratorGrant_IsInAdminModeWhereAdminModeIsEnforced(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin), harness.Locks(harness.LockInstanceGlobal), harness.Serial())
+
+	harness.SurfacesWith(e, func(e *harness.Env) adminModeFixture {
+		admin := fixture.NewUser(e, "fgadminmode", func(opts *gl.CreateUserOptions) { opts.Admin = new(true) })
+		f := adminModeFixture{
+			fineGrained: fixture.NewFineGrainedToken(e, admin, withStartup(fixture.GranularScope{
+				Access: fixture.AccessInstance, Permissions: []string{grantReadApplicationSetting},
+			})...),
+			classic: fixture.NewToken(e, admin),
+		}
+		enforceAdminMode(e)
+		return f
+	}, func(e *harness.Env, surface harness.Surface, f adminModeFixture) {
+		classic, err := e.ClientFor(f.classic.Value)
+		if err != nil {
+			e.T.Fatalf("building a client for the classic token: %v", err)
+		}
+		if _, _, readErr := classic.GL().Settings.GetSettings(gl.WithContext(e.Ctx)); !fixture.IsStatus(readErr, http.StatusForbidden) {
+			e.T.Fatalf("the classic token without admin_mode was answered %v on the admin read, want 403: Admin Mode is not enforced", readErr)
+		}
+
+		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.fineGrained.Value})
+		expectPhase(e, s)
+		got := harness.Do[settings.GetOutput](s, actionAdminSettingsGet, nil)
+		if len(got.Settings) == 0 {
+			e.T.Errorf("the admin read under Admin Mode answered no settings")
+		}
+	})
+}
+
+// adminModeSettle is how long after the admin_mode setting changes every
+// GitLab process answers by its new value: each keeps the application settings
+// in process memory for a minute (app/models/concerns/cacheable_attributes.rb,
+// application_settings_cache_seconds, at 19.4.1), so until then a request can
+// land on a process that still answers by the value before the change. The
+// second on top is margin, as for a feature flag.
+const adminModeSettle = time.Minute + time.Second
+
+// enforceAdminMode turns the instance's Admin Mode on for the rest of the test
+// and returns once every GitLab process enforces it, and turns it off again
+// when the test ends, waiting the same minute before the test gives the
+// instance back. An instance that already enforces it is left as it is.
+//
+// The restore is a cleanup of the test rather than of its ledger: it runs
+// before the ledger's undo work and before the serial gate opens, with its own
+// deadline, since the wait alone outlasts the budget the ledger's work shares.
+func enforceAdminMode(e *harness.Env) {
+	e.T.Helper()
+	current, _, readErr := e.Client().GL().Settings.GetSettings(gl.WithContext(e.Ctx))
+	if readErr != nil {
+		e.T.Fatalf("reading the application settings: %v", readErr)
+	}
+	if current.AdminMode {
+		return
+	}
+	e.T.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*adminModeSettle)
+		defer cancel()
+		if _, _, offErr := e.Client().GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{AdminMode: new(false)}, gl.WithContext(ctx)); offErr != nil {
+			e.T.Errorf("turning Admin Mode off again: %v", offErr)
+			return
+		}
+		if waitErr := awaitSettled(ctx, adminModeSettle); waitErr != nil {
+			e.T.Errorf("waiting for Admin Mode to be off everywhere: %v", waitErr)
+		}
+	})
+	if _, _, onErr := e.Client().GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{AdminMode: new(true)}, gl.WithContext(e.Ctx)); onErr != nil {
+		e.T.Fatalf("turning Admin Mode on: %v", onErr)
+	}
+	if waitErr := awaitSettled(e.Ctx, adminModeSettle); waitErr != nil {
+		e.T.Fatalf("waiting for Admin Mode to be on everywhere: %v", waitErr)
+	}
+}
+
+// awaitSettled holds for lifetime, or until ctx ends.
+func awaitSettled(ctx context.Context, lifetime time.Duration) error {
+	timer := time.NewTimer(lifetime)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // publicProjectFixture is a public project holding two linked issues, and a
