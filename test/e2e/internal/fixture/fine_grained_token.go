@@ -118,10 +118,7 @@ func NewFineGrainedToken(e *harness.Env, user User, scopes ...GranularScope) Tok
 	// answered 404, which a backlog under a whole suite makes outlast every
 	// retry. So the creation waits, with the user's own credential, until it
 	// sees every namespace the scopes name.
-	DrainSidekiq(e.Ctx, e.Client())
-	if err = waitForGrantedAccess(e.Ctx, client, scopes, budget(e, accessWait, enterpriseAccessWait)); err != nil {
-		e.T.Fatalf("waiting for user %d to see what its token is granted: %v", user.ID, err)
-	}
+	awaitAccess(e, user, client, scopes)
 
 	name := e.Name("fgtok")
 	expiry := time.Now().Add(tokenLifetime + 24*time.Hour).UTC().Format(time.DateOnly)
@@ -143,6 +140,40 @@ func NewFineGrainedToken(e *harness.Env, user User, scopes ...GranularScope) Tok
 		return nil
 	})
 	return token
+}
+
+// AwaitProjectAccess holds until user can read every project named, asked
+// with a classic token of the user's own, the wait NewFineGrainedToken makes
+// for the projects a grant names.
+//
+// A scenario that sends GitLab a fine-grained token's request about a project
+// its grant does not cover needs it for that project: until the background job
+// that refreshes the user's project authorizations has run, GitLab answers the
+// request 404, for a boundary the user cannot see, and only afterwards the 403
+// that names the permission the grant lacks, which is the answer the scenario
+// is about.
+func AwaitProjectAccess(e *harness.Env, user User, projects ...Project) {
+	e.T.Helper()
+	reader := NewToken(e, user)
+	client, err := e.ClientFor(reader.Value)
+	if err != nil {
+		e.T.Fatalf("building a client for user %d's reading token: %v", user.ID, err)
+	}
+	ids := make([]int64, 0, len(projects))
+	for _, project := range projects {
+		ids = append(ids, project.ID)
+	}
+	awaitAccess(e, user, client, []GranularScope{{ProjectIDs: ids}})
+}
+
+// awaitAccess holds until client, which acts as user, reads every project and
+// group the scopes name, or ends the test.
+func awaitAccess(e *harness.Env, user User, client *gitlabclient.Client, scopes []GranularScope) {
+	e.T.Helper()
+	DrainSidekiq(e.Ctx, e.Client())
+	if err := waitForGrantedAccess(e.Ctx, client, scopes, budget(e, accessWait, enterpriseAccessWait)); err != nil {
+		e.T.Fatalf("waiting for user %d to see the projects and groups it is a member of: %v", user.ID, err)
+	}
 }
 
 // The wait for a user's membership to reach its own credential, larger on a

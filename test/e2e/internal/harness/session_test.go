@@ -13,9 +13,11 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1030,39 +1032,98 @@ func licensedActionFor(t *testing.T, inst *instance) ActionID {
 
 // TestSession_FineGrainedPhase_HoldsThePhaseTheReleaseDecides walks the
 // verdicts: a classic session is no fine-grained one; on the recorded release
-// phase B is right and phase A is not, whatever its reason; outside it phase A
-// for want of a recorded release is right, and phase B or phase A for any
+// phase B is right and anything else is not, the listing-only state included;
+// on the prerelease after it the grant deciding the listing alone is right,
+// and phase B or phase A is not; elsewhere phase A for want of a recorded
+// release is right, and phase B, the listing-only state or phase A for any
 // other reason is not.
 func TestSession_FineGrainedPhase_HoldsThePhaseTheReleaseDecides(t *testing.T) {
-	recorded := actiongrants.Table().Version
+	table := actiongrants.Table()
+	recorded := table.Version
+	next := nextPrereleaseOf(t, table.Bucket)
 	const outsideVersion = "18.0.0"
 	empty := finegrained.Grant{Scopes: []finegrained.Scope{}}
 	granted := actiongrants.Build(true, finegrained.Reading{Grant: empty, Version: recorded})
+	listingOnly := actiongrants.Build(true, finegrained.Reading{Grant: empty, Version: next})
 	outside := actiongrants.Build(true, finegrained.Reading{Grant: empty, Version: outsideVersion})
 	unreadable := actiongrants.Build(true, finegrained.Reading{Fallback: finegrained.FallbackVersionUnreadable})
+	if !listingOnly.ListingOnly() {
+		t.Fatalf("a grant read on %s is not judged for the listing alone, so the listing-only cases test nothing", next)
+	}
 
+	both := FineGrainedJudgement{Listing: true, Calls: true}
+	listing := FineGrainedJudgement{Listing: true}
 	cases := []struct {
 		name, version string
 		authority     *finegrained.Authority
-		judged        bool
+		want          FineGrainedJudgement
 		problem       string
 	}{
 		{name: "a classic session", version: recorded, problem: "classic"},
-		{name: "phase B on the recorded release", version: recorded, authority: granted, judged: true},
-		{name: "phase A on the recorded release", version: recorded, authority: unreadable, judged: true, problem: "was not evaluated"},
+		{name: "phase B on the recorded release", version: recorded, authority: granted, want: both},
+		{name: "phase A on the recorded release", version: recorded, authority: unreadable, want: both, problem: "was not evaluated"},
+		{name: "the listing alone on the recorded release", version: recorded, authority: listingOnly, want: both, problem: "was not evaluated"},
+		{name: "the listing alone on the next prerelease", version: next, authority: listingOnly, want: listing},
+		{name: "phase B on the next prerelease", version: next, authority: granted, want: listing, problem: "alone"},
+		{name: "phase A on the next prerelease", version: next, authority: unreadable, want: listing, problem: "alone"},
 		{name: "phase A outside the record", version: outsideVersion, authority: outside},
 		{name: "phase B outside the record", version: outsideVersion, authority: granted, problem: "does not record"},
+		{name: "the listing alone outside the record", version: outsideVersion, authority: listingOnly, problem: "does not record"},
 		{name: "phase A for another reason outside the record", version: outsideVersion, authority: unreadable, problem: "does not record"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &Session{env: &Env{inst: &instance{facts: runtimeFacts{Version: tc.version}}}, conn: &sessionConn{authority: tc.authority}}
-			judged, problem := s.FineGrainedPhase()
-			if judged != tc.judged {
-				t.Errorf("judged = %t, want %t", judged, tc.judged)
+			got, problem := s.FineGrainedPhase()
+			if got != tc.want {
+				t.Errorf("judgement = %+v, want %+v", got, tc.want)
 			}
 			if (tc.problem == "") != (problem == "") || !strings.Contains(problem, tc.problem) {
 				t.Errorf("problem = %q, want one mentioning %q", problem, tc.problem)
+			}
+		})
+	}
+}
+
+// nextPrereleaseOf spells the prerelease of the release right after a
+// major.minor bucket, the one version outside the record whose grant decides
+// the listing.
+func nextPrereleaseOf(t *testing.T, bucket string) string {
+	t.Helper()
+	majorText, minorText, _ := strings.Cut(bucket, ".")
+	major, majorErr := strconv.Atoi(majorText)
+	minor, minorErr := strconv.Atoi(minorText)
+	if majorErr != nil || minorErr != nil {
+		t.Fatalf("the table's bucket %q is not a major.minor", bucket)
+	}
+	if minor >= lastMinorOfAMajor {
+		return fmt.Sprintf("%d.0.0-pre", major+1)
+	}
+	return fmt.Sprintf("%d.%d.0-pre", major, minor+1)
+}
+
+// TestPrereleaseAfter_NamesTheOneReleaseTheListingFollows walks the rule the
+// harness holds the listing-only state to: the next minor's prerelease, the
+// next major's first after a major's last minor, and nothing else, a release
+// of that minor, a later minor and a bucket that is no major.minor included.
+func TestPrereleaseAfter_NamesTheOneReleaseTheListingFollows(t *testing.T) {
+	cases := []struct {
+		name, version, bucket string
+		want                  bool
+	}{
+		{name: "the next minor's prerelease", version: "19.5.0-pre", bucket: "19.4", want: true},
+		{name: "the next major's after the last minor", version: "20.0.0-pre", bucket: "19.11", want: true},
+		{name: "the next minor's release", version: "19.5.0", bucket: "19.4"},
+		{name: "the recorded minor's prerelease", version: "19.4.0-pre", bucket: "19.4"},
+		{name: "a later minor's prerelease", version: "19.6.0-pre", bucket: "19.4"},
+		{name: "the same major after the last minor", version: "19.12.0-pre", bucket: "19.11"},
+		{name: "a bucket with no minor", version: "19.5.0-pre", bucket: "19"},
+		{name: "a bucket with no major", version: "19.5.0-pre", bucket: "x.4"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := prereleaseAfter(tc.version, tc.bucket); got != tc.want {
+				t.Errorf("prereleaseAfter(%q, %q) = %t, want %t", tc.version, tc.bucket, got, tc.want)
 			}
 		})
 	}

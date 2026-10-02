@@ -17,6 +17,7 @@ package ee
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -52,15 +53,16 @@ const (
 	fineGrainedNull = "not found may mean this token cannot see it"
 )
 
-// fineGrainedPhaseOf holds a fine-grained session to the phase the instance's
-// release decides, and reports whether its grant was evaluated.
-func fineGrainedPhaseOf(e *harness.Env, s *harness.Session) bool {
+// fineGrainedPhaseOf holds a fine-grained session to what the instance's
+// release decides, and reports what its grant decides there: the listing, the
+// calls, both (phase B) or neither (phase A).
+func fineGrainedPhaseOf(e *harness.Env, s *harness.Session) harness.FineGrainedJudgement {
 	e.T.Helper()
-	judged, problem := s.FineGrainedPhase()
+	judgement, problem := s.FineGrainedPhase()
 	if problem != "" {
 		e.T.Fatal(problem)
 	}
-	return judged
+	return judgement
 }
 
 // expectWithheldFor asserts that an action no fine-grained token can run is
@@ -146,12 +148,25 @@ func TestFineGrained_VulnerabilityReads_AreServedWithWhatGitLabLeavesEmpty(t *te
 
 // TestFineGrained_PublicProjectAttestations_AreServedToAGrantWithoutThem lists
 // a public project's attestations with a token granted nothing past the
-// startup scopes: the read is not listed for it, since the grant does not hold
-// Attestation: Read, and is still served, since GitLab answers it on a public
-// project whoever asks; what GitLab answers is its own, and never the refusal
-// of a permission.
+// startup scopes: where the grant decides the listing the read is not listed
+// for it, since the grant does not hold Attestation: Read, and in every phase
+// it is served, since GitLab answers it on a public project whoever asks, with
+// the project's attestations, of which there are none.
+//
+// GitLab answers every attestation route 404 while slsa_provenance_statement
+// is off, and the flag ships off (attestations_test.go says why that shapes
+// the sibling scenario), so the flag is pinned on here: without it the listing
+// is refused for the flag and says nothing about the grant. A release that no
+// longer defines the flag has dropped the check with it, which is how GitLab
+// retires a flag once its routes are generally available, so the pin is made
+// only where the flag exists and the listing is asserted either way.
 func TestFineGrained_PublicProjectAttestations_AreServedToAGrantWithoutThem(t *testing.T) {
-	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)))
+	e := harness.New(t,
+		harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)),
+		harness.Locks(harness.LockInstanceGlobal))
+	if fixture.FeatureDefined(e, attestations.FeatureFlag) {
+		fixture.PinFeature(e, attestations.FeatureFlag, true)
+	}
 
 	harness.SurfacesWith(e, func(e *harness.Env) grantedVulnerabilityFixture {
 		project := fixture.NewProject(e, fixture.WithNamePrefix("fgattest"), fixture.WithVisibility(gl.PublicVisibility))
@@ -159,16 +174,17 @@ func TestFineGrained_PublicProjectAttestations_AreServedToAGrantWithoutThem(t *t
 		return grantedVulnerabilityFixture{project: project, token: fixture.NewFineGrainedToken(e, user, fixture.StartupScopes()...)}
 	}, func(e *harness.Env, surface harness.Surface, f grantedVulnerabilityFixture) {
 		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.token.Value, Tier: harness.TierUltimate})
-		if !fineGrainedPhaseOf(e, s) {
-			// Phase A lists every action GitLab may serve, this one included.
-			return
+		// Phase A lists every action GitLab may serve, this one included, so
+		// only a grant that decides the listing leaves it out.
+		if fineGrainedPhaseOf(e, s).Listing && slices.Contains(s.Actions(), actionAttestationList) {
+			e.T.Errorf("%s is listed for a token whose grant does not hold Attestation: Read", actionAttestationList)
 		}
 
-		_, err := harness.Try[attestations.ListOutput](s, actionAttestationList, map[string]any{
+		listed := harness.Do[attestations.ListOutput](s, actionAttestationList, map[string]any{
 			"project_id": f.project.IDParam(), "subject_digest": emptySubjectDigest,
 		})
-		if err != nil && strings.Contains(strings.ToLower(err.Error()), "access denied") {
-			e.T.Errorf("the public project's attestations were refused for a permission: %v", err)
+		if len(listed.Attestations) != 0 {
+			e.T.Errorf("a public project that attested nothing lists %d attestations: %+v", len(listed.Attestations), listed.Attestations)
 		}
 	})
 }

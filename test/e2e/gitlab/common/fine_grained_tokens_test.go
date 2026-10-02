@@ -13,11 +13,14 @@
 // them.
 //
 // The grant is judged only on the release the table was recorded from (phase
-// B). On any other release the server withholds exactly what no fine-grained
-// token can reach and leaves the rest to GitLab (phase A, the grant not
-// evaluated), so every phase B scenario asserts phase B where the instance is
-// that release and phase A, with the recorded version named, where it is not:
-// the same scenario holds both, and neither skips.
+// B). On the prerelease of the release right after it, which is what a nightly
+// image reports, the grant decides the listing alone and every call phase A
+// allows is handed to GitLab. On any other release the server withholds
+// exactly what no fine-grained token can reach and leaves the rest to GitLab
+// (phase A, the grant not evaluated). So every scenario asserts what the
+// instance's release decides, the listing where the grant decides it and the
+// calls where it decides them, with the recorded version named where it is
+// not that release: the same scenario holds each state, and none skips.
 //
 // The direct probes at the end bypass the server: each sends GitLab the
 // request a cause in the table rests on, with a fine-grained token, and holds
@@ -67,6 +70,8 @@ const (
 	wordsBranchCreate   = "Branch: Create"
 	wordsRepositoryRead = "Repository: Read"
 	wordsMetadataRead   = "Metadata: Read"
+	wordsWorkItemRead   = "Work Item: Read"
+	wordsProjectRead    = "Project: Read"
 )
 
 // The stable sentences the server opens a fine-grained refusal with, one per
@@ -76,16 +81,28 @@ const (
 	refusalPhaseB = "this fine-grained personal access token was not granted"
 )
 
-// expectPhase holds a fine-grained session to the phase the instance's release
-// decides ([harness.Session.FineGrainedPhase]), and reports whether its grant
-// was evaluated (phase B).
-func expectPhase(e *harness.Env, s *harness.Session) bool {
+// expectPhase holds a fine-grained session to what the instance's release
+// decides ([harness.Session.FineGrainedPhase]), and reports what its grant
+// decides there: the listing, the calls, both (phase B) or neither (phase A).
+func expectPhase(e *harness.Env, s *harness.Session) harness.FineGrainedJudgement {
 	e.T.Helper()
-	judged, problem := s.FineGrainedPhase()
+	judgement, problem := s.FineGrainedPhase()
 	if problem != "" {
 		e.T.Fatal(problem)
 	}
-	return judged
+	return judgement
+}
+
+// expectRefusedByGitLab asserts that a call the server handed to GitLab came
+// back as GitLab's own 403, which is a class the server's withholding never
+// takes, and that the refusal names the permission the token lacks.
+func expectRefusedByGitLab(e *harness.Env, s *harness.Session, id harness.ActionID, params map[string]any, permission string) string {
+	e.T.Helper()
+	said := harness.Refused(s, id, params, harness.FailureForbidden)
+	if !strings.Contains(said, permission) {
+		e.T.Errorf("GitLab's refusal of %s does not name %s: %s", id, permission, firstLine(said))
+	}
+	return said
 }
 
 // expectDeniedWithheld asserts that an action no fine-grained token can run at
@@ -100,13 +117,14 @@ func expectDeniedWithheld(e *harness.Env, s *harness.Session, id harness.ActionI
 	}
 }
 
-// expectNotGranted asserts what a write outside the grant gets: in phase B the
-// server withholds it naming the permission the grant lacks, and in phase A it
-// lets GitLab answer, which names the same permission in its refusal.
-func expectNotGranted(e *harness.Env, s *harness.Session, judged bool, id harness.ActionID, params map[string]any, permission string) {
+// expectNotGranted asserts what a write outside the grant gets: where the
+// grant decides the calls (phase B) the server withholds it naming the
+// permission the grant lacks, and elsewhere it lets GitLab answer, which names
+// the same permission in its refusal.
+func expectNotGranted(e *harness.Env, s *harness.Session, callsJudged bool, id harness.ActionID, params map[string]any, permission string) {
 	e.T.Helper()
-	if !judged {
-		harness.ExpectToolError(s, id, params, permission)
+	if !callsJudged {
+		expectRefusedByGitLab(e, s, id, params, permission)
 		return
 	}
 	said := harness.Withheld(s, id, params)
@@ -143,8 +161,8 @@ func developerOf(e *harness.Env, prefix string, projects ...fixture.Project) fix
 // token holding the four startup permissions and nothing else, once on stdio
 // and once over HTTP, where the grant is read per pool entry: both read the
 // grant and the version, answer as the token's user, and withhold a project
-// write the grant does not reach (phase B), or leave it to GitLab on a release
-// the table does not record (phase A).
+// write the grant does not reach where the grant decides the calls (phase B),
+// or leave it to GitLab where it does not.
 func TestFineGrained_StartupGrant_StartsOnStdioAndOverHTTP(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 	user := fixture.NewUser(e, "fgstart")
@@ -159,26 +177,30 @@ func TestFineGrained_StartupGrant_StartsOnStdioAndOverHTTP(t *testing.T) {
 func expectStartedOn(e *harness.Env, transport harness.TransportKind, token fixture.Token) {
 	e.T.Helper()
 	s := e.Session(harness.ServerConfig{Token: token.Value, Transport: transport})
-	judged := expectPhase(e, s)
+	judgement := expectPhase(e, s)
 
 	me := harness.Do[users.Output](s, actionUserCurrent, nil)
 	if me.ID != token.UserID {
 		e.T.Errorf("over %s the session answered as user %d, want the token's owner %d", transport, me.ID, token.UserID)
 	}
-	if got := s.Serves(actionBranchCreate); got == judged {
-		e.T.Errorf("over %s the session serves %s = %t, want %t in phase %s", transport, actionBranchCreate, got, !judged, phaseName(judged))
+	if got := s.Serves(actionBranchCreate); got == judgement.Calls {
+		e.T.Errorf("over %s the session serves %s = %t, want %t in %s", transport, actionBranchCreate, got, !judgement.Calls, phaseName(judgement))
 	}
 	if got := s.Tier(); got != edition.Free {
 		e.T.Errorf("over %s a token that cannot read the license detected tier %s, want %s", transport, got, edition.Free)
 	}
 }
 
-// phaseName names a phase for a failure message.
-func phaseName(judged bool) string {
-	if judged {
-		return "B"
+// phaseName names what a grant decides, for a failure message.
+func phaseName(judgement harness.FineGrainedJudgement) string {
+	switch {
+	case judgement.Calls:
+		return "phase B"
+	case judgement.Listing:
+		return "the listing-only state"
+	default:
+		return "phase A"
 	}
-	return "A"
 }
 
 // TestFineGrained_WithoutMetadataRead_StartsWithTheGrantUnjudged starts a
@@ -227,8 +249,13 @@ type projectGrantFixture struct {
 // project reads and work item writes on one project: a read and a write there
 // are served and run, a write the grant does not hold is withheld naming the
 // permission it lacks, a read of the user's other project goes to GitLab,
-// whose refusal the answer carries, and what no fine-grained token can reach
-// is withheld whatever the grant holds.
+// whose 403 naming the permission the answer carries, and what no
+// fine-grained token can reach is withheld whatever the grant holds.
+//
+// The fixture waits until the user sees the other project too, although the
+// grant does not name it: before the background job that refreshes the user's
+// authorizations has run, GitLab answers that read 404 for a project the user
+// cannot see, which is not the refusal this scenario is about.
 func TestFineGrained_ProjectGrant_ServesWhatItReachesAndWithholdsTheRest(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -236,12 +263,13 @@ func TestFineGrained_ProjectGrant_ServesWhatItReachesAndWithholdsTheRest(t *test
 		granted := fixture.NewProject(e, fixture.WithNamePrefix("fggranted"))
 		other := fixture.NewProject(e, fixture.WithNamePrefix("fgother"))
 		user := developerOf(e, "fgproject", granted, other)
+		fixture.AwaitProjectAccess(e, user, other)
 		return projectGrantFixture{granted: granted, other: other, token: fixture.NewFineGrainedToken(e, user, withStartup(
 			onProjects([]string{grantReadProject, grantReadWorkItem, grantCreateWorkItem}, granted),
 		)...)}
 	}, func(e *harness.Env, surface harness.Surface, f projectGrantFixture) {
 		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.token.Value})
-		judged := expectPhase(e, s)
+		judgement := expectPhase(e, s)
 		here := map[string]any{"project_id": f.granted.IDParam()}
 
 		title := "fine-grained " + string(surface)
@@ -254,11 +282,11 @@ func TestFineGrained_ProjectGrant_ServesWhatItReachesAndWithholdsTheRest(t *test
 			e.T.Errorf("the granted project's issues do not hold #%d it just created", created.IID)
 		}
 
-		expectNotGranted(e, s, judged, actionBranchCreate, withParams(here, map[string]any{
+		expectNotGranted(e, s, judgement.Calls, actionBranchCreate, withParams(here, map[string]any{
 			"branch_name": "fg-" + string(surface), "ref": f.granted.DefaultBranch,
 		}), wordsBranchCreate)
 
-		refused := harness.ExpectToolError(s, actionIssueList, map[string]any{"project_id": f.other.IDParam()}, "fine-grained")
+		refused := expectRefusedByGitLab(e, s, actionIssueList, map[string]any{"project_id": f.other.IDParam()}, wordsWorkItemRead)
 		e.T.Logf("the read of the project outside the grant came back as: %s", firstLine(refused))
 
 		expectDeniedWithheld(e, s, actionBranchRuleList, map[string]any{"project_path": f.granted.Path}, "BranchRule")
@@ -324,10 +352,11 @@ type rawMetadataFixture struct {
 // request the derivation places by a declaration: the raw file metadata is a
 // HEAD Grape answers from the raw read's GET, so it needs Repository: Read.
 // A token granted it is listed the action and served the metadata. One
-// granted only the project is not listed it, and the call still goes to
-// GitLab, since GitLab serves a public project's repository to anyone, and
-// GitLab refuses it on this private one, with a HEAD's empty body and so no
-// permission to quote.
+// granted only the project is not listed it where the grant decides the
+// listing, and the call still goes to GitLab in every phase, since GitLab
+// serves a public project's repository to anyone; GitLab refuses it on this
+// private one with a 403, whose HEAD carries an empty body and so no
+// permission to quote, and never the server's own refusal.
 func TestFineGrained_RawFileMetadata_NeedsWhatTheRawReadNeeds(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -342,12 +371,10 @@ func TestFineGrained_RawFileMetadata_NeedsWhatTheRawReadNeeds(t *testing.T) {
 		}
 
 		other := e.Session(harness.ServerConfig{Surface: surface, Token: f.projectOne.Value})
-		if expectPhase(e, other) && slices.Contains(other.Actions(), actionRepositoryFileRawMetadata) {
+		if expectPhase(e, other).Listing && slices.Contains(other.Actions(), actionRepositoryFileRawMetadata) {
 			e.T.Errorf("%s is listed for a token whose grant does not hold %s", actionRepositoryFileRawMetadata, wordsRepositoryRead)
 		}
-		if _, err := harness.Try[files.MetaDataOutput](other, actionRepositoryFileRawMetadata, params); err == nil {
-			e.T.Errorf("a token granted only the project was answered the raw metadata of a private project")
-		}
+		harness.Refused(other, actionRepositoryFileRawMetadata, params, harness.FailureForbidden)
 	})
 }
 
@@ -368,7 +395,15 @@ func newRawMetadataFixture(e *harness.Env) rawMetadataFixture {
 // TestFineGrained_AdministratorGrant_ReadsTheApplicationSettings grants an
 // administrator Application Setting: Read at the instance: the admin read is
 // served and answers the instance's settings, so a fine-grained token reaches
-// an instance-boundary permission the way GitLab's admin mode lets it.
+// an instance-boundary permission.
+//
+// It says nothing about Admin Mode. The Docker instance does not enforce it
+// (the application setting is off unless an operator turns it on, and nothing
+// here does), and with it off GitLab treats every administrator as one in
+// admin mode, so this passes whatever GitLab does with Admin Mode for a
+// fine-grained token. That reading rests on GitLab's source, and turning the
+// setting on for one scenario would take every other test's administrator
+// calls with it for as long as GitLab caches the setting.
 func TestFineGrained_AdministratorGrant_ReadsTheApplicationSettings(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -398,21 +433,19 @@ type publicProjectFixture struct {
 
 // TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold reads the issue
 // links of a public project with a token granted nothing past the startup
-// scopes: the read is not listed for it, since the grant does not hold Work
-// Item: Read, and is still served, since GitLab answers it on a public project
-// whoever asks, and GitLab answers it with the link.
+// scopes: where the grant decides the listing the read is not listed for it,
+// since the grant does not hold Work Item: Read, and in every phase it is
+// served, since GitLab answers it on a public project whoever asks, and
+// GitLab answers it with the link.
 func TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
 	harness.SurfacesWith(e, newPublicProjectFixture, func(e *harness.Env, surface harness.Surface, f publicProjectFixture) {
 		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.token.Value})
-		if !expectPhase(e, s) {
-			// Phase A lists every action GitLab may serve, this one included.
-			return
-		}
-
-		if slices.Contains(s.Actions(), actionIssueLinkList) {
-			e.T.Errorf("%s is listed for a token whose grant does not hold Work Item: Read", actionIssueLinkList)
+		// Phase A lists every action GitLab may serve, this one included, so
+		// only a grant that decides the listing leaves it out.
+		if expectPhase(e, s).Listing && slices.Contains(s.Actions(), actionIssueLinkList) {
+			e.T.Errorf("%s is listed for a token whose grant does not hold %s", actionIssueLinkList, wordsWorkItemRead)
 		}
 		listed := harness.Do[issuelinks.ListOutput](s, actionIssueLinkList, map[string]any{
 			"project_id": f.project.IDParam(), "issue_iid": f.source.IID,
@@ -450,8 +483,10 @@ type personalProjectFixture struct {
 // TestFineGrained_PersonalProjects_ReachTheUsersOwnNamespaceOnly grants
 // project reads at the personal-projects level: GitLab attaches the scope to
 // the creating user's own namespace, so the server serves the read, GitLab
-// answers it for the project in that namespace, and refuses it for a project
-// the user only develops in.
+// answers it for the project in that namespace, and refuses it with a 403
+// naming Project: Read for a project the user only develops in. The fixture
+// waits until the user sees that project, since GitLab answers 404 for it
+// until the background job refreshing the user's authorizations has run.
 func TestFineGrained_PersonalProjects_ReachTheUsersOwnNamespaceOnly(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -460,6 +495,7 @@ func TestFineGrained_PersonalProjects_ReachTheUsersOwnNamespaceOnly(t *testing.T
 		personal := fixture.NewProject(e, fixture.WithNamePrefix("fgpersonal"), fixture.OwnedBy(user))
 		member := fixture.NewProject(e, fixture.WithNamePrefix("fgmember"))
 		fixture.AddProjectMember(e, member, user, gl.DeveloperPermissions)
+		fixture.AwaitProjectAccess(e, user, member)
 		return personalProjectFixture{personal: personal, member: member, token: fixture.NewFineGrainedToken(e, user, withStartup(
 			fixture.GranularScope{Access: fixture.AccessPersonalProjects, Permissions: []string{grantReadProject}},
 		)...)}
@@ -471,14 +507,7 @@ func TestFineGrained_PersonalProjects_ReachTheUsersOwnNamespaceOnly(t *testing.T
 		if fmt.Sprint(got["id"]) != f.personal.IDParam() {
 			e.T.Errorf("the personal project read answered %v, want project %d", got["id"], f.personal.ID)
 		}
-		// GitLab answers 403 naming the permission once the membership has
-		// reached the user's authorizations, and 404 before, which a
-		// background job decides the moment of; either is GitLab refusing a
-		// project the grant does not reach, and neither is served.
-		said := harness.ExpectToolError(s, actionProjectGet, map[string]any{"project_id": f.member.IDParam()}, "")
-		if !strings.Contains(said, "Project: Read") && !strings.Contains(strings.ToLower(said), "not found") {
-			e.T.Errorf("the read of a project outside the personal namespace came back as neither GitLab's refusal nor its not-found: %s", said)
-		}
+		expectRefusedByGitLab(e, s, actionProjectGet, map[string]any{"project_id": f.member.IDParam()}, wordsProjectRead)
 	})
 }
 
