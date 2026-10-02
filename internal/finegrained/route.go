@@ -35,7 +35,11 @@ const (
 // GET routes, since Grape answers a HEAD from the GET it mounts beside it and
 // checks that GET's authorization, which a fine-grained token on a booted
 // GitLab 19.4.1 shows (a HEAD on a raw file is refused naming Repository:
-// Read exactly when the GET is).
+// Read exactly when the GET is). Repeated slashes count as one, as the server
+// in front of GitLab's router merges them: client-go builds its Sidekiq
+// metrics paths as /api/v4//sidekiq/..., which GitLab serves as the
+// /sidekiq routes, so an empty segment never names, nor fails to name, a
+// route.
 func (t *Table) RouteTemplate(method, escapedPath string) (string, bool) {
 	if escapedPath == graphQLPath {
 		return graphQLPath, true
@@ -45,7 +49,7 @@ func (t *Table) RouteTemplate(method, escapedPath string) (string, bool) {
 		return "", false
 	}
 	index := t.routes()
-	segments := strings.Split(rest, "/")
+	segments := pathSegments(rest)
 	if template, matched := bestRoute(index[method], segments); matched {
 		return restPrefix + template, true
 	}
@@ -55,6 +59,20 @@ func (t *Table) RouteTemplate(method, escapedPath string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// pathSegments splits a request path that begins with a slash into the
+// segments a template is held to, the leading empty one kept, as a template's
+// own split keeps it, and every other empty one dropped.
+func pathSegments(path string) []string {
+	parts := strings.Split(path, "/")
+	segments := make([]string, 1, len(parts))
+	for _, part := range parts[1:] {
+		if part != "" {
+			segments = append(segments, part)
+		}
+	}
+	return segments
 }
 
 // routeVariant is one way a route template can be written once its optional

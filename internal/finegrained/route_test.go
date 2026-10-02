@@ -23,14 +23,16 @@ func routeTable() *Table {
 		{Name: "GET /releases/permalink/latest(/)(*suffix_path)"},
 		{Name: "GET /nested(/one(/two))"},
 		{Name: "GET /projects/:id/(broken"},
+		{Name: "GET /sidekiq/job_stats"},
 		{Name: "query project (queryListBranchRulesCE)"},
 		{Name: "GET"},
 	}}
 }
 
 // TestRouteTemplate_NamesTheTableRouteARequestReached holds every rule the
-// matcher reads a request path by: placeholders take one segment and never an
-// empty one, a wildcard takes one or more, Grape's optional groups are
+// matcher reads a request path by: repeated slashes count as one, so an empty
+// segment never fills a placeholder and a doubled slash still names its route,
+// placeholders take one segment, a wildcard takes one or more, Grape's optional groups are
 // matched both ways and nested, the most literal template wins and a tie goes
 // to the one that sorts first, a HEAD with no route of its own is matched
 // against the GETs, the GraphQL endpoint is named as itself, and anything
@@ -58,7 +60,9 @@ func TestRouteTemplate_NamesTheTableRouteARequestReached(t *testing.T) {
 		{"a nested group taken in part", http.MethodGet, "/api/v4/nested/one", "/api/v4/nested(/one(/two))", true},
 		{"a nested group left out", http.MethodGet, "/api/v4/nested", "/api/v4/nested(/one(/two))", true},
 		{"a tie goes to the first in order", http.MethodGet, "/api/v4/projects/1/things/9", "/api/v4/projects/:id/things/:a", true},
-		{"an empty placeholder", http.MethodGet, "/api/v4/projects//issues", "", false},
+		{"an empty segment fills no placeholder", http.MethodGet, "/api/v4/projects//issues", "", false},
+		{"repeated slashes count as one", http.MethodGet, "/api/v4//sidekiq/job_stats", "/api/v4/sidekiq/job_stats", true},
+		{"a trailing slash counts as none", http.MethodGet, "/api/v4/projects/1/issues/", "/api/v4/projects/:id/issues", true},
 		{"an unbalanced group matches nothing", http.MethodGet, "/api/v4/projects/1/broken", "", false},
 		{"the GraphQL endpoint", http.MethodPost, "/api/graphql", "/api/graphql", true},
 		{"a route the table does not hold", http.MethodGet, "/api/v4/version", "", false},
