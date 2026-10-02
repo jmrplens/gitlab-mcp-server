@@ -70,6 +70,16 @@ overrides:
   # on, and pinning 5.x onto it is a major bump an advisory fix should not drag
   # in.
   "js-yaml@>=4.0.0 <4.3.2": 4.3.2
+  # devalue, which Astro uses for its content collections' data store, its
+  # sessions and its actions (astro > devalue): shared memory serialized by
+  # stringify and uneval (GHSA-j22f-vq7h-c4qm), quadratic expansion on
+  # repeated strings in uneval (GHSA-mcm9-63f2-9j32) and an unhandled
+  # rejection from stringifyAsync (GHSA-x5rw-q4pp-hg5g), and three lower
+  # advisories published with them (GHSA-hx4r-w6wj-j8fg, GHSA-4q55-j62x-fr9h,
+  # GHSA-wf3x-273g-mvxv), all fixed in 5.9.3. The pin is 5.9.4, the last 5.x
+  # release, which adds only tree-shaking annotations; Astro asks for ^5.8.1,
+  # so this stays inside its range.
+  "devalue@<5.9.4": 5.9.4
 
 auditConfig:
   ignoreGhsas:
@@ -84,6 +94,20 @@ auditConfig:
     # last release published. Both exceptions retire together, on the release
     # that fixes either.
     - GHSA-7pqw-9j4j-h8q3
+    # basic-ftp quadratic-time parsing of a hostile server's directory listing
+    # in Client.list() (GHSA-c475-qrg2-pj4r): fixed only in 6.2.1, and its one
+    # consumer, get-uri, declares basic-ftp 5 in every release up to the
+    # newest, 8.0.1, so a pin would force a major onto a consumer that
+    # declares the other. Dev-only path (pa11y-ci > puppeteer >
+    # @puppeteer/browsers > proxy-agent > pac-proxy-agent > get-uri), loaded
+    # only when a proxy variable names a pac+ URL, and reaching basic-ftp only
+    # for a pac+ftp:// one, which nothing here configures. A get-uri release
+    # that accepts basic-ftp 6 would not retire this, because the chain holds
+    # get-uri on 6.x (pac-proxy-agent 7 asks for ^6.0.1); puppeteer 25 does,
+    # since its @puppeteer/browsers 3 depends on neither proxy-agent nor
+    # extract-zip. Remove this exception, and the two above with it, once
+    # pa11y-ci and the pa11y it asks for are both on puppeteer 25.
+    - GHSA-c475-qrg2-pj4r
 
 peerDependencyRules:
   allowedVersions:
