@@ -410,6 +410,25 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 
 Tools requiring `admin_mode` (`gitlab_admin`, `gitlab_enterprise_user`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope, on all three surfaces. A fine-grained token is the exception: it cannot carry the scope, its list is read as unknown, and these groups stay in its catalog, as they do for a token whose scopes could not be detected; which of their actions it is shown is then its grant's to decide, as for every other group.
 
+## Authority per Action, for Both Token Kinds
+
+Whatever the token, the server admits it at the minimum any action needs and applies authority per action ([ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md)). What decides an action's authority is the kind of token:
+
+| Token                              | What the server reads                                                                   | What decides an action                                                                                                                           | When the server cannot tell                                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Classic personal access token      | Its scopes (`GET /personal_access_tokens/self`)                                         | Whether the action writes, against `api` or `read_api`, and the scope map above                                                                  | Unknown scopes count as write-capable; GitLab's `403` answers the call it cannot make                           |
+| Fine-grained personal access token | Its grant (`GET /personal_access_tokens/:id`) and the instance version (`GET /version`) | Whether the grant reaches every request the action makes, judged against what GitLab 19.4.1 declares for each route and GraphQL type or mutation | Only what no fine-grained token can reach is withheld; GitLab judges the rest and the server quotes its refusal |
+
+A fine-grained token's scope list is the single value `granular`, so the scope reading never narrows it ([ADR-0024](../development/adr/adr-0024-fine-grained-token-authority-per-action.md)). The properties that keep the grant reading safe:
+
+- **The grant is never a key.** It is a value the caller mints, so no shared catalog, server shape or manifest cache is keyed on it, and the version an instance reports is never a key either: under `--allow-any-gitlab-url` the instance, and so the version, is the caller's. The verdict lives on the credential's pool entry (the process on stdio), which the pool already bounds and evicts, and is read per request.
+- **What is read is bounded where it is read.** The grant is read at most 1 MiB and 1000 scopes at a time, under a per-request response ceiling below the client's own, because each project or group a scope names becomes a scope of its own and the minter sizes the grant. The version string is accepted only in the shape GitLab releases use and at most 64 bytes before it is printed in any answer.
+- **A refusal costs the caller nothing it did not cause.** A withheld call spends its credential's rate-limit token like any refused call and charges no failure budget; the HTTP door's `403` for a fine-grained token without User: Read is uncharged, since GitLab authenticated the token, and is remembered for five minutes so the same token cannot hold a probe or verification slot per request.
+- **Nothing of the grant is logged.** A log line names the phase, the reason a grant was not evaluated, the release judged at and, for a grant naming permissions the record lacks, how many and at most three names cut short; never the token, its id, its grant or its projects and groups.
+- **On REST a wrong "yes" is GitLab's own `403`**, which names the permission, and the errors layer quotes it. **On GraphQL it is silent**: a position the grant does not reach comes back `null` and a connection drops the items it does not reach. So the requirement of a GraphQL action includes the objects its answer is made of, the actions whose answer GitLab cannot serve any fine-grained token are withheld, and an answer that may be empty for the credential carries a note saying so ([GraphQL Integration](graphql.md#fine-grained-personal-access-tokens)).
+
+[Fine-grained Tokens](../guides/fine-grained-tokens.md) is the operator's guide.
+
 ## Prompt Injection Protection
 
 MCP tool output contains user-generated content (UGC) from GitLab — issue descriptions, commit messages, wiki pages, MR notes, labels, etc. Malicious UGC could attempt to manipulate LLM behavior through prompt injection.
