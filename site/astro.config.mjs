@@ -760,6 +760,11 @@ export default defineConfig({
 							translations: { es: "Seguridad" },
 						},
 						{
+							slug: "operations/fine-grained-tokens",
+							label: "Fine-grained Tokens",
+							translations: { es: "Tokens de grano fino" },
+						},
+						{
 							slug: "operations/privacy",
 							label: "Privacy",
 							translations: { es: "Privacidad" },

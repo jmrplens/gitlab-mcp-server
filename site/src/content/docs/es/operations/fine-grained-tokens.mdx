@@ -1,0 +1,148 @@
+---
+title: Tokens de grano fino
+description: "Ejecuta GitLab MCP Server con un token de acceso personal de grano fino de GitLab: qué concederle, qué muestra el servidor a ese token y cómo leer la respuesta cuando una acción queda fuera de su alcance."
+datePublished: "2026-10-02"
+faq:
+  - q: "¿Funciona GitLab MCP Server con un token de acceso personal de grano fino?"
+    a: "Sí, en todos los modos. El servidor lee un token de grano fino como autoridad desconocida y no como de solo lectura, lee su concesión con el propio token y muestra a cada sesión las acciones que esa concesión alcanza, juzgadas contra los permisos que declara GitLab 19.4.1. Una llamada a cualquier otra acción se responde con el permiso que necesita, con las palabras de la página de creación de tokens de GitLab."
+  - q: "¿Qué permisos necesita un token de grano fino para que el servidor arranque?"
+    a: "User: Read, Namespace: Read y Personal Access Token: Read en el ámbito del usuario, y Metadata: Read en el de la instancia. Sin Personal Access Token: Read o Metadata: Read el servidor arranca igualmente, pero no puede juzgar la concesión, así que retiene solo lo que ningún token de grano fino alcanza y deja el resto a GitLab. En modo HTTP, un token sin User: Read se rechaza en la puerta con 403."
+  - q: "¿Por qué una acción dice que no está disponible para un token de grano fino?"
+    a: "Algunas acciones pasan por tipos o mutaciones GraphQL de GitLab que no declaran ningún permiso de grano fino en GitLab 19.4.1, y GitLab los rechaza o los vacía para todo token de grano fino sea cual sea su concesión: 58 acciones de 1098, entre ellas las de épicas, work items y logros. La respuesta nombra el tipo y la versión, y la salida es un token clásico."
+  - q: "Me falta un permiso. ¿Puedo añadírselo a mi token?"
+    a: "No. GitLab fija la concesión de un token de grano fino al crearlo, y rotar un token copia su concesión. Crea un token nuevo que conceda lo que nombra la respuesta."
+---
+
+import FAQ from "../../../../components/FAQ.astro";
+
+Un **token de acceso personal de grano fino** no lleva scopes. Su lista de scopes es
+el valor único `granular`, y lo que puede hacer es una **concesión** de permisos con
+nombre (Project: Read, Merge Request: Approve, Pipeline: Read), cada uno en un ámbito:
+un proyecto, un grupo, el usuario o la instancia. GitLab autentica el token y después
+juzga cada petición contra la concesión.
+
+GitLab MCP Server lee un token así como **autoridad desconocida**, nunca como de solo
+lectura, y deja que la concesión decida lo que se muestra a cada sesión. La concesión
+no se puede cambiar después de crear el token, así que un permiso que falta significa
+siempre un token nuevo.
+
+## Lo que el servidor necesita al arrancar
+
+| Permiso                     | Ámbito    | Para qué sirve                                                                                | Sin él                                                                        |
+| --------------------------- | --------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| User: Read                  | usuario   | `GET /api/v4/user`: la comprobación de la puerta HTTP, y la identidad en stdio                | El modo HTTP rechaza el token en la puerta con `403`                          |
+| Metadata: Read              | instancia | La versión de la instancia con la que se juzga la concesión                                   | La concesión no se evalúa; stdio registra un aviso que nombra el permiso      |
+| Personal Access Token: Read | usuario   | Leer la concesión del propio token                                                            | La concesión no se evalúa                                                     |
+| Namespace: Read             | usuario   | Detectar el nivel de licencia por los planes de los namespaces (la suscripción en GitLab.com) | El nivel vuelve a la licencia, o a Free; fija `GITLAB_MCP_TIER` para elegirlo |
+| License: Read               | instancia | La licencia de una instancia autogestionada, para administradores                             | Nada para quien no es administrador                                           |
+
+Cuando la concesión no se evalúa, el servidor sigue sirviendo el token: retiene solo
+lo que ningún token de grano fino alcanza y deja que GitLab juzgue el resto.
+
+## Crear el token
+
+En GitLab, selecciona tu avatar, después **Edit profile**, **Access** > **Personal
+access tokens**, y elige **Fine-grained token** en **Generate token**. Añade los
+permisos de arranque de arriba y lo que necesite tu trabajo. Por la API,
+`POST /api/v4/user/personal_access_tokens` acepta `granular_scopes` en lugar de `scopes`:
+
+```json
+{
+  "name": "gitlab-mcp-server",
+  "expires_at": "2027-01-31",
+  "granular_scopes": [
+    { "access": "user", "permissions": ["read_user", "read_namespace", "read_personal_access_token"] },
+    { "access": "instance", "permissions": ["read_metadata"] },
+    { "access": "selected_memberships", "project_ids": [42],
+      "permissions": ["read_project", "read_work_item", "read_merge_request"] }
+  ]
+}
+```
+
+Envía todos los scopes en una sola petición: a la concesión no se le puede añadir
+nada después.
+
+## Concesiones para usos habituales
+
+| Quieres que el asistente                            | Concede en el proyecto                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------ |
+| Lea las incidencias y merge requests de un proyecto | Project: Read, Work Item: Read, Merge Request: Read                      |
+| Clasifique y comente incidencias                    | la fila anterior, más Work Item: Create y Work Item: Update              |
+| Revise merge requests                               | Merge Request: Read, Merge Request: Create, Merge Request: Approve       |
+| Siga la CI                                          | Pipeline: Read, Job: Read                                                |
+| Edite ficheros en una rama nueva                    | Repository: Read, Repository: Create, Repository: Update, Branch: Create |
+
+La [referencia de permisos de grano fino](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md)
+enumera lo que necesita cada acción, y `gitlab://tools/{id}` sirve lo mismo para una
+acción en su bloque `fine_grained`.
+
+## Lo que se muestra a una sesión
+
+- **La concesión decide.** Cuando el token puede leer su propia concesión y la
+  instancia ejecuta GitLab 19.4, la versión que registra la tabla de permisos del
+  servidor, a la sesión se le listan las acciones que alcanza su concesión en todas
+  las superficies, y una llamada a cualquier otra se responde con el permiso que
+  necesita, sin una petición a GitLab. Una lectura que GitLab serviría en un proyecto
+  o grupo público se deja pasar aunque el listado la deje fuera.
+- **La concesión no se evalúa** cuando el token no puede leerla, la instancia no
+  informa de una versión o ejecuta otra versión. La sesión retiene entonces solo lo que
+  ningún token de grano fino alcanza, y cada rechazo dice por qué no se evaluó la
+  concesión.
+- **GitLab.com** informa de la versión previa del siguiente minor (`19.5.0-pre`). A esa
+  sesión se le lista lo que alcanza su concesión en 19.4.1, y cada llamada se pasa a
+  GitLab, que la juzga.
+- **Algunas acciones no las alcanza ningún token de grano fino.** En GitLab 19.4.1, 58
+  acciones pasan por tipos o mutaciones GraphQL que no declaran ningún permiso de grano
+  fino (las acciones de épicas, work items, logros y emojis personalizados, las reglas
+  de rama, el catálogo de CI y algunas lecturas y escrituras de seguridad). Se retienen
+  a toda sesión de grano fino, con el motivo y la salida, un token clásico.
+
+La concesión se vuelve a leer en cada revalidación, así que una instancia actualizada
+lleva la sesión a lo que decide su nueva versión. Una relectura fallida conserva lo que
+se le mostraba a la sesión.
+
+## Leer una respuesta retenida
+
+Una llamada que la sesión no puede hacer se responde antes de que nada llegue a GitLab,
+nombrando la acción por su ID:
+
+```text
+action "branch.create" exists but this fine-grained personal access token was not granted what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it. Create a fine-grained token that grants it, or use a classic token with the api scope (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+```
+
+La otra forma, `... exists but is not available to a fine-grained personal access
+token: ...`, significa que ningún token de grano fino alcanza la acción en esa versión
+de GitLab. `gitlab://tools/{id}` de una acción retenida lleva un bloque `withheld` con
+las mismas palabras, y `gitlab_find_action` deja esas acciones fuera de sus resultados.
+
+:::note
+En GraphQL, GitLab responde con `null` a la parte de una respuesta que no se le
+concedió a un token, o quita los elementos de una lista, sin ningún error. Una sesión
+de grano fino recibe una nota junto a esas respuestas, para que una lista vacía o un
+no encontrado no se lean como "no hay nada".
+:::
+
+## Cuando una organización exige tokens de grano fino
+
+- **En GitLab.com**, el Owner de un grupo de nivel superior puede rechazar los tokens
+  clásicos para el grupo, sus subgrupos y proyectos. Un token clásico se rechaza
+  entonces allí con el mismo texto que recibe un token de grano fino.
+- **En una instancia autogestionada**, un administrador puede exigir tokens de grano
+  fino para toda la instancia: los usuarios ya no pueden crear ni rotar tokens
+  clásicos, y los existentes siguen funcionando hasta que caducan.
+
+Por eso cada salida que ofrece el servidor dice "a classic token (an existing one, on
+an instance that no longer lets you create them), where the group does not refuse
+classic tokens".
+
+## Modo HTTP
+
+La puerta comprueba cada credencial nueva con `GET /api/v4/user`. Un token de grano
+fino sin User: Read se responde con `403`, **sin cargarse** al presupuesto de fallos de
+la dirección (GitLab aceptó el token), y se recuerda durante cinco minutos. En modo
+OAuth, un token de grano fino enviado como token Bearer cumple el mínimo `read_api`.
+Consulta [Servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) y
+[Solución de problemas](/gitlab-mcp-server/es/operations/troubleshooting/#tokens-de-grano-fino)
+para los textos de rechazo del propio GitLab.
+
+<FAQ />
