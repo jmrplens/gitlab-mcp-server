@@ -130,7 +130,8 @@ func TestIsFineGrained_OnlyTheFineGrainedKind(t *testing.T) {
 // selector the runtime matches: none declared, a run with no fine-grained
 // session, counts below each floor, and a run that clears them.
 func TestCheckFineGrained_Floors_Applied(t *testing.T) {
-	t.Cleanup(func() { fineGrainedFloors = map[string]fineGrainedFloor{} })
+	recorded := fineGrainedFloors
+	t.Cleanup(func() { fineGrainedFloors = recorded })
 	fineGrainedFloors = map[string]fineGrainedFloor{"ce": {Asserted: 4, Refused: 2}, "community/free": {Asserted: 1, Refused: 1}}
 
 	cases := []struct {

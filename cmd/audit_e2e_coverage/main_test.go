@@ -231,21 +231,30 @@ func TestRun_Results_JoinsTheStream(t *testing.T) {
 
 // TestRun_Check_FloorsAndExpectedRuntimes verifies -check on the fixture:
 // it passes on the ce shards, fails when an expected runtime is missing, and
-// fails when a package refused.
+// fails when a package refused. The fixture shards hold no fine-grained
+// session, so those cases run with no fine-grained floor, and one more holds
+// the ce shards to the floors this repository records, which a run with no
+// fine-grained session cannot meet.
 func TestRun_Check_FloorsAndExpectedRuntimes(t *testing.T) {
+	recorded := fineGrainedFloors
+	t.Cleanup(func() { fineGrainedFloors = recorded })
+	none := map[string]fineGrainedFloor{}
 	cases := []struct {
 		name     string
 		calls    string
 		runtime  string
+		floors   map[string]fineGrainedFloor
 		wantCode int
 		wantErr  string
 	}{
-		{name: "ce passes", calls: callsFixture("ce"), runtime: "ce", wantCode: exitOK},
-		{name: "an expected runtime is missing", calls: callsFixture("ce"), runtime: "ce,ee", wantCode: exitFindings, wantErr: "no runtime under"},
-		{name: "a package refused", calls: callsFixture("two-runtimes"), runtime: "ee", wantCode: exitFindings, wantErr: ""},
+		{name: "ce passes", calls: callsFixture("ce"), runtime: "ce", floors: none, wantCode: exitOK},
+		{name: "an expected runtime is missing", calls: callsFixture("ce"), runtime: "ce,ee", floors: none, wantCode: exitFindings, wantErr: "no runtime under"},
+		{name: "a package refused", calls: callsFixture("two-runtimes"), runtime: "ee", floors: none, wantCode: exitFindings, wantErr: ""},
+		{name: "the recorded fine-grained floors", calls: callsFixture("ce"), runtime: "ce", floors: recorded, wantCode: exitFindings, wantErr: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			fineGrainedFloors = tc.floors
 			opts := fixtureOptions(t)
 			opts.calls = tc.calls
 			opts.runtime = tc.runtime

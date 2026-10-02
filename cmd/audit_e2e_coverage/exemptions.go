@@ -65,11 +65,15 @@ var assertedFloors = map[string]int{}
 // [assertedFloors], and applied to a live run alone ([checkFineGrained]).
 //
 // The figures are the first complete Docker runs of issue 952's scenarios,
-// rounded down to what every one of those runs reached, so a run passes them
-// only if the fine-grained scenarios ran and saw both halves: actions a grant
-// reaches served, and actions it does not refused before anything reached
-// GitLab.
-var fineGrainedFloors = map[string]fineGrainedFloor{}
+// on GitLab 19.4.1 both as the latest images and pinned, each runtime's the
+// fewest any of its runs reached, so a run passes them only if the
+// fine-grained scenarios ran and saw both halves: actions a grant reaches
+// served, and actions a grant does not reach refused for the credential
+// before anything reached GitLab.
+var fineGrainedFloors = map[string]fineGrainedFloor{
+	"ce": {Asserted: 24, Refused: 9},
+	"ee": {Asserted: 27, Refused: 18},
+}
 
 // declaredCategories is the set a category must belong to, so a typo does
 // not invent a fourth kind of exemption.
