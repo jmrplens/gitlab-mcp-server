@@ -35,9 +35,10 @@ func routeTable() *Table {
 // placeholders take one segment, a wildcard takes one or more, Grape's optional groups are
 // matched both ways and nested, the most literal template wins and a tie goes
 // to the one that sorts first, a HEAD with no route of its own is matched
-// against the GETs, the GraphQL endpoint is named as itself, and anything
-// outside the v4 API or outside the table is named by nothing. The template
-// it answers is the table's own spelling under /api/v4, never the path.
+// against the GETs, the GraphQL endpoint is named as itself, an instance's
+// own path prefix in front of the API root is cut, and anything outside the
+// v4 API or outside the table is named by nothing. The template it answers is
+// the table's own spelling under /api/v4, never the path.
 func TestRouteTemplate_NamesTheTableRouteARequestReached(t *testing.T) {
 	table := routeTable()
 	cases := []struct {
@@ -70,6 +71,14 @@ func TestRouteTemplate_NamesTheTableRouteARequestReached(t *testing.T) {
 		{"the API root itself", http.MethodGet, "/api/v4", "", false},
 		{"a prefix that only begins like the API", http.MethodGet, "/api/v4x/projects/1/issues", "", false},
 		{"another API", http.MethodGet, "/api/v5/projects/1/issues", "", false},
+		{"under a relative URL root", http.MethodGet, "/gitlab/api/v4/projects/1/issues", "/api/v4/projects/:id/issues", true},
+		{"a doubled slash before the API root", http.MethodGet, "//api/v4/projects/1/issues", "/api/v4/projects/:id/issues", true},
+		{"under a relative URL root of two segments", http.MethodGet, "/tools/gitlab/api/v4/projects/1/issues/statistics", "/api/v4/projects/:id/issues/statistics", true},
+		{"the GraphQL endpoint under a relative URL root", http.MethodPost, "/gitlab/api/graphql", "/api/graphql", true},
+		{"a HEAD under a relative URL root", http.MethodHead, "/gitlab/api/v4/projects/1/repository/files/README.md/raw", "/api/v4/projects/:id/repository/files/:file_path/raw", true},
+		{"an encoded name holding the API segment", http.MethodGet, "/gitlab/api/v4/projects/acme%2Fapi%2Frepo/issues", "/api/v4/projects/:id/issues", true},
+		{"a relative URL root holding the API segment", http.MethodGet, "/api/gitlab/api/v4/projects/1/issues", "", false},
+		{"a relative URL root and no API", http.MethodGet, "/gitlab/projects/1/issues", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

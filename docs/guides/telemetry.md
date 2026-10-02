@@ -184,9 +184,11 @@ it was sent to and the response status, and, when the route is one the server's
 fine-grained permission table holds, `url.template`: the route
 as GitLab declares it, such as `/api/v4/projects/:id/issues`, which also names
 the span (`GET /api/v4/projects/:id/issues`). The template carries the
-placeholders and never the values a request filled in. A request to a route the
-table does not hold, `/api/v4/version` among them, carries no template, and its
-span is named by its method alone. The template is a span attribute only: it is
+placeholders and never the values a request filled in. An instance installed
+under a path of its own (a relative URL root, `https://host/gitlab`) gets the
+same template: the path in front of `/api/` is the instance's and is left out.
+A request to a route the table does not hold, `/api/v4/version` among them,
+carries no template, and its span is named by its method alone. The template is a span attribute only: it is
 not a dimension of `http.client.request.duration`, whose series it would
 multiply by every route GitLab serves.
 

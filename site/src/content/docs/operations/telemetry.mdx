@@ -175,9 +175,11 @@ The child span of a GitLab call carries the method, the host, the port and the
 response status, and, when the route is one the server's fine-grained
 permission table holds, `url.template`: the route as GitLab declares it, such
 as `/api/v4/projects/:id/issues`, which also names the span. The template
-carries the placeholders and never the values a request filled in; a route the
-table does not hold carries none, and its span is named by its method alone. It
-is a span attribute only, never a metric dimension.
+carries the placeholders and never the values a request filled in, and an
+instance installed under a path of its own (`https://host/gitlab`) gets the
+same template, the path in front of `/api/` left out; a route the table does
+not hold carries none, and its span is named by its method alone. It is a span
+attribute only, never a metric dimension.
 
 ### Metrics
 

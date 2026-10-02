@@ -7,10 +7,13 @@ import (
 )
 
 // The two path prefixes a GitLab request this server sends begins with: every
-// REST route under the v4 API, and the one GraphQL endpoint beside it.
+// REST route under the v4 API, and the one GraphQL endpoint beside it. Both sit
+// under the API root, whose segment is what an instance's own path prefix is
+// cut at.
 const (
 	restPrefix  = "/api/v4"
 	graphQLPath = "/api/graphql"
+	apiSegment  = "/api/"
 )
 
 // RouteTemplate names the route a GitLab request was sent to, from its method
@@ -40,7 +43,22 @@ const (
 // metrics paths as /api/v4//sidekiq/..., which GitLab serves as the
 // /sidekiq routes, so an empty segment never names, nor fails to name, a
 // route.
+//
+// An instance installed under a path of its own (a relative URL root,
+// https://host/gitlab) has every request carry that path in front of the API
+// root, and the route is named from the API root on: what precedes the first
+// "/api/" segment is the instance's, and is cut. It stays out of the template
+// because it is not a route of the table, and because in the deployment mode
+// where a caller names the instance it is the caller's to choose, which would
+// make the attribute as unbounded as the URL it replaces. A path a project or
+// file name writes "/api/" into comes after that segment, since such a name
+// travels percent-encoded inside one segment, and a root that itself holds an
+// "/api/" segment names no route, which is the method-only name a route the
+// table does not hold gets.
 func (t *Table) RouteTemplate(method, escapedPath string) (string, bool) {
+	if root := strings.Index(escapedPath, apiSegment); root != -1 {
+		escapedPath = escapedPath[root:]
+	}
 	if escapedPath == graphQLPath {
 		return graphQLPath, true
 	}

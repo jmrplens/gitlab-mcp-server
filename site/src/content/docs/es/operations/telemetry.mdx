@@ -183,7 +183,9 @@ estado de la respuesta y, cuando la ruta es una de las que contiene la tabla de
 permisos de grano fino del servidor, `url.template`: la ruta tal como GitLab la
 declara, por ejemplo `/api/v4/projects/:id/issues`, que también da nombre al
 span. La plantilla lleva los marcadores y nunca los valores con que una petición
-los rellenó; una ruta que la tabla no contiene no lleva ninguna, y su span se
+los rellenó, y una instancia instalada bajo una ruta propia
+(`https://host/gitlab`) recibe la misma plantilla, sin la ruta que precede a
+`/api/`; una ruta que la tabla no contiene no lleva ninguna, y su span se
 nombra solo por el método. Es un atributo del span y nunca una dimensión de las
 métricas.
 
