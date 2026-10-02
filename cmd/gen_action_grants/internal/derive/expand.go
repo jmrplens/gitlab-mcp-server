@@ -220,7 +220,10 @@ func (e *expansion) raw(l *leaf, at *frame, ctx context) pathSet {
 // record adds a request to the action and returns the path that makes it. An
 // unresolved request a declaration of the action answers is replaced by the
 // declared requests. Every unresolved request carries its reason, so a
-// declaration replacing nothing never meets one.
+// declaration replacing nothing never meets one. A request a declaration
+// says GitLab redirects is followed by the declared requests on the same
+// path, after it, since the client sends them only once GitLab has answered
+// it.
 func (e *expansion) record(req Request, l *leaf, ctx context, sdk string) pathSet {
 	if req.Kind == KindUnresolved {
 		for _, entry := range e.declarations {
@@ -230,7 +233,17 @@ func (e *expansion) record(req Request, l *leaf, ctx context, sdk string) pathSe
 			}
 		}
 	}
-	return single(e.use(req, l, ctx, sdk, ""))
+	sent := single(e.use(req, l, ctx, sdk, ""))
+	for _, entry := range e.declarations {
+		if entry.Follows != "" && entry.Follows == req.Key() {
+			entry.used = true
+			// One path times the few a declaration lists never passes the
+			// bound.
+			followed, _ := product(sent, e.declared(entry, l, ctx))
+			return followed
+		}
+	}
+	return sent
 }
 
 // declared records the requests a declaration stands for.

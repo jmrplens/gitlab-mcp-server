@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -14,7 +15,9 @@ import (
 	"github.com/vektah/gqlparser/v2/parser"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -280,5 +283,165 @@ fragment F on T { b { id } f { id } }`)
 	want := documentShape{name: "Q", roots: []string{"a", "other"}, positions: []string{"a", "a.b", "a.c", "a.f", "other", "other.e"}}
 	if got.name != want.name || !slices.Equal(got.roots, want.roots) || !slices.Equal(got.positions, want.positions) {
 		t.Errorf("shapeOf = %+v, want %+v", got, want)
+	}
+}
+
+// followDrivers are the arguments that make each action a follows-redirect
+// declaration stands for send the request GitLab redirects.
+var followDrivers = map[string]map[string]any{
+	"release.get_latest": {"project_id": "42"},
+}
+
+// seenRequest is one request a stand-in received: its method, its path with
+// the API prefix taken off, and the token it carried.
+type seenRequest struct {
+	method, path, token string
+}
+
+// redirectingStandIn answers a request the followed route matches with a
+// redirect to target, as GitLab answers the routes a follows-redirect
+// declaration names, and anything else with an empty object, keeping every
+// request with the token it carried. It runs on the httptest server's
+// goroutine, so it records and never stops the test.
+type redirectingStandIn struct {
+	follows string
+	target  string
+	mu      sync.Mutex
+	seen    []seenRequest
+}
+
+// ServeHTTP records the request and answers it.
+func (s *redirectingStandIn) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	path := strings.TrimPrefix(req.URL.EscapedPath(), "/api/v4")
+	s.mu.Lock()
+	s.seen = append(s.seen, seenRequest{method: req.Method, path: path, token: req.Header.Get("PRIVATE-TOKEN")})
+	s.mu.Unlock()
+	if routeMatches(s.follows, req.Method+" "+path) {
+		http.Redirect(w, req, "/api/v4"+s.target, http.StatusFound)
+		return
+	}
+	testutil.RespondJSON(w, http.StatusOK, `{}`)
+}
+
+// requests returns the requests received so far.
+func (s *redirectingStandIn) requests() []seenRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.seen)
+}
+
+// routeMatches reports whether a request line ("GET /projects/42/x") is one a
+// route in the derivation's spelling ("GET /projects/:/x") describes: the same
+// method and segment count, and every segment equal where the route spells
+// it, a ":" taking any one.
+func routeMatches(route, request string) bool {
+	routeMethod, routePath, _ := strings.Cut(route, " ")
+	requestMethod, requestPath, _ := strings.Cut(request, " ")
+	want := strings.Split(routePath, "/")
+	got := strings.Split(requestPath, "/")
+	if routeMethod != requestMethod || len(want) != len(got) {
+		return false
+	}
+	for i, segment := range want {
+		if segment != ":" && segment != got[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// filled writes a route's path with every ":" filled in, which is a path a
+// redirect can name.
+func filled(path string) string {
+	return strings.ReplaceAll(path, ":", "x")
+}
+
+// TestRequestDeclarations_FollowedRedirectsAreSentWithTheToken runs the
+// handler of every action a follows-redirect declaration stands for, through
+// the catalog, against a stand-in that answers the followed request with a
+// redirect to the declared one, and holds the client to what the declaration
+// says: the followed request is sent first, the declared one after it, and
+// the declared one carries the same token, so GitLab judges the credential on
+// it. A client that stopped following redirects, or a redirect policy that
+// dropped the token on the instance's own host, would make the declaration
+// false, and this is what says so.
+func TestRequestDeclarations_FollowedRedirectsAreSentWithTheToken(t *testing.T) {
+	ran := 0
+	for _, declaration := range requestDeclarations {
+		if declaration.Follows == "" {
+			continue
+		}
+		ran++
+		t.Run(declaration.Action, func(t *testing.T) {
+			if len(declaration.Requests) != 1 {
+				t.Fatalf("%s follows %s with %d requests; a redirect names one", declaration.Action, declaration.Follows, len(declaration.Requests))
+			}
+			declared := declaration.Requests[0].Method + " " + declaration.Requests[0].Path
+			standIn := &redirectingStandIn{follows: declaration.Follows, target: filled(declaration.Requests[0].Path)}
+			seen := driveFollowedAction(t, declaration.Action, standIn)
+			if len(seen) != 2 || !routeMatches(declaration.Follows, seen[0].method+" "+seen[0].path) ||
+				!routeMatches(declared, seen[1].method+" "+seen[1].path) {
+				t.Fatalf("%s sent %+v; want %s, then %s", declaration.Action, seen, declaration.Follows, declared)
+			}
+			if seen[1].token == "" || seen[1].token != seen[0].token {
+				t.Errorf("the redirected request carried token %q and the followed one %q; want the same", seen[1].token, seen[0].token)
+			}
+		})
+	}
+	if ran != len(followDrivers) {
+		t.Errorf("followDrivers holds %d actions and %d declarations follow a request; drop the drivers no declaration needs", len(followDrivers), ran)
+	}
+}
+
+// driveFollowedAction runs one action's handler, as the catalog binds it,
+// against the stand-in, and returns what the stand-in received. The client is
+// built as the server builds one, redirect policy included, and not through
+// testutil.NewTestClient, whose recorder would file these requests in the
+// request inventory under a command's package rather than a tool's.
+func driveFollowedAction(t *testing.T, id string, standIn *redirectingStandIn) []seenRequest {
+	t.Helper()
+	params, driven := followDrivers[id]
+	if !driven {
+		t.Fatalf("no arguments drive %s; add them to followDrivers", id)
+	}
+	srv := httptest.NewServer(standIn)
+	t.Cleanup(srv.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "test-token", DisableRetries: true})
+	if err != nil {
+		t.Fatalf("build the client: %v", err)
+	}
+	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("build the catalog: %v", err)
+	}
+	action, found := catalog.Action(actioncatalog.ActionID(id))
+	if !found {
+		t.Fatalf("the catalog holds no %s", id)
+	}
+	if _, err = action.Route.Handler(context.Background(), params); err != nil {
+		t.Fatalf("%s: %v", id, err)
+	}
+	return standIn.requests()
+}
+
+// TestRouteMatches_HoldsARequestToItsRoute verifies a route matches a request
+// of its method and shape, a ":" taking any one segment, and nothing of
+// another method, length or literal.
+func TestRouteMatches_HoldsARequestToItsRoute(t *testing.T) {
+	cases := []struct {
+		name, route, request string
+		want                 bool
+	}{
+		{name: "placeholders filled", route: "GET /projects/:/releases/:", request: "GET /projects/42/releases/v1", want: true},
+		{name: "another method", route: "GET /projects/:", request: "HEAD /projects/42"},
+		{name: "another length", route: "GET /projects/:", request: "GET /projects/42/releases"},
+		{name: "another literal", route: "GET /projects/:/releases", request: "GET /projects/42/issues"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := routeMatches(testCase.route, testCase.request); got != testCase.want {
+				t.Errorf("routeMatches(%q, %q) = %t, want %t", testCase.route, testCase.request, got, testCase.want)
+			}
+		})
 	}
 }

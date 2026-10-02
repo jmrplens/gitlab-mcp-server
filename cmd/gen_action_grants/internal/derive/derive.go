@@ -26,16 +26,25 @@ const (
 )
 
 // Declaration answers, for one action, what the walk cannot read: an action
-// that sends nothing, or the requests behind one unresolved request.
+// that sends nothing, the requests behind one unresolved request, or the
+// requests GitLab's answer to a resolved one makes the client send after it.
 type Declaration struct {
 	Action   string
 	Category string
 	Reason   string
 	// Replaces is the [Request.Reason] of the unresolved request the
-	// declaration answers, "" for an action declared to send nothing.
+	// declaration answers, "" for an action declared to send nothing or for
+	// one that follows a request.
 	Replaces string
-	// Requests are what the unresolved request stands for: all of them made,
-	// or one of them when Any is set.
+	// Follows is the [Request.Key] of a resolved REST request GitLab answers
+	// with a redirect to another of its routes, which the HTTP client follows
+	// with the same credential: wherever the action sends it, the declared
+	// requests are sent right after it, every one, and GitLab judges the
+	// credential again on each. The walk reads the handler and client-go, and
+	// neither names the second request, since GitLab's answer does.
+	Follows string
+	// Requests are what the unresolved request stands for, all of them made or
+	// one of them when Any is set, or what the followed request is followed by.
 	Requests []Request
 	Any      bool
 }
@@ -121,7 +130,7 @@ func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk S
 		if !entry.used {
 			result.Findings = append(result.Findings, fmt.Sprintf(
 				"%s: the %s declaration answers nothing the walk reaches (%s); remove it, or say what it answers now",
-				entry.Action, entry.Category, describeReplaces(entry.Replaces),
+				entry.Action, entry.Category, describeAnswer(&entry.Declaration),
 			))
 		}
 	}
@@ -129,12 +138,16 @@ func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk S
 	return result
 }
 
-// describeReplaces names what a declaration answers, for a finding.
-func describeReplaces(replaces string) string {
-	if replaces == "" {
+// describeAnswer names what a declaration answers, for a finding.
+func describeAnswer(entry *Declaration) string {
+	switch {
+	case entry.Follows != "":
+		return "the action sends no " + entry.Follows
+	case entry.Replaces == "":
 		return "the action is declared to send nothing and the walk found a request"
+	default:
+		return "no request reads " + entry.Replaces
 	}
-	return "no request reads " + replaces
 }
 
 // declared is a declaration with whether some action's walk used it.
@@ -180,7 +193,7 @@ func (d *deriver) action(act actionrequests.Action, sites map[string][]actionreq
 // holds only while the walk finds nothing it sends.
 func (d *deriver) sendsNothing(out *Action, declarations []*declared) {
 	for _, entry := range declarations {
-		if entry.Replaces != "" {
+		if entry.Replaces != "" || entry.Follows != "" {
 			continue
 		}
 		if len(out.Uses) == 0 {

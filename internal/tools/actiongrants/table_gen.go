@@ -7613,7 +7613,7 @@ var table = finegrained.Table{
 		{ID: "release.create", Paths: [][]uint32{{428}}},
 		{ID: "release.delete", Paths: [][]uint32{{828}}},
 		{ID: "release.get", Paths: [][]uint32{{829}}},
-		{ID: "release.get_latest", Paths: [][]uint32{{830}}},
+		{ID: "release.get_latest", Paths: [][]uint32{{829, 830}}},
 		{ID: "release.link_create", Paths: [][]uint32{{632}}},
 		{ID: "release.link_create_batch", Paths: [][]uint32{{632}}},
 		{ID: "release.link_delete", Paths: [][]uint32{{831}}},
