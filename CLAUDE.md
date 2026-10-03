@@ -45,9 +45,9 @@
 | Completion argument names | 18                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
-| Source files (tools)      | 775 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 471 test files under `internal/tools/`                                                                       |
-| Go packages               | 288 in the module (`go list ./...`); the README's 303 counts directories holding tracked `.go` files, so it adds the fifteen `go list` leaves out: fourteen `testdata` fixture packages (the two stand-in programs and the coverage audit's planted trees) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 180 under `internal/tools/...` (the root package plus 179 sub-packages) |
+| Source files (tools)      | 779 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 473 test files under `internal/tools/`                                                                       |
+| Go packages               | 297 in the module (`go list ./...`); the README's 314 counts directories holding tracked `.go` files, so it adds the seventeen `go list` leaves out: sixteen `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees and the stand-in module the SDK route reader's tests read) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 181 under `internal/tools/...` (the root package plus 180 sub-packages) |
 
 ### Orbit live tests
 
@@ -127,7 +127,7 @@ gitlab-mcp-server/
 │   ├── telemetry/               # The one place that knows the OpenTelemetry SDK: exporters, identity policy, metric views
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 179 internal/tools packages
+│   ├── tools/                   # Tool orchestration layer + 180 internal/tools packages
 │   │   ├── action_catalog.go    # Builds the canonical action catalog from domain ActionSpecs (pruneSchemaFieldsByTier)
 │   │   ├── actiongrants/        # The generated fine-grained table (`table_gen.go`, written by `cmd/gen_action_grants`, never edited) and its two readers, `Table()` and `Requirement(id)`; the catalog sets each action's `FineGrained` from it by canonical ID, and a test holds that the table compiles to data with no init work
 │   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed
@@ -259,7 +259,7 @@ Every documentation example must name a tool the surface it shows actually regis
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 179 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 180 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -859,7 +859,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (179 `internal/tools` packages; tools by tier: ~868 Free/CE, ~1022 Premium, ~1088 Ultimate self-managed, ~1094 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (180 `internal/tools` packages; tools by tier: ~868 Free/CE, ~1022 Premium, ~1088 Ultimate self-managed, ~1094 GitLab.com Ultimate) |
 | ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
@@ -883,7 +883,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 179 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 180 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
