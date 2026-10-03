@@ -157,7 +157,13 @@ func authorizeDecisions() []Decision {
 			// charges no failure budget (INV-007) while it spends its token of
 			// the credential's rate bucket like every other refused call. An
 			// action the table has no row for is unknown authority and served
-			// (INV-008).
+			// (INV-008). The refusal the call middleware makes of a registered
+			// tool's call is a tool result built before the SDK's dispatcher,
+			// which labels only what it answers, so the middleware gives it
+			// the resultType its revision requires (toolutil.LabelForRevision,
+			// upstream-bugs row 66), as the rate limiter does its own, and the
+			// row carries no F-20; the one dynamic execute makes in its
+			// handler is labeled by the dispatcher like any served call.
 			ID: "AUT-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the actions no fine-grained token can reach at the GitLab release the table was recorded from",
 			Key:      KeyEntry, StdioKey: KeyProcess,

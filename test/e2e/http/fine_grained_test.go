@@ -12,6 +12,7 @@ package httpe2e
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -119,6 +120,30 @@ func callAs(t *testing.T, srv *server, token, tool, arguments string) string {
 	return text
 }
 
+// legacyRevision is the revision before 2026-07-28, whose results carry no
+// resultType.
+const legacyRevision = "2025-11-25"
+
+// callResultAs calls a tool as token the way a client of revision sends it and
+// returns the JSON-RPC result decoded as a map, so an absent member can be told
+// from an empty one. At 2026-07-28 the call carries the protocol's _meta and
+// the extra headers that revision asks of its arguments; at 2025-11-25 it names
+// its revision in the header alone and sends none of the headers 2026-07-28
+// added, as callToolAtLegacyRevision does.
+func callResultAs(t *testing.T, srv *server, revision, token, tool, arguments string, extra map[string]string) map[string]any {
+	t.Helper()
+	meta := protocolMeta + ","
+	headers := map[string]string{"PRIVATE-TOKEN": token}
+	maps.Copy(headers, extra)
+	if revision == legacyRevision {
+		meta = ""
+		maps.Copy(headers, map[string]string{"MCP-Protocol-Version": legacyRevision, "Mcp-Method": "", "Mcp-Name": ""})
+	}
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{%s"name":%q,"arguments":%s}}`,
+		meta, tool, arguments)
+	return decodeToolCall(t, srv.do(t, request{body: body, headers: headers})).Result
+}
+
 // manifestEntriesAs reads gitlab://tools as token and returns its entry IDs.
 func manifestEntriesAs(t *testing.T, srv *server, token string) []string {
 	t.Helper()
@@ -199,5 +224,72 @@ func TestFineGrained_TwoCredentialsOnOneShape_PhaseAIsDecidedPerRequest(t *testi
 	callAs(t, srv, phaseAFineToken, servedWriteTool, `{"project_id":"42","title":"sent"}`)
 	if got := gitlab.created[phaseAFineToken].Load(); got != 1 {
 		t.Errorf("GitLab was asked for %d issues by the fine-grained credential, want 1: the write was not let through to it", got)
+	}
+}
+
+// TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes
+// holds the refusal phase A's call middleware makes of a fine-grained
+// session's call to a withheld tool to the resultType the call the same
+// credential is served just before it carries: "complete" at 2026-07-28,
+// which that revision requires on every result, and none at 2025-11-25, which
+// is what the SDK sends a client of that revision from its own dispatcher.
+//
+// The middleware answers before the SDK's dispatcher, which labels only what
+// it answers, so the refusal goes out through toolutil.LabelForRevision, as the
+// rate limiter's does (row 66 of docs/development/upstream-bugs.md). The
+// served call is the control: it is what makes the refusal's label about who
+// built the result rather than about the revision, the transport or the
+// credential.
+func TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes(t *testing.T) {
+	cases := []struct {
+		name string
+		want any
+	}{
+		{name: protocolVersion, want: "complete"},
+		{name: legacyRevision, want: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := startPhaseAGitLab(t)
+			srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--tool-surface=individual")
+
+			served := callResultAs(t, srv, tc.name, phaseAFineToken, servedWriteTool, `{"project_id":"42","title":"sent"}`, nil)
+			if isError, _ := served["isError"].(bool); isError {
+				t.Fatalf("the served call %s was refused: %v", servedWriteTool, served)
+			}
+			if got := served["resultType"]; got != tc.want {
+				t.Fatalf("a served tools/call at %s carried resultType %v, want %v: the control is broken, so this case cannot say anything about the refusal", tc.name, got, tc.want)
+			}
+
+			refused := callResultAs(t, srv, tc.name, phaseAFineToken, withheldTool, `{"group_path":"g"}`, nil)
+			if isError, _ := refused["isError"].(bool); !isError || !strings.Contains(refusalText(refused), phaseAWithheldFor) {
+				t.Fatalf("the call to %s was not phase A's refusal, so this case is not about a middleware-made result: %v", withheldTool, refused)
+			}
+			if got := refused["resultType"]; got != tc.want {
+				t.Errorf("phase A's refusal at %s carried resultType %v, want %v, the same as the call the dispatcher served before it",
+					tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFineGrained_WithheldExecute_ModernRevision_IsLabeledLikeAServedCall
+// verifies the same refusal on the default surface, where gitlab_execute_action
+// makes it inside its handler, which the SDK's dispatcher labels like any call
+// it served, so at 2026-07-28 it carries resultType "complete", and its text is
+// the withheld sentence after the tool's own name, as every refusal execute
+// writes is.
+func TestFineGrained_WithheldExecute_ModernRevision_IsLabeledLikeAServedCall(t *testing.T) {
+	gitlab := startPhaseAGitLab(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL)
+
+	arguments := fmt.Sprintf(`{"action":%q,"params":{"group_path":"g"}}`, withheldAction)
+	refused := callResultAs(t, srv, protocolVersion, phaseAFineToken, "gitlab_execute_action", arguments,
+		map[string]string{"Mcp-Param-Action": withheldAction})
+	if isError, _ := refused["isError"].(bool); !isError || !strings.HasPrefix(refusalText(refused), "gitlab_execute_action: "+phaseAWithheldFor) {
+		t.Fatalf("execute of %s = %v, want the withheld answer after the tool's name", withheldAction, refused)
+	}
+	if got, ok := refused["resultType"]; !ok || got != "complete" {
+		t.Errorf("execute's refusal carried resultType %v (present: %t), want \"complete\": a refusal made in a handler goes out labeled", got, ok)
 	}
 }

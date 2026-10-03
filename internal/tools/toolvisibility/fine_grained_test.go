@@ -410,3 +410,61 @@ func TestCallMiddleware_AnswersAWithheldCallBeforeTheArgumentsAreRead(t *testing
 		})
 	}
 }
+
+// TestCallMiddleware_WithheldCall_CarriesTheResultTypeOfItsRevision covers the
+// one field of the withheld refusal the call's revision decides, as the
+// middleware returns it: resultType "complete" for a call naming 2026-07-28 in
+// its _meta, which that revision requires on every result and the SDK adds
+// only to what its own dispatcher answers, and none for a call of an earlier
+// revision, as the SDK sends that client from its dispatcher. The refusal says
+// the same in both, and the handler behind the middleware runs in neither.
+// test/e2e/http drives the same refusal through the real binary.
+func TestCallMiddleware_WithheldCall_CarriesTheResultTypeOfItsRevision(t *testing.T) {
+	actions := NewToolActions(config.ToolSurfaceMeta, demoCatalog(t))
+	ready := func() *ToolActions { return actions }
+	session := boundTo(demoAuthority())
+	reached := &mcp.CallToolResult{}
+	next := func(context.Context, string, mcp.Request) (mcp.Result, error) { return reached, nil }
+	cases := []struct {
+		name    string
+		meta    mcp.Meta
+		labeled bool
+	}{
+		{name: "2026-07-28", meta: mcp.Meta{mcp.MetaKeyProtocolVersion: "2026-07-28"}, labeled: true},
+		{name: "an earlier revision", meta: nil, labeled: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := &mcp.CallToolParamsRaw{Name: "gitlab_demo", Arguments: json.RawMessage(`{"action":"denied"}`)}
+			params.SetMeta(tc.meta)
+			result, err := CallMiddleware(ready)(next)(session, methodToolsCall, &mcp.ServerRequest[*mcp.CallToolParamsRaw]{Params: params})
+			if err != nil || result == reached {
+				t.Fatalf("CallMiddleware = %+v, %v; want the withheld answer", result, err)
+			}
+			wire, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("the refusal does not marshal: %v", err)
+			}
+			var fields struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+				IsError    bool    `json:"isError"`
+				ResultType *string `json:"resultType"`
+			}
+			if err = json.Unmarshal(wire, &fields); err != nil {
+				t.Fatalf("the refusal is not a JSON object: %v (%s)", err, wire)
+			}
+			const withheld = `action "demo.denied" exists but is not available to a fine-grained personal access token`
+			if !fields.IsError || len(fields.Content) == 0 || !strings.HasPrefix(fields.Content[0].Text, withheld) {
+				t.Errorf("the refusal is %s, want isError and a text beginning %q", wire, withheld)
+			}
+			switch {
+			case tc.labeled && (fields.ResultType == nil || *fields.ResultType != "complete"):
+				t.Errorf("the refusal at 2026-07-28 is %s, want resultType \"complete\"", wire)
+			case !tc.labeled && fields.ResultType != nil:
+				t.Errorf("the refusal of an earlier revision is %s, want no resultType", wire)
+			}
+		})
+	}
+}

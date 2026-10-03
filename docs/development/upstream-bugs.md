@@ -4984,17 +4984,24 @@ neither, and the ADR now says so.
   stdio, gets this label and not the dispatcher's, which is what that revision
   requires and what e40f35d sends. The params are read by their concrete type, because a typed
   nil behind the `Params` interface panics in `GetMeta`. It is applied to the
-  two tool results a receiving middleware here makes: the rate limiter's
+  three tool results a receiving middleware here makes: the rate limiter's
   refusal, where it leaves the middleware (`attachRateLimitFunc` in
-  `internal/toolutil/rate_limit.go`, the ToolError channel of row RTC-001), and
-  the held-call ceiling's (`heldRequestsRefusal` in `cmd/server/held.go`, row
+  `internal/toolutil/rate_limit.go`, the ToolError channel of row RTC-001), the
+  held-call ceiling's (`heldRequestsRefusal` in `cmd/server/held.go`, row
   HLD-011), whose 2026-07-28 calls the gate counts, or refuses, before the SDK
-  reads them, so its label is defensive. No middleware here makes a
-  `prompts/get` or `resources/read` result. Each refusal keeps its channel, its
-  text and its error flag: row RTC-001 declares the ToolError channel for
-  `tools/call` so that a model reads the refusal as a tool result it can back
-  off from, which moving it to the `-42900` JSON-RPC error the limiter writes
-  for the other metered methods would have traded away. This entry used to say
+  reads them, so its label is defensive, and the withheld refusal of issue 952,
+  which the call middleware makes of a fine-grained session's call to a
+  registered tool whose action it may not run, before the SDK decodes the
+  arguments (`CallMiddleware` in `internal/tools/toolvisibility/fine_grained.go`,
+  the Withheld channel of row AUT-007). The same refusal made by dynamic
+  execute, inside its handler, is labeled by the dispatcher like any served
+  call. No middleware here makes a `prompts/get` or `resources/read` result.
+  Each refusal keeps its channel, its text and its error flag: row RTC-001
+  declares the ToolError channel for `tools/call` so that a model reads the
+  refusal as a tool result it can back off from, which moving it to the
+  `-42900` JSON-RPC error the limiter writes for the other metered methods
+  would have traded away, and row AUT-007 declares the Withheld channel, which
+  a model reads as a tool result saying why and what to do. This entry used to say
   the field could not be set from outside the SDK, because the setter is
   unexported; the public decoder sets it, which is how the sibling project
   libgen-mcp labels its own refusals
@@ -5021,7 +5028,9 @@ open for F-21, F-22 and F-24.
 
 **How we found it**: writing the tenant policy specification of issue 565, which
 read every refusal channel against go-sdk v1.8.0. The upstream issue already
-existed.
+existed. The third site, the withheld refusal of issue 952, was found reviewing
+that layer against the binary, by reading the result a withheld call answers at
+2026-07-28.
 
 **Pinned by**: `TestSDK_MiddlewareToolResult_GoesOutUnlabeled` in
 `internal/toolutil`, which drives a bare SDK server over the in-memory transport
@@ -5043,6 +5052,11 @@ on a binary built against e40f35d, where the SDK labels the refusal with the
 same value; it replaces the pin of the absence that test module held, which
 failed on 2026-09-27 against the head of
 [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300).
+`TestCallMiddleware_WithheldCall_CarriesTheResultTypeOfItsRevision` in
+`internal/tools/toolvisibility` and
+`TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes`
+in `test/e2e/http` hold the withheld refusal of issue 952 the same way, the
+second beside a call the same fine-grained credential is served.
 
 ### A Go SDK client never sees a `subscriptions/listen` refusal
 

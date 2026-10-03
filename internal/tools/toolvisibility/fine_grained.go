@@ -237,9 +237,12 @@ func ListingMiddleware(actions func() *ToolActions) mcp.Middleware {
 // CallMiddleware answers a fine-grained session's call to a tool whose action
 // it may not run with the reason, before the SDK decodes or validates the
 // call's arguments, so one cause gets one refusal whatever the arguments
-// (INV-012). Every other call passes through, and an action this cannot name
-// from the call is left to the dispatcher, which checks the action it runs
-// again ([toolutil.FineGrainedRefusal]).
+// (INV-012). The refusal is a tool result returned in the dispatcher's place,
+// so it carries the resultType the call's revision requires, which the SDK
+// adds only to what its own dispatcher answers ([toolutil.LabelForRevision]).
+// Every other call passes through, and an action this cannot name from the
+// call is left to the dispatcher, which checks the action it runs again
+// ([toolutil.FineGrainedRefusal]).
 //
 // actions returns nil until registration is done, which lets a call through
 // to the dispatcher's check.
@@ -259,7 +262,7 @@ func CallMiddleware(actions func() *ToolActions) mcp.Middleware {
 				return next(ctx, method, req)
 			}
 			if refusal := toolutil.FineGrainedRefusal(ctx, nil, raw.Name, id, ""); refusal != nil {
-				return refusal, nil
+				return toolutil.LabelForRevision(req, refusal), nil
 			}
 			return next(ctx, method, req)
 		}
