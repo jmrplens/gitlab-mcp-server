@@ -3655,9 +3655,16 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 var periodicCleanupInterval = tenancy.AuthSweepInterval // register row AUB-005
 
 // startPeriodicCleanup runs cleanup on every tick until ctx ends.
+//
+// The interval is read before the loop starts rather than by the loop, which
+// changes nothing at runtime, since nothing writes it. In a test binary it
+// keeps the read on the goroutine that set the server up, which the test
+// waits for, so a later test that shortens the interval does not race a loop
+// an earlier test's server started and the scheduler ran late.
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
+	interval := periodicCleanupInterval
 	go func() {
-		ticker := time.NewTicker(periodicCleanupInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {

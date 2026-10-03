@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -396,9 +397,21 @@ func adoptPooledEntry(
 // It costs the parked requests nothing worth measuring and holds no lock across
 // any response: forgetting the shape and evicting the entries each take their
 // own lock and release it, and the gate opens afterwards.
+//
+// # It is counted while it runs
+//
+// Nothing waits for the goroutine: a request refused before the gate can leave
+// it running after the server that started it has shut down, which costs a
+// process nothing, since the registration finishes on its own. A test binary
+// is the one place that outliving matters, because the next test may replace
+// a catalog hook this registration is about to read, so the goroutine is
+// counted in [shapeRegistrationsRunning] from before it starts until it has
+// finished.
 func startShapeRegistration(ctx context.Context, shape *serverShape, onFailure func(*mcp.Server)) {
 	shell := shape.shell
+	shapeRegistrationsRunning.Add(1)
 	go func() {
+		defer shapeRegistrationsRunning.Add(-1)
 		if registerErr := shell.register(ctx); registerErr != nil {
 			slog.ErrorContext(ctx, "the tool catalog could not be built for a configuration shape",
 				"error", registerErr)
@@ -409,3 +422,13 @@ func startShapeRegistration(ctx context.Context, shape *serverShape, onFailure f
 		shell.gate.markReady()
 	}()
 }
+
+// shapeRegistrationsRunning counts the registrations [startShapeRegistration]
+// has started that have not finished. The server never reads it. A test that
+// replaces a catalog hook waits for it to reach zero first, so a registration
+// an earlier test's server left running cannot read the hook while it is being
+// replaced. It is an atomic rather than a scan of the goroutine list because
+// the race detector orders the registration's reads before the replacement
+// only through a synchronizing operation, which a load of the count that
+// observes the registration's final decrement is.
+var shapeRegistrationsRunning atomic.Int64
