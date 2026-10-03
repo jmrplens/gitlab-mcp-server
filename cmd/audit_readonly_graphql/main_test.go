@@ -307,6 +307,12 @@ func TestMain_HandsRunMainTheProcessAndExitsWithItsStatus(t *testing.T) {
 	main()
 
 	os.Stderr = previousStderr
+	// Closed before it is read, as the other commands' tests close theirs:
+	// Windows refuses to remove an open file, so the temporary directory's
+	// cleanup would fail with the handle still held.
+	if err = stderr.Close(); err != nil {
+		t.Fatalf("close the stream: %v", err)
+	}
 	if len(statuses) != 1 || statuses[0] != 2 {
 		t.Errorf("main() exited with %v, want [2]", statuses)
 	}
