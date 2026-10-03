@@ -201,6 +201,18 @@ jobs:
       # reason the boot lives in a generator.
       - name: Check the pinned live GitLab record
         run: make check-api-live
+      # What a fine-grained token needs for each action is the join of the
+      # requests each handler sends with what the record above declares for
+      # them. The derivation is read from the tree on every run and gates
+      # three rules no diff shows (an unqualified second request, a denial
+      # naming something the record does not hold, a way of running that sends
+      # nothing), so it is never deferred; the three artifacts it writes are
+      # committed and compared under the same deferral as the others.
+      - name: Check every action's requests are derived and joined
+        run: make check-action-grants-derivation
+      - name: Check the fine-grained permissions per action
+        if: env.FRESHNESS == 'checked'
+        run: make check-action-grants
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the

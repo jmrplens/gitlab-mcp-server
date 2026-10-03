@@ -24,6 +24,7 @@
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
 	gen-api-live check-api-live check-meta-descriptions \
+	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
@@ -1026,31 +1027,33 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/25] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/25] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/25] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/25] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/25] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/25] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/25] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/25] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/25] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/25] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/25] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/25] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/25] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/25] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/25] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/25] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/25] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/25] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/25] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/25] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/25] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/25] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/25] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/25] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/25] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[1/27] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/27] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/27] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/27] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/27] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/27] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/27] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/27] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/27] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/27] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/27] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/27] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/27] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/27] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/27] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/27] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/27] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/27] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/27] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/27] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/27] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/27] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/27] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/27] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/27] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/27] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/27] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1538,7 +1541,7 @@ publish-lobehub: check-lhm-manifest
 gen-readme: gen-footprint gen-stats
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
+## Generates: brand vectors, fine-grained permissions per action, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, and gen-footprint and gen-stats both rewrite README.md, so make -j
@@ -1553,7 +1556,7 @@ gen-readme: gen-footprint gen-stats
 # those terms, and the measurement there is not merely slow: it is a paid run
 # against a provider.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-action-grants gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -2164,6 +2167,46 @@ gen-api-live:
 ## No Docker and no network, so it is a gate.
 check-api-live:
 	go run ./cmd/gen_api_live/ -check
+
+# action_grants runs cmd/gen_action_grants with the generated table,
+# internal/tools/actiongrants/table_gen.go, replaced by the stand-in beside the
+# command, both in the command's own build and in the program it loads: the
+# command builds the catalog through internal/tools, which compiles the table
+# in, so a table that no longer compiles after a change to a finegrained type
+# would otherwise stop the very run that regenerates it. The overlay is a JSON
+# file naming the two absolute paths, written to a temporary file and removed
+# when the recipe ends.
+define action_grants
+	@overlay="$$(mktemp)"; trap 'rm -f "$$overlay"' EXIT; \
+	printf '{"Replace":{"%s":"%s"}}\n' "$(CURDIR)/internal/tools/actiongrants/table_gen.go" \
+		"$(CURDIR)/cmd/gen_action_grants/table_stub.go.txt" > "$$overlay"; \
+	go run -overlay "$$overlay" ./cmd/gen_action_grants/ $(1)
+endef
+
+## gen-action-grants: derive what every catalog action sends from its handlers,
+## join it to what the live GitLab record declares for a fine-grained token,
+## and rewrite docs/development/action-requests.json,
+## internal/tools/actiongrants/table_gen.go and
+## docs/reference/fine-grained-permissions.md. It writes nothing while the
+## derivation has a finding.
+gen-action-grants:
+	$(call action_grants,)
+
+## check-action-grants: fail when the three artifacts gen-action-grants writes
+## are not what the tree and the committed record give now. Deferred on a
+## stacked layer in CI like every other committed-artifact gate.
+check-action-grants:
+	$(call action_grants,-check)
+
+## check-action-grants-derivation: derive and join every action and fail on any
+## finding: an action not derived or declared, a route or element the record
+## does not place, a permission no assignable expands to, a stale declaration
+## or directive, and the three gates (an unqualified second request on a path,
+## a denial naming something the record does not hold, a way of running that
+## sends nothing). It compares none of the three artifacts, so it is never
+## deferred.
+check-action-grants-derivation:
+	$(call action_grants,-check-derivation)
 
 ## check-graphql-documents: fail when a raw GraphQL document in the source is
 ## one GitLab would refuse. The test transport catches the documents a test
