@@ -476,9 +476,9 @@ and the workaround this server carries until it ships.
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
 | Source (`.go`, non-test) |     1,467 |       348,542 |
-| Unit tests (`_test.go`)  |     1,016 |       662,322 |
+| Unit tests (`_test.go`)  |     1,016 |       662,335 |
 | End-to-end tests         |       517 |       112,584 |
-| **Total**                | **3,000** | **1,123,448** |
+| **Total**                | **3,000** | **1,123,461** |
 
 ### Functions
 
