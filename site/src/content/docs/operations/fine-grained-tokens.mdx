@@ -86,8 +86,8 @@ in its `fine_grained` block.
   no fine-grained token can reach, and every refusal says why the grant was not
   evaluated.
 - **GitLab.com** reports the prerelease of the next minor (`19.5.0-pre`). Such a
-  session is listed what its grant reaches at 19.4.1, and every call is passed to
-  GitLab, which judges it.
+  session is listed what its grant reaches at 19.4.1, and every call not withheld from
+  all fine-grained tokens is passed to GitLab, which judges it.
 - **Some actions no fine-grained token can reach.** At GitLab 19.4.1, 58 actions go
   through GraphQL types or mutations that declare no fine-grained permission (the epic,
   work item, achievement and custom emoji actions, branch rules, the CI catalog, and a
@@ -97,6 +97,17 @@ in its `fine_grained` block.
 The grant is read again on every revalidation, so an upgraded instance moves the
 session to what its new release decides. A failed re-read keeps what the session was
 shown.
+
+If GitLab does not answer the request that says what kind of token the server holds
+(`GET /api/v4/personal_access_tokens/self`) when a session starts, the server cannot
+tell the token is fine-grained and serves it like a classic token whose scopes it could
+not detect: every action, nothing withheld, with GitLab judging each call. It logs
+`failed to detect PAT scopes, all tools will be registered` at `WARN` and asks again
+until GitLab answers: on every revalidation in HTTP mode, every 15 minutes on stdio,
+and on stdio as soon as a start that could not reach GitLab recovers. The round that
+learns the token is fine-grained gives the session what its grant reaches, and logs it
+at `INFO`. With `--auth-mode=oauth`, a token the verifier could not describe is asked
+about the same way.
 
 ## Reading a withheld answer
 

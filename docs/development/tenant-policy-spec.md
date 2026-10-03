@@ -727,7 +727,12 @@ uncharged 403 under a stable prefix, its body quoting GitLab's sentence filtered
 at 512 bytes and the bearer challenge's description a constant of this server's, and
 remember the verdict in `ADM-006`'s cache for its five minutes, since nothing at GitLab
 19.4 edits a grant after its token is created; what stays bounded in concurrency alone is
-a flood of distinct minted tokens, each a genuine credential. What a fine-grained session
+a flood of distinct minted tokens, each a genuine credential. `ADM-003`'s introspection
+reads a `403` carrying `insufficient_granular_scope` on the token's own description as an
+answer rather than a failure: that route's boundary is the user and names no root
+namespace, so only a fine-grained token is refused a grant there, and the refusal is taken
+as such a token's one scope, `granular`, without asking `/oauth/token/info`, which knows
+nothing of a personal access token. What a fine-grained session
 is shown is two rows of their own. `AUT-007` withholds the actions no fine-grained token
 can reach at the GitLab release the server's permission table was recorded from, and
 `AUT-008` the actions the token's grant does not reach when the server can read the

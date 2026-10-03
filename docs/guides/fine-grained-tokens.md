@@ -92,8 +92,17 @@ levels are `personal_projects` (the projects in your own namespace),
 `selected_memberships` (the projects and groups you list, and everything under a listed
 group), `all_memberships` (every project and group you are a member of), `user` and
 `instance`. Every project or group id becomes a scope of its own. The administrator
-route that creates a token for another user takes no grant at 19.4, so this server's
-own token creation actions create classic tokens only.
+route that creates a personal access token for another user takes no grant at 19.4
+(the impersonation token route and the route above do), and this server's own token
+creation actions send classic scopes only
+([upstream-bugs row 82](../development/upstream-bugs.md#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them),
+[issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+
+An administrator's token reaches the admin routes its `instance` scope grants, and on an
+instance that enforces Admin Mode it needs nothing more: GitLab lets every fine-grained
+token past the Admin Mode check of an API call, as it lets a classic token that carries
+the `admin_mode` scope (`lib/api/api_guard.rb` at 19.4.1), which the end-to-end suite
+holds on a running instance with Admin Mode turned on.
 
 ## Grants for common uses
 
@@ -154,6 +163,42 @@ The server writes one line at `INFO` when a session starts in this state, naming
 reason (`grant-unreadable`, `version-unreadable`, `version-outside-record` and so on)
 and never the token, its id or its grant.
 
+### When the server cannot tell what kind of token it holds
+
+Everything above starts from one request, `GET /api/v4/personal_access_tokens/self`,
+whose answer says the token is a fine-grained one. When that request fails for any
+reason other than GitLab refusing the token Personal Access Token: Read (a `5xx`, a
+`429`, a timeout, or an instance that did not answer at all), the server knows no more
+about the token than about a classic one whose scopes it could not detect, and serves
+it the same way for as long as that lasts: the whole catalog, nothing withheld, no
+refusal or note about a grant, and GitLab judging every call. That includes the actions
+no fine-grained token can reach (the next section), so a write in the second or fourth
+row of its table commits and is answered null there too. The server logs it at `WARN`
+(`failed to detect PAT scopes, all tools will be registered`).
+
+The server asks again until GitLab answers:
+
+- In HTTP mode, on every accepted revalidation of the pool entry, at
+  `--revalidate-interval` (15 minutes by default). With `0` nothing revalidates, and
+  the question is asked again by the build of the entry the first request makes once
+  its credential has gone an hour unchecked.
+- On stdio, on the timer that re-reads a grant, every 15 minutes, and as soon as a start
+  that could not reach GitLab at all recovers, which is the first call GitLab answers.
+
+A round GitLab still does not answer changes nothing and is logged at `DEBUG` (`the
+token's kind is still unknown`). The round that learns the token is a fine-grained one
+gives the session what its grant reaches, or phase A with its reason, says so at `INFO`
+with the phase, and from then on the session is the fine-grained one the sections above
+describe: a client that kept a listing from before is answered withheld on the calls
+it may not make. A token learned to be a classic one keeps the scope narrowing the start
+or the entry's build decided, until the process restarts or the entry is rebuilt.
+
+In `--auth-mode=oauth` the verifier asks the same question while it admits the token,
+and the pool entry takes the kind from that answer. When neither introspection endpoint
+answered, the verifier admits the token on an assumed `api` scope, which says nothing
+of its kind, so the pool entry asks the self endpoint itself, when it is built and on
+each accepted revalidation, as legacy mode does.
+
 ### What no fine-grained token can reach
 
 Some of what this server offers goes through GitLab GraphQL types or mutations that
@@ -161,17 +206,18 @@ declare no fine-grained permission at 19.4.1, and GitLab refuses or empties thos
 every fine-grained token, whatever its grant. At 19.4.1 that is 58 actions of 1098, all
 through GraphQL, each in one of four ways:
 
-| How GitLab answers                                                              | Actions | Examples                                                                                                                                                                        |
-| ------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A type on the answer's path declares nothing: null, or a list emptied or nulled |      34 | the epic, work item and saved view reads (`group.epic_get`, `issue.work_item_list`), `branch.rule_list`, `ci_catalog.list`, `custom_emoji.list`, `vulnerability.severity_count` |
-| The write commits, and the answer is null                                       |      20 | the achievement writes, `custom_emoji.create`, `issue.work_item_create`, `security_attribute.create`                                                                            |
-| The mutation declares nothing and is refused                                    |       3 | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                                                                                |
-| The object never resolves to the boundary GitLab declares                       |       1 | `group.epic_create`                                                                                                                                                             |
+| How GitLab answers                                                                                   | Actions | Examples                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A type on the answer's path declares nothing: null, or a list emptied or nulled                      |      34 | the epic, work item and saved view reads (`group.epic_get`, `issue.work_item_list`), `branch.rule_list`, `ci_catalog.list`, `custom_emoji.list`, `vulnerability.severity_count` |
+| The write commits, and the answer is null                                                            |      20 | the achievement writes, `custom_emoji.create`, `issue.work_item_create`, `security_attribute.create`                                                                            |
+| The mutation declares nothing and is refused                                                         |       3 | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                                                                                |
+| The object never resolves to the boundary GitLab declares: the write commits, and the answer is null |       1 | `group.epic_create`                                                                                                                                                             |
 
 These are withheld from every fine-grained session, with the reason, the GitLab release
 the verdict comes from and the way out, which is a classic token. One more action,
-`group.epic_list`, runs over REST and is refused only with an input that makes it send
-its GraphQL request instead. The second row is withheld for a reason beyond the empty
+`group.epic_list`, runs over REST and is served; with an input that makes it send its
+GraphQL request instead, GitLab answers that request empty, and the answer carries a
+note saying so. The second and fourth rows are withheld for a reason beyond the empty
 answer: an assistant that reads a null as "not done" and tries again repeats a write
 GitLab already committed.
 
@@ -292,7 +338,11 @@ classic tokens".
 read-only narrowing. It does not skip reading what kind of token the server holds, and
 it does not turn off anything this guide describes: the grant is a different question
 from the scopes, and skipping it would serve a fine-grained session the whole catalog
-with no word of what its grant leaves out.
+with no word of what its grant leaves out. The one start that reads nothing under it is
+a stdio start that could not reach GitLab, since an instance that did not answer cannot
+say what kind the token is; that session is the one
+[described above](#when-the-server-cannot-tell-what-kind-of-token-it-holds), exactly as
+it would be without the flag.
 
 ## See Also
 

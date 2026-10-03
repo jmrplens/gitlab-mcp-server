@@ -89,8 +89,8 @@ acción en su bloque `fine_grained`.
   ningún token de grano fino alcanza, y cada rechazo dice por qué no se evaluó la
   concesión.
 - **GitLab.com** informa de la versión previa del siguiente minor (`19.5.0-pre`). A esa
-  sesión se le lista lo que alcanza su concesión en 19.4.1, y cada llamada se pasa a
-  GitLab, que la juzga.
+  sesión se le lista lo que alcanza su concesión en 19.4.1, y cada llamada que no se
+  retiene a todo token de grano fino se pasa a GitLab, que la juzga.
 - **Algunas acciones no las alcanza ningún token de grano fino.** En GitLab 19.4.1, 58
   acciones pasan por tipos o mutaciones GraphQL que no declaran ningún permiso de grano
   fino (las acciones de épicas, work items, logros y emojis personalizados, las reglas
@@ -100,6 +100,17 @@ acción en su bloque `fine_grained`.
 La concesión se vuelve a leer en cada revalidación, así que una instancia actualizada
 lleva la sesión a lo que decide su nueva versión. Una relectura fallida conserva lo que
 se le mostraba a la sesión.
+
+Si GitLab no responde, al empezar una sesión, a la petición que dice qué tipo de token
+tiene el servidor (`GET /api/v4/personal_access_tokens/self`), el servidor no puede saber
+que el token es de grano fino y lo sirve como a un token clásico cuyos scopes no pudo
+detectar: todas las acciones, nada retenido, y GitLab juzgando cada llamada. Escribe
+`failed to detect PAT scopes, all tools will be registered` en `WARN` y vuelve a
+preguntar hasta que GitLab responde: en cada revalidación en el modo HTTP, cada 15
+minutos en stdio, y en stdio en cuanto se recupera un arranque que no pudo llegar a
+GitLab. La ronda que averigua que el token es de grano fino le da a la sesión lo que
+alcanza su concesión, y lo escribe en `INFO`. Con `--auth-mode=oauth`, un token que el
+verificador no pudo describir se pregunta del mismo modo.
 
 ## Leer una respuesta retenida
 
