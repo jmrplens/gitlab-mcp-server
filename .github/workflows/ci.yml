@@ -213,6 +213,13 @@ jobs:
       - name: Check the fine-grained permissions per action
         if: env.FRESHNESS == 'checked'
         run: make check-action-grants
+      # R-GRANT holds what that derivation committed to the live record it
+      # was joined from (the release, the permission vocabulary, the public
+      # sets, every denial's element, the actions both artifacts cover). It
+      # reads committed artifacts, so it is deferred with them.
+      - name: Check the fine-grained grants against the live record (R-GRANT)
+        if: env.FRESHNESS == 'checked'
+        run: make audit-1to1-grants
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the
