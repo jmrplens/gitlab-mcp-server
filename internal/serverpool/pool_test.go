@@ -609,7 +609,14 @@ func TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing(t *testing.T) 
 func TestConfirmUnexplainedRefusal_ProbeRefusedAFineGrainedPermission_KeepsTheEntry(t *testing.T) {
 	g := newRefusingGitLab(t, plainUnauthorizedBody)
 	pool, entry, key := refusedEntry(t, g)
-	before := lastValidatedOf(pool, entry)
+	// The baseline is moved a minute back, as in
+	// TestGetOrCreate_APermissionRefusalWith401_KeepsTheEntry: on a clock that
+	// advances in ticks (Windows) the entry's creation and the acceptance can
+	// read the same instant, which would fail the After check below.
+	pool.mu.Lock()
+	entry.lastValidated = entry.lastValidated.Add(-time.Minute)
+	before := entry.lastValidated
+	pool.mu.Unlock()
 	g.userStatus.Store(http.StatusForbidden)
 	body := userReadRefusalBody
 	g.userBody.Store(&body)
