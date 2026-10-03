@@ -108,6 +108,19 @@ auditConfig:
     # extract-zip. Remove this exception, and the two above with it, once
     # pa11y-ci and the pa11y it asks for are both on puppeteer 25.
     - GHSA-c475-qrg2-pj4r
+    # http-cache-semantics honours a client's max-stale on a shared-cache entry
+    # that was zeroed for security, so one user can be served another's cached
+    # response, Set-Cookie included (GHSA-ch52-4w7c-c8xp). Every release up to
+    # the newest, 4.2.0, is affected and none fixes it, so there is nothing to
+    # pin to. Build-time only: astro is its one consumer (7.3.5, the newest,
+    # still asks for ^4.2.0) and imports it only in assets/build/remote.js, to
+    # decide how long a remote image fetched during a build stays fresh. It
+    # calls only storable() and timeToLive() on a request it builds itself,
+    # and max-stale is read only in evaluateRequest(), which astro never
+    # calls; the site is static and serves no response through it. Remove
+    # this exception once http-cache-semantics publishes a fixed release or
+    # astro stops using it.
+    - GHSA-ch52-4w7c-c8xp
 
 peerDependencyRules:
   allowedVersions:
