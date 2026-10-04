@@ -6,7 +6,16 @@
   },
   "dynamic": {
     "visible_tools": 2,
-    "tool_schema_tokens": 1554
+    "tool_schema_tokens": 1554,
+    "total_tokens": {
+      "full": 10389,
+      "minimal": 1724
+    },
+    "reachable_actions": {
+      "free": 872,
+      "premium": 1026,
+      "ultimate": 1092
+    }
   },
   "individual": {
     "free": {
