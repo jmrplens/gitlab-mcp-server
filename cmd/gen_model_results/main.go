@@ -32,10 +32,12 @@ const (
 // reading a `make` log with several generators in it can tell whose sentence
 // they are reading. logLead is the same prefix carrying the space itself, for
 // the lines that build a format string rather than letting Fprintln put the
-// space between its operands.
+// space between its operands. Both are written out in full, and a test holds
+// the second to the first and its space: a constant built by concatenation is
+// one a mutation run can only report as never reached.
 const (
 	logPrefix = "gen_model_results:"
-	logLead   = logPrefix + " "
+	logLead   = "gen_model_results: "
 )
 
 // options are the four things this command can be asked to do.
@@ -50,7 +52,7 @@ type options struct {
 	// replacing them without being asked to is what the duplicate-row rule
 	// exists to refuse.
 	refold bool
-	// render redraws the managed blocks of both pages from the record.
+	// render redraws the managed blocks of the page from the record.
 	render bool
 	// check verifies the record and the pages offline instead of writing
 	// anything.
@@ -70,18 +72,33 @@ type options struct {
 func main() {
 	shards := flag.String("shards", "", "fold a model evaluation run's shards from this directory into the committed record")
 	refold := flag.Bool("refold", false, "with -shards: merge those shards into the rows they publish again, case by case, naming each case replaced")
-	render := flag.Bool("render", false, "redraw the managed blocks of README.md and the results page from the record")
+	render := flag.Bool("render", false, "redraw the managed blocks of the results page from the record")
 	check := flag.Bool("check", false, "verify the committed record and the pages drawn from it, writing nothing")
 	dryRun := flag.Bool("dry-run", false, "with -shards: fold and render into "+dryRunRelDir+" instead of the repository, admitting the fake provider so a rehearsal can be read")
 	flag.Parse()
 
-	root, err := cmdutil.RepositoryRoot(".")
+	root, err := repositoryRoot(".")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, logLead+"find repository root: %v\n", err)
-		os.Exit(exitUsage)
+		exitProcess(exitUsage)
+		return
 	}
-	os.Exit(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check, dryRun: *dryRun}, os.Stdout, os.Stderr))
+	exitProcess(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check, dryRun: *dryRun}, os.Stdout, os.Stderr))
 }
+
+// exitProcess and repositoryRoot are os.Exit and the root lookup behind
+// variables, so a test can drive main and read the code it hands the process,
+// and reach the refusal of a working directory outside any checkout.
+var (
+	exitProcess    = os.Exit
+	repositoryRoot = cmdutil.RepositoryRoot
+)
+
+// writeFile is os.WriteFile behind a variable, for the one failure no test can
+// otherwise produce: writing a page this command has just read, or a copy of
+// one into a directory it has just made, as root, whom permission bits do not
+// stop.
+var writeFile = os.WriteFile
 
 // run is main with its inputs handed to it, so a test can drive every path
 // against a tree of its own.
@@ -378,12 +395,12 @@ func writeRecord(root string, doc document) error {
 	return nil
 }
 
-// applyPages rewrites, or compares, every managed block of both pages.
+// applyPages rewrites, or compares, every managed block of every page.
 //
 // One read and one write per file rather than per block, because two blocks of
 // one file must be replaced in the text the first replacement produced; the
-// four README blocks written one at a time over the file on disk would each
-// overwrite the last.
+// four tables of the page written one at a time over the file on disk would
+// each overwrite the last.
 func applyPages(root string, rows []row, check bool) (changed, stale []string, err error) {
 	for _, path := range pagePaths() {
 		full := filepath.Join(root, path)
@@ -404,7 +421,7 @@ func applyPages(root string, rows []row, check bool) (changed, stale []string, e
 			continue
 		}
 		//#nosec G703,G306 -- the path is one of this command's own constants joined to the repository root, and the file was just read from it; the mode is the one every generated artifact here is written with
-		if writeErr := os.WriteFile(full, []byte(updated), docgen.GeneratedFileMode); writeErr != nil {
+		if writeErr := writeFile(full, []byte(updated), docgen.GeneratedFileMode); writeErr != nil {
 			return nil, nil, fmt.Errorf("write %s: %w", path, writeErr)
 		}
 		changed = append(changed, path)
@@ -412,13 +429,10 @@ func applyPages(root string, rows []row, check bool) (changed, stale []string, e
 	return changed, stale, nil
 }
 
-// applyBlocks replaces every managed block of one file in the text it was read
-// from.
+// applyBlocks replaces every managed block of the page in the text it was read
+// from. path names the page in an error.
 func applyBlocks(text, path string, rows []row) (string, error) {
 	for _, b := range blocks {
-		if b.Path != path {
-			continue
-		}
 		updated, err := docgen.ComputeReplacedSection(text, b.Start, b.End, renderBlock(b, rows))
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", path, err)
@@ -428,19 +442,10 @@ func applyBlocks(text, path string, rows []row) (string, error) {
 	return text, nil
 }
 
-// pagePaths lists the files holding a managed block, in the order the blocks
-// declare them and without repeats.
+// pagePaths lists the files holding a managed block. Every block is on the one
+// results page; the README's summaries left in issue 1163.
 func pagePaths() []string {
-	var paths []string
-	seen := map[string]bool{}
-	for _, b := range blocks {
-		if seen[b.Path] {
-			continue
-		}
-		seen[b.Path] = true
-		paths = append(paths, b.Path)
-	}
-	return paths
+	return []string{pageRelPath}
 }
 
 // fullSHA is what a recorded commit must look like before it is handed to git
@@ -454,11 +459,16 @@ var fullSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // none of them is from a checkout in one state.
 var gitProbe = askGit
 
-// gitProbeTimeout bounds one revision question. Both are answered out of the
+// gitProbeSeconds bounds one revision question. Both are answered out of the
 // object database and take milliseconds; the bound is there so a repository on
 // a filesystem that has stopped answering costs the gate a few seconds rather
 // than the job's whole timeout.
-const gitProbeTimeout = 10 * time.Second
+//
+// It is a count of seconds, made a duration where the deadline is taken: a
+// product written into the constant carries no coverage counter, so a mutation
+// run could only report it as never reached, while the same product in the
+// probe is one a test of the probe answering yes fails under.
+const gitProbeSeconds = 10
 
 // askGit runs one git command and reports whether it exited zero.
 //
@@ -474,7 +484,7 @@ func askGit(dir string, args ...string) (bool, error) {
 	if lookErr != nil {
 		return false, fmt.Errorf("find git: %w", lookErr)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), gitProbeTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), gitProbeSeconds*time.Second)
 	defer cancel()
 	// #nosec G204 -- the program is the absolute path just resolved, and the
 	// arguments are this file's own literals plus a commit the caller has

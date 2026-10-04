@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -366,5 +367,67 @@ func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
 	want := "supports **" + strconv.Itoa(siteCompletionArgNames) + " argument names**"
 	if !strings.Contains(string(data), want) {
 		t.Errorf("docs do not contain %q; update siteCompletionArgNames or the docs", want)
+	}
+}
+
+// TestReadme_ActionCount_MatchesTheCommittedSiteStats holds the one catalog
+// figure the README states in prose to the committed stats.json it is copied
+// from: the actions the dynamic surface reaches on GitLab.com.
+//
+// The README is hand-written apart from its token claim, so nothing would
+// notice this figure going stale. It is compared with the committed file
+// rather than a fresh measurement, so a layer that leaves stats.json stale on
+// purpose leaves the README alone too, and the refresh at the top of a stack
+// fails here until the README is updated with it.
+func TestReadme_ActionCount_MatchesTheCommittedSiteStats(t *testing.T) {
+	root := repositoryRoot()
+	data, err := os.ReadFile(filepath.Join(root, "site", "src", "data", "stats.json")) //#nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read committed stats.json: %v", err)
+	}
+	var stats siteStats
+	if unmarshalErr := json.Unmarshal(data, &stats); unmarshalErr != nil {
+		t.Fatalf("decode committed stats.json: %v", unmarshalErr)
+	}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md")) //#nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+
+	want := "Up to " + withThousands(stats.CatalogActions.GitLabCom) + " actions"
+	if !strings.Contains(string(readme), want) {
+		t.Errorf("README.md does not say %q; update its opening line to the committed site stats", want)
+	}
+}
+
+// withThousands renders a non-negative count with comma thousands separators,
+// the way the README writes it.
+func withThousands(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+// TestWithThousands_GroupsByThree verifies the separator lands every three
+// digits from the right and nowhere in a figure of three digits or fewer.
+func TestWithThousands_GroupsByThree(t *testing.T) {
+	tests := []struct {
+		in   int
+		want string
+	}{
+		{in: 0, want: "0"},
+		{in: 999, want: "999"},
+		{in: 1000, want: "1,000"},
+		{in: 1098, want: "1,098"},
+		{in: 1234567, want: "1,234,567"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := withThousands(tt.in); got != tt.want {
+				t.Errorf("withThousands(%d) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }

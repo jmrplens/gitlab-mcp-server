@@ -1186,8 +1186,8 @@ gen-model-corpus:
 check-model-corpus:
 	go run ./cmd/gen_model_corpus/ -check
 
-## gen-model-results: redraw the eight managed result blocks from the committed
-## record. It measures nothing and needs no shards, which is why update-all
+## gen-model-results: redraw the five managed blocks of the results page from the
+## committed record. It measures nothing and needs no shards, which is why update-all
 ## runs it: the measurement is a paid run, like the e2e coverage record's half.
 gen-model-results:
 	go run ./cmd/gen_model_results/ -render
@@ -1547,8 +1547,8 @@ publish-lobehub: check-lhm-manifest
 ## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
-# compile, and gen-footprint and gen-model-results both rewrite README.md, so
-# make -j would interleave them. bench-resources-render is in because it redraws from
+# compile, so make -j would build them against a file still being written.
+# bench-resources-render is in because it redraws from
 # the committed record and measures nothing, which is what check-bench-resources
 # then compares; bench-resources itself stays out, and so does brand-rasters,
 # which needs rsvg-convert and cwebp that only the maintainer's machine has.
@@ -1565,11 +1565,11 @@ update-all:
 	go run ./cmd/format_md_tables/
 	@echo "All generators and formatters complete."
 
-## gen-footprint: measure token footprint and write the README token-claim block and footprint section, token-footprint.md and site/src/data/token-footprint.json.
+## gen-footprint: measure token footprint and write the README token-claim block, token-footprint.md and site/src/data/token-footprint.json.
 gen-footprint:
 	go run ./cmd/audit_tokens/ -footprint
 
-## check-footprint: verify the README token-claim block and footprint section, token-footprint.md and site/src/data/token-footprint.json are current.
+## check-footprint: verify the README token-claim block, token-footprint.md and site/src/data/token-footprint.json are current.
 check-footprint:
 	go run ./cmd/audit_tokens/ -footprint -check
 

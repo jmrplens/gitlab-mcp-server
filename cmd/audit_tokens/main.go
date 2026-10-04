@@ -75,8 +75,8 @@ type auditOptions struct {
 // main parses flags and hands the work to run, whose exit code it returns.
 func main() {
 	opts := auditOptions{}
-	flag.BoolVar(&opts.footprint, "footprint", false, "measure all tiers \u00d7 surfaces \u00d7 GITLAB_MCP_META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
-	flag.BoolVar(&opts.check, "check", false, "with -footprint, verify the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
+	flag.BoolVar(&opts.footprint, "footprint", false, "measure all tiers \u00d7 surfaces \u00d7 GITLAB_MCP_META_PARAM_SCHEMA modes and write the README token-claim block, docs/development/token-footprint.md and site/src/data/token-footprint.json")
+	flag.BoolVar(&opts.check, "check", false, "with -footprint, verify the README token-claim block, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
 	flag.BoolVar(&opts.compareSchemas, "compare-schemas", false, "compare GITLAB_MCP_META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	flag.IntVar(&opts.topTools, "top-tools", 30, "number of individual tools to list by token cost")
 	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by token cost")
@@ -760,30 +760,32 @@ func humanBytes(n int) string {
 // --- Token footprint mode (-footprint) ----------------------------------------
 //
 // The footprint mode measures every tier \u00d7 surface \u00d7 GITLAB_MCP_META_PARAM_SCHEMA
-// combination and writes the README managed section plus the standalone
-// docs/development/token-footprint.md reference. It was previously the
-// standalone cmd/gen_readme binary.
+// combination and writes the README's token claim, the standalone
+// docs/development/token-footprint.md reference and the site's data file. It
+// was previously the standalone cmd/gen_readme binary.
 
-// Footprint section markers and output paths.
+// Footprint block markers and output paths.
 const (
-	footprintStartMarker  = "<!-- START TOKEN FOOTPRINT -->"
-	footprintEndMarker    = "<!-- END TOKEN FOOTPRINT -->"
 	detailedFootprintPath = "docs/development/token-footprint.md"
 	readmePath            = "README.md"
 	// The token claim is the one-paragraph headline near the top of the README:
 	// the startup cost of the default configuration, stated before the reader
-	// has scrolled anywhere. It is rendered from the same measured rows as the
-	// footprint table, so the two blocks cannot disagree, and it has its own
-	// marker pair because it lives several sections away from the table.
+	// has scrolled anywhere. It is the README's only generated block, and it is
+	// rendered from the same measured rows as the reference and the site's
+	// data, so none of the three can say something the others do not.
 	claimStartMarker = "<!-- START TOKEN CLAIM -->"
 	claimEndMarker   = "<!-- END TOKEN CLAIM -->"
 	// siteFootprintPath receives the headline figures the documentation site
 	// quotes. The site used to carry the startup-context reduction only as text
 	// baked into a social-card image, with no measured figure anywhere in the
 	// prose. Emitting it from the same measurement run that produces the README
-	// and the reference doc means the published claim cannot drift from what the
-	// tokenizer actually measured.
+	// claim and the reference doc means the published figures cannot drift from
+	// what the tokenizer actually measured.
 	siteFootprintPath = "site/src/data/token-footprint.json"
+	// claimMeasuredURL is where the claim sends a reader who wants the
+	// figures behind it: the site's section on the default surface's startup
+	// context, which renders them from siteFootprintPath.
+	claimMeasuredURL = "https://jmrp.io/docs/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save"
 )
 
 // Row identifiers used to pick the headline configurations out of the full
@@ -795,8 +797,8 @@ const (
 	ultimateTierLabel           = "Ultimate"
 )
 
-// tokenFootprintRow is a README-facing token measurement for one runtime
-// configuration.
+// tokenFootprintRow is the token measurement of one runtime configuration on
+// one tier.
 //
 // Configuration is the Markdown label rendered in the leftmost column.
 // MetaParamSchema is set for meta-tool configurations and empty ("n/a") for
@@ -851,11 +853,11 @@ func runFootprintMode(client *gitlabclient.Client, check bool) error {
 	return runFootprint(client)
 }
 
-// runFootprintCheck measures the token footprint and verifies that the README
-// managed section and the detailed reference doc already match the freshly
-// rendered content, without writing anything. It returns an error naming the
-// stale targets when either is out of date: the CI counterpart to runFootprint,
-// and the README-token-footprint half of the former gen_readme -check.
+// runFootprintCheck measures the token footprint and verifies that the README's
+// token claim, the detailed reference doc and the site data already match the
+// freshly rendered content, without writing anything. It returns an error
+// naming the stale targets when any is out of date: the CI counterpart to
+// runFootprint.
 func runFootprintCheck(client *gitlabclient.Client) error {
 	rows := measureFootprintRows(client)
 
@@ -896,13 +898,6 @@ func runFootprintCheck(client *gitlabclient.Client) error {
 func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tokenFootprintRow) ([]string, error) {
 	var stale []string
 
-	updated, err := docgen.ComputeReplacedSection(readmeText, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
-	if err != nil {
-		return nil, err
-	}
-	if updated != readmeText {
-		stale = append(stale, readmePath+" token-footprint section")
-	}
 	claim, err := renderReadmeTokenClaim(rows)
 	if err != nil {
 		return nil, err
@@ -926,8 +921,7 @@ func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tok
 }
 
 // runFootprint measures the full tier \u00d7 surface \u00d7 mode matrix and writes the
-// README managed sections (the headline claim and the footprint table) plus
-// the detailed reference doc and the site data file.
+// README's token claim, the detailed reference doc and the site data file.
 func runFootprint(client *gitlabclient.Client) error {
 	rows := measureFootprintRows(client)
 	claim, err := renderReadmeTokenClaim(rows)
@@ -935,9 +929,6 @@ func runFootprint(client *gitlabclient.Client) error {
 		return err
 	}
 	if replaceErr := docgen.ReplaceSection(readmePath, claimStartMarker, claimEndMarker, claim); replaceErr != nil {
-		return replaceErr
-	}
-	if replaceErr := docgen.ReplaceSection(readmePath, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows)); replaceErr != nil {
 		return replaceErr
 	}
 	detailedDoc := renderDetailedFootprint(rows)
@@ -951,7 +942,7 @@ func runFootprint(client *gitlabclient.Client) error {
 	if writeErr := os.WriteFile(filepath.Clean(siteFootprintPath), siteDoc, docgen.GeneratedFileMode); writeErr != nil { //#nosec G703 -- generated data path is a compile-time constant
 		return fmt.Errorf("writing %s: %w", siteFootprintPath, writeErr)
 	}
-	fmt.Printf("Updated %s token-claim block and token-footprint section, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))
+	fmt.Printf("Updated %s token-claim block, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))
 	return nil
 }
 
@@ -1172,57 +1163,29 @@ func measureTierFootprintWithPrompts(client *gitlabclient.Client, tier edition.T
 	return rows
 }
 
-// renderReadmeFootprint renders the README managed section: only the default
-// surface (dynamic) across all tiers, plus a link to the detailed doc.
-func renderReadmeFootprint(rows []tokenFootprintRow) string {
-	var b strings.Builder
-	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
-	b.WriteString("**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_MCP_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
-
-	tableRows := make([][]string, 0, len(rows))
-	for _, row := range rows {
-		if !strings.Contains(row.Configuration, "dynamic") {
-			continue
-		}
-		tierCell := row.Tier
-		schemaCell := "n/a"
-		if row.MetaParamSchema != "" {
-			schemaCell = fmt.Sprintf("`%s`", row.MetaParamSchema)
-		}
-		tableRows = append(tableRows, []string{
-			row.Configuration, tierCell,
-			fmtNum(row.VisibleTools), fmtNum(row.ReachableActions),
-			schemaCell, fmtNum(row.ToolSchemaTokens),
-			fmtNum(row.SharedTokens), fmtNum(row.totalTokens()),
-		})
-	}
-	b.WriteString(docgen.RenderMarkdownTable(
-		[]string{"Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`)", "Tier", "Visible tools", "Reachable actions", "`GITLAB_MCP_META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
-		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
-		tableRows,
-	))
-	b.WriteString("\nRows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_MCP_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.\n")
-	return b.String()
-}
-
 // renderReadmeTokenClaim renders the README's headline paragraph: what the
 // default configuration (dynamic surface, full capability surface) costs in
-// startup context, and what the minimal capability surface costs instead.
-// Both figures are the per-tier totals of the same measured rows the footprint
-// table prints, so the claim can never say something the table does not.
+// startup context, what the minimal capability surface costs instead, and what
+// listing every tool as its own costs. The figures are the per-tier totals of
+// the same measured rows the reference and the site's data are rendered from,
+// so the claim can never say something they do not.
 //
 // When every tier costs the same the claim states one figure and says so;
 // when the tiers ever diverge it states the span ("from X to Y") instead of
 // picking a tier, so a future tier-dependent cost cannot make the sentence
 // quietly wrong.
 func renderReadmeTokenClaim(rows []tokenFootprintRow) (string, error) {
-	defaultLo, defaultHi, ok := dynamicTotalSpan(rows, dynamicDefaultConfiguration)
+	defaultLo, defaultHi, ok := configurationTotalSpan(rows, dynamicDefaultConfiguration)
 	if !ok {
 		return "", fmt.Errorf("token claim: no %s row to quote", dynamicDefaultConfiguration)
 	}
-	minimalLo, minimalHi, ok := dynamicTotalSpan(rows, dynamicMinimalConfiguration)
+	minimalLo, minimalHi, ok := configurationTotalSpan(rows, dynamicMinimalConfiguration)
 	if !ok {
 		return "", fmt.Errorf("token claim: no %s row to quote", dynamicMinimalConfiguration)
+	}
+	individualLo, individualHi, ok := configurationTotalSpan(rows, individualConfiguration)
+	if !ok {
+		return "", fmt.Errorf("token claim: no %s row to quote", individualConfiguration)
 	}
 
 	tierClause := "the same on every GitLab tier"
@@ -1230,17 +1193,20 @@ func renderReadmeTokenClaim(rows []tokenFootprintRow) (string, error) {
 		tierClause = "depending on the GitLab tier"
 	}
 	return fmt.Sprintf(
-		"**%s tokens of startup context by default, %s (%s with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)\n",
+		"**%s tokens of startup context by default, %s (%s with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs %s tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](%s)\n",
 		fmtTokenSpan(defaultLo, defaultHi, "From"),
 		tierClause,
 		fmtTokenSpan(minimalLo, minimalHi, "from"),
+		fmtTokenSpan(individualLo, individualHi, "from"),
+		claimMeasuredURL,
 	), nil
 }
 
-// dynamicTotalSpan returns the smallest and largest startup total (tool schemas
-// plus shared resources and prompts) among the rows of one configuration
-// across all tiers. ok is false when no row carries that configuration.
-func dynamicTotalSpan(rows []tokenFootprintRow, configuration string) (lo, hi int, ok bool) {
+// configurationTotalSpan returns the smallest and largest startup total (tool
+// schemas plus shared resources and prompts) among the rows of one
+// configuration across all tiers. ok is false when no row carries that
+// configuration.
+func configurationTotalSpan(rows []tokenFootprintRow, configuration string) (lo, hi int, ok bool) {
 	var totals []int
 	for _, r := range rows {
 		if r.Configuration == configuration {

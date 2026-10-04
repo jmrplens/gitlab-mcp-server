@@ -1,6 +1,5 @@
 // Command gen_model_results turns what a model evaluation run observed into
-// what this repository publishes: the committed record, the reference page and
-// the README tables.
+// what this repository publishes: the committed record and the reference page.
 //
 // It is the second half of a split between observing and scoring. A
 // run writes observation and no verdict, so every number here is computed on

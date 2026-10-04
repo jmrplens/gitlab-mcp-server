@@ -520,8 +520,8 @@ func TestKindTemplate_CoversEverySubscribableKind(t *testing.T) {
 // kind count from the whitelist and asserts every document that states the
 // number still states this one.
 //
-// The count appears in prose no generator owns — the capability reference,
-// the front-door README, and the site page in both languages. When the
+// The count appears in prose no generator owns: the capability reference and
+// the site page in both languages. When the
 // whitelist grows, this is the test that turns a silently stale "26" into a
 // failing build with the list of files to touch. ADRs are deliberately not
 // checked: they record the number as it was when the decision was made.
@@ -534,7 +534,6 @@ func TestKindCount_MatchesEveryDocumentThatCitesIt(t *testing.T) {
 		phrase string
 	}{
 		{"docs/reference/capabilities/subscriptions.md", fmt.Sprintf("%d kinds of resource", count)},
-		{"README.md", fmt.Sprintf("%d resource kinds, single objects plus three single-parent lists", count)},
 		{"site/src/content/docs/capabilities/subscriptions.mdx", fmt.Sprintf("%d resource kinds, single objects plus three single-parent lists", count)},
 		{"site/src/content/docs/es/capabilities/subscriptions.mdx", fmt.Sprintf("%d tipos de recurso, objetos únicos más tres listas de un solo padre", count)},
 	}

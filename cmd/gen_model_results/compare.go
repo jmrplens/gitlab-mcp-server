@@ -19,7 +19,9 @@
 package main
 
 import (
+	"cmp"
 	"hash/fnv"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,21 +269,23 @@ func (g group) surfaces() int {
 func groupByVendor(rows []row) []group {
 	return collect(rows,
 		func(one row) string { return crossVendorKey(one).String() },
-		func(a, b row) bool { return a.Key.Model < b.Key.Model },
+		func(one row) string { return one.Key.Model },
 	)
 }
 
 // groupBySurface collects the rows into cross-surface comparisons, each sorted
-// by surface.
+// by surface. Two rows of one comparison can share a surface, measured in two
+// meta schema modes say, and those keep the order the record gave them.
 func groupBySurface(rows []row) []group {
 	return collect(rows,
 		func(one row) string { return crossSurfaceKey(one).String() },
-		func(a, b row) bool { return a.Key.Surface < b.Key.Surface },
+		func(one row) string { return one.Key.Surface },
 	)
 }
 
-// collect groups rows by a caption and orders each group's rows.
-func collect(rows []row, caption func(row) string, less func(a, b row) bool) []group {
+// collect groups rows by a caption and orders each group's rows by what order
+// reads off them, keeping the record's order among rows that read alike.
+func collect(rows []row, caption, order func(row) string) []group {
 	byCaption := map[string][]row{}
 	for _, one := range rows {
 		key := caption(one)
@@ -296,7 +300,7 @@ func collect(rows []row, caption func(row) string, less func(a, b row) bool) []g
 	groups := make([]group, 0, len(captions))
 	for _, key := range captions {
 		members := byCaption[key]
-		sort.SliceStable(members, func(i, j int) bool { return less(members[i], members[j]) })
+		slices.SortStableFunc(members, func(a, b row) int { return cmp.Compare(order(a), order(b)) })
 		groups = append(groups, group{Caption: key, Rows: members})
 	}
 	return groups

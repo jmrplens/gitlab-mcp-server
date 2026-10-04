@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,7 +14,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 )
 
-// newRoot builds a repository root holding the two pages with their markers,
+// newRoot builds a repository root holding the results page with its markers,
 // and nothing else.
 //
 // The pages are assembled from the block table rather than pasted in, so a
@@ -26,9 +27,6 @@ func newRoot(t *testing.T) string {
 		var page bytes.Buffer
 		page.WriteString("# " + path + "\n\nProse a person wrote.\n")
 		for _, one := range blocks {
-			if one.Path != path {
-				continue
-			}
 			page.WriteString("\n" + one.Start + "\n" + one.End + "\n")
 		}
 		full := filepath.Join(root, path)
@@ -86,13 +84,13 @@ func TestRun_TheEmptyBlocks_AreGeneratedAndGated(t *testing.T) {
 	if status, _, stderr := drive(t, root, options{render: true}); status != exitOK {
 		t.Fatalf("the render exited %d: %s", status, stderr)
 	}
-	page := filepath.Join(root, readmeRelPath)
+	page := filepath.Join(root, pageRelPath)
 	body, err := os.ReadFile(page) //#nosec G304 -- a path this test just built
 	if err != nil {
 		t.Fatalf("read the rendered page: %v", err)
 	}
 	if !strings.Contains(string(body), "is readable at commit") {
-		t.Fatalf("the rendered README carries no withdrawal sentence:\n%s", body)
+		t.Fatalf("the rendered page carries no withdrawal sentence:\n%s", body)
 	}
 
 	edited := strings.Replace(string(body), "Withdrawn.", "Actually, here are some numbers.", 1)
@@ -104,7 +102,7 @@ func TestRun_TheEmptyBlocks_AreGeneratedAndGated(t *testing.T) {
 	if status != exitFindings {
 		t.Fatalf("a hand-edited block exited %d, want a finding", status)
 	}
-	if !strings.Contains(stderr, readmeRelPath) {
+	if !strings.Contains(stderr, pageRelPath) {
 		t.Errorf("the finding %q does not name the file", stderr)
 	}
 }
@@ -214,7 +212,7 @@ func TestRun_FoldingAFakeRun_PublishesNothingAndSaysWhy(t *testing.T) {
 }
 
 // TestRun_FoldingARealRun_WritesTheRecordAndRedrawsThePages is the same path
-// with a row that survives: the record gains it and both pages are drawn again
+// with a row that survives: the record gains it and the page is drawn again
 // from the record rather than from the run.
 func TestRun_FoldingARealRun_WritesTheRecordAndRedrawsThePages(t *testing.T) {
 	root := newRoot(t)
@@ -419,7 +417,7 @@ func TestRun_ARecordOfAnotherSchemaVersion_IsAFindingAndNotACrash(t *testing.T) 
 // table in the middle of somebody's prose.
 func TestRun_APageWithoutItsMarkers_IsReportedRatherThanRewritten(t *testing.T) {
 	root := newRoot(t)
-	if err := os.WriteFile(filepath.Join(root, readmeRelPath), []byte("# No markers here\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, pageRelPath), []byte("# No markers here\n"), 0o600); err != nil {
 		t.Fatalf("write the page: %v", err)
 	}
 	status, _, stderr := drive(t, root, options{render: true})
@@ -1099,4 +1097,137 @@ func TestRun_ARecordThatCannotBeWritten_IsReportedRatherThanClaimedAsWritten(t *
 	if strings.Contains(stdout, "wrote "+recordRelPath) {
 		t.Errorf("the fold said %q, claiming a write that did not happen", stdout)
 	}
+}
+
+// stubWriteFile replaces the page writes for the test with fail, restoring
+// os.WriteFile afterwards.
+func stubWriteFile(t *testing.T, fail func(name string, data []byte) error) {
+	t.Helper()
+	original := writeFile
+	writeFile = func(name string, data []byte, perm os.FileMode) error {
+		if err := fail(name, data); err != nil {
+			return err
+		}
+		return original(name, data, perm)
+	}
+	t.Cleanup(func() { writeFile = original })
+}
+
+// TestRun_APageThatCannotBeWritten_IsReported covers the write that follows a
+// read of the same page: a render that drew the blocks and could not put them
+// back says which file, rather than reporting a page it did not change.
+func TestRun_APageThatCannotBeWritten_IsReported(t *testing.T) {
+	root := newRoot(t)
+	stubWriteFile(t, func(string, []byte) error { return errors.New("disk full") })
+
+	status, stdout, stderr := drive(t, root, options{render: true})
+	if status != exitUsage {
+		t.Fatalf("the render exited %d, want the failed write reported", status)
+	}
+	if want := "write " + pageRelPath + ": disk full"; !strings.Contains(stderr, want) {
+		t.Errorf("the message %q does not say %q", stderr, want)
+	}
+	if strings.Contains(stdout, "redrew") {
+		t.Errorf("the render said %q, claiming a page it did not write", stdout)
+	}
+}
+
+// TestRun_ARehearsalItCannotMark_IsReported holds the refusal that keeps an
+// unmarked rehearsal from being read as a measurement: the page was drawn,
+// the banner could not be put on it, and the run fails rather than leaving a
+// page with real-looking figures and no warning.
+func TestRun_ARehearsalItCannotMark_IsReported(t *testing.T) {
+	root := newRoot(t)
+	stubWriteFile(t, func(_ string, data []byte) error {
+		if bytes.HasPrefix(data, []byte(dryRunBanner)) {
+			return errors.New("disk full")
+		}
+		return nil
+	})
+
+	status, _, stderr := drive(t, root, options{shards: writeShard(t, fakeRunShard()), render: true, dryRun: true})
+	if status != exitUsage {
+		t.Fatalf("the dry run exited %d, want the unmarked rehearsal reported", status)
+	}
+	if want := "mark the rehearsed " + pageRelPath + ": disk full"; !strings.Contains(stderr, want) {
+		t.Errorf("the message %q does not say %q", stderr, want)
+	}
+}
+
+// TestWriteRecord_ARecordThatCannotBeRendered_IsReported covers the encoding
+// failure, which no document this command builds can produce: it is reached
+// through the seam, and what it pins is that the record is not written.
+func TestWriteRecord_ARecordThatCannotBeRendered_IsReported(t *testing.T) {
+	original := marshalIndent
+	marshalIndent = func(any, string, string) ([]byte, error) { return nil, errors.New("unsupported value") }
+	t.Cleanup(func() { marshalIndent = original })
+	root := newRoot(t)
+
+	err := writeRecord(root, document{})
+	if err == nil || err.Error() != "render the record: unsupported value" {
+		t.Fatalf("writeRecord() error = %v, want the encoding failure", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(statErr) {
+		t.Errorf("a record that could not be rendered was written; stat said %v", statErr)
+	}
+}
+
+// TestLogLead_IsThePrefixAndItsSpace holds the two spellings of the command's
+// name together. Each is written out in full, so nothing but this keeps a line
+// built on one from naming the command differently from a line built on the
+// other.
+func TestLogLead_IsThePrefixAndItsSpace(t *testing.T) {
+	if logLead != logPrefix+" " {
+		t.Errorf("logLead = %q, want the prefix %q and one space", logLead, logPrefix)
+	}
+}
+
+// TestMain_ExitsWithTheCodeRunDecided verifies main reads the process's own
+// command line and hands the process the code run returns, once: two modes
+// that cannot be combined are refused before anything is read.
+func TestMain_ExitsWithTheCodeRunDecided(t *testing.T) {
+	codes := driveMain(t, nil, "-check", "-render")
+
+	if len(codes) != 1 || codes[0] != exitUsage {
+		t.Errorf("exit codes = %v, want exactly [%d]", codes, exitUsage)
+	}
+}
+
+// TestMain_OutsideACheckout_RefusesBeforeRunning verifies a working directory
+// with no repository above it is refused with the usage code and that nothing
+// runs after the refusal: run would otherwise be handed an empty root and
+// answer with a code of its own as well.
+func TestMain_OutsideACheckout_RefusesBeforeRunning(t *testing.T) {
+	codes := driveMain(t, errors.New("no go.mod above this directory"), "-check")
+
+	if len(codes) != 1 || codes[0] != exitUsage {
+		t.Errorf("exit codes = %v, want exactly [%d]", codes, exitUsage)
+	}
+}
+
+// driveMain runs main with args as its command line, a fresh flag set, stderr
+// sent to a temporary file, and, when rootErr is not nil, a repository lookup
+// that fails with it. It returns every code main handed the process.
+func driveMain(t *testing.T, rootErr error, args ...string) []int {
+	t.Helper()
+	previousExit, previousRoot, previousArgs, previousFlags, previousStderr := exitProcess, repositoryRoot, os.Args, flag.CommandLine, os.Stderr
+	t.Cleanup(func() {
+		exitProcess, repositoryRoot, os.Args, flag.CommandLine, os.Stderr = previousExit, previousRoot, previousArgs, previousFlags, previousStderr
+	})
+	var codes []int
+	exitProcess = func(code int) { codes = append(codes, code) }
+	if rootErr != nil {
+		repositoryRoot = func(string) (string, error) { return "", rootErr }
+	}
+	os.Args = append([]string{"gen_model_results"}, args...)
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	sink, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatalf("create the stderr sink: %v", err)
+	}
+	t.Cleanup(func() { _ = sink.Close() })
+	os.Stderr = sink
+
+	main()
+	return codes
 }

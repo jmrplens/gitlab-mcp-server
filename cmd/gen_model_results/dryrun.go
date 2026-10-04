@@ -13,7 +13,7 @@
 // record cannot be reached from. Two properties make it safe to look at and
 // impossible to mistake:
 //
-//   - It never writes into the repository. The record and both pages are
+//   - It never writes into the repository. The record and the page are
 //     assembled under dist/, which Git ignores, and the real ones are read for
 //     their markers and never modified.
 //   - Every page it writes opens with a banner saying the figures are a
@@ -41,11 +41,7 @@ const dryRunRelDir = "dist/modeleval/dry-run"
 // blocks are the thing being rehearsed: a banner inside one would be a
 // difference between what a dry run draws and what a real fold draws, which is
 // the one thing a rehearsal must not have.
-const dryRunBanner = "> **This is a rehearsal, not a measurement.**\n" +
-	"> These pages were drawn by `gen_model_results -dry-run` from a run that\n" +
-	"> answered from the corpus's own answer key rather than from a model. The\n" +
-	"> figures say that the recording, the scoring and the rendering work. They\n" +
-	"> say nothing whatever about any model, and nothing here is published.\n\n"
+const dryRunBanner = "> **This is a rehearsal, not a measurement.**\n> These pages were drawn by `gen_model_results -dry-run` from a run that\n> answered from the corpus's own answer key rather than from a model. The\n> figures say that the recording, the scoring and the rendering work. They\n> say nothing whatever about any model, and nothing here is published.\n\n"
 
 // prepareDryRun builds the throwaway tree a rehearsal is written into and
 // returns its root.
@@ -70,7 +66,7 @@ func prepareDryRun(root string, stdout io.Writer) (string, error) {
 			return "", fmt.Errorf("make the dry-run directory: %w", mkErr)
 		}
 		//#nosec G703 -- path is one of this command's own page constants, joined under the repository's own dist directory
-		if writeErr := os.WriteFile(full, body, 0o600); writeErr != nil {
+		if writeErr := writeFile(full, body, 0o600); writeErr != nil {
 			return "", fmt.Errorf("copy %s into the dry run: %w", path, writeErr)
 		}
 	}
@@ -88,7 +84,7 @@ func bannerDryRun(scratch string, stdout io.Writer) error {
 			return fmt.Errorf("read the rehearsed %s: %w", path, err)
 		}
 		//#nosec G703 -- the same page constants under the same dist directory, re-read from where this command just wrote them
-		if writeErr := os.WriteFile(full, append([]byte(dryRunBanner), body...), 0o600); writeErr != nil {
+		if writeErr := writeFile(full, append([]byte(dryRunBanner), body...), 0o600); writeErr != nil {
 			return fmt.Errorf("mark the rehearsed %s: %w", path, writeErr)
 		}
 		fmt.Fprintf(stdout, logLead+"rehearsed %s\n", filepath.Join(dryRunRelDir, path))

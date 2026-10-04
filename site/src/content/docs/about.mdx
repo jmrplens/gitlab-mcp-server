@@ -51,10 +51,24 @@ The major version tracks the major of [`gitlab-org/api/client-go`](https://gitla
 
 Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a container image on GHCR and Docker Hub, and a Claude Desktop extension. Release notes and downloads are on the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases); binary signatures can be verified with Cosign as described under [release integrity](/gitlab-mcp-server/operations/security/).
 
+## Upstream contributions
+
+The server is built on GitLab's REST and GraphQL APIs, on [`client-go`](https://gitlab.com/gitlab-org/api/client-go) and on the [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). When building it turns up a gap in one of them, the fix goes upstream rather than staying a workaround here, so every other user of those projects gets it too:
+
+- **client-go**: response fields GitLab sends that the SDK's structs did not model, found by holding each struct against what a running GitLab actually sends, and fixes such as a panic decoding an issue with no id ([merge requests](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests?scope=all&state=all&author_username=jmrp)).
+- **GitLab**: API documentation and response annotations corrected where they disagreed with what the API sends, a fix so a revoked GPG identity no longer verifies commits, and proposed additions such as cancelling an automatic merge ([merge requests](https://gitlab.com/gitlab-org/gitlab/-/merge_requests?scope=all&state=all&author_username=jmrp)).
+- **MCP Go SDK**: protocol conformance fixes around cancellation, protocol version negotiation and the initialize handshake ([pull requests](https://github.com/modelcontextprotocol/go-sdk/pulls?q=is%3Apr+author%3Ajmrplens)).
+
+Every gap is tracked in the [upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md): the upstream issue or merge request, whether it has merged and in which release, and the workaround this server carries until it ships.
+
 ## Reporting problems and contributing
 
-Bug reports and feature requests belong in [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Include the output of `gitlab-mcp-server --version`, the transport (stdio or HTTP), the `GITLAB_MCP_TOOL_SURFACE` in use, and the GitLab edition and version you connect to — those four facts resolve most reports immediately.
+Bug reports and feature requests belong in [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Include the output of `gitlab-mcp-server --version`, the transport (stdio or HTTP), the `GITLAB_MCP_TOOL_SURFACE` in use, and the GitLab edition and version you connect to: those four facts resolve most reports immediately.
 
 **Security vulnerabilities are different: do not open a public issue.** Use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new), which keeps the report private until a fix ships. The full policy is in [SECURITY.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md).
+
+Contributions are welcome as pull requests on GitHub. [CONTRIBUTING.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/CONTRIBUTING.md) covers the development setup, branch naming, commit conventions and the review process, and the [Code of Conduct](https://github.com/jmrplens/gitlab-mcp-server/blob/main/CODE_OF_CONDUCT.md) ([Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)) applies to every space the project uses. GitHub is the canonical repository; the read-only [mirror on GitLab.com](https://gitlab.com/jmrp/gitlab-mcp-server) exists for discoverability and takes no contributions.
+
+To build the server from source, see [Build from source](/gitlab-mcp-server/install/binary/#build-from-source).
 
 <FAQ />
