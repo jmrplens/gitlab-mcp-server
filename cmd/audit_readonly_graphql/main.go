@@ -1,15 +1,27 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 )
 
 // auditPatterns are the packages the audit loads. Every catalog handler and
 // every GraphQL document in this project lives under them.
 var auditPatterns = []string{"./internal/..."}
+
+// catalogActions is every action this repository publishes: the catalog at
+// Ultimate for a self-managed instance and for GitLab.com, with the standalone
+// surface actions. A tier below Ultimate only removes actions, so auditing
+// Ultimate audits all of them, and the GitLab.com build is what holds Orbit's
+// six. Building it registers routes and schemas from the specs compiled into
+// this binary and never calls GitLab, so the audit needs no instance, no token
+// and no network.
+var catalogActions actionSource = actionrequests.Catalog
 
 // actionSource supplies the catalog actions to audit. It is a parameter so the
 // exit paths and the classification are reachable from a test without the
@@ -28,17 +40,35 @@ type auditRun struct {
 	actions actionSource
 }
 
-func main() {
-	dir := flag.String("dir", ".", "repository root to audit")
-	verbose := flag.Bool("v", false, "report what was checked, not only what failed")
-	flag.Parse()
+// exitProcess ends the process with the status main decided. A seam, so a
+// test can run main itself and read the status it would have exited with.
+var exitProcess = os.Exit
 
-	os.Exit(run(auditRun{
+func main() {
+	exitProcess(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// runMain reads the command line and runs the audit it describes, returning
+// the exit status: 0 for -h, 2 for a command line it cannot read, as the flag
+// package's own exit would, and otherwise what [run] decides.
+func runMain(args []string, out, errOut io.Writer) int {
+	flags := flag.NewFlagSet("audit_readonly_graphql", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	dir := flags.String("dir", ".", "repository root to audit")
+	verbose := flags.Bool("v", false, "report what was checked, not only what failed")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	return run(auditRun{
 		dir:      *dir,
 		verbose:  *verbose,
 		patterns: auditPatterns,
 		actions:  catalogActions,
-	}, os.Stdout, os.Stderr))
+	}, out, errOut)
 }
 
 // run is main with its streams, its catalog, and its exit status handed to it,
@@ -55,7 +85,7 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	prog, err := loadProgram(cfg.dir, cfg.patterns, cfg.overlay)
+	prog, err := actionrequests.Load(cfg.dir, cfg.patterns, cfg.overlay)
 	if err != nil {
 		fmt.Fprintln(errOut, "audit_readonly_graphql:", err)
 		return 1

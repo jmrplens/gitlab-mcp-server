@@ -63,9 +63,10 @@ type IDs struct {
 // gitlab_execute_action takes those IDs, so a cross-link naming one resolves
 // and must not be called dead.
 func Build() (*IDs, error) {
-	selfManaged, cleanup := mcpsurface.NewStubClient()
-	defer cleanup()
-
+	catalogs, err := Catalogs()
+	if err != nil {
+		return nil, err
+	}
 	built := &IDs{
 		ids:     map[string]struct{}{},
 		aliases: map[string]string{},
@@ -73,12 +74,8 @@ func Build() (*IDs, error) {
 		members: map[string]struct{}{},
 		tools:   map[string]string{},
 	}
-	for _, client := range []*gitlabclient.Client{selfManaged, mcpsurface.NewGitLabComClient()} {
-		catalog, err := catalogFor(client)
-		if err != nil {
-			return nil, err
-		}
-		built.addCatalog(catalog)
+	for _, catalog := range catalogs {
+		built.addCatalog(catalog.Actions())
 	}
 	for _, alias := range actioncompat.ActionAliases() {
 		built.addAlias(alias.Alias, alias.Canonical)
@@ -127,27 +124,58 @@ func NewWithTools(ids []string, aliases, toolNames map[string]string) *IDs {
 	return built
 }
 
+// The two builders a catalog is made with, variables so a test can make either
+// one fail: a catalog that cannot be built has to end the run that asked for
+// it with the builder's own reason, since an answer read from nothing would be
+// an answer about nothing.
+var (
+	buildActionCatalog   = tools.BuildActionCatalog
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog
+)
+
+// Catalogs builds the catalog this repository publishes, at Ultimate, for a
+// self-managed instance and for GitLab.com, in that order, standalone dynamic
+// actions included in both.
+//
+// It is the one place the two builds are made, for every reader that has to
+// answer for the whole surface: [Build] folds their IDs, and the action
+// request derivation reads every action of both, since Orbit's group is
+// contributed only to the GitLab.com build and the standalone actions only by
+// the step that adds them.
+func Catalogs() ([]*actioncatalog.Catalog, error) {
+	selfManaged, cleanup := mcpsurface.NewStubClient()
+	defer cleanup()
+
+	clients := []*gitlabclient.Client{selfManaged, mcpsurface.NewGitLabComClient()}
+	catalogs := make([]*actioncatalog.Catalog, 0, len(clients))
+	for _, client := range clients {
+		catalog, err := catalogFor(client)
+		if err != nil {
+			return nil, err
+		}
+		catalogs = append(catalogs, catalog)
+	}
+	return catalogs, nil
+}
+
 // catalogFor builds the Ultimate catalog for one client, standalone dynamic
 // actions included.
 func catalogFor(client *gitlabclient.Client) (*actioncatalog.Catalog, error) {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
 	if err != nil {
 		return nil, fmt.Errorf("build action catalog: %w", err)
 	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	catalog, err = addStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", err)
 	}
 	return catalog, nil
 }
 
-// addCatalog records one catalog's IDs, the aliases each action carries and
-// the compatibility aliases its spec declares.
-func (o *IDs) addCatalog(catalog *actioncatalog.Catalog) {
-	if catalog == nil {
-		return
-	}
-	for _, action := range catalog.Actions() {
+// addCatalog records the IDs of one catalog's actions, the aliases each action
+// carries and the compatibility aliases its spec declares.
+func (o *IDs) addCatalog(actions []actioncatalog.Action) {
+	for _, action := range actions {
 		id := o.addID(string(action.ID))
 		if id == "" {
 			continue
@@ -296,8 +324,10 @@ func (o *IDs) Candidates(prose string) []string {
 	var candidates []string
 	seen := map[string]struct{}{}
 	for _, token := range DottedToken.FindAllString(prose, -1) {
-		domain, member, found := strings.Cut(token, ".")
-		if !found || (!o.HasDomain(domain) && !o.HasMember(member)) {
+		// DottedToken matches only a token holding a dot, so the cut always
+		// finds one.
+		domain, member, _ := strings.Cut(token, ".")
+		if !o.HasDomain(domain) && !o.HasMember(member) {
 			continue
 		}
 		if _, repeated := seen[token]; repeated {

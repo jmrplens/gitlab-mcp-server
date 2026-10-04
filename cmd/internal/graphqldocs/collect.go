@@ -42,11 +42,13 @@ type Document struct {
 	// document written inline where it is used.
 	//
 	// It is here for a caller that reasons about the source through the type
-	// checker rather than about the text: cmd/audit_readonly_graphql resolves a
-	// handler's call graph and asks what each object it names holds, so the
+	// checker rather than about the text: cmd/internal/actionrequests resolves
+	// a handler's call graph, for cmd/audit_readonly_graphql and for the
+	// request derivation, and asks what each object it names holds, so the
 	// object is the only thing that joins this inventory to that walk. A
 	// document with none cannot be attributed to the handler that sends it,
-	// which is a fact that audit reports rather than one it can work around.
+	// which is a fact the readonly audit reports rather than one it can work
+	// around.
 	Object types.Object
 	// Position is where a reader will find it.
 	Position token.Position
@@ -104,11 +106,12 @@ func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Docume
 // loaded, which is the half of the inventory that lives in Go source.
 //
 // It is separate from [Collect] for the caller that has done the load itself:
-// cmd/audit_readonly_graphql type-checks the same tree to build a call graph,
-// and loading it twice would double the seconds a gate costs for an inventory
-// it already holds in memory. The positions come from the packages' own file
-// set, so a caller that mixes these documents with its own walk of the same
-// packages compares positions that mean the same thing.
+// cmd/internal/actionrequests type-checks the same tree to build a call graph,
+// for cmd/audit_readonly_graphql and for the request derivation, and loading
+// it twice would double the seconds a gate costs for an inventory it already
+// holds in memory. The positions come from the packages' own file set, so a
+// caller that mixes these documents with its own walk of the same packages
+// compares positions that mean the same thing.
 func FromPackages(loaded []*packages.Package) []Document {
 	if len(loaded) == 0 {
 		return nil

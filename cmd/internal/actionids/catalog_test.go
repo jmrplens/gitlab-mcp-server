@@ -1,12 +1,18 @@
 package actionids
 
 import (
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // buildTestIDs builds the real catalog once for the assertions below.
@@ -129,10 +135,11 @@ func TestBuild_EachClientCatalog_IsFoldedIntoTheUnion(t *testing.T) {
 	}
 }
 
-// TestBuild_EveryCatalogActionID_IsNonEmpty holds the property that makes
-// addCatalog's empty-ID guard unreachable: the catalog composes an ID from a
-// domain and a required action name, so nothing it hands over normalizes away
-// and no alias is ever recorded against nothing.
+// TestBuild_EveryCatalogActionID_IsNonEmpty holds the property that keeps
+// addCatalog's empty-ID guard out of a real build: the catalog composes an ID
+// from a domain and a required action name, so nothing it hands over
+// normalizes away and no alias is ever recorded against nothing. The guard is
+// held on a hand-built action list instead.
 func TestBuild_EveryCatalogActionID_IsNonEmpty(t *testing.T) {
 	selfManaged, cleanup := mcpsurface.NewStubClient()
 	defer cleanup()
@@ -347,15 +354,101 @@ func TestIDs_AddAlias_TargetIsNormalized(t *testing.T) {
 	}
 }
 
-// TestIDs_AddCatalog_NilCatalog_IsNoBuild holds that a build that produced
+// TestIDs_AddCatalog_NoActions_IsNoBuild holds that a build that produced
 // nothing contributes nothing rather than panicking, since the union takes two
 // builds and either may be the one that failed to carry a group.
-func TestIDs_AddCatalog_NilCatalog_IsNoBuild(t *testing.T) {
+func TestIDs_AddCatalog_NoActions_IsNoBuild(t *testing.T) {
 	ids := New([]string{"demo.get"}, nil)
 	ids.addCatalog(nil)
 
 	if ids.Count() != 1 {
 		t.Errorf("Count = %d, want the one ID the set was built with", ids.Count())
+	}
+}
+
+// TestIDs_AddCatalog_AnActionWithNoID_RecordsNothingForIt holds the guard the
+// real catalog never reaches (TestBuild_EveryCatalogActionID_IsNonEmpty says
+// why): an action whose ID normalizes to nothing records no ID, no alias and
+// no tool name against nothing, while the action beside it is recorded whole.
+func TestIDs_AddCatalog_AnActionWithNoID_RecordsNothingForIt(t *testing.T) {
+	ids := New(nil, nil)
+	ids.addCatalog([]actioncatalog.Action{
+		{ID: "  ", Aliases: []string{"demo.lost"}, IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_lost"}},
+		{ID: "demo.get", Aliases: []string{"demo.fetch"}, IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_demo_get"}},
+	})
+	ids.finish()
+
+	if ids.Count() != 1 || !ids.IsID("demo.get") {
+		t.Errorf("Count = %d, want only demo.get", ids.Count())
+	}
+	if _, isAlias := ids.Alias("demo.lost"); isAlias {
+		t.Error("an alias of the action with no ID was recorded")
+	}
+	if canonical, isAlias := ids.Alias("demo.fetch"); !isAlias || canonical != "demo.get" {
+		t.Errorf("Alias(demo.fetch) = %q, %v; want demo.get", canonical, isAlias)
+	}
+	if _, known := ids.ToolID("gitlab_lost"); known {
+		t.Error("the tool name of the action with no ID was recorded")
+	}
+}
+
+// TestCatalogs_ABuildThatFails_EndsTheRunWithItsReason holds each step of a
+// build to the run that asked for it: a catalog that cannot be built, or whose
+// standalone actions cannot be added, ends Catalogs and Build with that
+// step's own reason rather than with the other build alone.
+func TestCatalogs_ABuildThatFails_EndsTheRunWithItsReason(t *testing.T) {
+	failure := errors.New("fixture builder failure")
+	previousBuild, previousAdd := buildActionCatalog, addStandaloneCatalog
+	t.Cleanup(func() { buildActionCatalog, addStandaloneCatalog = previousBuild, previousAdd })
+
+	cases := []struct {
+		name string
+		fail func()
+		want string
+	}{
+		{name: "the catalog", fail: func() {
+			buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+				return nil, failure
+			}
+		}, want: "build action catalog: "},
+		{name: "the standalone actions", fail: func() {
+			addStandaloneCatalog = func(*actioncatalog.Catalog, *gitlabclient.Client, dynamictools.StandaloneOptions) (*actioncatalog.Catalog, error) {
+				return nil, failure
+			}
+		}, want: "add standalone dynamic actions: "},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			buildActionCatalog, addStandaloneCatalog = previousBuild, previousAdd
+			testCase.fail()
+
+			catalogs, err := Catalogs()
+			if !errors.Is(err, failure) || !strings.HasPrefix(err.Error(), testCase.want) || catalogs != nil {
+				t.Errorf("Catalogs() = %d catalog(s), %v; want %q wrapping the failure", len(catalogs), err, testCase.want)
+			}
+			if ids, buildErr := Build(); !errors.Is(buildErr, failure) || ids != nil {
+				t.Errorf("Build() = %v, %v; want the failure", ids, buildErr)
+			}
+		})
+	}
+}
+
+// TestCatalogs_BothBuilds_InOrder holds the order Catalogs returns the builds
+// in, self-managed first, since a reader folding them takes an action both
+// hold from the first: only the GitLab.com build holds Orbit's group.
+func TestCatalogs_BothBuilds_InOrder(t *testing.T) {
+	catalogs, err := Catalogs()
+	if err != nil {
+		t.Fatalf("Catalogs: %v", err)
+	}
+	if len(catalogs) != 2 {
+		t.Fatalf("Catalogs() = %d build(s), want two", len(catalogs))
+	}
+	if _, ok := catalogs[0].Action("orbit.status"); ok {
+		t.Error("the first build holds orbit.status, so it is not the self-managed one")
+	}
+	if _, ok := catalogs[1].Action("orbit.status"); !ok {
+		t.Error("the second build does not hold orbit.status, so it is not the GitLab.com one")
 	}
 }
 

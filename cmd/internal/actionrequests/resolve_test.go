@@ -1,4 +1,4 @@
-package main
+package actionrequests
 
 import (
 	"go/ast"
@@ -11,322 +11,29 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests/actionfixture"
 )
-
-// shapesFixture declares one action per spelling an ActionSpec is written in
-// across this repository, each routed to its own handler, so the resolver is
-// held to following the forwarding rather than to recognizing one shape.
-//
-// The closure action exists because a route may be built from a function
-// literal, which has no declared function to use as a call-graph root; its body
-// reaches the mutation, so a resolver that dropped literals would report
-// nothing for it.
-const shapesFixture = `package shapes
-
-import (
-	"context"
-	"strings"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
-
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
-
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_readonly_graphql/fixture/other"
-)
-
-// constantName is an action name written as a constant rather than a literal.
-const constantName = "constant"
-
-const readQuery = @@
-query {
-  currentUser { id }
-}
-@@
-
-const writeMutation = @@
-mutation($id: ID!) {
-  thingUpdate(input: {id: $id}) { errors }
-}
-@@
-
-// Input is the shared input for every fixture handler.
-type Input struct {
-	ID string ` + "`json:\"id\"`" + `
-}
-
-// Output is the shared output for every fixture handler.
-type Output struct {
-	OK bool ` + "`json:\"ok\"`" + `
-}
-
-func Direct(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func ViaHelper(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Decorated(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-// Wrapped is the handler behind a route whose 404 WrapNotFound answers.
-func Wrapped(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Chained(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Literal(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Variable(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Constant(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-func Appended(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-// Quiet touches no GraphQL at all, which is the ordinary case: most actions
-// are REST and this audit has nothing to say about them.
-func Quiet(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	_ = ctx
-	_ = client
-	return Output{OK: input.ID != ""}, nil
-}
-
-// closureBody is what the function-literal route runs, and it writes.
-func closureBody(ctx context.Context) error {
-	_ = ctx
-	_ = writeMutation
-	return nil
-}
-
-// closureCleanup and closureAudit are the other functions the literal route
-// names, so the roots a literal stands in for are three, declared in an order
-// the literal calls them in no part of, and their order has to be settled.
-func closureCleanup(ctx context.Context) error {
-	_ = ctx
-	return nil
-}
-
-func closureAudit(ctx context.Context) error {
-	_ = ctx
-	return nil
-}
-
-// ViaExecutor sends through the shared toolutil executor rather than through
-// the client-go service method. It is the shape the note domains are written
-// in, and the reason the transport check has a package half: the executor's
-// receiver is not a GraphQL type, so where it is declared is what says it puts
-// a document on the wire.
-func ViaExecutor(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	_, err := toolutil.ExecGraphQLNoteMutation[Output](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
-		Op:         "fixtureNoteUpdate",
-		PayloadKey: "updateNote",
-		Query:      writeMutation,
-		Variables:  map[string]any{"id": input.ID},
-	})
-	return Output{OK: err == nil}, err
-}
-
-func read(ctx context.Context, client *gitlabclient.Client) (Output, error) {
-	var response struct {
-		Data map[string]any ` + "`json:\"data\"`" + `
-	}
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: readQuery}, &response, gl.WithContext(ctx))
-	return Output{OK: err == nil}, err
-}
-
-// GenericHandler is a handler whose route names an explicit instantiation.
-func GenericHandler[T any](ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	return read(ctx, client)
-}
-
-// VoidHandler routes through the void constructor, whose output type is
-// synthesized rather than declared.
-func VoidHandler(ctx context.Context, client *gitlabclient.Client, input Input) error {
-	_, err := read(ctx, client)
-	return err
-}
-
-// routeLiteralHandler is wired through an ActionRoute struct literal.
-func routeLiteralHandler(ctx context.Context, params map[string]any) (any, error) {
-	_ = ctx
-	_ = params
-	return nil, nil
-}
-
-// namedByFunc supplies an action name from a function rather than a literal.
-func namedByFunc() string {
-	return "named_by_func"
-}
-
-// ActionSpecs declares one action per construction shape.
-func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
-	specs := []toolutil.ActionSpec{
-		toolutil.NewReadActionSpec("direct", toolutil.RouteAction(client, Direct), toolutil.ActionSpecOptions{}),
-		helperSpec("helper", toolutil.RouteAction(client, ViaHelper)),
-		toolutil.NewReadActionSpec("decorated", toolutil.RouteAction(client, Decorated).WithTags("fixture"), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("wrapped", toolutil.RouteAction(client, Wrapped).WrapNotFound(func(map[string]any) any { return nil }), toolutil.ActionSpecOptions{}),
-		helperSpec("chained", toolutil.RouteAction(client, Chained)).WithEmbeddedResource("gitlab://project/{id}"),
-		toolutil.ActionSpec{Name: "literal", Route: toolutil.RouteAction(client, Literal)},
-		variableSpec(client),
-		toolutil.NewReadActionSpec(constantName, routeFor(client), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("closure", toolutil.Route(func(ctx context.Context, params map[string]any) (any, error) {
-			_ = params
-			if err := closureAudit(ctx); err != nil {
-				return nil, err
-			}
-			if err := closureBody(ctx); err != nil {
-				return nil, err
-			}
-			return nil, closureCleanup(ctx)
-		}), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("quiet", toolutil.RouteAction(client, Quiet), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("generic", toolutil.RouteAction[Input, Output](client, Direct), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("generic_void", toolutil.RouteVoidAction[Input](client, VoidHandler), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("instantiated", toolutil.RouteAction(client, GenericHandler[string]), toolutil.ActionSpecOptions{}),
-		toolutil.ActionSpec{Name: "route_literal", Route: toolutil.ActionRoute{Handler: routeLiteralHandler}},
-		handlerSpec("passed_handler", client, ViaHelper),
-		toolutil.NewReadActionSpec(strings.TrimSpace("  trimmed  "), toolutil.RouteAction(client, Direct), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec(namedByFunc(), toolutil.RouteAction(client, Direct), toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("shared_route", other.SharedRoute, toolutil.ActionSpecOptions{}),
-		toolutil.NewReadActionSpec("cross_package", toolutil.RouteAction(client, other.Handle), toolutil.ActionSpecOptions{}),
-	}
-	return append(specs, toolutil.NewReadActionSpec("appended", toolutil.RouteAction(client, Appended), toolutil.ActionSpecOptions{}))
-}
-
-func helperSpec(name string, route toolutil.ActionRoute) toolutil.ActionSpec {
-	options := toolutil.ActionSpecOptions{Usage: "fixture"}
-	return toolutil.NewReadActionSpec(name, route, options)
-}
-
-// handlerSpec takes the handler itself rather than a built route, so the
-// resolver has to follow a function value through a parameter.
-func handlerSpec(name string, client *gitlabclient.Client, handler func(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error)) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, toolutil.RouteAction(client, handler), toolutil.ActionSpecOptions{})
-}
-
-func variableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	var route = toolutil.RouteAction(client, Variable)
-	spec := toolutil.NewReadActionSpec("variable", route, toolutil.ActionSpecOptions{})
-	return spec
-}
-
-func routeFor(client *gitlabclient.Client) toolutil.ActionRoute {
-	return toolutil.RouteAction(client, Constant)
-}
-`
-
-// otherFixture holds the pieces a spec can reach across a package boundary: a
-// handler named through a selector, and a route held in a package-level
-// variable, which the resolver deliberately does not follow.
-//
-// It also declares an action called "quiet", which is the name the shapes
-// fixture gives its REST-only action, routed here to a handler that sends a
-// mutation. Two packages declaring one action name is what makes the owning
-// package's part in resolution observable: the catalog says which of them
-// declares the action it is asking about, and taking the other one would report
-// a mutation against an action whose handler touches no GraphQL at all.
-const otherFixture = `package other
-
-import (
-	"context"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
-
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
-)
-
-const quietMutation = @@
-mutation($id: ID!) {
-	otherQuietUpdate(input: {id: $id}) { errors }
-}
-@@
-
-// Input is the fixture handler input.
-type Input struct {
-	ID string ` + "`json:\"id\"`" + `
-}
-
-// Output is the fixture handler output.
-type Output struct {
-	OK bool ` + "`json:\"ok\"`" + `
-}
-
-// SharedRoute is a route built once at package level.
-var SharedRoute = toolutil.Route(shared)
-
-func shared(ctx context.Context, params map[string]any) (any, error) {
-	_ = ctx
-	_ = params
-	return nil, nil
-}
-
-// Handle is a handler another package routes to by selector.
-func Handle(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	_ = ctx
-	_ = client
-	return Output{OK: input.ID != ""}, nil
-}
-
-// Quiet shares its action name with the REST-only action of the shapes
-// fixture, and writes.
-func Quiet(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
-	var response struct {
-		Data map[string]any ` + "`json:\"data\"`" + `
-	}
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     quietMutation,
-		Variables: map[string]any{"id": input.ID},
-	}, &response, gl.WithContext(ctx))
-	return Output{OK: err == nil}, err
-}
-
-// ActionSpecs declares this package's own "quiet".
-func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
-	return []toolutil.ActionSpec{
-		toolutil.NewReadActionSpec("quiet", toolutil.RouteAction(client, Quiet), toolutil.ActionSpecOptions{}),
-	}
-}
-`
 
 // mainSources is the fixture set every resolution and detection test loads.
 func mainSources() map[string]string {
-	return map[string]string{
-		"vuln":   vulnFixture,
-		"shapes": shapesFixture,
-		"vars":   varFixture,
-		"other":  otherFixture,
-	}
+	return actionfixture.Main()
 }
 
 // handlerNames returns the handlers resolved for one action name in one
 // package, sorted, with a function literal reported as "closure".
-func handlerNames(sites map[string][]site, pkgName, actionName string) []string {
+func handlerNames(sites map[string][]Site, pkgName, actionName string) []string {
 	var names []string
 	for _, resolved := range sites[actionName] {
-		if resolved.pkgName != pkgName {
+		if resolved.Package != pkgName {
 			continue
 		}
-		for _, handler := range resolved.handlers {
-			if handler.fn == nil {
+		for _, handler := range resolved.Handlers {
+			if handler.Func == nil {
 				names = append(names, "closure")
 				continue
 			}
-			names = append(names, handler.fn.Name())
+			names = append(names, handler.Func.Name())
 		}
 	}
 	sort.Strings(names)
@@ -543,7 +250,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // that resolves to nothing everywhere would not tell the bound from its
 // absence.
 func synthResolver() *resolver {
-	return &resolver{prog: &program{funcs: map[*types.Func]*function{}}}
+	return &resolver{prog: &Program{funcs: map[*types.Func]*Function{}}}
 }
 
 // synthInfo is type information a test fills in itself.
@@ -623,7 +330,7 @@ func synthBound(info *types.Info, name string, typ types.Type, held ast.Expr) (*
 // synthIndexed builds a resolver whose program holds one indexed function, so
 // the resolvers that enter a callee's body have one to enter.
 func synthIndexed(info *types.Info, callee *types.Func, body *ast.BlockStmt) *resolver {
-	return &resolver{prog: &program{funcs: map[*types.Func]*function{
+	return &resolver{prog: &Program{funcs: map[*types.Func]*Function{
 		callee: {pkg: synthPkg(info), decl: &ast.FuncDecl{Body: body}},
 	}}}
 }
@@ -1024,7 +731,7 @@ func TestResolveElements_ElementThatIsNoSpec_IsSkipped(t *testing.T) {
 	info := synthInfo()
 	element := &ast.Ident{Name: "name"}
 	info.Types[element] = types.TypeAndValue{Type: types.Typ[types.String]}
-	sites := map[string][]site{}
+	sites := map[string][]Site{}
 
 	res.resolveElements(&packages.Package{Name: "synth", TypesInfo: info}, nil, []ast.Expr{element}, sites)
 
@@ -1156,7 +863,7 @@ func TestReturnsOf_CalleeWhoseResultsDoNotCarryTheType_YieldsNothing(t *testing.
 	callee := types.NewFunc(token.NoPos, nil, "name", types.NewSignatureType(nil, nil, nil, nil,
 		types.NewTuple(types.NewVar(token.NoPos, nil, "", types.Typ[types.String])), false))
 	body := &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{&ast.Ident{Name: "value"}}}}}
-	res := &resolver{prog: &program{funcs: map[*types.Func]*function{
+	res := &resolver{prog: &Program{funcs: map[*types.Func]*Function{
 		callee: {decl: &ast.FuncDecl{Body: body}},
 	}}}
 
@@ -1182,7 +889,7 @@ func TestReturnsOf_ReturnInsideAFunctionLiteral_IsNotTheCalleesReturn(t *testing
 		}}}},
 		&ast.ReturnStmt{Results: []ast.Expr{own}},
 	}}
-	res := &resolver{prog: &program{funcs: map[*types.Func]*function{
+	res := &resolver{prog: &Program{funcs: map[*types.Func]*Function{
 		callee: {decl: &ast.FuncDecl{Body: body}},
 	}}}
 
@@ -1429,8 +1136,8 @@ func TestIsSpecSliceType_SlicesOfSomethingElse_AreRefused(t *testing.T) {
 // and keeping only one of them would leave a mutation unclassified; taking the
 // second name would attribute the spec to whichever branch was resolved last.
 func TestMerge_ASecondResolution_KeepsTheFirstNameAndEveryHandler(t *testing.T) {
-	first := []handlerRef{{}}
-	second := []handlerRef{{}, {}}
+	first := []Handler{{}}
+	second := []Handler{{}, {}}
 
 	name, handlers := merge("first", first, "second", second)
 
@@ -1677,7 +1384,7 @@ func TestReturnsOf_ReturnsThatCarryNoExpression_AreSkipped(t *testing.T) {
 func TestReturnsOf_CalleeWithNoBody_YieldsNothing(t *testing.T) {
 	info := synthInfo()
 	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "nameFor", nil, []types.Type{types.Typ[types.String]})
-	res := &resolver{prog: &program{funcs: map[*types.Func]*function{callee: {decl: &ast.FuncDecl{}}}}}
+	res := &resolver{prog: &Program{funcs: map[*types.Func]*Function{callee: {decl: &ast.FuncDecl{}}}}}
 
 	if found := res.returnsOf(callee, synthCall(info, callee), synthFrame(info, nil), ""); found != nil {
 		t.Errorf("returnsOf() = %v, want nothing from a callee with no body", found)

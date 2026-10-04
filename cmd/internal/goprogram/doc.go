@@ -2,20 +2,22 @@
 // type-check this repository's own source.
 //
 // Ten packages load through it. cmd/audit_md_escaping walks the calls that
-// interpolate a GitLab-authored value into Markdown, cmd/audit_readonly_graphql
-// walks the calls a read-only action can reach, cmd/internal/graphqldocs folds
-// every raw GraphQL document to the one string GitLab would receive, and
-// cmd/audit_graphql_shapes pairs each of those documents with the struct that
-// decodes it. cmd/audit_action_ids folds the action IDs the server publishes
-// to a model, cmd/audit_catalog_first resolves the calls that aggregate each
-// package's ActionSpecs, cmd/audit_dead_consts holds every unexported constant
-// to something that reads it, cmd/audit_sdk_context holds every call into
-// client-go to the caller's context, cmd/audit_tenancy holds the tenant policy
-// register to the code that enforces it, and cmd/audit_e2e_coverage's static
-// check reads the end-to-end test packages. They ask different questions of the
-// loaded program and index it different ways, which is why only the front end
-// lives here: the load mode, the config, and the rule that a package which did
-// not type-check stops the run.
+// interpolate a GitLab-authored value into Markdown,
+// cmd/internal/actionrequests walks the calls an action can reach, for
+// cmd/audit_readonly_graphql and for the request derivation,
+// cmd/internal/graphqldocs folds every raw GraphQL document to the one string
+// GitLab would receive, and cmd/audit_graphql_shapes pairs each of those
+// documents with the struct that decodes it. cmd/audit_action_ids folds the
+// action IDs the server publishes to a model, cmd/audit_catalog_first resolves
+// the calls that aggregate each package's ActionSpecs, cmd/audit_dead_consts
+// holds every unexported constant to something that reads it,
+// cmd/audit_sdk_context holds every call into client-go to the caller's
+// context, cmd/audit_tenancy holds the tenant policy register to the code that
+// enforces it, and cmd/audit_e2e_coverage's static check reads the end-to-end
+// test packages. They ask different questions of the loaded program and index
+// it different ways, which is why only the front end lives here: the load
+// mode, the config, and the rule that a package which did not type-check stops
+// the run.
 //
 // That last rule is why this package exists rather than being a copy per
 // gate. Every gate here answers "cannot tell" for anything it cannot resolve,
