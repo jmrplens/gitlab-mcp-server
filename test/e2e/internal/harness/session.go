@@ -424,7 +424,7 @@ func (c ServerConfig) label(private int64) string {
 // telemetryVariables reaches for the package's own collector and logs when it
 // finds none, and every child runs with telemetry on regardless, since a
 // session whose server exported no spans could only ever record what its tests
-// asked for, never what ran. The coverage directory is merged in startSession
+// asked for, never what ran. The coverage directory is merged in newChild
 // instead, because resolving it creates a directory and that can fail,
 // and a run that was asked to measure and silently measured nothing is the one
 // outcome this whole seam exists to prevent: the launcher can return that
@@ -924,15 +924,6 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	ctx, cancel := context.WithTimeout(lifetime, sessionStartTimeout)
 	defer cancel()
 
-	root, err := harnessRoot()
-	if err != nil {
-		return nil, fmt.Errorf("creating the directory the server runs in: %w", err)
-	}
-	bin, err := serverBinary(inst.settings.get(binaryEnv))
-	if err != nil {
-		return nil, err
-	}
-
 	cred, err := sessionCredential(ctx, inst, token)
 	if err != nil {
 		return nil, err
@@ -947,30 +938,10 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	recorded := cfg.narrowedBy(serverCfg)
 
 	label := recorded.label(privateSessionNumber(key))
-	dir := filepath.Join(root, sanitizeNamePart(label, 60))
-	if err = os.MkdirAll(dir, 0o750); err != nil {
-		return nil, fmt.Errorf("creating the session directory %s: %w", dir, err)
-	}
-
-	settingsForChild := inst.settings
-	if token != inst.settings.get(envGitLabToken) {
-		settingsForChild = inst.settings.with(envGitLabToken, token)
-	}
-
-	// Merged here rather than in childVariables, beside telemetry, for the one
-	// reason that separates it from telemetry: resolving the directory creates
-	// it, and that can fail. A method returning a map could only log the
-	// failure the way telemetryVariables logs a missing collector, and a run
-	// asked to measure that quietly measures nothing is exactly the outcome
-	// this seam exists to prevent, so the error is returned and the session
-	// does not start. The map childVariables returns is a fresh one per call,
-	// so writing into it changes nobody else's child.
-	childVars := cfg.childVariables()
-	coverage, err := coverageVariables(inst.settings)
+	proc, childVars, err := newChild(inst, cfg, token, label)
 	if err != nil {
 		return nil, err
 	}
-	maps.Copy(childVars, coverage)
 
 	conn := &sessionConn{
 		label:       label,
@@ -978,7 +949,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		tier:        recorded.resolvedTier(cred.tier),
 		authority:   cred.authority,
 		inst:        inst,
-		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)),
+		proc:        proc,
 		notifier:    newUpdateNotifier(),
 		acks:        newUpdateNotifier(),
 		progress:    newProgressCollector(),
@@ -1003,6 +974,47 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	conn.served.actions = expectation.actions
 	conn.served.callable = expectation.callable
 	return conn, nil
+}
+
+// newChild describes, without starting it, the server process a session for
+// cfg runs on token: the binary, a directory of its own named after label
+// under the run's root, and the environment, with the variables cfg asks for
+// and the coverage directory merged in. It returns those variables beside the
+// process, since they also say whether the child's spans can arrive.
+func newChild(inst *instance, cfg ServerConfig, token, label string) (*serverProcess, map[string]string, error) {
+	root, err := harnessRoot()
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating the directory the server runs in: %w", err)
+	}
+	bin, err := serverBinary(inst.settings.get(binaryEnv))
+	if err != nil {
+		return nil, nil, err
+	}
+	dir := filepath.Join(root, sanitizeNamePart(label, 60))
+	if err = os.MkdirAll(dir, 0o750); err != nil {
+		return nil, nil, fmt.Errorf("creating the session directory %s: %w", dir, err)
+	}
+
+	settingsForChild := inst.settings
+	if token != inst.settings.get(envGitLabToken) {
+		settingsForChild = inst.settings.with(envGitLabToken, token)
+	}
+
+	// Merged here rather than in childVariables, beside telemetry, for the one
+	// reason that separates it from telemetry: resolving the directory creates
+	// it, and that can fail. A method returning a map could only log the
+	// failure the way telemetryVariables logs a missing collector, and a run
+	// asked to measure that quietly measures nothing is exactly the outcome
+	// this seam exists to prevent, so the error is returned and the session
+	// does not start. The map childVariables returns is a fresh one per call,
+	// so writing into it changes nobody else's child.
+	childVars := cfg.childVariables()
+	coverage, err := coverageVariables(inst.settings)
+	if err != nil {
+		return nil, nil, err
+	}
+	maps.Copy(childVars, coverage)
+	return newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)), childVars, nil
 }
 
 // narrowedBy returns the configuration as the binary will actually serve it:
