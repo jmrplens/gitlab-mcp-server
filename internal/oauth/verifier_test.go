@@ -671,6 +671,23 @@ func TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes(t *testing.T
 			infoStatus: http.StatusNotFound, infoBody: `{}`,
 			want: []string{"read_api"},
 		},
+		{
+			// A fine-grained token granted Personal Access Token: Read reads
+			// its own one legacy scope.
+			name:      "a fine-grained token that may describe itself",
+			patStatus: http.StatusOK, patBody: `{"scopes":["granular"]}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"granular"},
+		},
+		{
+			// One without it is refused its own description a fine-grained
+			// permission, which is the same answer read another way; token
+			// info answering api here would be a wrong one, and is not asked.
+			name:      "a fine-grained token refused its own description",
+			patStatus: http.StatusForbidden, patBody: `{"error":"insufficient_granular_scope","error_description":"Access denied"}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":["api"]}`,
+			want: []string{"granular"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -921,8 +938,8 @@ func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var refused atomic.Bool
-			if got := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", &refused); got != nil {
-				t.Errorf("fetchIntrospection(%s) = %v, want nil", tt.name, got)
+			if got, fineGrained := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", &refused); got != nil || fineGrained {
+				t.Errorf("fetchIntrospection(%s) = %v, %v; want nil, false", tt.name, got, fineGrained)
 			}
 		})
 	}
@@ -1042,49 +1059,62 @@ func TestExpiryFromDate(t *testing.T) {
 	})
 }
 
-// TestNewGitLabVerifier_ForbiddenDistinguishesScope covers the two very
+// TestNewGitLabVerifier_ForbiddenDistinguishesScope covers the three very
 // different things a GitLab 403 can mean.
 //
 // A token that is genuine but under-scoped must be reported as such, so the
 // caller is told to request the missing scope rather than to throw a working
 // credential away — and so the gate does not charge the attempt against the
-// caller's authentication-failure budget. Anything else 403 means the caller may
-// not do this at all, which keeps being treated as an invalid credential.
+// caller's authentication-failure budget. A fine-grained token refused the
+// permission to read its own user is genuine too, and is reported apart,
+// carrying GitLab's sentence, because its way out is a new token rather than a
+// wider authorization. Anything else 403 means the caller may not do this at
+// all, which keeps being treated as an invalid credential, and so does a
+// document naming the code twice, which two readers could read two ways.
 //
 // The distinction lives only in the body: GitLab does not send WWW-Authenticate
 // on a 403, so a check reading the challenge would never fire.
 func TestNewGitLabVerifier_ForbiddenDistinguishesScope(t *testing.T) {
 	t.Parallel()
 
+	const sentence = "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read]."
 	tests := []struct {
-		name           string
-		body           string
-		contentType    string
-		wantScopeError bool
+		name            string
+		body            string
+		contentType     string
+		want            error
+		wantDescription string
 	}{
 		{
-			name:           "rack-oauth2 insufficient_scope",
-			body:           `{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`,
-			contentType:    "application/json",
-			wantScopeError: true,
+			name:        "rack-oauth2 insufficient_scope",
+			body:        `{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`,
+			contentType: "application/json",
+			want:        ErrInsufficientScope,
 		},
 		{
-			name:           "granular personal access token scope",
-			body:           `{"error":"insufficient_granular_scope"}`,
-			contentType:    "application/json",
-			wantScopeError: true,
+			name:            "a fine-grained grant without User: Read",
+			body:            `{"error":"insufficient_granular_scope","error_description":"` + sentence + `"}`,
+			contentType:     "application/json",
+			want:            ErrPermissionMissing,
+			wantDescription: sentence,
 		},
 		{
-			name:           "a Grape forbidden carries message, not error",
-			body:           `{"message":"403 Forbidden - Your account has been blocked"}`,
-			contentType:    "application/json",
-			wantScopeError: false,
+			name:        "the fine-grained code named twice",
+			body:        `{"error":"insufficient_granular_scope","error":"insufficient_granular_scope"}`,
+			contentType: "application/json",
+			want:        auth.ErrInvalidToken,
 		},
 		{
-			name:           "a plain-text rejection is not a scope problem",
-			body:           "forbidden",
-			contentType:    "text/plain",
-			wantScopeError: false,
+			name:        "a Grape forbidden carries message, not error",
+			body:        `{"message":"403 Forbidden - Your account has been blocked"}`,
+			contentType: "application/json",
+			want:        auth.ErrInvalidToken,
+		},
+		{
+			name:        "a plain-text rejection is not a scope problem",
+			body:        "forbidden",
+			contentType: "text/plain",
+			want:        auth.ErrInvalidToken,
 		},
 	}
 
@@ -1101,18 +1131,22 @@ func TestNewGitLabVerifier_ForbiddenDistinguishesScope(t *testing.T) {
 
 			verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
 			_, err := verifier(t.Context(), "some-token", nil)
-			if err == nil {
-				t.Fatal("expected an error for a 403 response")
-			}
-
-			gotScope := errors.Is(err, ErrInsufficientScope)
-			if gotScope != tt.wantScopeError {
-				t.Errorf("ErrInsufficientScope = %v, want %v (err: %v)", gotScope, tt.wantScopeError, err)
-			}
 			// Whatever the shape, it must never be reported as an upstream
 			// failure: GitLab answered, and it answered about the credential.
-			if !gotScope && !isErrInvalidToken(err) {
-				t.Errorf("a non-scope 403 should wrap auth.ErrInvalidToken, got: %v", err)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("verifier error = %v, want it to wrap %v", err, tt.want)
+			}
+			for _, other := range []error{ErrInsufficientScope, ErrPermissionMissing, auth.ErrInvalidToken} {
+				if !errors.Is(tt.want, other) && errors.Is(err, other) {
+					t.Errorf("verifier error = %v also wraps %v", err, other)
+				}
+			}
+			missing, isMissing := errors.AsType[*PermissionMissingError](err)
+			if isMissing != errors.Is(tt.want, ErrPermissionMissing) || (isMissing && missing.Description != tt.wantDescription) {
+				t.Errorf("PermissionMissingError = %+v (%v), want one carrying %q exactly when the grant was refused", missing, isMissing, tt.wantDescription)
+			}
+			if isMissing && err.Error() != ErrPermissionMissing.Error() {
+				t.Errorf("error text = %q, want the verdict and none of the instance's sentence", err.Error())
 			}
 		})
 	}
@@ -1310,6 +1344,72 @@ func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.
 			t.Fatalf("verify: %v — an unpinned deployment must keep admitting every credential the instance accepts", err)
 		}
 	})
+}
+
+// TestGitLabVerifier_PinnedDeployment_AnswersAMissingUserPermissionAsAnUnacceptedRecipient
+// covers a deployment that pins its OAuth applications (--oauth-client-uid)
+// meeting a token GitLab refused the permission to read its own user. Only a
+// personal access token is ever refused a fine-grained grant, and a pinned
+// deployment admits no personal access token, so the verdict is the recipient
+// refusal: telling the holder to create a token that grants User: Read would
+// send them to a credential this deployment refuses next. Introspection is not
+// asked for a verdict the refusal already settles. Every other verdict of GET
+// /user is unchanged by the pin, and an unpinned deployment keeps the missing
+// permission.
+func TestGitLabVerifier_PinnedDeployment_AnswersAMissingUserPermissionAsAnUnacceptedRecipient(t *testing.T) {
+	t.Parallel()
+
+	const (
+		granular  = `{"error":"insufficient_granular_scope","error_description":"Access denied: [User: Read]."}`
+		classic   = `{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`
+		pinnedUID = "5a4f1c0e"
+	)
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		pinned []string
+		want   error
+	}{
+		{name: "pinned, a missing fine-grained permission", status: http.StatusForbidden, body: granular, pinned: []string{pinnedUID}, want: ErrUnacceptedRecipient},
+		{name: "unpinned, a missing fine-grained permission", status: http.StatusForbidden, body: granular, want: ErrPermissionMissing},
+		{name: "pinned, a classic missing scope", status: http.StatusForbidden, body: classic, pinned: []string{pinnedUID}, want: ErrInsufficientScope},
+		{name: "pinned, a refused token", status: http.StatusUnauthorized, body: `{"message":"401 Unauthorized"}`, pinned: []string{pinnedUID}, want: auth.ErrInvalidToken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var introspections atomic.Int32
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			})
+			for _, path := range []string{"/api/v4/personal_access_tokens/self", "/oauth/token/info"} {
+				mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+					introspections.Add(1)
+					w.WriteHeader(http.StatusNotFound)
+				})
+			}
+			gitlab := httptest.NewServer(mux)
+			t.Cleanup(gitlab.Close)
+
+			verifier := NewGitLabVerifier(gitlab.URL, false, time.Minute, nil, tt.pinned...)
+			_, err := verifier(t.Context(), "glpat-fine-grained", nil)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("verify() error = %v, want it to wrap %v", err, tt.want)
+			}
+			for _, other := range []error{ErrUnacceptedRecipient, ErrPermissionMissing, ErrInsufficientScope, auth.ErrInvalidToken} {
+				if !errors.Is(tt.want, other) && errors.Is(err, other) {
+					t.Errorf("verify() error = %v also wraps %v", err, other)
+				}
+			}
+			if n := introspections.Load(); n != 0 {
+				t.Errorf("introspection was asked %d times, want none: GET /user already refused the token", n)
+			}
+		})
+	}
 }
 
 // TestSupportedScopes_FollowsWhatTheDeploymentCanDo pins the list published as
@@ -1798,6 +1898,61 @@ func TestIntrospectToken_RefusedByBothEndpoints_ReportsNoScopesRatherThanAssumin
 	}
 }
 
+// TestIntrospectToken_FineGrainedRefusalOfSelf_AnswersWithoutTokenInfo verifies
+// the inference introspection draws from GitLab refusing a token its own
+// description a fine-grained permission: the self route's boundary is the user
+// and names no root namespace, so only a fine-grained token is refused a grant
+// there, and the answer is that token's one scope, answered, with
+// /oauth/token/info never asked. A plain 403 is not that proof and still asks
+// token info, and so is a document naming the code twice.
+func TestIntrospectToken_FineGrainedRefusalOfSelf_AnswersWithoutTokenInfo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		selfBody      string
+		wantScopes    []string
+		wantTokenInfo int32
+	}{
+		{
+			name:       "GitLab's refusal of the grant",
+			selfBody:   `{"error":"insufficient_granular_scope","error_description":"Access denied"}`,
+			wantScopes: []string{"granular"},
+		},
+		{name: "a plain 403", selfBody: `{"message":"403 Forbidden"}`, wantTokenInfo: 1},
+		{
+			name:          "the code named twice",
+			selfBody:      `{"error":"insufficient_granular_scope","error":"insufficient_granular_scope"}`,
+			wantTokenInfo: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var tokenInfo atomic.Int32
+			instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/oauth/token/info" {
+					tokenInfo.Add(1)
+				}
+				w.WriteHeader(http.StatusForbidden)
+				if r.URL.Path == "/api/v4/personal_access_tokens/self" {
+					_, _ = w.Write([]byte(tt.selfBody))
+				}
+			}))
+			t.Cleanup(instance.Close)
+
+			got := introspectToken(t.Context(), instance.Client(), instance.URL, "glpat-fine-grained")
+
+			if !slices.Equal(got.scopes, tt.wantScopes) || !got.answered {
+				t.Errorf("introspectToken() = %v (answered %v), want %v answered", got.scopes, got.answered, tt.wantScopes)
+			}
+			if n := tokenInfo.Load(); n != tt.wantTokenInfo {
+				t.Errorf("/oauth/token/info was asked %d times, want %d", n, tt.wantTokenInfo)
+			}
+		})
+	}
+}
+
 // TestNewGitLabVerifier_DuplicateIdentityMember_IsRefusedRatherThanResolved
 // verifies that an identity body naming "id" twice is refused instead of
 // resolved to one of the two.
@@ -1907,6 +2062,14 @@ func TestSatisfiesMinimum_ApiCoversReadAPI(t *testing.T) {
 		// name must not be satisfied by holding something broader in a
 		// different dimension.
 		{name: "api does not cover an unrelated minimum", granted: []string{ScopeAPI}, minimum: "read_registry"},
+		// A fine-grained token's one scope names no authority, so it is
+		// unknown authority and meets whatever the door asks; GitLab judges
+		// each call against the grant.
+		{name: "a fine-grained token meets the read_api minimum", granted: []string{"granular"}, minimum: ScopeReadAPI, want: true},
+		{name: "a fine-grained token meets an api minimum", granted: []string{"granular"}, minimum: ScopeAPI, want: true},
+		// The scope beside a classic one is not that shape, and is read as
+		// the classic list it spells.
+		{name: "granular beside a classic scope is the classic list", granted: []string{"granular", "read_user"}, minimum: ScopeReadAPI},
 	}
 
 	for _, tt := range tests {

@@ -1413,100 +1413,25 @@ func TestPingDirect_NilContext(t *testing.T) {
 	}
 }
 
-// TestCredentialRejected_NilContext verifies that CredentialRejected returns
-// false (fail-open, per its documented contract) when
-// http.NewRequestWithContext fails to build the probe request, mirroring
-// TestPingDirect_NilContext for the credential-probe path. Without this test
-// the request-build error branch — distinct from the "no verdict" cases for
-// transport errors and non-401/403 status codes — was never exercised, and a
-// regression turning that branch into a panic or a mistaken "true" (treating
-// a local failure as an active rejection) would go unnoticed.
-func TestCredentialRejected_NilContext(t *testing.T) {
-	srv := stubVersionServer(t, http.StatusOK)
-	defer srv.Close()
-
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf(fmtNewClientErr, err)
-	}
-
-	//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
-	if client.CredentialRejected(nil) {
-		t.Error("CredentialRejected(nil) = true, want false (fail-open) when the probe request cannot be built")
-	}
-}
-
-// TestCredentialRejected_OnlyAnExplicitRefusalCountsAsOne verifies the verdict
-// the probe actually returns, for every answer GitLab can give it.
+// TestCheckCredential_FourAnswers_KeepsEachApart verifies that the credential
+// probe tells its four answers apart rather than folding one into another.
 //
-// The positive half is the point: a 401 or a 403 on /api/v4/user is the
-// instance saying this credential is no longer good, and it is what makes the
-// pool drop the entry. Nothing asserted that half before, so a probe that had
-// been reduced to `return false` would have passed the whole suite while
-// quietly keeping revoked credentials alive for as long as the process ran.
-//
-// The negative half is the fail-open rule: a 404 from a stubbed instance, a
-// 5xx, and an instance that does not answer at all are all "no verdict", and
-// answering true for any of them turns one unreachable GitLab into a mass
-// revocation across every pooled entry.
-func TestCredentialRejected_OnlyAnExplicitRefusalCountsAsOne(t *testing.T) {
+// The refusal is the point of the probe: a 401 or a 403 on /api/v4/user is
+// the instance saying this credential is no longer good, and it is what makes
+// the pool drop the entry and the gate charge the caller. The fail-open rule
+// is the other half: a 404 from a stubbed instance, a 5xx, and an instance
+// that does not answer at all are "no verdict", and a refusal read from any of
+// them would turn one unreachable GitLab into a mass revocation. The pool's
+// confirmation of a 401 that named no cause reads the acceptance, which is only
+// honest when GitLab actually answered. And the one 403 whose body is GitLab's
+// refusal of a fine-grained permission is none of them: the credential was
+// accepted, and read as a refusal it would be charged and told to
+// reauthorize a token that works.
+func TestCheckCredential_FourAnswers_KeepsEachApart(t *testing.T) {
 	tests := []struct {
 		name       string
 		status     int
-		unreliable bool
-		want       bool
-	}{
-		{name: "401 is the instance refusing the credential", status: http.StatusUnauthorized, want: true},
-		{name: "403 is the instance refusing the credential", status: http.StatusForbidden, want: true},
-		{name: "200 is the credential working", status: http.StatusOK},
-		{name: "404 is a stubbed endpoint, not a verdict", status: http.StatusNotFound},
-		{name: "500 is the instance struggling, not a verdict", status: http.StatusInternalServerError},
-		{name: "an instance that does not answer is not a verdict", unreliable: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/api/v4/version" {
-					w.Header().Set("Content-Type", "application/json")
-					_ = json.NewEncoder(w).Encode(map[string]any{"version": "17.0.0"})
-					return
-				}
-				w.WriteHeader(tt.status)
-			}))
-			defer srv.Close()
-
-			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-			if err != nil {
-				t.Fatalf(fmtNewClientErr, err)
-			}
-			if tt.unreliable {
-				// Closing the server first is how a transport error is
-				// produced without waiting on a timeout: the probe's Do
-				// fails to connect at all.
-				srv.Close()
-			}
-
-			if got := client.CredentialRejected(context.Background()); got != tt.want {
-				t.Errorf("CredentialRejected() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart verifies that the
-// credential probe tells the three answers apart rather than folding "no
-// verdict" into either of the other two.
-//
-// Admission reads only the refusal and fails open on the rest, but the pool's
-// confirmation of a 401 that named no cause reads the acceptance: it keeps the
-// entry and records the credential as just checked, which is only honest when
-// GitLab actually answered. A 500 read as accepted would push back the
-// credential-age ceiling on a question GitLab never answered.
-func TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart(t *testing.T) {
-	tests := []struct {
-		name       string
-		status     int
+		body       string
 		unreliable bool
 		want       CredentialVerdict
 	}{
@@ -1514,6 +1439,9 @@ func TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart(t *testing.T) {
 		{name: "204 accepts", status: http.StatusNoContent, want: CredentialAccepted},
 		{name: "401 refuses", status: http.StatusUnauthorized, want: CredentialRefused},
 		{name: "403 refuses", status: http.StatusForbidden, want: CredentialRefused},
+		{name: "403 for a classic scope refuses", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`, want: CredentialRefused},
+		{name: "403 for a fine-grained permission accepts the credential", status: http.StatusForbidden, body: granularRefusalBody, want: CredentialAcceptedPermissionMissing},
+		{name: "401 carrying the fine-grained code still refuses", status: http.StatusUnauthorized, body: granularRefusalBody, want: CredentialRefused},
 		{name: "404 is no verdict", status: http.StatusNotFound, want: CredentialUnanswered},
 		{name: "500 is no verdict", status: http.StatusInternalServerError, want: CredentialUnanswered},
 		{name: "no answer at all is no verdict", unreliable: true, want: CredentialUnanswered},
@@ -1522,6 +1450,7 @@ func TestCheckCredential_ThreeAnswers_KeepsNoVerdictApart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
 			}))
 			defer srv.Close()
 			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
@@ -1584,7 +1513,11 @@ func TestCheckCredentialDetail_EachAnswer_KeepsItsCause(t *testing.T) {
 			if tt.unreachable {
 				srv.Close()
 			}
-			assertCredentialCheck(t, client.CheckCredentialDetail(t.Context()), tt.wantVerdict, tt.wantStatus, tt.wantCause)
+			check := client.CheckCredentialDetail(t.Context())
+			assertCredentialCheck(t, check, tt.wantVerdict, tt.wantStatus, tt.wantCause)
+			if check.Description != "" {
+				t.Errorf("CheckCredentialDetail().Description = %q, want none outside a fine-grained refusal", check.Description)
+			}
 		})
 	}
 	t.Run("a probe that cannot be built names why", func(t *testing.T) {
@@ -1595,6 +1528,46 @@ func TestCheckCredentialDetail_EachAnswer_KeepsItsCause(t *testing.T) {
 		//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
 		assertCredentialCheck(t, client.CheckCredentialDetail(nil), CredentialUnanswered, 0, "build the credential probe")
 	})
+}
+
+// TestCheckCredentialDetail_FineGrainedRefusal_CarriesGitLabsSentence verifies
+// that the one 403 read as an accepted credential keeps GitLab's sentence as
+// sent, with no cause, since it is a verdict, and that a body too long to be
+// GitLab's error document is read only as far as the probe's bound and then
+// counts as the refusal it was before the code was recognized.
+func TestCheckCredentialDetail_FineGrainedRefusal_CarriesGitLabsSentence(t *testing.T) {
+	tests := []struct {
+		name            string
+		body            string
+		wantVerdict     CredentialVerdict
+		wantDescription string
+	}{
+		{name: "GitLab's document", body: granularRefusalBody, wantVerdict: CredentialAcceptedPermissionMissing, wantDescription: granularRefusalSentence},
+		{
+			name:        "a document past the probe's bound",
+			body:        `{"error":"insufficient_granular_scope","error_description":"` + strings.Repeat("x", credentialProbeBodyBytes) + `"}`,
+			wantVerdict: CredentialRefused,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			check := client.CheckCredentialDetail(t.Context())
+			assertCredentialCheck(t, check, tt.wantVerdict, http.StatusForbidden, "")
+			if check.Description != tt.wantDescription {
+				t.Errorf("CheckCredentialDetail().Description = %q, want %q", check.Description, tt.wantDescription)
+			}
+		})
+	}
 }
 
 // assertCredentialCheck holds one probe's answer to a verdict, a status and a
@@ -1622,6 +1595,7 @@ func assertCredentialCheck(t *testing.T, got CredentialCheck, wantVerdict Creden
 func TestCredentialVerdictFor_StatusEdges_AreReadExactly(t *testing.T) {
 	tests := []struct {
 		status int
+		body   string
 		want   CredentialVerdict
 	}{
 		{status: 199, want: CredentialUnanswered},
@@ -1632,11 +1606,15 @@ func TestCredentialVerdictFor_StatusEdges_AreReadExactly(t *testing.T) {
 		{status: http.StatusUnauthorized, want: CredentialRefused},
 		{status: http.StatusPaymentRequired, want: CredentialUnanswered},
 		{status: http.StatusForbidden, want: CredentialRefused},
+		{status: http.StatusForbidden, body: granularRefusalBody, want: CredentialAcceptedPermissionMissing},
+		{status: http.StatusUnauthorized, body: granularRefusalBody, want: CredentialRefused},
+		{status: http.StatusOK, body: granularRefusalBody, want: CredentialAccepted},
+		{status: http.StatusNotFound, body: granularRefusalBody, want: CredentialUnanswered},
 	}
 	for _, tt := range tests {
-		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
-			if got := credentialVerdictFor(tt.status); got != tt.want {
-				t.Errorf("credentialVerdictFor(%d) = %v, want %v", tt.status, got, tt.want)
+		t.Run(strconv.Itoa(tt.status)+" "+strconv.FormatBool(tt.body != ""), func(t *testing.T) {
+			if got := credentialVerdictFor(tt.status, []byte(tt.body)); got != tt.want {
+				t.Errorf("credentialVerdictFor(%d, %q) = %v, want %v", tt.status, tt.body, got, tt.want)
 			}
 		})
 	}
@@ -1815,8 +1793,8 @@ func TestPoolClientConstructors_UseTheirAuthScheme(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			if client.CredentialRejected(ctx) {
-				t.Error("CredentialRejected() = true against a 200 backend")
+			if got := client.CheckCredential(ctx); got != CredentialAccepted {
+				t.Errorf("CheckCredential() = %v against a 200 backend, want CredentialAccepted", got)
 			}
 			if _, verErr := client.versionDirect(ctx); verErr != nil {
 				t.Errorf("versionDirect() error: %v", verErr)
@@ -1973,8 +1951,8 @@ func TestClient_CrossHostRedirect_DropsCredential(t *testing.T) {
 		{
 			name: "health probe",
 			do: func(c *Client) error {
-				if c.CredentialRejected(context.Background()) {
-					return errors.New("CredentialRejected() = true against a 200 backend")
+				if verdict := c.CheckCredential(context.Background()); verdict == CredentialRefused {
+					return errors.New("CheckCredential() = CredentialRefused against a 200 backend")
 				}
 				return nil
 			},

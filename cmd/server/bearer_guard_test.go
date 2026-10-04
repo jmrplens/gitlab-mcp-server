@@ -1221,6 +1221,95 @@ func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached(t 
 	}
 }
 
+// userReadSentence is GitLab's refusal of GET /api/v4/user for a fine-grained
+// token granted no User: Read, as Authz::Tokens::AuthorizeGranularScopesService
+// writes it at v19.4.1-ee.
+const userReadSentence = "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read]."
+
+// TestBearerGuard_FineGrainedTokenWithoutUserRead_IsForbiddenUnchargedAndRemembered
+// covers a fine-grained token GitLab accepted and refused the permission to
+// read its own user. It is answered 403 with the insufficient_scope challenge,
+// whose description is this server's own constant, and with GitLab's sentence
+// in the body; it is charged nothing, however often it comes back, since the
+// token is genuine; and it is remembered, so a repeat is answered from memory
+// and costs no verification, which is what keeps one such token sent often
+// from holding every verification slot.
+func TestBearerGuard_FineGrainedTokenWithoutUserRead_IsForbiddenUnchargedAndRemembered(t *testing.T) {
+	t.Parallel()
+
+	const challenge = `Bearer realm="gitlab-mcp-server", error="insufficient_scope", ` +
+		`error_description="GitLab refused this token the permission to read its own user", scope="read_api", ` +
+		`resource_metadata="` + testMetadataURL + `"`
+	var verifications atomic.Int32
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		verifications.Add(1)
+		return nil, &oauth.PermissionMissingError{Description: userReadSentence}
+	})
+
+	// Five times the limiter's budget of three: every one a 403, none a 429.
+	for i := range 15 {
+		failure := g.check(guardRequest(t, "glpat-fine-grained"))
+		if failure == nil || failure.status != http.StatusForbidden || failure.code != errCodeForbidden {
+			t.Fatalf("request %d: failure = %+v, want the uncharged 403", i, failure)
+		}
+		if got := failure.header.Get(headerWWWAuthenticate); got != challenge {
+			t.Errorf("request %d: WWW-Authenticate = %q\nwant %q", i, got, challenge)
+		}
+		if want := doorPermissionPrefix + doorPermissionAdvice + " GitLab said: " + userReadSentence; failure.message != want {
+			t.Errorf("request %d: message = %q\nwant %q", i, failure.message, want)
+		}
+	}
+	if n := verifications.Load(); n != 1 {
+		t.Errorf("the verifier was asked %d times, want once: the verdict is answered from memory after that", n)
+	}
+	if kind, sentence, known := g.rejected.LookupRefusal("", "glpat-fine-grained"); !known ||
+		kind != oauth.RejectionPermissionMissing || sentence != userReadSentence {
+		t.Errorf("rejected-token cache holds %v, %q, %v; want the permission refusal with GitLab's sentence", kind, sentence, known)
+	}
+	assertSpendsNoBudget(t, g)
+}
+
+// TestBearerGuard_PermissionMissing_QuotesAHostileSentenceOnlyFilteredAndCut
+// feeds the guard the sentence a hostile instance could write, which under
+// --allow-any-gitlab-url is the caller's own: 4000 bytes carrying quotes,
+// backslashes, control characters and other scripts. None of it reaches the
+// challenge, whose description stays the constant, and the body quotes it only
+// as printable ASCII within 512 bytes. A guard without a rejected-token cache
+// answers the same.
+func TestBearerGuard_PermissionMissing_QuotesAHostileSentenceOnlyFilteredAndCut(t *testing.T) {
+	t.Parallel()
+
+	hostile := `Access denied: "quoted" \ back` + "\r\n\x00é" + strings.Repeat("x", 4000)
+	for name, withCache := range map[string]bool{"with a cache": true, "without a cache": false} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, &oauth.PermissionMissingError{Description: hostile}
+			})
+			if !withCache {
+				g.rejected = nil
+			}
+			failure := g.check(guardRequest(t, "glpat-hostile"))
+			if failure == nil || failure.status != http.StatusForbidden {
+				t.Fatalf("failure = %+v, want a 403", failure)
+			}
+			quoted, found := strings.CutPrefix(failure.message, doorPermissionPrefix+doorPermissionAdvice+" GitLab said: ")
+			if !found {
+				t.Fatalf("message = %q, want the prefix, the advice and GitLab's sentence", failure.message)
+			}
+			if len(quoted) > 512 || strings.ContainsFunc(quoted, func(r rune) bool { return r < ' ' || r > '~' }) {
+				t.Errorf("quoted sentence is %d bytes and carries %q, want printable ASCII within 512 bytes", len(quoted), quoted)
+			}
+			if !strings.HasPrefix(quoted, `Access denied: "quoted" \ back x`) {
+				t.Errorf("quoted sentence = %q, want its printable text kept", quoted)
+			}
+			if challenge := failure.header.Get(headerWWWAuthenticate); strings.Contains(challenge, "quoted") || strings.Contains(challenge, "xxxx") {
+				t.Errorf("the challenge %q carries the instance's sentence", challenge)
+			}
+		})
+	}
+}
+
 // newProxiedGuard returns a guard wired the way a deployment behind a reverse
 // proxy is: the caller's key comes from a trusted header, which is what makes
 // the coarse transport budget necessary in the first place.

@@ -4149,7 +4149,10 @@ func TestStartPeriodicCleanup_RunsOnEveryTickUntilTheContextEnds(t *testing.T) {
 // since a loop over nothing is a goroutine for the life of the process. The
 // oauth mode sweeps its token cache and its rejected-token cache whatever the
 // budgets are, and says once at startup when it admits only pinned
-// applications.
+// applications. The legacy mode sweeps its own rejected-token structure
+// whatever the budgets are too: it remembers the credentials GitLab accepted
+// and refused the permission to read their own user, which no budget charges
+// and so no budget's table ever sees.
 func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -4158,8 +4161,8 @@ func TestRegisterMCPHandlers_SweepEachExpiringTableTheyBuild(t *testing.T) {
 		pinned    bool
 		wantLoops int
 	}{
-		{name: "legacy with every budget off"},
-		{name: "legacy with every budget on", budgets: true, wantLoops: 3},
+		{name: "legacy with every budget off", wantLoops: 1},
+		{name: "legacy with every budget on", budgets: true, wantLoops: 4},
 		{name: "oauth with every budget off", oauth: true, wantLoops: 2},
 		{name: "oauth with every budget on and applications pinned", oauth: true, budgets: true, pinned: true, wantLoops: 5},
 	} {

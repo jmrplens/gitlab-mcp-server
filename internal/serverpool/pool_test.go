@@ -143,7 +143,11 @@ type refusingGitLab struct {
 	approveBody string
 	// userStatus is what /user answers; zero means 200.
 	userStatus atomic.Int32
-	userCalls  atomic.Int64
+	// userBody, when set, is the body a refused /user carries instead of the
+	// plain refusal, so a test can have GitLab refuse the probe a
+	// fine-grained permission.
+	userBody  atomic.Pointer[string]
+	userCalls atomic.Int64
 	// otherStatus is what every other path answers; zero means 200 with an
 	// empty object, and anything else is that status with the plain refusal
 	// body, which is how a deleted token is answered everywhere.
@@ -171,6 +175,10 @@ func newRefusingGitLab(t *testing.T, approveBody string) *refusingGitLab {
 		w.WriteHeader(status)
 		if status == http.StatusOK {
 			_, _ = w.Write([]byte(`{"id":7,"username":"approver"}`))
+			return
+		}
+		if body := g.userBody.Load(); body != nil {
+			_, _ = w.Write([]byte(*body))
 			return
 		}
 		_, _ = w.Write([]byte(plainUnauthorizedBody))
@@ -589,6 +597,45 @@ func TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing(t *testing.T) 
 				t.Errorf("lastValidated moved from %v to %v without an answer from GitLab", before, after)
 			}
 		})
+	}
+}
+
+// TestConfirmUnexplainedRefusal_ProbeRefusedAFineGrainedPermission_KeepsTheEntry
+// verifies that a confirmation GitLab answers with its refusal of a
+// fine-grained permission reads as the acceptance it is: the credential was
+// authenticated before the grant was judged, so the 401 that named no cause
+// was a permission refusal of the call, and the entry is kept, recorded as
+// checked, and not marked rejected.
+func TestConfirmUnexplainedRefusal_ProbeRefusedAFineGrainedPermission_KeepsTheEntry(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	pool, entry, key := refusedEntry(t, g)
+	// The baseline is moved a minute back, as in
+	// TestGetOrCreate_APermissionRefusalWith401_KeepsTheEntry: on a clock that
+	// advances in ticks (Windows) the entry's creation and the acceptance can
+	// read the same instant, which would fail the After check below.
+	pool.mu.Lock()
+	entry.lastValidated = entry.lastValidated.Add(-time.Minute)
+	before := entry.lastValidated
+	pool.mu.Unlock()
+	g.userStatus.Store(http.StatusForbidden)
+	body := userReadRefusalBody
+	g.userBody.Store(&body)
+
+	pool.confirmUnexplainedRefusal(key, entry)
+
+	if got := g.userCalls.Load(); got != 1 {
+		t.Errorf("the credential probe was asked %d times, want once", got)
+	}
+	stats := pool.Stats()
+	if stats.UnauthorizedKept != 1 || stats.RejectedCredentialEvictions != 0 {
+		t.Errorf("UnauthorizedKept = %d, RejectedCredentialEvictions = %d, want 1 and 0",
+			stats.UnauthorizedKept, stats.RejectedCredentialEvictions)
+	}
+	if entry.rejected.Load() || pool.Size() != 1 {
+		t.Errorf("rejected = %v, pool size = %d; want the entry kept", entry.rejected.Load(), pool.Size())
+	}
+	if after := lastValidatedOf(pool, entry); !after.After(before) {
+		t.Errorf("lastValidated stayed at %v, want it moved by the acceptance", after)
 	}
 }
 
@@ -2677,6 +2724,47 @@ func TestGetOrCreate_RejectsCredentialGitLabRefuses(t *testing.T) {
 	}
 }
 
+// The body GitLab's API guard answers GET /api/v4/user with for a fine-grained
+// token granted no User: Read, and the sentence it carries.
+const (
+	userReadSentence    = "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read]."
+	userReadRefusalBody = `{"error":"insufficient_granular_scope","error_description":"` + userReadSentence + `"}`
+)
+
+// TestGetOrCreate_FineGrainedTokenWithoutUserRead_IsRefusedAsAccepted verifies
+// the fourth answer of the credential probe at admission: a 403 carrying
+// insufficient_granular_scope says GitLab accepted the token and refused the
+// probe User: Read. The pool neither admits it, since the probe it trusts was
+// not answered, nor rejects it, since a rejection is charged to the caller: it
+// returns PermissionMissingError carrying GitLab's sentence as sent, which
+// wraps ErrCredentialLacksProbePermission and is not ErrInvalidCredential.
+func TestGetOrCreate_FineGrainedTokenWithoutUserRead_IsRefusedAsAccepted(t *testing.T) {
+	g := newRefusingGitLab(t, plainUnauthorizedBody)
+	g.userStatus.Store(http.StatusForbidden)
+	body := userReadRefusalBody
+	g.userBody.Store(&body)
+	pool := New(testConfig(g.URL), testFactory())
+	t.Cleanup(pool.Close)
+
+	got, err := pool.GetOrCreateEntry("glpat-fine-grained", g.URL, nil)
+	if got != nil {
+		t.Error("a credential the probe was not answered for received an entry")
+	}
+	var missing *PermissionMissingError
+	if !errors.As(err, &missing) || missing.Description != userReadSentence {
+		t.Fatalf("error = %v, want a PermissionMissingError carrying %q", err, userReadSentence)
+	}
+	if !errors.Is(err, ErrCredentialLacksProbePermission) || errors.Is(err, ErrInvalidCredential) {
+		t.Errorf("error = %v: want it to wrap ErrCredentialLacksProbePermission and not ErrInvalidCredential", err)
+	}
+	if err.Error() != ErrCredentialLacksProbePermission.Error() || strings.Contains(err.Error(), "User: Read") {
+		t.Errorf("error text = %q, want the verdict and none of the instance's sentence", err.Error())
+	}
+	if size := pool.Size(); size != 0 {
+		t.Errorf("pool size = %d, want 0", size)
+	}
+}
+
 // TestGetOrCreate_AdmitsCredentialGitLabAccepts is the positive half: a token
 // GitLab accepts is pooled as before.
 func TestGetOrCreate_AdmitsCredentialGitLabAccepts(t *testing.T) {
@@ -3874,6 +3962,7 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 	tests := []struct {
 		name          string
 		status        int
+		body          string
 		unreachable   bool
 		wantEvicted   bool
 		wantFailed    int64
@@ -3883,6 +3972,13 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 	}{
 		{name: "gitlab rejects the credential with 401", status: http.StatusUnauthorized, wantEvicted: true, wantFailed: 1},
 		{name: "gitlab rejects the credential with 403", status: http.StatusForbidden, wantEvicted: true, wantFailed: 1},
+		// GitLab accepted the token and refused the probe a fine-grained
+		// permission, which is still GitLab taking the credential: the entry
+		// is kept and counted as checked, the way an acceptance is.
+		{
+			name: "gitlab accepts the credential and refuses the probe User: Read", status: http.StatusForbidden,
+			body: userReadRefusalBody, wantSucceeded: 1, wantRevalid: true,
+		},
 		{name: "instance answers 500", status: http.StatusInternalServerError, wantTransient: 1},
 		{name: "instance answers 404", status: http.StatusNotFound, wantTransient: 1},
 		{name: "instance is unreachable", unreachable: true, wantTransient: 1},
@@ -3891,14 +3987,7 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				if tt.status == http.StatusOK {
-					_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abc"}`))
-					return
-				}
-				http.Error(w, fmt.Sprintf(`{"message":"%d"}`, tt.status), tt.status)
-			}))
+			srv := httptest.NewServer(revalidationAnswer(tt.status, tt.body))
 			baseURL := srv.URL
 			if tt.unreachable {
 				// Closing it first leaves a port nothing answers on, which is
@@ -3932,6 +4021,25 @@ func TestRevalidateAll_EvictsOnlyOnCredentialVerdict(t *testing.T) {
 				assertRevalidationWarning(t, captured, revalidationNoVerdictMessage, tt.status, true)
 			}
 		})
+	}
+}
+
+// revalidationAnswer is the instance a revalidation row asks: a version
+// document for 200, body under status when the row gives one, and otherwise
+// the plain refusal GitLab writes for status.
+func revalidationAnswer(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if status == http.StatusOK {
+			_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abc"}`))
+			return
+		}
+		if body != "" {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"message":"%d"}`, status), status)
 	}
 }
 

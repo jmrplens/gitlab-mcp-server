@@ -520,6 +520,54 @@ func TestGate_BlockedAddressStillServesAnAdmittedCredential(t *testing.T) {
 	}
 }
 
+// TestGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged drives the
+// legacy door with a fine-grained token GitLab accepts and refuses the
+// permission to read its own user, which is the one thing the door asks.
+//
+// It is answered 403 naming the permission, with no challenge, however often
+// it comes back: past the failure budget of ten it is still a 403 and never a
+// 429, because the token is genuine and charging it would let its holder lock
+// their own address out. GitLab is asked once, whatever the number of
+// requests, because the verdict is remembered. And the address is still
+// served afterwards: a fine-grained token that may read its user is admitted
+// from it.
+func TestGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged(t *testing.T) {
+	const (
+		refused  = "glpat-fine-grained-without-user-read"
+		admitted = "glpat-fine-grained-with-user-read"
+	)
+	gitlab := startFineGrainedFakeGitLab(t, map[string]fineGrainedToken{
+		refused:  {userRefusal: userReadSentence},
+		admitted: {},
+	})
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	const attempts = 15
+	for i := range attempts {
+		got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": refused}))
+		if got.status != http.StatusForbidden {
+			t.Fatalf("attempt %d: status = %d, want %d: %s", i, got.status, http.StatusForbidden, truncate(got.body))
+		}
+		if challenge := got.header.Get("WWW-Authenticate"); challenge != "" {
+			t.Errorf("attempt %d: WWW-Authenticate = %q, want none on the legacy door's 403", i, challenge)
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if body.Error.Code != -40300 ||
+			!strings.HasPrefix(body.Error.Message, "GitLab accepted this token and refused it the permission to read its own user.") ||
+			!strings.HasSuffix(body.Error.Message, "GitLab said: "+userReadSentence) {
+			t.Errorf("attempt %d: error = %d %q, want -40300 naming User: Read and quoting GitLab", i, body.Error.Code, body.Error.Message)
+		}
+	}
+	if n := gitlab.userCalls(refused); n != 1 {
+		t.Errorf("GET /api/v4/user was asked %d times for %d requests carrying one token, want once", n, attempts)
+	}
+
+	if served := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": admitted})); served.status != http.StatusOK {
+		t.Errorf("a fine-grained token that may read its user, from the same address = %d, want %d: %s",
+			served.status, http.StatusOK, truncate(served.body))
+	}
+}
+
 // gateAttemptsUntilBlocked issues unauthenticated requests, each claiming the
 // address claimedFor returns for it, and reports how many it took to be cut off
 // with 429. It returns 0 when limit requests went by without one, which is a

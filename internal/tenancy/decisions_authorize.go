@@ -35,7 +35,7 @@ func authorizeDecisions() []Decision {
 			ID: "AUT-001", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the read-only surface a credential without the api scope is served, a fine-grained token excepted",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			Decided:  []string{"ADR-0018", "ADR-0024"},
+			Decided:  []string{"ADR-0018", "ADR-0024", "issue 952"},
 			Refusals: narrowed(WidenScope),
 			Sites: []Site{
 				enforce(pkgGitLab, "FineGrained"),
