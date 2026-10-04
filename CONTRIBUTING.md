@@ -49,7 +49,7 @@ make test-race
 # Run end-to-end tests (requires .env with real GitLab credentials)
 make test-e2e
 
-# Run end-to-end tests in Docker mode (ephemeral GitLab CE, ~4 GB RAM)
+# Run end-to-end tests in Docker mode (ephemeral GitLab CE; GitLab peaks ~7.5 GiB, capped at 12 GiB)
 make test-e2e-docker
 
 # Check test coverage

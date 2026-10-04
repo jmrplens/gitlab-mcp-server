@@ -22,8 +22,13 @@ services:
         nginx['listen_https'] = false
         gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0', '::/0']
         gitlab_rails['initial_root_password'] = 'E2e_R0ot!xK9mZ#2026'
-        # Performance: handle ~40 parallel project creations without connection resets
-        puma['workers'] = 4
+        # Performance: handle ~40 parallel project creations without connection resets.
+        # The key is worker_processes: puma['workers'] is not an Omnibus key, so
+        # it was ignored and Puma ran one worker per CPU, 16 on the e2e host,
+        # which is what took the container to 15 GiB on CE and 20.7 GiB on EE.
+        # Four measured 7.4 GiB at the peak of a complete CE run and 9.4 GiB of
+        # an EE one, and the CE run's tests took 30 minutes against 36.
+        puma['worker_processes'] = 4
         puma['min_threads'] = 4
         puma['max_threads'] = 8
         sidekiq['concurrency'] = 10
@@ -60,6 +65,14 @@ services:
       - gitlab-logs:/var/log/gitlab
       - gitlab-data:/var/opt/gitlab
     shm_size: '512m'
+    # A ceiling about a quarter above the largest peak measured, a complete EE
+    # run at 9.8 GiB with four Puma workers, so a regression that brings the
+    # memory back shows as an out-of-memory kill inside this container rather
+    # than as a host that swaps under every other service it runs. The swap
+    # ceiling is the same figure, because Docker otherwise lets a container
+    # swap as much again as its memory limit.
+    mem_limit: 12g
+    memswap_limit: 12g
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:80/-/readiness?all=1"]
       interval: 15s

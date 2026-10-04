@@ -673,7 +673,7 @@ Run it through the target rather than by hand: the suite drives the real `cmd/se
 
 #### Docker Mode
 
-Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Docker and ~4 GB RAM. Enterprise mode uses the same topology with a GitLab EE image plus a locally supplied Ultimate license.
+Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Docker and the memory for it: the GitLab container peaks at about 7.5 GiB in a complete CE run and 10 GiB in an EE one and is capped at 12 GiB. Enterprise mode uses the same topology with a GitLab EE image plus a locally supplied Ultimate license.
 
 All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 
