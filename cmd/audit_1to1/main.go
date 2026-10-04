@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/actions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
@@ -37,16 +38,17 @@ var (
 	enumsRun       = enums.Run
 	sdkRun         = sdk.Run
 	pathsRun       = paths.Run
+	grantsRun      = grants.Run
 	marshalIndent  = json.MarshalIndent
 )
 
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
+	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths,grants} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
-	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question be asked per action rather than per owning package; reports and never gates")
+	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count of each action (grants) be asked per action rather than per owning package; reports and never gates")
 	refresh := flag.Bool("refresh", false, "with -validate-docs or -check-endpoints, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs or -check-endpoints, use only cached docs; do not fetch")
 	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -check-endpoints, re-download cached docs older than this")
@@ -86,8 +88,8 @@ type options struct {
 	docs      apidocs.Options
 	endpoints bool
 	// e2eCalls is the shard directory an end-to-end run recorded, read by the
-	// paths scope alone. Empty leaves the per-action observation out, which is
-	// every run outside a Docker session.
+	// paths and grants scopes. Empty leaves the per-action observation and
+	// request counts out, which is every run outside a Docker session.
 	e2eCalls string
 }
 
@@ -125,14 +127,18 @@ func run(ctx context.Context, opts options) error {
 	return nil
 }
 
-// gateFailure names which gate refused. Two scopes gate and they answer
+// gateFailure names which gate refused. Several scopes gate and they answer
 // different questions, so a reader of the exit line should not have to guess
 // which one produced the report beside it.
 func gateFailure(scopes []string) string {
-	if slices.Equal(scopes, []string{scopePaths}) {
+	switch {
+	case slices.Equal(scopes, []string{scopePaths}):
 		return "audit_1to1: request-path findings (see report)"
+	case slices.Equal(scopes, []string{scopeGrants}):
+		return "audit_1to1: fine-grained grant inconsistencies (see report)"
+	default:
+		return "audit_1to1: SDK parity findings (see report)"
 	}
-	return "audit_1to1: SDK parity findings (see report)"
 }
 
 // runValidateDocsMode resolves the repo root, builds the shared API-doc fetcher,
@@ -205,12 +211,12 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 }
 
 // runSingle runs one analyzer and returns its native JSON shape plus whether
-// that scope's gate passes. Only sdk, enums and paths gate; the three
+// that scope's gate passes. Only sdk, enums, paths and grants gate; the three
 // candidate streams always report clean, because a listed candidate is a
 // backlog entry rather than a defect.
 func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
-	case "structs", "actions", "enums", "sdk", scopePaths:
+	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants:
 		root, rootErr := repositoryRoot(".")
 		if rootErr != nil {
 			return nil, false, fmt.Errorf("find repository root: %w", rootErr)
@@ -230,6 +236,8 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 				Fetcher:     endpointFetcher(root, opts),
 				E2ECallsDir: opts.e2eCalls,
 			})
+		case scopeGrants:
+			return grantsRun(root, grants.Options{GapsOnly: opts.gapsOnly, E2ECallsDir: opts.e2eCalls})
 		default:
 			return sdkRun(root, opts.gapsOnly)
 		}
@@ -259,14 +267,17 @@ func endpointFetcher(root string, opts options) *apidocs.Fetcher {
 // scopePaths is the request-path dimension (R-PATH).
 const scopePaths = "paths"
 
-// mergedScopes is the set the merged backlog is built from, sorted. The sdk
-// and paths scopes are deliberately not among them: both gate rather than
-// accumulating candidates, and adding either would change the shape of
+// scopeGrants is the fine-grained permission dimension (R-GRANT).
+const scopeGrants = "grants"
+
+// mergedScopes is the set the merged backlog is built from, sorted. The sdk,
+// paths and grants scopes are deliberately not among them: they gate rather
+// than accumulating candidates, and adding any would change the shape of
 // plan/1to1-backlog.json.
 var mergedScopes = []string{"actions", "enums", "metadata", "structs"}
 
 // validScopes is every value -scope accepts, in the order a message lists them.
-var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths}
+var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants}
 
 // isMergedScope reports whether scopes is exactly the merged set, so a
 // selection that merely happens to have as many entries (say

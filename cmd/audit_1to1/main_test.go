@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
@@ -215,6 +216,45 @@ func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
 	}
 }
 
+// TestMain_GrantsScope_CarriesItsFlagsToTheFieldsTheyName runs main with
+// -scope=grants and holds each flag to the field it sets, the other left at
+// its zero value, for the reason the paths case above gives: two fields and
+// two flags are two chances to cross them.
+func TestMain_GrantsScope_CarriesItsFlagsToTheFieldsTheyName(t *testing.T) {
+	original := grantsRun
+	t.Cleanup(func() { grantsRun = original })
+	var got grants.Options
+	grantsRun = func(_ string, opts grants.Options) ([]byte, bool, error) {
+		got = opts
+		return []byte("{}\n"), true, nil
+	}
+	cases := []struct {
+		name     string
+		args     []string
+		wantGaps bool
+		wantDir  string
+	}{
+		{name: "gaps_only", args: []string{"-gaps-only"}, wantGaps: true},
+		{name: "the_shard_directory", args: []string{"-e2e-calls", "/tmp/e2e-calls-fixture"}, wantDir: "/tmp/e2e-calls-fixture"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got = grants.Options{}
+			messages := captureFatal(t)
+			resetFlags(t, append([]string{"-scope=grants", "-output", filepath.Join(t.TempDir(), "grants.json")}, testCase.args...)...)
+
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want a clean run", *messages)
+			}
+			if got.GapsOnly != testCase.wantGaps || got.E2ECallsDir != testCase.wantDir {
+				t.Errorf("Options = %+v, want GapsOnly %t and E2ECallsDir %q", got, testCase.wantGaps, testCase.wantDir)
+			}
+		})
+	}
+}
+
 // TestRun_AnalyzerFailures_AreNamedByStream verifies each seam-reachable
 // failure of the merged run and the single-scope run surfaces with the name
 // of the stream that failed, and that a gate reporting findings fails the run
@@ -307,6 +347,26 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 			},
 			wantErr: "request-path findings", wantReport: true,
 		},
+		{
+			name: "grants_gate_reports_findings", scope: scopeGrants,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := grantsRun
+				t.Cleanup(func() { grantsRun = original })
+				grantsRun = func(string, grants.Options) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
+			},
+			wantErr: "fine-grained grant inconsistencies", wantReport: true,
+		},
+		{
+			name: "grants_scope_fails", scope: scopeGrants,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := grantsRun
+				t.Cleanup(func() { grantsRun = original })
+				grantsRun = func(string, grants.Options) ([]byte, bool, error) { return nil, false, boom }
+			},
+			wantErr: "boom",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -359,6 +419,7 @@ func TestParseScope(t *testing.T) {
 		{name: "single scope", input: "structs", wantCount: 1, wantFirst: "structs"},
 		{name: "sdk scope", input: "sdk", wantCount: 1, wantFirst: "sdk"},
 		{name: "enums scope", input: "enums", wantCount: 1, wantFirst: "enums"},
+		{name: "grants scope", input: "grants", wantCount: 1, wantFirst: "grants"},
 		{name: "deduplicates repeats", input: "structs,structs,actions,actions", wantCount: 2},
 		{name: "trims whitespace", input: " structs , actions , metadata , enums ", wantCount: 4},
 		{name: "rejects unknown token", input: "structs,unknown", wantErr: true, errSubstr: "unknown"},

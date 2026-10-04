@@ -106,7 +106,7 @@ type Result struct {
 // joiner builds a table.
 type joiner struct {
 	record   *apilive.Document
-	routes   *routeIndex
+	routes   *apilive.RouteIndex
 	analyzer *analyzer
 	decl     Declarations
 	usedDecl map[string]bool
@@ -135,7 +135,7 @@ type joiner struct {
 func Join(record *apilive.Document, schema *gqlast.Schema, actions []derive.Action, decl Declarations) Result {
 	j := &joiner{
 		record:     record,
-		routes:     newRouteIndex(record.Routes),
+		routes:     apilive.NewRouteIndex(record.Routes),
 		analyzer:   &analyzer{authz: record.GraphQLAuthz, schema: schema},
 		decl:       decl,
 		usedDecl:   map[string]bool{},
@@ -248,14 +248,16 @@ func (j *joiner) group(req requirement, where string) uint32 {
 	return index
 }
 
-// groupsOf indexes a list of requirements, each group once: a route that
-// names one permission at one boundary twice demands it once.
+// groupsOf indexes a list of requirements. Every list it is handed holds each
+// requirement once already, which is what makes one index per entry right: a
+// route's comes from apilive.Route.Requirements, which returns a requirement
+// the route names twice once, and a GraphQL operation's or position's from
+// dedupeRequirements. Two requirements that differ are two groups, since a
+// group is indexed by the requirement's key.
 func (j *joiner) groupsOf(reqs []requirement, where string) []uint32 {
 	var out []uint32
 	for _, req := range reqs {
-		if index := j.group(req, where); !slices.Contains(out, index) {
-			out = append(out, index)
-		}
+		out = append(out, j.group(req, where))
 	}
 	return out
 }
@@ -289,7 +291,7 @@ func (j *joiner) action(act derive.Action) Action {
 // restRequest places a derived route.
 func (j *joiner) restRequest(request *Request, actionID string) {
 	derived := request.Method + " " + request.Path
-	route, ok := j.routes.match(request.Method, request.Path)
+	route, ok := j.routes.Match(request.Method, request.Path)
 	if !ok {
 		route, ok = j.declaredRoute(derived)
 		if !ok {
@@ -298,7 +300,7 @@ func (j *joiner) restRequest(request *Request, actionID string) {
 		}
 		request.Route = derived
 	}
-	request.Name = liveName(route)
+	request.Name = apilive.RouteName(route)
 	key := "rest " + request.Name
 	if index, seen := j.opIndex[key]; seen {
 		request.Operation = index
@@ -322,7 +324,7 @@ func (j *joiner) declaredRoute(derived string) (*apilive.Route, bool) {
 		}
 		j.usedDecl["route "+derived] = true
 		for i := range j.record.Routes {
-			if liveName(&j.record.Routes[i]) == declaration.Use {
+			if apilive.RouteName(&j.record.Routes[i]) == declaration.Use {
 				j.sameAuthorization(derived, &j.record.Routes[i])
 				return &j.record.Routes[i], true
 			}
@@ -337,16 +339,16 @@ func (j *joiner) declaredRoute(derived string) (*apilive.Route, bool) {
 // declares, or naming one of them would hide the others' requirement.
 func (j *joiner) sameAuthorization(derived string, named *apilive.Route) {
 	method, path, _ := strings.Cut(derived, " ")
-	segments := segmentsOf(path)
+	segments := apilive.PathSegments(path)
 	for i := range j.record.Routes {
 		candidate := &j.record.Routes[i]
-		recordPath, mounted := strings.CutPrefix(candidate.Path, apiPrefix)
-		if candidate.Method != method || !mounted || !looselyAgree(segmentsOf(recordPath), segments) {
+		recordPath, mounted := strings.CutPrefix(candidate.Path, apilive.EndpointPrefix)
+		if candidate.Method != method || !mounted || !looselyAgree(apilive.PathSegments(recordPath), segments) {
 			continue
 		}
 		if !reflect.DeepEqual(candidate.Authorization, named.Authorization) {
 			j.findings = append(j.findings, fmt.Sprintf("%s stands for %s, which declares another authorization than %s",
-				derived, liveName(candidate), liveName(named)))
+				derived, apilive.RouteName(candidate), apilive.RouteName(named)))
 		}
 	}
 }

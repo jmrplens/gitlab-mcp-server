@@ -5,6 +5,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/join"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 )
 
 // TestRenderRequests_SpellsEachRequestByItsKind verifies each request is
@@ -34,7 +35,7 @@ func TestRenderRequests_SpellsEachRequestByItsKind(t *testing.T) {
 		{ID: "a.nothing", Handlers: []string{"pkg.Nothing"}, Declaration: "sends-nothing"},
 	}
 	want := `{
-  "note": "` + requestsNote + `",
+  "note": "` + actionrequests.RecordNote + `",
   "actions": [
     {
       "id": "a.mixed",

@@ -3,22 +3,24 @@ package derive
 import (
 	"crypto/sha256"
 	"encoding/hex"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 )
 
 // Kind is what a request is on the wire, or that it could not be read.
 type Kind string
 
-// The kinds of request.
+// The kinds of request, spelled as the committed request record spells them.
 const (
 	// KindREST is a REST route.
-	KindREST Kind = "rest"
+	KindREST Kind = actionrequests.KindREST
 	// KindGraphQL is one GraphQL document posted to the GraphQL endpoint.
-	KindGraphQL Kind = "graphql"
+	KindGraphQL Kind = actionrequests.KindGraphQL
 	// KindUnresolved is a request the walk reached and could not read: a path
 	// that does not fold, a client-go document assembled at run time. It is
 	// carried rather than dropped, so a reader decides what it means and a
 	// declaration can answer it.
-	KindUnresolved Kind = "unresolved"
+	KindUnresolved Kind = actionrequests.KindUnresolved
 )
 
 // Request is one request an action can make.

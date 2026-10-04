@@ -2,7 +2,10 @@ package apilive
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // This file is the fine-grained half of the record, added in schema version
@@ -111,6 +114,85 @@ func (r Route) FineGrained() string {
 		return RouteTodo
 	}
 	return RouteUndeclared
+}
+
+// Requirement is one requirement a route checks on its own: every raw
+// permission in Permissions, sorted, held at one boundary type among Any.
+type Requirement struct {
+	Permissions []string
+	Any         finegrained.Boundary
+}
+
+// Requirements reads what a route demands of a fine-grained token: its
+// primary requirement and then one per additional scope, each once, since a
+// route naming one permission at one boundary twice demands it once; whether
+// the grant decides the route at all; and why no fine-grained token passes it
+// when none does.
+//
+// Two readers ask it, and they must agree: the fine-grained derivation joins
+// every REST request by it, and R-GRANT reads each REST operation of the
+// committed table back against it.
+func (r Route) Requirements() (groups []Requirement, skip bool, denied finegrained.Cause) {
+	switch r.FineGrained() {
+	case RouteSkipped:
+		return nil, true, ""
+	case RouteTodo:
+		return nil, false, finegrained.CauseRESTTodo
+	case RouteUndeclared:
+		return nil, false, finegrained.CauseRESTUndeclared
+	}
+	auth := r.Authorization
+	groups = appendRequirement(groups, Requirement{Permissions: sortedNames(auth.Permissions), Any: primaryBoundary(auth)})
+	for _, scope := range auth.AdditionalScopes {
+		boundaries := boundaryOf(scope.BoundaryType)
+		if scope.Boundary != nil || boundaries == 0 {
+			boundaries = finegrained.AllBoundaries
+		}
+		groups = appendRequirement(groups, Requirement{Permissions: sortedNames(scope.Permissions), Any: boundaries})
+	}
+	return groups, false, ""
+}
+
+// appendRequirement adds a requirement unless an equal one is already there.
+func appendRequirement(groups []Requirement, requirement Requirement) []Requirement {
+	for _, seen := range groups {
+		if seen.Any == requirement.Any && slices.Equal(seen.Permissions, requirement.Permissions) {
+			return groups
+		}
+	}
+	return append(groups, requirement)
+}
+
+// primaryBoundary reads the boundary types a route's primary requirement may
+// be held at. A callable boundary wins over everything else and is resolved
+// per request, so it is read as the types the route declares beside it, or
+// all four when it declares none.
+func primaryBoundary(auth *RouteAuthorization) finegrained.Boundary {
+	declared := boundaryOf(auth.BoundaryType)
+	for _, alternative := range auth.Boundaries {
+		declared |= boundaryOf(alternative.BoundaryType)
+		if alternative.Boundary != nil && alternative.BoundaryType == "" {
+			return finegrained.AllBoundaries
+		}
+	}
+	if declared == 0 {
+		return finegrained.AllBoundaries
+	}
+	return declared
+}
+
+// boundaryOf reads one boundary type, nothing for an empty or unknown one.
+func boundaryOf(name string) finegrained.Boundary {
+	boundary, _ := finegrained.ParseBoundary(name)
+	return boundary
+}
+
+// sortedNames returns a sorted copy of names, the order GitLab compares a
+// requirement's permissions in and the one the table keys a group by.
+func sortedNames(names []string) []string {
+	out := slices.Clone(names)
+	slices.Sort(out)
+	return out
 }
 
 // The boundary types GitLab knows, lower case as its enum values and its
@@ -409,6 +491,45 @@ func (g *Granular) Expandable() map[string]bool {
 		}
 	}
 	return expandable
+}
+
+// HoldsDenial reports whether the element a denial names is one the record
+// holds, of the kind its cause says it is: a route for a REST cause, a
+// mutation for an undeclared mutation, an object, union or interface type for
+// a position, and either a type or a mutation for a boundary that never
+// resolves, which a declaration may say of a mutation's own check. A denial
+// naming something the record does not hold was decided by nothing GitLab
+// declared.
+//
+// Two readers ask it, and they must agree: the fine-grained derivation, whose
+// gate 2 refuses such a denial as it joins the table, and R-GRANT, which reads
+// the committed table back and asks the same question of it. Both ask it of
+// every denial a row carries, the action's and each denied way's.
+func (d Document) HoldsDenial(denial *finegrained.Denial) bool {
+	if !denial.Cause.GraphQL() {
+		for i := range d.Routes {
+			if RouteName(&d.Routes[i]) == denial.Element {
+				return true
+			}
+		}
+		return false
+	}
+	authz := d.GraphQLAuthz
+	if authz == nil {
+		return false
+	}
+	_, mutation := authz.Mutations[denial.Element]
+	if denial.Cause == finegrained.CauseMutationUndeclared {
+		return mutation
+	}
+	if denial.Cause == finegrained.CauseBoundaryUnresolvable && mutation {
+		return true
+	}
+	if _, ok := authz.Types[denial.Element]; ok {
+		return true
+	}
+	_, ok := authz.Abstract[denial.Element]
+	return ok
 }
 
 // String renders the fine-grained figures as the one line a gate reports

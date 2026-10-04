@@ -20,176 +20,23 @@ func (r requirement) key() string {
 	return strings.Join(r.perms, ",") + "@" + r.any.String()
 }
 
-// routeIndex finds the record's route for a derived one.
-type routeIndex struct {
-	// byMethod maps a verb to every spelling of every route with that verb.
-	byMethod map[string][]spelled
-}
-
-// spelled is one spelling of a record route: its path with optional segments
-// taken or left out, and identifiers collapsed.
-type spelled struct {
-	segments []string
-	route    *apilive.Route
-}
-
-// apiPrefix is what every route of the REST API is mounted under.
-const apiPrefix = "/api/:version"
-
-// newRouteIndex indexes the record's routes.
-func newRouteIndex(routes []apilive.Route) *routeIndex {
-	index := &routeIndex{byMethod: map[string][]spelled{}}
-	for i := range routes {
-		route := &routes[i]
-		path, mounted := strings.CutPrefix(route.Path, apiPrefix)
-		if !mounted {
-			continue
-		}
-		for _, variant := range expandOptional(path) {
-			index.byMethod[route.Method] = append(index.byMethod[route.Method], spelled{segments: segmentsOf(variant), route: route})
-		}
-	}
-	return index
-}
-
-// expandOptional spells a Grape path with each optional group, written in
-// parentheses, taken and left out: `:id/(-/)epics` is both `:id/epics` and
-// `:id/-/epics`. An escaped parenthesis is a literal, not a group, a closing
-// one outside every group is a literal too, and a group that never closes
-// leaves the path as written.
-func expandOptional(path string) []string {
-	open, depth, escaped := 0, 0, false
-	for i := range len(path) {
-		switch {
-		case escaped:
-			escaped = false
-		case path[i] == '\\':
-			escaped = true
-		case path[i] == '(':
-			if depth == 0 {
-				open = i
-			}
-			depth++
-		case path[i] == ')' && depth > 0:
-			depth--
-			if depth == 0 {
-				return spellGroup(path[:open], path[open+1:i], path[i+1:])
-			}
-		}
-	}
-	return []string{path}
-}
-
-// spellGroup spells a path whose first optional group, inner, sits between
-// head and rest: every spelling of rest with the group left out, and with
-// each spelling of the group taken.
-func spellGroup(head, inner, rest string) []string {
-	var out []string
-	for _, tail := range expandOptional(rest) {
-		out = append(out, head+tail)
-		for _, middle := range expandOptional(inner) {
-			out = append(out, head+middle+tail)
-		}
-	}
-	return out
-}
-
-// segmentsOf splits a path into segments, each identifier or splat collapsed
-// to the placeholder.
-func segmentsOf(path string) []string {
-	segments := strings.Split(strings.Trim(path, "/"), "/")
-	for i, segment := range segments {
-		if strings.HasPrefix(segment, ":") || strings.HasPrefix(segment, "*") {
-			segments[i] = ":"
-		}
-	}
-	return segments
-}
-
-// match finds the record route a derived route is: the one spelling whose
-// segments equal the derived ones, a record placeholder standing for a
-// derived literal where it must; the closest, by literal segments in common,
-// when several do, and the first in the record's order among equally close
-// ones. It reports false for a route the record lacks.
-func (index *routeIndex) match(method, path string) (*apilive.Route, bool) {
-	derived := segmentsOf(path)
-	var best *apilive.Route
-	bestScore := 0
-	for _, candidate := range index.byMethod[method] {
-		score, ok := agree(candidate.segments, derived)
-		if ok && (best == nil || score > bestScore) {
-			best, bestScore = candidate.route, score
-		}
-	}
-	return best, best != nil
-}
-
-// agree reports whether a record spelling meets a derived path, and how many
-// literal segments they share.
-func agree(record, derived []string) (int, bool) {
-	if len(record) != len(derived) {
-		return 0, false
-	}
-	score := 0
-	for i := range record {
-		switch record[i] {
-		case derived[i]:
-			if record[i] != ":" {
-				score++
-			}
-		case ":":
-		default:
-			return 0, false
-		}
-	}
-	return score, true
-}
-
-// liveName spells a record route the way the table names it: the verb and the
-// path under the API prefix, parameters named as GitLab names them.
-func liveName(route *apilive.Route) string {
-	return route.Method + " " + strings.TrimPrefix(route.Path, apiPrefix)
-}
+// Where a derived route is found among the record's and what the table calls
+// it once found are apilive's to answer ([apilive.RouteIndex] and
+// [apilive.RouteName]), since R-GRANT places the routes the unit suite
+// recorded by the same rule and the two must agree on which route a request
+// is.
 
 // restRequirements reads what a route demands: its groups, whether the grant
 // decides it at all, and why no fine-grained token passes it when none does.
+// The reading is apilive's ([apilive.Route.Requirements]), because R-GRANT
+// holds each REST operation of the committed table to the record by the same
+// reading, and the two must agree on what a route demands.
 func restRequirements(route *apilive.Route) (groups []requirement, skip bool, denied finegrained.Cause) {
-	switch route.FineGrained() {
-	case apilive.RouteSkipped:
-		return nil, true, ""
-	case apilive.RouteTodo:
-		return nil, false, finegrained.CauseRESTTodo
-	case apilive.RouteUndeclared:
-		return nil, false, finegrained.CauseRESTUndeclared
+	read, skip, denied := route.Requirements()
+	for _, group := range read {
+		groups = append(groups, requirement{perms: group.Permissions, any: group.Any})
 	}
-	auth := route.Authorization
-	groups = append(groups, requirement{perms: sorted(auth.Permissions), any: primaryBoundary(auth)})
-	for _, scope := range auth.AdditionalScopes {
-		boundaries := boundaryOf(scope.BoundaryType)
-		if scope.Boundary != nil || boundaries == 0 {
-			boundaries = finegrained.AllBoundaries
-		}
-		groups = append(groups, requirement{perms: sorted(scope.Permissions), any: boundaries})
-	}
-	return groups, false, ""
-}
-
-// primaryBoundary reads the boundary types a route's primary requirement may
-// be held at. A callable boundary wins over everything else and is resolved
-// per request, so it is read as the types the route declares beside it, or
-// all four when it declares none.
-func primaryBoundary(auth *apilive.RouteAuthorization) finegrained.Boundary {
-	declared := boundaryOf(auth.BoundaryType)
-	for _, alternative := range auth.Boundaries {
-		declared |= boundaryOf(alternative.BoundaryType)
-		if alternative.Boundary != nil && alternative.BoundaryType == "" {
-			return finegrained.AllBoundaries
-		}
-	}
-	if declared == 0 {
-		return finegrained.AllBoundaries
-	}
-	return declared
+	return groups, skip, denied
 }
 
 // boundaryOf reads one boundary type, nothing for an empty or unknown one.

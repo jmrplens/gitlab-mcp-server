@@ -8,6 +8,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/join"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // gateFindings holds the derivation to the three rules a person cannot be
@@ -16,8 +17,9 @@ import (
 //  1. a way of running an action that sends more than one request says why
 //     each extra one runs (a directive or a declaration), since the default
 //     reading of syntax is what makes two lookups look like a conjunction;
-//  2. a denial names something the record holds, so no action is withheld on
-//     a name GitLab never declared;
+//  2. a denial, of an action or of one way of running it, names something the
+//     record holds, so no action and no input is withheld on a name GitLab
+//     never declared;
 //  3. an action that sends something sends something on every way of running
 //     it, or a directive says it may not, since a loop the default reads as
 //     optional is otherwise a silent wrong "yes".
@@ -34,14 +36,33 @@ func gateFindings(derived []derive.Action, joined []join.Action, record *apilive
 		}
 	}
 	for i := range joined {
-		row := joined[i].Row
-		if row != nil && row.Denied != nil && !join.Known(record, row.Denied) {
-			findings = append(findings, fmt.Sprintf("gate 2: %s is denied by %s, which the live record does not hold as a %s",
-				row.ID, row.Denied.Element, row.Denied.Cause))
-		}
+		findings = append(findings, unheldDenials(joined[i].Row, record)...)
 	}
 	slices.Sort(findings)
 	return slices.Compact(findings)
+}
+
+// unheldDenials reports each denial of a row, of the action or of one way of
+// running it, that names an element the record does not hold as the kind its
+// cause says. R-GRANT asks the same question of the committed table through
+// the same function, so the two cannot disagree on any denial either reads.
+func unheldDenials(row *finegrained.Requirement, record *apilive.Document) []string {
+	if row == nil {
+		return nil
+	}
+	var findings []string
+	if row.Denied != nil && !record.HoldsDenial(row.Denied) {
+		findings = append(findings, fmt.Sprintf("gate 2: %s is denied by %s, which the live record does not hold as a %s",
+			row.ID, row.Denied.Element, row.Denied.Cause))
+	}
+	for j := range row.DeniedWays {
+		way := &row.DeniedWays[j]
+		if !record.HoldsDenial(way) {
+			findings = append(findings, fmt.Sprintf("gate 2: a way of running %s is denied by %s, which the live record does not hold as a %s",
+				row.ID, way.Element, way.Cause))
+		}
+	}
+	return findings
 }
 
 // unqualified reports each way of running an action that sends more than one
