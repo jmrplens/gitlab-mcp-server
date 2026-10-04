@@ -27,7 +27,9 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // Requirement is what a package's tests need of the instance they run on.
@@ -193,8 +195,19 @@ func probe(ctx context.Context, client *gitlabclient.Client, url string, skipTLS
 	facts.Username = user.Username
 	facts.UserID = user.ID
 
-	facts.Scopes = gitlabclient.DetectScopes(ctx, client.GL())
+	facts.Scopes = gitlabclient.DetectToken(ctx, client.GL()).Scopes
 	return facts, nil
+}
+
+// credentialAuthority is what the binary attaches to a credential's client:
+// for a fine-grained token, the authority judged from its grant and the
+// instance version, read with the same two requests the binary makes; nil
+// for any other token.
+func credentialAuthority(ctx context.Context, client *gitlabclient.Client, token gitlabclient.TokenFacts) *finegrained.Authority {
+	if !token.FineGrained {
+		return nil
+	}
+	return actiongrants.Build(true, client.ReadFineGrained(ctx, token))
 }
 
 // instanceIsEnterprise reads the edition flag off GET /api/v4/version.

@@ -33,14 +33,20 @@ const (
 	withheldNotGranted = "exists but this fine-grained personal access token was not granted what it needs"
 )
 
-// WithheldText is the one sentence every surface answers a withheld call
-// with, or "" for a decision whose call passes. It names the action by its
+// WithheldText is the one sentence every surface answers a withheld action
+// with, or "" for a decision that lists the action. It names the action by its
 // canonical ID and never by a tool name, names permissions in the words the
 // token creation page offers, and says what GitLab does to the answer the way
 // the row's effect records it, so a read GitLab answers with null is not
 // described as a refusal.
+//
+// A call is refused only when the decision is not callable, which is when the
+// call middleware and the dispatchers ask for these words. An action left out
+// of the listing whose call still passes, one GitLab may serve on a public
+// project or group or one listed past the recorded release, is worded too, for
+// the detail of gitlab://tools/{id}, which says so.
 func (a *Authority) WithheldText(id string, decision Decision) string {
-	if decision.Callable {
+	if decision.Listed {
 		return ""
 	}
 	version := a.table.DisplayVersion()
@@ -124,8 +130,24 @@ func (a *Authority) notGrantedText(id string, decision Decision, version string)
 		pronoun = "them"
 	}
 	return fmt.Sprintf("action %q %s: %s, "+
-		"as GitLab %s declares it. Create a fine-grained token that grants %s, or use a classic token with the api scope %s.%s %s",
-		id, withheldNotGranted, strings.Join(parts, ", and "), version, pronoun, classicWayOut, a.fallbackText(), notMissing)
+		"as GitLab %s declares it. Create a fine-grained token that grants %s, or use a classic token with the api scope %s.%s%s %s",
+		id, withheldNotGranted, strings.Join(parts, ", and "), version, pronoun, classicWayOut,
+		a.passedText(decision), a.fallbackText(), notMissing)
+}
+
+// passedText is the sentence a not-granted action whose call still passes
+// appends, with its leading space, or "" for one whose call is refused: the
+// listing leaves it out, and a call is handed to GitLab, which judges it.
+func (a *Authority) passedText(decision Decision) string {
+	switch {
+	case !decision.Callable:
+		return ""
+	case a.listingOnly:
+		return fmt.Sprintf(" The instance reports GitLab %s, a prerelease past the release the permissions are recorded for, "+
+			"so the listing follows %s and a call is still passed to GitLab, which judges it.", a.reported, a.table.DisplayVersion())
+	default:
+		return " A call is still passed to GitLab, which serves it on a public project or group where these permissions are public."
+	}
 }
 
 // groupWords names one group the way a refusal reads it, "the project
@@ -163,12 +185,16 @@ func (a *Authority) fallbackText() string {
 	switch a.fallback {
 	case FallbackGrantUnreadable:
 		return " The token cannot read its own grant (a token created with Personal Access Token: Read can)" + notEvaluated
+	case FallbackGrantUnanswered:
+		return " The instance did not answer the request for the token's grant" + notEvaluated
 	case FallbackGrantTooLarge:
 		return " The token's grant is larger than this server reads" + notEvaluated
 	case FallbackGrantShape:
 		return " The token's grant holds a scope this server cannot read without guessing" + notEvaluated
 	case FallbackVersionUnreadable:
 		return " The instance did not report a version this server can read (a token granted Metadata: Read lets it)" + notEvaluated
+	case FallbackVersionUnanswered:
+		return " The instance did not answer the request for its version" + notEvaluated
 	case FallbackVersionOutside:
 		return fmt.Sprintf(" The instance reports GitLab %s and the permissions are recorded for %s only%s",
 			a.reported, a.table.Bucket, notEvaluated)

@@ -43,23 +43,24 @@ func TestRequirement_AnswersByCanonicalID(t *testing.T) {
 }
 
 // TestBuild_OnlyAFineGrainedTokenGetsAnAuthority verifies a classic credential
-// is decided by nothing here, and that a fine-grained one is given phase A over
-// the generated table: what no fine-grained token reaches is withheld, the
-// rest is left to GitLab, and nothing is said about a grant it never read.
+// is decided by nothing here, and that a fine-grained one is judged over the
+// generated table: phase A with the reason when its grant could not be read,
+// and phase B, at the version the table was recorded from, when it was.
 func TestBuild_OnlyAFineGrainedTokenGetsAnAuthority(t *testing.T) {
-	if got := Build(false); got != nil {
+	if got := Build(false, finegrained.Reading{Version: "19.4.1-ee"}); got != nil {
 		t.Errorf("Build(false) = %+v, want nil for a classic credential", got)
 	}
-	authority := Build(true)
-	if authority == nil {
-		t.Fatal("Build(true) = nil, want phase A for a fine-grained token")
+	unread := Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable})
+	if unread == nil || unread.Table() != Table() || unread.Phase() != finegrained.PhaseUnknown ||
+		unread.Fallback() != finegrained.FallbackGrantUnreadable {
+		t.Errorf("Build(true, unreadable) = %+v, want phase A over the generated table saying why", unread)
 	}
-	if authority.Table() != Table() || authority.Phase() != finegrained.PhaseUnknown ||
-		authority.Fallback() != finegrained.FallbackNone || authority.Reported() != "" {
-		t.Errorf("Build(true) = %+v, want phase A over the generated table with no fallback", authority)
+	read := Build(true, finegrained.Reading{Grant: finegrained.Grant{Scopes: []finegrained.Scope{}}, Version: Table().Version})
+	if read == nil || read.Table() != Table() || read.Phase() != finegrained.PhaseGranted || read.Reported() != Table().Version {
+		t.Errorf("Build(true, read) = %+v, want phase B over the generated table at its own version", read)
 	}
-	if Build(true) == authority {
-		t.Error("Build(true) returned the same authority twice; each credential gets its own")
+	if again := Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}); again == unread {
+		t.Error("Build returned the same authority twice; each credential gets its own")
 	}
 }
 

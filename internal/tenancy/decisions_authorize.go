@@ -5,7 +5,8 @@ package tenancy
 // and the operator's configuration leave, the local files a stdio process may
 // reach, the destinations a client may dial, the response profile and cache
 // hints a session is given, which subscriptions may be made at all, and what a
-// fine-grained token is withheld (AUT-007).
+// fine-grained token is withheld, whatever its grant (AUT-007) or for want of
+// one (AUT-008).
 //
 // Authority is the credential's own, which is why most of these are class C:
 // two credentials of one tenant may carry different scopes and so be served
@@ -181,11 +182,87 @@ func authorizeDecisions() []Decision {
 			},
 			Sites: []Site{
 				enforce(pkgFinegrained, "Authority.Decide"),
+				enforce(pkgFinegrained, "Authority.Lists"),
 				enforce(pkgActiongrants, "Build"),
 				enforce(pkgVisibility, "CallMiddleware"),
 				enforce(pkgToolutil, "FineGrainedRefusal"),
 				enforce(pkgVisibility, "ListingMiddleware"),
 				refuse(pkgFinegrained, "Authority.WithheldText"),
+				refuse(pkgVisibility, "ToolActions.Filter"),
+			},
+		},
+		{
+			// Phase B of issue 952: a fine-grained token whose grant the server
+			// can read (the token holds Personal Access Token: Read) is served
+			// only the actions that grant reaches at the instance's GitLab
+			// version, and a call to any other is withheld naming the
+			// permissions GitLab declares for it. What one scope covers before
+			// the call's target is known is CoverableAt, the rule this row
+			// promotes; Evaluate applies it to every scope of the grant once
+			// per entry build or revalidation, and the authority it returns is
+			// carried by the entry's client like AUT-007's, so the row has no
+			// capacity of its own and keys nothing on the grant: the grant is a
+			// value its caller mints, and it never reaches a shape, catalog or
+			// manifest key (INV-010), nor does the version an instance reports,
+			// which a caller names under --allow-any-gitlab-url. The listing
+			// varies with the authorization on the request alone (INV-009), so
+			// a re-read that did not answer keeps the authority in place
+			// rather than falling back. An HTTP entry is re-read on each
+			// accepted revalidation, at ADM-009's interval and off with it; the
+			// stdio process is re-read on a timer at ADM-009's default, which
+			// is this row's own use of that value (the Arg site below): stdio
+			// reads no revalidation setting, so nothing moves the timer or
+			// turns it off, and what it costs is the two reads, once per
+			// interval, of the one token the process serves. A token whose kind
+			// nothing has told yet (the self endpoint did not answer, or the
+			// OAuth verifier's scopes are its assumption) is asked its kind on
+			// those same rounds instead, and on stdio once a degraded start
+			// recovers, and is given its authority the round GitLab answers; it
+			// is served as a classic token until then. A withheld call
+			// charges no failure budget (INV-007) and spends its token of the
+			// credential's rate bucket like every other refused call. A call
+			// GitLab would serve on a public project or group, permission by
+			// permission, is passed to GitLab even when the listing leaves the
+			// action out. The bounds on the read itself are a request bound,
+			// RQB-011, and the build's two reads take POL-006's probe slots,
+			// which that row declares. The call middleware's refusal carries
+			// the resultType its revision requires, as AUT-007 says, so the row
+			// carries no F-20.
+			ID: "AUT-008", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
+			Resource: "the actions a fine-grained token's grant cannot reach",
+			Key:      KeyEntry, StdioKey: KeyProcess,
+			Decided:   []string{"ADR-0024", "issue 952"},
+			Functions: []string{"CoverableAt"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{"tools/call"}, Channel: Withheld, Answer: WidenScope,
+					Prefix: "exists but this fine-grained personal access token was not granted",
+					At:     refuse(pkgFinegrained, "Authority.notGrantedText"),
+				},
+				{
+					Methods: []string{"tools/list"}, Channel: Absent, Answer: WidenScope,
+					At: refuse(pkgVisibility, "ToolActions.Filter"),
+				},
+			},
+			Sites: []Site{
+				enforce(pkgFinegrained, "Evaluate"),
+				enforce(pkgFinegrained, "Judge"),
+				enforce(pkgFinegrained, "Rejudge"),
+				enforce(pkgFinegrained, "Authority.Decide"),
+				enforce(pkgFinegrained, "Authority.Lists"),
+				enforce(pkgActiongrants, "Build"),
+				enforce(pkgGitLab, "Client.RefreshAuthority"),
+				enforce(pkgPool, "ServerPool.fineGrainedAuthority"),
+				enforce(pkgPool, "ServerPool.refreshAuthority"),
+				enforce(pkgPool, "redetectKind"),
+				enforce(pkgServer, "stdioAuthority"),
+				enforce(pkgServer, "refreshStdioAuthority"),
+				enforce(pkgServer, "redetectStdioToken"),
+				arg(pkgServer, "prepareStdioCatalog", "refreshStdioAuthority", 3, 1, "RevalidateInterval"),
+				enforce(pkgVisibility, "CallMiddleware"),
+				enforce(pkgToolutil, "FineGrainedRefusal"),
+				enforce(pkgVisibility, "ListingMiddleware"),
+				refuse(pkgFinegrained, "Authority.notGrantedText"),
 				refuse(pkgVisibility, "ToolActions.Filter"),
 			},
 		},

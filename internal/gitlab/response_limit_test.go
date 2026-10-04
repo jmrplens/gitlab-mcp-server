@@ -948,3 +948,60 @@ func TestResponseLimitTransport_A401WithNoBody_IsStillReported(t *testing.T) {
 		})
 	}
 }
+
+// TestRequestLimit_TheSmallerCeilingApplies verifies a request reads under the
+// lower of the client's ceiling and the one its context carries, that no
+// context ceiling, or one of zero or less, leaves the client's, and that a
+// client with no ceiling of its own takes the context's.
+func TestRequestLimit_TheSmallerCeilingApplies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		carried int64
+		carries bool
+		client  int64
+		want    int64
+	}{
+		{name: "nothing carried", client: 64, want: 64},
+		{name: "a smaller one carried", carried: 8, carries: true, client: 64, want: 8},
+		{name: "a larger one carried", carried: 128, carries: true, client: 64, want: 64},
+		{name: "zero carried", carried: 0, carries: true, client: 64, want: 64},
+		{name: "a negative one carried", carried: -1, carries: true, client: 64, want: 64},
+		{name: "a client with no ceiling", carried: 8, carries: true, client: 0, want: 8},
+		{name: "the same carried", carried: 64, carries: true, client: 64, want: 64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tc.carries {
+				ctx = WithResponseLimit(ctx, tc.carried)
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, restURL, http.NoBody)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
+			}
+			if got := requestLimit(req, tc.client); got != tc.want {
+				t.Errorf("requestLimit = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestResponseLimitTransport_AContextCeiling_BoundsTheBody verifies the
+// transport reads a body under the ceiling a request's context carries when
+// it is below the client's, failing past it with the ceiling's error.
+func TestResponseLimitTransport_AContextCeiling_BoundsTheBody(t *testing.T) {
+	client := &Client{}
+	client.SetMaxResponseBytes(DefaultMaxResponseBytes)
+	transport := &responseLimitTransport{base: &stubRoundTripper{body: "0123456789"}, client: client}
+	req, err := http.NewRequestWithContext(WithResponseLimit(t.Context(), 4), http.MethodGet, restURL, http.NoBody)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	defer resp.Body.Close()
+	if _, readErr := io.ReadAll(resp.Body); !errors.Is(readErr, ErrResponseTooLarge) {
+		t.Errorf("reading the body = %v, want %v", readErr, ErrResponseTooLarge)
+	}
+}

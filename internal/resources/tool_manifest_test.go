@@ -835,6 +835,38 @@ func TestToolManifest_FineGrained_ReadNarrowedToWhatTheSessionMayRun(t *testing.
 	}
 }
 
+// BenchmarkToolManifest_FineGrainedRead measures one read of gitlab://tools by
+// a phase B session on the individual surface over the whole catalog: the copy
+// of the shared snapshot narrowed to what its grant lists, which is the one
+// cost the manifest adds for a fine-grained session (the snapshot itself is
+// marshaled on every read for every session already).
+func BenchmarkToolManifest_FineGrainedRead(b *testing.B) {
+	catalog := domainSurfaceCatalog(b)
+	opts := ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual, Catalog: catalog, ToolActions: map[string][]string{}}
+	for _, action := range catalog.Actions() {
+		name := action.IndividualTool.Name
+		if name == "" {
+			continue
+		}
+		opts.Tools = append(opts.Tools, &mcp.Tool{Name: name})
+		opts.ToolActions[name] = []string{string(action.ID)}
+	}
+	snapshot := newToolSurfaceSnapshot(opts)
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Judge(actiongrants.Table(), finegrained.Reading{
+		Grant: finegrained.Grant{Scopes: []finegrained.Scope{{
+			Access: finegrained.AccessSelectedMemberships, Namespace: finegrained.NamespaceGroup, NamespaceID: 1,
+			Permissions: []string{"read_project", "read_merge_request"},
+		}}},
+		Version: actiongrants.Table().Version,
+	}))
+	ctx := gitlabclient.WithClient(context.Background(), client)
+	b.ReportAllocs()
+	for b.Loop() {
+		snapshot.manifestFor(ctx)
+	}
+}
+
 // TestToolManifest_FineGrained_WithheldDetailSaysWhy verifies the detail of an
 // action a fine-grained session may not run is served, carrying why in the
 // words a call to it is refused with, rather than answered not found; and that
@@ -1824,14 +1856,14 @@ func TestToolManifest_StandaloneSeeAlso_IsKeptInCanonicalIDsOnEverySurface(t *te
 // domainSurfaceCatalog builds the Ultimate-tier catalog the meta and
 // individual surfaces register from: the canonical actions without the
 // standalone surface tools, which those surfaces register beside it.
-func domainSurfaceCatalog(t *testing.T) *actioncatalog.Catalog {
-	t.Helper()
+func domainSurfaceCatalog(tb testing.TB) *actioncatalog.Catalog {
+	tb.Helper()
 	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
 		Enterprise: true,
 		IncludeMCP: true,
 	})
 	if err != nil {
-		t.Fatalf("BuildActionCatalog: %v", err)
+		tb.Fatalf("BuildActionCatalog: %v", err)
 	}
 	return catalog
 }

@@ -22,9 +22,11 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // TestDeclaredCapabilities_ReadsWhatTheServerSaid checks the rule that keeps a
@@ -338,7 +340,7 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			cfg := ServerConfig{Surface: testCase.surface}.normalized()
-			expected, err := expectedSurface(inst, cfg.Surface, serverConfigFor(inst, cfg, inst.credential()))
+			expected, err := expectedSurface(inst, cfg.Surface, serverConfigFor(inst, cfg, inst.credential()), inst.credential().authority)
 			if err != nil {
 				t.Fatalf("expectedSurface(%s): %v", testCase.surface, err)
 			}
@@ -425,11 +427,11 @@ func TestServerConfigFor_CredentialTier_DecidesTheCatalog(t *testing.T) {
 	if licensed.Tier != edition.Ultimate || unlicensed.Tier != edition.Free {
 		t.Fatalf("tiers = %s and %s, want the credential's: ultimate and free", licensed.Tier, unlicensed.Tier)
 	}
-	withLicense, err := expectedSurface(inst, SurfaceMeta, licensed)
+	withLicense, err := expectedSurface(inst, SurfaceMeta, licensed, nil)
 	if err != nil {
 		t.Fatalf("expectedSurface(ultimate): %v", err)
 	}
-	withoutLicense, err := expectedSurface(inst, SurfaceMeta, unlicensed)
+	withoutLicense, err := expectedSurface(inst, SurfaceMeta, unlicensed, nil)
 	if err != nil {
 		t.Fatalf("expectedSurface(free): %v", err)
 	}
@@ -603,6 +605,60 @@ func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.
 	}
 }
 
+// TestListedFor_FineGrainedPhaseB_ServesCallsTheListingLeavesOut checks the
+// two action sets a session is held to. A credential with no authority is
+// listed and served the same actions. A fine-grained token in phase B whose
+// grant reaches nothing is listed only what its grant reaches, while its call
+// guard still serves the actions GitLab answers on a public project or group,
+// so a session can be sent such a call even though no listing shows it; and an
+// action no fine-grained token reaches is in neither set.
+func TestListedFor_FineGrainedPhaseB_ServesCallsTheListingLeavesOut(t *testing.T) {
+	table := actiongrants.Table()
+	every := func() map[ActionID]struct{} {
+		actions := make(map[ActionID]struct{}, len(table.Actions))
+		for i := range table.Actions {
+			actions[ActionID(table.Actions[i].ID)] = struct{}{}
+		}
+		return actions
+	}
+
+	classic := listedFor(surfaceExpectation{actions: every()}, nil, nil)
+	if !maps.Equal(classic.actions, classic.callable) || len(classic.callable) != len(table.Actions) {
+		t.Errorf("with no authority: %d listed and %d served, want both %d", len(classic.actions), len(classic.callable), len(table.Actions))
+	}
+
+	authority := finegrained.Judge(table, finegrained.Reading{Grant: finegrained.Grant{}, Version: table.Version})
+	if authority.Phase() != finegrained.PhaseGranted {
+		t.Fatalf("an empty grant at the recorded release is phase %v, want B", authority.Phase())
+	}
+	got := listedFor(surfaceExpectation{actions: every()}, authority, nil)
+	servedOnly := 0
+	for id := range got.callable {
+		decision := authority.Decide(string(id))
+		if !decision.Callable {
+			t.Errorf("%s is served though the call guard refuses it", id)
+		}
+		if _, listed := got.actions[id]; !listed {
+			servedOnly++
+		}
+	}
+	for id := range got.actions {
+		if _, served := got.callable[id]; !served || !authority.Lists(string(id)) {
+			t.Errorf("%s is listed but not served, or listed though the authority leaves it out", id)
+		}
+	}
+	if servedOnly == 0 {
+		t.Error("no action is served without being listed, so the call guard's public reads are not in the served set")
+	}
+	for i := range table.Actions {
+		if row := &table.Actions[i]; row.Denied != nil {
+			if _, served := got.callable[ActionID(row.ID)]; served {
+				t.Errorf("%s is denied to every fine-grained token and still served", row.ID)
+			}
+		}
+	}
+}
+
 // TestExpectedSurface_AssemblerThatFails_StopsTheExpectation checks that each
 // surface's expectation is refused, naming the catalog, when the assembler it
 // is read from cannot build one, and that a surface nothing serves is refused
@@ -628,7 +684,7 @@ func TestExpectedSurface_AssemblerThatFails_StopsTheExpectation(t *testing.T) {
 		t.Run(string(surface), func(t *testing.T) {
 			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
 
-			_, err := expectedSurface(inst, surface, serverCfg)
+			_, err := expectedSurface(inst, surface, serverCfg, nil)
 
 			if !errors.Is(err, cause) {
 				t.Fatalf("expectedSurface(%s) error = %v, want the assembler's own", surface, err)
@@ -640,7 +696,7 @@ func TestExpectedSurface_AssemblerThatFails_StopsTheExpectation(t *testing.T) {
 	}
 
 	t.Run("a surface nothing serves", func(t *testing.T) {
-		_, err := expectedSurface(inst, Surface("carrier pigeon"), &config.ServerConfig{})
+		_, err := expectedSurface(inst, Surface("carrier pigeon"), &config.ServerConfig{}, nil)
 		if err == nil || !strings.Contains(err.Error(), "unknown tool surface") {
 			t.Errorf("expectedSurface(unknown) error = %v, want the surface refused by name", err)
 		}
@@ -676,7 +732,7 @@ func TestExpectedSurface_ProjectionThatCannotBeBuilt_FailsTheExpectation(t *test
 		t.Run(string(surface), func(t *testing.T) {
 			serverCfg := serverConfigFor(inst, ServerConfig{Surface: surface}.normalized(), inst.credential())
 
-			_, err := expectedSurface(inst, surface, serverCfg)
+			_, err := expectedSurface(inst, surface, serverCfg, nil)
 
 			if !errors.Is(err, failing.err) {
 				t.Fatalf("expectedSurface(%s) error = %v, want the projection's own", surface, err)

@@ -26,10 +26,11 @@ var specRequirementIDs = []string{
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
 	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006", "AUT-007",
+	"AUT-008",
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-	"RQB-008", "RQB-009", "RQB-010",
+	"RQB-008", "RQB-009", "RQB-010", "RQB-011",
 }
 
 // TestDecisions_EveryRequirementHasOneRow holds the register to the
@@ -90,7 +91,9 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // the thirtieth, and HLD-010, the session ceiling the same issue put in place
 // of the decision by absence that row used to record, the thirty-first, which
 // is also why there was one ruled row fewer. AUT-007, the actions issue 952
-// withholds from a fine-grained session, is the thirty-fifth ruled row.
+// withholds from a fine-grained session, is the thirty-fifth ruled row, and
+// AUT-008, what such a session's grant does not reach, the thirty-sixth;
+// RQB-011, the bounds on reading that grant, is the eleventh request bound.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -102,10 +105,10 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 31},
-		{"ruled", Ruled, 35},
+		{"ruled", Ruled, 36},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
-		{"request-bound", RequestBound, 10},
+		{"request-bound", RequestBound, 11},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if counts[tc.disposition] != tc.want {
@@ -119,7 +122,8 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 // function: the five rows of the method meter name MeterFor, and so does
 // HLD-011, which counts the methods it meters to an upstream; POL-003 names
 // Busy, the three authentication budgets name the switch that says whether
-// each is on, and every other row names none.
+// each is on, AUT-008 names CoverableAt, what one scope of a fine-grained
+// token's grant covers, and every other row names none.
 func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 	want := map[string]string{
 		"RTC-001": "MeterFor",
@@ -132,6 +136,7 @@ func TestDecisions_FunctionsNameThePromotedRules(t *testing.T) {
 		"AUB-001": "BudgetOn",
 		"AUB-002": "TransportSourceBudgetOn",
 		"AUB-003": "EscalationOn",
+		"AUT-008": "CoverableAt",
 	}
 	for _, d := range Decisions() {
 		t.Run(d.ID, func(t *testing.T) {
@@ -764,6 +769,13 @@ func rowPins() map[string]rowPin {
 			},
 			{methods: "tools/list", channel: Absent, answer: WidenScope},
 		}},
+		"AUT-008": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
+			{
+				methods: "tools/call", channel: Withheld,
+				prefix: "exists but this fine-grained personal access token was not granted", answer: WidenScope,
+			},
+			{methods: "tools/list", channel: Absent, answer: WidenScope},
+		}},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{
@@ -884,7 +896,7 @@ func rowPins() map[string]rowPin {
 	}
 	for _, id := range []string{
 		"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-		"RQB-008", "RQB-009", "RQB-010",
+		"RQB-008", "RQB-009", "RQB-010", "RQB-011",
 	} {
 		pins[id] = rowPin{Allow, Bound, ClassP, RequestBound, KeyRequest, KeyRequest, KeyNone, KeyNone, nil}
 	}

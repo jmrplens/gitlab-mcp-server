@@ -101,28 +101,23 @@ func clampedBackoff(minWait, maxWait time.Duration, attemptNum int, resp *http.R
 //
 // The ceiling is applied last as well as first, so neither the caller's own
 // minimum nor the jitter can lift the wait back above it.
+//
+// Every bound is applied with min or max rather than a comparison and an
+// assignment: each of those branches only cut the value to the bound, so at
+// the bound both of its sides gave the same wait and a mutation of the
+// comparison could never be observed.
 func (b retryBackoff) wait(minWait, maxWait time.Duration, attemptNum int, resp *http.Response) time.Duration {
 	wait := time.Duration(attemptNum+1) * retryBackoffStep
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
-		if reset := rateLimitResetWait(resp); reset > wait {
-			wait = reset
-		}
+		wait = max(wait, rateLimitResetWait(resp))
 	}
-	if wait > b.ceiling {
-		wait = b.ceiling
-	}
-	if wait < minWait {
-		wait = minWait
-	}
+	wait = max(min(wait, b.ceiling), minWait)
 	// A little jitter so a fleet of pooled clients released by the same
 	// reset does not re-send in lockstep.
 	if maxWait > minWait {
 		wait += time.Duration(rand.Int64N(int64(maxWait - minWait))) //nolint:gosec // retry jitter, not a security decision
 	}
-	if wait > b.ceiling {
-		wait = b.ceiling
-	}
-	return wait
+	return min(wait, b.ceiling)
 }
 
 // rateLimitResetWait reports how long GitLab's RateLimit-Reset header says the
@@ -143,9 +138,7 @@ func rateLimitResetWait(resp *http.Response) time.Duration {
 	// guard that used to stand here was unobservable, which mutation testing
 	// reported as a surviving mutant rather than as dead code, and removing it
 	// is the answer this repository's testing README gives for that shape.
-	wait := time.Until(time.Unix(reset, 0))
-	if wait < 0 {
-		return 0
-	}
-	return wait
+	// A reset already past waits nothing; max says so with no comparison whose
+	// two sides agree at zero.
+	return max(time.Until(time.Unix(reset, 0)), 0)
 }

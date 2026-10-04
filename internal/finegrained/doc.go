@@ -26,23 +26,36 @@
 //
 // # The decision
 //
-// An [Authority] is what one credential is worth. Without a grant, which is
-// phase A and the only phase this package computes so far, it withholds
-// exactly the actions no fine-grained token can reach at the recorded GitLab
-// version (a [Requirement] with a [Denial]) and allows the rest; an action the
-// table has no row for is unknown authority and allowed, never locked out,
-// since a stale table or a newer action is not evidence against the caller.
-// [Authority.WithheldText] writes the one sentence every surface answers a
-// withheld action with, and [Authority.DegradedNote], [Authority.NullNote] and
+// An [Authority] is what one credential is worth, in one of two phases.
+// Without a grant, phase A ([Unevaluated]), it withholds exactly the actions
+// no fine-grained token can reach at the recorded GitLab version (a
+// [Requirement] with a [Denial]) and allows the rest; an action the table has
+// no row for is unknown authority and allowed, never locked out, since a
+// stale table or a newer action is not evidence against the caller. With the
+// grant read, phase B ([Evaluate]), it lists an action when the grant alone
+// reaches it and lets it be called when the grant or GitLab's anonymous
+// access to a public object can, so a call is refused here only where GitLab
+// would refuse it whatever the object. [Judge] decides which of the two a
+// [Reading] is worth, falling back to phase A with its reason when the
+// instance is not a recorded release, the grant could not be read or names a
+// permission the table does not know; [Rejudge] is the same decision for a
+// re-read, which replaces the authority only on reads that answered.
+// [Authority.Decide] and [Authority.Lists] are what the listing and the call
+// read; [Authority.WithheldText] writes the one sentence every surface
+// answers a withheld action with, naming the permission a phase B refusal
+// needs, and [Authority.DegradedNote], [Authority.NullNote] and
 // [Authority.EmptyNote] the next steps a served answer is given where GitLab
 // leaves part of it empty, answers null or removes items over GraphQL without
 // saying so.
 //
-// # A leaf
+// # A leaf beside the register
 //
-// The package imports the standard library alone, so internal/gitlab can hold
-// an [Authority] and the e2e harness can call the same decision the server
-// takes. Every slice of a [Table] holds constants only, which lets the Go
-// compiler lay a generated table out statically: the binary runs no
-// initialization code for it.
+// The package imports the standard library and internal/tenancy alone, so
+// internal/gitlab can hold an [Authority] and the e2e harness can call the
+// same decision the server takes. What one granted scope covers is a policy
+// rule, so it lives in the register as tenancy.CoverableAt (row AUT-008) and
+// the vocabulary it is written in with it; the types here alias them. Every
+// slice of a [Table] holds constants only, which lets the Go compiler lay a
+// generated table out statically: the binary runs no initialization code for
+// it.
 package finegrained

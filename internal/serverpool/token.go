@@ -173,7 +173,10 @@ func ResolveRequestOptionsFor(r *http.Request, allowed []string) (RequestOptions
 		return options, nil
 	}
 
-	if len(normalizedAllowed) > 1 {
+	// More than one, since exactly one has returned above. Written as not
+	// none rather than as more than one, which would carry a boundary the
+	// return above makes unobservable.
+	if len(normalizedAllowed) != 0 {
 		if header == "" {
 			// Refused rather than defaulted to the first published instance,
 			// which is what this did until the server's gate started refusing

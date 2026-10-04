@@ -2282,7 +2282,7 @@ func listedMatches(ctx context.Context, matches []scoredActionEntry) []scoredAct
 		return matches
 	}
 	return slices.DeleteFunc(matches, func(match scoredActionEntry) bool {
-		return !authority.Decide(match.entry.ID).Listed
+		return !authority.Lists(match.entry.ID)
 	})
 }
 

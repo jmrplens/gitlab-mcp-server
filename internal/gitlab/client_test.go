@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -820,6 +821,58 @@ func TestEnsureInitialized_Recovery(t *testing.T) {
 	}
 }
 
+// TestSetOnRecovered_RunsOnlyWhenALazyInitializationSucceeds verifies the
+// recovery hook a stdio start registers: it is not told about an attempt the
+// instance did not answer, it is told once when the next attempt recovers the
+// client, and a nil hook clears it, so a recovery after that tells nobody.
+func TestSetOnRecovered_RunsOnlyWhenALazyInitializationSucceeds(t *testing.T) {
+	var up atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.4.1-ee","revision":"abc"}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	var told atomic.Int64
+	client.SetOnRecovered(func() { told.Add(1) })
+	client.EnableLazyInit()
+
+	client.EnsureInitialized(context.Background())
+	if told.Load() != 0 || client.IsInitialized() {
+		t.Fatalf("after an attempt the instance did not answer: told %d times, initialized %v; want neither",
+			told.Load(), client.IsInitialized())
+	}
+
+	up.Store(true)
+	client.lastInitAttempt = time.Time{}
+	client.EnsureInitialized(context.Background())
+	if told.Load() != 1 || !client.IsInitialized() {
+		t.Fatalf("after the attempt that recovered: told %d times, initialized %v; want once and initialized",
+			told.Load(), client.IsInitialized())
+	}
+
+	cleared, clearErr := NewClient(newTestConfig(srv.URL, testValidToken))
+	if clearErr != nil {
+		t.Fatalf(fmtNewClientErr, clearErr)
+	}
+	cleared.SetOnRecovered(func() { told.Add(1) })
+	cleared.SetOnRecovered(nil)
+	cleared.EnableLazyInit()
+	cleared.EnsureInitialized(context.Background())
+	if told.Load() != 1 || !cleared.IsInitialized() {
+		t.Errorf("a cleared hook: told %d times in all, initialized %v; want still once and initialized",
+			told.Load(), cleared.IsInitialized())
+	}
+}
+
 // TestEnsureInitialized_Cooldown verifies that [Client.EnsureInitialized]
 // respects the 30-second cooldown between re-initialization attempts.
 func TestEnsureInitialized_Cooldown(t *testing.T) {
@@ -845,6 +898,47 @@ func TestEnsureInitialized_Cooldown(t *testing.T) {
 	client.EnsureInitialized(context.Background())
 	if callCount != firstCount {
 		t.Errorf("expected cooldown to prevent second attempt, got %d calls (want %d)", callCount, firstCount)
+	}
+}
+
+// TestEnsureInitialized_Cooldown_EndsExactlyWhenItSays verifies that a lazy
+// re-initialization attempt is refused until initCooldown has passed since the
+// last one, and made the instant it has.
+//
+// A bubble's clock moves only when its goroutines sleep, so the time since the
+// last attempt is exactly what the test slept, which the wall clock never
+// allows: this boundary used to be recorded as one no test could schedule. The
+// attempt runs under a cancelled context, so Initialize returns before it
+// sends anything and the attempt's only trace is lastInitAttempt moving to the
+// bubble's present.
+func TestEnsureInitialized_Cooldown_EndsExactlyWhenItSays(t *testing.T) {
+	cases := []struct {
+		name    string
+		elapsed time.Duration
+		attempt bool
+	}{
+		{name: "a nanosecond before the cooldown ends", elapsed: initCooldown - time.Nanosecond, attempt: false},
+		{name: "the instant the cooldown ends", elapsed: initCooldown, attempt: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClient(newTestConfig("http://127.0.0.1:1", testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			client.EnableLazyInit()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				client.lastInitAttempt = time.Now()
+				before := client.lastInitAttempt
+				time.Sleep(tc.elapsed)
+				client.EnsureInitialized(ctx)
+				if attempted := !client.lastInitAttempt.Equal(before); attempted != tc.attempt {
+					t.Errorf("after %v an attempt was made = %v, want %v", tc.elapsed, attempted, tc.attempt)
+				}
+			})
+		})
 	}
 }
 

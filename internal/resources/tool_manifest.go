@@ -418,7 +418,7 @@ func (snapshot *toolSurfaceSnapshot) manifestFor(ctx context.Context) ToolSurfac
 	if authority == nil || toolutil.IsInternalInspection(ctx) {
 		return snapshot.manifest
 	}
-	listed := func(id string) bool { return authority.Decide(id).Listed }
+	listed := authority.Lists
 	narrowed := snapshot.manifest
 	narrowed.Entries = make([]ToolSurfaceEntry, 0, len(snapshot.manifest.Entries))
 	for _, entry := range snapshot.manifest.Entries {

@@ -752,6 +752,9 @@ func TestSession_Actions_ListsWhatServesAnswersFor(t *testing.T) {
 			t.Errorf("Actions() lists %s, which Serves denies", id)
 		}
 	}
+	if session.Serves("project.delete") {
+		t.Error("the read-only session serves project.delete")
+	}
 	if slices.Contains(actions, "project.delete") {
 		t.Error("the read-only session lists project.delete")
 	}
