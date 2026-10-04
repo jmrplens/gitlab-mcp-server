@@ -5,11 +5,16 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"debug/buildinfo"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/golist"
 )
 
 // TestRunMain_ExitCodes holds the exit code to what went wrong: 2 for
@@ -43,20 +48,23 @@ func TestRunMain_ExitCodes(t *testing.T) {
 }
 
 // TestRunMain_ReadsARealBinary runs the command the way the release does:
-// against a real binary, its build information read by debug/buildinfo and
-// GOROOT and the module cache by `go env`. The binary is this test's own,
-// which links no module outside this one, so its notices are the standard
-// library's, read from the GOROOT of the toolchain that built it.
+// against a real binary, its build information read by debug/buildinfo, its
+// packages by `go list -deps` and GOROOT and the module cache by `go env`.
+// The binary is this command, built from this package, since a test binary's
+// main package is not one `go list` can name, and its notices hold the
+// standard library's texts, read from the GOROOT of the toolchain that built
+// it.
 func TestRunMain_ReadsARealBinary(t *testing.T) {
 	t.Parallel()
 
-	self, err := os.Executable()
+	self := filepath.Join(t.TempDir(), toolName)
+	build := exec.CommandContext(context.Background(), golist.Executable(), "build", "-o", self, ".") //#nosec G204 -- golist.Executable is the toolchain's own go binary, building this package into a temporary directory
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	info, err := buildinfo.ReadFile(self)
 	if err != nil {
 		t.Fatal(err)
-	}
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		t.Fatal("the test binary records no build information")
 	}
 	target, err := targetOf(info)
 	if err != nil {
@@ -87,7 +95,7 @@ func TestRunMain_ReadsARealBinary(t *testing.T) {
 
 // TestRun_WritesTheNoticesAndSaysWhat covers a successful run end to end
 // over the fixture release, and each later step that can stop it: the
-// target list, `go env` and the write itself.
+// target list, the package listing, `go env` and the write itself.
 func TestRun_WritesTheNoticesAndSaysWhat(t *testing.T) {
 	t.Parallel()
 
@@ -96,13 +104,14 @@ func TestRun_WritesTheNoticesAndSaysWhat(t *testing.T) {
 	modcache := fixtureModcache(t)
 	base := func(out string) config {
 		return config{
-			patterns: []string{filepath.Join(dir, "server-*")},
-			out:      out,
-			targets:  []string{"linux/amd64", "windows/amd64"},
-			goroot:   goroot,
-			modcache: modcache,
-			readInfo: read,
-			goEnv:    func() ([]byte, error) { t.Error("go env asked although both were named"); return nil, nil },
+			patterns:     []string{filepath.Join(dir, "server-*")},
+			out:          out,
+			targets:      []string{"linux/amd64", "windows/amd64"},
+			goroot:       goroot,
+			modcache:     modcache,
+			readInfo:     read,
+			listPackages: fixtureLister,
+			goEnv:        func() ([]byte, error) { t.Error("go env asked although both were named"); return nil, nil },
 		}
 	}
 
@@ -118,7 +127,7 @@ func TestRun_WritesTheNoticesAndSaysWhat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.HasPrefix(doc, []byte("Third-party notices for gitlab-mcp-server\n")) || !bytes.HasSuffix(doc, []byte("Copyright Toml\n")) {
+	if !bytes.HasPrefix(doc, []byte("Third-party notices for gitlab-mcp-server\n")) || !bytes.HasSuffix(doc, []byte("Toml internal notice\n")) {
 		t.Errorf("the written file is not the rendered notices:\n%s", doc)
 	}
 
@@ -132,6 +141,8 @@ func TestRun_WritesTheNoticesAndSaysWhat(t *testing.T) {
 	unwritable := base(filepath.Join(t.TempDir(), "missing", "THIRD_PARTY_NOTICES"))
 	unreadable := base(filepath.Join(t.TempDir(), "x"))
 	unreadable.readInfo = func(string) (*debug.BuildInfo, error) { return nil, os.ErrInvalid }
+	unlisted := base(filepath.Join(t.TempDir(), "x"))
+	unlisted.listPackages = func(*debug.BuildInfo) ([]listedPackage, error) { return nil, os.ErrNotExist }
 	for _, tc := range []struct {
 		name string
 		cfg  config
@@ -142,6 +153,7 @@ func TestRun_WritesTheNoticesAndSaysWhat(t *testing.T) {
 		{"GOROOT of another toolchain", badGOROOT, "is go1.26.4"},
 		{"an unwritable destination", unwritable, "missing"},
 		{"a binary with no build information", unreadable, os.ErrInvalid.Error()},
+		{"packages that cannot be listed", unlisted, os.ErrNotExist.Error()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

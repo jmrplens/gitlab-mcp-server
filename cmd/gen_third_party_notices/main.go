@@ -17,15 +17,17 @@ const toolName = "gen_third_party_notices"
 
 // config is one run: the binaries to read, the file to write, the targets the
 // binaries must cover, where GOROOT and the module cache are when the caller
-// names them, and how build information and `go env` are read.
+// names them, and how build information, the linked packages and `go env` are
+// read.
 type config struct {
-	patterns []string
-	out      string
-	targets  []string
-	goroot   string
-	modcache string
-	readInfo infoReader
-	goEnv    func() ([]byte, error)
+	patterns     []string
+	out          string
+	targets      []string
+	goroot       string
+	modcache     string
+	readInfo     infoReader
+	listPackages packageLister
+	goEnv        func() ([]byte, error)
 }
 
 // exitProcess is [os.Exit] behind a seam, so the code [runMain] decides is a
@@ -57,13 +59,14 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	cfg := config{
-		patterns: flags.Args(),
-		out:      *out,
-		targets:  splitList(*targets),
-		goroot:   *goroot,
-		modcache: *modcache,
-		readInfo: buildinfo.ReadFile,
-		goEnv:    runGoEnv,
+		patterns:     flags.Args(),
+		out:          *out,
+		targets:      splitList(*targets),
+		goroot:       *goroot,
+		modcache:     *modcache,
+		readInfo:     buildinfo.ReadFile,
+		listPackages: goListPackages,
+		goEnv:        runGoEnv,
 	}
 	summary, err := run(cfg)
 	if err != nil {
@@ -99,6 +102,9 @@ func run(cfg config) (string, error) {
 	}
 	if targetErr := set.requireTargets(cfg.targets); targetErr != nil {
 		return "", targetErr
+	}
+	if listErr := set.addPackages(cfg.listPackages); listErr != nil {
+		return "", listErr
 	}
 	env, err := resolveGoEnv(cfg.goroot, cfg.modcache, cfg.goEnv)
 	if err != nil {

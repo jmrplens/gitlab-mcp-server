@@ -19,10 +19,12 @@
 // program name is fixed. Written twice, that is a rule that holds until one
 // of the two copies is edited by somebody who did not read the other; written
 // once, with the reasoning and the Windows suffix beside it, it is a rule.
-// Two more commands ask [Executable] for the same reason without listing
-// anything: cmd/audit_binary_vulns runs `go build` for every release target,
-// and cmd/gen_third_party_notices runs `go env` to find GOROOT and the module
-// cache.
+// Two more commands ask [Executable] for the same reason:
+// cmd/audit_binary_vulns runs `go build` for every release target, and
+// cmd/gen_third_party_notices runs `go env` to find GOROOT and the module
+// cache. The second also lists packages, with `go list -deps` and a format of
+// its own whose rows name each package's module and its replacement rather
+// than its directory, for the packages a release binary links.
 //
 // What stays with each command is everything that makes its listing its own.
 // godoc_tool keeps `./...`, its 30-second bound and the seam its tests feed
