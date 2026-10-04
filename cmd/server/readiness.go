@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,6 +54,10 @@ type readinessGate struct {
 	// released because the server is going away, not because it is ready.
 	lifetime <-chan struct{}
 	openOnce sync.Once
+	// refusal, once set, is what every catalog method is answered with from
+	// then on ([readinessGate.markRefused]): the process's token is one GitLab
+	// accepts below the admission minimum, so there is nothing to serve it.
+	refusal atomic.Pointer[jsonrpc.Error]
 }
 
 // newReadinessGate builds a closed gate bound to the server's lifetime.
@@ -93,6 +98,61 @@ func (g *readinessGate) markFailed(cause error) {
 		g.failure.Store(&cause)
 		close(g.ready)
 	})
+}
+
+// markRefused makes every catalog method answer refusal from now on, and opens
+// the gate, so a request parked in it is released into that answer rather than
+// left waiting for a catalog that will not come. Stdio calls it when the
+// process's token is below the admission minimum, at the start or when a later
+// read first learns its scopes (issue 952); the handshake, ping and
+// notifications are answered as before, so a client is told why on its first
+// request rather than seeing a process that died.
+func (g *readinessGate) markRefused(refusal *jsonrpc.Error) {
+	g.refusal.Store(refusal)
+	g.markReady()
+}
+
+// refusedMethods are the methods [readinessGate.markRefused] refuses: the
+// ones that answer about the catalog, every one the tenant register lets an
+// in-band refusal answer. Anything else that waits at the gate is served.
+var refusedMethods = []string{
+	"tools/list", "tools/call",
+	"resources/list", "resources/templates/list", "resources/read", "resources/subscribe",
+	"prompts/list", "prompts/get",
+	"completion/complete", "subscriptions/listen",
+}
+
+// stdioBelowMinimumMessage is the whole answer a stdio process gives every
+// catalog method when its token is one GitLab accepted below the admission
+// minimum (register row ADM-001). It names the two scopes and the way out, a
+// new token, because a token's scopes cannot be changed after it is created,
+// and the restart, because the process reads its token once. It is one literal
+// rather than a concatenation, for the reason [doorPermissionAdvice] gives.
+const stdioBelowMinimumMessage = "GitLab accepted the token this server was started with, which carries neither the read_api nor the api scope this server needs at least, so it serves nothing with it. A token's scopes cannot be changed after it is created: create one with read_api, or with api to write as well, and restart the server with it as GITLAB_TOKEN."
+
+// stdioBelowMinimumRefusal is the in-band refusal [refuseStdioBelowMinimum]
+// installs: -40300, the code the HTTP doors give the same verdict, since stdio
+// has no status to carry it.
+func stdioBelowMinimumRefusal() *jsonrpc.Error {
+	return &jsonrpc.Error{Code: errCodeForbidden, Message: stdioBelowMinimumMessage}
+}
+
+// refuseStdioBelowMinimum says once, at ERROR, that the process's token is
+// below the admission minimum and nothing will be served until it is replaced,
+// naming its scopes and never the token, and makes the gate refuse every
+// catalog method from then on.
+func refuseStdioBelowMinimum(ctx context.Context, gate *readinessGate, scopes []string) {
+	slog.ErrorContext(ctx, "the token carries neither read_api nor api; every catalog request is refused until the server is restarted with one that does",
+		"scopes", scopes)
+	gate.markRefused(stdioBelowMinimumRefusal())
+}
+
+// stdioBelowMinimumRefuser is what a stdio start hands its re-read rounds
+// ([refreshStdioAuthority]) to call when a round first learns the process's
+// token is below the admission minimum: [refuseStdioBelowMinimum], bound to the
+// process's context and gate.
+func stdioBelowMinimumRefuser(ctx context.Context, gate *readinessGate) func(scopes []string) {
+	return func(scopes []string) { refuseStdioBelowMinimum(ctx, gate, scopes) }
 }
 
 // failed reports the registration error, if registration failed.
@@ -193,11 +253,16 @@ func readinessExempt(method string) bool {
 func (g *readinessGate) middleware() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if g.isReady() || !readinessEnforced(ctx) || readinessExempt(method) {
+			if !readinessEnforced(ctx) || readinessExempt(method) {
 				return next(ctx, method, req)
 			}
-			if err := g.await(ctx, method); err != nil {
-				return nil, err
+			if !g.isReady() {
+				if err := g.await(ctx, method); err != nil {
+					return nil, err
+				}
+			}
+			if refusal := g.refusal.Load(); refusal != nil && slices.Contains(refusedMethods, method) {
+				return nil, refusal
 			}
 			return next(ctx, method, req)
 		}

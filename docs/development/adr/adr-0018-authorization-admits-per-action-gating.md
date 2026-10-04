@@ -54,7 +54,9 @@ action.**
   predicate, `gitlabclient.MeetsMinimum`, which `SatisfiesMinimum` delegates
   to: a token GitLab accepted that carries neither `read_api` nor `api` is
   answered 403, uncharged, and remembered, while one whose scopes could not
-  be read is still admitted, as NEG-002 below says.]
+  be read is still admitted, as NEG-002 below says. A stdio process started
+  with such a token keeps answering the handshake and refuses every catalog
+  method in-band with `-40300`, under `--ignore-scopes` too.]
 - A token that cannot write gets a read-only tool surface.
   `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` on the pool
   entry when `gitlabclient.WriteCapable` reports the token's scopes cannot

@@ -104,7 +104,7 @@ Al iniciar, el servidor detecta los scopes de tu token mediante la API de GitLab
 
 Esto evita que la IA intente operaciones que fallarían con errores de permisos y mantiene la lista de herramientas enfocada en lo que tu token puede hacer realmente.
 
-Para desactivar la detección de scopes y registrar todas las herramientas independientemente de los permisos del token:
+Para omitir el filtrado por scopes y registrar todas las herramientas independientemente de los permisos del token:
 
 ```bash
 GITLAB_MCP_IGNORE_SCOPES=true
@@ -117,7 +117,7 @@ O en modo HTTP:
 ```
 
 :::note
-Cuando la detección de scopes está desactivada, las herramientas se registran igualmente pero las llamadas a la API pueden fallar con `403 Forbidden` si el token no tiene los permisos necesarios.
+Cuando se omite el filtrado, las herramientas se registran igualmente pero las llamadas a la API pueden fallar con `403 Forbidden` si el token no tiene los permisos necesarios. Los scopes del token se siguen leyendo: uno que no lleva ni `read_api` ni `api` no alcanza ninguna herramienta, así que se rechaza en ambos modos, con un `403` por HTTP y con JSON-RPC `-40300` en cada petición del catálogo en stdio, diga lo que diga este ajuste.
 :::
 
 ### Tokens de acceso personal de grano fino

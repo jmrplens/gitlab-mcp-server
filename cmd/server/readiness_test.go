@@ -12,9 +12,11 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -24,6 +26,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -157,6 +160,123 @@ func TestReadinessGate_MethodBeforeCatalog_HandshakePassesAndCatalogMethodsWait(
 			}
 		})
 	}
+}
+
+// assertBelowMinimumRefusal holds what a probe ended with to stdio's refusal
+// of a token below the admission minimum, its handler never reached.
+func assertBelowMinimumRefusal(t *testing.T, probe *gateProbe, method string) {
+	t.Helper()
+	awaitChan(t, probe.done, method+" returning")
+	select {
+	case <-probe.reached:
+		t.Errorf("%s reached its handler on a process whose token is below the minimum", method)
+	default:
+	}
+	var refusal *jsonrpc.Error
+	if err := probe.probeError(); !errors.As(err, &refusal) || refusal.Code != errCodeForbidden || refusal.Message != stdioBelowMinimumMessage {
+		t.Errorf("%s error = %v, want the -40300 refusal naming the minimum", method, err)
+	}
+}
+
+// catalogMethods are the methods a stdio process refuses while its token is
+// below the admission minimum, written out here rather than read from
+// refusedMethods, so a method dropped from the gate's list fails this test
+// instead of leaving it with one case less.
+var catalogMethods = []string{
+	"tools/list", "tools/call",
+	"resources/list", "resources/templates/list", "resources/read", "resources/subscribe",
+	"prompts/list", "prompts/get",
+	"completion/complete", "subscriptions/listen",
+}
+
+// TestRefusedMethods_AreTheMethodsTheRegisterDeclares holds the gate's list to
+// the methods register row ADM-001 declares its stdio refusal on, which is the
+// list audit_tenancy reads: two copies of one list drift unless something holds
+// them to each other, and a method only one of them names is either refused
+// without a declaration or declared and served.
+func TestRefusedMethods_AreTheMethodsTheRegisterDeclares(t *testing.T) {
+	var declared []string
+	for _, row := range tenancy.Decisions() {
+		if row.ID != "ADM-001" {
+			continue
+		}
+		for _, refusal := range row.Refusals {
+			if refusal.Era == tenancy.EraStdio {
+				declared = refusal.Methods
+			}
+		}
+	}
+	if !slices.Equal(slices.Sorted(slices.Values(refusedMethods)), slices.Sorted(slices.Values(declared))) {
+		t.Errorf("the gate refuses %v, and ADM-001 declares its stdio refusal on %v", refusedMethods, declared)
+	}
+}
+
+// TestReadinessGate_MarkRefused_RefusesEveryCatalogMethodAndServesTheRest
+// covers a stdio process whose token GitLab accepted below the admission
+// minimum (issue 952). Every catalog method is answered with the in-band
+// refusal, its handler never reached, whether the verdict arrived before the
+// catalog would have been ready or after it was; the handshake, ping,
+// notifications and the methods that say nothing about the catalog are served,
+// so a client learns why on its first request rather than seeing a process
+// that died.
+func TestReadinessGate_MarkRefused_RefusesEveryCatalogMethodAndServesTheRest(t *testing.T) {
+	served := []string{"initialize", "server/discover", "ping", "notifications/initialized", "logging/setLevel"}
+	for _, order := range []string{"refused while shut", "refused once ready"} {
+		t.Run(order, func(t *testing.T) {
+			gate := newReadinessGate(t.Context())
+			if order == "refused once ready" {
+				gate.markReady()
+			}
+			gate.markRefused(stdioBelowMinimumRefusal())
+
+			for _, method := range catalogMethods {
+				assertBelowMinimumRefusal(t, runThroughGate(t.Context(), gate, method), method)
+			}
+			for _, method := range served {
+				probe := runThroughGate(t.Context(), gate, method)
+				awaitChan(t, probe.reached, method+" reaching its handler")
+				awaitChan(t, probe.done, method+" returning")
+				if err := probe.probeError(); err != nil {
+					t.Errorf("%s error = %v, want it served", method, err)
+				}
+			}
+		})
+	}
+}
+
+// TestStdioBelowMinimumRefuser_RefusesThroughTheGateItWasBoundTo covers what a
+// stdio start hands its re-read rounds: called with the scopes a round
+// learned, it refuses through the gate of the process it was built for.
+func TestStdioBelowMinimumRefuser_RefusesThroughTheGateItWasBoundTo(t *testing.T) {
+	gate := newReadinessGate(t.Context())
+	stdioBelowMinimumRefuser(t.Context(), gate)([]string{"read_user"})
+
+	assertBelowMinimumRefusal(t, runThroughGate(t.Context(), gate, "tools/call"), "tools/call")
+}
+
+// TestReadinessGate_MarkRefused_ReleasesAParkedRequestIntoTheRefusal covers a
+// catalog request a client sent before startup learned the token's scopes: it
+// is parked at the shut gate, and the verdict releases it into the refusal
+// rather than leaving it waiting for a catalog that will not come. It runs in
+// a synctest bubble so the verdict is given only once the request is durably
+// blocked at the gate: given earlier, the request would meet the refusal
+// without ever having waited, and the case would pass without the path it
+// names.
+func TestReadinessGate_MarkRefused_ReleasesAParkedRequestIntoTheRefusal(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gate := newReadinessGate(t.Context())
+		probe := runThroughGate(t.Context(), gate, "tools/list")
+		synctest.Wait()
+		select {
+		case <-probe.done:
+			t.Fatal("tools/list returned before any verdict, so it never parked at the shut gate")
+		default:
+		}
+
+		gate.markRefused(stdioBelowMinimumRefusal())
+
+		assertBelowMinimumRefusal(t, probe, "tools/list")
+	})
 }
 
 // TestReadinessGate_MarkReady_ReleasesEveryWaiter verifies that opening the gate

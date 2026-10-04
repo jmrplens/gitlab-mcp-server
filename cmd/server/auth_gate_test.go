@@ -2637,6 +2637,25 @@ func gateBelowMinimumGitLab(t *testing.T, refuseProbe bool, probes *atomic.Int64
 	return srv.URL
 }
 
+// assertBelowMinimumAnswers sends handler requests POSTs carrying the token
+// below the minimum and holds each answer to the legacy door's refusal of it:
+// 403 with no challenge, -40300 and the door's fixed words.
+func assertBelowMinimumAnswers(t *testing.T, handler http.Handler, requests int) {
+	t.Helper()
+	for i := range requests {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", "glpat-narrow")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden || rec.Header().Get("WWW-Authenticate") != "" {
+			t.Fatalf("request %d: status %d with challenge %q, want 403 with none", i, rec.Code, rec.Header().Get("WWW-Authenticate"))
+		}
+		if decoded := decodeJSONRPCError(t, rec.Body.String()); decoded.Error.Code != errCodeForbidden || decoded.Error.Message != belowMinimumMessage {
+			t.Errorf("request %d: error = %d %q\nwant %d %q", i, decoded.Error.Code, decoded.Error.Message, errCodeForbidden, belowMinimumMessage)
+		}
+	}
+}
+
 // TestMCPServerGate_TokenBelowTheMinimum_IsForbiddenUnchargedAndRemembered
 // covers the legacy door for a token GitLab accepted that carries neither
 // read_api nor api (issue 952), whichever way GitLab says so. It is answered
@@ -2645,36 +2664,33 @@ func gateBelowMinimumGitLab(t *testing.T, refuseProbe bool, probes *atomic.Int64
 // the plain 401 rather than the 429 an exhausted budget would give), builds no
 // entry, and is remembered, so the instance is probed once for every one of
 // those requests. Before, the token GET /api/v4/user refused was answered 401
-// and charged, and the read_user one was admitted and failed on every call.
+// and charged, and the read_user one was admitted and failed on every call. A
+// gate with no rejected-token cache answers the same and stays uncharged, and
+// asks the instance on every request, since nothing remembers the verdict.
 func TestMCPServerGate_TokenBelowTheMinimum_IsForbiddenUnchargedAndRemembered(t *testing.T) {
 	const requests = authFailureLimit * 2
 	for _, tt := range []struct {
 		name        string
 		refuseProbe bool
+		noCache     bool
 	}{
 		{name: "refused by the probe for want of a scope", refuseProbe: true},
 		{name: "described as carrying read_user"},
+		{name: "refused by the probe, with no rejected-token cache", refuseProbe: true, noCache: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var probes atomic.Int64
 			gate := newGateAgainst(t, okFactory, gateBelowMinimumGitLab(t, tt.refuseProbe, &probes))
-			gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			wantProbes := int64(requests)
+			if !tt.noCache {
+				gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+				wantProbes = 1
+			}
 			handler := gate.middleware(http.NotFoundHandler())
 
-			for i := range requests {
-				req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
-				req.Header.Set("PRIVATE-TOKEN", "glpat-narrow")
-				rec := httptest.NewRecorder()
-				handler.ServeHTTP(rec, req)
-				if rec.Code != http.StatusForbidden || rec.Header().Get("WWW-Authenticate") != "" {
-					t.Fatalf("request %d: status %d with challenge %q, want 403 with none", i, rec.Code, rec.Header().Get("WWW-Authenticate"))
-				}
-				if decoded := decodeJSONRPCError(t, rec.Body.String()); decoded.Error.Code != errCodeForbidden || decoded.Error.Message != belowMinimumMessage {
-					t.Errorf("request %d: error = %d %q\nwant %d %q", i, decoded.Error.Code, decoded.Error.Message, errCodeForbidden, belowMinimumMessage)
-				}
-			}
-			if got := probes.Load(); got != 1 {
-				t.Errorf("GET /api/v4/user was asked %d times for %d requests, want once", got, requests)
+			assertBelowMinimumAnswers(t, handler, requests)
+			if got := probes.Load(); got != wantProbes {
+				t.Errorf("GET /api/v4/user was asked %d times for %d requests, want %d", got, requests, wantProbes)
 			}
 			if gate.pool.Size() != 0 {
 				t.Errorf("pool size = %d, want 0: a token below the minimum is not served", gate.pool.Size())

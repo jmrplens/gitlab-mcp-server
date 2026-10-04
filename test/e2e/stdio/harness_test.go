@@ -637,6 +637,11 @@ type fakeGitLab struct {
 	// fine-grained token not granted Metadata: Read is answered. Empty
 	// answers the version. Set it before the server starts.
 	versionRefusal string
+	// versionScopeRefused, when set, refuses the version endpoint with a 403
+	// carrying insufficient_scope, what GitLab answers a classic token whose
+	// scopes do not reach it (self_rotate or read_repository alone). Set it
+	// before the server starts.
+	versionScopeRefused bool
 	// versionReads counts the requests that reached the version endpoint.
 	versionReads atomic.Int32
 	// versionHold, when set, holds every answer of the version endpoint until
@@ -776,11 +781,19 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 }
 
 // serveVersion answers the version endpoint: held while versionHold is open,
-// refused as GitLab refuses a fine-grained token without Metadata: Read when
-// versionRefusal is set, and otherwise the version the fake reports.
+// refused as GitLab refuses a classic token whose scopes do not reach it when
+// versionScopeRefused is set, refused as it refuses a fine-grained token
+// without Metadata: Read when versionRefusal is set, and otherwise the version
+// the fake reports.
 func (f *fakeGitLab) serveVersion(w http.ResponseWriter, r *http.Request) {
 	f.versionReads.Add(1)
 	if !released(f.versionHold, r) {
+		return
+	}
+	if f.versionScopeRefused {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"read_user ai_features ai_workflows api read_api"}`))
 		return
 	}
 	if f.versionRefusal != "" {

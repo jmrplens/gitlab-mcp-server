@@ -607,7 +607,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		refreshStdioAuthority(ctx, client, facts, 5*time.Millisecond, nil)
+		refreshStdioAuthority(ctx, client, facts, 5*time.Millisecond, nil, nil)
 	}()
 
 	// Each wait is for the refresh goroutine: the upgrade moving the token to
@@ -634,7 +634,7 @@ func TestRefreshStdioAuthority_FollowsTheInstanceUntilTheContextEnds(t *testing.
 	unread := make(chan struct{})
 	go func() {
 		defer close(unread)
-		refreshStdioAuthority(context.Background(), client, gitlabclient.TokenFacts{FineGrained: true}, time.Millisecond, nil)
+		refreshStdioAuthority(context.Background(), client, gitlabclient.TokenFacts{FineGrained: true}, time.Millisecond, nil, nil)
 	}()
 	select {
 	case <-unread:
@@ -667,7 +667,7 @@ func TestRefreshStdioAuthority_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testin
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		refreshStdioAuthority(ctx, client, gitlabclient.TokenFacts{KindUnknown: true}, 5*time.Millisecond, nil)
+		refreshStdioAuthority(ctx, client, gitlabclient.TokenFacts{KindUnknown: true}, 5*time.Millisecond, nil, nil)
 	}()
 
 	waitFor(t, func() bool { return g.selves.Load() >= 2 })
@@ -745,7 +745,7 @@ func TestRefreshStdioAuthority_AKindLearned_EndsOrStartsTheReReads(t *testing.T)
 	returned := make(chan struct{})
 	go func() {
 		defer close(returned)
-		refreshStdioAuthority(t.Context(), classic, gitlabclient.TokenFacts{KindUnknown: true}, time.Millisecond, nil)
+		refreshStdioAuthority(t.Context(), classic, gitlabclient.TokenFacts{KindUnknown: true}, time.Millisecond, nil, nil)
 	}()
 	select {
 	case <-returned:
@@ -762,7 +762,7 @@ func TestRefreshStdioAuthority_AKindLearned_EndsOrStartsTheReReads(t *testing.T)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		refreshStdioAuthority(ctx, fine, gitlabclient.TokenFacts{KindUnknown: true}, time.Hour, recovered)
+		refreshStdioAuthority(ctx, fine, gitlabclient.TokenFacts{KindUnknown: true}, time.Hour, recovered, nil)
 	}()
 	close(recovered)
 	waitFor(t, func() bool { return fine.Authority() != nil })

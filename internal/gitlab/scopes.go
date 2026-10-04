@@ -65,6 +65,17 @@ func DetectToken(ctx context.Context, client *gl.Client) TokenFacts {
 	return facts
 }
 
+// DescribeToken is [DetectToken] for a caller whose verdict an unanswered
+// description cannot change, which therefore logs nothing about it: a stdio
+// start whose version GitLab refused for want of a scope refuses the catalog
+// whatever the description says, and asks it only to name the token's scopes,
+// so DetectToken's warning that every tool will be registered would say the
+// opposite of what the process does.
+func DescribeToken(ctx context.Context, client *gl.Client) TokenFacts {
+	facts, _ := detectToken(ctx, client)
+	return facts
+}
+
 // RedetectToken is [DetectToken] for a token whose kind an earlier read left
 // unknown, which a caller asks again on every revalidation round, on the stdio
 // timer and once a degraded stdio start recovers, until GitLab answers. Its

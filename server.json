@@ -207,7 +207,7 @@
         },
         {
           "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "description": "Skip the scope filter and the read-only narrowing and register all tools regardless of token permissions; a token carrying neither read_api nor api is still refused (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -364,7 +364,7 @@
         },
         {
           "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "description": "Skip the scope filter and the read-only narrowing and register all tools regardless of token permissions; a token carrying neither read_api nor api is still refused (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -523,7 +523,7 @@
         },
         {
           "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "description": "Skip the scope filter and the read-only narrowing and register all tools regardless of token permissions; a token carrying neither read_api nor api is still refused (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -683,7 +683,7 @@
         },
         {
           "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "description": "Skip the scope filter and the read-only narrowing and register all tools regardless of token permissions; a token carrying neither read_api nor api is still refused (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -843,7 +843,7 @@
         },
         {
           "name": "GITLAB_MCP_IGNORE_SCOPES",
-          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "description": "Skip the scope filter and the read-only narrowing and register all tools regardless of token permissions; a token carrying neither read_api nor api is still refused (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
