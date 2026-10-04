@@ -70,9 +70,12 @@ func authorizeDecisions() []Decision {
 			// resolves it high everywhere else, ADM-003's scopes included).
 			// Issue 952 kept it and recorded it as that invariant's exception,
 			// which is why F-09 left this row: Free is the truth on a CE build
-			// and on an unlicensed enterprise one, and the licensed instance
-			// whose license the caller may not read is the case an enterprise
-			// build warns about, naming GITLAB_MCP_TIER and --tier (issue 900).
+			// and on an unlicensed enterprise one. Every enterprise build that
+			// reaches Free this way warns, naming GITLAB_MCP_TIER and --tier
+			// (issue 900), an unlicensed one included: only an administrator
+			// may read the license, so the server cannot tell it from a
+			// licensed instance whose license the caller may not read, which
+			// is the case the warning is for.
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
 			Resource: "the licensing tier, and the namespace pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
