@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,672 |
-| Unit test functions                                   | 19,216 |
+| Total test functions                                  | 20,676 |
+| Unit test functions                                   | 19,220 |
 | E2E test functions                                    |  1,456 |
-| cmd test functions                                    |  4,533 |
+| cmd test functions                                    |  4,536 |
 | Test files (internal/)                                |    698 |
 | Test files (cmd/)                                     |    308 |
 | Test files (test/e2e/)                                |    405 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,207 | 63.9% |
+| `TestFunc_Scenario` (2-part)           | 13,208 | 63.9% |
 | `TestFunc` (no underscore)             |    913 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,552 | 31.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,555 | 31.7% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,773 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            386 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,524 |        457 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,525 |        457 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,456 |        405 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,533 |        308 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,672** |  **1,411** |                                                                                                 |
+| cmd packages            |          4,536 |        308 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,676** |  **1,411** |                                                                                                 |
 
 ### Core Packages
 
@@ -269,7 +269,7 @@
 | projecttemplates        |         23 |          1 |   100.0% |         2 |
 | protectedenvs           |         47 |          2 |   100.0% |         5 |
 | protectedpackages       |         44 |          2 |   100.0% |         4 |
-| releaselinks            |         68 |          2 |   100.0% |         6 |
+| releaselinks            |         69 |          2 |   100.0% |         6 |
 | releases                |         84 |          2 |   100.0% |         6 |
 | repository              |         88 |          1 |   100.0% |         9 |
 | repositorysubmodules    |         74 |          5 |   100.0% |         3 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,524** |    **457** |          | **1,190** |
+| **Total**               | **10,525** |    **457** |          | **1,190** |
 
 </details>
 
