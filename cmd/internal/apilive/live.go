@@ -1,29 +1,3 @@
-// Package apilive is the committed record of what a booted GitLab says its
-// own REST API is, and the one reader of it.
-//
-// Every other oracle this repository holds about GitLab's REST API is a
-// reading of text: the OpenAPI document GitLab commits to its own repository,
-// or a scan of the Grape source that document is generated from. Both are
-// downstream of the object that decides what a request returns, which is the
-// Rails application with its classes loaded, and both lose the same thing when
-// a name is not written down. GeoSiteStatus exposes its fields by iterating a
-// constant assembled from two method calls: the source says "expose the loop
-// variable", a scanner reads 26 fields, and GitLab sends 606. That is not a
-// hole a better parser closes.
-//
-// So this record is produced by asking the application. cmd/gen_api_live boots
-// a released GitLab image, runs one script inside it, and writes what comes
-// back here; every audit then reads this file with no Docker and no network,
-// the way cmd/gen_graphql_schema's pin is read. The boot is a generator, never
-// an audit: an audit that needed a container could not be a gate.
-//
-// One thing evaluation does not give and the record therefore carries from
-// source: a block condition is a Proc, and a Proc knows where it was written
-// but not what it says. The generator reads those lines back from inside the
-// same image, so a block condition arrives here both located and quoted. A
-// hash or a symbol condition is the other way round: it holds what it tests,
-// which the record keeps as its data or its option, and grape-entity keeps no
-// location for it, so it arrives quoted and never located.
 package apilive
 
 import (
@@ -51,7 +25,14 @@ import (
 // as its kind alone: 41 of the 914 on 19.3.1-ee, each the only gate on its
 // field. A reader of that record would take those 41 fields for unconditional,
 // which is the same silent inversion version 2 was cut for.
-const SchemaVersion = 3
+//
+// Version 4 records fine-grained authorization: [Route.Authorization],
+// [Document.Granular] and [Document.GraphQLAuthz]. In version 4 a route with
+// no authorization declares nothing, so a fine-grained token is refused there;
+// in version 3 the same absence meant "not recorded". A reader taking a
+// version 3 record for version 4 would deny every route, which is the silent
+// inversion the version exists to stop.
+const SchemaVersion = 4
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -84,6 +65,12 @@ type Document struct {
 	Routes []Route `json:"routes"`
 	// Features maps a licensed feature symbol to the tier that unlocks it.
 	Features map[string]string `json:"features"`
+	// Granular is the permission vocabulary a fine-grained token is granted
+	// in, and GraphQLAuthz what the GraphQL schema demands of one. A version 4
+	// record without either cannot answer what a fine-grained token reaches,
+	// and the gate refuses it.
+	Granular     *Granular     `json:"granular,omitempty"`
+	GraphQLAuthz *GraphQLAuthz `json:"graphql_authz,omitempty"`
 }
 
 // Source is the instance the record was taken from.
@@ -107,6 +94,9 @@ type Source struct {
 	Fields   int    `json:"fields"`
 	Routes   int    `json:"routes"`
 	Features int    `json:"features"`
+	// AuthorizationCounts are the fine-grained figures, counted from the
+	// record when it is written.
+	AuthorizationCounts
 }
 
 // Entity is one Grape entity as the loaded class describes itself.
@@ -233,6 +223,10 @@ type Route struct {
 	Summary string `json:"summary,omitempty"`
 	// Params is what the endpoint declares it accepts, keyed by name.
 	Params map[string]Param `json:"params,omitempty"`
+	// Authorization is what the route demands of a fine-grained token. nil
+	// means it declares nothing, which GitLab answers a fine-grained token by
+	// refusing it.
+	Authorization *RouteAuthorization `json:"authorization,omitempty"`
 }
 
 // Param is one declared parameter.

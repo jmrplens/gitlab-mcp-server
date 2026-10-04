@@ -40,6 +40,50 @@
 // refuses to write or to pass a record holding a condition that carries
 // neither text, hash nor symbol.
 //
+// # Fine-grained authorization
+//
+// Since schema version 4 the same boot records what each route and each
+// GraphQL element demands of a fine-grained personal access token, which is
+// what issue 952 needs to say per action which permissions a token must be
+// granted. GitLab's own permission tasks walk the same objects and are not
+// loaded in a production image, so the script repeats their walk:
+//
+//   - every route's `route_setting :authorization`, key for key as
+//     lib/api/helpers.rb reads it, a callable boundary located and quoted
+//     like a block condition, and any key it does not know recorded by name;
+//   - the permission vocabulary: every assignable permission, deprecated ones
+//     kept, with the raw permissions it expands to and the words GitLab's
+//     refusal prints, every raw permission, and for each raw one the first
+//     assignable GitLab names and the first one a token can actually be
+//     granted, which differ for seventeen at 19.4.1;
+//   - the anonymous policy evaluated on an unsaved public project, with every
+//     feature enabled and every licensed feature made available, and on an
+//     unsaved public group, which is what GitLab serves a token beyond its
+//     grant; the role file is a lower bound of it;
+//   - every GraphQL object type with whether the granular check runs on it,
+//     its abilities, its directives and the signature of every object-typed
+//     field, every union and interface with its possible types, every
+//     mutation with the directives GitLab's runtime check reads (its class's)
+//     and, only where it differs, the reading GitLab's permission task makes
+//     of its field, every field-level directive, and the undeclared set
+//     computed with GitLab's own todo rule beside the authorization_todo.txt
+//     the image ships.
+//
+// -check refuses a version 4 record that lacks either block, falls below the
+// fine-grained floors, maps a raw permission to an assignable that is not its
+// own or offers one no token can hold, declares a permission GitLab does not
+// define or no assignable expands to, declares permissions with no boundary,
+// names a boundary type GitLab does not resolve, carries a key or argument
+// nothing reads, holds a directive with both a skip and permissions or
+// neither, holds a mutation whose field and class GitLab's two readers would
+// disagree about, computes an undeclared set that differs from GitLab's list,
+// leaves an abstract type without members or a field leading nowhere, or
+// holds a public set that does not say how it was produced. The generator
+// refuses to write the same record. -check alone also refuses a source block
+// whose figures, the four the provenance always carried and the fine-grained
+// ones, are not what the content gives, since a passing run prints them as
+// the record's own.
+//
 // # What it cannot give
 //
 // One released version and one edition. The static record is pinned to master,

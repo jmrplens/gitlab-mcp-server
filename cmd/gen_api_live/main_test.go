@@ -44,18 +44,65 @@ func wholeEnough() dumped {
 	for i := range minRoutes + 1 {
 		payload.Routes = append(payload.Routes, apilive.Route{
 			Method: "GET", Path: routePath(i), Entity: entityName(i % 7),
+			Authorization: &apilive.RouteAuthorization{Permissions: []string{rawName(i % 3)}, BoundaryType: "project"},
 		})
 	}
 	for i := range minFeatures + 1 {
 		payload.Features[featureName(i)] = apilive.TierPremium
 	}
+	payload.Granular = wholeVocabulary(minAssignablePermissions + 1)
+	payload.GraphQLAuthz = wholeGraphQL(minGraphQLDeclaredTypes + 1)
 	return payload
 }
 
-func entityName(i int) string   { return "API::Entities::Fixture" + itoa(i) }
-func fieldName(i, j int) string { return "field_" + itoa(i) + "_" + itoa(j) }
-func routePath(i int) string    { return "/api/:version/fixture/" + itoa(i) }
-func featureName(i int) string  { return "fixture_feature_" + itoa(i) }
+func entityName(i int) string     { return "API::Entities::Fixture" + itoa(i) }
+func fieldName(i, j int) string   { return "field_" + itoa(i) + "_" + itoa(j) }
+func routePath(i int) string      { return "/api/:version/fixture/" + itoa(i) }
+func featureName(i int) string    { return "fixture_feature_" + itoa(i) }
+func rawName(i int) string        { return "read_fixture_" + itoa(i) }
+func assignableName(i int) string { return "fixture_assignable_" + itoa(i) }
+func typeName(i int) string       { return "FixtureType" + itoa(i) }
+
+// wholeVocabulary is a permission vocabulary of count assignables, each
+// expanding to a raw permission of its own, mapped to it both ways, and
+// grantable to a token, with a public set drawn from it: one every vocabulary
+// rule passes.
+func wholeVocabulary(count int) *apilive.Granular {
+	granular := &apilive.Granular{
+		RawToAssignable: map[string]apilive.AssignableMatch{},
+		PublicAnonymous: &apilive.PublicAnonymous{
+			Source: apilive.PublicSourceUnsaved, Licensed: true,
+			Project: []string{rawName(0), rawName(1)}, Group: []string{rawName(1)},
+		},
+	}
+	for i := range count {
+		granular.Assignable = append(granular.Assignable, apilive.Assignable{
+			Name: assignableName(i), Permissions: []string{rawName(i)},
+			Boundaries: []string{"project"}, AvailableFor: []string{grantableTo},
+		})
+		granular.RawPermissions = append(granular.RawPermissions, rawName(i))
+		granular.RawToAssignable[rawName(i)] = apilive.AssignableMatch{First: assignableName(i), FirstAvailable: assignableName(i)}
+	}
+	return granular
+}
+
+// wholeGraphQL is a GraphQL half with count enforced types, each declaring one
+// raw permission of wholeVocabulary at the project boundary.
+func wholeGraphQL(count int) *apilive.GraphQLAuthz {
+	authz := &apilive.GraphQLAuthz{
+		Types:     map[string]apilive.GraphQLType{},
+		Abstract:  map[string]apilive.AbstractType{},
+		Mutations: map[string]apilive.Mutation{},
+		Fields:    map[string][]apilive.Directive{},
+	}
+	for i := range count {
+		authz.Types[typeName(i)] = apilive.GraphQLType{
+			Enforced: true,
+			Granular: []apilive.Directive{{Permissions: []string{rawName(i % 3)}, BoundaryType: "project", Boundary: "itself"}},
+		}
+	}
+	return authz
+}
 
 func itoa(i int) string {
 	if i == 0 {
@@ -92,14 +139,28 @@ func writeDump(t *testing.T, payload dumped) string {
 // both at once.
 func writeRecordAt(t *testing.T, dir string, payload dumped, retrievedAt string) {
 	t.Helper()
+	writeRecordEdited(t, dir, payload, retrievedAt, func(*apilive.Source) {})
+}
+
+// writeRecordEdited is writeRecordAt with the source block's figures counted
+// from the content the way the generator counts them, then handed to edit
+// before the record is written, for the cases about a source block that says
+// something else.
+func writeRecordEdited(t *testing.T, dir string, payload dumped, retrievedAt string, edit func(*apilive.Source)) {
+	t.Helper()
 	doc := apilive.Document{
 		SchemaVersion: apilive.SchemaVersion,
 		Source: apilive.Source{
 			Image: "gitlab/gitlab-ee:latest", Version: payload.Version,
 			RetrievedAt: retrievedAt,
+			Entities:    len(payload.Entities), Routes: len(payload.Routes), Features: len(payload.Features),
 		},
 		Entities: payload.Entities, Routes: payload.Routes, Features: payload.Features,
+		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz,
 	}
+	doc.Source.Fields = doc.FieldCount()
+	doc.Source.AuthorizationCounts = doc.CountAuthorization()
+	edit(&doc.Source)
 	if err := apilive.Write(dir, doc); err != nil {
 		t.Fatalf("write the fixture: %v", err)
 	}
@@ -205,6 +266,13 @@ func TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance(t *testing.T) {
 		{name: "the field count spans every entity", got: doc.Source.Fields, want: len(payload.Entities) * 13},
 		{name: "the route count is counted", got: doc.Source.Routes, want: len(payload.Routes)},
 		{name: "the licensed feature count is counted", got: doc.Source.Features, want: len(payload.Features)},
+		{name: "the fine-grained figures are counted from the record", got: doc.Source.AuthorizationCounts, want: apilive.AuthorizationCounts{
+			AuthorizedRoutes:      len(payload.Routes),
+			AssignablePermissions: len(payload.Granular.Assignable),
+			GraphQLDeclaredTypes:  len(payload.GraphQLAuthz.Types),
+		}},
+		{name: "the vocabulary is carried over", got: len(doc.Granular.Assignable), want: len(payload.Granular.Assignable)},
+		{name: "the GraphQL half is carried over", got: len(doc.GraphQLAuthz.Types), want: len(payload.GraphQLAuthz.Types)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.got != testCase.want {
@@ -521,6 +589,132 @@ func TestRunGenerate_AConditionNothingCanRead_IsRefusedAfterTheFloors(t *testing
 	}
 }
 
+// TestRunGenerate_AFineGrainedShapeNothingReads_IsRefusedAfterTheConditions
+// verifies that a regeneration cannot write a record whose fine-grained half
+// holds a shape a reader would misread.
+//
+// It is refused with a sentence of its own, after the floors and after the
+// conditions: a record that is not a GitLab, or whose conditions cannot be
+// read, is reported as that first, since the order is the order a maintainer
+// fixes them in.
+func TestRunGenerate_AFineGrainedShapeNothingReads_IsRefusedAfterTheConditions(t *testing.T) {
+	unknownKey := func(d *dumped) {
+		d.Routes[2].Authorization.UnknownKeys = []string{"future_option"}
+	}
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*dumped)
+		want   string
+	}{
+		{
+			name:   "a whole record with one route carrying an unknown option",
+			mutate: unknownKey,
+			want: "refusing to write a record whose fine-grained authorization cannot be read:\n  " +
+				"1 route authorizations carry keys nothing here reads (GET /api/:version/fixture/2 future_option): " +
+				"introspect.rb met an option it does not know, and a reader would judge the route without it",
+		},
+		{
+			name: "an unreadable condition is reported before it",
+			mutate: func(d *dumped) {
+				unknownKey(d)
+				d.Entities[entityName(3)] = apilive.Entity{Fields: []apilive.Field{
+					{Name: "custom_attributes", Conditions: []apilive.Condition{{Kind: "SymbolCondition"}}},
+				}}
+			},
+			want: "refusing to write a record whose conditions cannot be read:\n  " +
+				"1 condition carries neither text, hash nor symbol (API::Entities::Fixture3.custom_attributes SymbolCondition): " +
+				"introspect.rb met a condition it does not read, and an audit can report the field it gates as gated but never by what",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			payload := wholeEnough()
+			testCase.mutate(&payload)
+
+			err := runGenerate(dir, dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false)
+			if err == nil {
+				t.Fatal("the record was written, want a refusal")
+			}
+			if err.Error() != testCase.want {
+				t.Errorf("error = %q, want %q", err, testCase.want)
+			}
+			if _, statErr := os.Stat(apilive.Path(dir)); statErr == nil {
+				t.Error("a refused record was written anyway")
+			}
+		})
+	}
+}
+
+// TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn verifies the third
+// line a regeneration or a gate prints, and that it is printed only when the
+// public set is missing.
+//
+// A record without one is legitimate, so nothing refuses it; the line is the
+// only place a person learns that every reader will then let GitLab judge a
+// public read, and why the introspection could not evaluate the set.
+func TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn(t *testing.T) {
+	payload := wholeEnough()
+	doc := apilive.Document{
+		Source:   apilive.Source{Image: "gitlab/gitlab-ee:19.4.1-ee.0", Version: "19.4.1-ee", RetrievedAt: "2026-10-01", Routes: 3},
+		Granular: payload.Granular,
+	}
+	doc.Source.AuthorizationCounts = apilive.AuthorizationCounts{AuthorizedRoutes: 2, SkippedRoutes: 1}
+	twoLines := "gen_api_live: " + doc.Source.String() + "\n" +
+		"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n"
+
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*apilive.Document)
+		want   string
+	}{
+		{name: "a record with a public set prints two lines", mutate: func(*apilive.Document) {}, want: twoLines},
+		{
+			name: "a record whose public set could not be evaluated says why",
+			mutate: func(d *apilive.Document) {
+				granular := *d.Granular
+				granular.PublicAnonymous = nil
+				granular.PublicAnonymousError = "ActiveRecord::RecordInvalid: Path has already been taken"
+				d.Granular = &granular
+			},
+			want: twoLines + "gen_api_live: no public anonymous set: ActiveRecord::RecordInvalid: Path has already been taken\n",
+		},
+		{
+			// The missing block is the gate's to refuse; the report has
+			// nothing of it to say a second time.
+			name:   "a record with no vocabulary at all says nothing of a public set",
+			mutate: func(d *apilive.Document) { d.Granular = nil },
+			want:   twoLines,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			stdout := captureStdout(t)
+			reported := doc
+			testCase.mutate(&reported)
+
+			report(reported)
+
+			if said := stdout(); said != testCase.want {
+				t.Errorf("stdout = %q, want %q", said, testCase.want)
+			}
+		})
+	}
+}
+
+// TestIntrospectScript_DeclaresTheSchemaVersionThisBuildWrites holds the Ruby
+// to the Go between them, since they are separate files a maintainer edits one
+// at a time.
+//
+// runGenerate refuses a dump from another version, which catches the drift on
+// the next boot, twenty minutes and three gigabytes later; this catches it on
+// the next test run.
+func TestIntrospectScript_DeclaresTheSchemaVersionThisBuildWrites(t *testing.T) {
+	t.Parallel()
+	want := fmt.Sprintf("\nSCHEMA_VERSION = %d\n", apilive.SchemaVersion)
+	if !strings.Contains(introspectScript, want) {
+		t.Errorf("introspect.rb does not declare %q, the version this build writes", strings.TrimSpace(want))
+	}
+}
+
 // TestRunCheck_AStaleOrTruncatedRecord_IsRefused verifies the gate every audit
 // rests on: it reads one file, asks nothing of Docker or the network, and
 // fails on a record that cannot answer for a current GitLab.
@@ -563,6 +757,20 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 			},
 			wantsIn: "1 condition carries neither text, hash nor symbol (API::Entities::Fixture5.license SymbolCondition)",
 		},
+		{
+			// The shape a version 3 record would have if it were let through:
+			// whole, current, and saying nothing about fine-grained tokens.
+			name: "a record with no fine-grained vocabulary", retrievedAt: "2026-09-09", now: fresh,
+			mutate:  func(d *dumped) { d.Granular = nil },
+			wantsIn: "it carries no granular block",
+		},
+		{
+			name: "a record whose route carries an option nothing reads", retrievedAt: "2026-09-09", now: fresh,
+			mutate: func(d *dumped) {
+				d.Routes[0].Authorization.UnknownKeys = []string{"future_option"}
+			},
+			wantsIn: "1 route authorizations carry keys nothing here reads (GET /api/:version/fixture/0 future_option)",
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -585,6 +793,89 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), testCase.wantsIn) {
 				t.Errorf("error = %q, want it to name %q", err, testCase.wantsIn)
+			}
+		})
+	}
+}
+
+// TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused
+// verifies that the figures a passing gate prints are the record's own.
+//
+// Every figure is held, the four the provenance always carried and each of the
+// fine-grained ones, and the refusal names each that differs, in the order the
+// source block holds them, with what it says and what the content gives. A
+// figure is set one above the truth rather than to zero, so a check that only
+// noticed a missing figure would pass it.
+func TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused(t *testing.T) {
+	payload := wholeEnough()
+	counted := documentOf(payload)
+	entities, fields := len(payload.Entities), counted.FieldCount()
+	routes, features := len(payload.Routes), len(payload.Features)
+	authorization := counted.CountAuthorization()
+	refusal := func(differing string) string {
+		return "the live API record cannot be rested on:\n  its source block disagrees with what it holds (" + differing +
+			"): the figures this gate reports would not be the record's, and only a regeneration writes them (make gen-api-live)"
+	}
+	for _, testCase := range []struct {
+		name string
+		edit func(*apilive.Source)
+		want string
+	}{
+		{name: "figures counted from the content pass", edit: func(*apilive.Source) {}},
+		{
+			name: "entities", edit: func(s *apilive.Source) { s.Entities++ },
+			want: refusal(fmt.Sprintf("entities says %d and it holds %d", entities+1, entities)),
+		},
+		{
+			name: "fields", edit: func(s *apilive.Source) { s.Fields++ },
+			want: refusal(fmt.Sprintf("fields says %d and it holds %d", fields+1, fields)),
+		},
+		{
+			name: "routes", edit: func(s *apilive.Source) { s.Routes++ },
+			want: refusal(fmt.Sprintf("routes says %d and it holds %d", routes+1, routes)),
+		},
+		{
+			name: "features", edit: func(s *apilive.Source) { s.Features++ },
+			want: refusal(fmt.Sprintf("features says %d and it holds %d", features+1, features)),
+		},
+		{
+			name: "the first fine-grained figure", edit: func(s *apilive.Source) { s.AuthorizedRoutes++ },
+			want: refusal(fmt.Sprintf("authorized_routes says %d and it holds %d",
+				authorization.AuthorizedRoutes+1, authorization.AuthorizedRoutes)),
+		},
+		{
+			name: "the last fine-grained figure", edit: func(s *apilive.Source) { s.GraphQLUndeclaredMutations++ },
+			want: refusal(fmt.Sprintf("graphql_undeclared_mutations says %d and it holds %d",
+				authorization.GraphQLUndeclaredMutations+1, authorization.GraphQLUndeclaredMutations)),
+		},
+		{
+			name: "every figure that differs is named, in the source block's order",
+			edit: func(s *apilive.Source) {
+				s.GraphQLUndeclaredTypes += 2
+				s.Routes--
+			},
+			want: refusal(fmt.Sprintf("routes says %d and it holds %d; graphql_undeclared_types says %d and it holds %d",
+				routes-1, routes, authorization.GraphQLUndeclaredTypes+2, authorization.GraphQLUndeclaredTypes)),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRecordEdited(t, dir, payload, today(), testCase.edit)
+			stdout := captureStdout(t)
+
+			err := runCheck(dir, time.Now())
+
+			if testCase.want == "" {
+				if err != nil {
+					t.Fatalf("runCheck: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != testCase.want {
+				t.Errorf("runCheck = %v, want %q", err, testCase.want)
+			}
+			if said := stdout(); said != "" {
+				t.Errorf("a refused record still reported its figures: %q", said)
 			}
 		})
 	}
@@ -1989,7 +2280,8 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 				if err != nil {
 					t.Fatalf("read the record back: %v", err)
 				}
-				wantStdout = "gen_api_live: " + doc.Source.String() + "\n"
+				wantStdout = "gen_api_live: " + doc.Source.String() + "\n" +
+					"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n"
 			}
 			if said := stdout(); said != wantStdout {
 				t.Errorf("stdout = %q, want %q", said, wantStdout)

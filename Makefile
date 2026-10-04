@@ -2156,8 +2156,12 @@ gen-api-live:
 
 ## check-api-live: fail when the committed live record is not one this build can
 ## read, is too small to have come from a GitLab, holds an entity that refused to
-## describe itself, or is past the shared staleness window
-## (cmd/internal/provenance). No Docker and no network, so it is a gate.
+## describe itself or a condition that says nothing about what it tests, carries
+## source figures its content does not give, has a fine-grained half (route
+## authorization, the permission vocabulary, the public set, GraphQL
+## authorization) that is missing, too small or holds a shape a reader would
+## misread, or is past the shared staleness window (cmd/internal/provenance).
+## No Docker and no network, so it is a gate.
 check-api-live:
 	go run ./cmd/gen_api_live/ -check
 
