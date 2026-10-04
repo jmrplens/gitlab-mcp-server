@@ -96,7 +96,7 @@ Add an asset link to a GitLab release. Supports link types: runbook, package, im
 
 ### `gitlab_release_link_create_batch`
 
-Create multiple release asset links in one call. Accepts a `links` array where each entry has a `name` and an absolute `url`, plus optional `link_type` and `direct_asset_path` (deprecated alias: `filepath`). Returns the created links and any failed entries. Prefer this over repeated `gitlab_release_link_create` calls when attaching several assets at once.
+Create multiple release asset links in one call. Accepts a `links` array where each entry has a `name` and an absolute `url`, plus optional `link_type` and `direct_asset_path` (deprecated alias: `filepath`). Returns the created links and any failed entries; a list none of whose entries has both a `name` and a `url` is refused before anything is sent. Prefer this over repeated `gitlab_release_link_create` calls when attaching several assets at once.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
