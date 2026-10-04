@@ -354,6 +354,38 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 	}
 }
 
+// TestDecisions_TierFallback_IsINV008sRecordedException holds issue 952's
+// decision on F-09: unknown scopes resolve wide (ADM-003) and an unknown tier
+// resolves narrow, to Free with an enterprise build's warning (AUT-003, issue
+// 900), and the second is kept as INV-008's recorded exception. Both rows
+// record the decision and carry F-09 no longer; AUT-003 keeps F-10, the tier
+// narrowing that still answers as unknown, which is issue 956's.
+func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
+	for _, tc := range []struct {
+		id      string
+		decided []string
+	}{
+		{"ADM-003", []string{"ADR-0018", "issue 952"}},
+		{"AUT-003", []string{"issue 900", "issue 952"}},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, ok := Lookup(tc.id)
+			if !ok {
+				t.Fatalf("%s names no row", tc.id)
+			}
+			if !slices.Equal(d.Decided, tc.decided) || d.Carries("F-09") {
+				t.Errorf("%s: decided %v, carries F-09 %v; want %v and F-09 no longer carried", tc.id, d.Decided, d.Carries("F-09"), tc.decided)
+			}
+		})
+	}
+	if tier, _ := Lookup("AUT-003"); !slices.Equal(tier.Findings, []string{"F-10"}) {
+		t.Errorf("AUT-003 carries %v, want F-10 alone", tier.Findings)
+	}
+	if FindingIssue("F-09") != 952 {
+		t.Errorf("F-09 is filed as issue %d, want it kept as issue 952's", FindingIssue("F-09"))
+	}
+}
+
 // TestDecisions_ToolCallRefusal_AnswersF20UnderIssue961 pins what the work of
 // issue 961 answered on RTC-001: the tools/call refusal a middleware makes now
 // carries the resultType its revision requires, so the row records the issue
@@ -467,9 +499,10 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // the next finding answered joins that list in the change that answers it, as
 // F-29 and F-30 did when issue 950 bounded the OAuth identity cache and
 // verification, F-31 did when issue 951 bounded the stateful sessions, F-20
-// did when the tool-call refusal was given its resultType under issue 961, and
+// did when the tool-call refusal was given its resultType under issue 961,
 // F-17 did when issue 952 stopped misreading a fine-grained token, at the
-// read-only narrowing and at both doors.
+// read-only narrowing and at both doors, and F-09 did when issue 952 recorded
+// the tier's Free fallback as INV-008's exception.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -497,7 +530,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-09,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

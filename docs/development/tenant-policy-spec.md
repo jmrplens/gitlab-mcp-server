@@ -215,7 +215,11 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   not cause.
 - **INV-008 Admission at the minimum, authority per action.** A limit does not raise the
   admission minimum; authority is applied per action; unknown scopes count as
-  write-capable; a detected tier is the highest paid plan found (ADR-0018). A
+  write-capable; a detected tier is the highest paid plan found (ADR-0018). The one
+  exception, recorded under issue 952, is a tier neither the license nor a namespace plan
+  answers for, which is Free: that is the truth on a CE build and on an unlicensed
+  enterprise one, and an enterprise build that could not read its tier warns, naming
+  `GITLAB_MCP_TIER` and `--tier` (`AUT-003`, issue 900). A
   fine-grained token's scope list, the single value `granular`, is unknown scopes, and
   its grant decides per action what it is shown and may call, judged against what GitLab
   declares (`AUT-007`, `AUT-008`, ADR-0024); an action the generated table has no row for
@@ -524,7 +528,7 @@ departure from `INV-010`. The map was first recorded under F-29, whose issue (95
 about OAuth verification while the map is kept in both authentication modes, and it was
 given a finding of its own once it was filed.
 
-Eight findings are answered, and stay in the list with their issues. F-03, the listing
+Nine findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -746,9 +750,15 @@ labels its refusal of a withheld call as `RTC-001`'s middleware labels its own. 
 bounds the read of the grant, 1 MiB and 1000 scopes, under a per-request ceiling below
 `RQB-009`'s, because every project or group a scope names becomes a scope of its own and
 the minter sizes the grant. `AUT-001`, `ADM-001` and `ADM-002` carry F-17 no longer and
-record the decision; `ADM-001` and `ADM-002` still carry F-08, and `AUT-003` and `ADM-003`
-F-09, which issue 952's other decision, on the admission minimum in legacy HTTP and on
-stdio and on the tier fallback, is still to answer. Four more
+record the decision. F-09, that unknown authority resolves wide for scopes and narrow for
+the tier, is answered by issue 952's other decision, which kept both: scopes nobody
+answered for still count as write-capable (`ADM-003`), and a tier neither the license nor
+a namespace plan answers for is still Free, recorded as `INV-008`'s one exception, with
+the warning an enterprise build gives naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`,
+issue 900). `ADM-003` records ADR-0018 and issue 952, `AUT-003` issues 900 and 952, and
+neither carries F-09 any longer; `AUT-003` keeps F-10. The same decision set the
+admission minimum at `read_api` in legacy HTTP and on stdio as well, and until that is in
+place `ADM-001` and `ADM-002` still carry F-08. Four more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
 message the SDK gives the server no way to send, and F-23 and F-27 stale statements.
