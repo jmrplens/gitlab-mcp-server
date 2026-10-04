@@ -8043,6 +8043,20 @@ stopped those tests hardcoding the version, so a bump no longer edits them.
   the freshly rebased branch's base and the check found the bump. It stops at
   `no merge base` on a branch whose base `main` has moved past and whose
   description carries no marker.
+
+  Read on 2026-10-04, the follow-up has had no review from a person and its
+  fork pipeline fails only `lint:prose`. The `lint:prose` regression has a fix
+  in review from another contributor:
+  [gitlab-org/orbit/knowledge-graph!2676](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2676),
+  "fix(linting): fall back to HEAD when the MR source SHA is empty", opened
+  from the community fork on 2026-09-30, makes `prose_lint.py` read an empty
+  `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` as `HEAD`, which is what the
+  `base...head` form did before `b7bce6fb`. Its own fork pipeline passes,
+  `lint:prose` included, @peterhegman handed its review to @dgruzd on
+  2026-10-02, and it has no
+  approval. The lint runs from the branch's own tree, so once it merges, the
+  follow-up and row 76's merge request pass `lint:prose` in a fork pipeline
+  only after a rebase onto it.
 - **Merged**: yes, at 10:15 UTC on 2026-10-02, by @dgruzd, as squash commit
   `374c457c` (merge commit `edfa149d`), which closed
   [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329).
@@ -8123,7 +8137,17 @@ while rewriting `orbit.query` for issue 1031.
   [gitlab-org/orbit/knowledge-graph!2692](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2692),
   merged a minute earlier, stops the project's tests hardcoding the skill
   version, asked for one more rebase onto it, and said the change looks good
-  otherwise. It has no approval, and the next step is ours: that rebase.
+  otherwise. That rebase went up at 19:03 UTC the same day, dropping the
+  commit that had moved the four version assertions, since the server's skill
+  tests now read the version from the skill itself, so what is left is the
+  documentation commit, unchanged, with the skill one patch above `main`. The
+  note posted with it (19:33 UTC) says so, that the unit tests of
+  `orbit-server`, `orbit-cli` and `orbit-prompts` pass locally on the rebased
+  tree with no test change, and that a pipeline in the canonical project is still
+  needed for `lint:prose`. Read on 2026-10-04, its fork pipeline on that head
+  (`a75651db`) fails only `lint:prose`, nobody has answered since, it has no
+  approval, and the next step is the reviewer's. The `lint:prose` regression
+  has a fix in review from another contributor, named under row 75.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
