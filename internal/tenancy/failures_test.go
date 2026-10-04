@@ -14,10 +14,10 @@ func TestFailures_ValidateFailuresIsNil(t *testing.T) {
 	}
 }
 
-// TestFailures_ListEveryRefusalOfTheThreeFunctions pins the table to the
-// twenty-five refusal returns of the gate's resolve and the bearer guard's
-// check and classify, of which two, two and one are charged.
-func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
+// TestFailures_ListEveryRefusalOfTheFourFunctions pins the table to the
+// thirty-two refusal returns of the gate's resolve and classify and the bearer
+// guard's check and classify, of which one, one, two and one are charged.
+func TestFailures_ListEveryRefusalOfTheFourFunctions(t *testing.T) {
 	type tally struct{ returns, charged int }
 	got := map[string]tally{}
 	for _, f := range Failures() {
@@ -33,8 +33,9 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 		returns int
 		charged int
 	}{
-		{"mcpServerGate.resolve", 10, 2},
-		{"bearerGuard.check", 8, 2},
+		{"mcpServerGate.resolve", 10, 1},
+		{"mcpServerGate.classify", 6, 1},
+		{"bearerGuard.check", 9, 2},
 		{"bearerGuard.classify", 7, 1},
 	} {
 		t.Run(tc.fn, func(t *testing.T) {
@@ -44,14 +45,15 @@ func TestFailures_ListEveryRefusalOfTheThreeFunctions(t *testing.T) {
 			}
 		})
 	}
-	if len(got) != 3 || len(Failures()) != 25 {
-		t.Errorf("%d functions and %d failures, want 3 and 25", len(got), len(Failures()))
+	if len(got) != 4 || len(Failures()) != 32 {
+		t.Errorf("%d functions and %d failures, want 4 and 32", len(got), len(Failures()))
 	}
 }
 
-// TestFailures_PermissionMissingIsNeverCharged holds the four returns of a
+// TestFailures_PermissionMissingIsNeverCharged holds the six returns of a
 // credential GitLab accepted and refused the permission to read its own user,
-// fresh and cached at each door, to the answer INV-007 gives them: uncharged
+// fresh and cached at each door and at the gate behind the guard in oauth
+// mode, to the answer INV-007 gives them: uncharged
 // and not the caller's doing, since GitLab authenticated the token before it
 // judged the grant, and each a 403 in the words ADM-001, ADM-002 and ADM-006
 // declare.
@@ -67,11 +69,46 @@ func TestFailures_PermissionMissingIsNeverCharged(t *testing.T) {
 		}
 	}
 	want := "mcpServerGate.resolve:cached-permission-missing:ADM-006," +
-		"mcpServerGate.resolve:gitlab-permission-missing:ADM-001," +
+		"mcpServerGate.resolve:cached-permission-missing-oauth:ADM-006," +
+		"mcpServerGate.classify:gitlab-permission-missing:ADM-001," +
+		"mcpServerGate.classify:gitlab-permission-missing-oauth:ADM-002," +
 		"bearerGuard.check:cached-permission-missing:ADM-006," +
 		"bearerGuard.classify:gitlab-permission-missing:ADM-002"
 	if got := strings.Join(found, ","); got != want {
 		t.Errorf("permission-missing failures = %s\nwant %s", got, want)
+	}
+}
+
+// TestFailures_TwinsOfOneFunction_DifferInTheirChallenge holds what lets the
+// gate match each return to one row: two rows of one function with the same
+// status and the same leading words, the gate's voice and the bearer guard's
+// for one verdict, differ in whether they carry a challenge. Rows whose text
+// does not fold name no prefix and are told apart by nothing, so they are
+// left out; they never differ in what a match decides.
+func TestFailures_TwinsOfOneFunction_DifferInTheirChallenge(t *testing.T) {
+	type identity struct {
+		fn, prefix string
+		status     int
+		challenge  bool
+	}
+	seen := map[identity]string{}
+	twins := 0
+	for _, f := range Failures() {
+		if f.Prefix == "" {
+			continue
+		}
+		id := identity{f.At.Name, f.Prefix, f.Status, f.Challenge}
+		if other, dup := seen[id]; dup {
+			t.Errorf("%s:%s and %s:%s share status %d, prefix %q and challenge %t", f.At.Name, other, f.At.Name, f.Kind, f.Status, f.Prefix, f.Challenge)
+		}
+		seen[id] = f.Kind
+		id.challenge = !id.challenge
+		if _, twin := seen[id]; twin {
+			twins++
+		}
+	}
+	if twins != 2 {
+		t.Errorf("%d pairs told apart by their challenge alone, want 2: the gate's permission refusal from memory and fresh", twins)
 	}
 }
 
@@ -111,7 +148,7 @@ func TestFailures_ChargedAreExactlyTheCallersOwn(t *testing.T) {
 			charged = append(charged, f.At.Name+":"+f.Kind)
 		}
 	}
-	want := "mcpServerGate.resolve:missing-credential,mcpServerGate.resolve:gitlab-rejected," +
+	want := "mcpServerGate.resolve:missing-credential,mcpServerGate.classify:gitlab-rejected," +
 		"bearerGuard.check:missing-credential,bearerGuard.check:cached-rejection," +
 		"bearerGuard.classify:gitlab-rejected"
 	if got := strings.Join(charged, ","); got != want {

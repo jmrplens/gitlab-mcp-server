@@ -122,6 +122,7 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 		RejectedCredentialEvictions: 7,
 		InvalidEvictions:            8,
 		RebuildEvictions:            9,
+		BelowMinimumEvictions:       10,
 		Evictions:                   1000,
 		Hits:                        2000,
 		Misses:                      3000,
@@ -142,6 +143,7 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 		{name: "rejected_credential", got: counts.RejectedEvictions, want: 7},
 		{name: "invalid_credential", got: counts.InvalidEvictions, want: 8},
 		{name: "rebuild", got: counts.RebuildEvictions, want: 9},
+		{name: "below_minimum", got: counts.BelowMinimumEvictions, want: 10},
 	}
 	for _, field := range fields {
 		t.Run(field.name, func(t *testing.T) {
@@ -158,6 +160,7 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 	if slices.Contains([]int64{
 		counts.Entries, counts.MaxSize, counts.SizeEvictions, counts.BusyEvictions, counts.IdleEvictions,
 		counts.StaleEvictions, counts.RejectedEvictions, counts.InvalidEvictions, counts.RebuildEvictions,
+		counts.BelowMinimumEvictions,
 	}, stats.Evictions) {
 		t.Errorf("the legacy Evictions total reached an exported series: %+v", counts)
 	}

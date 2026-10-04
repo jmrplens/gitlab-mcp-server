@@ -32,12 +32,20 @@ import (
 // than by role: an elicitation request, or a resource-updated notification, is
 // something this server initiates and therefore takes the strict rule. That is
 // why this function names its side rather than being reusable for both.
-var callerFaultCodes = map[int64]struct{}{
-	-32700: {}, // parse error
-	-32600: {}, // invalid request
-	-32601: {}, // method not found
-	-32602: {}, // invalid params
-	-32002: {}, // resource not found
+var callerFaultCodes = callerFaultCodeSet()
+
+// callerFaultCodeSet builds [callerFaultCodes] once, at package
+// initialization. It is a function rather than the literal assigned in place
+// because a package-level initializer carries no statement counter, so the
+// mutation gate could not tell a code mistyped there from the right one.
+func callerFaultCodeSet() map[int64]struct{} {
+	return map[int64]struct{}{
+		-32700: {}, // parse error
+		-32600: {}, // invalid request
+		-32601: {}, // method not found
+		-32602: {}, // invalid params
+		-32002: {}, // resource not found
+	}
 }
 
 // outcome is the classification of one finished request, shared by the span and

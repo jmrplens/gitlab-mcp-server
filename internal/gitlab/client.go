@@ -991,7 +991,8 @@ const (
 	// CredentialAccepted means GitLab answered the probe with a 2xx.
 	CredentialAccepted
 	// CredentialRefused means GitLab answered the probe with 401 or 403, other
-	// than the one 403 [CredentialAcceptedPermissionMissing] reads.
+	// than the two 403s [CredentialAcceptedPermissionMissing] and
+	// [CredentialAcceptedBelowMinimum] read.
 	CredentialRefused
 	// CredentialAcceptedPermissionMissing means GitLab accepted the credential
 	// and refused the probe a permission its fine-grained grant lacks: a 403
@@ -1000,27 +1001,35 @@ const (
 	// authenticated the token, and on GET /api/v4/user the grant it lacks is
 	// User: Read.
 	CredentialAcceptedPermissionMissing
+	// CredentialAcceptedBelowMinimum means GitLab accepted the credential and
+	// refused the probe for want of a scope: a 403 whose body carries the RFC
+	// 6750 code insufficient_scope. The token is genuine, since GitLab's API
+	// guard checks a token's scopes only after it has found the token, and on
+	// GET /api/v4/user it carries none of api, read_api and read_user, so it
+	// is below the read_api minimum every door admits at ([MeetsMinimum]).
+	CredentialAcceptedBelowMinimum
 )
 
 // CheckCredential asks GitLab whether it accepts this credential, and reports
-// which of the four answers it got.
+// which of the five answers it got.
 //
-// Four and not two, because the callers need different parts of them.
+// Five and not two, because the callers need different parts of them.
 // Admission needs to know whether GitLab refused, and admits on no verdict so
 // that an instance outage is not a total denial of service; it also needs the
-// fourth answer apart, because a credential GitLab accepted and refused the
-// probe's permission is neither a refusal to charge nor a credential to serve
-// ([Client.CheckCredentialDetail] carries GitLab's sentence for it). The
-// pool's confirmation of a 401 that named no cause needs to know whether
-// GitLab accepted, which both acceptances say: keeping an entry and recording
-// that its credential was just checked is only honest on a real answer, and a
-// 500 read as "accepted" would push back the credential-age ceiling on the
+// two accepting 403s apart, because a credential GitLab accepted and refused
+// the probe's permission, or the probe for want of a scope, is neither a
+// refusal to charge nor a credential to serve ([Client.CheckCredentialDetail]
+// carries GitLab's sentence for the first). The pool's confirmation of a 401
+// that named no cause needs to know whether GitLab accepted, and ends an entry
+// whose credential is below the minimum: keeping an entry and recording that
+// its credential was just checked is only honest on a real answer, and a 500
+// read as "accepted" would push back the credential-age ceiling on the
 // strength of a question GitLab never answered. The pool's
 // periodic revalidation reads them all, through [Client.CheckCredentialDetail]
-// so it can log what each was read from: it evicts on a refusal, stamps the
-// entry on an acceptance, and counts anything else as no verdict, since
-// treating a briefly unreachable GitLab as a refusal would evict every tenant
-// at once.
+// so it can log what each was read from: it evicts on a refusal or a
+// credential below the minimum, stamps the entry on an acceptance, and counts
+// anything else as no verdict, since treating a briefly unreachable GitLab as
+// a refusal would evict every tenant at once.
 //
 // It issues GET /api/v4/user through the raw health client rather than the SDK
 // on purpose: client-go wraps requests in retryablehttp with RetryMax 5 and a
@@ -1103,10 +1112,11 @@ const refusalBodyBytes = 4 << 10
 
 // credentialVerdictFor reads the status and body the credential probe was
 // answered with. Only an explicit 401 or 403 refuses and only a 2xx accepts;
-// every other status is no verdict at all. The one exception is a 403 whose
-// body is GitLab's refusal of a fine-grained permission ([PermissionRefusal]),
-// which says the credential was accepted and refused the probe's own
-// permission.
+// every other status is no verdict at all. The exceptions are two 403s that
+// say the credential was accepted: GitLab's refusal of a fine-grained
+// permission ([PermissionRefusal]), which refused the probe's own permission,
+// and its refusal of a scope (insufficient_scope), which refused a token
+// carrying none of the scopes GET /api/v4/user takes.
 //
 // Written as ifs rather than a tagless switch, because a case expression
 // carries no statement counter of its own: the mutation gate reports every
@@ -1116,6 +1126,9 @@ func credentialVerdictFor(status int, body []byte) CredentialVerdict {
 	if status == http.StatusForbidden {
 		if _, missing := PermissionRefusal(body); missing {
 			return CredentialAcceptedPermissionMissing
+		}
+		if errorCode(body) == scopeRefusalCode {
+			return CredentialAcceptedBelowMinimum
 		}
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {

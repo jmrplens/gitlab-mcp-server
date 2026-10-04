@@ -197,6 +197,12 @@ func carriesInvalidToken(body []byte) bool {
 // so the spelling the two doors act on lives here once.
 const GranularScopeRefusalCode = "insufficient_granular_scope"
 
+// scopeRefusalCode is the RFC 6750 error code GitLab's API guard gives a token
+// it found and whose scopes do not reach the route (lib/api/api_guard.rb), in
+// the body of a 403. On the credential probe it means a genuine token below the
+// admission minimum ([CredentialAcceptedBelowMinimum]).
+const scopeRefusalCode = "insufficient_scope"
+
 // PermissionRefusal reports whether body is GitLab's refusal of a permission
 // a fine-grained grant lacks, and returns the sentence GitLab gave for it.
 //

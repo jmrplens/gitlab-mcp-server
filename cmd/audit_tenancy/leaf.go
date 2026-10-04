@@ -29,13 +29,14 @@ func (g *gate) checkLeaf() []Finding {
 	for _, file := range leaf.Syntax {
 		for _, spec := range file.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
-			switch {
-			case !slices.Contains(g.rules.leafImports, path):
+			if !slices.Contains(g.rules.leafImports, path) {
 				found = append(found, Finding{
 					Rule: "G12", Subject: g.reg.leaf, Position: g.p.position(spec.Pos()),
 					Message: fmt.Sprintf("imports %s, and the register may import only %v", path, g.rules.leafImports),
 				})
-			case server == nil || server.Imports[path] == nil:
+				continue
+			}
+			if server == nil || server.Imports[path] == nil {
 				found = append(found, Finding{
 					Rule: "G12", Subject: g.reg.leaf, Position: g.p.position(spec.Pos()),
 					Message: fmt.Sprintf("imports %s, which %s does not import itself", path, g.rules.server),

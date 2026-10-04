@@ -94,15 +94,16 @@ En el protocolo 2026-07-28 una suscripción es una petición `subscriptions/list
 }
 ```
 
-| `reason`             | Qué ocurrió                                                            | Qué hacer                                                              |
-| -------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `credential_evicted` | La presión de tamaño se llevó la entrada del pool de esta credencial   | Reconecta y vuelve a suscribirte ya; la credencial sigue siendo válida |
-| `credential_reset`   | La entrada se reclamó por inactividad, antigüedad o una reconstrucción | Reconecta y vuelve a suscribirte; la credencial no tiene nada malo     |
-| `credential_revoked` | GitLab rechazó la credencial                                           | Reautentícate primero; el mismo token se rechazará de nuevo            |
-| `resource_gone`      | El recurso vigilado respondió 401, 403 o 404                           | Revisa el acceso; vuelve a suscribirte solo si el recurso reaparece    |
-| `lifetime_reached`   | Se agotó el tope absoluto de vida de 24 horas                          | Vuelve a suscribirte; es lo esperado en un cliente de larga duración   |
-| `watcher_evicted`    | Un vigilante tuyo, degradado, se detuvo en el tope de vigilantes       | Vuelve a suscribirte y mantén la sesión activa                         |
-| `shutdown`           | El servidor se está deteniendo                                         | Reconecta; tras un balanceador te atenderá otra instancia              |
+| `reason`                  | Qué ocurrió                                                            | Qué hacer                                                              |
+| ------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `credential_evicted`      | La presión de tamaño se llevó la entrada del pool de esta credencial   | Reconecta y vuelve a suscribirte ya; la credencial sigue siendo válida |
+| `credential_reset`        | La entrada se reclamó por inactividad, antigüedad o una reconstrucción | Reconecta y vuelve a suscribirte; la credencial no tiene nada malo     |
+| `credential_revoked`      | GitLab rechazó la credencial                                           | Reautentícate primero; el mismo token se rechazará de nuevo            |
+| `credential_insufficient` | GitLab acepta la credencial, que no lleva ni `read_api` ni `api`       | Sustituye el token por uno que los lleve; sus scopes no pueden cambiar |
+| `resource_gone`           | El recurso vigilado respondió 401, 403 o 404                           | Revisa el acceso; vuelve a suscribirte solo si el recurso reaparece    |
+| `lifetime_reached`        | Se agotó el tope absoluto de vida de 24 horas                          | Vuelve a suscribirte; es lo esperado en un cliente de larga duración   |
+| `watcher_evicted`         | Un vigilante tuyo, degradado, se detuvo en el tope de vigilantes       | Vuelve a suscribirte y mantén la sesión activa                         |
+| `shutdown`                | El servidor se está deteniendo                                         | Reconecta; tras un balanceador te atenderá otra instancia              |
 
 `detail` es una frase de consejo, para que un cliente que no reconozca la palabra del motivo pueda actuar igualmente. El campo `status` aparece solo en `resource_gone`, y se retransmite sin interpretarlo: GitLab responde 404 a un recurso que quizá no puedas ver, así que un 404 aquí no significa «borrado». El vocabulario es cerrado y se publica en `subscriptions.end_reasons` de la tarjeta del servidor, que solo se sirve en modo HTTP: en stdio no hay endpoint del que leerla, y los cuatro motivos que allí pueden darse (`resource_gone`, `lifetime_reached`, `watcher_evicted` y `shutdown`) se documentan en esta página. Trata un valor desconocido como «un final que este cliente no conoce», nunca como «cualquier final».
 

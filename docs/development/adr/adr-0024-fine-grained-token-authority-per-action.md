@@ -129,9 +129,10 @@ Out of scope, each with its own issue: serving over REST what GraphQL cannot rea
 fine-grained token ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)),
 and declaring the missing GraphQL permissions upstream
 ([issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055)). The admission
-minimum issue 952 set for legacy HTTP and stdio (`read_api`) is decided there and not
-here; when it lands it treats `["granular"]` as meeting the minimum, through
-`gitlabclient.FineGrained`.
+minimum issue 952 set for legacy HTTP and stdio (`read_api`) was decided there and not
+here, and treats `["granular"]` as meeting the minimum, through
+`gitlabclient.FineGrained`, in the one predicate every door asks,
+`gitlabclient.MeetsMinimum`.
 
 ## Consequences
 
@@ -205,7 +206,7 @@ shape.
   fine-grained token is listed exactly the tools a token whose scopes are unknown is
   listed, every write and the `admin_mode` groups among them, with no log line saying it
   cannot write, and on the default surface its write reaches the instance.
-- `TestCheckCredential_FourAnswers_KeepsEachApart`,
+- `TestCheckCredential_FiveAnswers_KeepsEachApart`,
   `TestCheckCredentialDetail_FineGrainedRefusal_CarriesGitLabsSentence` and the two
   `TestPermissionRefusal` tests in `internal/gitlab`,
   `TestGetOrCreate_FineGrainedTokenWithoutUserRead_IsRefusedAsAccepted` and

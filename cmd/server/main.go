@@ -276,7 +276,7 @@ func main() {
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated tool names, group names or canonical action IDs to exclude, on every surface")
-	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
+	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip the scope filter and the read-only narrowing; the read_api minimum still applies")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or the requests they hold, which the process bounds on its own")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response). A session no client deletes keeps one of the process's session slots until it expires, and with 0 until its credential's pool entry is evicted")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
@@ -533,7 +533,7 @@ FLAGS
                             private, loopback or CGNAT address (default false). Cloud metadata addresses stay
                             refused
   -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
-  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
+  -ignore-scopes            Skip the scope filter and read-only narrowing; read_api is still the minimum (default false)
   -upload-max-file-size n   Maximum size in bytes for upload and file-read tools (default 2GB)
 
   The GitLab token has no flag, on purpose: a token on a command line is
@@ -3636,6 +3636,10 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// it can reach too, a credential GitLab accepted and refused the
 	// permission to read its own user.
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
+	// The pool records here too, when it learns of a credential it already
+	// serves that it carries neither read_api nor api, so the guard answers
+	// the next request with it from memory.
+	pool.RememberBelowMinimum(rejectedTokens.RecordBelowMinimum)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
@@ -3725,6 +3729,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		minimumScope:    oauth.MinimumScope,
 		advertisedScope: requiredScope,
 	}
+	// The gate answers a credential it finds below the minimum in the guard's
+	// words and with its challenge, which the guard repeats from memory.
+	gate.guard = guard
 	// No Scopes: the guard in front owns the minimum (ADM-002), and the SDK
 	// would require every listed scope literally, refusing behind the guard's
 	// back a fine-grained token the guard admitted as unknown authority, whose
@@ -3807,11 +3814,14 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	observeAuthBlocks(blockCounts)
 	// Legacy mode keeps no negative cache of invalid tokens (the failure
 	// budgets bound those), but it does remember a token GitLab accepted and
-	// refused the permission to read its own user: that refusal is uncharged,
-	// so nothing else stops the same token costing a probe on every request.
-	// Same structure and sizes as the OAuth one (ADM-006).
+	// refused the permission to read its own user, and one that carries
+	// neither read_api nor api: both refusals are uncharged, so nothing else
+	// stops the same token costing a probe on every request. Same structure
+	// and sizes as the OAuth one (ADM-006). The pool records the second kind
+	// here too, when it learns it of a credential it already serves.
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
+	pool.RememberBelowMinimum(rejectedTokens.RecordBelowMinimum)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),

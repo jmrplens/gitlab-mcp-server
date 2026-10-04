@@ -354,6 +354,65 @@ func TestWriteCapable_FineGrainedIsUnknownAuthority(t *testing.T) {
 	}
 }
 
+// TestMeetsMinimum_ReadAPIOrAPIOrAGrant holds the admission minimum every door
+// asks: a list GitLab answered with meets it when it carries read_api or api,
+// or is a fine-grained token's, and no other scope does, read_user and the
+// repository scopes included. It judges an answer only, so an absent or empty
+// list does not meet it.
+func TestMeetsMinimum_ReadAPIOrAPIOrAGrant(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{name: "read_api", scopes: []string{"read_api"}, want: true},
+		{name: "api", scopes: []string{"api"}, want: true},
+		{name: "read_api among others", scopes: []string{"read_user", "read_api"}, want: true},
+		{name: "a fine-grained token", scopes: []string{"granular"}, want: true},
+		{name: "read_user", scopes: []string{"read_user"}},
+		{name: "repository and registry scopes", scopes: []string{"read_repository", "write_repository", "read_registry"}},
+		{name: "self_rotate", scopes: []string{"self_rotate"}},
+		{name: "granular beside read_user is the read_user token it spells", scopes: []string{"granular", "read_user"}},
+		{name: "no scope at all", scopes: []string{}},
+		{name: "no answer", scopes: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := MeetsMinimum(tt.scopes); got != tt.want {
+				t.Errorf("MeetsMinimum(%#v) = %v, want %v", tt.scopes, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBelowMinimum_OnlyAnAnswerBelowItRefuses verifies that what is known of
+// a token puts it below the minimum only when GitLab answered with its scopes
+// and they do not meet it: scopes nothing answered for count as capable.
+func TestBelowMinimum_OnlyAnAnswerBelowItRefuses(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		facts TokenFacts
+		want  bool
+	}{
+		{name: "read_user", facts: TokenFacts{Scopes: []string{"read_user"}}, want: true},
+		{name: "an answer with no scope", facts: TokenFacts{Scopes: []string{}}, want: true},
+		{name: "read_api", facts: TokenFacts{Scopes: []string{"read_api"}}},
+		{name: "a fine-grained token", facts: FactsFromScopes([]string{"granular"}, 3)},
+		{name: "scopes nothing answered for", facts: TokenFacts{KindUnknown: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := BelowMinimum(tt.facts); got != tt.want {
+				t.Errorf("BelowMinimum(%+v) = %v, want %v", tt.facts, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestCatalogScopes_FineGrainedReadsAsUnknown verifies the list the catalog's
 // scope filter and its cache key read: a fine-grained token's list becomes nil,
 // the list of a token whose scopes are unknown, and every other list is handed

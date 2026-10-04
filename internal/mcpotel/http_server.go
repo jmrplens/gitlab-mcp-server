@@ -246,10 +246,10 @@ func knownMethod(method string) (recorded, original string) {
 // the operator nothing.
 const maxOriginalMethod = 32
 
-// boundMethod truncates a caller-chosen verb to what the span will carry.
+// boundMethod truncates a caller-chosen verb to what the span will carry. It
+// is one slice with no branch: a verb of exactly the bound is the same string
+// cut there or not, so a comparison would carry a boundary no test can tell
+// from its mutant.
 func boundMethod(method string) string {
-	if len(method) <= maxOriginalMethod {
-		return method
-	}
-	return method[:maxOriginalMethod]
+	return method[:min(len(method), maxOriginalMethod)]
 }

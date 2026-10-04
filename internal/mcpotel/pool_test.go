@@ -24,6 +24,8 @@ var samplePoolCounts = PoolCounts{
 	RejectedEvictions: 17,
 	InvalidEvictions:  19,
 	RebuildEvictions:  23,
+
+	BelowMinimumEvictions: 29,
 }
 
 // collectedMetric returns one named metric from a fresh collection, or fails.
@@ -150,6 +152,7 @@ func TestObservePool_PublishesOneSeriesPerEvictionReason(t *testing.T) {
 		poolEvictionRejectedCredential: samplePoolCounts.RejectedEvictions,
 		poolEvictionInvalidCredential:  samplePoolCounts.InvalidEvictions,
 		poolEvictionRebuild:            samplePoolCounts.RebuildEvictions,
+		poolEvictionBelowMinimum:       samplePoolCounts.BelowMinimumEvictions,
 	}
 	got := reasonValues(t, sum)
 	if len(got) != len(want) {
@@ -186,7 +189,7 @@ func reasonValues(t *testing.T, sum metricdata.Sum[int64]) map[string]int64 {
 // A counter that appears only after its first eviction cannot be graphed or
 // alerted on until the moment it already matters, and an operator watching an
 // empty panel cannot tell "nothing has been evicted" from "this build does not
-// export that". The vocabulary is closed at seven values, so publishing all of
+// export that". The vocabulary is closed at eight values, so publishing all of
 // them costs less than one dimension of the request instrument.
 func TestObservePool_ObservesEveryReasonBeforeAnythingIsEvicted(t *testing.T) {
 	reader, restore := newMetricRecorder(t)
@@ -199,8 +202,8 @@ func TestObservePool_ObservesEveryReasonBeforeAnythingIsEvicted(t *testing.T) {
 	t.Cleanup(func() { _ = registration.Unregister() })
 
 	points := sumPoints(t, collectedMetric(t, reader, poolEvictionsInstrument))
-	if len(points) != 7 {
-		t.Fatalf("got %d reason series on a pool that has evicted nothing, want 7", len(points))
+	if len(points) != 8 {
+		t.Fatalf("got %d reason series on a pool that has evicted nothing, want 8", len(points))
 	}
 	for _, point := range points {
 		if point.Value != 0 {

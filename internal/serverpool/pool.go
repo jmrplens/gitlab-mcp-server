@@ -82,6 +82,13 @@ type Entry struct {
 	// fine-grained token kept its authority, so the reason is logged once per
 	// entry and not on every round.
 	rereadKept atomic.Bool
+	// rememberBelowMinimum hands the entry's own instance and credential to
+	// the record [ServerPool.RememberBelowMinimum] installed, when GitLab has
+	// said the credential is below the admission minimum. It closes over the
+	// token the entry's client already holds, so the entry keeps no second
+	// copy anywhere a log line or a dump could reach, and it is set when the
+	// entry is built.
+	rememberBelowMinimum func()
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -266,14 +273,20 @@ type Metrics struct {
 	// RejectedCredentialEvictions counts entries dropped because GitLab
 	// refused their credential on a call: a 401 that named the credential, or
 	// a 401 that named nothing and that the credential probe then confirmed.
-	// The token was revoked, expired or deleted while the entry was live, or
-	// the GraphQL endpoint refused it for its scope (it answers 401 to a token
-	// carrying neither api nor read_api, which legacy admission lets through
-	// on read_user alone), and the first refused data call is the signal
-	// rather than the next periodic check. A permission refusal answered with
+	// The token was revoked, expired or deleted while the entry was live, and
+	// the first refused data call is the signal rather than the next periodic
+	// check. A token carrying neither api nor read_api, which the GraphQL
+	// endpoint answers with such a 401, is refused at admission whenever its
+	// scopes can be read (issue 952), so it reaches this counter only when
+	// they could not be, before a revalidation learns them. A permission refusal answered with
 	// 401 is not counted here, since the probe finds the credential accepted;
 	// see UnauthorizedKept.
 	RejectedCredentialEvictions atomic.Int64
+	// BelowMinimumEvictions counts entries dropped because GitLab said their
+	// credential is below the admission minimum once the entry was serving
+	// ([CauseBelowMinimum]). A credential found below it at admission builds
+	// no entry and is counted by nothing here.
+	BelowMinimumEvictions atomic.Int64
 	// UnauthorizedKept counts 401s that named no cause and after which the
 	// credential probe found GitLab still accepting the credential, so the
 	// entry was kept. Each is a permission refusal GitLab answered with 401
@@ -313,6 +326,10 @@ type Snapshot struct {
 	// refused their credential on a call, by a 401 naming it or by a 401 the
 	// credential probe then confirmed.
 	RejectedCredentialEvictions int64 `json:"rejected_credential_evictions"`
+	// BelowMinimumEvictions counts entries dropped because GitLab said their
+	// credential is below the admission minimum. See
+	// [Metrics.BelowMinimumEvictions].
+	BelowMinimumEvictions int64 `json:"below_minimum_evictions"`
 	// UnauthorizedKept counts 401s that named no cause after which the
 	// credential probe found the credential still accepted, and the entry was
 	// kept. See [Metrics.UnauthorizedKept].
@@ -348,7 +365,12 @@ type ServerPool struct {
 	onEvict func(*Entry, EvictionCause)
 	// inUse answers whether an entry is doing work the pool cannot see, for
 	// idle eviction alone. See [WithInUse].
-	inUse              func(*Entry) bool
+	inUse func(*Entry) bool
+	// belowMinimum records that GitLab accepted a credential the pool serves
+	// and that it is below the admission minimum, nil until
+	// [ServerPool.RememberBelowMinimum] installs one. Atomic because the door
+	// that owns the record is assembled after the pool.
+	belowMinimum       atomic.Pointer[func(gitlabURL, token string)]
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
 	maxCredentialAge   time.Duration
@@ -443,6 +465,16 @@ const (
 	// CauseInvalidCredential is the periodic revalidation finding that GitLab
 	// now refuses the credential.
 	CauseInvalidCredential EvictionCause = "invalid_credential"
+	// CauseBelowMinimum is GitLab saying of a credential the pool already
+	// serves that it is genuine and below the admission minimum, carrying
+	// neither read_api nor api: the probe answered 403 insufficient_scope on a
+	// confirmation or a revalidation, or the token's own description, asked
+	// again because its kind was unknown when the entry was built, named only
+	// scopes below it (issue 952). It is apart from the two causes above
+	// because GitLab refused nothing: the credential works and reaches too
+	// little, so its holder needs another token rather than to re-authenticate
+	// the same one.
+	CauseBelowMinimum EvictionCause = "below_minimum"
 	// CauseRebuild is a configuration shape whose catalog registration failed,
 	// taking every credential pointing at it.
 	CauseRebuild EvictionCause = "rebuild"
@@ -856,6 +888,11 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		// [Entry.Owner] for why it is random rather than derived.
 		owner: rand.Text(),
 		token: facts,
+		rememberBelowMinimum: func() {
+			if record := p.belowMinimum.Load(); record != nil {
+				(*record)(gitlabURL, token)
+			}
+		},
 	}
 	// The first data call GitLab refuses is the revocation signal. Without
 	// this, a token revoked while its entry was live kept being served until
@@ -985,11 +1022,16 @@ func (p *ServerPool) confirmUnexplainedRefusal(key string, entry *Entry) {
 	defer cancel()
 	// A credential GitLab accepted and refused the probe's own permission is
 	// still one GitLab accepts, which is all this asks: the entry was built,
-	// and a 401 naming nothing is then a permission refusal of the call.
+	// and a 401 naming nothing is then a permission refusal of the call. One
+	// GitLab accepted and refused the probe for want of a scope is genuine and
+	// below the minimum, so the entry it was admitted to while that was not
+	// known ends, as admission would have refused it.
 	switch entry.client.CheckCredential(ctx) {
 	case gitlabclient.CredentialRefused:
 		entry.rejected.Store(true)
 		p.evictRejectedCredential(key, entry)
+	case gitlabclient.CredentialAcceptedBelowMinimum:
+		p.evictBelowMinimum(ctx, key, entry)
 	case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
 		p.keepConfirmedEntry(key, entry)
 	default:
@@ -1077,6 +1119,50 @@ func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (gitlabURL stri
 	}
 	p.metrics.RejectedCredentialEvictions.Add(1)
 	p.dropEntry(key, CauseRejectedCredential)
+	return gitlabURL, len(p.entries), true
+}
+
+// evictBelowMinimum drops entry, if it is still the one under key, because
+// GitLab has said its credential is genuine and below the admission minimum,
+// counts it apart from a credential GitLab refused ([CauseBelowMinimum]), and
+// hands the verdict to the record [ServerPool.RememberBelowMinimum] installed,
+// so the next request carrying the credential is refused from memory rather
+// than rebuilt. The record is called once the lock is released: it is the
+// door's, and the pool does not know what it takes.
+//
+// It runs on the goroutine of the confirmation or the revalidation sweep that
+// reached the verdict, each behind a recover of its own, so a panic in the
+// eviction callback or the record stops there as it would for any other
+// removal those make.
+func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *Entry) {
+	gitlabURL, size, dropped := p.dropBelowMinimumEntry(key, entry)
+	if !dropped {
+		return
+	}
+	// Every entry the pool builds carries the hand-off; one assembled
+	// elsewhere, as the tests assemble theirs, has nothing to hand.
+	if entry.rememberBelowMinimum != nil {
+		entry.rememberBelowMinimum()
+	}
+	slog.InfoContext(ctx, "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
+		"gitlab_url", gitlabURL,
+		"pool_size", size)
+}
+
+// dropBelowMinimumEntry removes entry under the lock, if it is still the one
+// under key, and reports what to log about it.
+func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (gitlabURL string, size int, dropped bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if current, ok := p.entries[key]; !ok || current != entry {
+		return "", 0, false
+	}
+	gitlabURL, _ = entryConfigLogValues(entry)
+	// An entry the map holds was given its element when it was inserted, so
+	// it is removed unguarded, as evictStaleCredential removes one.
+	p.lru.Remove(entry.element)
+	p.metrics.BelowMinimumEvictions.Add(1)
+	p.dropEntry(key, CauseBelowMinimum)
 	return gitlabURL, len(p.entries), true
 }
 
@@ -1305,6 +1391,41 @@ func (e *PermissionMissingError) Error() string {
 // Unwrap lets errors.Is find [ErrCredentialLacksProbePermission].
 func (e *PermissionMissingError) Unwrap() error { return ErrCredentialLacksProbePermission }
 
+// RememberBelowMinimum installs the function the pool calls with a credential
+// it serves once GitLab has said the credential is below the admission
+// minimum, which ends its entry ([CauseBelowMinimum]). It is the door's record
+// of that verdict (register row ADM-006), so the next request carrying the
+// credential is refused from memory rather than rebuilt. A pool with none
+// installed ends the entry all the same, and the next request rebuilds it,
+// which reaches the verdict at admission.
+//
+// It takes the record after [New] because the door is assembled after the
+// pool it serves from; it is installed once, before the listener accepts a
+// request, and is read atomically all the same.
+//
+// A nil record installs none: storing a pointer to a nil function would make
+// the next verdict call it.
+func (p *ServerPool) RememberBelowMinimum(record func(gitlabURL, token string)) {
+	if record == nil {
+		p.belowMinimum.Store(nil)
+		return
+	}
+	p.belowMinimum.Store(&record)
+}
+
+// ErrCredentialBelowMinimum reports that GitLab accepted the credential and
+// that it carries neither read_api nor api, the minimum every door admits at
+// (ADR-0018, issue 952): the credential probe was answered 403
+// insufficient_scope, or the token's own description named only scopes below
+// it, read_user alone among them.
+//
+// It is a verdict about a genuine token, like [ErrCredentialLacksProbePermission],
+// so the caller must not charge an authentication failure for it (INV-007), and
+// a refusal rather than an admission, since such a token can read nothing of
+// the API the catalog serves. Callers map it to 403 and remember it: a token's
+// scopes cannot change after it is created.
+var ErrCredentialBelowMinimum = errors.New("gitlab accepted the credential, which carries neither the read_api nor the api scope")
+
 // verifyCredential asks GitLab whether the token is usable before the pool
 // admits an entry for it.
 //
@@ -1326,11 +1447,14 @@ func (e *PermissionMissingError) Unwrap() error { return ErrCredentialLacksProbe
 // an instance outage into a total denial of service, which is worse than the
 // churn this prevents.
 //
-// One 403 is not a rejection: GitLab's refusal of a fine-grained permission,
-// which says the token was accepted and cannot read its own user. It is
-// refused with [PermissionMissingError] rather than admitted, because the
-// probe the pool trusts was not answered, and rather than rejected, because
-// charging a genuine credential lets its holder lock their own address out.
+// Two 403s are not rejections, because each says the token was accepted:
+// GitLab's refusal of a fine-grained permission, the token's grant lacking
+// User: Read, and its refusal of a scope, the token carrying none of the
+// scopes GET /api/v4/user takes. The first is refused with
+// [PermissionMissingError] and the second with [ErrCredentialBelowMinimum],
+// rather than admitted, because the probe the pool trusts was not answered,
+// and rather than rejected, because charging a genuine credential lets its
+// holder lock their own address out.
 func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
@@ -1341,6 +1465,9 @@ func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 	}
 	if check.Verdict == gitlabclient.CredentialAcceptedPermissionMissing {
 		return &PermissionMissingError{Description: check.Description}
+	}
+	if check.Verdict == gitlabclient.CredentialAcceptedBelowMinimum {
+		return fmt.Errorf("%w", ErrCredentialBelowMinimum)
 	}
 	return nil
 }
@@ -1467,20 +1594,19 @@ const entryDetectTimeout = 10 * time.Second
 // resolved GitLab URL plus optional edition and token-scope discovery, and
 // attaches what a fine-grained token may be shown to the entry's client. It
 // returns what was learned about the token, which the entry keeps for its
-// revalidations, and fails only when the fine-grained reads found no probe
-// slot free ([ErrCredentialProbeBusy]).
+// revalidations, and fails when the token's own description names scopes
+// below the admission minimum ([ErrCredentialBelowMinimum]) or when the
+// fine-grained reads found no probe slot free ([ErrCredentialProbeBusy]).
+//
+// The token is asked about before the tier, so a token refused for its scopes
+// costs no tier request and leaves no warning about a tier nobody will be
+// served.
 func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts) (*config.ServerConfig, gitlabclient.TokenFacts, error) {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
 	ctx, cancel := context.WithTimeout(p.lifetime(), entryDetectTimeout)
 	defer cancel()
-
-	// Detect the tier from the instance license only when the operator did not
-	// pin it explicitly via --tier/GITLAB_MCP_TIER.
-	if !p.cfg.TierExplicit {
-		entryCfg.Tier = client.DetectTier(ctx)
-	}
 
 	// The PAT self endpoint does not answer for an OAuth access token, which
 	// is why the caller may hand what it learned in: in oauth mode the
@@ -1503,6 +1629,19 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 		if detected := gitlabclient.DetectToken(ctx, client.GL()); known == nil || !detected.KindUnknown {
 			facts = detected
 		}
+	}
+	// A token whose own description names no scope that reaches the API, a
+	// read_user one among them, is refused here, under --ignore-scopes too:
+	// that flag skips the scope filter and the read-only narrowing, never the
+	// minimum (issue 952). Scopes nothing answered for are not below it.
+	if gitlabclient.BelowMinimum(facts) {
+		return nil, facts, fmt.Errorf("%w", ErrCredentialBelowMinimum)
+	}
+
+	// Detect the tier from the instance license only when the operator did not
+	// pin it explicitly via --tier/GITLAB_MCP_TIER.
+	if !p.cfg.TierExplicit {
+		entryCfg.Tier = client.DetectTier(ctx)
 	}
 
 	// What a fine-grained token may be shown, on the entry's own client, since
@@ -1574,11 +1713,14 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 // upgraded to a release no table records, is logged with the same arguments an
 // entry build in phase A logs; one that kept the authority is logged once per
 // entry, with its reason and nothing else. An entry whose token's kind is
-// still unknown is asked that instead ([redetectKind]).
-func (p *ServerPool) refreshAuthority(ctx context.Context, entry *Entry) {
+// still unknown is asked that instead ([redetectKind]), and ends if the answer
+// names scopes below the admission minimum, as admission would have refused it.
+func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *Entry) {
 	facts := entry.tokenFacts()
 	if facts.KindUnknown {
-		redetectKind(ctx, entry)
+		if redetectKind(ctx, entry) {
+			p.evictBelowMinimum(ctx, key, entry)
+		}
 		return
 	}
 	moved, reason := entry.client.RefreshAuthority(ctx, facts, actiongrants.Table())
@@ -1609,19 +1751,29 @@ func (p *ServerPool) refreshAuthority(ctx context.Context, entry *Entry) {
 // authority is its client's own. The line written once the kind is learned
 // names the phase and the reason as an entry build in phase A does, and never
 // the token's id.
-func redetectKind(ctx context.Context, entry *Entry) {
+//
+// It reports whether the answer names scopes below the admission minimum, a
+// read_user token being the usual one, which the caller ends the entry for:
+// it was admitted because nothing said what its scopes were, and the minimum
+// holds whenever that is learned (issue 952). The entry's facts are left as
+// they were, since the entry is about to go.
+func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
 	detected := gitlabclient.RedetectToken(ctx, entry.client.GL())
 	if detected.KindUnknown {
-		return
+		return false
+	}
+	if gitlabclient.BelowMinimum(detected) {
+		return true
 	}
 	entry.setTokenFacts(detected)
 	if !detected.FineGrained {
-		return
+		return false
 	}
 	authority := actiongrants.Build(true, entry.client.ReadFineGrained(ctx, detected))
 	slog.InfoContext(ctx, "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown",
 		authority.LogArgs()...)
 	entry.client.SetAuthority(authority)
+	return false
 }
 
 // applyScopeReadOnly narrows an entry to read-only when its token cannot
@@ -1679,6 +1831,7 @@ func (p *ServerPool) Stats() Snapshot {
 		RevalidationsTransient:      p.metrics.RevalidationsTransient.Load(),
 		StaleCredentialEvictions:    p.metrics.StaleCredentialEvictions.Load(),
 		RejectedCredentialEvictions: p.metrics.RejectedCredentialEvictions.Load(),
+		BelowMinimumEvictions:       p.metrics.BelowMinimumEvictions.Load(),
 		UnauthorizedKept:            p.metrics.UnauthorizedKept.Load(),
 		CurrentSize:                 size,
 		MaxSize:                     p.maxSize,
@@ -2059,6 +2212,16 @@ func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Ent
 		)
 		p.metrics.RevalidationsFailed.Add(1)
 		p.evictByKey(key)
+	case gitlabclient.CredentialAcceptedBelowMinimum:
+		// Admitted while nothing said what its scopes were, and below the
+		// minimum all along, since a token's scopes cannot change: it ends
+		// as admission would have refused it, counted apart from a refusal.
+		// GitLab still takes the token, which is what a revalidation asks,
+		// so the round counts as one that succeeded, as the re-read of a
+		// token's kind counts the same verdict; the eviction has its own
+		// counter.
+		p.metrics.RevalidationsSucceeded.Add(1)
+		p.evictBelowMinimum(ctx, key, entry)
 	case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
 		p.metrics.RevalidationsSucceeded.Add(1)
 		p.mu.Lock()
@@ -2070,7 +2233,7 @@ func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Ent
 		// its credential inside the age ceiling, so this re-read is what keeps
 		// a fine-grained token's authority in step with its instance, and what
 		// learns the kind of a token its build could not tell.
-		p.refreshAuthority(checkCtx, entry)
+		p.refreshAuthority(checkCtx, key, entry)
 	default:
 		slog.WarnContext(ctx,
 			"server pool: token revalidation could not reach a verdict, keeping entry",

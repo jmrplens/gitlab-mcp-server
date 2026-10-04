@@ -116,17 +116,17 @@ cannot change until a human or a clock acts.
 
 A watch ends, or slows, for these reasons and no others:
 
-| Event                                     | Effect                                | Told to the client?                                                                                                            |
-| ----------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                                                                                                                |
-| The session disconnects                   | Stops                                 | It is gone                                                                                                                     |
-| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification                                                                                               |
-| Any request on the session                | Restores full speed                   | —                                                                                                                              |
-| The resource returns 401, 403 or 404      | Stops                                 | Stream closed with `resource_gone` (2026-07-28)                                                                                |
-| 24 hours, renewals included               | Stops                                 | Stream closed with `lifetime_reached` (2026-07-28)                                                                             |
-| Evicted to make room at the cap           | Stops                                 | Stream closed with `watcher_evicted` (2026-07-28)                                                                              |
-| The pool evicts this credential's entry   | Stops                                 | Stream closed with `credential_evicted`, `credential_reset` or `credential_revoked`; session terminated on `--stateless=false` |
-| The server is shutting down               | Stops                                 | Stream closed with `shutdown` (2026-07-28)                                                                                     |
+| Event                                     | Effect                                | Told to the client?                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resources/unsubscribe`                   | Stops when the last subscriber leaves | It asked for it                                                                                                                                           |
+| The session disconnects                   | Stops                                 | It is gone                                                                                                                                                |
+| 30 minutes with no traffic on the session | **Slows to a 10-minute poll**         | `_meta` on the next notification                                                                                                                          |
+| Any request on the session                | Restores full speed                   | Nothing to tell                                                                                                                                           |
+| The resource returns 401, 403 or 404      | Stops                                 | Stream closed with `resource_gone` (2026-07-28)                                                                                                           |
+| 24 hours, renewals included               | Stops                                 | Stream closed with `lifetime_reached` (2026-07-28)                                                                                                        |
+| Evicted to make room at the cap           | Stops                                 | Stream closed with `watcher_evicted` (2026-07-28)                                                                                                         |
+| The pool evicts this credential's entry   | Stops                                 | Stream closed with `credential_evicted`, `credential_reset`, `credential_revoked` or `credential_insufficient`; session terminated on `--stateless=false` |
+| The server is shutting down               | Stops                                 | Stream closed with `shutdown` (2026-07-28)                                                                                                                |
 
 The reason words are a closed vocabulary, listed in
 [Why a subscription ended](#why-a-subscription-ended).
@@ -304,19 +304,20 @@ there:
 }
 ```
 
-Without it, all seven endings below are one bare result: a client cannot tell
+Without it, all eight endings below are one bare result: a client cannot tell
 "the server ran out of room" from "your token was revoked", and the right
 response to those two is not the same.
 
-| `reason`             | What happened                                                                                      | What to do                                                             |
-| -------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `credential_evicted` | Size pressure took this credential's pooled entry                                                  | Reconnect and subscribe again now; the credential is still valid       |
-| `credential_reset`   | The entry was reclaimed for idleness, for the credential-recheck ceiling, or to rebuild its server | Reconnect and subscribe again; nothing is wrong with the credential    |
-| `credential_revoked` | GitLab refused the credential, at revalidation or on a call                                        | Re-authenticate first; the same token will be refused again            |
-| `resource_gone`      | The watched resource answered 401, 403 or 404, so the watch retired                                | Check access; subscribe again only if the resource comes back          |
-| `lifetime_reached`   | The absolute 24-hour watch lifetime ran out                                                        | Subscribe again; expected on a long-lived client                       |
-| `watcher_evicted`    | One of this credential's own demoted watches was stopped at the watcher cap                        | Subscribe again, and keep the session busy so the watch is not demoted |
-| `shutdown`           | The server is stopping                                                                             | Reconnect; behind a balancer another instance will take you            |
+| `reason`                  | What happened                                                                                      | What to do                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `credential_evicted`      | Size pressure took this credential's pooled entry                                                  | Reconnect and subscribe again now; the credential is still valid       |
+| `credential_reset`        | The entry was reclaimed for idleness, for the credential-recheck ceiling, or to rebuild its server | Reconnect and subscribe again; nothing is wrong with the credential    |
+| `credential_revoked`      | GitLab refused the credential, at revalidation or on a call                                        | Re-authenticate first; the same token will be refused again            |
+| `credential_insufficient` | GitLab accepts the credential, and it carries neither `read_api` nor `api`, the admission minimum  | Replace the token with one that does; its scopes cannot change         |
+| `resource_gone`           | The watched resource answered 401, 403 or 404, so the watch retired                                | Check access; subscribe again only if the resource comes back          |
+| `lifetime_reached`        | The absolute 24-hour watch lifetime ran out                                                        | Subscribe again; expected on a long-lived client                       |
+| `watcher_evicted`         | One of this credential's own demoted watches was stopped at the watcher cap                        | Subscribe again, and keep the session busy so the watch is not demoted |
+| `shutdown`                | The server is stopping                                                                             | Reconnect; behind a balancer another instance will take you            |
 
 Three things are worth knowing about the shape:
 

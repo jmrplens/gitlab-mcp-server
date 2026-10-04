@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -154,6 +155,19 @@ func TestOutcome_MetricAttributes_CarryWhatTheResponseSaidAndNothingElse(t *test
 				t.Errorf("metric attributes = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestCallerFaultCodeSet_IsTheFiveTheConventionNames holds the set to exactly
+// the five codes the semantic convention says a server does not count as its
+// own failures, and nothing else: a code mistyped out of it would count model
+// confusion as server errors, and one added would hide a real failure.
+func TestCallerFaultCodeSet_IsTheFiveTheConventionNames(t *testing.T) {
+	t.Parallel()
+
+	got := slices.Sorted(maps.Keys(callerFaultCodeSet()))
+	if want := []int64{-32700, -32602, -32601, -32600, -32002}; !slices.Equal(got, want) {
+		t.Errorf("callerFaultCodeSet() = %v, want %v", got, want)
 	}
 }
 

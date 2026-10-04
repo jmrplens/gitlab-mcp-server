@@ -307,6 +307,18 @@ type mcpServerGate struct {
 	// structure, which records that verdict first. Nil in tests that build a
 	// gate without one, where nothing is remembered.
 	rejected *oauth.RejectedTokens
+	// guard is the bearer guard in front of this gate in oauth mode, and nil in
+	// legacy mode. A credential this gate refuses as genuine is given the
+	// guard's answer for it, with its insufficient_scope challenge: below the
+	// admission minimum, which in oauth mode is a token the verifier admitted
+	// on its own api assumption (a personal access token, whose scopes no
+	// introspection answers), or refused the permission to read its own user,
+	// which reaches the gate only when the pool's probe and the verifier's
+	// disagree. The guard gives the same answer to every later request with
+	// the credential from memory, so the first answer carries the challenge
+	// RFC 6750 section 3.1 asks of an OAuth door and words it as the later
+	// ones do.
+	guard *bearerGuard
 	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
 	// may skip authentication.
 	//
@@ -645,15 +657,54 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 	logIgnoredRequestOptions(token, options)
 
 	// A credential GitLab accepted and refused the permission to read its own
-	// user is answered from memory: it builds no entry and is charged
-	// nothing, so without this every request carrying it would hold one of
-	// the pool's probe slots for another GET /user with the same answer.
-	if sentence, known := g.knownPermissionRefusal(options.GitLabURL, token); known {
-		logDoorPermissionRefusal(r.Context(), "request rejected at the gate: token already known to lack the permission to read its own user", sentence)
-		return nil, doorPermissionFailure(sentence)
+	// user, or one that carries neither read_api nor api, is answered from
+	// memory: it builds no entry and is charged nothing, so without this every
+	// request carrying it would hold one of the pool's probe slots for another
+	// GET /user with the same answer.
+	if kind, sentence, known := g.knownDoorRefusal(options.GitLabURL, token); known {
+		if kind == oauth.RejectionPermissionMissing {
+			logDoorPermissionRefusal(r.Context(), "request rejected at the gate: token already known to lack the permission to read its own user", sentence)
+			if g.guard != nil {
+				return nil, g.guard.permissionMissingFailure(sentence)
+			}
+			return nil, doorPermissionFailure(sentence)
+		}
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected at the gate: token already known to carry neither read_api nor api")
+		if g.guard != nil {
+			return nil, g.guard.insufficientScopeFailure()
+		}
+		return nil, belowMinimumFailure()
 	}
 
 	entry, err := g.pool.GetOrCreateEntryWithFacts(token, options.GitLabURL, verifiedFacts(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
+	if err != nil {
+		return nil, g.classify(r.Context(), err, ip, source, options.GitLabURL, token)
+	}
+	return entry, nil
+}
+
+// classify turns the pool's refusal to build an entry into the gate's answer,
+// as the bearer guard's classify does with the verifier's: a credential GitLab
+// rejected, one it accepted and refused at the door, or one nothing judged.
+// Only the first is the caller's doing and charged; the other two are
+// remembered or retried, never counted against the address.
+func (g *mcpServerGate) classify(ctx context.Context, err error, ip, source, instance, token string) *gateFailure {
+	if errors.Is(err, serverpool.ErrCredentialBelowMinimum) {
+		// GitLab accepted the token, and it carries neither read_api nor api:
+		// the probe was refused for want of a scope, or the token's own
+		// description named only scopes below the minimum. Not charged
+		// (INV-007), for the reason the permission refusal below is not, and
+		// remembered, since a token's scopes cannot change after it is
+		// created (issue 952).
+		if g.rejected != nil {
+			g.rejected.RecordBelowMinimum(instance, token)
+		}
+		refusalLog.log(ctx, slog.LevelInfo, "request rejected at the gate: gitlab accepted the token, which carries neither read_api nor api")
+		if g.guard != nil {
+			return g.guard.insufficientScopeFailure()
+		}
+		return belowMinimumFailure()
+	}
 	if missing, isMissing := errors.AsType[*serverpool.PermissionMissingError](err); isMissing {
 		// GitLab accepted the token and judged its fine-grained grant, which
 		// lacks User: Read. Not charged (INV-007): the credential is genuine,
@@ -661,19 +712,22 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 		// Remembered, so the next request with it asks GitLab nothing.
 		sentence := oauth.QuotedDescription(missing.Description)
 		if g.rejected != nil {
-			g.rejected.RecordPermissionMissing(options.GitLabURL, token, missing.Description)
+			g.rejected.RecordPermissionMissing(instance, token, missing.Description)
 		}
-		logDoorPermissionRefusal(r.Context(), "request rejected at the gate: gitlab accepted the token and refused it the permission to read its own user", sentence)
-		return nil, doorPermissionFailure(sentence)
+		logDoorPermissionRefusal(ctx, "request rejected at the gate: gitlab accepted the token and refused it the permission to read its own user", sentence)
+		if g.guard != nil {
+			return g.guard.permissionMissingFailure(sentence)
+		}
+		return doorPermissionFailure(sentence)
 	}
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
-		// limiter — this is the path that stops a stream of invented tokens
+		// limiter. This is the path that stops a stream of invented tokens
 		// from churning the pool.
 		g.chargeFailure(ip, source, token)
-		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
-		return nil, &gateFailure{
+		refusalLog.log(ctx, slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		return &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.",
@@ -684,22 +738,19 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 			header: newHeader("WWW-Authenticate", g.invalidTokenChallenge()),
 		}
 	}
-	if err != nil {
-		// Deliberately not charged to the authentication limiter. Any other
-		// pool failure means the backend could not be reached or the server
-		// could not be built — the credential was never judged. Counting it
-		// would let a GitLab outage lock out clients holding valid tokens,
-		// which is the same conflation of causes this gate exists to remove.
-		slog.ErrorContext(r.Context(), "failed to create server for token", "error", err)
-		// The pool error can name internal state, so it is logged but not
-		// returned to the caller.
-		return nil, &gateFailure{
-			status:  http.StatusServiceUnavailable,
-			code:    errCodeUpstreamUnavailable,
-			message: "Could not initialize a GitLab session for this token. The instance may be unreachable; retry shortly.",
-		}
+	// Deliberately not charged to the authentication limiter. Any other pool
+	// failure means the backend could not be reached or the server could not
+	// be built: the credential was never judged. Counting it would let a
+	// GitLab outage lock out clients holding valid tokens, which is the same
+	// conflation of causes this gate exists to remove.
+	slog.ErrorContext(ctx, "failed to create server for token", "error", err)
+	// The pool error can name internal state, so it is logged but not
+	// returned to the caller.
+	return &gateFailure{
+		status:  http.StatusServiceUnavailable,
+		code:    errCodeUpstreamUnavailable,
+		message: "Could not initialize a GitLab session for this token. The instance may be unreachable; retry shortly.",
 	}
-	return entry, nil
 }
 
 // credentialAlreadyAdmitted reports whether this request carries a credential
@@ -1035,15 +1086,40 @@ func (g *mcpServerGate) invalidTokenChallenge() string {
 	return g.challenge + `, error="invalid_token", error_description="the access token is expired, revoked, or not valid for this GitLab instance"`
 }
 
-// knownPermissionRefusal reports whether this deployment already knows GitLab
-// accepted this credential and refused it the permission to read its own
-// user, and returns the sentence it was refused with, as it was quoted then.
-func (g *mcpServerGate) knownPermissionRefusal(instance, token string) (string, bool) {
+// knownDoorRefusal reports whether this deployment already knows GitLab
+// accepted this credential and this door refuses it uncharged, and which way:
+// refused the permission to read its own user, with the sentence it was
+// refused with as it was quoted then ([oauth.RejectionPermissionMissing]), or
+// carrying neither read_api nor api, recorded by this gate or by the pool once
+// it learned that of a credential it served ([oauth.RejectionBelowMinimum]).
+// Any other cached refusal, a GitLab rejection included, is not known here:
+// only the bearer guard in front answers that one from memory.
+func (g *mcpServerGate) knownDoorRefusal(instance, token string) (kind oauth.RejectionKind, sentence string, known bool) {
 	if g.rejected == nil {
-		return "", false
+		return kind, "", false
 	}
-	kind, sentence, known := g.rejected.LookupRefusal(instance, token)
-	return sentence, known && kind == oauth.RejectionPermissionMissing
+	kind, sentence, known = g.rejected.LookupRefusal(instance, token)
+	return kind, sentence, known && (kind == oauth.RejectionPermissionMissing || kind == oauth.RejectionBelowMinimum)
+}
+
+// belowMinimumMessage is the whole refusal the legacy gate gives a credential
+// GitLab accepted that carries neither read_api nor api (register rows ADM-001
+// and ADM-006), the bearer guard's own answer in OAuth mode aside. It says a
+// new token rather than a changed one because GitLab has no route that edits a
+// personal access token's scopes, and an OAuth token granted more is a new
+// token too. It is one literal rather than a concatenation, for the reason
+// [doorPermissionAdvice] gives.
+const belowMinimumMessage = "GitLab accepted this token, which carries neither the read_api nor the api scope this server needs at least. A token's scopes cannot be changed after it is created: create one with read_api, or with api to write as well. The token itself is valid."
+
+// belowMinimumFailure is the 403 a credential below the admission minimum is
+// given, with no challenge, the legacy gate's shape for a genuine credential
+// it refuses (the permission refusal's too), and uncharged.
+func belowMinimumFailure() *gateFailure {
+	return &gateFailure{
+		status:  http.StatusForbidden,
+		code:    errCodeForbidden,
+		message: belowMinimumMessage,
+	}
 }
 
 // doorPermissionPrefix is the stable leading text of the refusal both doors

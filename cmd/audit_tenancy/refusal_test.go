@@ -74,6 +74,10 @@ func (g *gate) oddHeader() *gateFailure {
 	return &gateFailure{status: 400, code: -32600, message: "Odd.", header: newHeader("Retry-After")}
 }
 
+func (g *gate) spreadHeader(pairs []string) *gateFailure {
+	return &gateFailure{status: 400, code: -32600, message: "Spread.", header: newHeader(pairs...)}
+}
+
 func pairOf(n int) (int, int) { return n, n }
 
 func (g *gate) pairedDelay() *gateFailure {
@@ -268,18 +272,21 @@ func TestCheckRefusals_GateLiteralsThatCarryTheirRow_Pass(t *testing.T) {
 	paired := gateAt("gate.pairedDelay", 503, -50300, "Paired.")
 	paired.RetryAfter = tenancy.RetryAfterFixed
 	report := refusalFixture(t, blocked, missing, upstream, fixed, via, viaNoMessage,
-		gateAt("gate.nilHeader", 404, -32600, ""), gateAt("gate.resolveURL", 400, -32600, ""),
-		gateAt("gate.oddHeader", 400, -32600, "Odd."), paired)
+		gateAt("gate.nilHeader", 404, -32600, ""), gateAt("gate.resolveURL", 400, -32600, ""), paired)
 	assertFindings(t, report, "G8")
-	if report.Summary.Refusals != 10 {
-		t.Fatalf("refusals read = %d, want 10", report.Summary.Refusals)
+	if report.Summary.Refusals != 9 {
+		t.Fatalf("refusals read = %d, want 9", report.Summary.Refusals)
 	}
 }
 
 // TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding: reworded text, a
 // changed status, a changed code, a Retry-After gained or lost or read from
 // the wrong source, a challenge gained or lost, and headers the gate cannot
-// read each fail until the row changes with them.
+// read each fail until the row changes with them. Headers built from a
+// variable, from a name that does not fold, from a spread slice or from a
+// name handed no value are all unreadable: the last two used to be read as
+// whatever pairs were complete, which says a challenge is absent that may not
+// be.
 func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 	missingRetry := gateAt("gate.blocked", 429, -42900, "Too many attempts.")
 	wrongSource := gateAt("gate.blocked", 429, -42900, "Too many attempts.")
@@ -315,6 +322,8 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		gateAt("busy", 400, -32600, ""),
 		gateAt("gate.resolveURL", 400, -40300, ""),
 		upstreamOnFixed, viaChallenged, packageDelay,
+		gateAt("gate.oddHeader", 400, -32600, "Odd."),
+		gateAt("gate.spreadHeader", 400, -32600, "Spread."),
 	)
 	key := func(name string) string { return siteDir + ":" + name }
 	assertFindings(t, report, "G8",
@@ -334,6 +343,8 @@ func TestCheckRefusals_AGateLiteralThatDrifted_IsAFinding(t *testing.T) {
 		"ROW-001 refusal 15 (http gate): "+key("gate.classify")+" its Retry-After does not read RetryAfter",
 		"ROW-001 refusal 16 (http gate): "+key("gate.resolveChallenged")+" it carries WWW-Authenticate true, and the register says false",
 		"ROW-001 refusal 17 (http gate): "+key("gate.packageDelay")+" its Retry-After does not read upstreamRetryAfter",
+		"ROW-001 refusal 18 (http gate): "+key("gate.oddHeader")+" its headers are built where the gate cannot read them",
+		"ROW-001 refusal 19 (http gate): "+key("gate.spreadHeader")+" its headers are built where the gate cannot read them",
 	)
 }
 

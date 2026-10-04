@@ -150,7 +150,121 @@ func TestCheckCharges_TheTableAndItsRowsAgreeOnWhatIsCharged(t *testing.T) {
 	assertFindings(t, report, "G7",
 		key+" blocked: is uncharged in the failure table, and ROW-001's 429 refusal beginning \"Too many attempts.\" is charged",
 		key+" rejected: is charged in the failure table, and ROW-001's 401 refusal beginning \"Rejected token.\" is uncharged",
-		key+" upstream: names ROW-001, which declares no gate refusal of status 503 beginning \"Upstream down.\"",
+		key+" upstream: names ROW-001, which declares no gate 503 refusal beginning \"Upstream down.\"",
+	)
+}
+
+// TestCheckCharges_AFailureIsHeldToItsRowsChallenge: a failure carrying a
+// challenge pairs only with a gate refusal of its row that carries one too, so
+// the row of a door whose refusal carries none answers nothing for it.
+func TestCheckCharges_AFailureIsHeldToItsRowsChallenge(t *testing.T) {
+	body := `
+func (g *gate) resolve() *gateFailure {
+	return &gateFailure{status: 401, code: -40100, message: "Rejected token.", header: newHeader("WWW-Authenticate", "Bearer")}
+}
+`
+	at := tenancy.Site{Pkg: siteDir, Name: "gate.resolve", Role: tenancy.Charge, Call: "gate.charge"}
+	for _, tt := range []struct {
+		name      string
+		challenge bool
+		want      []string
+	}{
+		{"the refusal carries one", true, nil},
+		{"the refusal carries none", false, []string{
+			siteDir + ":gate.resolve rejected: names ROW-001, which declares no gate 401 refusal beginning \"Rejected token.\" with a challenge",
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			d := row("ROW-001")
+			d.Refusals = []tenancy.Refusal{{Channel: tenancy.Gate, Status: 401, Prefix: "Rejected token.", Challenge: tt.challenge}}
+			report := fixture{
+				files: map[string]string{"site/site.go": gateSource + body},
+				rows:  []tenancy.Decision{d},
+				fails: []tenancy.Failure{{Kind: "rejected", Decision: d.ID, At: at, Status: 401, Prefix: "Rejected token.", Challenge: true}},
+			}.run(t)
+			assertFindings(t, report, "G7", tt.want...)
+		})
+	}
+}
+
+// TestCheckCharges_TwinsOnlyTheChallengeTellsApart_MatchTheirOwnRows: a door
+// answering one verdict in two voices, the same status and leading sentence
+// with a challenge and without, has each return matched to the row of its own
+// voice whatever order the table lists them in. Read by order alone, the
+// guard's uncharged return took the gate's charged row and both failed; with
+// a table that says neither carries one, the guard's return finds no row and
+// the guard's row no return, while the gate's still meets its own.
+func TestCheckCharges_TwinsOnlyTheChallengeTellsApart_MatchTheirOwnRows(t *testing.T) {
+	body := `
+func (g *gate) resolve(token string, n int) *gateFailure {
+	if n == 1 {
+		return &gateFailure{status: 403, code: -40300, message: "Refused.", header: newHeader("WWW-Authenticate", "Bearer")}
+	}
+	g.charge(token)
+	return &gateFailure{status: 403, code: -40300, message: "Refused."}
+}
+`
+	at := tenancy.Site{Pkg: siteDir, Name: "gate.resolve", Role: tenancy.Charge, Call: "gate.charge", Count: 1}
+	key := siteDir + ":gate.resolve"
+	for _, tt := range []struct {
+		name       string
+		challenges [2]bool
+		want       []string
+	}{
+		{"the table says which carries one", [2]bool{false, true}, nil},
+		{"the table says neither does", [2]bool{false, false}, []string{
+			key + ": returns a 403 refusal beginning \"Refused.\" with a challenge that no row of the failure table matches",
+			key + " guard: is a 403 refusal beginning \"Refused.\" in the failure table that no return of " + key + " matches",
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			report := fixture{
+				files: map[string]string{"site/site.go": gateSource + body},
+				fails: []tenancy.Failure{
+					{Kind: "gate", Attributable: true, Charged: true, At: at, Status: 403, Prefix: "Refused.", Challenge: tt.challenges[0]},
+					{Kind: "guard", At: at, Status: 403, Prefix: "Refused.", Challenge: tt.challenges[1]},
+				},
+			}.run(t)
+			assertFindings(t, report, "G7", tt.want...)
+		})
+	}
+}
+
+// TestCheckCharges_ARefusalWhoseHeadersCannotBeRead_IsAFinding: whether a
+// return carries a challenge is part of which row it is, so headers the gate
+// cannot read, in a literal or in a constructor's, are reported rather than
+// read as carrying none: a value it cannot follow, a spread slice, and a name
+// handed no value.
+func TestCheckCharges_ARefusalWhoseHeadersCannotBeRead_IsAFinding(t *testing.T) {
+	body := `
+func (g *gate) hidden(h map[string]string) *gateFailure {
+	return &gateFailure{status: 401, code: -40100, message: "Hidden.", header: h}
+}
+
+func (g *gate) resolve(n int, h map[string]string, pairs []string) *gateFailure {
+	switch n {
+	case 1:
+		return &gateFailure{status: 400, code: -32600, message: "Bad.", header: h}
+	case 2:
+		return &gateFailure{status: 400, code: -32600, message: "Spread.", header: newHeader(pairs...)}
+	case 3:
+		return &gateFailure{status: 400, code: -32600, message: "Odd.", header: newHeader("WWW-Authenticate")}
+	}
+	return g.hidden(h)
+}
+`
+	at := tenancy.Site{Pkg: siteDir, Name: "gate.resolve", Role: tenancy.Charge, Call: "gate.charge"}
+	key := siteDir + ":gate.resolve"
+	report := fixture{
+		files: map[string]string{"site/site.go": gateSource + body},
+		fails: []tenancy.Failure{{Kind: "bad", At: at, Status: 400, Prefix: "Bad."}},
+	}.run(t)
+	assertFindings(t, report, "G7",
+		key+": returns a refusal from "+siteDir+":gate.hidden, whose headers the gate cannot read",
+		key+": returns a refusal whose headers the gate cannot read",
+		key+": returns a refusal whose headers the gate cannot read",
+		key+": returns a refusal whose headers the gate cannot read",
+		key+" bad: is a 400 refusal beginning \"Bad.\" in the failure table that no return of "+key+" matches",
 	)
 }
 
@@ -382,19 +496,21 @@ func (g *gate) sneak(key string) { g.b.spend(key) }
 }
 
 // TestMatchScore_PrefersTheRowThatNamesTheReturn: a row naming the return's
-// text beats a row that names none, and a row naming other text or another
-// status does not match.
+// text beats a row that names none, and a row naming other text, another
+// status or another challenge does not match.
 func TestMatchScore_PrefersTheRowThatNamesTheReturn(t *testing.T) {
-	ret := refusalReturn{status: 401, text: "Rejected token. Check it."}
+	ret := refusalReturn{status: 401, text: "Rejected token. Check it.", challenge: true}
 	tests := []struct {
 		name string
 		row  tenancy.Failure
 		want int
 	}{
-		{"names the text", tenancy.Failure{Status: 401, Prefix: "Rejected token."}, 2},
-		{"names no text", tenancy.Failure{Status: 401}, 1},
-		{"names other text", tenancy.Failure{Status: 401, Prefix: "Missing."}, 0},
-		{"another status", tenancy.Failure{Status: 403, Prefix: "Rejected token."}, 0},
+		{"names the text", tenancy.Failure{Status: 401, Prefix: "Rejected token.", Challenge: true}, 2},
+		{"names no text", tenancy.Failure{Status: 401, Challenge: true}, 1},
+		{"names other text", tenancy.Failure{Status: 401, Prefix: "Missing.", Challenge: true}, 0},
+		{"another status", tenancy.Failure{Status: 403, Prefix: "Rejected token.", Challenge: true}, 0},
+		{"no challenge", tenancy.Failure{Status: 401, Prefix: "Rejected token."}, 0},
+		{"no challenge and no text", tenancy.Failure{Status: 401}, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

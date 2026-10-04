@@ -316,7 +316,7 @@ type Config struct {
 	// met for every origin not on the list.
 	TrustedOrigins []string
 	ExcludeTools   []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
-	IgnoreScopes   bool     // When true, skip PAT scope detection and register all tools
+	IgnoreScopes   bool     // When true, skip the scope filter and the read-only narrowing; the scopes are still read, for the read_api minimum
 
 	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
 	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0

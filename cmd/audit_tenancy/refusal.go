@@ -411,10 +411,11 @@ func (g *gate) gateLiteralProblems(r tenancy.Refusal, rl refusalLit, holder *dec
 		return append(problems, "its headers are built where the gate cannot read them")
 	}
 	retry, hasRetry := headers[textproto.CanonicalMIMEHeaderKey(g.rules.headerRetryAfter)]
-	switch {
-	case hasRetry != (r.RetryAfter != tenancy.RetryAfterNone):
-		problems = append(problems, fmt.Sprintf("it carries Retry-After %t, and the register says %t", hasRetry, r.RetryAfter != tenancy.RetryAfterNone))
-	case hasRetry:
+	wantRetry := r.RetryAfter != tenancy.RetryAfterNone
+	if hasRetry != wantRetry {
+		problems = append(problems, fmt.Sprintf("it carries Retry-After %t, and the register says %t", hasRetry, wantRetry))
+	}
+	if hasRetry && wantRetry {
 		read := g.symbolsRead(holder, retry)
 		for _, want := range g.rules.retryAfterReads[r.RetryAfter] {
 			if !read[want] {
@@ -438,7 +439,9 @@ func describeInt(v int, ok bool) string {
 
 // headers reads the header expression of a gate literal: a call whose
 // arguments alternate a name that folds and the value it is given. A literal
-// with no header has none, and anything else cannot be read.
+// with no header has none, and anything else cannot be read, a spread slice
+// and an odd count of arguments among it: either hides a name or a value, and
+// read as no header it would say a refusal carries no challenge that does.
 func (g *gate) headers(info *types.Info, expr ast.Expr) (map[string]ast.Expr, bool) {
 	out := map[string]ast.Expr{}
 	if expr == nil {
@@ -448,7 +451,10 @@ func (g *gate) headers(info *types.Info, expr ast.Expr) (map[string]ast.Expr, bo
 	if !isCall {
 		return nil, info.Types[expr].IsNil()
 	}
-	for i := 0; i+1 < len(call.Args); i += 2 {
+	if call.Ellipsis.IsValid() || len(call.Args)%2 != 0 {
+		return nil, false
+	}
+	for i := 0; i < len(call.Args); i += 2 {
 		name, ok := constString(info, call.Args[i])
 		if !ok {
 			return nil, false

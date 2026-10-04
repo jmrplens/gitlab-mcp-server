@@ -1186,38 +1186,72 @@ func TestBearerGuard_UnpublishedInstance_IsForbiddenAndNotChargedToTheLimiter(t 
 	}
 }
 
-// TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached
+// TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenUnchargedAndRemembered
 // covers the scope verdict that comes back from GitLab rather than from the
-// token's own scope list.
+// token's own scope list: GET /api/v4/user answered 403 insufficient_scope.
 //
 // The token is valid, so the client is told to ask for the named scope rather
-// than to discard a working credential, and neither the address budget nor the
-// negative cache is charged: caching it would keep refusing that token for the
-// whole TTL after the user granted the missing scope.
-func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached(t *testing.T) {
+// than to discard a working credential, and the address budget is not charged,
+// however often it comes back. It is remembered (issue 952), so a repeat is
+// answered from memory, in the same words and with the same challenge, and
+// costs no verification: a token's scopes cannot change after it is created,
+// and an OAuth token granted more is a new token, so the memory refuses nothing
+// that would now pass.
+func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenUnchargedAndRemembered(t *testing.T) {
 	t.Parallel()
 
+	const challenge = `Bearer realm="gitlab-mcp-server", error="insufficient_scope", ` +
+		`error_description="the token lacks the read_api scope", scope="read_api", ` +
+		`resource_metadata="` + testMetadataURL + `"`
+	var verifications atomic.Int32
 	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		verifications.Add(1)
 		return nil, oauth.ErrInsufficientScope
 	})
 
-	failure := g.check(guardRequest(t, "gloas-narrow"))
-
-	if failure == nil || failure.status != http.StatusForbidden {
-		t.Fatalf("failure = %+v, want a 403 about the scope", failure)
+	// Five times the limiter's budget of three: every one a 403, none a 429.
+	for i := range 15 {
+		failure := g.check(guardRequest(t, "gloas-narrow"))
+		if failure == nil || failure.status != http.StatusForbidden || failure.code != errCodeForbidden {
+			t.Fatalf("request %d: failure = %+v, want the uncharged 403 about the scope", i, failure)
+		}
+		if got := failure.header.Get(headerWWWAuthenticate); got != challenge {
+			t.Errorf("request %d: WWW-Authenticate = %q\nwant %q", i, got, challenge)
+		}
+		if !strings.HasPrefix(failure.message, "GitLab rejected this token for lacking the scope") {
+			t.Errorf("request %d: message = %q", i, failure.message)
+		}
 	}
-	challenge := failure.header.Get(headerWWWAuthenticate)
-	for _, want := range []string{`error="insufficient_scope"`, oauth.MinimumScope} {
-		t.Run(want, func(t *testing.T) {
-			t.Parallel()
-
-			if !strings.Contains(challenge, want) {
-				t.Errorf("challenge %q is missing %s", challenge, want)
-			}
-		})
+	if n := verifications.Load(); n != 1 {
+		t.Errorf("the verifier was asked %d times, want once: the verdict is answered from memory after that", n)
 	}
-	if g.rejected.Contains("", "gloas-narrow") {
-		t.Error("a scope refusal was cached; the token would keep being refused after the user granted the scope")
+	if kind, known := g.rejected.Lookup("", "gloas-narrow"); !known || kind != oauth.RejectionBelowMinimum {
+		t.Errorf("rejected-token cache holds %v, %v; want the below-minimum verdict", kind, known)
+	}
+	assertSpendsNoBudget(t, g)
+}
+
+// TestBearerGuard_BelowMinimumRecordedByThePool_IsAnsweredFromMemory covers a
+// verdict the guard did not reach itself: the pool learned of a credential it
+// served that it carries neither read_api nor api and recorded it in the
+// structure the guard reads. The guard answers it as it answers its own,
+// asking the verifier nothing and charging nothing.
+func TestBearerGuard_BelowMinimumRecordedByThePool_IsAnsweredFromMemory(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		t.Error("the verifier was asked about a token already known to be below the minimum")
+		return nil, errors.New("unreachable")
+	})
+	g.rejected.RecordBelowMinimum("", "glpat-read-user")
+
+	// Five times the limiter's budget of three: every one a 403, none a 429.
+	for i := range 15 {
+		failure := g.check(guardRequest(t, "glpat-read-user"))
+		if failure == nil || failure.status != http.StatusForbidden ||
+			!strings.Contains(failure.header.Get(headerWWWAuthenticate), `error="insufficient_scope"`) {
+			t.Fatalf("request %d: failure = %+v, want the uncharged 403 with the insufficient_scope challenge", i, failure)
+		}
 	}
 }
 

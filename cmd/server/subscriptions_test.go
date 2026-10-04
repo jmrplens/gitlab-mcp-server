@@ -3196,6 +3196,7 @@ func TestWatchEndForCause_TurnsAPoolEvictionIntoWhatTheClientIsTold(t *testing.T
 		{name: "a shape that has to be rebuilt", cause: serverpool.CauseRebuild, want: endCredentialReset},
 		{name: "GitLab refusing a call", cause: serverpool.CauseRejectedCredential, want: endCredentialRevoked},
 		{name: "revalidation finding it refused", cause: serverpool.CauseInvalidCredential, want: endCredentialRevoked},
+		{name: "a credential found below the minimum", cause: serverpool.CauseBelowMinimum, want: endCredentialInsufficient},
 		{name: "the pool closing", cause: serverpool.CausePoolClosed, want: endShutdown},
 		{
 			// A removal path added later without a decision here leaves the
@@ -3280,22 +3281,24 @@ func TestWatchEnd_Meta_OmitsAStatusThereIsNone(t *testing.T) {
 // held to the phrase that says what to do, and to carrying no other ending's.
 func TestWatchEnd_EachReasonCarriesItsOwnAdvice(t *testing.T) {
 	endings := map[string]*watchEnd{
-		endCredentialEvicted: endOfCredentialEviction,
-		endCredentialReset:   endOfCredentialReset,
-		endCredentialRevoked: endOfCredentialRevocation,
-		endResourceGone:      resourceGoneEnd(nil),
-		endLifetimeReached:   endOfLifetime,
-		endWatcherEvicted:    endOfWatcherEviction,
-		endShutdown:          endOfShutdown,
+		endCredentialEvicted:      endOfCredentialEviction,
+		endCredentialReset:        endOfCredentialReset,
+		endCredentialRevoked:      endOfCredentialRevocation,
+		endCredentialInsufficient: endOfCredentialInsufficient,
+		endResourceGone:           resourceGoneEnd(nil),
+		endLifetimeReached:        endOfLifetime,
+		endWatcherEvicted:         endOfWatcherEviction,
+		endShutdown:               endOfShutdown,
 	}
 	advice := map[string]string{
-		endCredentialEvicted: "still valid",
-		endCredentialReset:   "rebuild it",
-		endCredentialRevoked: "re-authenticate",
-		endResourceGone:      "check access",
-		endLifetimeReached:   "maximum lifetime",
-		endWatcherEvicted:    "make room",
-		endShutdown:          "shutting down",
+		endCredentialEvicted:      "still valid",
+		endCredentialReset:        "rebuild it",
+		endCredentialRevoked:      "re-authenticate",
+		endCredentialInsufficient: "replace the token",
+		endResourceGone:           "check access",
+		endLifetimeReached:        "maximum lifetime",
+		endWatcherEvicted:         "make room",
+		endShutdown:               "shutting down",
 	}
 	if len(endings) != len(watchEndReasons) {
 		t.Fatalf("%d endings checked for %d published reasons", len(endings), len(watchEndReasons))

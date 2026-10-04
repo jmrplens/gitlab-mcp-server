@@ -49,12 +49,13 @@
 //     config.Load going back to a literal burst does, although Load is a
 //     declared Arg for the rate.
 //   - G7 charges. Every refusal the authentication failure table's functions
-//     return is matched to one row by its status and text, and is charged
-//     exactly when a call of the charge helper precedes it in its own block or
-//     in a block enclosing it; the calls that spend a budget are made only
-//     from the charge helpers; and each failure agrees with its row's gate
-//     refusal of the same status and prefix, which names a budget exactly when
-//     the failure is charged.
+//     return is matched to one row by its status, its text and whether it
+//     carries a challenge, read from its headers, which it reports when it
+//     cannot read them; it is charged exactly when a call of the charge helper
+//     precedes it in its own block or in a block enclosing it; the calls that
+//     spend a budget are made only from the charge helpers; and each failure
+//     agrees with its row's gate refusal of the same status, prefix and
+//     challenge, which names a budget exactly when the failure is charged.
 //   - G8 refusal. Every refusal's stable text begins a string its code folds
 //     (a format read up to its first verb), and the literal that carries it
 //     has the row's status, code, Retry-After source and challenge; a JSON-RPC

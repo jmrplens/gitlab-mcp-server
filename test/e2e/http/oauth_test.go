@@ -699,6 +699,56 @@ func TestOAuth_ReadAPITokenGetsAReadOnlySurface(t *testing.T) {
 	}
 }
 
+// TestOAuth_TokenFoundBelowTheMinimumBehindTheGuard_GetsTheGuardsChallenge
+// covers the one way a token below the minimum passes the OAuth bearer guard
+// (issue 952): neither introspection endpoint answers, so the verifier admits
+// the token on its own api assumption, and the pool's own read of the token
+// then finds read_user alone. The gate behind the guard answers that first
+// request with the guard's refusal, its words and its insufficient_scope
+// challenge, and every later request gets the same from the guard's memory.
+// The stand-in answers the token's description 503 the first time, which is
+// the verifier's read, and with read_user after that, which is the pool's.
+func TestOAuth_TokenFoundBelowTheMinimumBehindTheGuard_GetsTheGuardsChallenge(t *testing.T) {
+	var descriptions atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.4.1","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"username":"reader"}`))
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		if descriptions.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"scopes":["read_user"],"active":true}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	gitlab := httptest.NewServer(mux)
+	t.Cleanup(gitlab.Close)
+	srv := oauthServer(t, gitlab.URL)
+
+	for i := range 3 {
+		got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer glpat-read-user"}))
+		challenge := got.header.Get("WWW-Authenticate")
+		if got.status != http.StatusForbidden || !strings.Contains(challenge, `error="insufficient_scope"`) {
+			t.Fatalf("request %d: status %d with challenge %q, want 403 with insufficient_scope: %s", i, got.status, challenge, truncate(got.body))
+		}
+		if body := decodeJSONRPCError(t, got.body); !strings.HasPrefix(body.Error.Message, "GitLab rejected this token for lacking the scope") {
+			t.Errorf("request %d: message %q, want the guard's words", i, body.Error.Message)
+		}
+	}
+	if got := descriptions.Load(); got < 2 {
+		t.Errorf("the token's description was read %d times, want the verifier's read and the pool's: the gate's path was not reached", got)
+	}
+}
+
 // TestOAuth_MultiInstanceAllowList pins the allow-list that makes a
 // per-request instance safe in oauth mode.
 //
