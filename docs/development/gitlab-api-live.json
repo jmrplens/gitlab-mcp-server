@@ -6,8 +6,8 @@
   "digest": "sha256:803e5887cd561ed49ce84c92756838d39e9bcef5c061d4399f2e1057a335cae2",
   "version": "19.4.1-ee",
   "revision": "26212baacad",
-  "retrieved_at": "2026-10-01",
-  "sha256": "5e2d0908a9064c6089bf09da0a02dc03f5aade45a7db40bd0043cb52f8fdfb39",
+  "retrieved_at": "2026-10-04",
+  "sha256": "6d641bf7c22926acec334202b040b4e5f5d7578ec28059a107dbb4e8d0bbf2a8",
   "entities": 596,
   "fields": 7412,
   "routes": 2152,
@@ -33514,7 +33514,7 @@
     },
     "ends_at": {
      "type": "DateTime",
-     "default": "#\u003cProc:0x00007fa6497ef490 /opt/gitlab/embedded/service/gitlab-rails/lib/api/admin/broadcast_messages.rb:41 (lambda)\u003e",
+     "default": "(computed per request, lib/api/admin/broadcast_messages.rb:41)",
      "desc": "Ending time"
     },
     "font": {
@@ -33528,7 +33528,7 @@
     },
     "starts_at": {
      "type": "DateTime",
-     "default": "#\u003cProc:0x00007fa6497ef760 /opt/gitlab/embedded/service/gitlab-rails/lib/api/admin/broadcast_messages.rb:40 (lambda)\u003e",
+     "default": "(computed per request, lib/api/admin/broadcast_messages.rb:40)",
      "desc": "Starting time"
     },
     "target_access_levels": {
@@ -36876,7 +36876,7 @@
     },
     "organization_id": {
      "type": "Integer",
-     "default": "#\u003cProc:0x00007fa63f1a4360 /opt/gitlab/embedded/service/gitlab-rails/lib/api/groups.rb:309 (lambda)\u003e",
+     "default": "(computed per request, lib/api/groups.rb:309)",
      "desc": "The organization id for the group"
     },
     "parent_id": {
@@ -47065,7 +47065,7 @@
    "params": {
     "before": {
      "type": "Time",
-     "default": "#\u003cProc:0x00007fa63edc6a90 /opt/gitlab/embedded/service/gitlab-rails/lib/api/environments.rb:171 (lambda)\u003e",
+     "default": "(computed per request, lib/api/environments.rb:171)",
      "desc": "The date before which environments can be deleted. Defaults to 30 days ago. Expected in ISO 8601 format (`YYYY-MM-DDTHH:MM:SSZ`)"
     },
     "dry_run": {
@@ -50159,7 +50159,7 @@
     },
     "organization_id": {
      "type": "Integer",
-     "default": "#\u003cProc:0x00007fa63e3293d0 /opt/gitlab/embedded/service/gitlab-rails/lib/api/group_import.rb:69 (lambda)\u003e",
+     "default": "(computed per request, lib/api/group_import.rb:69)",
      "desc": "The ID of the organization that the group will be part of."
     },
     "parent_id": {
@@ -79589,7 +79589,7 @@
    "params": {
     "organization_id": {
      "type": "Integer",
-     "default": "#\u003cProc:0x00007fa63cb56e38 /opt/gitlab/embedded/service/gitlab-rails/lib/api/topics.rb:29 (lambda)\u003e",
+     "default": "(computed per request, lib/api/topics.rb:29)",
      "desc": "The organization id for the topics"
     },
     "page": {
@@ -79652,7 +79652,7 @@
     },
     "organization_id": {
      "type": "Integer",
-     "default": "#\u003cProc:0x00007fa63cb50f60 /opt/gitlab/embedded/service/gitlab-rails/lib/api/topics.rb:71 (lambda)\u003e",
+     "default": "(computed per request, lib/api/topics.rb:71)",
      "desc": "The organization id for the topic"
     },
     "title": {
@@ -98167,7 +98167,7 @@
    "params": {
     "from": {
      "type": "DateTime",
-     "default": "Wed, 01 Apr 2026 00:31:26.051016470 UTC +00:00",
+     "default": "(computed when the API loads)",
      "desc": "Date string in the format YEAR-MONTH-DAY"
     },
     "page": {

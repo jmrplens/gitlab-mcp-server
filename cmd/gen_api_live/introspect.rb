@@ -303,6 +303,24 @@ def entity_of(description)
   [names.first, names.size]
 end
 
+# default_of renders a declared default the same way on every boot of one
+# image. Two kinds of default are a value of the boot rather than of the
+# route: a lambda, which Grape calls on each request and whose inspect names
+# the address the object was given, is recorded by where it is written; and a
+# time or a date, which the API computes when it loads, so its value is the
+# moment the image booted, is recorded by its kind. Every other default is its
+# inspect, as GitLab wrote it.
+def default_of(default)
+  if default.is_a?(Proc)
+    file, line = default.source_location
+    file ? "(computed per request, #{repo_relative(file)}:#{line})" : "(computed per request)"
+  elsif default.acts_like?(:time) || default.acts_like?(:date)
+    "(computed when the API loads)"
+  else
+    default.inspect[0, 120]
+  end
+end
+
 # params_of records what an endpoint declares it accepts. Grape keeps type,
 # requiredness, default and the documented example, all of which say more than
 # a bare parameter name: an audit can ask whether a required param is ever
@@ -321,7 +339,7 @@ def params_of(route)
     if spec.is_a?(Hash)
       entry["required"] = true if spec[:required]
       entry["type"] = spec[:type].to_s if spec[:type]
-      entry["default"] = spec[:default].inspect[0, 120] unless spec[:default].nil?
+      entry["default"] = default_of(spec[:default]) unless spec[:default].nil?
       entry["desc"] = squeeze(spec[:desc].to_s)[0, 200] if spec[:desc]
     end
     out[name.to_s] = entry
