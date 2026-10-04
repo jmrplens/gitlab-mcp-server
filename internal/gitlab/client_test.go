@@ -1284,6 +1284,70 @@ func TestDetectTier_ErrorFallsBackToFree(t *testing.T) {
 	}
 }
 
+// unresolvedTierClient is a client of an instance that refuses its license and
+// its namespace plans, as it does a token of a non-administrator on a
+// self-managed instance, and reports the edition it is given.
+func unresolvedTierClient(t *testing.T, enterprise bool) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "19.4.1", "enterprise": enterprise})
+		case "/api/v4/license", "/api/v4/namespaces":
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	return client
+}
+
+// TestDetectTier_Unresolved_WarnsOnlyAnEnterpriseBuild pins the exception to
+// INV-008 issue 952 recorded: when neither the license nor a namespace plan
+// answers, the tier is Free on every build, and only an enterprise build, where
+// Free may be wrong, warns, once, naming both settings that pin the tier. A CE
+// build stays silent, because Free is the truth there.
+func TestDetectTier_Unresolved_WarnsOnlyAnEnterpriseBuild(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		enterprise bool
+		debug      string
+	}{
+		{name: "enterprise build", enterprise: true},
+		{name: "CE build", enterprise: false, debug: "no license and no paid namespace plan on a CE instance; the tier is free"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := unresolvedTierClient(t, tc.enterprise)
+			logged := captureClientLog(t)
+
+			if got := client.DetectTier(t.Context()); got != edition.Free {
+				t.Errorf("DetectTier() = %v, want Free", got)
+			}
+			warnings := strings.Count(logged.String(), `"level":"WARN"`)
+			if !tc.enterprise {
+				if warnings != 0 || !strings.Contains(logged.String(), tc.debug) {
+					t.Errorf("a CE build warned or did not say why the tier is free:\n%s", logged)
+				}
+				return
+			}
+			if warnings != 1 {
+				t.Fatalf("an unresolved enterprise tier logged %d warnings, want 1:\n%s", warnings, logged)
+			}
+			for _, want := range []string{"could not determine the licensing tier of this enterprise instance", "GITLAB_MCP_TIER", "--tier in HTTP mode"} {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("the warning does not say %q:\n%s", want, logged)
+				}
+			}
+		})
+	}
+}
+
 // TestCurrentUsername_Success verifies that [Client.CurrentUsername] returns
 // the username from the /user API endpoint.
 func TestCurrentUsername_Success(t *testing.T) {

@@ -65,12 +65,21 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
+			// A tier neither the license nor a namespace plan answers for is
+			// Free, the one place unknown authority resolves narrow (INV-008
+			// resolves it high everywhere else, ADM-003's scopes included).
+			// Issue 952 kept it and recorded it as that invariant's exception,
+			// which is why F-09 left this row: Free is the truth on a CE build
+			// and on an unlicensed enterprise one, and the licensed instance
+			// whose license the caller may not read is the case an enterprise
+			// build warns about, naming GITLAB_MCP_TIER and --tier (issue 900).
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
 			Resource: "the licensing tier, and the namespace pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages"}, Source: Constant, Zero: ZeroNotApplicable,
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
-			Findings: []string{"F-09", "F-10"},
+			Decided:  []string{"issue 900", "issue 952"},
+			Findings: []string{"F-10"},
 			// The tier filter runs before the withheld lists exist, so an action
 			// it removed is answered as unknown rather than withheld.
 			Refusals: []Refusal{

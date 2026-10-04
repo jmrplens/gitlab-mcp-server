@@ -139,12 +139,16 @@ func admitDecisions() []Decision {
 			// description is itself an answer: that route's boundary is the
 			// user and names no root namespace, so only a fine-grained token
 			// is refused a grant there, and introspection reads it as such a
-			// token's one scope without asking /oauth/token/info.
+			// token's one scope without asking /oauth/token/info. Scopes
+			// nobody answered for resolve wide, to api, while the tier nobody
+			// answered for resolves narrow, to Free (AUT-003); issue 952 kept
+			// both and recorded the tier as INV-008's exception, which is why
+			// F-09 left this row.
 			ID: "ADM-003", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the scopes assumed when introspection cannot answer",
 			Key:      KeyVerified, StdioKey: KeyNone,
-			Findings: []string{"F-09"},
-			Sites:    []Site{enforce(pkgOAuth, "introspectToken"), enforce(pkgOAuth, "fetchIntrospection")},
+			Decided: []string{"ADR-0018", "issue 952"},
+			Sites:   []Site{enforce(pkgOAuth, "introspectToken"), enforce(pkgOAuth, "fetchIntrospection")},
 		},
 		{
 			// A token GitLab refused the permission to read its own user is
