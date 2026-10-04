@@ -181,7 +181,8 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 - **Self-hosted mode** reads `GITLAB_URL` + `GITLAB_TOKEN` from `.env`.
   Tests create and delete real resources; the user must have permission.
   `make test-e2e` adds a confirmation prompt.
-- **Docker mode** needs ~4 GB RAM and runs GitLab CE + runner + fixture
+- **Docker mode** needs the memory for GitLab (it peaks at about 7.5 GiB in a
+  complete CE run and is capped at 12 GiB) and runs GitLab CE + runner + fixture
   service:
 
   ```bash

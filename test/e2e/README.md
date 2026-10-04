@@ -135,7 +135,7 @@ make test-e2e-gitlab
 
 ### Docker Mode
 
-Uses an ephemeral GitLab CE container plus a Bitbucket Data Center import fixture. Requires Docker and ~5.5 GB RAM.
+Uses an ephemeral GitLab CE container plus a Bitbucket Data Center import fixture. Requires Docker and the memory for them: the GitLab container runs four Puma workers (`puma['worker_processes']`), peaks at about 7.5 GiB in a complete CE run and 10 GiB in an EE one, and is capped at 12 GiB with no swap beyond it (`mem_limit` and `memswap_limit`), and the runner and the fixture services, Bitbucket among them, need memory beside it. Measured on 2026-10-04 against the GitLab 19.4.1 images, CE and EE.
 
 All Docker infrastructure is version-controlled in this directory:
 

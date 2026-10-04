@@ -291,7 +291,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 
 #### Docker Mode (Ephemeral GitLab)
 
-Run the full E2E suite against an ephemeral GitLab CE container. Requires Docker and ~4 GB RAM. This mode also enables pipeline/job tests that need a CI runner.
+Run the full E2E suite against an ephemeral GitLab CE container. Requires Docker and the memory for it: the GitLab container peaks at about 7.5 GiB in a complete CE run and 10 GiB in an EE one and is capped at 12 GiB, and the runner and the fixture services need memory beside it. This mode also enables pipeline/job tests that need a CI runner.
 
 ```bash
 make test-e2e-docker

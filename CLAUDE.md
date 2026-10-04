@@ -431,7 +431,7 @@ make golangci-lint                       # Consolidated Go formatting and lintin
 # End-to-end tests. The suite drives the real binary, so it is staged first;
 # every target below does that for you through e2e-server-binary.
 make test-e2e                                          # self-hosted GitLab from .env (alias of test-e2e-gitlab)
-make test-e2e-ce                                       # ephemeral GitLab CE + runner + fixtures (Docker, ~4 GB RAM)
+make test-e2e-ce                                       # ephemeral GitLab CE + runner + fixtures (Docker; GitLab peaks ~7.5 GiB, capped at 12 GiB)
 make test-e2e-ee                                       # ephemeral GitLab EE, licensed; runs the common and ee packages
 make test-e2e-harness                                  # the harness library's own tests: no GitLab
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials

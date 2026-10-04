@@ -88,15 +88,18 @@ purpose and a test that only asserts there was no error.
   license file. `test/e2e/scripts/enterprise-activation-code.sh` finds it in
   `GITLAB_ACTIVATION_CODE`, in `ENTERPRISE_LICENSE`, or in the repository `.env`, and
   reuses a cached license at `test/e2e/.enterprise-license` when one is already there.
-- Docker, and roughly 6 GB of memory for the container stack.
+- Docker, and the memory for the container stack: GitLab alone peaks at about 10 GiB in
+  a complete EE run and is capped at 12 GiB, and the runner and the fixture services
+  need memory beside it.
 - A host with room to spare. The container stack belongs on a bigger idle machine with
   the Go process local and pointed at it, rather than on a laptop that is also being
   used.
 
 ### How long it takes
 
-About ten minutes of GitLab booting, setup and activation, then about sixteen minutes
-of tests. Budget half an hour end to end, and expect the boot to dominate.
+About ten minutes of GitLab booting, setup and activation, then about seventy minutes
+of tests, measured on 2026-10-04 against GitLab 19.4.1 EE. Budget an hour and a half end
+to end.
 
 ### How to run it
 
