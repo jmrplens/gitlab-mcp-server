@@ -14,6 +14,11 @@ func dispatch(action string, requests int, refusal string) e2ecalls.Record {
 	return e2ecalls.Record{Type: e2ecalls.TypeDispatch, Dispatch: &e2ecalls.Dispatch{Action: action, Requests: requests, RefusalReason: refusal}}
 }
 
+// routed is one dispatch line naming the routes its trace reached.
+func routed(action string, routes ...string) e2ecalls.Record {
+	return e2ecalls.Record{Type: e2ecalls.TypeDispatch, Dispatch: &e2ecalls.Dispatch{Action: action, Requests: len(routes), Routes: routes}}
+}
+
 // useE2ECalls points the shard reader at records or a failure for one test.
 func useE2ECalls(t *testing.T, records []e2ecalls.Record, err error) {
 	t.Helper()
@@ -110,5 +115,69 @@ func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsShortestPath(t *testing.T) 
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("e2eCheck =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// TestE2ECheck_Routes_EachIsAccountedForOrALead verifies the route half: a
+// route the derivation names is accounted for, and so is one a declared
+// pattern covers, a slug of the family and a HEAD sent to a route Grape
+// declares for GET alike; the GraphQL endpoint is accounted for by any
+// GraphQL request and is a lead on an action that sends none; a route the
+// derivation does not name is a lead even beside routes it does; a method
+// alone, a route the table holds no template for, is a lead of its own kind
+// unless a declared pattern of that method placed the action's route; an
+// action with an unresolved request accounts for anything; and a line naming
+// no route is held to its count alone, outside the routes compared.
+func TestE2ECheck_Routes_EachIsAccountedForOrALead(t *testing.T) {
+	useE2ECalls(t, []e2ecalls.Record{
+		routed("issue.get", "GET /projects/:id/issues", "GET /projects/:id/integrations/slack"),
+		routed("issue.get", "GET"),
+		routed("issue.update", "GET /projects/:id/issues", "PUT /projects/:id/issues/:issue_iid", "DELETE /projects/:id/issues/:issue_iid"),
+		routed("branch.rule_list", graphQLRoute),
+		routed("issue.thing", graphQLRoute),
+		routed("issue.bulk", "PATCH"),
+		routed("namespace.list", "DELETE /anything", "GET"),
+		routed("file.raw", "HEAD /projects/:id/repository/files/:file_path/raw"),
+		dispatch("branch.protected_list", 1, ""),
+	}, nil)
+	record := fixtureRecord()
+	head := rest("GET /projects/:id/repository/files/:file_path/raw", actionrequests.ClassMandatory)
+	head.Derived = "HEAD /projects/:/repository/files/:/raw"
+	record.Actions = append(record.Actions, actionrequests.RecordAction{ID: "file.raw", Requests: []actionrequests.RecordRequest{head}, Paths: [][]int{{0}}})
+
+	got := e2eCheck("shards", record)
+	want := E2ECheck{
+		Ran: true, Directory: "shards", Grain: e2eGrain,
+		Compared: 8, Consistent: 5, RoutesCompared: 7,
+		RoutesNotDerived: []RouteLead{
+			{Action: "issue.thing", Route: graphQLRoute},
+			{Action: "issue.update", Route: "DELETE /projects/:id/issues/:issue_iid"},
+		},
+		RoutesTheTableDoesNotName: []RouteLead{{Action: "issue.bulk", Route: "PATCH"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("e2eCheck =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// TestPatternCovers_TheMethodAndEverySpelledSegment verifies the pattern match
+// a declaration's route is read by.
+func TestPatternCovers_TheMethodAndEverySpelledSegment(t *testing.T) {
+	cases := []struct {
+		name, pattern, route string
+		want                 bool
+	}{
+		{name: "a slug", pattern: "PUT /projects/:/integrations/:", route: "PUT /projects/:id/integrations/slack", want: true},
+		{name: "another method", pattern: "PUT /projects/:/integrations/:", route: "GET /projects/:id/integrations/slack"},
+		{name: "a literal differs", pattern: "PUT /projects/:/integrations/:", route: "PUT /groups/:id/integrations/slack"},
+		{name: "a segment more", pattern: "PUT /projects/:/integrations/:", route: "PUT /projects/:id/integrations/slack/test"},
+		{name: "a segment fewer", pattern: "PUT /projects/:/integrations/:", route: "PUT /projects/:id/integrations"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := patternCovers(tc.pattern, tc.route); got != tc.want {
+				t.Errorf("patternCovers(%q, %q) = %t, want %t", tc.pattern, tc.route, got, tc.want)
+			}
+		})
 	}
 }

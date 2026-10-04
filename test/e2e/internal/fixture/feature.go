@@ -21,6 +21,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -52,10 +54,16 @@ func (f FeatureState) On() bool { return f.Listed && f.Boolean && f.Value }
 // false exactly for a rollout gated by percentage or by actor.
 func (f FeatureState) Restorable() bool { return !f.Listed || f.Boolean }
 
-// ReadFeature reads how the instance holds one feature flag right now.
+// ReadFeature reads how the instance holds one feature flag right now, once
+// the last change this process made to it has reached every GitLab process
+// ([awaitFlagSettled]): the listing is read through the same per-process
+// cache as the flag itself, and so is the refusal a test asserts next.
 func ReadFeature(e *harness.Env, name string) FeatureState {
 	e.T.Helper()
 
+	if err := awaitFlagSettled(e.Ctx, name, flagCacheLifetime); err != nil {
+		e.T.Fatalf("%v", err)
+	}
 	listed, _, err := e.Client().GL().Features.ListFeatures(gl.WithContext(e.Ctx))
 	if err != nil {
 		e.T.Fatalf("listing the instance feature flags: %v", err)
@@ -86,7 +94,9 @@ func FeatureDefined(e *harness.Env, name string) bool {
 }
 
 // PinFeature sets one instance-global feature flag for the rest of the test
-// and registers the restore, returning the state it found.
+// and registers the restore, returning the state it found. It returns once the
+// value has reached every GitLab process, so the route behind the flag
+// answers by it on whichever process takes the next request.
 //
 // It refuses a rollout it cannot put back rather than guessing, since the only
 // guess available (the delete) would drop a rollout the instance's own
@@ -100,12 +110,77 @@ func PinFeature(e *harness.Env, name string, value bool) FeatureState {
 			"boolean gate; a test has to leave such a flag alone", name)
 	}
 
-	e.Defer("feature flag "+name, func(ctx context.Context) error { return restoreFeature(ctx, e, name, before) })
+	e.Defer("feature flag "+name, func(ctx context.Context) error {
+		// Recorded whatever the restore answered: a restore that failed may
+		// still have changed the flag, and the wait it costs the next reader
+		// is the safe side of not knowing.
+		defer noteFlagChange(name)
+		return restoreFeature(ctx, e, name, before)
+	})
 
 	if err := setFeature(e.Ctx, e, name, value); err != nil {
 		e.T.Fatalf("setting feature flag %s to %t: %v", name, value, err)
 	}
+	noteFlagChange(name)
+	if err := awaitFlagSettled(e.Ctx, name, flagCacheLifetime); err != nil {
+		e.T.Fatalf("%v", err)
+	}
 	return before
+}
+
+// flagCacheLifetime is how long after a flag changes every GitLab process
+// answers by its new value: each process keeps a flag's value for a minute
+// once it has read it (the in-process cache Feature reads through,
+// lib/feature.rb:471 at 19.4.1), so until a minute has passed a request can
+// land on a process that answers by the value before the change. The second
+// on top is margin.
+//
+// A test that pinned a flag and called its route at once met such a process
+// now and then, and so did one that asserted the refusal of a flag another
+// test had just put back: the attestation scenario failed one surface of a
+// complete run that way, the process that had answered its own refusal a
+// moment earlier answering the listing with the flag pinned on.
+const flagCacheLifetime = time.Minute + time.Second
+
+// flagChanges records when this process last changed each flag. Every test
+// that pins a flag runs in one package, and so in one process, under the
+// instance-global lock, so the record this process keeps is every change the
+// suite makes to the flags it pins.
+var flagChanges = struct {
+	sync.Mutex
+	at map[string]time.Time
+}{at: map[string]time.Time{}}
+
+// noteFlagChange records that this process changed a flag now.
+func noteFlagChange(name string) {
+	flagChanges.Lock()
+	defer flagChanges.Unlock()
+	flagChanges.at[name] = time.Now()
+}
+
+// awaitFlagSettled holds until lifetime has passed since this process last
+// changed the flag, which is when every GitLab process answers by the value it
+// was changed to, or until ctx ends. A flag this process never changed is
+// settled already.
+func awaitFlagSettled(ctx context.Context, name string, lifetime time.Duration) error {
+	flagChanges.Lock()
+	changed, recorded := flagChanges.at[name]
+	flagChanges.Unlock()
+	if !recorded {
+		return nil
+	}
+	wait := time.Until(changed.Add(lifetime))
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("waiting for feature flag %s to reach every GitLab process: %w", name, ctx.Err())
+	case <-timer.C:
+		return nil
+	}
 }
 
 // setFeature sets one flag's instance-global boolean gate.

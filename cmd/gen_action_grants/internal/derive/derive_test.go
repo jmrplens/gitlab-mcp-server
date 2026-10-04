@@ -1020,9 +1020,13 @@ func TestDerive_Fixture_ReportsWhatItCannotRead(t *testing.T) {
 // TestDerive_Declarations_AnswerWhatTheWalkCannotRead verifies a declaration
 // replaces the unresolved request it names with the requests it declares, all
 // of them or any one, marks them qualified and names its category on each;
-// that a sends-nothing declaration holds an action the walk finds silent; and
-// that a declaration answering nothing is reported, whether it names a request
-// no walk reads or declares silent an action that sends.
+// that a sends-nothing declaration holds an action the walk finds silent; that
+// a request a declaration says GitLab redirects is followed, on the same path
+// and after it, by the declared request, which the declaration qualifies and
+// the followed request does not, without the action reading as declared
+// whole; and that a declaration answering nothing is reported, whether it
+// names a request no walk reads, declares silent an action that sends, or
+// follows a request the action does not send.
 func TestDerive_Declarations_AnswerWhatTheWalkCannotRead(t *testing.T) {
 	declarations := []Declaration{
 		{
@@ -1036,8 +1040,27 @@ func TestDerive_Declarations_AnswerWhatTheWalkCannotRead(t *testing.T) {
 		{Action: "fixture.nothing", Category: "sends-nothing"},
 		{Action: "fixture.sequence", Category: "sends-nothing"},
 		{Action: "fixture.raws", Category: "path-function-value", Replaces: "raw-path nowhere"},
+		{
+			Action: "fixture.refusals", Category: "follows-redirect", Follows: strings.TrimSpace(getRoute),
+			Requests: []Request{{Kind: KindREST, Method: "GET", Path: "/redirected/:"}},
+		},
+		{Action: "fixture.raws", Category: "follows-redirect", Follows: "GET /nowhere"},
+		{Action: "fixture.nothing", Category: "follows-redirect", Follows: "GET /nowhere"},
 	}
 	result := deriveWithin(t, declarations)
+
+	followed := actionByID(t, result, "fixture.refusals")
+	if got, want := describe(followed), getRoute+"[mandatory]\nGET /redirected/: [mandatory]\npath [0 1]\n"; got != want {
+		t.Errorf("fixture.refusals derives\n%s\nwant\n%s", got, want)
+	}
+	if first, second := followed.Uses[0], followed.Uses[1]; first.Qualified || first.Declaration != "" ||
+		!second.Qualified || second.Declaration != "follows-redirect" {
+		t.Errorf("the followed request is qualified %t by %q and the redirect %t by %q; want the redirect alone, by follows-redirect",
+			first.Qualified, first.Declaration, second.Qualified, second.Declaration)
+	}
+	if followed.Declaration != "" {
+		t.Errorf("fixture.refusals, which sends, is declared %q whole", followed.Declaration)
+	}
 
 	unknowns := actionByID(t, result, "fixture.raw_unknowns")
 	want := "GET /a [mandatory]\nGET /b [mandatory]\nGET /c [alternative]\nGET /d [alternative]\npath [0 1 2]\npath [0 1 3]\n"
@@ -1060,6 +1083,10 @@ func TestDerive_Declarations_AnswerWhatTheWalkCannotRead(t *testing.T) {
 			"(the action is declared to send nothing and the walk found a request); remove it, or say what it answers now",
 		"fixture.raws: the path-function-value declaration answers nothing the walk reaches " +
 			"(no request reads raw-path nowhere); remove it, or say what it answers now",
+		"fixture.raws: the follows-redirect declaration answers nothing the walk reaches " +
+			"(the action sends no GET /nowhere); remove it, or say what it answers now",
+		"fixture.nothing: the follows-redirect declaration answers nothing the walk reaches " +
+			"(the action sends no GET /nowhere); remove it, or say what it answers now",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !slices.Contains(result.Findings, want) {

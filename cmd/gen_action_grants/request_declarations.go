@@ -25,6 +25,10 @@ const (
 	// categoryPathFunction is a request path a handler builds through a
 	// function value held in a struct field, which the walk does not bind.
 	categoryPathFunction = "path-function-value"
+	// categoryFollowsRedirect is a route GitLab answers with a redirect to
+	// another of its API routes, which the HTTP client follows with the same
+	// credential, so GitLab judges the credential on both.
+	categoryFollowsRedirect = "follows-redirect"
 )
 
 // userCoreBasic is client-go's UserCoreBasic template (users.go), which every
@@ -178,6 +182,13 @@ var requestDeclarations = []derive.Declaration{
 		Action: "access.invite_group", Category: categoryPathFunction,
 		Reason:   "runInvitation formats the path through the path field of sendInvitationArgs, which inviteGroup fills with the group invitations route",
 		Replaces: "raw-path invites.postInvitation", Requests: []derive.Request{rest("POST", "/groups/:/invitations")},
+	},
+	{
+		Action: "release.get_latest", Category: categoryFollowsRedirect,
+		Reason: "GitLab answers the latest-release permalink with a redirect to the release's own route " +
+			"(lib/api/releases.rb, redirect expose_path(redirect_url)), which the HTTP client follows with the token, " +
+			"and GitLab judges the token again there; a trace of the action on 19.4.1 reaches both routes",
+		Follows: "GET /projects/:/releases/permalink/latest", Requests: []derive.Request{rest("GET", "/projects/:/releases/:")},
 	},
 	{
 		Action: "package.download", Category: categorySprintfPath,

@@ -33,6 +33,8 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -132,6 +134,52 @@ type traceSpans struct {
 	dispatch dispatchRecord
 	// requests counts the GitLab client spans of this trace.
 	requests int
+	// routes are the routes those client spans named, sorted and
+	// deduplicated ([requestRoute]).
+	routes []string
+}
+
+// requestRoute names the route one GitLab client span was sent to, the way
+// the request record spells a REST route ("GET /projects/:id/issues"): the
+// span's method and its url.template, which the server fills from the table
+// it carries, less the "/api/v4" every REST route is under. A span with no
+// template, one whose route the table does not hold, is named by its method
+// alone, so a reader can tell a request nobody derived from a span that named
+// none. The GraphQL endpoint keeps its own path, since its operations are not
+// routes.
+func requestRoute(span *tracepb.Span) string {
+	method := stringAttribute(span, mcpotel.AttrHTTPRequestMethod)
+	template := stringAttribute(span, mcpotel.AttrURLTemplate)
+	if template == "" {
+		return method
+	}
+	if rest, under := strings.CutPrefix(template, restRoutePrefix); under {
+		template = rest
+	}
+	return method + " " + template
+}
+
+// restRoutePrefix is what every REST route a span names begins with, which
+// the request record leaves out of the routes it spells.
+const restRoutePrefix = "/api/v4"
+
+// stringAttribute is a span's string attribute under a key, or "".
+func stringAttribute(span *tracepb.Span, key attribute.Key) string {
+	for _, kv := range span.GetAttributes() {
+		if kv.GetKey() == string(key) {
+			return kv.GetValue().GetStringValue()
+		}
+	}
+	return ""
+}
+
+// withRoute adds a route to a sorted list of distinct routes.
+func withRoute(routes []string, route string) []string {
+	at, found := slices.BinarySearch(routes, route)
+	if found {
+		return routes
+	}
+	return slices.Insert(routes, at, route)
 }
 
 // merge fills this record's empty fields from another, first non-empty
@@ -365,6 +413,7 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	kept := r.seen[traceID]
 	if request {
 		kept.requests++
+		kept.routes = withRoute(kept.routes, requestRoute(span))
 		r.seen[traceID] = kept
 		return
 	}

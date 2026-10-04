@@ -35,7 +35,10 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // Mode is the protective mode a server runs in.
@@ -499,6 +502,108 @@ func (s *Session) Tier() edition.Tier { return s.conn.tier }
 // Transport returns how the harness reaches this session's server.
 func (s *Session) Transport() TransportKind { return s.conn.cfg.Transport }
 
+// Authority returns what the server decides for this session's credential
+// when it is a fine-grained personal access token, and nil for any other.
+//
+// It is the harness's own judgement, made with the reads the binary makes at
+// startup and the table the binary carries, so a scenario can ask which phase
+// its token is in and branch on it: phase B where the instance runs the
+// release the table was recorded from, phase A with that release named where
+// it does not. A scenario that asserted one phase whatever the instance would
+// pass on the pinned image and fail the day the latest one moves on.
+func (s *Session) Authority() *finegrained.Authority { return s.conn.authority }
+
+// FineGrainedJudgement is what a fine-grained session's grant decides on its
+// instance's release, which is what a scenario branches its assertions on.
+//
+// There are three states, not two. On the release the action table was
+// recorded from the grant decides both (phase B). On the prerelease of the
+// release right after it, which is what GitLab.com and a nightly image report
+// while releases stop at the table's minor, the grant decides the listing
+// alone and every call phase A allows is passed to GitLab, which judges it
+// (internal/finegrained's Judge). On any other release it decides neither
+// (phase A).
+type FineGrainedJudgement struct {
+	// Listing is whether the grant decides what the session is listed, so an
+	// action the grant does not reach is left out of it.
+	Listing bool
+	// Calls is whether the grant decides what the session may call as well, so
+	// a call it does not reach is withheld rather than handed to GitLab.
+	Calls bool
+}
+
+// FineGrainedPhase holds this session's fine-grained credential to what its
+// instance's release decides, and says what that is: phase B, the grant
+// evaluated for the listing and the calls, where the instance runs the release
+// the action table was recorded from; the listing alone on the prerelease of
+// the release right after it; and phase A for want of a recorded release
+// otherwise. problem says how the session departs from that, "" when it does
+// not, so a scenario that asserts each state where the instance is in it holds
+// all three with one call and skips none.
+//
+// It reads the harness's own judgement of the token, which the served-set
+// check has already held the binary's listing to, against its own reading of
+// which release is which; the refusals a scenario asserts are the binary's
+// own word for the phase.
+func (s *Session) FineGrainedPhase() (judgement FineGrainedJudgement, problem string) {
+	authority := s.conn.authority
+	if authority == nil {
+		return FineGrainedJudgement{}, "the session carries no fine-grained authority, so its token ran as a classic one"
+	}
+	version, table := s.env.inst.facts.Version, actiongrants.Table()
+	switch {
+	case finegrained.Bucket(version) == table.Bucket:
+		judgement = FineGrainedJudgement{Listing: true, Calls: true}
+		if authority.Phase() != finegrained.PhaseGranted || authority.ListingOnly() {
+			return judgement, fmt.Sprintf("on %s, the release the table records, the grant was not evaluated for the listing and the calls: "+
+				"phase %d, fallback %q, listing only %t", version, authority.Phase(), authority.Fallback(), authority.ListingOnly())
+		}
+		return judgement, ""
+	case prereleaseAfter(version, table.Bucket):
+		judgement = FineGrainedJudgement{Listing: true}
+		if authority.Phase() != finegrained.PhaseGranted || !authority.ListingOnly() {
+			return judgement, fmt.Sprintf("on %s, the prerelease after the release the table (%s) records, the grant does not decide the listing "+
+				"alone: phase %d, fallback %q, listing only %t", version, table.Version, authority.Phase(), authority.Fallback(), authority.ListingOnly())
+		}
+		return judgement, ""
+	}
+	if authority.Phase() != finegrained.PhaseUnknown || authority.Fallback() != finegrained.FallbackVersionOutside {
+		return FineGrainedJudgement{}, fmt.Sprintf("on %s, which the table (%s) does not record, the session is in phase %d with fallback %q, "+
+			"want the version outside the record", version, table.Version, authority.Phase(), authority.Fallback())
+	}
+	return FineGrainedJudgement{}, ""
+}
+
+// lastMinorOfAMajor is the last minor GitLab releases in a major: a minor each
+// month and a major each May, so a major runs from .0 to .11.
+const lastMinorOfAMajor = 11
+
+// prereleaseAfter reports whether version is the prerelease of the release
+// right after the major.minor bucket: the next minor of the same major
+// ("19.5.0-pre" after "19.4"), or the next major's first after a major's last
+// minor ("20.0.0-pre" after "19.11").
+//
+// It is the harness's own reading of the rule internal/finegrained's Judge
+// applies rather than a call into it, so a Judge that let another release in,
+// or stopped letting this one in, is a session the harness refuses instead of
+// one it agrees with by construction.
+func prereleaseAfter(version, bucket string) bool {
+	if !strings.HasSuffix(version, "-pre") {
+		return false
+	}
+	majorText, minorText, _ := strings.Cut(bucket, ".")
+	major, majorErr := strconv.Atoi(majorText)
+	minor, minorErr := strconv.Atoi(minorText)
+	if majorErr != nil || minorErr != nil {
+		return false
+	}
+	next := fmt.Sprintf("%d.%d", major, minor+1)
+	if minor >= lastMinorOfAMajor {
+		next = fmt.Sprintf("%d.0", major+1)
+	}
+	return finegrained.Bucket(version) == next
+}
+
 // Tools returns the tool names the session listed when it started.
 func (s *Session) Tools() []string { return slices.Clone(s.conn.served.tools) }
 
@@ -586,8 +691,13 @@ type sessionConn struct {
 	// tier is the tier the server detected with this session's credential,
 	// which is the run's own unless the session was given another token.
 	tier edition.Tier
-	proc *serverProcess
-	inst *instance
+	// authority is what the binary attaches to this session's credential when
+	// it is a fine-grained token, judged by the harness with the binary's own
+	// reads and table, and nil for any other credential. It is what the
+	// session's lines record as their credential kind.
+	authority *finegrained.Authority
+	proc      *serverProcess
+	inst      *instance
 
 	// served is what the session listed when it started, and what the
 	// served-set check was run against.
@@ -635,6 +745,17 @@ type sessionConn struct {
 	inFlightMu   sync.Mutex
 	inFlight     map[int64]callAttribution
 	inFlightNext atomic.Int64
+}
+
+// credentialKind is what this session's lines record as the kind of
+// credential it ran with: fine-grained when the binary attaches an authority
+// to its token, and nothing otherwise, which a reader takes for classic
+// ([e2ecalls.CredentialKind]).
+func (c *sessionConn) credentialKind() string {
+	if c.authority != nil {
+		return e2ecalls.CredentialFineGrained
+	}
+	return ""
 }
 
 // sessionEntry is one pooled session, started by the first test that asks for
@@ -855,6 +976,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		label:       label,
 		cfg:         recorded,
 		tier:        recorded.resolvedTier(cred.tier),
+		authority:   cred.authority,
 		inst:        inst,
 		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)),
 		notifier:    newUpdateNotifier(),
@@ -926,8 +1048,7 @@ func sessionCredential(ctx context.Context, inst *instance, token string) (crede
 	if token == inst.settings.get(envGitLabToken) {
 		return inst.credential(), nil
 	}
-	client, err := gitlabclient.NewClientWithToken(inst.facts.URL, token,
-		strings.EqualFold(inst.settings.get(envSkipTLSVerify), "true"))
+	client, err := inst.clientFor(token)
 	if err != nil {
 		return credentialFacts{}, fmt.Errorf("building a client for the session's own credential: %w", err)
 	}

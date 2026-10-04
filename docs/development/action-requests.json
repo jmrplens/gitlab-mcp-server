@@ -22075,11 +22075,21 @@
           "sdk_methods": [
             "Releases.GetLatestRelease"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/releases/:tag_name",
+          "class": "mandatory",
+          "sites": [
+            "releases.GetLatest"
+          ],
+          "declaration": "follows-redirect"
         }
       ],
       "paths": [
         [
-          0
+          0,
+          1
         ]
       ]
     },

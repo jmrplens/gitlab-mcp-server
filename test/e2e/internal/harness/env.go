@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,8 +124,10 @@ const detachedPackage = "detached"
 // harness's source gate refuses it under test/e2e/gitlab.
 //
 // What a probe would have learned is left at its zero value, so everything
-// the Env answers from it (the runtime, the tier, the user) answers nothing,
-// and a test that needs a real answer belongs in a real run.
+// the Env answers from it (the tier, the user, the version) answers nothing,
+// and a test that needs a real answer belongs in a real run. The one fact it
+// does carry is the instance's address, read off the client, which is what
+// [Env.ClientFor] builds another credential's client for.
 func NewDetached(t *testing.T, client *gitlabclient.Client) *Env {
 	t.Helper()
 	return newEnv(t, &instance{
@@ -132,9 +135,25 @@ func NewDetached(t *testing.T, client *gitlabclient.Client) *Env {
 		requirement: Any,
 		pkg:         detachedPackage,
 		runID:       configuredRunID(time.Now(), "", detachedPackage),
+		facts:       runtimeFacts{URL: instanceURLOf(client)},
 		client:      client,
 	})
 }
+
+// instanceURLOf is the instance a client was built for: its API base with the
+// v4 path taken off, which is the address the client constructors take. A
+// missing client has none.
+func instanceURLOf(client *gitlabclient.Client) string {
+	if client == nil {
+		return ""
+	}
+	base := *client.GL().BaseURL()
+	base.Path = strings.TrimSuffix(base.Path, apiV4Path)
+	return strings.TrimSuffix(base.String(), "/")
+}
+
+// apiV4Path is the path client-go appends to an instance's address.
+const apiV4Path = "api/v4/"
 
 // Skipf ends this test with a reason the record carries.
 //
