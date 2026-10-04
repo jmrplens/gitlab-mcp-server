@@ -22134,7 +22134,7 @@
             "ReleaseLinks.CreateReleaseLink"
           ],
           "directives": [
-            "mandatory: the handler refuses an empty list, so the loop body runs at least once"
+            "mandatory: the handler refuses a list with no entry holding both a name and a url, so the loop sends at least one request"
           ]
         }
       ],

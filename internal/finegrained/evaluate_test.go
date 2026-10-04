@@ -27,11 +27,10 @@ import (
 //   - z.denied is denied whatever the grant.
 func phaseBTable() *Table {
 	return &Table{
-		Version:        "19.4.1-ee",
-		Bucket:         "19.4",
-		Permissions:    []string{"read_project", "approve_merge_request", "read_issue_link", "read_user", "read_vulnerability"},
-		Display:        []string{"Project: Read", "Merge Request: Approve", "Issue Link: Read", "User: Read", "Vulnerability: Read"},
-		RefusalDisplay: []string{"Project: Read", "Merge Request: Approve", "Issue Link: Read", "User: Read", "Vulnerability: Read"},
+		Version:     "19.4.1-ee",
+		Bucket:      "19.4",
+		Permissions: []string{"read_project", "approve_merge_request", "read_issue_link", "read_user", "read_vulnerability"},
+		Display:     []string{"Project: Read", "Merge Request: Approve", "Issue Link: Read", "User: Read", "Vulnerability: Read"},
 		Assignables: []Assignable{
 			{Name: "project_read", Permissions: []uint16{0}, Boundaries: BoundaryProject | BoundaryGroup, Grantable: true},
 			{Name: "mr_approve", Permissions: []uint16{1}, Boundaries: BoundaryProject, Grantable: true},
@@ -672,7 +671,6 @@ func fuzzTable(f *fuzzBytes) *Table {
 		name := "p" + strconv.Itoa(i)
 		t.Permissions = append(t.Permissions, name)
 		t.Display = append(t.Display, name)
-		t.RefusalDisplay = append(t.RefusalDisplay, name)
 		t.Assignables = append(t.Assignables, Assignable{Name: name, Permissions: []uint16{uint16(i)}, Boundaries: AllBoundaries, Grantable: true})
 		for p := range t.PublicAnonymous {
 			if f.pick(3) == 0 {

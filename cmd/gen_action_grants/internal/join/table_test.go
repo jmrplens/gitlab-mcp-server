@@ -678,10 +678,10 @@ func TestJoin_Fixture_SharesAnOperationUntilADeclarationDeparts(t *testing.T) {
 
 // TestJoin_Fixture_ReadsTheVocabulary verifies the table carries the record's
 // vocabulary: every raw permission an assignable expands to, sorted, with the
-// words a grant names it by (the first assignable a token can be granted) and
-// the words GitLab's refusal names it by (the first assignable of any kind,
-// deprecated included), each assignable's boundaries and whether a token can
-// be granted it, and the anonymous policy as bits over the permissions.
+// words a grant names it by (the first assignable a token can be granted,
+// never a deprecated one that comes before it), each assignable's boundaries
+// and whether a token can be granted it, and the anonymous policy as bits
+// over the permissions.
 func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	table := Join(fixtureRecord(), fixtureSchema(t), nil, Declarations{}).Table
 	if table.Version != "19.4.1-ee" || table.Bucket == "" {
@@ -691,8 +691,8 @@ func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	if index < 0 || !slices.IsSorted(table.Permissions) {
 		t.Fatalf("permissions %q are not sorted or lack read_issue", table.Permissions)
 	}
-	if table.Display[index] != "Issue: Read" || table.RefusalDisplay[index] != "Issue: Read (old)" {
-		t.Errorf("read_issue is granted as %q and refused as %q", table.Display[index], table.RefusalDisplay[index])
+	if table.Display[index] != "Issue: Read" {
+		t.Errorf("read_issue is granted as %q, want Issue: Read rather than its deprecated first match", table.Display[index])
 	}
 	roleOnly := slices.IndexFunc(table.Assignables, func(a finegrained.Assignable) bool { return a.Name == "read_role_only" })
 	if roleOnly < 0 || table.Assignables[roleOnly].Grantable {

@@ -183,16 +183,13 @@ func (j *joiner) vocabulary() finegrained.Table {
 		byName[assignable.Name] = assignable
 	}
 	table := finegrained.Table{
-		Version:        j.record.Source.Version,
-		Bucket:         finegrained.Bucket(j.record.Source.Version),
-		Permissions:    permissions,
-		Display:        make([]string, len(permissions)),
-		RefusalDisplay: make([]string, len(permissions)),
+		Version:     j.record.Source.Version,
+		Bucket:      finegrained.Bucket(j.record.Source.Version),
+		Permissions: permissions,
+		Display:     make([]string, len(permissions)),
 	}
 	for i, name := range permissions {
-		match := granular.RawToAssignable[name]
-		table.Display[i] = byName[match.FirstAvailable].Display
-		table.RefusalDisplay[i] = byName[match.First].Display
+		table.Display[i] = byName[granular.RawToAssignable[name].FirstAvailable].Display
 	}
 	for _, assignable := range granular.Assignable {
 		entry := finegrained.Assignable{

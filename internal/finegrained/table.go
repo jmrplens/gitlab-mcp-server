@@ -221,11 +221,8 @@ type Table struct {
 	// Display is, per raw permission, the words of the first assignable a
 	// token can be granted that expands to it ("Merge Request: Approve"),
 	// which is what the token creation page offers; empty when none can.
-	Display []string
-	// RefusalDisplay is, per raw permission, the words GitLab's own refusal
-	// prints, deprecated names included.
-	RefusalDisplay []string
-	Assignables    []Assignable
+	Display     []string
+	Assignables []Assignable
 	// PublicAnonymous are bit sets over Permissions, indexed by
 	// [PublicProject] and [PublicGroup]: the anonymous policy GitLab evaluated
 	// on a public project and group.

@@ -33,11 +33,10 @@ const (
 // fixtureTable is the table the fixture record joins to.
 func fixtureTable() *finegrained.Table {
 	return &finegrained.Table{
-		Version:        "19.4.1-ee",
-		Bucket:         "19.4",
-		Permissions:    []string{"read_issue", "read_namespace", "read_protected_branch", "update_issue"},
-		Display:        []string{"Issue: Read", "Namespace: Read", "Branch Rule: Read", "Issue: Update"},
-		RefusalDisplay: []string{"Issue: Read", "Namespace: Read", "Branch Rule: Read", "Issue: Update"},
+		Version:     "19.4.1-ee",
+		Bucket:      "19.4",
+		Permissions: []string{"read_issue", "read_namespace", "read_protected_branch", "update_issue"},
+		Display:     []string{"Issue: Read", "Namespace: Read", "Branch Rule: Read", "Issue: Update"},
 		PublicAnonymous: [2][]uint64{
 			finegrained.PublicProject: {1 << permReadIssue},
 			finegrained.PublicGroup:   {1 << permReadNamespace},

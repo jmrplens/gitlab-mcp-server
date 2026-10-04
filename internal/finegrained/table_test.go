@@ -10,11 +10,10 @@ import (
 // and permissions with and without a grantable display.
 func testTable() *Table {
 	return &Table{
-		Version:        "19.4.1-ee",
-		Bucket:         "19.4",
-		Permissions:    []string{"approve_merge_request", "read_issue", "read_role_only"},
-		Display:        []string{"Merge Request: Approve", "Issue: Read", ""},
-		RefusalDisplay: []string{"Merge Request: Approve", "Issue: Read", "Role: Only"},
+		Version:     "19.4.1-ee",
+		Bucket:      "19.4",
+		Permissions: []string{"approve_merge_request", "read_issue", "read_role_only"},
+		Display:     []string{"Merge Request: Approve", "Issue: Read", ""},
 		Assignables: []Assignable{
 			{Name: "approve_merge_request", Permissions: []uint16{0}, Boundaries: BoundaryProject, Grantable: true},
 			{Name: "read_work_item", Permissions: []uint16{1}, Boundaries: BoundaryProject | BoundaryGroup, Grantable: true},
