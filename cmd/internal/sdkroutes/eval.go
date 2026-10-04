@@ -25,6 +25,12 @@ const (
 	// concatenation of several reassigned variables cannot multiply without
 	// end. No client-go path comes near it.
 	maxFolds = 16
+	// overflow stands for the spellings past [maxFolds]. A path holding it
+	// multiplied further than the reading keeps, and is reported as unresolved
+	// after the routes kept rather than read as though they were all.
+	overflow = "\x01"
+	// boundReason is how a path that reached the bound is reported.
+	boundReason = "folds to more spellings than the reading keeps"
 	// verbFlags are the characters a format verb may carry between its percent
 	// sign and its letter.
 	verbFlags = "+-# 0123456789."
@@ -43,9 +49,11 @@ func (r *reading) resolve(entry *function) Method {
 	r.walk(entry, nil, map[string]bool{}, func(fn *function, env map[string]string) {
 		method.GraphQL = method.GraphQL || fn.graphQL
 		for _, use := range fn.templates {
-			for _, path := range r.templatePaths(fn, use, env) {
+			paths, unresolved := r.templatePaths(fn, use, env)
+			for _, path := range paths {
 				method.Routes = append(method.Routes, Route{Method: verbOf(fn.verb), Path: path})
 			}
+			method.Unresolved = append(method.Unresolved, unresolved...)
 		}
 		for _, use := range fn.legacy {
 			routes, unresolved := r.legacyRoutes(fn, use, env)
@@ -126,20 +134,26 @@ func spellings(values []string) []string {
 // combinations is every way of taking one spelling for each piece, in order,
 // at most [maxFolds] of them. Taking the first spelling of each instead would
 // keep one route of a path whose collection is picked through a branched local
-// and drop the rest without saying so.
+// and drop the rest without saying so. Past the bound one more combination
+// holds [overflow] for every piece, so what the bound left out is reported.
 func combinations(pieces [][]string) [][]string {
 	out := [][]string{nil}
+	bounded := false
 	for _, options := range pieces {
 		var next [][]string
 		for _, prefix := range out {
 			for _, option := range options {
 				if len(next) == maxFolds {
+					bounded = true
 					break
 				}
 				next = append(next, append(slices.Clip(prefix), option))
 			}
 		}
 		out = next
+	}
+	if bounded {
+		out = append(out, slices.Repeat([]string{overflow}, len(pieces)))
 	}
 	return out
 }
@@ -154,19 +168,23 @@ func verbOf(named string) string {
 
 // templatePaths formats one withPath template with every combination of the
 // spellings its arguments fold to, and keeps each shape that names something
-// static.
-func (r *reading) templatePaths(fn *function, use templateUse, env map[string]string) []string {
+// static. A spelling past the bound is reported as unresolved instead.
+func (r *reading) templatePaths(fn *function, use templateUse, env map[string]string) (paths, unresolved []string) {
 	pieces := make([][]string, 0, len(use.args))
 	for _, arg := range use.args {
 		pieces = append(pieces, spellings(r.fold(fn, arg, env, map[string]bool{})))
 	}
-	var paths []string
 	for _, values := range combinations(pieces) {
-		if path, literal := shape(substitute(use.template, values)); literal {
+		raw := substitute(use.template, values)
+		if strings.Contains(raw, overflow) {
+			unresolved = append(unresolved, fn.key+": a path it formats "+boundReason)
+			continue
+		}
+		if path, literal := shape(raw); literal {
 			paths = append(paths, path)
 		}
 	}
-	return paths
+	return paths, unresolved
 }
 
 // legacyRoutes reads one NewRequest or UploadRequest: its verb, reassigned or
@@ -175,7 +193,7 @@ func (r *reading) templatePaths(fn *function, use templateUse, env map[string]st
 // An empty path is the GraphQL transport's, which posts to an endpoint of its
 // own, and is no REST route. A path that folds to no static segment at all
 // cannot be told from any other route and is recorded as unresolved rather
-// than guessed at.
+// than guessed at, and so is one that multiplied past the bound.
 func (r *reading) legacyRoutes(fn *function, use legacyUse, env map[string]string) (routes []Route, unresolved []string) {
 	verb := fn.override
 	if verb == "" {
@@ -187,6 +205,10 @@ func (r *reading) legacyRoutes(fn *function, use legacyUse, env map[string]strin
 	}
 	for _, raw := range r.fold(fn, use.path, env, map[string]bool{}) {
 		if raw == "" {
+			continue
+		}
+		if strings.Contains(raw, overflow) {
+			unresolved = append(unresolved, fn.key+": the path of a request it builds "+boundReason)
 			continue
 		}
 		path, literal := shape(raw)
@@ -370,16 +392,24 @@ func concat(left, right []string) []string {
 	return limit(out)
 }
 
-// limit keeps at most [maxFolds] spellings, dropping repeats.
+// limit keeps at most [maxFolds] spellings, dropping repeats, and holds
+// [overflow] after them when it left a distinct one out.
 func limit(values []string) []string {
 	var out []string
 	seen := map[string]bool{}
+	bounded := false
 	for _, value := range values {
-		if seen[value] || len(out) == maxFolds {
-			continue
+		switch {
+		case seen[value]:
+		case len(out) == maxFolds:
+			bounded = true
+		default:
+			seen[value] = true
+			out = append(out, value)
 		}
-		seen[value] = true
-		out = append(out, value)
+	}
+	if bounded {
+		out = append(out, overflow)
 	}
 	return out
 }

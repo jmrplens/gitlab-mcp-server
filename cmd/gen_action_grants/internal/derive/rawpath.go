@@ -188,9 +188,9 @@ func (d *deriver) sprintf(format string, args []ast.Expr, at *frame, depth int) 
 
 // combine concatenates every spelling of a with every spelling of b, up to
 // [maxSpellings]. The spellings past the bound fold to one [unknownPiece]
-// after the ones kept, so a path that multiplies further is reported as one
-// nothing static names rather than read as the routes kept, which would leave
-// the rest out of the derivation without a word.
+// after the ones kept, so a path that multiplies further reads as the routes
+// kept and one unresolved request after them, rather than as the routes kept
+// alone, which would leave the rest out of the derivation without a word.
 func combine(a, b []string) []string {
 	var out []string
 	for _, left := range a {
