@@ -410,6 +410,7 @@ func TestGitLabRefused_IsEveryRefusalThatIsNotOurOwn(t *testing.T) {
 		{outcome: modelrecord.RefusedOutcome(toolutil.RefusalNeedsConfirmation), want: false},
 		{outcome: modelrecord.RefusedOutcome(toolutil.RefusalSafeMode), want: false},
 		{outcome: modelrecord.RefusedOutcome(toolutil.RefusalRateLimited), want: false},
+		{outcome: modelrecord.RefusedOutcome(toolutil.RefusalFineGrained), want: false},
 		{outcome: modelrecord.OutcomeOK, want: false},
 		{outcome: modelrecord.OutcomePreview, want: false},
 		{outcome: modelrecord.OutcomeProtocolError, want: false},

@@ -410,6 +410,53 @@ func TestDistinctTokenBudget_Cleanup_DropsQuietRecordsAndKeepsBlockedOnes(t *tes
 	}
 }
 
+// TestDistinctTokenBudget_Cleanup_KeepsTheCapWarningWhileTheTableIsFull
+// verifies the distinct budget's at-capacity warning is re-armed by the
+// scheduled sweep only once there is room again, as the failure table's is:
+// a sweep that frees nothing leaves the flag set, so a flood that keeps the
+// table full logs one warning rather than one per sweep, and a sweep that
+// frees a record re-arms it for the next episode.
+func TestDistinctTokenBudget_Cleanup_KeepsTheCapWarningWhileTheTableIsFull(t *testing.T) {
+	b := NewDistinctTokenBudget(1000, time.Minute, time.Minute)
+	for i := range maxTrackedAuthSources {
+		b.Charge("10.0."+strconv.Itoa(i/256)+"."+strconv.Itoa(i%256), "glpat-"+strconv.Itoa(i))
+	}
+	b.mu.Lock()
+	b.warnedAtCap = true
+	b.mu.Unlock()
+
+	b.Cleanup()
+
+	b.mu.Lock()
+	stillWarned := b.warnedAtCap
+	size := len(b.addresses)
+	b.mu.Unlock()
+	if size != maxTrackedAuthSources {
+		t.Fatalf("tracked addresses = %d after a sweep that frees nothing, want the table still full at %d", size, maxTrackedAuthSources)
+	}
+	if !stillWarned {
+		t.Error("the at-capacity warning was re-armed while the table is still full")
+	}
+
+	// One record past the reset horizon is enough to make room.
+	b.mu.Lock()
+	for _, rec := range b.addresses {
+		rec.lastSeenAt = time.Now().Add(-b.resetAfter() - time.Second)
+		rec.blockedUntil = time.Time{}
+		break
+	}
+	b.mu.Unlock()
+
+	b.Cleanup()
+
+	b.mu.Lock()
+	rearmed := !b.warnedAtCap
+	b.mu.Unlock()
+	if !rearmed {
+		t.Error("the at-capacity warning stayed suppressed after the table dropped below the cap")
+	}
+}
+
 // TestDistinctTokenBudget_CapAdmitsNewAddressesOnceRecordsLapse covers the
 // other half of the cap: it is a ceiling on live records, not on everything
 // ever seen, so a saturated table recovers on its own rather than refusing to

@@ -235,8 +235,9 @@ llegó bien formada y este servidor decidió no ejecutarla:
 | `invalid_params`            | los parámetros no encajan con la acción                         |
 | `unknown_action`            | no existe ninguna acción con ese nombre en esta superficie      |
 | `rate_limited`              | el propio límite de tasa del despliegue rechazó la llamada      |
+| `fine_grained`              | un token de grano fino no puede ejecutar esa acción             |
 
-Esos cinco son el conjunto completo, y eso es lo que hace que el atributo sea
+Esos seis son el conjunto completo, y eso es lo que hace que el atributo sea
 asumible también como dimensión de métrica: un despliegue que rechaza una de
 cada tres llamadas es indistinguible de uno sano si solo se mira el histograma
 de duración.

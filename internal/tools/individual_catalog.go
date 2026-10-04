@@ -280,6 +280,12 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 // so logging and request metadata propagate.
 func individualCatalogHandler(toolName string, action actioncatalog.Action, formatResult toolutil.FormatResultFunc, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
+		// Before safe mode and the confirmation, as every dispatcher does: a
+		// write a fine-grained session may not run is refused rather than
+		// previewed or offered for confirmation.
+		if withheld := toolutil.FineGrainedRefusal(ctx, req, toolName, string(action.ID), ""); withheld != nil {
+			return withheld, nil, nil
+		}
 		if opts.SafeMode && !individualCatalogActionReadOnly(action) {
 			// safeModeHandler records the safe_mode refusal itself, as it must
 			// for the tools the server wraps after registration.
@@ -310,9 +316,9 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		}
 		toolutil.LogToolCallAll(ctx, req, toolName, start, result, err)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, toolutil.FineGrainedErrorNote(ctx, string(action.ID), err)
 		}
-		callResult, structured := toolutil.FinishToolResult(formatResult(result), result, action.Route, input)
+		callResult, structured := toolutil.FinishToolResult(toolutil.FineGrainedNotes(ctx, string(action.ID), formatResult(result), result), result, action.Route, input)
 		if callResult.IsError {
 			return callResult, nil, nil
 		}

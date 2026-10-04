@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -1629,4 +1630,76 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// fineGrainedSession binds a client carrying phase A over a table that denies
+// test.delete and serves test.lookup over GraphQL, which is what a
+// fine-grained session's requests carry.
+func fineGrainedSession() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version: "19.4.1-ee",
+		Actions: []finegrained.Requirement{
+			{ID: "test.delete", Denied: &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "thingDelete", Effect: finegrained.EffectRefused}},
+			{ID: "test.lookup", GraphQL: true},
+		},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// TestIndividualCatalogHandler_FineGrained_WithholdsBeforeSafeModeAndConfirmation
+// verifies the individual dispatcher refuses an action a fine-grained session
+// may not run before safe mode would preview it and before its confirmation
+// would be asked for, so the session is told it is withheld rather than shown
+// a preview of something its token cannot do, and the route never runs.
+func TestIndividualCatalogHandler_FineGrained_WithholdsBeforeSafeModeAndConfirmation(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "false")
+	var ran atomic.Bool
+	spec := toolutil.NewActionSpec("delete", toolutil.RouteFunc(func(context.Context, struct{}) (string, error) {
+		ran.Store(true)
+		return "deleted", nil
+	}), toolutil.ActionSpecOptions{
+		Destructive:    true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_delete", Title: "Test Delete", Description: "Test delete."},
+	})
+	action := testIndividualCatalog(t, spec).Actions()[0]
+	for _, safeMode := range []bool{true, false} {
+		t.Run(fmt.Sprintf("safe mode %v", safeMode), func(t *testing.T) {
+			handler := individualCatalogHandler("gitlab_test_delete", action, markdownForResult, IndividualCatalogRegisterOptions{SafeMode: safeMode})
+			result, structured, err := handler(fineGrainedSession(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "gitlab_test_delete"}}, map[string]any{})
+			if err != nil || structured != nil || result == nil || !result.IsError {
+				t.Fatalf("handler() = (%+v, %+v, %v), want the withheld answer", result, structured, err)
+			}
+			text := result.Content[0].(*mcp.TextContent).Text
+			if !strings.HasPrefix(text, `action "test.delete" exists but is not available to a fine-grained personal access token`) {
+				t.Errorf("handler() text = %q", text)
+			}
+		})
+	}
+	if ran.Load() {
+		t.Error("the withheld route ran")
+	}
+}
+
+// TestIndividualCatalogHandler_FineGrained_NotesAGraphQLNotFound verifies the
+// individual dispatcher hands a fine-grained session a GraphQL action's
+// not-found error with the note that the token may be what cannot see the
+// object, and a classic session the error as the handler wrote it.
+func TestIndividualCatalogHandler_FineGrained_NotesAGraphQLNotFound(t *testing.T) {
+	spec := toolutil.NewActionSpec("lookup", toolutil.RouteFunc(func(context.Context, struct{}) (string, error) {
+		return "", errors.New(`lookup: thing "7" not found`)
+	}), toolutil.ActionSpecOptions{
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_lookup", Title: "Test Lookup", Description: "Test lookup."},
+	})
+	handler := individualCatalogHandler("gitlab_test_lookup", testIndividualCatalog(t, spec).Actions()[0], markdownForResult, IndividualCatalogRegisterOptions{})
+	_, _, err := handler(fineGrainedSession(), nil, map[string]any{})
+	if err == nil || !strings.Contains(err.Error(), "not found may mean this token cannot see it") {
+		t.Errorf("fine-grained error = %v, want the null note after it", err)
+	}
+	_, _, err = handler(context.Background(), nil, map[string]any{})
+	if err == nil || err.Error() != `lookup: thing "7" not found` {
+		t.Errorf("classic error = %v, want the handler's own", err)
+	}
 }

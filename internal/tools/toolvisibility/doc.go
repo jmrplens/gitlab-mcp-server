@@ -33,4 +33,17 @@
 // second caller only made visible: cmd/server is the one package exempt from
 // the coverage rule, so while the pass lived there it had no unit test of its
 // own on its policy. Here it has one.
+//
+// # What a fine-grained session is listed
+//
+// The package also holds the per-request half of that decision for a
+// fine-grained personal access token (issue 952, register row AUT-007), for
+// the same two reasons: the e2e harness has to expect what the binary serves
+// rather than a copy of its rule, and cmd/server keeps only thin middlewares.
+// [ToolActions] says which catalog actions each registered tool runs, computed
+// once per server; [ListingMiddleware] narrows a fine-grained session's
+// tools/list to the tools whose actions it may run, and [CallMiddleware]
+// answers its call to a withheld tool before the SDK decodes the arguments.
+// Both read the authority the request's client carries, so a classic session
+// passes through them untouched.
 package toolvisibility

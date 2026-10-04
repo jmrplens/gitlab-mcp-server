@@ -6,8 +6,10 @@
 // The table is data the compiler lays out: every value in table_gen.go is a
 // constant in a keyed composite literal, so the server runs no code to build
 // it and has no init function for it, which a test of this package holds. The
-// catalog sets each action's FineGrained pointer from it, and the detail of an
-// action in gitlab://tools/{id} words it.
+// catalog sets each action's FineGrained pointer from it, the detail of an
+// action in gitlab://tools/{id} words it, and Build turns it into the authority
+// a fine-grained credential's client carries, which every layer that decides
+// what such a session is shown reads.
 //
 // It imports internal/finegrained and nothing else, so the catalog, the
 // resources and the generator can all read it without a cycle.

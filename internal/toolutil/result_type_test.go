@@ -253,19 +253,24 @@ func TestLabelForRevision_ResultThatCannotMakeTheRoundTrip_IsHandedBackUnlabeled
 const resultTypeFix = "Retire the workaround in this same pull request. " +
 	"Delete internal/toolutil/result_type.go and this test file. " +
 	"Return the refusals as they are built in internal/toolutil/rate_limit.go (attachRateLimitFunc, with the " +
-	"comment above the call) and cmd/server/held.go (heldRequestsRefusal), and drop the req parameter " +
+	"comment above the call), cmd/server/held.go (heldRequestsRefusal) and " +
+	"internal/tools/toolvisibility/fine_grained.go (CallMiddleware), and drop the req parameter " +
 	"heldRequestsRefusal gained only for the label, at its calls in held.go and held_test.go. " +
-	"Delete TestAttachRateLimit_ToolRefusal_CarriesTheResultTypeOfItsRevision in internal/toolutil/rate_limit_test.go " +
-	"and TestHeldRequestsMiddleware_ToolRefusal_CarriesTheResultTypeOfItsRevision in cmd/server/held_test.go, " +
-	"or drive them through an SDK server: both read the middleware's return before the SDK labels it, so both " +
-	"fail once the refusals are returned as built. Move the helpers rate_limit_test.go borrows (callNaming and wireFields from this file, " +
+	"Delete TestAttachRateLimit_ToolRefusal_CarriesTheResultTypeOfItsRevision in internal/toolutil/rate_limit_test.go, " +
+	"TestHeldRequestsMiddleware_ToolRefusal_CarriesTheResultTypeOfItsRevision in cmd/server/held_test.go " +
+	"and TestCallMiddleware_WithheldCall_CarriesTheResultTypeOfItsRevision in " +
+	"internal/tools/toolvisibility/fine_grained_test.go, or drive them through an SDK server: all three read the " +
+	"middleware's return before the SDK labels it, so all three fail once the refusals are returned as built. " +
+	"Move the helpers rate_limit_test.go borrows (callNaming and wireFields from this file, " +
 	"completeResultType from result_type.go) into it, or delete them with their users. " +
-	"Remove what is said about the label from the doc comments of AttachRateLimit (rate_limit.go) and " +
-	"heldRequestsRefusal (held.go), from the comment on row RTC-001 in internal/tenancy/decisions_allow.go, from " +
+	"Remove what is said about the label from the doc comments of AttachRateLimit (rate_limit.go), " +
+	"heldRequestsRefusal (held.go) and CallMiddleware (fine_grained.go), from the comment on row RTC-001 in " +
+	"internal/tenancy/decisions_allow.go and on row AUT-007 in internal/tenancy/decisions_authorize.go, from " +
 	"the paragraph on F-20 in docs/development/tenant-policy-spec.md, from Transport end-to-end modules in CLAUDE.md, from " +
 	"HTTP transport module in test/e2e/README.md and from the header of test/e2e/http/result_type_test.go. " +
 	"Mark row 66 of docs/development/upstream-bugs.md merged with the version and retire its workaround, and " +
-	"keep TestRateLimitedToolCall_EachRevision_CarriesTheResultTypeTheServedCallDoes in test/e2e/http passing."
+	"keep TestRateLimitedToolCall_EachRevision_CarriesTheResultTypeTheServedCallDoes and " +
+	"TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes in test/e2e/http passing."
 
 // middlewareMadeTools serves one tool through the SDK's dispatcher and answers
 // two more from a receiving middleware in its place: "refused" with a tool

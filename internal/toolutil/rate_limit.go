@@ -581,7 +581,7 @@ func attachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 				// The server's own listings are charged to neither bucket, and
 				// they are how the process's learns what this server lists
 				// before any client's listing reaches it.
-				if isInternalInspection(ctx) {
+				if IsInternalInspection(ctx) {
 					return listings.learn(next(ctx, method, req))
 				}
 				// No entry bucket, no process one: the process bucket follows
@@ -622,9 +622,16 @@ func WithInternalInspection(ctx context.Context) context.Context {
 	return context.WithValue(ctx, inspectionKey{}, true)
 }
 
-// isInternalInspection reports whether ctx carries [WithInternalInspection]'s
+// IsInternalInspection reports whether ctx carries [WithInternalInspection]'s
 // mark.
-func isInternalInspection(ctx context.Context) bool {
+//
+// It is exported for the layers that narrow what a fine-grained session is
+// listed (issue 952): the tools/list filter, the find filter and the
+// gitlab://tools filter all hand the server's own listings the whole surface,
+// since registration counts, narrows and snapshots what it registered, and on
+// stdio the credential those listings would otherwise be filtered for is the
+// process's own.
+func IsInternalInspection(ctx context.Context) bool {
 	marked, _ := ctx.Value(inspectionKey{}).(bool)
 	return marked
 }

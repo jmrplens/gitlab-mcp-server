@@ -4,12 +4,15 @@ package tenancy
 // The five questions): the surface a credential's scopes, the instance's tier
 // and the operator's configuration leave, the local files a stdio process may
 // reach, the destinations a client may dial, the response profile and cache
-// hints a session is given, and which subscriptions may be made at all.
+// hints a session is given, which subscriptions may be made at all, and what a
+// fine-grained token is withheld (AUT-007).
 //
 // Authority is the credential's own, which is why most of these are class C:
 // two credentials of one tenant may carry different scopes and so be served
 // different surfaces. A narrowed surface says why wherever it can (Withheld),
 // and a tier narrowing does not yet (F-10, issue 956).
+//
+//nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func authorizeDecisions() []Decision {
 	withheld := refuse(pkgDynamic, "Registry.withheldActionMessage")
 	filter := refuse(pkgTools, "FilterActionCatalog")
@@ -137,6 +140,53 @@ func authorizeDecisions() []Decision {
 				enforce(pkgToolutil, "DownloadDirAllowlistEnv"),
 				enforce(pkgToolutil, "ImportArchiveAllowlistEnv"),
 				refuse(pkgToolutil, "outsideAllowedDirsError"),
+			},
+		},
+		{
+			// Phase A of issue 952: the actions no fine-grained token can reach
+			// at the GitLab version the table was recorded from, because the
+			// GraphQL types or mutations they read declare no fine-grained
+			// permission there, are withheld from a fine-grained session with
+			// the reason, the version and the way out, never answered as
+			// unknown. The authority is computed per pool entry (per process on
+			// stdio) and carried by the entry's client, which the pool already
+			// bounds and evicts, so the row has no capacity of its own and
+			// keys nothing on the credential: the shape, catalog and manifest
+			// keys stay what they were (INV-010), the listing varies with the
+			// authorization on the request alone (INV-009), and a withheld call
+			// charges no failure budget (INV-007) while it spends its token of
+			// the credential's rate bucket like every other refused call. An
+			// action the table has no row for is unknown authority and served
+			// (INV-008). The refusal the call middleware makes of a registered
+			// tool's call is a tool result built before the SDK's dispatcher,
+			// which labels only what it answers, so the middleware gives it
+			// the resultType its revision requires (toolutil.LabelForRevision,
+			// upstream-bugs row 66), as the rate limiter does its own, and the
+			// row carries no F-20; the one dynamic execute makes in its
+			// handler is labeled by the dispatcher like any served call.
+			ID: "AUT-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
+			Resource: "the actions no fine-grained token can reach at the GitLab release the table was recorded from",
+			Key:      KeyEntry, StdioKey: KeyProcess,
+			Decided: []string{"ADR-0024", "issue 952"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{"tools/call"}, Channel: Withheld, Answer: WidenScope,
+					Prefix: "exists but is not available to a fine-grained personal access token",
+					At:     refuse(pkgFinegrained, "Authority.WithheldText"),
+				},
+				{
+					Methods: []string{"tools/list"}, Channel: Absent, Answer: WidenScope,
+					At: refuse(pkgVisibility, "ToolActions.Filter"),
+				},
+			},
+			Sites: []Site{
+				enforce(pkgFinegrained, "Authority.Decide"),
+				enforce(pkgActiongrants, "Build"),
+				enforce(pkgVisibility, "CallMiddleware"),
+				enforce(pkgToolutil, "FineGrainedRefusal"),
+				enforce(pkgVisibility, "ListingMiddleware"),
+				refuse(pkgFinegrained, "Authority.WithheldText"),
+				refuse(pkgVisibility, "ToolActions.Filter"),
 			},
 		},
 		{

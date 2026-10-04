@@ -94,6 +94,34 @@ func TestAuthority_WithheldText_PhaseANamesTheCauseAndWhatGitLabDoes(t *testing.
 	}
 }
 
+// TestAuthority_WithheldText_CarriesTheRegisterPrefixRightAfterTheAction
+// verifies each phase's words carry their stable text right after the action
+// they name, which is what a client matches the refusal on and what the tenant
+// register declares as its prefix.
+func TestAuthority_WithheldText_CarriesTheRegisterPrefixRightAfterTheAction(t *testing.T) {
+	authority := Unevaluated(testTable(), FallbackNone, "")
+	cases := []struct {
+		name     string
+		decision Decision
+		prefix   string
+	}{
+		{name: "phase A", decision: authority.Decide("epic.list"), prefix: "exists but is not available to a fine-grained personal access token"},
+		{
+			name:     "phase B",
+			decision: Decision{Cause: CauseNotGranted, Missing: []uint32{0}, Known: true},
+			prefix:   "exists but this fine-grained personal access token was not granted what it needs",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := authority.WithheldText("epic.list", tc.decision)
+			if want := `action "epic.list" ` + tc.prefix + ": "; !strings.HasPrefix(got, want) {
+				t.Errorf("WithheldText = %q, want it to begin %q", got, want)
+			}
+		})
+	}
+}
+
 // TestAuthority_WithheldText_ACallThatPassesHasNoWords verifies a call the
 // decision lets through, with a row or without one, is told nothing.
 func TestAuthority_WithheldText_ACallThatPassesHasNoWords(t *testing.T) {

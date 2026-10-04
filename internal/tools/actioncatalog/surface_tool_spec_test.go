@@ -104,6 +104,9 @@ func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	if actionSpec.Route.InputSchema == nil || actionSpec.Route.OutputSchema == nil {
 		t.Fatalf("ActionSpec().Route schemas = input:%v output:%v, want both schemas", actionSpec.Route.InputSchema, actionSpec.Route.OutputSchema)
 	}
+	if actionSpec.Route.ActionID != "test.surface" {
+		t.Errorf("ActionSpec().Route.ActionID = %q, want the canonical ID test.surface the dispatcher decides by", actionSpec.Route.ActionID)
+	}
 }
 
 // TestSurfaceToolSpec_ActionSpec_ProjectsEachFlagOnItsOwn verifies that each

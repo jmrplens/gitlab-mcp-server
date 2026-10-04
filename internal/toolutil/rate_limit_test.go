@@ -9,6 +9,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -2384,5 +2385,62 @@ func TestAttachRateLimitFunc_ServersOwnListing_ChargesTheFirstClientListingItsSi
 				t.Errorf("the process bucket holds %d tools, want %d", got, tc.wantLeft)
 			}
 		})
+	}
+}
+
+// TestAttachRateLimitFunc_ANarrowingOutsideIt_ChargesEveryWideListingInFull pins
+// why a filter that narrows one credential's listing, a fine-grained session's
+// (register row AUT-007), is added after the rate limiter and so runs outside
+// it: the limiter remembers what the server lists from the answer it sees, and
+// charges the next listing that many tools up front. Outside it, a narrow
+// listing leaves the limiter seeing the server's whole surface, so the wide
+// listings of the other credentials that follow are each charged in full before
+// they are answered; inside it, one narrow grant's listing would lower what
+// every other tenant's is charged.
+func TestAttachRateLimitFunc_ANarrowingOutsideIt_ChargesEveryWideListingInFull(t *testing.T) {
+	t.Parallel()
+	process := testProcessBucket(100)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	registerEchoTool(server)
+	withTwoMore(server)
+	var heldWhenAnswered atomic.Int64
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == methodToolsList {
+				heldWhenAnswered.Store(int64(heldTools(process)))
+			}
+			return next(ctx, method, req)
+		}
+	})
+	attachRateLimitFunc(server, func(context.Context) *RateLimiter { return NewRateLimiter(10, 40) }, process)
+	var narrow atomic.Bool
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, req)
+			if listed, isListing := result.(*mcp.ListToolsResult); isListing && narrow.Load() {
+				narrowed := *listed
+				narrowed.Tools = listed.Tools[:1]
+				return &narrowed, err
+			}
+			return result, err
+		}
+	})
+
+	narrow.Store(true)
+	session, ctx := connectClient(t, server)
+	listed, err := session.ListTools(ctx, nil)
+	if err != nil || len(listed.Tools) != 1 {
+		t.Fatalf("the narrow listing = %v, %v; want one tool", listed, err)
+	}
+	narrow.Store(false)
+	// sequential: each wide listing is charged what the one before it carried.
+	for i, want := range []int64{94, 91} {
+		wide, wideCtx := connectClient(t, server)
+		if _, wideErr := wide.ListTools(wideCtx, nil); wideErr != nil {
+			t.Fatalf("wide listing %d: %v", i, wideErr)
+		}
+		if got := heldWhenAnswered.Load(); got != want {
+			t.Errorf("wide listing %d was answered with %d tools left in the process bucket, want %d: it was not charged the server's three up front", i, got, want)
+		}
 	}
 }

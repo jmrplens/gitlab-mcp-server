@@ -33,7 +33,10 @@
 // table has no row for is unknown authority and allowed, never locked out,
 // since a stale table or a newer action is not evidence against the caller.
 // [Authority.WithheldText] writes the one sentence every surface answers a
-// withheld action with.
+// withheld action with, and [Authority.DegradedNote], [Authority.NullNote] and
+// [Authority.EmptyNote] the next steps a served answer is given where GitLab
+// leaves part of it empty, answers null or removes items over GraphQL without
+// saying so.
 //
 // # A leaf
 //

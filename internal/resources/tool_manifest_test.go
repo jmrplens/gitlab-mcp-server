@@ -7,6 +7,7 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"reflect"
 	"regexp"
@@ -17,6 +18,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
@@ -695,6 +698,257 @@ func TestToolManifest_StandaloneDetail_CarriesTheFineGrainedRequirement(t *testi
 			}
 			if _, filed := snapshot.details["gitlab_not_registered"]; filed {
 				t.Error("a standalone tool this server does not register was given a detail")
+			}
+		})
+	}
+}
+
+// projectGetWithheld binds a client whose authority withholds project.get,
+// which is what a fine-grained session's requests carry.
+func projectGetWithheld() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version: "19.4.1-ee",
+		Actions: []finegrained.Requirement{{ID: "project.get", Denied: &finegrained.Denial{
+			Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull,
+		}}},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// entryIDs returns a manifest's entry IDs.
+func entryIDs(manifest ToolSurfaceManifest) []string {
+	ids := make([]string, 0, len(manifest.Entries))
+	for _, entry := range manifest.Entries {
+		ids = append(ids, entry.ID)
+	}
+	return ids
+}
+
+// visibleNames returns a manifest's visible tool names.
+func visibleNames(manifest ToolSurfaceManifest) []string {
+	names := make([]string, 0, len(manifest.VisibleTools))
+	for _, tool := range manifest.VisibleTools {
+		names = append(names, tool.Name)
+	}
+	return names
+}
+
+// narrowedRead is what one surface's narrowed read of the manifest must hold:
+// the entry of the withheld action gone, the entry of an action the session
+// may run kept, a tool none of whose actions it may run gone ("" when the
+// surface has none) and a tool it may run kept.
+type narrowedRead struct {
+	gone, kept, goneTool, keptTool string
+}
+
+// check holds a narrowed read to r against the shared manifest it came from.
+func (r narrowedRead) check(t *testing.T, shared, narrowed ToolSurfaceManifest) {
+	t.Helper()
+	if slices.Contains(entryIDs(narrowed), r.gone) || !slices.Contains(entryIDs(shared), r.gone) {
+		t.Errorf("entry %s: shared %v, narrowed %v; want it in the first only", r.gone, slices.Contains(entryIDs(shared), r.gone), slices.Contains(entryIDs(narrowed), r.gone))
+	}
+	if !slices.Contains(entryIDs(narrowed), r.kept) {
+		t.Errorf("entry %s, whose action the session may run, was removed", r.kept)
+	}
+	if r.goneTool != "" && slices.Contains(visibleNames(narrowed), r.goneTool) {
+		t.Errorf("visible tool %s stays listed for a session that may run none of its actions", r.goneTool)
+	}
+	if !slices.Contains(visibleNames(narrowed), r.keptTool) {
+		t.Errorf("visible tool %s was removed", r.keptTool)
+	}
+	if narrowed.EntryCount != len(narrowed.Entries) || narrowed.VisibleToolCount != len(narrowed.VisibleTools) {
+		t.Errorf("counts %d/%d, want %d/%d", narrowed.EntryCount, narrowed.VisibleToolCount, len(narrowed.Entries), len(narrowed.VisibleTools))
+	}
+}
+
+// TestToolManifest_FineGrained_ReadNarrowedToWhatTheSessionMayRun verifies a
+// fine-grained session's read of the manifest leaves out, on every surface, the
+// entries of an action it may not run and a tool whose every action it may not
+// run, with the counts following, while a tool that runs other actions too, or
+// none of the catalog's, stays; and that a classic session and the server's
+// own read are served the shared snapshot itself.
+func TestToolManifest_FineGrained_ReadNarrowedToWhatTheSessionMayRun(t *testing.T) {
+	domain := domainSurfaceCatalog(t)
+	action, ok := domain.Action("project.get")
+	if !ok {
+		t.Fatal("the catalog has no project.get")
+	}
+	list, ok := domain.Action("project.list")
+	if !ok {
+		t.Fatal("the catalog has no project.list")
+	}
+	cases := []struct {
+		name     string
+		opts     ToolSurfaceResourceOptions
+		read     narrowedRead
+		keptTool string
+	}{
+		{
+			name: toolSurfaceDynamic,
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceDynamic, Catalog: domain,
+				Tools: []*mcp.Tool{{Name: "gitlab_execute_action"}, {Name: "gitlab_find_action"}},
+			},
+			read: narrowedRead{gone: "project.get", kept: "project.list", keptTool: "gitlab_execute_action"},
+		},
+		{
+			name: toolSurfaceMeta,
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceMeta, Catalog: domain, MetaRoutes: domain.ActionMaps(),
+				Tools:       []*mcp.Tool{{Name: action.ToolName}, {Name: "gitlab_lonely"}},
+				ToolActions: map[string][]string{action.ToolName: {"project.get", "project.list"}, "gitlab_lonely": {"project.get"}},
+			},
+			read: narrowedRead{
+				gone: metaManifestID(action.ToolName, action.Name), kept: metaManifestID(list.ToolName, list.Name),
+				goneTool: "gitlab_lonely", keptTool: action.ToolName,
+			},
+		},
+		{
+			name: toolSurfaceIndividual,
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceIndividual, Catalog: domain,
+				Tools: []*mcp.Tool{{Name: action.IndividualTool.Name}, {Name: list.IndividualTool.Name}, {Name: "gitlab_find_action"}},
+				ToolActions: map[string][]string{
+					action.IndividualTool.Name: {"project.get"}, list.IndividualTool.Name: {"project.list"},
+				},
+			},
+			read: narrowedRead{
+				gone: action.IndividualTool.Name, kept: list.IndividualTool.Name,
+				goneTool: action.IndividualTool.Name, keptTool: "gitlab_find_action",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := newToolSurfaceSnapshot(tc.opts)
+			tc.read.check(t, snapshot.manifest, snapshot.manifestFor(projectGetWithheld()))
+			for name, ctx := range map[string]context.Context{
+				"classic":    context.Background(),
+				"inspection": toolutil.WithInternalInspection(projectGetWithheld()),
+			} {
+				if got := snapshot.manifestFor(ctx); len(got.Entries) != len(snapshot.manifest.Entries) || &got.Entries[0] != &snapshot.manifest.Entries[0] {
+					t.Errorf("a %s read was not served the shared snapshot", name)
+				}
+			}
+		})
+	}
+}
+
+// TestToolManifest_FineGrained_WithheldDetailSaysWhy verifies the detail of an
+// action a fine-grained session may not run is served, carrying why in the
+// words a call to it is refused with, rather than answered not found; and that
+// every other detail, a classic read and the server's own, carries nothing.
+func TestToolManifest_FineGrained_WithheldDetailSaysWhy(t *testing.T) {
+	domain := domainSurfaceCatalog(t)
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceDynamic, Catalog: domain,
+		Tools: []*mcp.Tool{{Name: "gitlab_execute_action"}, {Name: "gitlab_find_action"}},
+	})
+	if detail := readToolDetail(t, session, "gitlab://tools/project.get"); detail.Withheld != nil {
+		t.Errorf("a classic read of the detail carries %+v", detail.Withheld)
+	}
+	snapshot := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{Surface: toolSurfaceDynamic, Catalog: domain, Tools: []*mcp.Tool{{Name: "gitlab_execute_action"}}})
+	withheld := snapshot.detailFor(projectGetWithheld(), "project.get", snapshot.details["project.get"])
+	if withheld.Withheld == nil || withheld.Withheld.Cause != string(finegrained.CauseTypeUndeclared) ||
+		!strings.HasPrefix(withheld.Withheld.Message, `action "project.get" exists but is not available to a fine-grained personal access token`) {
+		t.Errorf("withheld detail = %+v", withheld.Withheld)
+	}
+	if withheld.ID != "project.get" || withheld.FineGrained == nil {
+		t.Errorf("withheld detail lost the entry it describes: %+v", withheld)
+	}
+	for name, read := range map[string]func() ToolSurfaceDetail{
+		"another action": func() ToolSurfaceDetail {
+			return snapshot.detailFor(projectGetWithheld(), "project.list", snapshot.details["project.list"])
+		},
+		"a key that runs no action": func() ToolSurfaceDetail {
+			return snapshot.detailFor(projectGetWithheld(), "gitlab_execute_action", snapshot.details["gitlab_execute_action"])
+		},
+		"the server's own read": func() ToolSurfaceDetail {
+			return snapshot.detailFor(toolutil.WithInternalInspection(projectGetWithheld()), "project.get", snapshot.details["project.get"])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := read(); got.Withheld != nil {
+				t.Errorf("detail carries %+v", got.Withheld)
+			}
+		})
+	}
+}
+
+// projectReadsWithheld binds a client whose authority withholds project.get
+// and project.list for two different reasons.
+func projectReadsWithheld() context.Context {
+	client := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	client.SetAuthority(finegrained.Unevaluated(&finegrained.Table{
+		Version: "19.4.1-ee",
+		Actions: []finegrained.Requirement{
+			{ID: "project.get", Denied: &finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}},
+			{ID: "project.list", Denied: &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "projectList", Effect: finegrained.EffectNull}},
+		},
+	}, finegrained.FallbackNone, ""))
+	return gitlabclient.WithClient(context.Background(), client)
+}
+
+// TestToolManifest_FineGrained_MetaToolWithEveryActionWithheldSaysWhy verifies
+// the meta surface's detail of a tool a fine-grained session may run none of
+// the actions of, which tools/list and the manifest's visible tools leave out,
+// is served with why for each of its actions in the words a call is refused
+// with; and that a tool the session may run one action of, a classic read and
+// the server's own read carry nothing.
+func TestToolManifest_FineGrained_MetaToolWithEveryActionWithheldSaysWhy(t *testing.T) {
+	domain := domainSurfaceCatalog(t)
+	action, ok := domain.Action("project.get")
+	if !ok {
+		t.Fatal("the catalog has no project.get")
+	}
+	snapshot := newToolSurfaceSnapshot(ToolSurfaceResourceOptions{
+		Surface: toolSurfaceMeta, Catalog: domain, MetaRoutes: domain.ActionMaps(),
+		Tools: []*mcp.Tool{{Name: action.ToolName}, {Name: "gitlab_partial"}},
+		ToolActions: map[string][]string{
+			action.ToolName:  {"project.get", "project.list"},
+			"gitlab_partial": {"project.get", "project.unrecorded"},
+		},
+	})
+	session := projectReadsWithheld()
+	if slices.Contains(visibleNames(snapshot.manifestFor(session)), action.ToolName) {
+		t.Fatalf("the narrowed manifest still lists %s, so this test is not about a withheld tool", action.ToolName)
+	}
+
+	detail := snapshot.detailFor(session, action.ToolName, snapshot.details[action.ToolName])
+	if detail.Withheld == nil || len(detail.Withheld.Actions) != 2 || detail.Withheld.Cause != "" || detail.Withheld.Message != "" {
+		t.Fatalf("the detail of %s carries %+v, want one reason per action and no reason of the tool's own", action.ToolName, detail.Withheld)
+	}
+	for i, want := range []struct{ id, cause string }{
+		{"project.get", string(finegrained.CauseTypeUndeclared)},
+		{"project.list", string(finegrained.CauseMutationUndeclared)},
+	} {
+		t.Run(want.id, func(t *testing.T) {
+			got := detail.Withheld.Actions[i]
+			prefix := fmt.Sprintf("action %q exists but is not available to a fine-grained personal access token", want.id)
+			if got.ID != want.id || got.Cause != want.cause || !strings.HasPrefix(got.Message, prefix) {
+				t.Errorf("action %d of the withheld block = %+v, want %s for %s in the words a call is refused with", i, got, want.cause, want.id)
+			}
+		})
+	}
+	if detail.ID != action.ToolName {
+		t.Errorf("the withheld detail lost the tool it describes: %+v", detail.ToolSurfaceEntry)
+	}
+
+	for name, read := range map[string]func() ToolSurfaceDetail{
+		"a tool the session may run one action of": func() ToolSurfaceDetail {
+			return snapshot.detailFor(session, "gitlab_partial", snapshot.details["gitlab_partial"])
+		},
+		"a classic read": func() ToolSurfaceDetail {
+			return snapshot.detailFor(context.Background(), action.ToolName, snapshot.details[action.ToolName])
+		},
+		"the server's own read": func() ToolSurfaceDetail {
+			return snapshot.detailFor(toolutil.WithInternalInspection(session), action.ToolName, snapshot.details[action.ToolName])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := read(); got.Withheld != nil {
+				t.Errorf("detail carries %+v", got.Withheld)
 			}
 		})
 	}

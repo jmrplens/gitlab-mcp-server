@@ -11,12 +11,27 @@ import (
 // instance enforcement is instance-wide and blocks creating or rotating
 // classic tokens after its date while existing ones keep working
 // (doc/auth/tokens/fine_grained_access_tokens.md), so it never assumes either.
-const classicWayOut = "(an existing one, on an instance that no longer lets you create them), " +
-	"where the group does not refuse classic tokens"
+// It is one literal rather than two joined, since a constant expression has
+// no statement a test can cover and a mutation tool reports its operator as
+// not covered.
+const classicWayOut = "(an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens"
 
 // notMissing closes every withheld answer: a model told an action is withheld
 // reads it as a capability the server lacks unless it is told otherwise.
 const notMissing = "Do not report the capability as missing."
+
+// The stable texts a withheld answer carries right after the action it names,
+// one per phase. They are what a client matches a refusal on, and what the
+// tenant register declares as the refusal's prefix (AUT-007 for the first), so
+// each is written once, as a constant the sentence is built around.
+const (
+	// withheldUnavailable follows the action ID when no fine-grained token can
+	// reach the action at the recorded version (phase A).
+	withheldUnavailable = "exists but is not available to a fine-grained personal access token"
+	// withheldNotGranted follows the action ID when this token's grant does
+	// not reach the action (phase B).
+	withheldNotGranted = "exists but this fine-grained personal access token was not granted what it needs"
+)
 
 // WithheldText is the one sentence every surface answers a withheld call
 // with, or "" for a decision whose call passes. It names the action by its
@@ -37,9 +52,9 @@ func (a *Authority) WithheldText(id string, decision Decision) string {
 	if row != nil && row.Denied != nil {
 		reason = deniedReason(*row.Denied, version)
 	}
-	return fmt.Sprintf("action %q exists but is not available to a fine-grained personal access token: %s. "+
+	return fmt.Sprintf("action %q %s: %s. "+
 		"Use a classic personal access token with read_api for reads or api for writes %s.%s %s",
-		id, reason, classicWayOut, a.fallbackText(), notMissing)
+		id, withheldUnavailable, reason, classicWayOut, a.fallbackText(), notMissing)
 }
 
 // deniedReason says why no fine-grained token reaches an action, and what
@@ -96,31 +111,39 @@ func effectPhrase(cause Cause, effect Effect) string {
 
 // notGrantedText is the phase B answer: the groups the grant fails, named in
 // the words a user grants them by.
-//
-//gitlab:allow-unescaped strings.Join(names, ", "): the names are the table's, generated from GitLab's source at the recorded version and compiled into the binary rather than read from any instance, and a bracketed list followed by no link destination is not a link.
 func (a *Authority) notGrantedText(id string, decision Decision, version string) string {
-	var parts []string
+	parts := make([]string, 0, len(decision.Missing))
 	count := 0
 	for _, index := range decision.Missing {
-		group := a.table.Groups[index]
-		names := make([]string, 0, len(group.Perms))
-		for _, perm := range group.Perms {
-			names = append(names, a.table.displayOf(perm))
-		}
-		count += len(names)
-		noun := "permission"
-		if len(names) > 1 {
-			noun = "permissions"
-		}
-		parts = append(parts, fmt.Sprintf("the %s %s [%s]", group.Any, noun, strings.Join(names, ", ")))
+		words, perms := a.table.groupWords(index)
+		count += perms
+		parts = append(parts, words)
 	}
 	pronoun := "it"
 	if count > 1 {
 		pronoun = "them"
 	}
-	return fmt.Sprintf("action %q exists but this fine-grained personal access token was not granted what it needs: %s, "+
+	return fmt.Sprintf("action %q %s: %s, "+
 		"as GitLab %s declares it. Create a fine-grained token that grants %s, or use a classic token with the api scope %s.%s %s",
-		id, strings.Join(parts, ", and "), version, pronoun, classicWayOut, a.fallbackText(), notMissing)
+		id, withheldNotGranted, strings.Join(parts, ", and "), version, pronoun, classicWayOut, a.fallbackText(), notMissing)
+}
+
+// groupWords names one group the way a refusal reads it, "the project
+// permission [Merge Request: Approve]", and says how many permissions it
+// named, so a sentence about several groups can choose its pronoun.
+//
+//gitlab:allow-unescaped strings.Join(names, ", "): the names are the table's, generated from GitLab's source at the recorded version and compiled into the binary rather than read from any instance, and a bracketed list followed by no link destination is not a link.
+func (t *Table) groupWords(index uint32) (words string, count int) {
+	group := t.Groups[index]
+	names := make([]string, 0, len(group.Perms))
+	for _, perm := range group.Perms {
+		names = append(names, t.displayOf(perm))
+	}
+	noun := "permission"
+	if len(names) > 1 {
+		noun = "permissions"
+	}
+	return fmt.Sprintf("the %s %s [%s]", group.Any, noun, strings.Join(names, ", ")), len(names)
 }
 
 // displayOf names one raw permission the way the token creation page offers

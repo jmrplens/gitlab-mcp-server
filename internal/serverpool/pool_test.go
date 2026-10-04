@@ -5682,3 +5682,55 @@ func TestInsertEntry_TheCreatedEntryLine_SaysWhetherScopesWereDetected(t *testin
 		})
 	}
 }
+
+// TestGetOrCreate_FineGrainedTokenGetsAnAuthorityOnItsClient verifies an entry
+// whose token is a fine-grained one carries the authority every request of it
+// is decided by on its own client, whether the scopes were detected from the
+// token's own description or handed in by the OAuth verifier, and with
+// --ignore-scopes too, since that skips the scope filter and says nothing
+// about the token kind; and that a classic token's client carries none.
+func TestGetOrCreate_FineGrainedTokenGetsAnAuthorityOnItsClient(t *testing.T) {
+	cases := []struct {
+		name          string
+		handed        []string
+		selfScopes    string
+		ignoreScopes  bool
+		wantAuthority bool
+	}{
+		{name: "handed a fine-grained list", handed: []string{"granular"}, wantAuthority: true},
+		{name: "handed a fine-grained list under ignore-scopes", handed: []string{"granular"}, ignoreScopes: true, wantAuthority: true},
+		{name: "detected a fine-grained list", selfScopes: `["granular"]`, wantAuthority: true},
+		{name: "handed a classic list", handed: []string{"api"}},
+		{name: "detected a classic list", selfScopes: `["api"]`},
+		{name: "nothing known", ignoreScopes: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.selfScopes == "" {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":1,"name":"t","active":true,"scopes":` + tc.selfScopes + `}`))
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			cfg := testConfig(srv.URL)
+			cfg.IgnoreScopes = tc.ignoreScopes
+			var built *gitlabclient.Client
+			factory := func(client *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
+				built = client
+				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+			}
+			if _, err := New(cfg, factory).GetOrCreateWithScopes("glpat-"+strings.ReplaceAll(tc.name, " ", "-"), srv.URL, tc.handed); err != nil {
+				t.Fatalf("GetOrCreateWithScopes() error: %v", err)
+			}
+			if got := built.Authority() != nil; got != tc.wantAuthority {
+				t.Errorf("the entry's client carries an authority = %v, want %v", got, tc.wantAuthority)
+			}
+		})
+	}
+}
