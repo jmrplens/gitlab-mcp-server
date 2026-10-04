@@ -628,6 +628,10 @@ type fakeGitLab struct {
 	// unavailable" case every other test relies on. Set it before the server
 	// starts, since the server asks once at startup.
 	scopes []string
+	// issuesCreated counts the issue creations that reached the instance, so a
+	// test can tell a write GitLab was asked to make from one the server
+	// withheld before sending anything.
+	issuesCreated atomic.Int32
 }
 
 // awaitInFlightCall blocks until a call has reached the blocking endpoint.
@@ -666,6 +670,10 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	})
 	mux.HandleFunc("/api/v4/projects/42", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"id":42,"name":"proj","path_with_namespace":"g/proj","web_url":"http://example.invalid/g/proj"}`)
+	})
+	mux.HandleFunc("POST /api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
+		fake.issuesCreated.Add(1)
+		writeJSON(w, `{"id":1,"iid":1,"project_id":42,"title":"sent to GitLab","state":"opened","web_url":"http://example.invalid/g/proj/-/issues/1"}`)
 	})
 	// A collection larger than one page, answering exactly what was asked for
 	// and reporting the rest through the pagination headers GitLab sends. It

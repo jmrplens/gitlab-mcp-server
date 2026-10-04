@@ -258,6 +258,9 @@ obstacle: a resolver would be built from `Decisions()` and `Key.MintCost()`.
 - ADR-0015 (polled resource subscriptions), ADR-0018 (admission at the minimum scope),
   ADR-0019 (audience binding), ADR-0020 (one server per configuration shape) and ADR-0022
   (operator-named destinations).
+- ADR-0024 (a fine-grained token's authority per action), which amends rows `AUT-001`,
+  `AUT-002`, `ADM-001`, `ADM-002`, `ADM-003` and `ADM-006` and adds the rows for what a
+  fine-grained session is withheld and the bound on reading its grant.
 - The specification, `docs/development/tenant-policy-spec.md`.
 - Issues [540](https://github.com/jmrplens/gitlab-mcp-server/issues/540),
   [561](https://github.com/jmrplens/gitlab-mcp-server/issues/561) and

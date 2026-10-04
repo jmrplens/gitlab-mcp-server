@@ -3232,11 +3232,9 @@ func listedToolNames(t *testing.T, client *gitlabclient.Client, cfg *config.Serv
 // fails, covering the defensive warning path.
 func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 	client := newMockGitLabClient(t)
-	original := listRegisteredToolsForInspection
-	listRegisteredToolsForInspection = func(_ *mcp.Server, _ string) ([]*mcp.Tool, error) {
+	replaceRegistrationHook(t, &listRegisteredToolsForInspection, func(_ *mcp.Server, _ string) ([]*mcp.Tool, error) {
 		return nil, errors.New("forced inspection failure")
-	}
-	t.Cleanup(func() { listRegisteredToolsForInspection = original })
+	})
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
@@ -3258,11 +3256,9 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	forcedErr := errors.New("forced failure")
 
 	t.Run("server connect", func(t *testing.T) {
-		original := connectInspectionServer
-		connectInspectionServer = func(_ *mcp.Server, _ context.Context, _ mcp.Transport) (*mcp.ServerSession, error) {
+		replaceRegistrationHook(t, &connectInspectionServer, func(_ *mcp.Server, _ context.Context, _ mcp.Transport) (*mcp.ServerSession, error) {
 			return nil, forcedErr
-		}
-		t.Cleanup(func() { connectInspectionServer = original })
+		})
 
 		_, err := listRegisteredTools(server, "server-error")
 		if err == nil || !strings.Contains(err.Error(), "server connect") {
@@ -3271,11 +3267,9 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("client connect", func(t *testing.T) {
-		original := connectInspectionClient
-		connectInspectionClient = func(_ *mcp.Client, _ context.Context, _ mcp.Transport) (*mcp.ClientSession, error) {
+		replaceRegistrationHook(t, &connectInspectionClient, func(_ *mcp.Client, _ context.Context, _ mcp.Transport) (*mcp.ClientSession, error) {
 			return nil, forcedErr
-		}
-		t.Cleanup(func() { connectInspectionClient = original })
+		})
 
 		_, err := listRegisteredTools(server, "client-error")
 		if err == nil || !strings.Contains(err.Error(), "client connect") {
@@ -3284,11 +3278,9 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		original := listInspectionTools
-		listInspectionTools = func(_ *mcp.ClientSession, _ context.Context) (*mcp.ListToolsResult, error) {
+		replaceRegistrationHook(t, &listInspectionTools, func(_ *mcp.ClientSession, _ context.Context) (*mcp.ListToolsResult, error) {
 			return nil, forcedErr
-		}
-		t.Cleanup(func() { listInspectionTools = original })
+		})
 
 		_, err := listRegisteredTools(server, "list-error")
 		if err == nil || !strings.Contains(err.Error(), "list tools") {
@@ -3297,19 +3289,54 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
+// settleShapeRegistrations waits until no shape registration is running. A
+// registration runs on a goroutine nothing waits for, and one an earlier
+// test's HTTP server started can still be running after that test ended: a
+// request refused before the readiness gate leaves it behind, which is how
+// TestRegisterOAuthMCPHandlers_RefusesPastTheProcessHeldCeiling followed by
+// TestCreateServer_ARegistrationFailure_IsReturned raced on buildDynamicCatalog
+// under -race. Loading the count is what orders that registration's reads
+// before whatever the caller does next; waiting for its goroutine to vanish
+// would not.
+func settleShapeRegistrations(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for shapeRegistrationsRunning.Load() > 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("a shape registration was still running after %s", testHTTPLivenessTimeout)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// replaceRegistrationHook sets *hook to replacement for the rest of the test
+// and puts the original back when it ends, each only once no shape
+// registration is running. Every hook a registration reads (the three catalog
+// builds and the in-memory inspection the tool count and the manifest make) is
+// replaced through it, so the replacement never races a registration an
+// earlier test's server left running, nor the restore one this test's left.
+func replaceRegistrationHook[T any](t *testing.T, hook *T, replacement T) {
+	t.Helper()
+	settleShapeRegistrations(t)
+	original := *hook
+	t.Cleanup(func() {
+		settleShapeRegistrations(t)
+		*hook = original
+	})
+	*hook = replacement
+}
+
 // failDynamicCatalog makes the dynamic catalog build fail for the test's
 // duration and returns the error it fails with.
 func failDynamicCatalog(t *testing.T, builds *atomic.Int64) error {
 	t.Helper()
 	forced := errors.New("forced catalog failure")
-	original := buildDynamicCatalog
-	t.Cleanup(func() { buildDynamicCatalog = original })
-	buildDynamicCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+	replaceRegistrationHook(t, &buildDynamicCatalog, func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
 		if builds != nil {
 			builds.Add(1)
 		}
 		return nil, tools.WithheldActions{}, forced
-	}
+	})
 	return forced
 }
 
@@ -3768,11 +3795,9 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *t
 			arrange: func(t *testing.T) error {
 				t.Helper()
 				forced := errors.New("forced catalog failure")
-				original := sharedIndividualCatalog
-				t.Cleanup(func() { sharedIndividualCatalog = original })
-				sharedIndividualCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
+				replaceRegistrationHook(t, &sharedIndividualCatalog, func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
 					return nil, nil, fmt.Errorf("build individual action catalog: %w", forced)
-				}
+				})
 				return forced
 			},
 			wantErr: "build individual action catalog",
@@ -3783,11 +3808,9 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *t
 			arrange: func(t *testing.T) error {
 				t.Helper()
 				forced := errors.New("forced catalog failure")
-				original := sharedMetaCatalog
-				t.Cleanup(func() { sharedMetaCatalog = original })
-				sharedMetaCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+				replaceRegistrationHook(t, &sharedMetaCatalog, func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
 					return nil, tools.WithheldActions{}, fmt.Errorf("filter meta action catalog: %w", forced)
-				}
+				})
 				return forced
 			},
 			wantErr: "filter meta action catalog",
@@ -3872,27 +3895,21 @@ func inspectionFailures(t *testing.T, forced error) []struct {
 	}{
 		{name: "server connect", arrange: func(t *testing.T) {
 			t.Helper()
-			original := connectInspectionServer
-			t.Cleanup(func() { connectInspectionServer = original })
-			connectInspectionServer = func(*mcp.Server, context.Context, mcp.Transport) (*mcp.ServerSession, error) {
+			replaceRegistrationHook(t, &connectInspectionServer, func(*mcp.Server, context.Context, mcp.Transport) (*mcp.ServerSession, error) {
 				return nil, forced
-			}
+			})
 		}},
 		{name: "client connect", arrange: func(t *testing.T) {
 			t.Helper()
-			original := connectInspectionClient
-			t.Cleanup(func() { connectInspectionClient = original })
-			connectInspectionClient = func(*mcp.Client, context.Context, mcp.Transport) (*mcp.ClientSession, error) {
+			replaceRegistrationHook(t, &connectInspectionClient, func(*mcp.Client, context.Context, mcp.Transport) (*mcp.ClientSession, error) {
 				return nil, forced
-			}
+			})
 		}},
 		{name: "list tools", arrange: func(t *testing.T) {
 			t.Helper()
-			original := listInspectionTools
-			t.Cleanup(func() { listInspectionTools = original })
-			listInspectionTools = func(*mcp.ClientSession, context.Context) (*mcp.ListToolsResult, error) {
+			replaceRegistrationHook(t, &listInspectionTools, func(*mcp.ClientSession, context.Context) (*mcp.ListToolsResult, error) {
 				return nil, forced
-			}
+			})
 		}},
 	}
 }
