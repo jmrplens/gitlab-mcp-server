@@ -390,6 +390,29 @@ def boundary_of(spec, known = BOUNDARY_KEYS)
   out
 end
 
+# primary_requirement_of reads a route's own requirement: the permissions it
+# names and the boundary they are held at, in each of the three ways a route
+# may declare one.
+def primary_requirement_of(auth)
+  out = {}
+  permissions = names_of(auth[:permissions])
+  out["permissions"] = permissions unless permissions.empty?
+  out["boundary_type"] = auth[:boundary_type].to_s if auth[:boundary_type]
+  out["boundary_param"] = auth[:boundary_param].to_s if auth[:boundary_param]
+  out["boundaries"] = Array(auth[:boundaries]).map { |spec| boundary_of(spec) } if auth[:boundaries]
+  out["boundary"] = callable_of(auth[:boundary]) unless auth[:boundary].nil?
+  out
+end
+
+# additional_scope_of reads one additional scope: a boundary, read as a
+# route's own is, and the permissions that must pass at it.
+def additional_scope_of(spec)
+  scope = boundary_of(spec, ADDITIONAL_SCOPE_KEYS)
+  scope_permissions = spec.is_a?(Hash) ? names_of(spec[:permissions]) : []
+  scope["permissions"] = scope_permissions unless scope_permissions.empty?
+  scope
+end
+
 # authorization_of records what a route demands of a fine-grained token.
 #
 # Every key is read as lib/api/helpers.rb reads it: permissions are raw
@@ -403,20 +426,9 @@ def authorization_of(settings)
   auth = settings && settings[:authorization]
   return nil unless auth.is_a?(Hash)
 
-  out = {}
-  permissions = names_of(auth[:permissions])
-  out["permissions"] = permissions unless permissions.empty?
-  out["boundary_type"] = auth[:boundary_type].to_s if auth[:boundary_type]
-  out["boundary_param"] = auth[:boundary_param].to_s if auth[:boundary_param]
-  out["boundaries"] = Array(auth[:boundaries]).map { |spec| boundary_of(spec) } if auth[:boundaries]
-  out["boundary"] = callable_of(auth[:boundary]) unless auth[:boundary].nil?
+  out = primary_requirement_of(auth)
   if auth[:additional_scopes]
-    out["additional_scopes"] = Array(auth[:additional_scopes]).map do |spec|
-      scope = boundary_of(spec, ADDITIONAL_SCOPE_KEYS)
-      scope_permissions = spec.is_a?(Hash) ? names_of(spec[:permissions]) : []
-      scope["permissions"] = scope_permissions unless scope_permissions.empty?
-      scope
-    end
+    out["additional_scopes"] = Array(auth[:additional_scopes]).map { |spec| additional_scope_of(spec) }
   end
   skip = auth[:skip_granular_token_authorization]
   out["skip"] = skip.to_s if skip
@@ -766,22 +778,24 @@ def mutation_class_of(field)
   resolver if resolver.is_a?(Class) && resolver < ::Mutations::BaseMutation
 end
 
-# todo_rule_type? is the type half of the rule that generates GitLab's
-# authorization_todo.txt (lib/tasks/gitlab/permissions/graphql/schema_directives.rb).
-def todo_rule_type?(name, type)
+# PENDING_LIST_FILE is the list GitLab keeps of the GraphQL types and
+# mutations it has not declared a fine-grained permission for yet, which the
+# record calls its pending list.
+PENDING_LIST_FILE = "config/authz/graphql/authorization_todo.txt"
+
+# pending_rule_type? is the type half of the rule that generates the pending
+# list (lib/tasks/gitlab/permissions/graphql/schema_directives.rb).
+def pending_rule_type?(name, type)
   return false if name.start_with?("__")
   return false if %w[Mutation Query Subscription].include?(name)
 
   type.kind.object? && !name.end_with?("Payload", "Connection", "Edge")
 end
 
-AUTHORIZATION_TODO_FILE = "config/authz/graphql/authorization_todo.txt"
-
-# todo_document reads the list GitLab keeps of the types and mutations it has
-# not declared yet, when the image ships it, so the set computed below can be
-# held to it.
-def todo_document
-  path = Rails.root.join(AUTHORIZATION_TODO_FILE)
+# pending_list_document reads the pending list, when the image ships it, so
+# the set computed below can be held to it.
+def pending_list_document
+  path = Rails.root.join(PENDING_LIST_FILE)
   return nil unless File.exist?(path)
 
   content = File.read(path)
@@ -804,10 +818,22 @@ def todo_document
   out
 end
 
-def graphql_authz_document
+# abstract_of records a union or an interface: which of the two it is, and the
+# object types GitLab may resolve it to.
+def abstract_of(type)
+  {
+    "kind" => type.kind.union? ? "union" : "interface",
+    "possible_types" => GitlabSchema.possible_types(type).map(&:graphql_name).sort,
+  }
+end
+
+# graphql_named_types reads every named type but the introspection ones: an
+# object into what it declares, a union or an interface into the types it
+# resolves to, and the names of the objects the pending-list rule counts as
+# declaring nothing.
+def graphql_named_types
   types = {}
   abstract = {}
-  fields = {}
   rule_types = []
   GitlabSchema.types.sort.each do |name, type|
     next if name.start_with?("__")
@@ -815,21 +841,47 @@ def graphql_authz_document
     kind = type.kind
     if kind.object?
       types[name] = type_of(type)
-      rule_types << name if todo_rule_type?(name, type) && type.directives.none? { |d| d.is_a?(GRANULAR_SCOPE) }
+      rule_types << name if pending_rule_type?(name, type) && type.directives.none? { |d| d.is_a?(GRANULAR_SCOPE) }
     elsif kind.union? || kind.interface?
-      abstract[name] = {
-        "kind" => kind.union? ? "union" : "interface",
-        "possible_types" => GitlabSchema.possible_types(type).map(&:graphql_name).sort,
-      }
+      abstract[name] = abstract_of(type)
     end
-    next if name == "Mutation" || !type.respond_to?(:fields)
+  end
+  [types, abstract, rule_types]
+end
+
+# graphql_field_declarations reads the directives declared on a field, of
+# every type but Mutation, whose fields are read as mutations.
+def graphql_field_declarations
+  fields = {}
+  GitlabSchema.types.sort.each do |name, type|
+    next if name.start_with?("__") || name == "Mutation" || !type.respond_to?(:fields)
 
     type.fields.sort.each do |field_name, field|
       granular = granular_of(field)
       fields["#{name}.#{field_name}"] = granular unless granular.empty?
     end
   end
+  fields
+end
 
+# mutation_entry_of records one mutation: its names, its payload, what
+# GitLab's runtime check reads and, where the permission task would read
+# something else, what that is.
+def mutation_entry_of(resolver, granular, task_granular)
+  entry = {
+    "name" => resolver.graphql_name.to_s,
+    "class" => resolver.name.to_s,
+    "payload" => resolver.payload_type.graphql_name.to_s,
+  }
+  entry["granular"] = granular unless granular.empty?
+  entry["field_granular"] = task_granular unless task_granular.empty? || task_granular == granular
+  entry
+end
+
+# graphql_mutations reads every field of Mutation a Mutations::BaseMutation
+# backs, and the names of the mutations the pending-list rule counts as
+# declaring nothing.
+def graphql_mutations
   mutations = {}
   rule_mutations = []
   GitlabSchema.types["Mutation"].fields.sort.each do |field_name, field|
@@ -842,37 +894,35 @@ def graphql_authz_document
     #
     # GitLab's permission task reads the field's directives first and the
     # class's only when the field has none (find_mutation_directives in
-    # lib/tasks/gitlab/permissions/graphql/schema_directives.rb), and its todo
-    # list is generated that way, so the todo rule below keeps that reading.
-    # graphql-ruby's Schema::Field#directives (2.6.10 at 19.4.1) answers for a
-    # mutation field with any directives the field declares itself followed by
-    # the class's, and mount_mutation declares none on the field, so the two
-    # readings agree at every mutation today. field_granular is recorded only
-    # where they do not, and the gate refuses it, because the todo list and
-    # what a fine-grained token is refused would then describe two
-    # requirements.
+    # lib/tasks/gitlab/permissions/graphql/schema_directives.rb), and the
+    # pending list is generated that way, so the rule below keeps that
+    # reading. graphql-ruby's Schema::Field#directives (2.6.10 at 19.4.1)
+    # answers for a mutation field with any directives the field declares
+    # itself followed by the class's, and mount_mutation declares none on the
+    # field, so the two readings agree at every mutation today.
+    # field_granular is recorded only where they do not, and the gate refuses
+    # it, because the pending list and what a fine-grained token is refused
+    # would then describe two requirements.
     granular = granular_of(resolver)
     task_granular = granular_of(field)
-    entry = {
-      "name" => resolver.graphql_name.to_s,
-      "class" => resolver.name.to_s,
-      "payload" => resolver.payload_type.graphql_name.to_s,
-    }
-    entry["granular"] = granular unless granular.empty?
-    entry["field_granular"] = task_granular unless task_granular.empty? || task_granular == granular
-    mutations[field_name] = entry
+    mutations[field_name] = mutation_entry_of(resolver, granular, task_granular)
     rule_mutations << resolver.graphql_name.to_s if task_granular.empty? && granular.empty?
   end
+  [mutations, rule_mutations]
+end
 
+def graphql_authz_document
+  types, abstract, rule_types = graphql_named_types
+  mutations, rule_mutations = graphql_mutations
   document = {
     "types" => types,
     "abstract" => abstract,
     "mutations" => mutations,
-    "fields" => fields,
+    "fields" => graphql_field_declarations,
     "undeclared_by_todo_rule" => { "types" => rule_types.sort, "mutations" => rule_mutations.sort },
   }
-  todo = todo_document
-  document["todo"] = todo if todo
+  pending = pending_list_document
+  document["todo"] = pending if pending
   document
 end
 
