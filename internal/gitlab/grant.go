@@ -66,8 +66,11 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 		return finegrained.Grant{}, finegrained.FallbackNone, fmt.Errorf("read the token's grant: %w", err)
 	}
 	var body json.RawMessage
-	if decodeErr := capture.Decode(&body); decodeErr != nil {
-		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil //nolint:nilerr // an answer that is not JSON is a reason the authority names, not a read that failed
+	// An answer that is not JSON is a reason the authority names, not a read
+	// that failed, so it is no error.
+	decoded := capture.Decode(&body) == nil
+	if !decoded {
+		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil
 	}
 	grant, reason := finegrained.DecodeGrant(body, GrantMaxScopes)
 	return grant, reason, nil
