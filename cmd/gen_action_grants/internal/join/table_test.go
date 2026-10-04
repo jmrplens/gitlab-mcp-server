@@ -121,7 +121,7 @@ func authorized(boundary string, perms ...string) *apilive.RouteAuthorization {
 
 // route is one record route under the API prefix.
 func route(method, path string, auth *apilive.RouteAuthorization) apilive.Route {
-	return apilive.Route{Method: method, Path: apiPrefix + path, Authorization: auth}
+	return apilive.Route{Method: method, Path: apilive.EndpointPrefix + path, Authorization: auth}
 }
 
 // fixtureRecord is the live record the join's fixture actions are held to.

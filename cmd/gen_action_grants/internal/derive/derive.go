@@ -14,14 +14,15 @@ import (
 // Class is how a request of an action is needed.
 type Class string
 
-// The classes.
+// The classes, spelled as the committed request record spells them, since
+// that record is written from these and read back by R-GRANT.
 const (
 	// ClassMandatory is a request every path makes.
-	ClassMandatory Class = "mandatory"
+	ClassMandatory Class = actionrequests.ClassMandatory
 	// ClassAlternative is a request some paths make and others do not.
-	ClassAlternative Class = "alternative"
+	ClassAlternative Class = actionrequests.ClassAlternative
 	// ClassOptional is a request no path needs.
-	ClassOptional Class = "optional"
+	ClassOptional Class = actionrequests.ClassOptional
 )
 
 // Declaration answers, for one action, what the walk cannot read: an action

@@ -29,4 +29,7 @@
 // access token needs: each route's authorization, the permission vocabulary a
 // token is granted in, the anonymous policy on a public project and group,
 // and what each GraphQL type, mutation and field demands (authorization.go).
+// How a request this server sends is found among the record's routes, and
+// what the route is called once found, is routes.go: the fine-grained
+// derivation and R-GRANT both place requests by it, and must agree.
 package apilive

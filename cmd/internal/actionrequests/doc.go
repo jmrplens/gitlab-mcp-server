@@ -50,8 +50,19 @@
 // GraphQL transport, and the client-go service methods it names, keyed the way
 // cmd/internal/sdkroutes keys the request each one sends.
 //
-// What it does not do yet is derive a raw request's path, classify a request
-// as unconditional or one of several alternatives, or join anything to
-// GitLab's own declarations; those belong to the generator that reads this
-// package for the fine-grained permission table.
+// What it does not do is derive a raw request's path, classify a request as
+// unconditional or one of several alternatives, or join anything to GitLab's
+// own declarations; those belong to the generator that reads this package for
+// the fine-grained permission table.
+//
+// # The record of what each action sends
+//
+// What that generator derives is committed as
+// docs/development/action-requests.json, and the record's shape is declared
+// here ([Record], [ReadRecord], [RenderRecord]) because it has two readers on
+// either side of the file: cmd/gen_action_grants writes it, and R-GRANT
+// (cmd/audit_1to1 -scope=grants) reads it back to say what shaped each
+// action's requirement and to hold the derivation to what the unit suite and
+// an end-to-end run were seen sending. The request kinds and classes are
+// spelled once here for the same reason.
 package actionrequests

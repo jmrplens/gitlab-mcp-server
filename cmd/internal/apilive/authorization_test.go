@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // TestRoute_FineGrained_ClassifiesInGitLabsOrder verifies the class a route
@@ -54,6 +56,99 @@ func TestRouteClasses_AreSpelledAsTheCountsNameThem(t *testing.T) {
 	want := []string{"skipped", "authorized", "todo", "undeclared"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("classes = %q, want %q", got, want)
+	}
+}
+
+// TestRoute_Requirements_ReadsWhatARouteDemands verifies what a route demands
+// of a fine-grained token in each class: a skipped route demands nothing and
+// is left to GitLab, a deferred one and one declaring nothing demand nothing
+// and are denied with their cause, and an authorized one demands its primary
+// requirement and then each additional scope, permissions sorted, the scope's
+// boundary read as all four when a callable resolves it or it names none
+// GitLab knows, and a requirement the route names twice demanded once. The
+// permissions are sorted on a copy, so the record is left as it was read.
+func TestRoute_Requirements_ReadsWhatARouteDemands(t *testing.T) {
+	t.Parallel()
+	callable := &Callable{Callable: true}
+	authorized := &RouteAuthorization{
+		Permissions: []string{"update_issue", "read_issue"}, BoundaryType: "project",
+		AdditionalScopes: []AdditionalScope{
+			{Permissions: []string{"read_namespace"}, BoundaryType: "group"},
+			{Permissions: []string{"read_user"}, BoundaryType: "user", Boundary: callable},
+			{Permissions: []string{"read_runner"}, BoundaryType: "namespace"},
+			{Permissions: []string{"read_issue", "update_issue"}, BoundaryType: "project"},
+			{Permissions: []string{"read_namespace"}, BoundaryType: "group"},
+		},
+	}
+	for _, testCase := range []struct {
+		name       string
+		auth       *RouteAuthorization
+		wantGroups []Requirement
+		wantSkip   bool
+		wantDenied finegrained.Cause
+	}{
+		{name: "skipped", auth: &RouteAuthorization{Permissions: []string{"read_issue"}, Skip: "public"}, wantSkip: true},
+		{name: "deferred", auth: &RouteAuthorization{Todo: "later"}, wantDenied: finegrained.CauseRESTTodo},
+		{name: "undeclared", auth: nil, wantDenied: finegrained.CauseRESTUndeclared},
+		{name: "authorized", auth: authorized, wantGroups: []Requirement{
+			{Permissions: []string{"read_issue", "update_issue"}, Any: finegrained.BoundaryProject},
+			{Permissions: []string{"read_namespace"}, Any: finegrained.BoundaryGroup},
+			{Permissions: []string{"read_user"}, Any: finegrained.AllBoundaries},
+			{Permissions: []string{"read_runner"}, Any: finegrained.AllBoundaries},
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			groups, skip, denied := (Route{Authorization: testCase.auth}).Requirements()
+			if !reflect.DeepEqual(groups, testCase.wantGroups) || skip != testCase.wantSkip || denied != testCase.wantDenied {
+				t.Errorf("Requirements() = %+v, %t, %q; want %+v, %t, %q",
+					groups, skip, denied, testCase.wantGroups, testCase.wantSkip, testCase.wantDenied)
+			}
+		})
+	}
+	if got := authorized.Permissions; !reflect.DeepEqual(got, []string{"update_issue", "read_issue"}) {
+		t.Errorf("Requirements() reordered the record's permissions to %q", got)
+	}
+}
+
+// TestPrimaryBoundary_ReadsWhereARouteMayBeHeld verifies a route's primary
+// requirement is held at the boundary it declares, at any of its alternative
+// boundaries, at all four when a callable resolves it per request or when it
+// declares none, that a callable declared beside a boundary type keeps that
+// type, and that an alternative naming neither adds nothing.
+func TestPrimaryBoundary_ReadsWhereARouteMayBeHeld(t *testing.T) {
+	t.Parallel()
+	callable := &Callable{Callable: true}
+	for _, testCase := range []struct {
+		name string
+		auth RouteAuthorization
+		want finegrained.Boundary
+	}{
+		{name: "declared", auth: RouteAuthorization{BoundaryType: "project"}, want: finegrained.BoundaryProject},
+		{
+			name: "alternatives",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "group"}, {BoundaryType: "user"}}},
+			want: finegrained.BoundaryGroup | finegrained.BoundaryUser,
+		},
+		{name: "callable alone", auth: RouteAuthorization{Boundaries: []Boundary{{Boundary: callable}}}, want: finegrained.AllBoundaries},
+		{
+			name: "callable with a type",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "project", Boundary: callable}}},
+			want: finegrained.BoundaryProject,
+		},
+		{name: "none", auth: RouteAuthorization{}, want: finegrained.AllBoundaries},
+		{
+			name: "an alternative naming neither",
+			auth: RouteAuthorization{Boundaries: []Boundary{{BoundaryType: "group"}, {}}},
+			want: finegrained.BoundaryGroup,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := primaryBoundary(&testCase.auth); got != testCase.want {
+				t.Errorf("primaryBoundary = %s, want %s", got, testCase.want)
+			}
+		})
 	}
 }
 
@@ -265,6 +360,63 @@ func TestGranular_Expandable_IsEveryRawPermissionAnAssignableExpandsTo(t *testin
 		got := none.Expandable()
 		if got == nil || len(got) != 0 {
 			t.Errorf("Expandable() of a nil vocabulary = %v, want an empty set", got)
+		}
+	})
+}
+
+// deniedRecord is a record holding one of each element a denial can name: a
+// route, a mutation, an object type and a union.
+func deniedRecord() *Document {
+	return &Document{
+		Routes: []Route{{Method: "GET", Path: EndpointPrefix + "/projects/:id/nothing"}},
+		GraphQLAuthz: &GraphQLAuthz{
+			Types:     map[string]GraphQLType{"BranchRule": {Enforced: true}, "WorkItem": {Enforced: true}},
+			Abstract:  map[string]AbstractType{"VulnerabilityDetail": {Kind: "union", PossibleTypes: []string{"BaseObject"}}},
+			Mutations: map[string]Mutation{"issueCreate": {Name: "CreateIssue"}, "workItemUpdate": {Name: "WorkItemUpdate"}},
+		},
+	}
+}
+
+// TestDocument_HoldsDenial_HoldsADenialToWhatTheRecordDeclares verifies the
+// question both the derivation's gate 2 and R-GRANT ask: a denial is held only
+// when the element it names is one the record holds, of the kind its cause
+// names. A route for a REST cause, a mutation for an undeclared mutation, an
+// object, union or interface type for a position, and a type or a mutation
+// for a boundary a declaration says never resolves.
+func TestDocument_HoldsDenial_HoldsADenialToWhatTheRecordDeclares(t *testing.T) {
+	t.Parallel()
+	record := deniedRecord()
+	cases := []struct {
+		name   string
+		denial finegrained.Denial
+		want   bool
+	}{
+		{name: "a recorded route", denial: finegrained.Denial{Cause: finegrained.CauseRESTUndeclared, Element: "GET /projects/:id/nothing"}, want: true},
+		{name: "a route the record lacks", denial: finegrained.Denial{Cause: finegrained.CauseRESTTodo, Element: "GET /nowhere"}},
+		{name: "a recorded mutation", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "issueCreate"}, want: true},
+		{name: "a mutation the record lacks", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "undeclaredThing"}},
+		{name: "a type for a mutation cause", denial: finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: "BranchRule"}},
+		{name: "an object type", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule"}, want: true},
+		{name: "a union", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "VulnerabilityDetail"}, want: true},
+		{name: "a type the record lacks", denial: finegrained.Denial{Cause: finegrained.CausePayloadUndeclared, Element: "Nowhere"}},
+		{name: "a mutation for a type cause", denial: finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "issueCreate"}},
+		{name: "an unresolvable type", denial: finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: "WorkItem"}, want: true},
+		{name: "an unresolvable mutation", denial: finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: "workItemUpdate"}, want: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := record.HoldsDenial(&testCase.denial); got != testCase.want {
+				t.Errorf("HoldsDenial(%+v) = %t, want %t", testCase.denial, got, testCase.want)
+			}
+		})
+	}
+	t.Run("no GraphQL record", func(t *testing.T) {
+		t.Parallel()
+		bare := deniedRecord()
+		bare.GraphQLAuthz = nil
+		if bare.HoldsDenial(&finegrained.Denial{Cause: finegrained.CauseTypeUndeclared, Element: "BranchRule"}) {
+			t.Error("a GraphQL denial is held with no GraphQL record")
 		}
 	})
 }
