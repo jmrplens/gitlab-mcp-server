@@ -514,8 +514,22 @@ func startSessionsServerWith(t *testing.T, wrap func(http.Handler) http.Handler)
 // but free, and gives them back when the test ends.
 func fillProcessStatefulSessions(t *testing.T, free int64) {
 	t.Helper()
+	settleProcessSlots(t)
 	previous := processStatefulSessions.open.Swap(processStatefulSessions.limit - free)
 	t.Cleanup(func() { processStatefulSessions.open.Store(previous) })
+}
+
+// settleProcessSlots waits until no session or call an earlier test opened
+// still holds a slot of the process's two counts. A session gives its slots
+// back from a goroutine of its own once it has ended, after the DELETE that
+// ended it was answered, so a test that runs next and fills a count, or reads
+// one to compare against, would otherwise take that session's slots for its
+// own and see them come back in the middle of its assertions: one session slot
+// more free than it made, and one held slot fewer than it counted.
+func settleProcessSlots(t *testing.T) {
+	t.Helper()
+	waitOpen(t, processStatefulSessions, 0)
+	waitOpen(t, processHeldRequests, 0)
 }
 
 // initializeBody opens a session on an older revision.

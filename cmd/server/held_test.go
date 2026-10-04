@@ -971,6 +971,7 @@ func postHeld(t *testing.T, srv *httptest.Server, token, body string, header htt
 // and gives them back when the test ends.
 func fillProcessHeldRequests(t *testing.T, free int64) {
 	t.Helper()
+	settleProcessSlots(t)
 	previous := processHeldRequests.open.Swap(processHeldRequests.limit - free)
 	t.Cleanup(func() { processHeldRequests.open.Store(previous) })
 }
@@ -1052,6 +1053,7 @@ func TestHeldCeiling_CountsEachCallTheSDKDispatches(t *testing.T) {
 func TestHeldCall_TakesOneSlotAndLeavesItsEntryEvictable(t *testing.T) {
 	gitlab := newHoldingGitLab(t)
 	srv, binding, owner := startHeldServer(t, gitlab, 1)
+	settleProcessSlots(t)
 	before := processHeldRequests.open.Load()
 
 	type outcome struct {

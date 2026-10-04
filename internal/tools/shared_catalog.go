@@ -132,7 +132,10 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // only ones that change the result. Everything else a token carries would add
 // keys to a cache that never evicts, at the choosing of whoever minted the
 // token. A nil list is still told apart from an empty one, because the scope
-// filter treats the two differently: nil means detection was unavailable.
+// filter treats the two differently: nil means detection was unavailable. A
+// fine-grained token's list is keyed as nil, the reading the filter gives it
+// (see [scopeCatalogKey]), so it shares the catalog of a classic token whose
+// scopes are unknown and never that of a token with no scope.
 //
 // The three flags are printed as true or false because this is a map key and
 // not a card. A cache key is compared and never read, so the glyph a reader
@@ -159,8 +162,16 @@ func CatalogFilterKey(cfg *config.ServerConfig) string {
 // now apply the same scope filter, so a key that canonicalized differently
 // would let one of them cache a catalog under a name the other cannot reach.
 //
+// The list is read through [gitlabclient.CatalogScopes] first, as
+// [FilterScopeFilteredCatalog] reads it, so a fine-grained token is keyed as a
+// token whose scopes are unknown (scopesKnown=false). Read literally, its
+// single scope granular would canonicalize to no required scope with the list
+// known, the key of an empty list, while the filter removes nothing for it and
+// every admin_mode group for the empty one.
+//
 //gitlab:allow-raw tokenScopes != nil: a cache key component, compared and never read
 func scopeCatalogKey(tokenScopes []string) string {
+	tokenScopes = gitlabclient.CatalogScopes(tokenScopes)
 	return fmt.Sprintf("scopes=%s|scopesKnown=%t",
 		strings.Join(catalogRelevantScopes(tokenScopes), ","),
 		tokenScopes != nil)
