@@ -327,3 +327,27 @@ func TestActionsFromSpecs_DuplicateNames_RefusedAtProjection(t *testing.T) {
 		})
 	}
 }
+
+// TestCompatibilityAliasNames_BlankAliases_AreDropped verifies an alias that
+// is blank once trimmed names nothing: it is dropped from a list that keeps
+// the others, lowercased and trimmed, and a list holding only blank aliases
+// carries none at all rather than an empty list.
+func TestCompatibilityAliasNames_BlankAliases_AreDropped(t *testing.T) {
+	tests := []struct {
+		name    string
+		aliases []toolutil.ActionAliasSpec
+		want    []string
+	}{
+		{name: "none", aliases: nil, want: nil},
+		{name: "only blank", aliases: []toolutil.ActionAliasSpec{{Alias: "  "}, {Alias: ""}}, want: nil},
+		{name: "blank among named", aliases: []toolutil.ActionAliasSpec{{Alias: " Close "}, {Alias: " "}, {Alias: "shut"}}, want: []string{"close", "shut"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := compatibilityAliasNames(tt.aliases)
+			if !slices.Equal(got, tt.want) || (got == nil) != (tt.want == nil) {
+				t.Errorf("compatibilityAliasNames() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}

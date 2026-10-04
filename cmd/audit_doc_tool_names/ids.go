@@ -1,6 +1,8 @@
 package main
 
 import (
+	"cmp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -129,12 +131,8 @@ func sortedTokens(findings map[string]idFinding) []string {
 	for token := range findings {
 		tokens = append(tokens, token)
 	}
-	sort.Slice(tokens, func(i, j int) bool {
-		left, right := findings[tokens[i]], findings[tokens[j]]
-		if len(left.Files) != len(right.Files) {
-			return len(left.Files) > len(right.Files)
-		}
-		return tokens[i] < tokens[j]
+	slices.SortFunc(tokens, func(a, b string) int {
+		return cmp.Or(cmp.Compare(len(findings[b].Files), len(findings[a].Files)), strings.Compare(a, b))
 	})
 	return tokens
 }

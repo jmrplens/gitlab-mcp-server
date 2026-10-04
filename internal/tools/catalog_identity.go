@@ -145,6 +145,20 @@ func indexStandaloneTools() map[string]mcpotel.Identity {
 	return index
 }
 
+// StandaloneActionIDs maps each standalone utility's registered tool name to
+// its canonical action ID, read from the same index the served call
+// identifier uses. The meta and individual surfaces register those tools
+// beside their catalogs, and this is how a reader of one of their tools finds
+// the action it is. The map is the caller's to keep.
+func StandaloneActionIDs() map[string]string {
+	identities := standaloneIdentities()
+	ids := make(map[string]string, len(identities))
+	for name, identity := range identities {
+		ids[name] = identity.ActionID
+	}
+	return ids
+}
+
 // identifierActions lists a catalog's actions in the order the surface's
 // resolver reads them.
 //

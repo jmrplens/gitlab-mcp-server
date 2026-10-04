@@ -813,6 +813,7 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 	// constraints. LLMs tend to explicitly send squash=false even when
 	// omitting it would be correct, so we override when the MR indicates
 	// an enforced setting.
+	//gitlab:request optional: a failed prefetch is ignored and the merge runs with the caller's options, so only the merge itself is needed
 	prefetched, _, fetchErr := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, nil, gl.WithContext(ctx))
 	if fetchErr == nil {
 		if prefetched.SquashOnMerge {

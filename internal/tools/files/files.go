@@ -274,6 +274,7 @@ func enrichFileInfoOutput(ctx context.Context, client *gitlabclient.Client, proj
 	if client == nil || projectID == "" || filePath == "" || branch == "" {
 		return output
 	}
+	//gitlab:request optional: commit metadata enriches an answer the write already produced, and a failed read is ignored
 	metadata, _, err := client.GL().RepositoryFiles.GetFileMetaData(projectID, filePath, &gl.GetFileMetaDataOptions{Ref: new(branch)}, gl.WithContext(ctx))
 	if err != nil {
 		return output

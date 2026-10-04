@@ -372,6 +372,7 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 
 	// Fetch the schedule after triggering to return current state, using the raw
 	// superset path so the documented variables[].raw field is preserved.
+	//gitlab:request mandatory: the action answers with the schedule as it stands after the run, and a failed read fails the call
 	s, err := rawGetSchedule(ctx, client, schedulePath(string(input.ProjectID), input.ScheduleID))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("get pipeline schedule after run", err)

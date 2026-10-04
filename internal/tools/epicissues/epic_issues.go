@@ -624,5 +624,6 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 
 	// The mutation answers with the child that moved, not with the epic's
 	// children, so the order the caller asked about is read back from the epic.
+	//gitlab:request mandatory: the reorder answers with the moved child only, so the epic's children are read back after it on every call
 	return List(ctx, client, ListInput{FullPath: input.FullPath, IID: input.IID})
 }

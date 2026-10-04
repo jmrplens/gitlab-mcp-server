@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"testing"
+	"time"
 
 	"golang.org/x/tools/go/packages"
 
@@ -130,14 +131,36 @@ func TestMatch_TheTwinsOfTheRequestsFixture_JoinToOneSiteEach(t *testing.T) {
 	}
 }
 
+// sitesDeadline bounds resolving every construction site of the tree, which
+// takes seconds. A resolver step that stopped counting toward its bound fans
+// out without end through the tree's helpers, and is reported as a stall
+// rather than left to run into the binary's own timeout, which would hide
+// which step it was behind the time it took.
+const sitesDeadline = 90 * time.Second
+
+// sitesWithin resolves prog's construction sites on a goroutine of their own
+// and fails the test when they are not resolved within [sitesDeadline].
+func sitesWithin(t *testing.T, prog *Program) map[string][]Site {
+	t.Helper()
+	done := make(chan map[string][]Site, 1)
+	go func() { done <- prog.Sites() }()
+	select {
+	case sites := <-done:
+		return sites
+	case <-time.After(sitesDeadline):
+		t.Fatalf("resolving the tree's construction sites did not finish within %s", sitesDeadline)
+		return nil
+	}
+}
+
 // clientGoSourceDir returns the directory of the client-go root package the
 // module at root builds against, which is what cmd/internal/sdkroutes reads.
 func clientGoSourceDir(t *testing.T, root string) string {
 	t.Helper()
 	cfg := &packages.Config{Context: t.Context(), Mode: packages.NeedName | packages.NeedFiles, Dir: root}
-	loaded, err := packages.Load(cfg, clientGoPath)
+	loaded, err := packages.Load(cfg, ClientGoPath)
 	if err != nil || len(loaded) != 1 || len(loaded[0].GoFiles) == 0 {
-		t.Fatalf("locate %s from %s: %d package(s), %v", clientGoPath, root, len(loaded), err)
+		t.Fatalf("locate %s from %s: %d package(s), %v", ClientGoPath, root, len(loaded), err)
 	}
 	return filepath.Dir(loaded[0].GoFiles[0])
 }
@@ -162,7 +185,7 @@ func TestMatch_EveryCatalogAction_JoinsOneSiteWhoseMethodsSDKRoutesReads(t *test
 		t.Fatalf("Load: %v", err)
 	}
 	sdk := sdkroutes.Read(clientGoSourceDir(t, root))
-	sites := prog.Sites()
+	sites := sitesWithin(t, prog)
 	byID := realCatalog(t)
 
 	reached := make(map[*types.Func]bool)
@@ -310,7 +333,7 @@ func TestBoundHandlers_ANameBoundToNothing_IsPassedOver(t *testing.T) {
 
 	found := synthResolver().boundHandlers(Handler{Lit: lit, pkg: at.pkg, at: at})
 
-	if len(found) != 1 || found[0].Lit == nil {
-		t.Errorf("boundHandlers() = %+v, want the one literal fn is bound to", found)
+	if len(found) != 1 || found[0].handler.Lit == nil || found[0].variable != info.Uses[bound] {
+		t.Errorf("boundHandlers() = %+v, want the one literal fn is bound to, through fn", found)
 	}
 }

@@ -1,0 +1,16 @@
+// Stand-in for table_gen.go while cmd/gen_action_grants runs.
+//
+// The generator builds the catalog through internal/tools, which links the
+// table it is about to rewrite, so a committed table that no longer compiles
+// (a field of internal/finegrained changed under it) would stop the one
+// command that can fix it. make gen-action-grants and make check-action-grants
+// therefore run the generator, and hand its program loader, an overlay that
+// puts this file in table_gen.go's place. Nothing compiles it otherwise, and a
+// test of cmd/gen_action_grants holds it to compiling against the current
+// types.
+
+package actiongrants
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+
+var table = finegrained.Table{}

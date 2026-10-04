@@ -55,6 +55,7 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		return WaitOutput{}, toolutil.ErrRequiredInt64("jobWait", "job_id")
 	}
 
+	//gitlab:request mandatory: the wait reads the job before it can report a status, so the read runs on every call that answers
 	result, err := waitpoll.Poll(ctx, waitpoll.Options[Output]{
 		Request:         req,
 		IntervalSeconds: input.IntervalSeconds,
