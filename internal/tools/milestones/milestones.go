@@ -270,6 +270,7 @@ func resolveIID(ctx context.Context, client *gitlabclient.Client, projectID tool
 	opts := &gl.ListMilestonesOptions{
 		IIDs: &iids,
 	}
+	//gitlab:request mandatory: the action is addressed by IID and GitLab's milestone routes by ID, so this lookup runs before the action's own request on every call
 	milestones, _, err := client.GL().Milestones.ListMilestones(string(projectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return 0, fmt.Errorf("resolving milestone IID %d: %w", iid, err)

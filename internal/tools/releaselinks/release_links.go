@@ -173,6 +173,7 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 	}
 
 	out := CreateBatchOutput{Created: make([]Output, 0, len(input.Links))}
+	//gitlab:request mandatory: the handler refuses an empty list, so the loop body runs at least once
 	for i, entry := range input.Links {
 		if err := ctx.Err(); err != nil {
 			return out, err

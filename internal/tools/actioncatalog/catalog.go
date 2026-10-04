@@ -9,7 +9,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -50,6 +52,11 @@ type Action struct {
 	Destructive            bool
 	Idempotent             bool
 	OpenWorld              bool
+	// FineGrained is what a fine-grained personal access token needs for the
+	// action, read from the generated table by canonical ID when the action
+	// joins a catalog; nil when the table holds no row for it. It points into
+	// the one table, so every catalog shares it.
+	FineGrained *finegrained.Requirement
 }
 
 // GroupOptions contains metadata for creating a catalog group.
@@ -840,6 +847,11 @@ func normalizeAction(toolName, baseDomain string, action Action) (Action, error)
 	action.Compatibility = toolutil.CloneCompatibilityPolicy(action.Compatibility)
 	action.SchemaValidationNotes = cloneStrings(action.SchemaValidationNotes)
 	action.RuntimeValidationNotes = cloneStrings(action.RuntimeValidationNotes)
+	// Set here rather than where the catalog is built, because the standalone
+	// actions join a catalog after it is built and pass through here too.
+	if action.FineGrained == nil {
+		action.FineGrained = actiongrants.Requirement(string(action.ID))
+	}
 	return cloneAction(action), nil
 }
 

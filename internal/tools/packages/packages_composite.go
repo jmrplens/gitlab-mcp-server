@@ -84,6 +84,7 @@ func PublishAndLink(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 		URL:       pubOut.URL,
 		LinkType:  linkType,
 	}
+	//gitlab:request mandatory: the action publishes the file and then links it to the release, so both requests run on every call
 	linkOut, err := releaselinks.Create(ctx, client, linkInput)
 	if err != nil {
 		return PublishAndLinkOutput{Package: pubOut}, toolutil.WrapErrWithStatusHint(
@@ -254,6 +255,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	var out PublishDirOutput
 	out.Published = make([]PublishDirItem, 0, len(files))
 
+	//gitlab:request mandatory: collectMatchingFiles refuses a directory with no matching file, so the loop publishes at least one
 	for i, name := range files {
 		if err = ctx.Err(); err != nil {
 			return out, fmt.Errorf("context canceled after %d of %d files: %w", i, len(files), err)

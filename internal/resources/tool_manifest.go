@@ -10,7 +10,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -53,6 +55,12 @@ type ToolSurfaceResourceOptions struct {
 	// decides which tools are visible, the meta parameter-schema mode and
 	// the capability surface. Empty builds a private snapshot.
 	ShareKey string
+	// StandaloneActions maps each standalone utility's registered tool name
+	// to its canonical action ID. The meta and individual surfaces register
+	// those tools beside the catalog rather than in it, so this is how their
+	// details find the fine-grained requirement the catalog's actions carry.
+	// Nil leaves them without the block.
+	StandaloneActions map[string]string
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -261,6 +269,12 @@ type ToolSurfaceDetail struct {
 	ToolSurfaceEntry
 	Call        ToolSurfaceCallShape `json:"call"`
 	InputSchema any                  `json:"input_schema,omitempty"`
+	// FineGrained is what a fine-grained personal access token needs for the
+	// action at the GitLab release the table was recorded at, in GitLab's
+	// words, or why none can run it. It is served for every session, classic
+	// tokens included, since the detail is where a model looks up what an
+	// action needs; the listing and find results do not carry it.
+	FineGrained *finegrained.Description `json:"fine_grained,omitempty"`
 }
 
 type toolSurfaceSnapshot struct {
@@ -411,6 +425,11 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 	// here, that a reader of aliasCanonicalActionIDs cannot see.
 	snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	snapshot.addUncoveredDirectTools(toolDetails)
+	// The fine-grained requirement is attached last, once every detail is
+	// filed: under its canonical ID as well as its surface key, so an alias
+	// copied before it carries the block too, and after the uncovered direct
+	// tools, whose details that pass files afresh and would otherwise lose it.
+	snapshot.attachFineGrained(opts.Catalog, opts.StandaloneActions)
 	slices.SortFunc(snapshot.manifest.Entries, func(a, b ToolSurfaceEntry) int { return cmp.Compare(a.ID, b.ID) })
 	snapshot.manifest.EntryCount = len(snapshot.manifest.Entries)
 	return snapshot
@@ -604,6 +623,38 @@ func (snapshot *toolSurfaceSnapshot) aliasCanonicalActionIDs(catalog *actioncata
 			continue
 		}
 		snapshot.details[id] = detail
+	}
+}
+
+// attachFineGrained gives each action's detail the requirement a fine-grained
+// token has to meet for it, worded from the generated table.
+//
+// A detail is looked for under the two keys an action's can be filed under:
+// its canonical ID, which is the dynamic surface's key, and the key the meta
+// and individual surfaces file it under. The standalone utilities are
+// registered beside the meta and individual catalogs rather than in them, so
+// on those two surfaces their details are found by registered tool name, and
+// their rows by the canonical ID standalone maps it to, which is the row the
+// dynamic surface's catalog carries for them.
+func (snapshot *toolSurfaceSnapshot) attachFineGrained(catalog *actioncatalog.Catalog, standalone map[string]string) {
+	table := actiongrants.Table()
+	for _, action := range catalog.Actions() {
+		description := table.Describe(action.FineGrained)
+		for _, key := range []string{string(action.ID), snapshot.surfaceKeyFor(action)} {
+			snapshot.describeDetail(key, description)
+		}
+	}
+	for name, id := range standalone {
+		snapshot.describeDetail(name, table.Describe(actiongrants.Requirement(id)))
+	}
+}
+
+// describeDetail gives the detail filed under key a fine-grained block, when
+// there is such a detail and a description to give it.
+func (snapshot *toolSurfaceSnapshot) describeDetail(key string, description *finegrained.Description) {
+	if detail, ok := snapshot.details[key]; ok && description != nil {
+		detail.FineGrained = description
+		snapshot.details[key] = detail
 	}
 }
 

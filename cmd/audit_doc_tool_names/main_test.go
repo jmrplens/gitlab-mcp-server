@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"os"
@@ -747,6 +748,72 @@ func TestRun_NoRootPresent_ReportsEveryDeclarationStale(t *testing.T) {
 	want := fmt.Sprintf("\nERROR: the documentation names 0 tool(s) the server does not register and 0 action ID(s) the catalog does not publish; %d declaration(s) excuse nothing\n", len(allowedIDs))
 	if errOut.String() != want {
 		t.Errorf("stderr = %q, want %q", errOut.String(), want)
+	}
+}
+
+// TestMain_ExitsWithTheCodeRunReturns verifies main parses its flag, runs the
+// audit over the declared roots with the registry this binary compiles in, and
+// exits with run's code: here a directory holding none of the roots, read
+// without -check, which reports and exits 0.
+func TestMain_ExitsWithTheCodeRunReturns(t *testing.T) {
+	t.Chdir(t.TempDir())
+	restoreExit, restoreArgs, restoreFlags := osExit, os.Args, flag.CommandLine
+	t.Cleanup(func() { osExit, os.Args, flag.CommandLine = restoreExit, restoreArgs, restoreFlags })
+	code := -1
+	osExit = func(c int) { code = c }
+	os.Args = []string{"audit_doc_tool_names"}
+	flag.CommandLine = flag.NewFlagSet("audit_doc_tool_names", flag.ContinueOnError)
+
+	main()
+	if code != 0 {
+		t.Errorf("main exited %d, want 0 for a report run with nothing to read", code)
+	}
+}
+
+// TestRun_ACatalogThatCannotBeBuilt_ExitsOne verifies a catalog that fails to
+// build ends the run with 1 and the reason on stderr, before any page is read,
+// since an audit with no catalog to hold the pages to has judged nothing.
+func TestRun_ACatalogThatCannotBeBuilt_ExitsOne(t *testing.T) {
+	restore := buildIDs
+	t.Cleanup(func() { buildIDs = restore })
+	buildIDs = func() (*actionids.IDs, error) { return nil, errors.New("no catalog") }
+
+	var out, errOut bytes.Buffer
+	if code := run(false, docRoots, func() map[string]struct{} { return stubRegistry }, &out, &errOut); code != 1 {
+		t.Errorf("run = %d, want 1", code)
+	}
+	if want := "build the action catalog: no catalog\n"; errOut.String() != want {
+		t.Errorf("stderr = %q, want %q", errOut.String(), want)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing reported for an audit that never ran", out.String())
+	}
+}
+
+// TestScanRoot_ARootThatCannotBeStatted_FailsRatherThanBeingSkipped verifies
+// a root whose stat fails for any reason but its absence is an error: only a
+// root that is not there is passed over, since a root the scan could not look
+// at may hold pages that name anything.
+func TestScanRoot_ARootThatCannotBeStatted_FailsRatherThanBeingSkipped(t *testing.T) {
+	if err := newStubScan().scanRoot("docs\x00"); err == nil || os.IsNotExist(err) {
+		t.Errorf("scanRoot of an unstattable root = %v, want an error other than its absence", err)
+	}
+}
+
+// TestScanRoot_TheWalksOwnError_IsReturned verifies the error the walk hands
+// its callback, which a directory that cannot be listed produces, ends the
+// scan with that error. The walk is replaced because a process that ignores
+// directory permissions cannot be made to produce it, and
+// TestScanRoot_ADirectoryThatCannotBeListed_FailsRatherThanBeingSkipped skips
+// for such a process.
+func TestScanRoot_TheWalksOwnError_IsReturned(t *testing.T) {
+	restore := walkDir
+	t.Cleanup(func() { walkDir = restore })
+	unlisted := errors.New("unlisted")
+	walkDir = func(root string, fn fs.WalkDirFunc) error { return fn(root, nil, unlisted) }
+
+	if err := newStubScan().scanRoot(t.TempDir()); !errors.Is(err, unlisted) {
+		t.Errorf("scanRoot = %v, want the walk's own error", err)
 	}
 }
 

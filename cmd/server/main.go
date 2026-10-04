@@ -2190,11 +2190,12 @@ func (sh *serverShell) register(ctx context.Context) error {
 		slog.Warn("failed to build tool manifest resource", "error", listErr)
 	} else {
 		manifestOpts := resources.ToolSurfaceResourceOptions{
-			Surface:    sh.toolSurface,
-			Tools:      manifestTools,
-			Catalog:    surfaceCatalog,
-			MetaRoutes: metaSchemaRoutes,
-			ShareKey:   manifestShareKey(sh.toolSurface, sh.capabilitySurface, cfg, surfaceCatalog),
+			Surface:           sh.toolSurface,
+			Tools:             manifestTools,
+			Catalog:           surfaceCatalog,
+			MetaRoutes:        metaSchemaRoutes,
+			ShareKey:          manifestShareKey(sh.toolSurface, sh.capabilitySurface, cfg, surfaceCatalog),
+			StandaloneActions: gitlabtools.StandaloneActionIDs(),
 		}
 		if sh.subs != nil {
 			manifestOpts.SubscribableURITemplates = subscriptions.Templates()

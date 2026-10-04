@@ -20,9 +20,11 @@ import (
 // [goprogram.ToolutilPath], so a module move lands in every gate at once.
 const toolutilPath = goprogram.ToolutilPath
 
-// clientGoPath is the import path of client-go's root package, whose service
-// methods are the requests a handler hands to the SDK.
-const clientGoPath = "gitlab.com/gitlab-org/api/client-go/v3"
+// ClientGoPath is the import path of client-go's root package, whose service
+// methods are the requests a handler hands to the SDK, and whose Client
+// builds the raw requests a handler sends without one. Exported so a reader
+// of this package's bodies tells client-go apart by the same spelling.
+const ClientGoPath = "gitlab.com/gitlab-org/api/client-go/v3"
 
 // serviceSuffixes are the endings a client-go type that groups requests is
 // named with: the interface a handler holds (IssuesServiceInterface) and the
@@ -86,6 +88,13 @@ type Function struct {
 
 	pkg  *packages.Package
 	decl *ast.FuncDecl
+	// root is the node the body was indexed from: a declared function's body,
+	// a handler literal's body, or a package-level variable's initializer.
+	root ast.Node
+	// bound is, for a handler literal, every function-valued parameter of the
+	// route helper it was written in that it names, with what the helper's
+	// caller bound to it.
+	bound map[*types.Var][]*types.Func
 	// calls is every function this body names. A reference counts as a call:
 	// a function value handed to a helper is called by that helper, and the
 	// walk would rather over-approximate the reachable set than miss a request
@@ -304,7 +313,7 @@ func (p *Program) link(fn *Function) {
 // into the enclosing function keeps the reachable set honest without a
 // separate node per literal.
 func (p *Program) indexBody(pkg *packages.Package, root ast.Node) *Function {
-	fn := &Function{pkg: pkg, calls: make(map[*types.Func]bool), sdk: make(map[string]bool)}
+	fn := &Function{pkg: pkg, root: root, calls: make(map[*types.Func]bool), sdk: make(map[string]bool)}
 	ast.Inspect(root, func(node ast.Node) bool {
 		switch typed := node.(type) {
 		case *ast.Ident:
@@ -336,10 +345,10 @@ func (p *Program) recordUse(fn *Function, pkg *packages.Package, ident *ast.Iden
 	}
 	if callee, ok := obj.(*types.Func); ok {
 		fn.calls[callee] = true
-		if graphQLSenders[callee.Name()] && isGraphQLSender(callee) {
+		if SendsGraphQL(callee) {
 			fn.SendsGraphQL = true
 		}
-		if method, isService := serviceMethod(callee); isService {
+		if method, isService := ServiceMethod(callee); isService {
 			fn.sdk[method] = true
 		}
 		return
@@ -379,6 +388,23 @@ func (p *Program) recordLiteral(fn *Function, pkg *packages.Package, lit *ast.Ba
 	fn.Documents = append(fn.Documents, DocumentUse{Text: value, Pos: lit.Pos()})
 }
 
+// SendsGraphQL reports whether naming callee puts a GraphQL document on the
+// wire: client-go's GraphQL Do, or one of the shared toolutil executors that
+// call it with a document their caller supplied. It is the test a body's
+// [Function.SendsGraphQL] is recorded by, exported for a reader that walks a
+// body itself and has to ask it of one name at a time.
+func SendsGraphQL(callee *types.Func) bool {
+	return graphQLSenders[callee.Name()] && isGraphQLSender(callee)
+}
+
+// ServiceMethod names a client-go service method the way [sdkroutes] keys it
+// and reports whether callee is one, which is how a body's
+// [Function.SDKMethods] are recorded, exported for the same reader as
+// [SendsGraphQL].
+func ServiceMethod(callee *types.Func) (string, bool) {
+	return serviceMethod(callee)
+}
+
 // isGraphQLSender reports whether a method named Do (or one of the shared
 // executors) belongs to the GraphQL transport rather than to some unrelated
 // type that happens to have a method with the same name.
@@ -406,7 +432,7 @@ func serviceMethod(callee *types.Func) (string, bool) {
 		typ = pointer.Elem()
 	}
 	named, ok := typ.(*types.Named)
-	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != clientGoPath {
+	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != ClientGoPath {
 		return "", false
 	}
 	for _, suffix := range serviceSuffixes {
@@ -450,6 +476,48 @@ func (p *Program) Reachable(roots []*types.Func) map[*types.Func]bool {
 func (p *Program) Function(fn *types.Func) (*Function, bool) {
 	found, ok := p.funcs[fn]
 	return found, ok
+}
+
+// Initializer returns the stand-in function a package-level variable's
+// initializer was indexed as, or false for a variable this program indexed
+// no initializer for.
+func (p *Program) Initializer(variable *types.Var) (*types.Func, bool) {
+	stand, ok := p.initializers[variable]
+	return stand, ok
+}
+
+// Document returns the text of the GraphQL document an object declares, or
+// false for an object that declares none.
+func (p *Program) Document(obj types.Object) (string, bool) {
+	text, ok := p.documents[obj]
+	return text, ok
+}
+
+// Package returns the package the body was written in, whose type
+// information a reader of [Function.Root] resolves names through.
+func (f *Function) Package() *packages.Package { return f.pkg }
+
+// Root returns the node the body was indexed from: a declared function's
+// body, a handler literal's body, or a package-level variable's initializer.
+// A reader that asks more of a body than the summary fields carry, such as
+// which of its requests sit in a branch, walks this.
+func (f *Function) Root() ast.Node { return f.root }
+
+// Decl returns the declaration a declared function was indexed from, whose
+// parameters a caller's arguments bind to, or nil for a stand-in: a handler
+// literal's or an initializer's.
+func (f *Function) Decl() *ast.FuncDecl {
+	if f.decl == nil || f.decl.Body == nil {
+		return nil
+	}
+	return f.decl
+}
+
+// Bound returns, for a handler literal, the functions the route helper's
+// caller bound to one of the helper's function-valued parameters the literal
+// names, and nothing for any other variable or body.
+func (f *Function) Bound(variable *types.Var) []*types.Func {
+	return f.bound[variable]
 }
 
 // Packages returns the loaded packages in the loader's order, for a reader
