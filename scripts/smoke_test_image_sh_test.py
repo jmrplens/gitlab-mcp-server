@@ -65,7 +65,7 @@ def notices(platform):
     piped check die of SIGPIPE against the first image built with them."""
     return (
         "Third-party notices for gitlab-mcp-server\n\n"
-        "Module:    github.com/jmrplens/gitlab-mcp-server/v3 (devel)\n"
+        "Module:    github.com/jmrplens/gitlab-mcp-server/v3\n"
         "Toolchain: go1.27.1\n"
         "Builds:    " + platform + "\n\n" + "licence text of a linked module\n" * 13000
     )

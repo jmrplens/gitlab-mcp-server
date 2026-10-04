@@ -27,9 +27,37 @@
 // regular file at the module's root named LICENSE (in either spelling),
 // COPYING, COPYRIGHT, NOTICE or PATENTS, alone or with a prefix or suffix
 // (LICENSE.md, LICENSE-APACHE, MIT-LICENSE). The standard library's texts
-// are read from GOROOT the same way, after its VERSION is held to the
+// are read from GOROOT's root the same way, after its VERSION is held to the
 // toolchain the binaries record, so the text is the one of the Go that built
 // them.
+//
+// A module can also carry a license of its own below its root, which is
+// what code copied into it from another project under another license looks
+// like. Build information records modules, not packages, so for each binary
+// the packages it links are listed again with `go list -deps` on its main
+// package, under the GOOS, GOARCH, CGO_ENABLED, other GO settings, build
+// tags and instrumentation flags (-race, -msan, -asan) it records, and the
+// license files in the directory of every linked package, and of each parent
+// of one below the module root, are reproduced too, each named with the
+// import path of its directory ("LICENSE in example.com/m/pkg/vendored"). A
+// directory holding only packages no binary links is not read, so texts
+// covering code no binary carries (test fuzzers, internal tools) stay out.
+// The listing is held to each binary's own build information in both
+// directions, the replacement each module is built from included, which is
+// what ties it to the go.mod the binaries were built from: the command runs
+// inside the module checkout, as every caller already does. That is a check
+// of the module set and not of the source, so a checkout at another commit
+// with the same requirements but other imports would pass it. None of the
+// modules 3.1.0 links has such a file, so the section exists for the
+// dependency that one day will.
+//
+// No directory below GOROOT's root is read. The standard library carries two
+// kinds of license file there, and neither is a text these binaries are
+// short of: the copies of golang.org/x modules it vendors under src/vendor
+// carry the Go Authors' license and patent grant, the same texts as GOROOT's
+// root, and crypto/internal/boring's covers the BoringSSL object only a
+// GOEXPERIMENT=boringcrypto build links, which needs cgo, while every build
+// this runs against sets CGO_ENABLED=0.
 //
 // # What it refuses
 //
@@ -37,9 +65,18 @@
 // is short of something: a pattern that matches no file, a binary with no
 // build information, binaries built from different main modules, by
 // different toolchains, twice for one target, or linking one module at two
-// versions, a target list other than the one -targets names, a module the
-// cache does not hold or replaced by a local directory, and a module or a
-// GOROOT that publishes no license file at all.
+// versions, a target list other than the one -targets names, a package
+// listing that fails or disagrees with a binary's build information (a
+// package from a module it does not name or names at another version or
+// replacement, or a module it names that the listing gives no package of), a
+// module the cache
+// does not hold or replaced by a local directory, and a module or a GOROOT
+// that publishes no license file at all. A package directory below a root
+// may hold none, which is the usual case.
+//
+// A main module recorded as (devel), which is how a build from a tree with
+// no version control metadata names it, the image's builder among them, is
+// written without a version.
 //
 // It reproduces texts and classifies none: which SPDX identifier a text is
 // lives in the release's SBOMs. GOROOT and the module cache are read from

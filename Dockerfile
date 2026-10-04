@@ -40,12 +40,16 @@ ARG TARGETARCH
 # the dependencies and /usr/local/go for the standard library, none of which
 # says anything about the host that ran the build.
 #
-# THIRD_PARTY_NOTICES is generated from this binary's own build information
-# and the module cache the build just used (cmd/gen_third_party_notices, which
-# needs nothing outside the standard library), in the same step so the cache
-# mount it reads is the one the build filled. The image's binary is not the
-# release's (musl loader, no -trimpath), so it gets notices of its own rather
-# than the release asset, and a generation that fails fails the build.
+# THIRD_PARTY_NOTICES is generated from this binary's own build information,
+# the packages `go list -deps` reports it links when run from /src, the module
+# it was built from, and the module cache the build just used
+# (cmd/gen_third_party_notices, which needs nothing outside the standard
+# library), in the same step so the cache mount it reads is the one the build
+# filled. The binary records its main module as (devel), since .git is not in
+# the build context, and the notices name the module without a version. The
+# image's binary is not the release's (musl loader, no -trimpath), so it gets
+# notices of its own rather than the release asset, and a generation that
+# fails fails the build.
 RUN --mount=type=cache,target=/go/pkg/mod \
 	--mount=type=cache,target=/root/.cache/go-build \
 	set -eu; \
