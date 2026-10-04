@@ -676,6 +676,27 @@ func TestJoin_Fixture_SharesAnOperationUntilADeclarationDeparts(t *testing.T) {
 	}
 }
 
+// TestJoin_Fixture_HoldsEachDisplayOnce verifies the words a permission is
+// offered by are held once each, sorted with the empty words first, and that a
+// permission no token can be granted points at the empty words.
+func TestJoin_Fixture_HoldsEachDisplayOnce(t *testing.T) {
+	table := Join(fixtureRecord(), fixtureSchema(t), nil, Declarations{}).Table
+	if len(table.Displays) == 0 || table.Displays[0] != "" || !slices.IsSorted(table.Displays) ||
+		len(slices.Compact(slices.Clone(table.Displays))) != len(table.Displays) {
+		t.Errorf("displays %q are not each held once, sorted, with the empty words first", table.Displays)
+	}
+	if len(table.Display) != len(table.Permissions) {
+		t.Fatalf("%d displays for %d permissions", len(table.Display), len(table.Permissions))
+	}
+	roleOnly := slices.Index(table.Permissions, "read_role_only")
+	if roleOnly < 0 {
+		t.Fatalf("permissions %q lack read_role_only", table.Permissions)
+	}
+	if table.Display[roleOnly] != 0 {
+		t.Errorf("read_role_only, which no token can be granted, is offered as %q", table.Displays[table.Display[roleOnly]])
+	}
+}
+
 // TestJoin_Fixture_ReadsTheVocabulary verifies the table carries the record's
 // vocabulary: every raw permission an assignable expands to, sorted, with the
 // words a grant names it by (the first assignable a token can be granted,
@@ -691,8 +712,8 @@ func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	if index < 0 || !slices.IsSorted(table.Permissions) {
 		t.Fatalf("permissions %q are not sorted or lack read_issue", table.Permissions)
 	}
-	if table.Display[index] != "Issue: Read" {
-		t.Errorf("read_issue is granted as %q, want Issue: Read rather than its deprecated first match", table.Display[index])
+	if got := table.Displays[table.Display[index]]; got != "Issue: Read" {
+		t.Errorf("read_issue is granted as %q, want Issue: Read rather than its deprecated first match", got)
 	}
 	roleOnly := slices.IndexFunc(table.Assignables, func(a finegrained.Assignable) bool { return a.Name == "read_role_only" })
 	if roleOnly < 0 || table.Assignables[roleOnly].Grantable {

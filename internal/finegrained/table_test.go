@@ -13,7 +13,8 @@ func testTable() *Table {
 		Version:     "19.4.1-ee",
 		Bucket:      "19.4",
 		Permissions: []string{"approve_merge_request", "read_issue", "read_role_only"},
-		Display:     []string{"Merge Request: Approve", "Issue: Read", ""},
+		Displays:    []string{"", "Issue: Read", "Merge Request: Approve"},
+		Display:     []uint16{2, 1, 0},
 		Assignables: []Assignable{
 			{Name: "approve_merge_request", Permissions: []uint16{0}, Boundaries: BoundaryProject, Grantable: true},
 			{Name: "read_work_item", Permissions: []uint16{1}, Boundaries: BoundaryProject | BoundaryGroup, Grantable: true},

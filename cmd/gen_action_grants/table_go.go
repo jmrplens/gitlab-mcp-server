@@ -4,12 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"maps"
-	"slices"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
@@ -68,24 +64,14 @@ var (
 )
 
 // renderTable writes the table as Go source of keyed composite literals, so a
-// field added to a finegrained type leaves an older table compiling. The
-// words a permission is offered by are declared once each, as constants
-// after the table, since many raw permissions share one assignable.
+// field added to a finegrained type leaves an older table compiling.
 func renderTable(table *finegrained.Table) []byte {
 	var b bytes.Buffer
 	b.WriteString(tableHeader)
 	fmt.Fprintf(&b, "Version: %q,\nBucket: %q,\n", table.Version, table.Bucket)
 	writeStrings(&b, "Permissions", table.Permissions)
-	displays := displayConstants(table.Display)
-	b.WriteString("Display: []string{\n")
-	for _, display := range table.Display {
-		if display == "" {
-			b.WriteString(`"",` + "\n")
-			continue
-		}
-		b.WriteString(displays[display] + ",\n")
-	}
-	b.WriteString("},\n")
+	writeStrings(&b, "Displays", table.Displays)
+	fmt.Fprintf(&b, "Display: %s,\n", uint16s(table.Display))
 	b.WriteString("Assignables: []finegrained.Assignable{\n")
 	for _, a := range table.Assignables {
 		fmt.Fprintf(&b, "{Name: %q, Permissions: %s, Boundaries: %s", a.Name, uint16s(a.Permissions), boundary(a.Boundaries))
@@ -152,7 +138,6 @@ func renderTable(table *finegrained.Table) []byte {
 		b.WriteString("},\n")
 	}
 	b.WriteString("},\n}\n")
-	writeDisplayConstants(&b, displays)
 	// The source is assembled from fixed fragments and quoted values, so a
 	// formatting failure is a defect of this function, which the repository's
 	// rule says to state at the leaf.
@@ -174,71 +159,6 @@ func constantOf[V ~string](names map[V]string, value V) string {
 		cmdutil.MustDo(fmt.Errorf("%T %q has no constant in the table writer", value, value))
 	}
 	return name
-}
-
-// displayConstants names every distinct non-empty display as a Go constant:
-// display followed by its words, each capitalized, with everything but
-// letters and digits dropped ("CI/CD Setting: Update" is
-// displayCICDSettingUpdate). Two displays that spell one name, which only a
-// difference in case or punctuation can cause, are told apart by a number
-// after the second, in sorted order so the names do not move between runs.
-func displayConstants(displays []string) map[string]string {
-	distinct := slices.Sorted(maps.Keys(setOf(displays)))
-	names := make(map[string]string, len(distinct))
-	taken := map[string]bool{}
-	for _, display := range distinct {
-		if display == "" {
-			continue
-		}
-		base := displayIdentifier(display)
-		name := base
-		for n := 2; taken[name]; n++ {
-			name = base + strconv.Itoa(n)
-		}
-		taken[name] = true
-		names[display] = name
-	}
-	return names
-}
-
-// displayIdentifier spells one display as an identifier, without telling
-// collisions apart.
-func displayIdentifier(display string) string {
-	var b strings.Builder
-	b.WriteString("display")
-	words := strings.FieldsFunc(display, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	for _, word := range words {
-		first, size := utf8.DecodeRuneInString(word)
-		b.WriteRune(unicode.ToUpper(first))
-		b.WriteString(word[size:])
-	}
-	return b.String()
-}
-
-// writeDisplayConstants declares the display constants, sorted by name.
-func writeDisplayConstants(b *bytes.Buffer, names map[string]string) {
-	if len(names) == 0 {
-		return
-	}
-	byName := make(map[string]string, len(names))
-	for display, name := range names {
-		byName[name] = display
-	}
-	b.WriteString("\n// The words GitLab's token page offers each assignable permission by, which\n" +
-		"// Display reads once per raw permission the assignable expands to.\nconst (\n")
-	for _, name := range slices.Sorted(maps.Keys(byName)) {
-		fmt.Fprintf(b, "%s = %q\n", name, byName[name])
-	}
-	b.WriteString(")\n")
-}
-
-// setOf is the set of a slice's values.
-func setOf(values []string) map[string]bool {
-	set := make(map[string]bool, len(values))
-	for _, value := range values {
-		set[value] = true
-	}
-	return set
 }
 
 // writeStrings writes a string slice field, one value per line.

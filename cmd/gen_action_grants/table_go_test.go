@@ -15,16 +15,16 @@ import (
 // TestRenderTable_KeyedLiteralsOfEveryField verifies the table is written as
 // keyed composite literals, every field the table carries spelled once and a
 // zero one left out, a boundary, a cause and an effect as the constants that
-// name them, a bit set in hexadecimal, each display declared once as a
-// constant after the table and read by name wherever a permission is offered
-// by it, two displays that spell one name told apart in sorted order, and the
-// whole formatted the way gofmt writes it.
+// name them, a bit set in hexadecimal, the displays once each and a
+// permission's display as its index among them, and the whole formatted the
+// way gofmt writes it.
 func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 	table := &finegrained.Table{
 		Version:     "19.4.1-ee",
 		Bucket:      "19.4",
 		Permissions: []string{"read_a", "read_b", "read_c", "read_d"},
-		Display:     []string{"A: Read", "", "A: Read", "A read"},
+		Displays:    []string{"", "A read", "A: Read"},
+		Display:     []uint16{2, 0, 2, 1},
 		Assignables: []finegrained.Assignable{
 			{Name: "read_a", Permissions: []uint16{0, 2}, Boundaries: finegrained.BoundaryProject | finegrained.BoundaryGroup, Grantable: true},
 			{Name: "read_old", Permissions: []uint16{0, 1}, Deprecated: true},
@@ -59,12 +59,12 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 		"read_c",
 		"read_d",
 	},
-	Display: []string{
-		displayARead2,
+	Displays: []string{
 		"",
-		displayARead2,
-		displayARead,
+		"A read",
+		"A: Read",
 	},
+	Display: []uint16{2, 0, 2, 1},
 	Assignables: []finegrained.Assignable{
 		{Name: "read_a", Permissions: []uint16{0, 2}, Boundaries: finegrained.BoundaryProject | finegrained.BoundaryGroup, Grantable: true},
 		{Name: "read_old", Permissions: []uint16{0, 1}, Boundaries: 0, Deprecated: true},
@@ -91,46 +91,9 @@ func TestRenderTable_KeyedLiteralsOfEveryField(t *testing.T) {
 		{ID: "a.some", Paths: [][]uint32{{0}}, DeniedWays: []finegrained.Denial{{Cause: finegrained.CauseTypeUndeclared, Element: "Namespace", Effect: finegrained.EffectNull}, {Cause: finegrained.CauseRESTUndeclared, Element: "GET /b", Effect: finegrained.EffectRefused}}},
 	},
 }
-
-// The words GitLab's token page offers each assignable permission by, which
-// Display reads once per raw permission the assignable expands to.
-const (
-	displayARead  = "A read"
-	displayARead2 = "A: Read"
-)
 `
 	if got := string(renderTable(table)); got != want {
 		t.Errorf("renderTable =\n%s\nwant\n%s", got, want)
-	}
-}
-
-// TestRenderTable_NoDisplay_DeclaresNoConstants verifies a table no
-// permission of which is offered by any words declares no constant block,
-// which gofmt would refuse empty.
-func TestRenderTable_NoDisplay_DeclaresNoConstants(t *testing.T) {
-	got := string(renderTable(&finegrained.Table{Permissions: []string{"read_a"}, Display: []string{""}}))
-	if strings.Contains(got, "const (") || !strings.Contains(got, "Display: []string{\n\t\t\"\",\n\t},") {
-		t.Errorf("renderTable =\n%s\nwant the empty display spelled in place and no constant block", got)
-	}
-}
-
-// TestDisplayIdentifier_SpellsTheWordsCapitalized verifies a display becomes
-// an identifier of its words, each capitalized whatever script it starts in,
-// with the punctuation between them dropped.
-func TestDisplayIdentifier_SpellsTheWordsCapitalized(t *testing.T) {
-	tests := []struct{ display, want string }{
-		{"Work Item: Update", "displayWorkItemUpdate"},
-		{"CI/CD Setting: Update", "displayCICDSettingUpdate"},
-		{"On-Demand DAST Scan: Create", "displayOnDemandDASTScanCreate"},
-		{"AI catalog item: Create", "displayAICatalogItemCreate"},
-		{"élan 2: read", "displayÉlan2Read"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.display, func(t *testing.T) {
-			if got := displayIdentifier(tc.display); got != tc.want {
-				t.Errorf("displayIdentifier(%q) = %q, want %q", tc.display, got, tc.want)
-			}
-		})
 	}
 }
 

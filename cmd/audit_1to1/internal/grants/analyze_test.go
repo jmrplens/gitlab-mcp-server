@@ -36,7 +36,8 @@ func fixtureTable() *finegrained.Table {
 		Version:     "19.4.1-ee",
 		Bucket:      "19.4",
 		Permissions: []string{"read_issue", "read_namespace", "read_protected_branch", "update_issue"},
-		Display:     []string{"Issue: Read", "Namespace: Read", "Branch Rule: Read", "Issue: Update"},
+		Displays:    []string{"", "Branch Rule: Read", "Issue: Read", "Issue: Update", "Namespace: Read"},
+		Display:     []uint16{2, 4, 1, 3},
 		PublicAnonymous: [2][]uint64{
 			finegrained.PublicProject: {1 << permReadIssue},
 			finegrained.PublicGroup:   {1 << permReadNamespace},

@@ -1266,1259 +1266,795 @@ var table = finegrained.Table{
 		"validate_ci_config",
 		"verify_pages_domain",
 	},
-	Display: []string{
-		displayUserActivate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayMergeTrainMergeRequestAdd,
-		displaySuggestionApply,
-		displayAccessRequestApprove,
-		displayDeploymentApprove,
-		displayMemberUpdate,
-		displayMergeRequestApprove,
-		displayUserApprove,
-		displayCustomFieldArchive,
-		displayGroupArchive,
-		displayProjectArchive,
-		displayVulnerabilityArchive,
-		displayWorkItemTypeArchive,
-		displayMemberRoleAssign,
-		displayRunnerAssign,
-		displayVirtualRegistryCreate,
-		displayVirtualRegistryCreate,
-		displayVirtualRegistryCreate,
-		displayPackageRead,
-		displayAchievementAward,
-		displayUserBan,
-		displayAICatalogMCPServerBlock,
-		displayUserBlock,
-		displayImportCancel,
-		displayImportCancel,
-		displayJobUpdate,
-		displayMergeRequestMerge,
-		displayPipelineUpdate,
-		displayAISelfHostedModelUpdate,
-		displayCommitCreate,
-		displayActiveContextDeadQueueClear,
-		displayRunnerUpdate,
-		displayWorkItemCreate,
-		displayVulnerabilityUpdate,
-		displayAccessRequestCreate,
-		displayAchievementCreate,
-		displayAddOnAssignmentCreate,
-		displayAddOnPurchaseCreate,
-		displayAdminMemberRoleCreate,
-		displayAIAgentAuditEventCreate,
-		displayAIAgentIdentityCreate,
-		displayAIAgentSessionCreate,
-		displayAICatalogItemCreate,
-		displayAICatalogItemCreate,
-		displayAICatalogMCPServerCreate,
-		displayAICatalogExternalAgentCreate,
-		displayAiFlowScheduleCreate,
-		displayAIFlowTriggerCreate,
-		displayAISelfHostedModelCreate,
-		displayAlertMetricImageCreate,
-		displayApprovalRuleCreate,
-		displayAscpCreate,
-		displayAscpCreate,
-		displayAscpCreate,
-		displayAuditEventStreamingDestinationCreate,
-		displayAwardEmojiCreate,
-		displayBadgeCreate,
-		displayImportCreate,
-		displayImportCreate,
-		displayBranchCreate,
-		displayBranchRuleCreate,
-		displayBroadcastMessageCreate,
-		displayImportCreate,
-		displayCatalogResourceCreate,
-		displayCDApplicationCreate,
-		displayCDApplicationFlowDefinitionCreate,
-		displayCDApplicationLinkCreate,
-		displayCDArtifactSourceCreate,
-		displayCDEnvironmentCreate,
-		displayCDRolloutCreate,
-		displayCDServiceCreate,
-		displayCDVersionSetCreate,
-		displayChatCompletionCreate,
-		displayCIMinuteCreate,
-		displayClusterCreate,
-		displayClusterAgentCreate,
-		displayClusterAgentMappingCreate,
-		displayClusterAgentTokenCreate,
-		displayClusterAgentURLConfigurationCreate,
-		displayCodeSuggestionCompletionCreate,
-		displayCodeSuggestionDirectAccessCreate,
-		displayCommitCreate,
-		displayCommitUpdate,
-		displayCommitCreate,
-		displayCommitCreate,
-		displayCommitStatusCreate,
-		displayComplianceFrameworkCreate,
-		displayComplianceFrameworkCreate,
-		displayComplianceFrameworkCreate,
-		displayContainerRegistryProtectionTagRuleCreate,
-		displayContainerRepositoryProtectionRuleCreate,
-		displayVirtualRegistryCreate,
-		displayVirtualRegistryCreate,
-		displayCoverageFuzzingCorpusCreate,
-		displayCRMContactCreate,
-		displayCRMOrganizationCreate,
-		displayCustomDashboardCreate,
-		displayCustomEmojiCreate,
-		displayWorkItemCreate,
-		displayOnDemandDASTScanCreate,
-		displayOnDemandDASTScanCreate,
-		displayOnDemandDASTScanCreate,
-		displayOnDemandDASTScanCreate,
-		displayDebianDistributionCreate,
-		displayDependencyFirewallEvaluationCreate,
-		displayDependencyListExportCreate,
-		displayDeployKeyCreate,
-		displayDeployTokenCreate,
-		displayDeploymentCreate,
-		displayDesignCreate,
-		displayDuoFlowCallbackHookCreate,
-		displayDuoUserFeedbackCreate,
-		displayDuoWorkflowCreate,
-		displayDuoWorkflowDirectAccessTokenCreate,
-		displayEditorTelemetryCreate,
-		displayEnvironmentCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayErrorTrackingClientKeyCreate,
-		displayEscalationPolicyCreate,
-		displayExternalStatusCheckCreate,
-		displayExternalStatusCheckServiceCreate,
-		displayFeatureFlagCreate,
-		displayFeatureFlagUserListCreate,
-		displayProjectFork,
-		displayProjectFork,
-		displayFreezePeriodCreate,
-		displayGeoNodeCreate,
-		displayGeoSiteCreate,
-		displayGitCommandCreate,
-		displayImportCreate,
-		displayImportCreate,
-		displayGitLabSubscriptionCreate,
-		displayPolicyStorePolicyCreate,
-		displayGroupCreate,
-		displayImportCreate,
-		displayHTTPIntegrationCreate,
-		displayImpersonationTokenCreate,
-		displayIntegrationExclusionCreate,
-		displayInvitationCreate,
-		displayIssuableMetricImageCreate,
-		displayIssuableResourceLinkCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemUpdate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayJiraConnectSubscriptionCreate,
-		displayJiraImportCreate,
-		displayJobTokenScopeAllowlistCreate,
-		displayKnowledgeGraphEnabledNamespaceCreate,
-		displayLabelCreate,
-		displayLDAPAdminRoleLinkCreate,
-		displayLDAPGroupLinkCreate,
-		displayMemberUpdate,
-		displayLicenseCreate,
-		displayMarkdownUploadCreate,
-		displayVirtualRegistryCreate,
-		displayVirtualRegistryCreate,
-		displayMemberCreate,
-		displayMemberRoleCreate,
-		displayMergeRequestCreate,
-		displayMergeRequestApprovalRuleCreate,
-		displayWorkItemCreate,
-		displayMergeRequestUpdate,
-		displayMergeRequestCreate,
-		displayMergeRequestCreate,
-		displayMergeRequestCreate,
-		displayMergeRequestUpdate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayMergeRequestUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemCreate,
-		displayMLExperimentCreate,
-		displayMLflowRunCreate,
-		displayMLModelCreate,
-		displayMobilePushSubscriptionCreate,
-		displayModelVersionCreate,
-		displayNamespaceStorageLimitExclusionCreate,
-		displayWorkItemCreate,
-		displayPackageCreate,
-		displayVirtualRegistryCreate,
-		displayOAuthApplicationCreate,
-		displayOfflineExportCreate,
-		displayImportCreate,
-		displayOnDemandDASTScanCreate,
-		displayOnCallScheduleCreate,
-		displayOnCallScheduleCreate,
-		displayOrganizationCreate,
-		displayOrganizationUserCreate,
-		displayPackageCreate,
-		displayPagesDomainCreate,
-		displayPathLockCreate,
-		displayPersonalAccessTokenCreate,
-		displayPipelineCreate,
-		displayPipelineScheduleCreate,
-		displayPipelineScheduleUpdate,
-		displayPipelineSubscriptionCreate,
-		displayPlaceholderReassignmentCreate,
-		displaySecurityPolicyUpdate,
-		displayProjectCreate,
-		displayAliasCreate,
-		displayExportCreate,
-		displayImportCreate,
-		displayExportCreate,
-		displayImportCreate,
-		displayBranchProtect,
-		displayProtectedEnvironmentCreate,
-		displayTagProtect,
-		displayPullMirrorCreate,
-		displayPushRuleCreate,
-		displayWorkItemCreate,
-		displayReleaseCreate,
-		displayReleaseCreate,
-		displayReleaseLinkCreate,
-		displayRemoteMirrorCreate,
-		displayRepositoryCreate,
-		displayRepositoryCreate,
-		displayRepositoryStorageMoveCreate,
-		displayRepositoryTagCreate,
-		displayWorkItemCreate,
-		displayResourceAccessTokenCreate,
-		displayRunnerCreate,
-		displayRunnerControllerCreate,
-		displayRunnerControllerTokenCreate,
-		displaySAMLGroupLinkCreate,
-		displaySavedReplyCreate,
-		displayMergeRequestSavedViewCreate,
-		displaySecretCreate,
-		displaySecretsManagerAPIJWTCreate,
-		displaySecretsManagerProvision,
-		displaySecureFileCreate,
-		displaySecurityAttributeCreate,
-		displaySecurityAttributeCreate,
-		displaySecuritySettingUpdate,
-		displaySecurityProjectTrackedRefCreate,
-		displaySecurityScanCreate,
-		displaySecurityScanProfilesCreate,
-		displayServiceAccountCreate,
-		displayServiceAccountPersonalAccessTokenCreate,
-		displaySnippetCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displaySSHCertificateCreate,
-		displayTargetBranchRuleCreate,
-		displayTerraformStateCreate,
-		displayTerraformStateProtectionRuleCreate,
-		displayWorkItemCreate,
-		displayThirdPartyAgentDirectAccessTokenCreate,
-		displayTimelineEventCreate,
-		displayTimelineEventCreate,
-		displayTimelogCreate,
-		displayTodoCreate,
-		displayTopicCreate,
-		displayTriggerCreate,
-		displayUserCreate,
-		displayEmailCreate,
-		displayGPGKeyCreate,
-		displaySSHKeyCreate,
-		displaySupportPINCreate,
-		displayValueStreamCreate,
-		displayVariableCreate,
-		displayVerifiedNamespaceCreate,
-		displayVirtualRegistryCleanupPolicyCreate,
-		displayVulnerabilityCreate,
-		displayVulnerabilityArchiveExportCreate,
-		displayVulnerabilityExportCreate,
-		displayVulnerabilityIssueLinkCreate,
-		displayVulnerabilityIssueLinkCreate,
-		displayVulnerabilityMergeRequestLinkCreate,
-		displayVulnerabilityNoteCreate,
-		displayWebhookCreate,
-		displayWikiCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemCreate,
-		displayWorkItemSavedViewCreate,
-		displayWorkItemCreate,
-		displayWorkspaceCreate,
-		displayZoektNamespaceCreate,
-		displayUserDeactivate,
-		displayAccessRequestDelete,
-		displayAchievementDelete,
-		displayAddOnAssignmentDelete,
-		displayAdminMemberRoleDelete,
-		displayAICatalogItemDelete,
-		displayAICatalogItemDelete,
-		displayAICatalogItemConsumerDelete,
-		displayAICatalogExternalAgentDelete,
-		displayAiFlowScheduleDelete,
-		displayAIFlowTriggerDelete,
-		displayAISelfHostedModelDelete,
-		displayAlertMetricImageDelete,
-		displayApprovalRuleDelete,
-		displayArtifactDelete,
-		displayAuditEventStreamingDestinationDelete,
-		displayAwardEmojiDelete,
-		displayBadgeDelete,
-		displayMemberDelete,
-		displayBranchDelete,
-		displayBranchRuleDelete,
-		displayBroadcastMessageDelete,
-		displayCatalogResourceDelete,
-		displayCDApplicationLinkDelete,
-		displayClusterDelete,
-		displayClusterAgentDelete,
-		displayClusterAgentMappingDelete,
-		displayClusterAgentURLConfigurationDelete,
-		displayCommitDelete,
-		displayComplianceFrameworkDelete,
-		displayComplianceFrameworkDelete,
-		displayComplianceFrameworkDelete,
-		displayPackageDelete,
-		displayContainerRegistryProtectionTagRuleDelete,
-		displayContainerRepositoryDelete,
-		displayContainerRepositoryProtectionRuleDelete,
-		displayContainerRepositoryDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayConversationThreadDelete,
-		displayCustomAttributeDelete,
-		displayCustomDashboardDelete,
-		displayCustomEmojiDelete,
-		displayOnDemandDASTScanDelete,
-		displayOnDemandDASTScanDelete,
-		displayDebianDistributionDelete,
-		displayDeployKeyDelete,
-		displayDeployTokenDelete,
-		displayDeploymentDelete,
-		displayDesignDelete,
-		displayDuoFlowCallbackHookDelete,
-		displayDuoWorkflowDelete,
-		displayEnterpriseUserDelete,
-		displayEnvironmentDelete,
-		displayEnvironmentDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayErrorTrackingClientKeyDelete,
-		displayEscalationPolicyDelete,
-		displayExperimentCacheDelete,
-		displayExternalStatusCheckDelete,
-		displayExternalStatusCheckServiceDelete,
-		displayFeatureDelete,
-		displayFeatureFlagDelete,
-		displayFeatureFlagUserListDelete,
-		displayProjectFork,
-		displayFreezePeriodDelete,
-		displayGeoNodeDelete,
-		displayGeoSiteDelete,
-		displayPolicyStorePolicyDelete,
-		displayGroupDelete,
-		displayHTTPIntegrationDelete,
-		displayIdentityDelete,
-		displayIntegrationDelete,
-		displayIntegrationExclusionDelete,
-		displayInvitationDelete,
-		displayIssuableMetricImageDelete,
-		displayIssuableResourceLinkDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayJobArtifactDelete,
-		displayJobTokenScopeAllowlistDelete,
-		displayKnowledgeGraphEnabledNamespaceDelete,
-		displayLabelDelete,
-		displayLDAPAdminRoleLinkDelete,
-		displayLDAPGroupLinkDelete,
-		displayMemberUpdate,
-		displayLicenseDelete,
-		displayMarkdownUploadDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayMemberDelete,
-		displayMemberRoleDelete,
-		displayMergeRequestDelete,
-		displayMergeRequestApprovalRuleDelete,
-		displayWorkItemDelete,
-		displayMergeRequestUpdate,
-		displayMergeRequestDelete,
-		displayMergeRequestDelete,
-		displayMergeRequestUpdate,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayMergeTrainCarDelete,
-		displayBranchDelete,
-		displayWorkItemDelete,
-		displayMLExperimentDelete,
-		displayMLflowRunDelete,
-		displayMLModelDelete,
-		displayMobilePushSubscriptionDelete,
-		displayModelVersionDelete,
-		displayNamespaceBanDelete,
-		displayNamespaceStorageLimitExclusionDelete,
-		displayWorkItemDelete,
-		displayPackageDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayPackageDelete,
-		displayOAuthApplicationDelete,
-		displayOnDemandDASTScanDelete,
-		displayOnCallScheduleDelete,
-		displayOnCallScheduleDelete,
-		displayOrganizationDelete,
-		displayOrganizationUserDelete,
-		displayPackageDelete,
-		displayPackageDelete,
-		displayPageDelete,
-		displayPageDelete,
-		displayPagesDomainDelete,
-		displayPipelineDelete,
-		displayPipelineScheduleDelete,
-		displayPipelineScheduleUpdate,
-		displayPipelineSubscriptionDelete,
-		displayProjectDelete,
-		displayAliasDelete,
-		displayBranchProtect,
-		displayProtectedEnvironmentDelete,
-		displayTagProtect,
-		displayPushRuleDelete,
-		displayWorkItemDelete,
-		displayReleaseDelete,
-		displayReleaseLinkDelete,
-		displayRemoteMirrorDelete,
-		displayRepositoryDelete,
-		displayRepositoryTagDelete,
-		displayResourceAccessTokenDelete,
-		displayRunnerDelete,
-		displayRunnerControllerDelete,
-		displaySAMLGroupLinkDelete,
-		displaySAMLGroupIdentityDelete,
-		displaySavedReplyDelete,
-		displayMergeRequestSavedViewDelete,
-		displaySCIMIdentityDelete,
-		displaySecretDelete,
-		displaySecretsManagerDeprovision,
-		displaySecretsPermissionDelete,
-		displaySecureFileDelete,
-		displaySecurityAttributeDelete,
-		displaySecurityAttributeDelete,
-		displaySecuritySettingUpdate,
-		displaySecurityScanProfilesDelete,
-		displayServiceAccountDelete,
-		displaySnippetDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayBranchRuleDelete,
-		displaySSHCertificateDelete,
-		displayTargetBranchRuleDelete,
-		displayTerraformStateDelete,
-		displayTerraformStateProtectionRuleDelete,
-		displayTerraformStateDelete,
-		displayTimelineEventDelete,
-		displayTimelogDelete,
-		displayTodoDelete,
-		displayTopicDelete,
-		displayTriggerDelete,
-		displayUserDelete,
-		displayAchievementDelete,
-		displayEmailDelete,
-		displayGPGKeyDelete,
-		displaySSHKeyDelete,
-		displayValueStreamDelete,
-		displayVariableDelete,
-		displayVirtualRegistryCleanupPolicyDelete,
-		displayVSCodeSettingDelete,
-		displayVulnerabilityIssueLinkDelete,
-		displayVulnerabilityIssueLinkDelete,
-		displayVulnerabilityMergeRequestLinkDelete,
-		displayVulnerabilityNoteDelete,
-		displayWebhookDelete,
-		displayWebhookUpdate,
-		displayWebhookUpdate,
-		displayWikiDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemDelete,
-		displayWorkItemSavedViewDelete,
-		displayZoektNamespaceDelete,
-		displaySecretsManagerDeprovision,
-		displayEnterpriseUserDisableTwoFactor,
-		displayUserDisableTwoFactor,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayUINotificationDismiss,
-		displayVulnerabilityUpdate,
-		displayPackageRead,
-		displayCodeDownload,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayExportDownload,
-		displayPackageRead,
-		displayJobArtifactRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayExportDownload,
-		displayExportDownload,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displaySecureFileRead,
-		displayPackageRead,
-		displayWikiRead,
-		displaySidekiqJobDrop,
-		displayDeployKeyEnable,
-		displayDevOpsAdoptionEnable,
-		displaySecretsManagerAddOnEnable,
-		displayJobDelete,
-		displayMCPToolExecute,
-		displayGitLabOrbitMCPToolExecute,
-		displayVulnerabilityDuoWorkflowExecute,
-		displayUserFollow,
-		displayProjectUpdate,
-		displayProjectUpdate,
-		displayUsageDataMetricUpdate,
-		displayNamespaceDuoFeatureLock,
-		displayTerraformStateLock,
-		displayMLflowRunLog,
-		displayDatabaseMigrationMark,
-		displayMergeRequestMerge,
-		displayTopicMerge,
-		displayWorkItemUpdate,
-		displayPipelineScheduleUpdate,
-		displayBatchedBackgroundMigrationRun,
-		displayJobRun,
-		displayPipelineScheduleUpdate,
-		displayJobArtifactUpdate,
-		displayLabelPromote,
-		displayWorkItemUpdate,
-		displaySecretsManagerProvision,
-		displayCatalogVersionPublish,
-		displayPackageCreate,
-		displayMergeRequestUpdate,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayDependencyProxyCachePurge,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayVirtualRegistryDelete,
-		displayCodePush,
-		displayAccessRequestRead,
-		displayActiveContextConnectionRead,
-		displayActivityAnalyticsRead,
-		displayAddOnPurchaseRead,
-		displayAdminDataManagementRead,
-		displayAdminMemberRoleRead,
-		displayAIAgentSessionRead,
-		displayAICatalogItemRead,
-		displayAIToolRuleRead,
-		displayAlertMetricImageRead,
-		displayProjectRead,
-		displayAnyTokenRead,
-		displayApplicationAppearanceRead,
-		displayApplicationSettingRead,
-		displayApprovalConfigurationRead,
-		displayApprovalRuleRead,
-		displayAttestationRead,
-		displayAuditEventRead,
-		displayAvatarRead,
-		displayBadgeRead,
-		displayBatchedBackgroundMigrationRead,
-		displayBatchedBackgroundOperationRead,
-		displayMemberRead,
-		displayBranchRead,
-		displayImportRead,
-		displayImportRead,
-		displayImportRead,
-		displayPackageRead,
-		displayCatalogBundledResourceRead,
-		displayCDApplicationRead,
-		displayCDApplicationFlowDefinitionRead,
-		displayCDApplicationLinkRead,
-		displayCDArtifactSourceRead,
-		displayCDEnvironmentRead,
-		displayCDRolloutRead,
-		displayCDServiceRead,
-		displayCDVersionSetRead,
-		displayCIConfigRead,
-		displayClusterRead,
-		displayClusterAgentRead,
-		displayClusterAgentTokenRead,
-		displayClusterAgentURLConfigurationRead,
-		displayCodeRead,
-		displayCodeReviewAnalyticsRead,
-		displayCodeSuggestionConnectionDetailRead,
-		displayCodeSuggestionEnabledStatusRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayCommitRead,
-		displayComplianceDashboardRead,
-		displayCompliancePolicySettingRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayContainerRegistryProtectionTagRuleRead,
-		displayContainerRepositoryRead,
-		displayContainerRepositoryProtectionRuleRead,
-		displayContainerRepositoryRead,
-		displayVirtualRegistryRead,
-		displayVirtualRegistryRead,
-		displayVirtualRegistryRead,
-		displayProjectRead,
-		displayProjectRead,
-		displayCustomAttributeRead,
-		displayCycleAnalyticsRead,
-		displayDatabaseDictionaryRead,
-		displayDatabaseMigrationRead,
-		displayDebianDistributionRead,
-		displayDependencyRead,
-		displayDependencyListExportRead,
-		displayDependencyProxyRead,
-		displayDeployKeyRead,
-		displayDeployTokenRead,
-		displayDeploymentRead,
-		displayGroupRead,
-		displayWorkItemRead,
-		displayDoraMetricRead,
-		displayDuoFlowCallbackHookRead,
-		displayDuoWorkflowRead,
-		displayDuoWorkflowRead,
-		displayDuoWorkflowRead,
-		displayDuoWorkflowRead,
+	Displays: []string{
 		"",
-		displayAIUsageMetricRead,
-		displayEnterpriseUserRead,
-		displayEnvironmentRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayErrorTrackingClientKeyRead,
-		displayErrorTrackingSettingRead,
-		displayEventRead,
-		displayExperimentRead,
-		displayExternalStatusCheckRead,
-		displayExternalStatusCheckServiceRead,
-		displayFeatureRead,
-		displayFeatureFlagRead,
-		displayFeatureFlagUserListRead,
-		displayFlowsMetadataRead,
-		displayProjectRead,
-		displayFreezePeriodRead,
-		displayGeoNodeRead,
-		displayGeoSiteRead,
-		displayGitLabSubscriptionRead,
-		displayGLQLRead,
-		displayPackageRead,
-		displayPolicyStorePolicyRead,
-		displayGroupRead,
-		displayGroupRead,
-		displayGroupRead,
-		displayImpersonationTokenRead,
-		displayEscalationPolicyRead,
-		displayIntegrationRead,
-		displayInvitationRead,
-		displayIssuableMetricImageRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayJobRead,
-		displayJobTokenScopeRead,
-		displayJobTokenScopeAllowlistRead,
-		displayKnowledgeGraphRead,
-		displayKnowledgeGraphEnabledNamespaceRead,
-		displayLabelRead,
-		displayProjectRead,
-		displayLDAPAdminRoleLinkRead,
-		displayLDAPGroupRead,
-		displayLDAPGroupLinkRead,
-		displayLicenseRead,
-		displayMarkdownUploadRead,
-		displayVirtualRegistryRead,
-		displayVirtualRegistryRead,
-		displayVirtualRegistryRead,
-		displayMemberRead,
-		displayMemberRoleRead,
-		displayMergeRequestRead,
-		displayMergeRequestApprovalRuleRead,
-		displayApprovalSettingRead,
-		displayMergeRequestRead,
-		displayWorkItemRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayMergeRequestRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayMergeTrainRead,
-		displayMergeTrainRead,
-		displayMetadataRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayMLExperimentRead,
-		displayMLflowArtifactRead,
-		displayMLflowRunRead,
-		displayMLModelRead,
-		displayModelSelectionAllowlistRead,
-		displayModelVersionRead,
-		displayNamespaceRead,
-		displayNamespaceStorageLimitExclusionRead,
-		displayWorkItemRead,
-		displayNotificationSettingRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayVirtualRegistryRead,
-		displayVirtualRegistryRead,
-		displayPackageRead,
-		displayOAuthApplicationRead,
-		displayOfflineExportRead,
-		displayOrganizationRead,
-		displayOrganizationRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayPageRead,
-		displayPageRead,
-		displayProjectRead,
-		displayPagesDomainRead,
-		displayMemberRead,
-		displayPersonalAccessTokenRead,
-		displayPipelineRead,
-		displayPipelineRead,
-		displayPipelineExecutionProjectScheduleRead,
-		displayPipelineRead,
-		displayPipelineScheduleRead,
-		displayPipelineScheduleRead,
-		displayPipelineRead,
-		displayPipelineRead,
-		displayPipelineRead,
-		displayPipelineRead,
-		displayPlaceholderReassignmentRead,
-		displayPlanLimitRead,
-		displayProjectRead,
-		displayAliasRead,
-		displayExportRead,
-		displayImportRead,
-		displayProjectRead,
-		displayExportRead,
-		displayImportRead,
-		displayProjectRead,
-		displayProtectedBranchRead,
-		displayProtectedEnvironmentRead,
-		displayProtectedTagRead,
-		displayProvisionedUserRead,
-		displayPullMirrorRead,
-		displayPushRuleRead,
-		displayPackageRead,
-		displayWorkItemRead,
-		displayReleaseRead,
-		displayReleaseLinkRead,
-		displayRemoteMirrorRead,
-		displayRemoteMirrorPublicKeyRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryRead,
-		displayRepositoryStorageMoveRead,
-		displayRepositoryTagRead,
-		displayRepositoryTagRead,
-		displayRepositoryRead,
-		displayWorkItemRead,
-		displayResourceAccessTokenRead,
-		displayResourceGroupRead,
-		displayPackageRead,
-		displayPackageRead,
-		displayRunnerRead,
-		displayRunnerControllerRead,
-		displayRunnerControllerTokenRead,
-		displayRunnerUsageRead,
-		displaySAMLGroupLinkRead,
-		displaySAMLGroupIdentityRead,
-		displaySAMLUserRead,
-		displayMergeRequestSavedViewRead,
-		displaySBOMOccurrenceRead,
-		displaySCIMIdentityRead,
-		displaySearchMigrationRead,
-		displaySecretsManagerRead,
-		displaySecretsManagerEnrollmentRead,
-		displaySecureFileRead,
-		displaySecuritySettingRead,
-		displayServiceAccountRead,
-		displayServiceAccountPersonalAccessTokenRead,
-		displayServicePingRead,
-		displayProjectRead,
-		displayGroupRead,
-		displayGroupRead,
-		displaySidekiqMetricRead,
-		displaySnapshotRead,
-		displaySnippetRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displaySnippetRead,
-		displaySSHCertificateRead,
-		displaySSHKeyRead,
-		displayProjectRead,
-		displayProjectRead,
-		displayStatisticRead,
-		displayProjectRead,
-		displayGroupRead,
-		displayTemplateRead,
-		displayPackageRead,
-		displayTerraformStateRead,
-		displayTerraformStateRead,
-		displayTodoRead,
-		displayTopicRead,
-		displayTriggerRead,
-		displayUsageDataMetricRead,
-		displayUsageDataQueryRead,
-		displayUserRead,
-		displayActivityRead,
-		displayAssociationRead,
-		displayCountsRead,
-		displayEmailRead,
-		displayFollowerRead,
-		displayFollowingRead,
-		displayGPGKeyRead,
-		displayPreferenceRead,
-		displayDeployKeyRead,
-		displaySSHKeyRead,
-		displayStatusRead,
-		displaySupportPINRead,
-		displayVariableRead,
-		displayVirtualRegistryCleanupPolicyRead,
-		displayVSCodeSettingRead,
-		displayVulnerabilityRead,
-		displayVulnerabilityArchiveExportRead,
-		displayVulnerabilityExportRead,
-		displayVulnerabilityIssueLinkRead,
-		displayVulnerabilityNoteRead,
-		displayVulnerabilityRead,
-		displayWebhookRead,
-		displayWebhookRead,
-		displayWikiRead,
-		displayWorkItemRead,
-		displayWorkItemRead,
-		displayZoektNodeRead,
-		displayMergeRequestUpdate,
-		displayProjectUpdate,
-		displayLicenseBillableUserRefresh,
-		displayUserReject,
-		displayMarkdownRender,
-		displayOAuthApplicationRenewSecret,
-		displayWorkItemUpdate,
-		displayWorkItemSavedViewSubscribe,
-		displayGeoNodeRepair,
-		displayGeoSiteRepair,
-		displayActiveContextDeadQueueReplay,
-		displayAICatalogItemReport,
-		displayWebhookTrigger,
-		displayMergeRequestApprove,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayRunnerRegistrationTokenReset,
-		displayCDRolloutGateResolve,
-		displayVulnerabilityUpdate,
-		displayBatchedBackgroundOperationRun,
-		displayAICatalogItemRestore,
-		displayGroupUpdate,
-		displayOrganizationRestore,
-		displayPageDelete,
-		displayProjectUpdate,
-		displayBatchedBackgroundMigrationRun,
-		displayDuoWorkflowResume,
-		displayExternalStatusCheckRetry,
-		displayJobRun,
-		displayPipelineUpdate,
-		displayCommitCreate,
-		displayVulnerabilityUpdate,
-		displayAchievementRevoke,
-		displayAnyTokenRevoke,
-		displayClusterAgentTokenRevoke,
-		displayOnDemandDASTScanDelete,
-		displayImpersonationTokenRevoke,
-		displayPersonalAccessTokenRevoke,
-		displayRunnerControllerTokenRevoke,
-		displayServiceAccountPersonalAccessTokenRevoke,
-		displayGPGKeyRevoke,
-		displaySupportPINRevoke,
-		displayRepositoryHistoryRewrite,
-		displayPersonalAccessTokenRotate,
-		displayResourceAccessTokenRotate,
-		displayRunnerControllerTokenRotate,
-		displayServiceAccountPersonalAccessTokenRotate,
-		displayLDAPGroupSyncRun,
-		displayPackageRead,
-		displayPackageRead,
-		displayGroupShare,
-		displayProjectShare,
-		displayAICatalogItemRead,
-		displayProjectUpdate,
-		displayExportCreate,
-		displaySecretsManagerTrialStart,
-		displayBatchedBackgroundOperationRun,
-		displayEnvironmentStop,
-		displayEnvironmentStop,
-		displayIssueSubscribe,
-		displayLabelSubscribe,
-		displayMergeRequestSubscribe,
-		displayWikiSubscribe,
-		displayWorkItemSubscribe,
-		displayWorkItemSavedViewSubscribe,
-		displayRemoteMirrorUpdate,
-		displayVirtualRegistryUpdate,
-		displayVirtualRegistryUpdate,
-		displayWebhookTrigger,
-		displayMemberUpdate,
-		displayInternalEventTrack,
-		displayCIMinuteTransfer,
-		displayGroupTransfer,
-		displayProjectTransfer,
-		displayMergeRequestApprove,
-		displayCustomFieldArchive,
-		displayGroupArchive,
-		displayProjectArchive,
-		displayRunnerAssign,
-		displayUserUnban,
-		displayUserUnblock,
-		displayUserUnfollow,
-		displayTerraformStateLock,
-		displayJobUpdate,
-		displayGroupShare,
-		displayProjectShare,
-		displayProjectUpdate,
-		displayWorkItemSavedViewSubscribe,
-		displayAchievementUpdate,
-		displayActiveContextCollectionUpdate,
-		displayActiveContextConnectionUpdate,
-		displayActiveContextEnabledNamespaceUpdate,
-		displayAddOnPurchaseUpdate,
-		displayAdminDataManagementUpdate,
-		displayAdminMemberRoleUpdate,
-		displayAIAgentSessionUpdate,
-		displayAICatalogItemUpdate,
-		displayAICatalogItemUpdate,
-		displayAICatalogItemConsumerUpdate,
-		displayAICatalogMCPServerUpdate,
-		displayAICatalogExternalAgentUpdate,
-		displayAIDomainSettingsUpdate,
-		displayDuoSettingUpdate,
-		displayAiFlowScheduleUpdate,
-		displayAIFlowTriggerUpdate,
-		displayAISelfHostedModelUpdate,
-		displayAIToolRuleUpdate,
-		displayAlertUpdate,
-		displayAlertMetricImageUpdate,
-		displayApplicationAppearanceUpdate,
-		displayApplicationSettingUpdate,
-		displayApprovalConfigurationUpdate,
-		displayApprovalRuleUpdate,
-		displayAuditEventStreamingDestinationUpdate,
-		displayBadgeUpdate,
-		displayBranchRuleUpdate,
-		displayBroadcastMessageUpdate,
-		displayCDApplicationUpdate,
-		displayCDApplicationLinkUpdate,
-		displayCDEnvironmentUpdate,
-		displayCDServiceUpdate,
-		displayCICDSettingUpdate,
-		displayCINamespaceSettingsUpdate,
-		displayClusterUpdate,
-		displayCommitUpdate,
-		displayCommitUpdate,
-		displayCommitEmailUpdate,
-		displayComplianceFrameworkUpdate,
-		displayCompliancePolicySettingUpdate,
-		displayComplianceFrameworkUpdate,
-		displayComplianceFrameworkUpdate,
-		displayComplianceViolationsReportUpdate,
-		displayContainerExpirationPolicyUpdate,
-		displayContainerRegistryProtectionTagRuleUpdate,
-		displayContainerRepositoryProtectionRuleUpdate,
-		displayVirtualRegistryUpdate,
-		displayVirtualRegistryUpdate,
-		displayCreditCardValidationUpdate,
-		displayCRMContactUpdate,
-		displayCRMOrganizationUpdate,
-		displayCustomAttributeUpdate,
-		displayCustomDashboardUpdate,
-		displayWorkItemUpdate,
-		displayOnDemandDASTScanUpdate,
-		displayOnDemandDASTScanUpdate,
-		displayDebianDistributionUpdate,
-		displayDependencyProxyUpdate,
-		displayDependencyProxyPackagesSettingUpdate,
-		displayDeployKeyUpdate,
-		displayDeploymentUpdate,
-		displayDesignUpdate,
-		displayDuoSettingUpdate,
-		displayDuoWorkflowUpdate,
-		displayElasticsearchIndexedNamespaceUpdate,
-		displayEnterpriseUserUpdate,
-		displayEnvironmentUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayErrorTrackingSettingUpdate,
-		displayEscalationPolicyUpdate,
-		displayExternalStatusCheckUpdate,
-		displayExternalStatusCheckServiceUpdate,
-		displayFeatureUpdate,
-		displayFeatureFlagUpdate,
-		displayFeatureFlagUserListUpdate,
-		displayFeatureFlagSettingsUpdate,
-		displayVulnerabilityUpdate,
-		displayFindingTokenStatusUpdate,
-		displayFreezePeriodUpdate,
-		displayGeoNodeUpdate,
-		displayGeoRegistryUpdate,
-		displayGeoSiteUpdate,
-		displayGitLabSubscriptionUpdate,
-		displayPolicyStorePolicyUpdate,
-		displayGroupUpdate,
-		displayHTTPIntegrationUpdate,
-		displayIntegrationUpdate,
-		displayInvitationUpdate,
-		displayIssuableMetricImageUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayJobUpdate,
-		displayJobTokenScopeUpdate,
-		displayKnowledgeGraphSettingUpdate,
-		displayLabelUpdate,
-		displayVirtualRegistryUpdate,
-		displayVirtualRegistryUpdate,
-		displayMemberUpdate,
-		displayMemberApprovalUpdate,
-		displayMemberRoleUpdate,
-		displayMergeRequestUpdate,
-		displayMergeRequestApprovalRuleUpdate,
-		displayApprovalSettingUpdate,
-		displayMergeRequestUpdate,
-		displayMergeRequestUpdate,
-		displayMergeRequestUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayMLExperimentUpdate,
-		displayMLflowRunUpdate,
-		displayMLModelUpdate,
-		displayDuoSettingUpdate,
-		displayModelSelectionAllowlistUpdate,
-		displayModelVersionUpdate,
-		displayNamespaceUpdate,
-		displayWorkItemUpdate,
-		displayNotificationSettingUpdate,
-		displayVirtualRegistryUpdate,
-		displayVirtualRegistryUpdate,
-		displayOAuthApplicationUpdate,
-		displayOnDemandDASTScanUpdate,
-		displayOnCallScheduleUpdate,
-		displayOnCallScheduleUpdate,
-		displayOrganizationUpdate,
-		displayOrganizationUserUpdate,
-		displayPackageUpdate,
-		displayPackageUpdate,
-		displayPackageSettingUpdate,
-		displayPageUpdate,
-		displayPagesDomainUpdate,
-		displayPipelineUpdate,
-		displayPipelineScheduleUpdate,
-		displayPipelineScheduleUpdate,
-		displayPlaceholderReassignmentUpdate,
-		displayPlanLimitUpdate,
-		displayProjectUpdate,
-		displayProtectedBranchUpdate,
-		displayProtectedEnvironmentUpdate,
-		displayPullMirrorUpdate,
-		displayPushRuleUpdate,
-		displayReleaseUpdate,
-		displayReleaseLinkUpdate,
-		displayRemoteMirrorUpdate,
-		displayRepositoryUpdate,
-		displayRepositorySubmoduleUpdate,
-		displayWorkItemUpdate,
-		displayResourceGroupUpdate,
-		displayRunnerUpdate,
-		displayRunnerControllerUpdate,
-		displaySAMLGroupIdentityUpdate,
-		displaySavedReplyUpdate,
-		displayMergeRequestSavedViewUpdate,
-		displaySCIMIdentityUpdate,
-		displaySecretUpdate,
-		displaySecretsPermissionUpdate,
-		displaySecurityAttributeUpdate,
-		displaySecurityAttributeUpdate,
-		displaySecurityDashboardUpdate,
-		displaySecuritySettingUpdate,
-		displaySecurityPolicyUpdate,
-		displaySecurityScanProfilesUpdate,
-		displaySecuritySettingUpdate,
-		displayServiceAccountUpdate,
-		displaySnippetUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayBranchRuleUpdate,
-		displaySubscriptionUsageCapUpdate,
-		displayTerraformStateProtectionRuleUpdate,
-		displayTimelineEventUpdate,
-		displayTodoUpdate,
-		displayTopicUpdate,
-		displayTriggerUpdate,
-		displayUserUpdate,
-		displayAchievementUpdate,
-		displayAvatarUpdate,
-		displayPreferenceUpdate,
-		displayStatusUpdate,
-		displayValueStreamUpdate,
-		displayVariableUpdate,
-		displayVirtualRegistryCleanupPolicyUpdate,
-		displayVirtualRegistryUpdate,
-		displayVSCodeSettingUpdate,
-		displayVulnerabilityFlagUpdate,
-		displayVulnerabilityNoteUpdate,
-		displayWebhookUpdate,
-		displayWebhookUpdate,
-		displayWebhookUpdate,
-		displayWikiUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemSavedViewUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkItemUpdate,
-		displayWorkspaceUpdate,
-		displayZoektIndexUpdate,
-		displayZoektNamespaceUpdate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayPackageCreate,
-		displayWikiUpdate,
-		displayGlobalSearchUse,
-		displayCIConfigValidate,
-		displayPagesDomainVerify,
+		"AI Agent Audit Event: Create",
+		"AI Agent Identity: Create",
+		"AI Agent Session: Create",
+		"AI Agent Session: Read",
+		"AI Agent Session: Update",
+		"AI Catalog External Agent: Create",
+		"AI Catalog External Agent: Delete",
+		"AI Catalog External Agent: Update",
+		"AI Domain Settings: Update",
+		"AI Flow Trigger: Create",
+		"AI Flow Trigger: Delete",
+		"AI Flow Trigger: Update",
+		"AI Self-Hosted Model: Create",
+		"AI Self-Hosted Model: Delete",
+		"AI Self-Hosted Model: Update",
+		"AI catalog MCP server: Block",
+		"AI catalog MCP server: Create",
+		"AI catalog MCP server: Update",
+		"AI catalog item consumer: Delete",
+		"AI catalog item consumer: Update",
+		"AI catalog item: Create",
+		"AI catalog item: Delete",
+		"AI catalog item: Read",
+		"AI catalog item: Report",
+		"AI catalog item: Restore",
+		"AI catalog item: Update",
+		"AI tool rule: Read",
+		"AI tool rule: Update",
+		"AI usage metric: Read",
+		"Access Request: Approve",
+		"Access Request: Create",
+		"Access Request: Delete",
+		"Access Request: Read",
+		"Achievement: Award",
+		"Achievement: Create",
+		"Achievement: Delete",
+		"Achievement: Revoke",
+		"Achievement: Update",
+		"Active Context Collection: Update",
+		"Active Context Connection: Read",
+		"Active Context Connection: Update",
+		"Active Context Dead Queue: Clear",
+		"Active Context Dead Queue: Replay",
+		"Active Context Enabled Namespace: Update",
+		"Activity Analytics: Read",
+		"Activity: Read",
+		"Add On Assignment: Create",
+		"Add On Assignment: Delete",
+		"Add On Purchase: Create",
+		"Add On Purchase: Read",
+		"Add On Purchase: Update",
+		"Admin Data Management: Read",
+		"Admin Data Management: Update",
+		"Admin Member Role: Create",
+		"Admin Member Role: Delete",
+		"Admin Member Role: Read",
+		"Admin Member Role: Update",
+		"Ai Flow Schedule: Create",
+		"Ai Flow Schedule: Delete",
+		"Ai Flow Schedule: Update",
+		"Alert Metric Image: Create",
+		"Alert Metric Image: Delete",
+		"Alert Metric Image: Read",
+		"Alert Metric Image: Update",
+		"Alert: Update",
+		"Alias: Create",
+		"Alias: Delete",
+		"Alias: Read",
+		"Any Token: Read",
+		"Any Token: Revoke",
+		"Application Appearance: Read",
+		"Application Appearance: Update",
+		"Application Setting: Read",
+		"Application Setting: Update",
+		"Approval Configuration: Read",
+		"Approval Configuration: Update",
+		"Approval Rule: Create",
+		"Approval Rule: Delete",
+		"Approval Rule: Read",
+		"Approval Rule: Update",
+		"Approval Setting: Read",
+		"Approval Setting: Update",
+		"Artifact: Delete",
+		"Ascp: Create",
+		"Association: Read",
+		"Attestation: Read",
+		"Audit Event Streaming Destination: Create",
+		"Audit Event Streaming Destination: Delete",
+		"Audit Event Streaming Destination: Update",
+		"Audit Event: Read",
+		"Avatar: Read",
+		"Avatar: Update",
+		"Award Emoji: Create",
+		"Award Emoji: Delete",
+		"Badge: Create",
+		"Badge: Delete",
+		"Badge: Read",
+		"Badge: Update",
+		"Batched Background Migration: Read",
+		"Batched Background Migration: Run",
+		"Batched Background Operation: Read",
+		"Batched Background Operation: Run",
+		"Branch Rule: Create",
+		"Branch Rule: Delete",
+		"Branch Rule: Update",
+		"Branch: Create",
+		"Branch: Delete",
+		"Branch: Protect",
+		"Branch: Read",
+		"Broadcast Message: Create",
+		"Broadcast Message: Delete",
+		"Broadcast Message: Update",
+		"CD Application Flow Definition: Create",
+		"CD Application Flow Definition: Read",
+		"CD Application Link: Create",
+		"CD Application Link: Delete",
+		"CD Application Link: Read",
+		"CD Application Link: Update",
+		"CD Application: Create",
+		"CD Application: Read",
+		"CD Application: Update",
+		"CD Artifact Source: Create",
+		"CD Artifact Source: Read",
+		"CD Environment: Create",
+		"CD Environment: Read",
+		"CD Environment: Update",
+		"CD Rollout Gate: Resolve",
+		"CD Rollout: Create",
+		"CD Rollout: Read",
+		"CD Service: Create",
+		"CD Service: Read",
+		"CD Service: Update",
+		"CD Version Set: Create",
+		"CD Version Set: Read",
+		"CI Config: Read",
+		"CI Config: Validate",
+		"CI Minute: Create",
+		"CI Minute: Transfer",
+		"CI Namespace Settings: Update",
+		"CI/CD Setting: Update",
+		"CRM Contact: Create",
+		"CRM Contact: Update",
+		"CRM Organization: Create",
+		"CRM Organization: Update",
+		"Catalog Bundled Resource: Read",
+		"Catalog Resource: Create",
+		"Catalog Resource: Delete",
+		"Catalog Version: Publish",
+		"Chat Completion: Create",
+		"Cluster Agent Mapping: Create",
+		"Cluster Agent Mapping: Delete",
+		"Cluster Agent Token: Create",
+		"Cluster Agent Token: Read",
+		"Cluster Agent Token: Revoke",
+		"Cluster Agent URL Configuration: Create",
+		"Cluster Agent URL Configuration: Delete",
+		"Cluster Agent URL Configuration: Read",
+		"Cluster Agent: Create",
+		"Cluster Agent: Delete",
+		"Cluster Agent: Read",
+		"Cluster: Create",
+		"Cluster: Delete",
+		"Cluster: Read",
+		"Cluster: Update",
+		"Code Review Analytics: Read",
+		"Code Suggestion Completion: Create",
+		"Code Suggestion Connection Detail: Read",
+		"Code Suggestion Direct Access: Create",
+		"Code Suggestion Enabled Status: Read",
+		"Code: Download",
+		"Code: Push",
+		"Code: Read",
+		"Commit Email: Update",
+		"Commit Status: Create",
+		"Commit: Create",
+		"Commit: Delete",
+		"Commit: Read",
+		"Commit: Update",
+		"Compliance Dashboard: Read",
+		"Compliance Framework: Create",
+		"Compliance Framework: Delete",
+		"Compliance Framework: Update",
+		"Compliance Policy Setting: Read",
+		"Compliance Policy Setting: Update",
+		"Compliance Violations Report: Update",
+		"Container Expiration Policy: Update",
+		"Container Registry Protection Tag Rule: Create",
+		"Container Registry Protection Tag Rule: Delete",
+		"Container Registry Protection Tag Rule: Read",
+		"Container Registry Protection Tag Rule: Update",
+		"Container Repository Protection Rule: Create",
+		"Container Repository Protection Rule: Delete",
+		"Container Repository Protection Rule: Read",
+		"Container Repository Protection Rule: Update",
+		"Container Repository: Delete",
+		"Container Repository: Read",
+		"Conversation Thread: Delete",
+		"Counts: Read",
+		"Coverage Fuzzing Corpus: Create",
+		"Credit Card Validation: Update",
+		"Custom Attribute: Delete",
+		"Custom Attribute: Read",
+		"Custom Attribute: Update",
+		"Custom Dashboard: Create",
+		"Custom Dashboard: Delete",
+		"Custom Dashboard: Update",
+		"Custom Emoji: Create",
+		"Custom Emoji: Delete",
+		"Custom Field: Archive",
+		"Cycle Analytics: Read",
+		"Database Dictionary: Read",
+		"Database Migration: Mark",
+		"Database Migration: Read",
+		"Debian Distribution: Create",
+		"Debian Distribution: Delete",
+		"Debian Distribution: Read",
+		"Debian Distribution: Update",
+		"Dependency Firewall Evaluation: Create",
+		"Dependency List Export: Create",
+		"Dependency List Export: Read",
+		"Dependency Proxy Cache: Purge",
+		"Dependency Proxy Packages Setting: Update",
+		"Dependency Proxy: Read",
+		"Dependency Proxy: Update",
+		"Dependency: Read",
+		"Deploy Key: Create",
+		"Deploy Key: Delete",
+		"Deploy Key: Enable",
+		"Deploy Key: Read",
+		"Deploy Key: Update",
+		"Deploy Token: Create",
+		"Deploy Token: Delete",
+		"Deploy Token: Read",
+		"Deployment: Approve",
+		"Deployment: Create",
+		"Deployment: Delete",
+		"Deployment: Read",
+		"Deployment: Update",
+		"Design: Create",
+		"Design: Delete",
+		"Design: Update",
+		"DevOps Adoption: Enable",
+		"Dora Metric: Read",
+		"Duo Flow Callback Hook: Create",
+		"Duo Flow Callback Hook: Delete",
+		"Duo Flow Callback Hook: Read",
+		"Duo Setting: Update",
+		"Duo Workflow Direct Access Token: Create",
+		"Duo Workflow: Create",
+		"Duo Workflow: Delete",
+		"Duo Workflow: Read",
+		"Duo Workflow: Resume",
+		"Duo Workflow: Update",
+		"Duo user feedback: Create",
+		"Editor Telemetry: Create",
+		"Elasticsearch Indexed Namespace: Update",
+		"Email: Create",
+		"Email: Delete",
+		"Email: Read",
+		"Enterprise User: Delete",
+		"Enterprise User: Disable Two Factor",
+		"Enterprise User: Read",
+		"Enterprise User: Update",
+		"Environment: Create",
+		"Environment: Delete",
+		"Environment: Read",
+		"Environment: Stop",
+		"Environment: Update",
+		"Error Tracking Client Key: Create",
+		"Error Tracking Client Key: Delete",
+		"Error Tracking Client Key: Read",
+		"Error Tracking Setting: Read",
+		"Error Tracking Setting: Update",
+		"Escalation Policy: Create",
+		"Escalation Policy: Delete",
+		"Escalation Policy: Read",
+		"Escalation Policy: Update",
+		"Event: Read",
+		"Experiment Cache: Delete",
+		"Experiment: Read",
+		"Export: Create",
+		"Export: Download",
+		"Export: Read",
+		"External Status Check Service: Create",
+		"External Status Check Service: Delete",
+		"External Status Check Service: Read",
+		"External Status Check Service: Update",
+		"External Status Check: Create",
+		"External Status Check: Delete",
+		"External Status Check: Read",
+		"External Status Check: Retry",
+		"External Status Check: Update",
+		"Feature Flag Settings: Update",
+		"Feature Flag User List: Create",
+		"Feature Flag User List: Delete",
+		"Feature Flag User List: Read",
+		"Feature Flag User List: Update",
+		"Feature Flag: Create",
+		"Feature Flag: Delete",
+		"Feature Flag: Read",
+		"Feature Flag: Update",
+		"Feature: Delete",
+		"Feature: Read",
+		"Feature: Update",
+		"Finding Token Status: Update",
+		"Flows Metadata: Read",
+		"Follower: Read",
+		"Following: Read",
+		"Freeze Period: Create",
+		"Freeze Period: Delete",
+		"Freeze Period: Read",
+		"Freeze Period: Update",
+		"GLQL: Read",
+		"GPG Key: Create",
+		"GPG Key: Delete",
+		"GPG Key: Read",
+		"GPG Key: Revoke",
+		"Geo Node: Create",
+		"Geo Node: Delete",
+		"Geo Node: Read",
+		"Geo Node: Repair",
+		"Geo Node: Update",
+		"Geo Registry: Update",
+		"Geo Site: Create",
+		"Geo Site: Delete",
+		"Geo Site: Read",
+		"Geo Site: Repair",
+		"Geo Site: Update",
+		"Git Command: Create",
+		"GitLab Orbit MCP tool: Execute",
+		"GitLab Subscription: Create",
+		"GitLab Subscription: Read",
+		"GitLab Subscription: Update",
+		"Global Search: Use",
+		"Group: Archive",
+		"Group: Create",
+		"Group: Delete",
+		"Group: Read",
+		"Group: Share",
+		"Group: Transfer",
+		"Group: Update",
+		"HTTP Integration: Create",
+		"HTTP Integration: Delete",
+		"HTTP Integration: Update",
+		"Identity: Delete",
+		"Impersonation Token: Create",
+		"Impersonation Token: Read",
+		"Impersonation Token: Revoke",
+		"Import: Cancel",
+		"Import: Create",
+		"Import: Read",
+		"Integration Exclusion: Create",
+		"Integration Exclusion: Delete",
+		"Integration: Delete",
+		"Integration: Read",
+		"Integration: Update",
+		"Internal Event: Track",
+		"Invitation: Create",
+		"Invitation: Delete",
+		"Invitation: Read",
+		"Invitation: Update",
+		"Issuable Metric Image: Create",
+		"Issuable Metric Image: Delete",
+		"Issuable Metric Image: Read",
+		"Issuable Metric Image: Update",
+		"Issuable Resource Link: Create",
+		"Issuable Resource Link: Delete",
+		"Issue: Subscribe",
+		"Jira Connect Subscription: Create",
+		"Jira Import: Create",
+		"Job Artifact: Delete",
+		"Job Artifact: Read",
+		"Job Artifact: Update",
+		"Job Token Scope Allowlist: Create",
+		"Job Token Scope Allowlist: Delete",
+		"Job Token Scope Allowlist: Read",
+		"Job Token Scope: Read",
+		"Job Token Scope: Update",
+		"Job: Delete",
+		"Job: Read",
+		"Job: Run",
+		"Job: Update",
+		"Knowledge Graph Enabled Namespace: Create",
+		"Knowledge Graph Enabled Namespace: Delete",
+		"Knowledge Graph Enabled Namespace: Read",
+		"Knowledge Graph Setting: Update",
+		"Knowledge Graph: Read",
+		"LDAP Admin Role Link: Create",
+		"LDAP Admin Role Link: Delete",
+		"LDAP Admin Role Link: Read",
+		"LDAP Group Link: Create",
+		"LDAP Group Link: Delete",
+		"LDAP Group Link: Read",
+		"LDAP Group Sync: Run",
+		"LDAP Group: Read",
+		"Label: Create",
+		"Label: Delete",
+		"Label: Promote",
+		"Label: Read",
+		"Label: Subscribe",
+		"Label: Update",
+		"License Billable User: Refresh",
+		"License: Create",
+		"License: Delete",
+		"License: Read",
+		"MCP tool: Execute",
+		"ML Experiment: Create",
+		"ML Experiment: Delete",
+		"ML Experiment: Read",
+		"ML Experiment: Update",
+		"ML Model: Create",
+		"ML Model: Delete",
+		"ML Model: Read",
+		"ML Model: Update",
+		"MLflow Artifact: Read",
+		"MLflow Run: Create",
+		"MLflow Run: Delete",
+		"MLflow Run: Log",
+		"MLflow Run: Read",
+		"MLflow Run: Update",
+		"Markdown Upload: Create",
+		"Markdown Upload: Delete",
+		"Markdown Upload: Read",
+		"Markdown: Render",
+		"Member Approval: Update",
+		"Member Role: Assign",
+		"Member Role: Create",
+		"Member Role: Delete",
+		"Member Role: Read",
+		"Member Role: Update",
+		"Member: Create",
+		"Member: Delete",
+		"Member: Read",
+		"Member: Update",
+		"Merge Request Approval Rule: Create",
+		"Merge Request Approval Rule: Delete",
+		"Merge Request Approval Rule: Read",
+		"Merge Request Approval Rule: Update",
+		"Merge Request Saved View: Create",
+		"Merge Request Saved View: Delete",
+		"Merge Request Saved View: Read",
+		"Merge Request Saved View: Update",
+		"Merge Request: Approve",
+		"Merge Request: Create",
+		"Merge Request: Delete",
+		"Merge Request: Merge",
+		"Merge Request: Read",
+		"Merge Request: Subscribe",
+		"Merge Request: Update",
+		"Merge Train Car: Delete",
+		"Merge Train Merge Request: Add",
+		"Merge Train: Read",
+		"Metadata: Read",
+		"Mobile Push Subscription: Create",
+		"Mobile Push Subscription: Delete",
+		"Model Selection Allowlist: Read",
+		"Model Selection Allowlist: Update",
+		"Model Version: Create",
+		"Model Version: Delete",
+		"Model Version: Read",
+		"Model Version: Update",
+		"Namespace Ban: Delete",
+		"Namespace Duo Feature: Lock",
+		"Namespace Storage Limit Exclusion: Create",
+		"Namespace Storage Limit Exclusion: Delete",
+		"Namespace Storage Limit Exclusion: Read",
+		"Namespace: Read",
+		"Namespace: Update",
+		"Notification Setting: Read",
+		"Notification Setting: Update",
+		"OAuth Application: Create",
+		"OAuth Application: Delete",
+		"OAuth Application: Read",
+		"OAuth Application: Renew Secret",
+		"OAuth Application: Update",
+		"Offline Export: Create",
+		"Offline Export: Read",
+		"On-Demand DAST Scan: Create",
+		"On-Demand DAST Scan: Delete",
+		"On-Demand DAST Scan: Update",
+		"On-call Schedule: Create",
+		"On-call Schedule: Delete",
+		"On-call Schedule: Update",
+		"Organization User: Create",
+		"Organization User: Delete",
+		"Organization User: Update",
+		"Organization: Create",
+		"Organization: Delete",
+		"Organization: Read",
+		"Organization: Restore",
+		"Organization: Update",
+		"Package Setting: Update",
+		"Package: Create",
+		"Package: Delete",
+		"Package: Read",
+		"Package: Update",
+		"Page: Delete",
+		"Page: Read",
+		"Page: Update",
+		"Pages Domain: Create",
+		"Pages Domain: Delete",
+		"Pages Domain: Read",
+		"Pages Domain: Update",
+		"Pages Domain: Verify",
+		"Path Lock: Create",
+		"Personal Access Token: Create",
+		"Personal Access Token: Read",
+		"Personal Access Token: Revoke",
+		"Personal Access Token: Rotate",
+		"Pipeline Execution Project Schedule: Read",
+		"Pipeline Schedule: Create",
+		"Pipeline Schedule: Delete",
+		"Pipeline Schedule: Read",
+		"Pipeline Schedule: Update",
+		"Pipeline Subscription: Create",
+		"Pipeline Subscription: Delete",
+		"Pipeline: Create",
+		"Pipeline: Delete",
+		"Pipeline: Read",
+		"Pipeline: Update",
+		"Placeholder Reassignment: Create",
+		"Placeholder Reassignment: Read",
+		"Placeholder Reassignment: Update",
+		"Plan Limit: Read",
+		"Plan Limit: Update",
+		"Policy Store Policy: Create",
+		"Policy Store Policy: Delete",
+		"Policy Store Policy: Read",
+		"Policy Store Policy: Update",
+		"Preference: Read",
+		"Preference: Update",
+		"Project: Archive",
+		"Project: Create",
+		"Project: Delete",
+		"Project: Fork",
+		"Project: Read",
+		"Project: Share",
+		"Project: Transfer",
+		"Project: Update",
+		"Protected Branch: Read",
+		"Protected Branch: Update",
+		"Protected Environment: Create",
+		"Protected Environment: Delete",
+		"Protected Environment: Read",
+		"Protected Environment: Update",
+		"Protected Tag: Read",
+		"Provisioned User: Read",
+		"Pull Mirror: Create",
+		"Pull Mirror: Read",
+		"Pull Mirror: Update",
+		"Push Rule: Create",
+		"Push Rule: Delete",
+		"Push Rule: Read",
+		"Push Rule: Update",
+		"Release Link: Create",
+		"Release Link: Delete",
+		"Release Link: Read",
+		"Release Link: Update",
+		"Release: Create",
+		"Release: Delete",
+		"Release: Read",
+		"Release: Update",
+		"Remote Mirror Public Key: Read",
+		"Remote Mirror: Create",
+		"Remote Mirror: Delete",
+		"Remote Mirror: Read",
+		"Remote Mirror: Update",
+		"Repository History: Rewrite",
+		"Repository Storage Move: Create",
+		"Repository Storage Move: Read",
+		"Repository Submodule: Update",
+		"Repository Tag: Create",
+		"Repository Tag: Delete",
+		"Repository Tag: Read",
+		"Repository: Create",
+		"Repository: Delete",
+		"Repository: Read",
+		"Repository: Update",
+		"Resource Access Token: Create",
+		"Resource Access Token: Delete",
+		"Resource Access Token: Read",
+		"Resource Access Token: Rotate",
+		"Resource Group: Read",
+		"Resource Group: Update",
+		"Runner Controller Token: Create",
+		"Runner Controller Token: Read",
+		"Runner Controller Token: Revoke",
+		"Runner Controller Token: Rotate",
+		"Runner Controller: Create",
+		"Runner Controller: Delete",
+		"Runner Controller: Read",
+		"Runner Controller: Update",
+		"Runner Registration Token: Reset",
+		"Runner Usage: Read",
+		"Runner: Assign",
+		"Runner: Create",
+		"Runner: Delete",
+		"Runner: Read",
+		"Runner: Update",
+		"SAML Group Identity: Delete",
+		"SAML Group Identity: Read",
+		"SAML Group Identity: Update",
+		"SAML Group Link: Create",
+		"SAML Group Link: Delete",
+		"SAML Group Link: Read",
+		"SAML User: Read",
+		"SBOM Occurrence: Read",
+		"SCIM Identity: Delete",
+		"SCIM Identity: Read",
+		"SCIM Identity: Update",
+		"SSH Certificate: Create",
+		"SSH Certificate: Delete",
+		"SSH Certificate: Read",
+		"SSH Key: Create",
+		"SSH Key: Delete",
+		"SSH Key: Read",
+		"Saved Reply: Create",
+		"Saved Reply: Delete",
+		"Saved Reply: Update",
+		"Search Migration: Read",
+		"Secret: Create",
+		"Secret: Delete",
+		"Secret: Update",
+		"Secrets Manager API JWT: Create",
+		"Secrets Manager Add-on: Enable",
+		"Secrets Manager Enrollment: Read",
+		"Secrets Manager Trial: Start",
+		"Secrets Manager: Deprovision",
+		"Secrets Manager: Provision",
+		"Secrets Manager: Read",
+		"Secrets Permission: Delete",
+		"Secrets Permission: Update",
+		"Secure File: Create",
+		"Secure File: Delete",
+		"Secure File: Read",
+		"Security Attribute: Create",
+		"Security Attribute: Delete",
+		"Security Attribute: Update",
+		"Security Dashboard: Update",
+		"Security Policy: Update",
+		"Security Project Tracked Ref: Create",
+		"Security Scan Profiles: Create",
+		"Security Scan Profiles: Delete",
+		"Security Scan Profiles: Update",
+		"Security Scan: Create",
+		"Security Setting: Read",
+		"Security Setting: Update",
+		"Service Account Personal Access Token: Create",
+		"Service Account Personal Access Token: Read",
+		"Service Account Personal Access Token: Revoke",
+		"Service Account Personal Access Token: Rotate",
+		"Service Account: Create",
+		"Service Account: Delete",
+		"Service Account: Read",
+		"Service Account: Update",
+		"Service Ping: Read",
+		"Sidekiq Job: Drop",
+		"Sidekiq Metric: Read",
+		"Snapshot: Read",
+		"Snippet: Create",
+		"Snippet: Delete",
+		"Snippet: Read",
+		"Snippet: Update",
+		"Statistic: Read",
+		"Status: Read",
+		"Status: Update",
+		"Subscription Usage Cap: Update",
+		"Suggestion: Apply",
+		"Support PIN: Create",
+		"Support PIN: Read",
+		"Support PIN: Revoke",
+		"Tag: Protect",
+		"Target Branch Rule: Create",
+		"Target Branch Rule: Delete",
+		"Template: Read",
+		"Terraform State Protection Rule: Create",
+		"Terraform State Protection Rule: Delete",
+		"Terraform State Protection Rule: Update",
+		"Terraform State: Create",
+		"Terraform State: Delete",
+		"Terraform State: Lock",
+		"Terraform State: Read",
+		"Third Party Agent Direct Access Token: Create",
+		"Timeline Event: Create",
+		"Timeline Event: Delete",
+		"Timeline Event: Update",
+		"Timelog: Create",
+		"Timelog: Delete",
+		"Todo: Create",
+		"Todo: Delete",
+		"Todo: Read",
+		"Todo: Update",
+		"Topic: Create",
+		"Topic: Delete",
+		"Topic: Merge",
+		"Topic: Read",
+		"Topic: Update",
+		"Trigger: Create",
+		"Trigger: Delete",
+		"Trigger: Read",
+		"Trigger: Update",
+		"UI Notification: Dismiss",
+		"Usage Data Metric: Read",
+		"Usage Data Metric: Update",
+		"Usage Data Query: Read",
+		"User: Activate",
+		"User: Approve",
+		"User: Ban",
+		"User: Block",
+		"User: Create",
+		"User: Deactivate",
+		"User: Delete",
+		"User: Disable Two Factor",
+		"User: Follow",
+		"User: Read",
+		"User: Reject",
+		"User: Unban",
+		"User: Unblock",
+		"User: Unfollow",
+		"User: Update",
+		"VSCode Setting: Delete",
+		"VSCode Setting: Read",
+		"VSCode Setting: Update",
+		"Value Stream: Create",
+		"Value Stream: Delete",
+		"Value Stream: Update",
+		"Variable: Create",
+		"Variable: Delete",
+		"Variable: Read",
+		"Variable: Update",
+		"Verified Namespace: Create",
+		"Virtual Registry Cleanup Policy: Create",
+		"Virtual Registry Cleanup Policy: Delete",
+		"Virtual Registry Cleanup Policy: Read",
+		"Virtual Registry Cleanup Policy: Update",
+		"Virtual Registry: Create",
+		"Virtual Registry: Delete",
+		"Virtual Registry: Read",
+		"Virtual Registry: Update",
+		"Vulnerability Archive Export: Create",
+		"Vulnerability Archive Export: Read",
+		"Vulnerability Duo Workflow: Execute",
+		"Vulnerability Export: Create",
+		"Vulnerability Export: Read",
+		"Vulnerability Flag: Update",
+		"Vulnerability Issue Link: Create",
+		"Vulnerability Issue Link: Delete",
+		"Vulnerability Issue Link: Read",
+		"Vulnerability Merge Request Link: Create",
+		"Vulnerability Merge Request Link: Delete",
+		"Vulnerability Note: Create",
+		"Vulnerability Note: Delete",
+		"Vulnerability Note: Read",
+		"Vulnerability Note: Update",
+		"Vulnerability: Archive",
+		"Vulnerability: Create",
+		"Vulnerability: Read",
+		"Vulnerability: Update",
+		"Webhook: Create",
+		"Webhook: Delete",
+		"Webhook: Read",
+		"Webhook: Trigger",
+		"Webhook: Update",
+		"Wiki: Create",
+		"Wiki: Delete",
+		"Wiki: Read",
+		"Wiki: Subscribe",
+		"Wiki: Update",
+		"Work Item Saved View: Create",
+		"Work Item Saved View: Delete",
+		"Work Item Saved View: Subscribe",
+		"Work Item Saved View: Update",
+		"Work Item Type: Archive",
+		"Work Item: Create",
+		"Work Item: Delete",
+		"Work Item: Read",
+		"Work Item: Subscribe",
+		"Work Item: Update",
+		"Workspace: Create",
+		"Workspace: Update",
+		"Zoekt Index: Update",
+		"Zoekt Namespace: Create",
+		"Zoekt Namespace: Delete",
+		"Zoekt Namespace: Update",
+		"Zoekt Node: Read",
 	},
+	Display: []uint16{706, 778, 778, 451, 668, 30, 234, 434, 443, 707, 209, 335, 532, 755, 773, 426, 595, 736, 736, 736, 495, 34, 708, 16, 709, 349, 349, 382, 446, 520, 15, 175, 42, 599, 774, 758, 31, 35, 47, 49, 54, 1, 2, 3, 21, 21, 17, 6, 58, 10, 13, 61, 77, 84, 84, 84, 87, 93, 95, 350, 350, 106, 103, 110, 350, 146, 119, 113, 115, 122, 124, 128, 130, 133, 149, 137, 161, 158, 150, 152, 155, 166, 168, 175, 178, 175, 175, 174, 180, 180, 180, 187, 191, 736, 736, 199, 141, 143, 204, 207, 774, 478, 478, 478, 478, 214, 218, 219, 226, 231, 235, 239, 244, 254, 249, 248, 255, 264, 774, 774, 774, 774, 774, 774, 774, 774, 269, 274, 288, 284, 298, 294, 535, 535, 309, 318, 324, 329, 350, 350, 331, 526, 336, 350, 342, 346, 352, 358, 362, 366, 774, 774, 774, 774, 774, 774, 774, 774, 774, 778, 774, 774, 369, 370, 374, 383, 396, 388, 391, 434, 403, 421, 736, 736, 431, 427, 444, 435, 774, 449, 444, 444, 444, 449, 774, 774, 449, 778, 774, 407, 416, 411, 454, 458, 464, 774, 493, 736, 471, 476, 350, 478, 481, 481, 487, 484, 493, 500, 505, 506, 517, 511, 514, 515, 521, 640, 533, 66, 281, 350, 281, 350, 108, 542, 672, 548, 551, 774, 559, 559, 555, 564, 575, 575, 569, 572, 774, 579, 596, 589, 585, 603, 617, 439, 621, 624, 629, 633, 636, 636, 647, 641, 645, 642, 652, 648, 660, 774, 774, 774, 774, 774, 611, 673, 679, 676, 774, 683, 684, 684, 687, 689, 693, 698, 710, 257, 314, 614, 669, 724, 727, 731, 732, 756, 740, 743, 746, 746, 749, 751, 759, 764, 774, 774, 774, 769, 774, 779, 782, 711, 32, 36, 48, 55, 22, 22, 19, 7, 59, 11, 14, 62, 78, 83, 88, 94, 96, 432, 107, 104, 111, 147, 116, 162, 159, 151, 156, 176, 181, 181, 181, 494, 188, 195, 192, 195, 737, 737, 737, 197, 201, 205, 208, 479, 479, 215, 227, 232, 236, 240, 245, 250, 260, 265, 265, 775, 775, 775, 775, 775, 775, 775, 270, 275, 279, 289, 285, 302, 299, 295, 535, 310, 319, 325, 527, 337, 343, 345, 354, 353, 359, 363, 367, 775, 775, 775, 775, 775, 775, 775, 775, 775, 775, 371, 375, 384, 397, 389, 392, 434, 404, 422, 737, 737, 737, 432, 428, 445, 436, 775, 449, 445, 445, 449, 775, 775, 450, 107, 775, 408, 417, 412, 455, 459, 462, 465, 775, 494, 737, 737, 494, 472, 479, 482, 482, 488, 485, 494, 494, 497, 497, 501, 518, 512, 514, 516, 534, 67, 108, 543, 672, 552, 775, 560, 556, 565, 576, 573, 580, 597, 590, 604, 600, 618, 440, 608, 622, 628, 631, 634, 637, 637, 647, 643, 653, 661, 775, 775, 775, 775, 104, 612, 674, 680, 677, 680, 685, 688, 690, 694, 699, 712, 36, 258, 315, 615, 725, 728, 733, 721, 747, 747, 750, 752, 760, 763, 763, 765, 775, 775, 775, 770, 783, 628, 261, 713, 737, 737, 737, 702, 758, 495, 170, 495, 495, 495, 495, 495, 282, 495, 372, 495, 495, 495, 495, 282, 282, 495, 495, 495, 635, 495, 766, 657, 228, 242, 625, 379, 406, 330, 742, 714, 539, 539, 704, 463, 681, 418, 212, 446, 695, 778, 514, 100, 381, 514, 373, 398, 778, 629, 148, 493, 449, 737, 737, 221, 737, 737, 737, 171, 33, 40, 45, 50, 52, 56, 4, 23, 27, 63, 536, 69, 71, 73, 75, 79, 86, 90, 91, 97, 99, 101, 433, 109, 351, 351, 351, 495, 145, 120, 114, 117, 123, 125, 129, 131, 134, 135, 163, 160, 153, 157, 172, 165, 167, 169, 177, 177, 177, 177, 177, 177, 177, 177, 177, 177, 179, 183, 495, 495, 189, 196, 193, 196, 738, 738, 738, 536, 536, 202, 210, 211, 213, 216, 225, 220, 223, 229, 233, 237, 338, 776, 243, 246, 251, 251, 251, 251, 0, 29, 262, 266, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 271, 272, 278, 280, 290, 286, 303, 300, 296, 306, 536, 311, 320, 326, 332, 313, 495, 528, 338, 338, 338, 347, 276, 355, 360, 364, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 776, 380, 377, 376, 387, 385, 399, 536, 390, 395, 393, 405, 423, 738, 738, 738, 433, 429, 447, 437, 81, 447, 776, 447, 447, 447, 447, 447, 447, 447, 447, 447, 447, 776, 776, 776, 447, 447, 447, 447, 447, 776, 776, 452, 452, 453, 776, 776, 776, 776, 409, 415, 419, 413, 456, 460, 467, 466, 776, 469, 495, 495, 738, 738, 495, 473, 477, 489, 489, 495, 495, 495, 498, 498, 536, 502, 433, 507, 519, 519, 510, 519, 513, 513, 519, 519, 519, 519, 522, 524, 536, 68, 283, 351, 536, 283, 351, 536, 540, 544, 546, 547, 549, 553, 495, 776, 561, 557, 566, 563, 577, 577, 577, 577, 577, 577, 577, 577, 577, 570, 574, 574, 577, 776, 581, 583, 495, 495, 598, 591, 586, 594, 605, 601, 606, 441, 607, 609, 620, 630, 626, 635, 646, 654, 649, 656, 536, 338, 338, 658, 659, 662, 776, 776, 776, 776, 776, 662, 613, 616, 536, 536, 664, 536, 338, 675, 495, 682, 682, 691, 696, 700, 703, 705, 715, 46, 85, 198, 259, 307, 308, 316, 530, 229, 616, 665, 670, 729, 734, 722, 757, 741, 744, 748, 753, 757, 761, 761, 766, 776, 776, 785, 449, 539, 402, 716, 424, 474, 778, 771, 321, 327, 43, 24, 762, 443, 778, 778, 778, 778, 593, 127, 758, 102, 25, 341, 490, 497, 539, 100, 252, 291, 381, 520, 175, 758, 37, 70, 154, 479, 348, 508, 587, 650, 317, 671, 568, 509, 582, 588, 651, 394, 495, 495, 339, 537, 23, 539, 281, 627, 102, 267, 267, 368, 400, 448, 767, 777, 771, 567, 739, 739, 762, 434, 357, 138, 340, 538, 443, 209, 335, 532, 595, 717, 718, 719, 681, 382, 339, 537, 539, 771, 38, 39, 41, 44, 51, 53, 57, 5, 26, 26, 20, 18, 8, 9, 247, 60, 12, 15, 28, 65, 64, 72, 74, 76, 80, 89, 98, 105, 112, 121, 118, 126, 132, 140, 139, 164, 178, 178, 173, 182, 184, 182, 182, 185, 186, 190, 194, 739, 739, 200, 142, 144, 203, 206, 778, 480, 480, 217, 224, 222, 230, 238, 241, 247, 253, 256, 263, 268, 778, 778, 778, 778, 778, 778, 273, 277, 292, 287, 304, 301, 297, 293, 758, 305, 312, 322, 323, 328, 333, 529, 341, 344, 356, 361, 365, 778, 778, 778, 778, 778, 778, 778, 778, 382, 378, 386, 401, 739, 739, 434, 425, 430, 449, 438, 82, 449, 449, 449, 778, 778, 410, 420, 414, 247, 457, 461, 468, 778, 470, 739, 739, 475, 480, 483, 483, 491, 486, 496, 496, 492, 499, 503, 520, 514, 514, 523, 525, 539, 541, 545, 550, 554, 562, 558, 567, 578, 571, 778, 584, 599, 592, 602, 619, 442, 610, 623, 632, 638, 638, 639, 647, 640, 644, 647, 655, 663, 778, 778, 778, 105, 667, 678, 686, 692, 697, 701, 720, 38, 92, 531, 666, 726, 730, 735, 739, 723, 745, 754, 763, 763, 763, 768, 778, 778, 778, 772, 778, 778, 778, 778, 780, 781, 784, 493, 493, 493, 493, 493, 493, 493, 493, 493, 493, 493, 768, 334, 136, 504},
 	Assignables: []finegrained.Assignable{
 		{Name: "create_ascp", Permissions: []uint16{53, 54, 55}, Boundaries: finegrained.BoundaryProject, Grantable: true},
 		{Name: "read_attestation", Permissions: []uint16{596}, Boundaries: finegrained.BoundaryProject, Grantable: true},
@@ -6633,793 +6169,3 @@ var table = finegrained.Table{
 		{ID: "wiki.upload_attachment", Paths: [][]uint32{{1079}}},
 	},
 }
-
-// The words GitLab's token page offers each assignable permission by, which
-// Display reads once per raw permission the assignable expands to.
-const (
-	displayAIAgentAuditEventCreate                  = "AI Agent Audit Event: Create"
-	displayAIAgentIdentityCreate                    = "AI Agent Identity: Create"
-	displayAIAgentSessionCreate                     = "AI Agent Session: Create"
-	displayAIAgentSessionRead                       = "AI Agent Session: Read"
-	displayAIAgentSessionUpdate                     = "AI Agent Session: Update"
-	displayAICatalogExternalAgentCreate             = "AI Catalog External Agent: Create"
-	displayAICatalogExternalAgentDelete             = "AI Catalog External Agent: Delete"
-	displayAICatalogExternalAgentUpdate             = "AI Catalog External Agent: Update"
-	displayAICatalogItemConsumerDelete              = "AI catalog item consumer: Delete"
-	displayAICatalogItemConsumerUpdate              = "AI catalog item consumer: Update"
-	displayAICatalogItemCreate                      = "AI catalog item: Create"
-	displayAICatalogItemDelete                      = "AI catalog item: Delete"
-	displayAICatalogItemRead                        = "AI catalog item: Read"
-	displayAICatalogItemReport                      = "AI catalog item: Report"
-	displayAICatalogItemRestore                     = "AI catalog item: Restore"
-	displayAICatalogItemUpdate                      = "AI catalog item: Update"
-	displayAICatalogMCPServerBlock                  = "AI catalog MCP server: Block"
-	displayAICatalogMCPServerCreate                 = "AI catalog MCP server: Create"
-	displayAICatalogMCPServerUpdate                 = "AI catalog MCP server: Update"
-	displayAIDomainSettingsUpdate                   = "AI Domain Settings: Update"
-	displayAIFlowTriggerCreate                      = "AI Flow Trigger: Create"
-	displayAIFlowTriggerDelete                      = "AI Flow Trigger: Delete"
-	displayAIFlowTriggerUpdate                      = "AI Flow Trigger: Update"
-	displayAISelfHostedModelCreate                  = "AI Self-Hosted Model: Create"
-	displayAISelfHostedModelDelete                  = "AI Self-Hosted Model: Delete"
-	displayAISelfHostedModelUpdate                  = "AI Self-Hosted Model: Update"
-	displayAIToolRuleRead                           = "AI tool rule: Read"
-	displayAIToolRuleUpdate                         = "AI tool rule: Update"
-	displayAIUsageMetricRead                        = "AI usage metric: Read"
-	displayAccessRequestApprove                     = "Access Request: Approve"
-	displayAccessRequestCreate                      = "Access Request: Create"
-	displayAccessRequestDelete                      = "Access Request: Delete"
-	displayAccessRequestRead                        = "Access Request: Read"
-	displayAchievementAward                         = "Achievement: Award"
-	displayAchievementCreate                        = "Achievement: Create"
-	displayAchievementDelete                        = "Achievement: Delete"
-	displayAchievementRevoke                        = "Achievement: Revoke"
-	displayAchievementUpdate                        = "Achievement: Update"
-	displayActiveContextCollectionUpdate            = "Active Context Collection: Update"
-	displayActiveContextConnectionRead              = "Active Context Connection: Read"
-	displayActiveContextConnectionUpdate            = "Active Context Connection: Update"
-	displayActiveContextDeadQueueClear              = "Active Context Dead Queue: Clear"
-	displayActiveContextDeadQueueReplay             = "Active Context Dead Queue: Replay"
-	displayActiveContextEnabledNamespaceUpdate      = "Active Context Enabled Namespace: Update"
-	displayActivityAnalyticsRead                    = "Activity Analytics: Read"
-	displayActivityRead                             = "Activity: Read"
-	displayAddOnAssignmentCreate                    = "Add On Assignment: Create"
-	displayAddOnAssignmentDelete                    = "Add On Assignment: Delete"
-	displayAddOnPurchaseCreate                      = "Add On Purchase: Create"
-	displayAddOnPurchaseRead                        = "Add On Purchase: Read"
-	displayAddOnPurchaseUpdate                      = "Add On Purchase: Update"
-	displayAdminDataManagementRead                  = "Admin Data Management: Read"
-	displayAdminDataManagementUpdate                = "Admin Data Management: Update"
-	displayAdminMemberRoleCreate                    = "Admin Member Role: Create"
-	displayAdminMemberRoleDelete                    = "Admin Member Role: Delete"
-	displayAdminMemberRoleRead                      = "Admin Member Role: Read"
-	displayAdminMemberRoleUpdate                    = "Admin Member Role: Update"
-	displayAiFlowScheduleCreate                     = "Ai Flow Schedule: Create"
-	displayAiFlowScheduleDelete                     = "Ai Flow Schedule: Delete"
-	displayAiFlowScheduleUpdate                     = "Ai Flow Schedule: Update"
-	displayAlertMetricImageCreate                   = "Alert Metric Image: Create"
-	displayAlertMetricImageDelete                   = "Alert Metric Image: Delete"
-	displayAlertMetricImageRead                     = "Alert Metric Image: Read"
-	displayAlertMetricImageUpdate                   = "Alert Metric Image: Update"
-	displayAlertUpdate                              = "Alert: Update"
-	displayAliasCreate                              = "Alias: Create"
-	displayAliasDelete                              = "Alias: Delete"
-	displayAliasRead                                = "Alias: Read"
-	displayAnyTokenRead                             = "Any Token: Read"
-	displayAnyTokenRevoke                           = "Any Token: Revoke"
-	displayApplicationAppearanceRead                = "Application Appearance: Read"
-	displayApplicationAppearanceUpdate              = "Application Appearance: Update"
-	displayApplicationSettingRead                   = "Application Setting: Read"
-	displayApplicationSettingUpdate                 = "Application Setting: Update"
-	displayApprovalConfigurationRead                = "Approval Configuration: Read"
-	displayApprovalConfigurationUpdate              = "Approval Configuration: Update"
-	displayApprovalRuleCreate                       = "Approval Rule: Create"
-	displayApprovalRuleDelete                       = "Approval Rule: Delete"
-	displayApprovalRuleRead                         = "Approval Rule: Read"
-	displayApprovalRuleUpdate                       = "Approval Rule: Update"
-	displayApprovalSettingRead                      = "Approval Setting: Read"
-	displayApprovalSettingUpdate                    = "Approval Setting: Update"
-	displayArtifactDelete                           = "Artifact: Delete"
-	displayAscpCreate                               = "Ascp: Create"
-	displayAssociationRead                          = "Association: Read"
-	displayAttestationRead                          = "Attestation: Read"
-	displayAuditEventRead                           = "Audit Event: Read"
-	displayAuditEventStreamingDestinationCreate     = "Audit Event Streaming Destination: Create"
-	displayAuditEventStreamingDestinationDelete     = "Audit Event Streaming Destination: Delete"
-	displayAuditEventStreamingDestinationUpdate     = "Audit Event Streaming Destination: Update"
-	displayAvatarRead                               = "Avatar: Read"
-	displayAvatarUpdate                             = "Avatar: Update"
-	displayAwardEmojiCreate                         = "Award Emoji: Create"
-	displayAwardEmojiDelete                         = "Award Emoji: Delete"
-	displayBadgeCreate                              = "Badge: Create"
-	displayBadgeDelete                              = "Badge: Delete"
-	displayBadgeRead                                = "Badge: Read"
-	displayBadgeUpdate                              = "Badge: Update"
-	displayBatchedBackgroundMigrationRead           = "Batched Background Migration: Read"
-	displayBatchedBackgroundMigrationRun            = "Batched Background Migration: Run"
-	displayBatchedBackgroundOperationRead           = "Batched Background Operation: Read"
-	displayBatchedBackgroundOperationRun            = "Batched Background Operation: Run"
-	displayBranchCreate                             = "Branch: Create"
-	displayBranchDelete                             = "Branch: Delete"
-	displayBranchProtect                            = "Branch: Protect"
-	displayBranchRead                               = "Branch: Read"
-	displayBranchRuleCreate                         = "Branch Rule: Create"
-	displayBranchRuleDelete                         = "Branch Rule: Delete"
-	displayBranchRuleUpdate                         = "Branch Rule: Update"
-	displayBroadcastMessageCreate                   = "Broadcast Message: Create"
-	displayBroadcastMessageDelete                   = "Broadcast Message: Delete"
-	displayBroadcastMessageUpdate                   = "Broadcast Message: Update"
-	displayCDApplicationCreate                      = "CD Application: Create"
-	displayCDApplicationFlowDefinitionCreate        = "CD Application Flow Definition: Create"
-	displayCDApplicationFlowDefinitionRead          = "CD Application Flow Definition: Read"
-	displayCDApplicationLinkCreate                  = "CD Application Link: Create"
-	displayCDApplicationLinkDelete                  = "CD Application Link: Delete"
-	displayCDApplicationLinkRead                    = "CD Application Link: Read"
-	displayCDApplicationLinkUpdate                  = "CD Application Link: Update"
-	displayCDApplicationRead                        = "CD Application: Read"
-	displayCDApplicationUpdate                      = "CD Application: Update"
-	displayCDArtifactSourceCreate                   = "CD Artifact Source: Create"
-	displayCDArtifactSourceRead                     = "CD Artifact Source: Read"
-	displayCDEnvironmentCreate                      = "CD Environment: Create"
-	displayCDEnvironmentRead                        = "CD Environment: Read"
-	displayCDEnvironmentUpdate                      = "CD Environment: Update"
-	displayCDRolloutCreate                          = "CD Rollout: Create"
-	displayCDRolloutGateResolve                     = "CD Rollout Gate: Resolve"
-	displayCDRolloutRead                            = "CD Rollout: Read"
-	displayCDServiceCreate                          = "CD Service: Create"
-	displayCDServiceRead                            = "CD Service: Read"
-	displayCDServiceUpdate                          = "CD Service: Update"
-	displayCDVersionSetCreate                       = "CD Version Set: Create"
-	displayCDVersionSetRead                         = "CD Version Set: Read"
-	displayCICDSettingUpdate                        = "CI/CD Setting: Update"
-	displayCIConfigRead                             = "CI Config: Read"
-	displayCIConfigValidate                         = "CI Config: Validate"
-	displayCIMinuteCreate                           = "CI Minute: Create"
-	displayCIMinuteTransfer                         = "CI Minute: Transfer"
-	displayCINamespaceSettingsUpdate                = "CI Namespace Settings: Update"
-	displayCRMContactCreate                         = "CRM Contact: Create"
-	displayCRMContactUpdate                         = "CRM Contact: Update"
-	displayCRMOrganizationCreate                    = "CRM Organization: Create"
-	displayCRMOrganizationUpdate                    = "CRM Organization: Update"
-	displayCatalogBundledResourceRead               = "Catalog Bundled Resource: Read"
-	displayCatalogResourceCreate                    = "Catalog Resource: Create"
-	displayCatalogResourceDelete                    = "Catalog Resource: Delete"
-	displayCatalogVersionPublish                    = "Catalog Version: Publish"
-	displayChatCompletionCreate                     = "Chat Completion: Create"
-	displayClusterAgentCreate                       = "Cluster Agent: Create"
-	displayClusterAgentDelete                       = "Cluster Agent: Delete"
-	displayClusterAgentMappingCreate                = "Cluster Agent Mapping: Create"
-	displayClusterAgentMappingDelete                = "Cluster Agent Mapping: Delete"
-	displayClusterAgentRead                         = "Cluster Agent: Read"
-	displayClusterAgentTokenCreate                  = "Cluster Agent Token: Create"
-	displayClusterAgentTokenRead                    = "Cluster Agent Token: Read"
-	displayClusterAgentTokenRevoke                  = "Cluster Agent Token: Revoke"
-	displayClusterAgentURLConfigurationCreate       = "Cluster Agent URL Configuration: Create"
-	displayClusterAgentURLConfigurationDelete       = "Cluster Agent URL Configuration: Delete"
-	displayClusterAgentURLConfigurationRead         = "Cluster Agent URL Configuration: Read"
-	displayClusterCreate                            = "Cluster: Create"
-	displayClusterDelete                            = "Cluster: Delete"
-	displayClusterRead                              = "Cluster: Read"
-	displayClusterUpdate                            = "Cluster: Update"
-	displayCodeDownload                             = "Code: Download"
-	displayCodePush                                 = "Code: Push"
-	displayCodeRead                                 = "Code: Read"
-	displayCodeReviewAnalyticsRead                  = "Code Review Analytics: Read"
-	displayCodeSuggestionCompletionCreate           = "Code Suggestion Completion: Create"
-	displayCodeSuggestionConnectionDetailRead       = "Code Suggestion Connection Detail: Read"
-	displayCodeSuggestionDirectAccessCreate         = "Code Suggestion Direct Access: Create"
-	displayCodeSuggestionEnabledStatusRead          = "Code Suggestion Enabled Status: Read"
-	displayCommitCreate                             = "Commit: Create"
-	displayCommitDelete                             = "Commit: Delete"
-	displayCommitEmailUpdate                        = "Commit Email: Update"
-	displayCommitRead                               = "Commit: Read"
-	displayCommitStatusCreate                       = "Commit Status: Create"
-	displayCommitUpdate                             = "Commit: Update"
-	displayComplianceDashboardRead                  = "Compliance Dashboard: Read"
-	displayComplianceFrameworkCreate                = "Compliance Framework: Create"
-	displayComplianceFrameworkDelete                = "Compliance Framework: Delete"
-	displayComplianceFrameworkUpdate                = "Compliance Framework: Update"
-	displayCompliancePolicySettingRead              = "Compliance Policy Setting: Read"
-	displayCompliancePolicySettingUpdate            = "Compliance Policy Setting: Update"
-	displayComplianceViolationsReportUpdate         = "Compliance Violations Report: Update"
-	displayContainerExpirationPolicyUpdate          = "Container Expiration Policy: Update"
-	displayContainerRegistryProtectionTagRuleCreate = "Container Registry Protection Tag Rule: Create"
-	displayContainerRegistryProtectionTagRuleDelete = "Container Registry Protection Tag Rule: Delete"
-	displayContainerRegistryProtectionTagRuleRead   = "Container Registry Protection Tag Rule: Read"
-	displayContainerRegistryProtectionTagRuleUpdate = "Container Registry Protection Tag Rule: Update"
-	displayContainerRepositoryDelete                = "Container Repository: Delete"
-	displayContainerRepositoryProtectionRuleCreate  = "Container Repository Protection Rule: Create"
-	displayContainerRepositoryProtectionRuleDelete  = "Container Repository Protection Rule: Delete"
-	displayContainerRepositoryProtectionRuleRead    = "Container Repository Protection Rule: Read"
-	displayContainerRepositoryProtectionRuleUpdate  = "Container Repository Protection Rule: Update"
-	displayContainerRepositoryRead                  = "Container Repository: Read"
-	displayConversationThreadDelete                 = "Conversation Thread: Delete"
-	displayCountsRead                               = "Counts: Read"
-	displayCoverageFuzzingCorpusCreate              = "Coverage Fuzzing Corpus: Create"
-	displayCreditCardValidationUpdate               = "Credit Card Validation: Update"
-	displayCustomAttributeDelete                    = "Custom Attribute: Delete"
-	displayCustomAttributeRead                      = "Custom Attribute: Read"
-	displayCustomAttributeUpdate                    = "Custom Attribute: Update"
-	displayCustomDashboardCreate                    = "Custom Dashboard: Create"
-	displayCustomDashboardDelete                    = "Custom Dashboard: Delete"
-	displayCustomDashboardUpdate                    = "Custom Dashboard: Update"
-	displayCustomEmojiCreate                        = "Custom Emoji: Create"
-	displayCustomEmojiDelete                        = "Custom Emoji: Delete"
-	displayCustomFieldArchive                       = "Custom Field: Archive"
-	displayCycleAnalyticsRead                       = "Cycle Analytics: Read"
-	displayDatabaseDictionaryRead                   = "Database Dictionary: Read"
-	displayDatabaseMigrationMark                    = "Database Migration: Mark"
-	displayDatabaseMigrationRead                    = "Database Migration: Read"
-	displayDebianDistributionCreate                 = "Debian Distribution: Create"
-	displayDebianDistributionDelete                 = "Debian Distribution: Delete"
-	displayDebianDistributionRead                   = "Debian Distribution: Read"
-	displayDebianDistributionUpdate                 = "Debian Distribution: Update"
-	displayDependencyFirewallEvaluationCreate       = "Dependency Firewall Evaluation: Create"
-	displayDependencyListExportCreate               = "Dependency List Export: Create"
-	displayDependencyListExportRead                 = "Dependency List Export: Read"
-	displayDependencyProxyCachePurge                = "Dependency Proxy Cache: Purge"
-	displayDependencyProxyPackagesSettingUpdate     = "Dependency Proxy Packages Setting: Update"
-	displayDependencyProxyRead                      = "Dependency Proxy: Read"
-	displayDependencyProxyUpdate                    = "Dependency Proxy: Update"
-	displayDependencyRead                           = "Dependency: Read"
-	displayDeployKeyCreate                          = "Deploy Key: Create"
-	displayDeployKeyDelete                          = "Deploy Key: Delete"
-	displayDeployKeyEnable                          = "Deploy Key: Enable"
-	displayDeployKeyRead                            = "Deploy Key: Read"
-	displayDeployKeyUpdate                          = "Deploy Key: Update"
-	displayDeployTokenCreate                        = "Deploy Token: Create"
-	displayDeployTokenDelete                        = "Deploy Token: Delete"
-	displayDeployTokenRead                          = "Deploy Token: Read"
-	displayDeploymentApprove                        = "Deployment: Approve"
-	displayDeploymentCreate                         = "Deployment: Create"
-	displayDeploymentDelete                         = "Deployment: Delete"
-	displayDeploymentRead                           = "Deployment: Read"
-	displayDeploymentUpdate                         = "Deployment: Update"
-	displayDesignCreate                             = "Design: Create"
-	displayDesignDelete                             = "Design: Delete"
-	displayDesignUpdate                             = "Design: Update"
-	displayDevOpsAdoptionEnable                     = "DevOps Adoption: Enable"
-	displayDoraMetricRead                           = "Dora Metric: Read"
-	displayDuoFlowCallbackHookCreate                = "Duo Flow Callback Hook: Create"
-	displayDuoFlowCallbackHookDelete                = "Duo Flow Callback Hook: Delete"
-	displayDuoFlowCallbackHookRead                  = "Duo Flow Callback Hook: Read"
-	displayDuoSettingUpdate                         = "Duo Setting: Update"
-	displayDuoUserFeedbackCreate                    = "Duo user feedback: Create"
-	displayDuoWorkflowCreate                        = "Duo Workflow: Create"
-	displayDuoWorkflowDelete                        = "Duo Workflow: Delete"
-	displayDuoWorkflowDirectAccessTokenCreate       = "Duo Workflow Direct Access Token: Create"
-	displayDuoWorkflowRead                          = "Duo Workflow: Read"
-	displayDuoWorkflowResume                        = "Duo Workflow: Resume"
-	displayDuoWorkflowUpdate                        = "Duo Workflow: Update"
-	displayEditorTelemetryCreate                    = "Editor Telemetry: Create"
-	displayElasticsearchIndexedNamespaceUpdate      = "Elasticsearch Indexed Namespace: Update"
-	displayEmailCreate                              = "Email: Create"
-	displayEmailDelete                              = "Email: Delete"
-	displayEmailRead                                = "Email: Read"
-	displayEnterpriseUserDelete                     = "Enterprise User: Delete"
-	displayEnterpriseUserDisableTwoFactor           = "Enterprise User: Disable Two Factor"
-	displayEnterpriseUserRead                       = "Enterprise User: Read"
-	displayEnterpriseUserUpdate                     = "Enterprise User: Update"
-	displayEnvironmentCreate                        = "Environment: Create"
-	displayEnvironmentDelete                        = "Environment: Delete"
-	displayEnvironmentRead                          = "Environment: Read"
-	displayEnvironmentStop                          = "Environment: Stop"
-	displayEnvironmentUpdate                        = "Environment: Update"
-	displayErrorTrackingClientKeyCreate             = "Error Tracking Client Key: Create"
-	displayErrorTrackingClientKeyDelete             = "Error Tracking Client Key: Delete"
-	displayErrorTrackingClientKeyRead               = "Error Tracking Client Key: Read"
-	displayErrorTrackingSettingRead                 = "Error Tracking Setting: Read"
-	displayErrorTrackingSettingUpdate               = "Error Tracking Setting: Update"
-	displayEscalationPolicyCreate                   = "Escalation Policy: Create"
-	displayEscalationPolicyDelete                   = "Escalation Policy: Delete"
-	displayEscalationPolicyRead                     = "Escalation Policy: Read"
-	displayEscalationPolicyUpdate                   = "Escalation Policy: Update"
-	displayEventRead                                = "Event: Read"
-	displayExperimentCacheDelete                    = "Experiment Cache: Delete"
-	displayExperimentRead                           = "Experiment: Read"
-	displayExportCreate                             = "Export: Create"
-	displayExportDownload                           = "Export: Download"
-	displayExportRead                               = "Export: Read"
-	displayExternalStatusCheckCreate                = "External Status Check: Create"
-	displayExternalStatusCheckDelete                = "External Status Check: Delete"
-	displayExternalStatusCheckRead                  = "External Status Check: Read"
-	displayExternalStatusCheckRetry                 = "External Status Check: Retry"
-	displayExternalStatusCheckServiceCreate         = "External Status Check Service: Create"
-	displayExternalStatusCheckServiceDelete         = "External Status Check Service: Delete"
-	displayExternalStatusCheckServiceRead           = "External Status Check Service: Read"
-	displayExternalStatusCheckServiceUpdate         = "External Status Check Service: Update"
-	displayExternalStatusCheckUpdate                = "External Status Check: Update"
-	displayFeatureDelete                            = "Feature: Delete"
-	displayFeatureFlagCreate                        = "Feature Flag: Create"
-	displayFeatureFlagDelete                        = "Feature Flag: Delete"
-	displayFeatureFlagRead                          = "Feature Flag: Read"
-	displayFeatureFlagSettingsUpdate                = "Feature Flag Settings: Update"
-	displayFeatureFlagUpdate                        = "Feature Flag: Update"
-	displayFeatureFlagUserListCreate                = "Feature Flag User List: Create"
-	displayFeatureFlagUserListDelete                = "Feature Flag User List: Delete"
-	displayFeatureFlagUserListRead                  = "Feature Flag User List: Read"
-	displayFeatureFlagUserListUpdate                = "Feature Flag User List: Update"
-	displayFeatureRead                              = "Feature: Read"
-	displayFeatureUpdate                            = "Feature: Update"
-	displayFindingTokenStatusUpdate                 = "Finding Token Status: Update"
-	displayFlowsMetadataRead                        = "Flows Metadata: Read"
-	displayFollowerRead                             = "Follower: Read"
-	displayFollowingRead                            = "Following: Read"
-	displayFreezePeriodCreate                       = "Freeze Period: Create"
-	displayFreezePeriodDelete                       = "Freeze Period: Delete"
-	displayFreezePeriodRead                         = "Freeze Period: Read"
-	displayFreezePeriodUpdate                       = "Freeze Period: Update"
-	displayGLQLRead                                 = "GLQL: Read"
-	displayGPGKeyCreate                             = "GPG Key: Create"
-	displayGPGKeyDelete                             = "GPG Key: Delete"
-	displayGPGKeyRead                               = "GPG Key: Read"
-	displayGPGKeyRevoke                             = "GPG Key: Revoke"
-	displayGeoNodeCreate                            = "Geo Node: Create"
-	displayGeoNodeDelete                            = "Geo Node: Delete"
-	displayGeoNodeRead                              = "Geo Node: Read"
-	displayGeoNodeRepair                            = "Geo Node: Repair"
-	displayGeoNodeUpdate                            = "Geo Node: Update"
-	displayGeoRegistryUpdate                        = "Geo Registry: Update"
-	displayGeoSiteCreate                            = "Geo Site: Create"
-	displayGeoSiteDelete                            = "Geo Site: Delete"
-	displayGeoSiteRead                              = "Geo Site: Read"
-	displayGeoSiteRepair                            = "Geo Site: Repair"
-	displayGeoSiteUpdate                            = "Geo Site: Update"
-	displayGitCommandCreate                         = "Git Command: Create"
-	displayGitLabOrbitMCPToolExecute                = "GitLab Orbit MCP tool: Execute"
-	displayGitLabSubscriptionCreate                 = "GitLab Subscription: Create"
-	displayGitLabSubscriptionRead                   = "GitLab Subscription: Read"
-	displayGitLabSubscriptionUpdate                 = "GitLab Subscription: Update"
-	displayGlobalSearchUse                          = "Global Search: Use"
-	displayGroupArchive                             = "Group: Archive"
-	displayGroupCreate                              = "Group: Create"
-	displayGroupDelete                              = "Group: Delete"
-	displayGroupRead                                = "Group: Read"
-	displayGroupShare                               = "Group: Share"
-	displayGroupTransfer                            = "Group: Transfer"
-	displayGroupUpdate                              = "Group: Update"
-	displayHTTPIntegrationCreate                    = "HTTP Integration: Create"
-	displayHTTPIntegrationDelete                    = "HTTP Integration: Delete"
-	displayHTTPIntegrationUpdate                    = "HTTP Integration: Update"
-	displayIdentityDelete                           = "Identity: Delete"
-	displayImpersonationTokenCreate                 = "Impersonation Token: Create"
-	displayImpersonationTokenRead                   = "Impersonation Token: Read"
-	displayImpersonationTokenRevoke                 = "Impersonation Token: Revoke"
-	displayImportCancel                             = "Import: Cancel"
-	displayImportCreate                             = "Import: Create"
-	displayImportRead                               = "Import: Read"
-	displayIntegrationDelete                        = "Integration: Delete"
-	displayIntegrationExclusionCreate               = "Integration Exclusion: Create"
-	displayIntegrationExclusionDelete               = "Integration Exclusion: Delete"
-	displayIntegrationRead                          = "Integration: Read"
-	displayIntegrationUpdate                        = "Integration: Update"
-	displayInternalEventTrack                       = "Internal Event: Track"
-	displayInvitationCreate                         = "Invitation: Create"
-	displayInvitationDelete                         = "Invitation: Delete"
-	displayInvitationRead                           = "Invitation: Read"
-	displayInvitationUpdate                         = "Invitation: Update"
-	displayIssuableMetricImageCreate                = "Issuable Metric Image: Create"
-	displayIssuableMetricImageDelete                = "Issuable Metric Image: Delete"
-	displayIssuableMetricImageRead                  = "Issuable Metric Image: Read"
-	displayIssuableMetricImageUpdate                = "Issuable Metric Image: Update"
-	displayIssuableResourceLinkCreate               = "Issuable Resource Link: Create"
-	displayIssuableResourceLinkDelete               = "Issuable Resource Link: Delete"
-	displayIssueSubscribe                           = "Issue: Subscribe"
-	displayJiraConnectSubscriptionCreate            = "Jira Connect Subscription: Create"
-	displayJiraImportCreate                         = "Jira Import: Create"
-	displayJobArtifactDelete                        = "Job Artifact: Delete"
-	displayJobArtifactRead                          = "Job Artifact: Read"
-	displayJobArtifactUpdate                        = "Job Artifact: Update"
-	displayJobDelete                                = "Job: Delete"
-	displayJobRead                                  = "Job: Read"
-	displayJobRun                                   = "Job: Run"
-	displayJobTokenScopeAllowlistCreate             = "Job Token Scope Allowlist: Create"
-	displayJobTokenScopeAllowlistDelete             = "Job Token Scope Allowlist: Delete"
-	displayJobTokenScopeAllowlistRead               = "Job Token Scope Allowlist: Read"
-	displayJobTokenScopeRead                        = "Job Token Scope: Read"
-	displayJobTokenScopeUpdate                      = "Job Token Scope: Update"
-	displayJobUpdate                                = "Job: Update"
-	displayKnowledgeGraphEnabledNamespaceCreate     = "Knowledge Graph Enabled Namespace: Create"
-	displayKnowledgeGraphEnabledNamespaceDelete     = "Knowledge Graph Enabled Namespace: Delete"
-	displayKnowledgeGraphEnabledNamespaceRead       = "Knowledge Graph Enabled Namespace: Read"
-	displayKnowledgeGraphRead                       = "Knowledge Graph: Read"
-	displayKnowledgeGraphSettingUpdate              = "Knowledge Graph Setting: Update"
-	displayLDAPAdminRoleLinkCreate                  = "LDAP Admin Role Link: Create"
-	displayLDAPAdminRoleLinkDelete                  = "LDAP Admin Role Link: Delete"
-	displayLDAPAdminRoleLinkRead                    = "LDAP Admin Role Link: Read"
-	displayLDAPGroupLinkCreate                      = "LDAP Group Link: Create"
-	displayLDAPGroupLinkDelete                      = "LDAP Group Link: Delete"
-	displayLDAPGroupLinkRead                        = "LDAP Group Link: Read"
-	displayLDAPGroupRead                            = "LDAP Group: Read"
-	displayLDAPGroupSyncRun                         = "LDAP Group Sync: Run"
-	displayLabelCreate                              = "Label: Create"
-	displayLabelDelete                              = "Label: Delete"
-	displayLabelPromote                             = "Label: Promote"
-	displayLabelRead                                = "Label: Read"
-	displayLabelSubscribe                           = "Label: Subscribe"
-	displayLabelUpdate                              = "Label: Update"
-	displayLicenseBillableUserRefresh               = "License Billable User: Refresh"
-	displayLicenseCreate                            = "License: Create"
-	displayLicenseDelete                            = "License: Delete"
-	displayLicenseRead                              = "License: Read"
-	displayMCPToolExecute                           = "MCP tool: Execute"
-	displayMLExperimentCreate                       = "ML Experiment: Create"
-	displayMLExperimentDelete                       = "ML Experiment: Delete"
-	displayMLExperimentRead                         = "ML Experiment: Read"
-	displayMLExperimentUpdate                       = "ML Experiment: Update"
-	displayMLModelCreate                            = "ML Model: Create"
-	displayMLModelDelete                            = "ML Model: Delete"
-	displayMLModelRead                              = "ML Model: Read"
-	displayMLModelUpdate                            = "ML Model: Update"
-	displayMLflowArtifactRead                       = "MLflow Artifact: Read"
-	displayMLflowRunCreate                          = "MLflow Run: Create"
-	displayMLflowRunDelete                          = "MLflow Run: Delete"
-	displayMLflowRunLog                             = "MLflow Run: Log"
-	displayMLflowRunRead                            = "MLflow Run: Read"
-	displayMLflowRunUpdate                          = "MLflow Run: Update"
-	displayMarkdownRender                           = "Markdown: Render"
-	displayMarkdownUploadCreate                     = "Markdown Upload: Create"
-	displayMarkdownUploadDelete                     = "Markdown Upload: Delete"
-	displayMarkdownUploadRead                       = "Markdown Upload: Read"
-	displayMemberApprovalUpdate                     = "Member Approval: Update"
-	displayMemberCreate                             = "Member: Create"
-	displayMemberDelete                             = "Member: Delete"
-	displayMemberRead                               = "Member: Read"
-	displayMemberRoleAssign                         = "Member Role: Assign"
-	displayMemberRoleCreate                         = "Member Role: Create"
-	displayMemberRoleDelete                         = "Member Role: Delete"
-	displayMemberRoleRead                           = "Member Role: Read"
-	displayMemberRoleUpdate                         = "Member Role: Update"
-	displayMemberUpdate                             = "Member: Update"
-	displayMergeRequestApprovalRuleCreate           = "Merge Request Approval Rule: Create"
-	displayMergeRequestApprovalRuleDelete           = "Merge Request Approval Rule: Delete"
-	displayMergeRequestApprovalRuleRead             = "Merge Request Approval Rule: Read"
-	displayMergeRequestApprovalRuleUpdate           = "Merge Request Approval Rule: Update"
-	displayMergeRequestApprove                      = "Merge Request: Approve"
-	displayMergeRequestCreate                       = "Merge Request: Create"
-	displayMergeRequestDelete                       = "Merge Request: Delete"
-	displayMergeRequestMerge                        = "Merge Request: Merge"
-	displayMergeRequestRead                         = "Merge Request: Read"
-	displayMergeRequestSavedViewCreate              = "Merge Request Saved View: Create"
-	displayMergeRequestSavedViewDelete              = "Merge Request Saved View: Delete"
-	displayMergeRequestSavedViewRead                = "Merge Request Saved View: Read"
-	displayMergeRequestSavedViewUpdate              = "Merge Request Saved View: Update"
-	displayMergeRequestSubscribe                    = "Merge Request: Subscribe"
-	displayMergeRequestUpdate                       = "Merge Request: Update"
-	displayMergeTrainCarDelete                      = "Merge Train Car: Delete"
-	displayMergeTrainMergeRequestAdd                = "Merge Train Merge Request: Add"
-	displayMergeTrainRead                           = "Merge Train: Read"
-	displayMetadataRead                             = "Metadata: Read"
-	displayMobilePushSubscriptionCreate             = "Mobile Push Subscription: Create"
-	displayMobilePushSubscriptionDelete             = "Mobile Push Subscription: Delete"
-	displayModelSelectionAllowlistRead              = "Model Selection Allowlist: Read"
-	displayModelSelectionAllowlistUpdate            = "Model Selection Allowlist: Update"
-	displayModelVersionCreate                       = "Model Version: Create"
-	displayModelVersionDelete                       = "Model Version: Delete"
-	displayModelVersionRead                         = "Model Version: Read"
-	displayModelVersionUpdate                       = "Model Version: Update"
-	displayNamespaceBanDelete                       = "Namespace Ban: Delete"
-	displayNamespaceDuoFeatureLock                  = "Namespace Duo Feature: Lock"
-	displayNamespaceRead                            = "Namespace: Read"
-	displayNamespaceStorageLimitExclusionCreate     = "Namespace Storage Limit Exclusion: Create"
-	displayNamespaceStorageLimitExclusionDelete     = "Namespace Storage Limit Exclusion: Delete"
-	displayNamespaceStorageLimitExclusionRead       = "Namespace Storage Limit Exclusion: Read"
-	displayNamespaceUpdate                          = "Namespace: Update"
-	displayNotificationSettingRead                  = "Notification Setting: Read"
-	displayNotificationSettingUpdate                = "Notification Setting: Update"
-	displayOAuthApplicationCreate                   = "OAuth Application: Create"
-	displayOAuthApplicationDelete                   = "OAuth Application: Delete"
-	displayOAuthApplicationRead                     = "OAuth Application: Read"
-	displayOAuthApplicationRenewSecret              = "OAuth Application: Renew Secret"
-	displayOAuthApplicationUpdate                   = "OAuth Application: Update"
-	displayOfflineExportCreate                      = "Offline Export: Create"
-	displayOfflineExportRead                        = "Offline Export: Read"
-	displayOnCallScheduleCreate                     = "On-call Schedule: Create"
-	displayOnCallScheduleDelete                     = "On-call Schedule: Delete"
-	displayOnCallScheduleUpdate                     = "On-call Schedule: Update"
-	displayOnDemandDASTScanCreate                   = "On-Demand DAST Scan: Create"
-	displayOnDemandDASTScanDelete                   = "On-Demand DAST Scan: Delete"
-	displayOnDemandDASTScanUpdate                   = "On-Demand DAST Scan: Update"
-	displayOrganizationCreate                       = "Organization: Create"
-	displayOrganizationDelete                       = "Organization: Delete"
-	displayOrganizationRead                         = "Organization: Read"
-	displayOrganizationRestore                      = "Organization: Restore"
-	displayOrganizationUpdate                       = "Organization: Update"
-	displayOrganizationUserCreate                   = "Organization User: Create"
-	displayOrganizationUserDelete                   = "Organization User: Delete"
-	displayOrganizationUserUpdate                   = "Organization User: Update"
-	displayPackageCreate                            = "Package: Create"
-	displayPackageDelete                            = "Package: Delete"
-	displayPackageRead                              = "Package: Read"
-	displayPackageSettingUpdate                     = "Package Setting: Update"
-	displayPackageUpdate                            = "Package: Update"
-	displayPageDelete                               = "Page: Delete"
-	displayPageRead                                 = "Page: Read"
-	displayPageUpdate                               = "Page: Update"
-	displayPagesDomainCreate                        = "Pages Domain: Create"
-	displayPagesDomainDelete                        = "Pages Domain: Delete"
-	displayPagesDomainRead                          = "Pages Domain: Read"
-	displayPagesDomainUpdate                        = "Pages Domain: Update"
-	displayPagesDomainVerify                        = "Pages Domain: Verify"
-	displayPathLockCreate                           = "Path Lock: Create"
-	displayPersonalAccessTokenCreate                = "Personal Access Token: Create"
-	displayPersonalAccessTokenRead                  = "Personal Access Token: Read"
-	displayPersonalAccessTokenRevoke                = "Personal Access Token: Revoke"
-	displayPersonalAccessTokenRotate                = "Personal Access Token: Rotate"
-	displayPipelineCreate                           = "Pipeline: Create"
-	displayPipelineDelete                           = "Pipeline: Delete"
-	displayPipelineExecutionProjectScheduleRead     = "Pipeline Execution Project Schedule: Read"
-	displayPipelineRead                             = "Pipeline: Read"
-	displayPipelineScheduleCreate                   = "Pipeline Schedule: Create"
-	displayPipelineScheduleDelete                   = "Pipeline Schedule: Delete"
-	displayPipelineScheduleRead                     = "Pipeline Schedule: Read"
-	displayPipelineScheduleUpdate                   = "Pipeline Schedule: Update"
-	displayPipelineSubscriptionCreate               = "Pipeline Subscription: Create"
-	displayPipelineSubscriptionDelete               = "Pipeline Subscription: Delete"
-	displayPipelineUpdate                           = "Pipeline: Update"
-	displayPlaceholderReassignmentCreate            = "Placeholder Reassignment: Create"
-	displayPlaceholderReassignmentRead              = "Placeholder Reassignment: Read"
-	displayPlaceholderReassignmentUpdate            = "Placeholder Reassignment: Update"
-	displayPlanLimitRead                            = "Plan Limit: Read"
-	displayPlanLimitUpdate                          = "Plan Limit: Update"
-	displayPolicyStorePolicyCreate                  = "Policy Store Policy: Create"
-	displayPolicyStorePolicyDelete                  = "Policy Store Policy: Delete"
-	displayPolicyStorePolicyRead                    = "Policy Store Policy: Read"
-	displayPolicyStorePolicyUpdate                  = "Policy Store Policy: Update"
-	displayPreferenceRead                           = "Preference: Read"
-	displayPreferenceUpdate                         = "Preference: Update"
-	displayProjectArchive                           = "Project: Archive"
-	displayProjectCreate                            = "Project: Create"
-	displayProjectDelete                            = "Project: Delete"
-	displayProjectFork                              = "Project: Fork"
-	displayProjectRead                              = "Project: Read"
-	displayProjectShare                             = "Project: Share"
-	displayProjectTransfer                          = "Project: Transfer"
-	displayProjectUpdate                            = "Project: Update"
-	displayProtectedBranchRead                      = "Protected Branch: Read"
-	displayProtectedBranchUpdate                    = "Protected Branch: Update"
-	displayProtectedEnvironmentCreate               = "Protected Environment: Create"
-	displayProtectedEnvironmentDelete               = "Protected Environment: Delete"
-	displayProtectedEnvironmentRead                 = "Protected Environment: Read"
-	displayProtectedEnvironmentUpdate               = "Protected Environment: Update"
-	displayProtectedTagRead                         = "Protected Tag: Read"
-	displayProvisionedUserRead                      = "Provisioned User: Read"
-	displayPullMirrorCreate                         = "Pull Mirror: Create"
-	displayPullMirrorRead                           = "Pull Mirror: Read"
-	displayPullMirrorUpdate                         = "Pull Mirror: Update"
-	displayPushRuleCreate                           = "Push Rule: Create"
-	displayPushRuleDelete                           = "Push Rule: Delete"
-	displayPushRuleRead                             = "Push Rule: Read"
-	displayPushRuleUpdate                           = "Push Rule: Update"
-	displayReleaseCreate                            = "Release: Create"
-	displayReleaseDelete                            = "Release: Delete"
-	displayReleaseLinkCreate                        = "Release Link: Create"
-	displayReleaseLinkDelete                        = "Release Link: Delete"
-	displayReleaseLinkRead                          = "Release Link: Read"
-	displayReleaseLinkUpdate                        = "Release Link: Update"
-	displayReleaseRead                              = "Release: Read"
-	displayReleaseUpdate                            = "Release: Update"
-	displayRemoteMirrorCreate                       = "Remote Mirror: Create"
-	displayRemoteMirrorDelete                       = "Remote Mirror: Delete"
-	displayRemoteMirrorPublicKeyRead                = "Remote Mirror Public Key: Read"
-	displayRemoteMirrorRead                         = "Remote Mirror: Read"
-	displayRemoteMirrorUpdate                       = "Remote Mirror: Update"
-	displayRepositoryCreate                         = "Repository: Create"
-	displayRepositoryDelete                         = "Repository: Delete"
-	displayRepositoryHistoryRewrite                 = "Repository History: Rewrite"
-	displayRepositoryRead                           = "Repository: Read"
-	displayRepositoryStorageMoveCreate              = "Repository Storage Move: Create"
-	displayRepositoryStorageMoveRead                = "Repository Storage Move: Read"
-	displayRepositorySubmoduleUpdate                = "Repository Submodule: Update"
-	displayRepositoryTagCreate                      = "Repository Tag: Create"
-	displayRepositoryTagDelete                      = "Repository Tag: Delete"
-	displayRepositoryTagRead                        = "Repository Tag: Read"
-	displayRepositoryUpdate                         = "Repository: Update"
-	displayResourceAccessTokenCreate                = "Resource Access Token: Create"
-	displayResourceAccessTokenDelete                = "Resource Access Token: Delete"
-	displayResourceAccessTokenRead                  = "Resource Access Token: Read"
-	displayResourceAccessTokenRotate                = "Resource Access Token: Rotate"
-	displayResourceGroupRead                        = "Resource Group: Read"
-	displayResourceGroupUpdate                      = "Resource Group: Update"
-	displayRunnerAssign                             = "Runner: Assign"
-	displayRunnerControllerCreate                   = "Runner Controller: Create"
-	displayRunnerControllerDelete                   = "Runner Controller: Delete"
-	displayRunnerControllerRead                     = "Runner Controller: Read"
-	displayRunnerControllerTokenCreate              = "Runner Controller Token: Create"
-	displayRunnerControllerTokenRead                = "Runner Controller Token: Read"
-	displayRunnerControllerTokenRevoke              = "Runner Controller Token: Revoke"
-	displayRunnerControllerTokenRotate              = "Runner Controller Token: Rotate"
-	displayRunnerControllerUpdate                   = "Runner Controller: Update"
-	displayRunnerCreate                             = "Runner: Create"
-	displayRunnerDelete                             = "Runner: Delete"
-	displayRunnerRead                               = "Runner: Read"
-	displayRunnerRegistrationTokenReset             = "Runner Registration Token: Reset"
-	displayRunnerUpdate                             = "Runner: Update"
-	displayRunnerUsageRead                          = "Runner Usage: Read"
-	displaySAMLGroupIdentityDelete                  = "SAML Group Identity: Delete"
-	displaySAMLGroupIdentityRead                    = "SAML Group Identity: Read"
-	displaySAMLGroupIdentityUpdate                  = "SAML Group Identity: Update"
-	displaySAMLGroupLinkCreate                      = "SAML Group Link: Create"
-	displaySAMLGroupLinkDelete                      = "SAML Group Link: Delete"
-	displaySAMLGroupLinkRead                        = "SAML Group Link: Read"
-	displaySAMLUserRead                             = "SAML User: Read"
-	displaySBOMOccurrenceRead                       = "SBOM Occurrence: Read"
-	displaySCIMIdentityDelete                       = "SCIM Identity: Delete"
-	displaySCIMIdentityRead                         = "SCIM Identity: Read"
-	displaySCIMIdentityUpdate                       = "SCIM Identity: Update"
-	displaySSHCertificateCreate                     = "SSH Certificate: Create"
-	displaySSHCertificateDelete                     = "SSH Certificate: Delete"
-	displaySSHCertificateRead                       = "SSH Certificate: Read"
-	displaySSHKeyCreate                             = "SSH Key: Create"
-	displaySSHKeyDelete                             = "SSH Key: Delete"
-	displaySSHKeyRead                               = "SSH Key: Read"
-	displaySavedReplyCreate                         = "Saved Reply: Create"
-	displaySavedReplyDelete                         = "Saved Reply: Delete"
-	displaySavedReplyUpdate                         = "Saved Reply: Update"
-	displaySearchMigrationRead                      = "Search Migration: Read"
-	displaySecretCreate                             = "Secret: Create"
-	displaySecretDelete                             = "Secret: Delete"
-	displaySecretUpdate                             = "Secret: Update"
-	displaySecretsManagerAPIJWTCreate               = "Secrets Manager API JWT: Create"
-	displaySecretsManagerAddOnEnable                = "Secrets Manager Add-on: Enable"
-	displaySecretsManagerDeprovision                = "Secrets Manager: Deprovision"
-	displaySecretsManagerEnrollmentRead             = "Secrets Manager Enrollment: Read"
-	displaySecretsManagerProvision                  = "Secrets Manager: Provision"
-	displaySecretsManagerRead                       = "Secrets Manager: Read"
-	displaySecretsManagerTrialStart                 = "Secrets Manager Trial: Start"
-	displaySecretsPermissionDelete                  = "Secrets Permission: Delete"
-	displaySecretsPermissionUpdate                  = "Secrets Permission: Update"
-	displaySecureFileCreate                         = "Secure File: Create"
-	displaySecureFileDelete                         = "Secure File: Delete"
-	displaySecureFileRead                           = "Secure File: Read"
-	displaySecurityAttributeCreate                  = "Security Attribute: Create"
-	displaySecurityAttributeDelete                  = "Security Attribute: Delete"
-	displaySecurityAttributeUpdate                  = "Security Attribute: Update"
-	displaySecurityDashboardUpdate                  = "Security Dashboard: Update"
-	displaySecurityPolicyUpdate                     = "Security Policy: Update"
-	displaySecurityProjectTrackedRefCreate          = "Security Project Tracked Ref: Create"
-	displaySecurityScanCreate                       = "Security Scan: Create"
-	displaySecurityScanProfilesCreate               = "Security Scan Profiles: Create"
-	displaySecurityScanProfilesDelete               = "Security Scan Profiles: Delete"
-	displaySecurityScanProfilesUpdate               = "Security Scan Profiles: Update"
-	displaySecuritySettingRead                      = "Security Setting: Read"
-	displaySecuritySettingUpdate                    = "Security Setting: Update"
-	displayServiceAccountCreate                     = "Service Account: Create"
-	displayServiceAccountDelete                     = "Service Account: Delete"
-	displayServiceAccountPersonalAccessTokenCreate  = "Service Account Personal Access Token: Create"
-	displayServiceAccountPersonalAccessTokenRead    = "Service Account Personal Access Token: Read"
-	displayServiceAccountPersonalAccessTokenRevoke  = "Service Account Personal Access Token: Revoke"
-	displayServiceAccountPersonalAccessTokenRotate  = "Service Account Personal Access Token: Rotate"
-	displayServiceAccountRead                       = "Service Account: Read"
-	displayServiceAccountUpdate                     = "Service Account: Update"
-	displayServicePingRead                          = "Service Ping: Read"
-	displaySidekiqJobDrop                           = "Sidekiq Job: Drop"
-	displaySidekiqMetricRead                        = "Sidekiq Metric: Read"
-	displaySnapshotRead                             = "Snapshot: Read"
-	displaySnippetCreate                            = "Snippet: Create"
-	displaySnippetDelete                            = "Snippet: Delete"
-	displaySnippetRead                              = "Snippet: Read"
-	displaySnippetUpdate                            = "Snippet: Update"
-	displayStatisticRead                            = "Statistic: Read"
-	displayStatusRead                               = "Status: Read"
-	displayStatusUpdate                             = "Status: Update"
-	displaySubscriptionUsageCapUpdate               = "Subscription Usage Cap: Update"
-	displaySuggestionApply                          = "Suggestion: Apply"
-	displaySupportPINCreate                         = "Support PIN: Create"
-	displaySupportPINRead                           = "Support PIN: Read"
-	displaySupportPINRevoke                         = "Support PIN: Revoke"
-	displayTagProtect                               = "Tag: Protect"
-	displayTargetBranchRuleCreate                   = "Target Branch Rule: Create"
-	displayTargetBranchRuleDelete                   = "Target Branch Rule: Delete"
-	displayTemplateRead                             = "Template: Read"
-	displayTerraformStateCreate                     = "Terraform State: Create"
-	displayTerraformStateDelete                     = "Terraform State: Delete"
-	displayTerraformStateLock                       = "Terraform State: Lock"
-	displayTerraformStateProtectionRuleCreate       = "Terraform State Protection Rule: Create"
-	displayTerraformStateProtectionRuleDelete       = "Terraform State Protection Rule: Delete"
-	displayTerraformStateProtectionRuleUpdate       = "Terraform State Protection Rule: Update"
-	displayTerraformStateRead                       = "Terraform State: Read"
-	displayThirdPartyAgentDirectAccessTokenCreate   = "Third Party Agent Direct Access Token: Create"
-	displayTimelineEventCreate                      = "Timeline Event: Create"
-	displayTimelineEventDelete                      = "Timeline Event: Delete"
-	displayTimelineEventUpdate                      = "Timeline Event: Update"
-	displayTimelogCreate                            = "Timelog: Create"
-	displayTimelogDelete                            = "Timelog: Delete"
-	displayTodoCreate                               = "Todo: Create"
-	displayTodoDelete                               = "Todo: Delete"
-	displayTodoRead                                 = "Todo: Read"
-	displayTodoUpdate                               = "Todo: Update"
-	displayTopicCreate                              = "Topic: Create"
-	displayTopicDelete                              = "Topic: Delete"
-	displayTopicMerge                               = "Topic: Merge"
-	displayTopicRead                                = "Topic: Read"
-	displayTopicUpdate                              = "Topic: Update"
-	displayTriggerCreate                            = "Trigger: Create"
-	displayTriggerDelete                            = "Trigger: Delete"
-	displayTriggerRead                              = "Trigger: Read"
-	displayTriggerUpdate                            = "Trigger: Update"
-	displayUINotificationDismiss                    = "UI Notification: Dismiss"
-	displayUsageDataMetricRead                      = "Usage Data Metric: Read"
-	displayUsageDataMetricUpdate                    = "Usage Data Metric: Update"
-	displayUsageDataQueryRead                       = "Usage Data Query: Read"
-	displayUserActivate                             = "User: Activate"
-	displayUserApprove                              = "User: Approve"
-	displayUserBan                                  = "User: Ban"
-	displayUserBlock                                = "User: Block"
-	displayUserCreate                               = "User: Create"
-	displayUserDeactivate                           = "User: Deactivate"
-	displayUserDelete                               = "User: Delete"
-	displayUserDisableTwoFactor                     = "User: Disable Two Factor"
-	displayUserFollow                               = "User: Follow"
-	displayUserRead                                 = "User: Read"
-	displayUserReject                               = "User: Reject"
-	displayUserUnban                                = "User: Unban"
-	displayUserUnblock                              = "User: Unblock"
-	displayUserUnfollow                             = "User: Unfollow"
-	displayUserUpdate                               = "User: Update"
-	displayVSCodeSettingDelete                      = "VSCode Setting: Delete"
-	displayVSCodeSettingRead                        = "VSCode Setting: Read"
-	displayVSCodeSettingUpdate                      = "VSCode Setting: Update"
-	displayValueStreamCreate                        = "Value Stream: Create"
-	displayValueStreamDelete                        = "Value Stream: Delete"
-	displayValueStreamUpdate                        = "Value Stream: Update"
-	displayVariableCreate                           = "Variable: Create"
-	displayVariableDelete                           = "Variable: Delete"
-	displayVariableRead                             = "Variable: Read"
-	displayVariableUpdate                           = "Variable: Update"
-	displayVerifiedNamespaceCreate                  = "Verified Namespace: Create"
-	displayVirtualRegistryCleanupPolicyCreate       = "Virtual Registry Cleanup Policy: Create"
-	displayVirtualRegistryCleanupPolicyDelete       = "Virtual Registry Cleanup Policy: Delete"
-	displayVirtualRegistryCleanupPolicyRead         = "Virtual Registry Cleanup Policy: Read"
-	displayVirtualRegistryCleanupPolicyUpdate       = "Virtual Registry Cleanup Policy: Update"
-	displayVirtualRegistryCreate                    = "Virtual Registry: Create"
-	displayVirtualRegistryDelete                    = "Virtual Registry: Delete"
-	displayVirtualRegistryRead                      = "Virtual Registry: Read"
-	displayVirtualRegistryUpdate                    = "Virtual Registry: Update"
-	displayVulnerabilityArchive                     = "Vulnerability: Archive"
-	displayVulnerabilityArchiveExportCreate         = "Vulnerability Archive Export: Create"
-	displayVulnerabilityArchiveExportRead           = "Vulnerability Archive Export: Read"
-	displayVulnerabilityCreate                      = "Vulnerability: Create"
-	displayVulnerabilityDuoWorkflowExecute          = "Vulnerability Duo Workflow: Execute"
-	displayVulnerabilityExportCreate                = "Vulnerability Export: Create"
-	displayVulnerabilityExportRead                  = "Vulnerability Export: Read"
-	displayVulnerabilityFlagUpdate                  = "Vulnerability Flag: Update"
-	displayVulnerabilityIssueLinkCreate             = "Vulnerability Issue Link: Create"
-	displayVulnerabilityIssueLinkDelete             = "Vulnerability Issue Link: Delete"
-	displayVulnerabilityIssueLinkRead               = "Vulnerability Issue Link: Read"
-	displayVulnerabilityMergeRequestLinkCreate      = "Vulnerability Merge Request Link: Create"
-	displayVulnerabilityMergeRequestLinkDelete      = "Vulnerability Merge Request Link: Delete"
-	displayVulnerabilityNoteCreate                  = "Vulnerability Note: Create"
-	displayVulnerabilityNoteDelete                  = "Vulnerability Note: Delete"
-	displayVulnerabilityNoteRead                    = "Vulnerability Note: Read"
-	displayVulnerabilityNoteUpdate                  = "Vulnerability Note: Update"
-	displayVulnerabilityRead                        = "Vulnerability: Read"
-	displayVulnerabilityUpdate                      = "Vulnerability: Update"
-	displayWebhookCreate                            = "Webhook: Create"
-	displayWebhookDelete                            = "Webhook: Delete"
-	displayWebhookRead                              = "Webhook: Read"
-	displayWebhookTrigger                           = "Webhook: Trigger"
-	displayWebhookUpdate                            = "Webhook: Update"
-	displayWikiCreate                               = "Wiki: Create"
-	displayWikiDelete                               = "Wiki: Delete"
-	displayWikiRead                                 = "Wiki: Read"
-	displayWikiSubscribe                            = "Wiki: Subscribe"
-	displayWikiUpdate                               = "Wiki: Update"
-	displayWorkItemCreate                           = "Work Item: Create"
-	displayWorkItemDelete                           = "Work Item: Delete"
-	displayWorkItemRead                             = "Work Item: Read"
-	displayWorkItemSavedViewCreate                  = "Work Item Saved View: Create"
-	displayWorkItemSavedViewDelete                  = "Work Item Saved View: Delete"
-	displayWorkItemSavedViewSubscribe               = "Work Item Saved View: Subscribe"
-	displayWorkItemSavedViewUpdate                  = "Work Item Saved View: Update"
-	displayWorkItemSubscribe                        = "Work Item: Subscribe"
-	displayWorkItemTypeArchive                      = "Work Item Type: Archive"
-	displayWorkItemUpdate                           = "Work Item: Update"
-	displayWorkspaceCreate                          = "Workspace: Create"
-	displayWorkspaceUpdate                          = "Workspace: Update"
-	displayZoektIndexUpdate                         = "Zoekt Index: Update"
-	displayZoektNamespaceCreate                     = "Zoekt Namespace: Create"
-	displayZoektNamespaceDelete                     = "Zoekt Namespace: Delete"
-	displayZoektNamespaceUpdate                     = "Zoekt Namespace: Update"
-	displayZoektNodeRead                            = "Zoekt Node: Read"
-)

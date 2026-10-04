@@ -218,10 +218,15 @@ type Table struct {
 	Bucket  string
 	// Permissions are the raw permission names, sorted.
 	Permissions []string
-	// Display is, per raw permission, the words of the first assignable a
-	// token can be granted that expands to it ("Merge Request: Approve"),
-	// which is what the token creation page offers; empty when none can.
-	Display     []string
+	// Displays are the words GitLab's token creation page offers an
+	// assignable permission by ("Merge Request: Approve"), each once and
+	// sorted, the first of them empty.
+	Displays []string
+	// Display is, per raw permission, the index in Displays of the words of
+	// the first assignable a token can be granted that expands to it; 0, the
+	// empty words, when none can. Many raw permissions share one assignable,
+	// so the words are held once and indexed rather than repeated.
+	Display     []uint16
 	Assignables []Assignable
 	// PublicAnonymous are bit sets over Permissions, indexed by
 	// [PublicProject] and [PublicGroup]: the anonymous policy GitLab evaluated
