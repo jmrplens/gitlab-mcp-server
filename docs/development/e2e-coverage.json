@@ -3,7 +3,7 @@
  "note": "What the end-to-end suite asserts, per runtime, from the calls it recorded rather than from mentions in its source. Written by `make e2e-coverage-record` after a Docker run of both halves; the page at docs/development/testing/e2e-coverage.md is rendered from this file and `make check-e2e-coverage-record` compares both without a GitLab and without a network. One entry per Docker target: ce is the unlicensed instance, ee the licensed one.",
  "runtimes": {
   "ce": {
-   "retrieved_at": "2026-09-30",
+   "retrieved_at": "2026-10-03",
    "runtime": "community/free",
    "edition": "community",
    "tier": "free",
@@ -12,8 +12,8 @@
      "package": "ce",
      "requirement": "free",
      "status": "started",
-     "run_id": "20260930t090308z-aa7169e24c-ce",
-     "commit": "e600a73d03e806760f8c311362d3e7cc1d6a4add",
+     "run_id": "20261003t141507z-a33592066a-ce",
+     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
      "gitlab_version": "19.4.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -27,8 +27,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20260930t083040z-19e0ef3ef5-common",
-     "commit": "e600a73d03e806760f8c311362d3e7cc1d6a4add",
+     "run_id": "20261003t133750z-25a47f3a98-common",
+     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
      "gitlab_version": "19.4.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -154,7 +154,7 @@
    ],
    "summary": {
     "catalog_actions": 872,
-    "test_calls": 3524,
+    "test_calls": 3530,
     "l1": 834,
     "l2": 730,
     "l3": 714,
@@ -2512,7 +2512,7 @@
    }
   },
   "ee": {
-   "retrieved_at": "2026-09-30",
+   "retrieved_at": "2026-10-03",
    "runtime": "enterprise/ultimate",
    "edition": "enterprise",
    "tier": "ultimate",
@@ -2521,8 +2521,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20260930t070748z-214854e5c4-common",
-     "commit": "e600a73d03e806760f8c311362d3e7cc1d6a4add",
+     "run_id": "20261003t120430z-4a54f6c6df-common",
+     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
      "gitlab_version": "19.4.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2536,8 +2536,8 @@
      "package": "ee",
      "requirement": "licensed",
      "status": "started",
-     "run_id": "20260930t080327z-7e70dc60f9-ee",
-     "commit": "e600a73d03e806760f8c311362d3e7cc1d6a4add",
+     "run_id": "20261003t130916z-bc30ec8233-ee",
+     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
      "gitlab_version": "19.4.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2663,7 +2663,7 @@
    ],
    "summary": {
     "catalog_actions": 1092,
-    "test_calls": 4671,
+    "test_calls": 4617,
     "l1": 1028,
     "l2": 924,
     "l3": 908,

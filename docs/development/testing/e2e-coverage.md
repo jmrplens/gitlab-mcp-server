@@ -36,8 +36,8 @@ further down.
 
 | Runtime | Edition/tier        | Measured   | Catalog actions |           L1 |          L2 |          L3 | Test calls |
 | ------- | ------------------- | ---------- | --------------: | -----------: | ----------: | ----------: | ---------: |
-| `ce`    | community/free      | 2026-09-30 |             872 |  834 (95.6%) | 730 (83.7%) | 714 (81.9%) |       3524 |
-| `ee`    | enterprise/ultimate | 2026-09-30 |            1092 | 1028 (94.1%) | 924 (84.6%) | 908 (83.2%) |       4671 |
+| `ce`    | community/free      | 2026-10-03 |             872 |  834 (95.6%) | 730 (83.7%) | 714 (81.9%) |       3530 |
+| `ee`    | enterprise/ultimate | 2026-10-03 |            1092 | 1028 (94.1%) | 924 (84.6%) | 908 (83.2%) |       4617 |
 
 The actions behind each level are listed by id in `docs/development/e2e-coverage.json`, under `levels.l1`, `levels.l2` and `levels.l3`.
 
@@ -45,10 +45,10 @@ The actions behind each level are listed by id in `docs/development/e2e-coverage
 
 | Runtime | Package  | Requires | Status  | GitLab    | Tier confirmed | Commit         |
 | ------- | -------- | -------- | ------- | --------- | -------------- | -------------- |
-| `ce`    | `ce`     | free     | started | 19.4.1    | no             | `e600a73d03e8` |
-| `ce`    | `common` | any      | started | 19.4.1    | no             | `e600a73d03e8` |
-| `ee`    | `common` | any      | started | 19.4.1-ee | yes            | `e600a73d03e8` |
-| `ee`    | `ee`     | licensed | started | 19.4.1-ee | yes            | `e600a73d03e8` |
+| `ce`    | `ce`     | free     | started | 19.4.1    | no             | `1ecae82fa58e` |
+| `ce`    | `common` | any      | started | 19.4.1    | no             | `1ecae82fa58e` |
+| `ee`    | `common` | any      | started | 19.4.1-ee | yes            | `1ecae82fa58e` |
+| `ee`    | `ee`     | licensed | started | 19.4.1-ee | yes            | `1ecae82fa58e` |
 
 A tier that is not confirmed came from a setting rather than from the instance license, which means the catalog the share is divided by may hold actions that instance would refuse. An unlicensed GitLab reports no license at all, so the `ce` half is expected to read `no` here.
 

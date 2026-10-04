@@ -246,6 +246,27 @@ func TestCollectStats_SeveralFilesPerKind_CountEachKindAndKeepTheLongest(t *test
 	}
 }
 
+// TestCollectStats_EqualLengthFiles_KeepTheFirst verifies a later file as long
+// as the record does not displace it, for source and for unit tests alike, so
+// the published largest file is the first of the longest in the index's
+// sorted order.
+func TestCollectStats_EqualLengthFiles_KeepTheFirst(t *testing.T) {
+	root := writeFakeRepository(t, map[string]string{
+		"internal/a/a.go":      "package a\n\nfunc first() {}\n",
+		"internal/a/b.go":      "package a\n\nfunc later() {}\n",
+		"internal/a/a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) {}\n",
+		"internal/a/b_test.go": "package a\n\nimport \"testing\"\n\nfunc TestB(t *testing.T) {}\n",
+	})
+
+	stats, err := collectStats(root)
+	if err != nil {
+		t.Fatalf("collectStats() error = %v", err)
+	}
+	if stats.LargestSrcFile != "internal/a/a.go" || stats.LargestTestFile != "internal/a/a_test.go" {
+		t.Fatalf("largest files = %q / %q, want internal/a/a.go / internal/a/a_test.go", stats.LargestSrcFile, stats.LargestTestFile)
+	}
+}
+
 // TestCollectStats_TrackedFileShapes_SkipOrFail verifies how the collector
 // treats index entries that no longer match the working tree: a deleted file
 // is skipped with a warning, a file the scanner cannot read fails, a file the
@@ -356,6 +377,82 @@ func TestWarnIndexDrift_NotARepository_StaysQuiet(t *testing.T) {
 		t.Skipf("git not on PATH: %v", err)
 	}
 	warnIndexDrift(t.TempDir(), gitBin, 0)
+}
+
+// TestListTrackedGoFiles_IndexAndTreeDisagree_SaysSo verifies the two
+// warnings the collector writes to stderr: a tracked file deleted on disk is
+// counted and reported, an untracked Go file is reported by name, and a tree
+// that matches its index produces neither.
+func TestListTrackedGoFiles_IndexAndTreeDisagree_SaysSo(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, root string)
+		want   []string
+	}{
+		{name: "matching tree", mutate: func(*testing.T, string) {}},
+		{
+			name: "tracked file deleted",
+			mutate: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.Remove(filepath.Join(root, "test", "e2e", "gitlab", "flow_test.go")); err != nil {
+					t.Fatalf("remove: %v", err)
+				}
+			},
+			want: []string{"warning: 1 tracked .go file(s) are deleted on disk but not staged"},
+		},
+		{
+			name: "untracked file",
+			mutate: func(t *testing.T, root string) {
+				t.Helper()
+				writeFile(t, root, "internal/a/extra.go", "package a\n")
+			},
+			want: []string{"warning: 1 untracked .go file(s) are not counted", "  internal/a/extra.go\n"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeFakeRepository(t, fakeRepositoryFiles())
+			tt.mutate(t, root)
+			var err error
+			said := captureStderr(t, func() { _, err = listTrackedGoFiles(root) })
+			if err != nil {
+				t.Fatalf("listTrackedGoFiles() error = %v", err)
+			}
+			if len(tt.want) == 0 && said != "" {
+				t.Errorf("stderr = %q, want nothing", said)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(said, want) {
+					t.Errorf("stderr = %q, want it to hold %q", said, want)
+				}
+			}
+		})
+	}
+}
+
+// captureStderr runs fn with os.Stderr pointed at a file and returns what fn
+// wrote there.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "stderr")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create %s: %v", path, err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = file
+	func() {
+		defer func() { os.Stderr = origStderr }()
+		fn()
+	}()
+	if closeErr := file.Close(); closeErr != nil {
+		t.Fatalf("close %s: %v", path, closeErr)
+	}
+	said, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(said)
 }
 
 // TestListTrackedGoFiles_NoGitOnPath_ReturnsError verifies the collector
@@ -515,6 +612,7 @@ func TestUpdateFunctionStats_NameShapes_ClassifyEachBucket(t *testing.T) {
 		{name: "unit test", fn: "TestThing_Works", isTest: true, want: repoStats{TestFuncs: 1, LongestTestName: "TestThing_Works"}},
 		{name: "unit helper is ignored", fn: "TestMain", isTest: true},
 		{name: "exported", fn: "Exported", want: repoStats{ExportedFuncs: 1, LongestFuncName: "Exported"}},
+		{name: "a test-shaped name in source is exported", fn: "TestShaped", want: repoStats{ExportedFuncs: 1, LongestFuncName: "TestShaped"}},
 		{name: "unexported", fn: "internal", want: repoStats{UnexportedFuncs: 1, LongestFuncName: "internal"}},
 		{name: "empty name", fn: "", want: repoStats{UnexportedFuncs: 1}},
 	}
@@ -542,9 +640,26 @@ func TestUpdateFunctionStats_ShorterNames_KeepLongestRecord(t *testing.T) {
 	}
 }
 
+// TestUpdateFunctionStats_EqualLengthNames_KeepTheFirst verifies a later name
+// as long as the record does not displace it either, in both buckets, so the
+// published name is the first of the longest the declaration pass meets.
+func TestUpdateFunctionStats_EqualLengthNames_KeepTheFirst(t *testing.T) {
+	var s repoStats
+	updateFunctionStats("TestFirst_Case", false, true, &s)
+	updateFunctionStats("TestLater_Case", false, true, &s)
+	updateFunctionStats("FirstName", false, false, &s)
+	updateFunctionStats("laterName", false, false, &s)
+	if s.LongestTestName != "TestFirst_Case" || s.LongestFuncName != "FirstName" {
+		t.Fatalf("longest names = %q / %q, want TestFirst_Case / FirstName", s.LongestTestName, s.LongestFuncName)
+	}
+}
+
 // TestIsTODOComment_MarkerShapes_RequireWordBoundary verifies the three task
 // markers are recognized only as comments and only at a word boundary, so
-// identifiers that merely start with a marker are not counted.
+// identifiers that merely start with a marker are not counted, and that a
+// marker not written in capitals counts only when a colon or a parenthesis
+// follows it, so a doc comment of an identifier named Todo and a sentence
+// beginning with GitLab's word "todo" are not counted either.
 func TestIsTODOComment_MarkerShapes_RequireWordBoundary(t *testing.T) {
 	tests := []struct {
 		line string
@@ -552,10 +667,19 @@ func TestIsTODOComment_MarkerShapes_RequireWordBoundary(t *testing.T) {
 	}{
 		{line: "// TODO: later", want: true},
 		{line: "//TODO", want: true},
+		{line: "// HACK", want: true},
 		{line: "// fixme(x): later", want: true},
+		{line: "// todo: later", want: true},
 		{line: "//\tHACK - workaround", want: true},
+		{line: "// TODO(dynamic-search): remove this", want: true},
 		{line: "// TodoOutput is a struct", want: false},
 		{line: "// TODO_LATER", want: false},
+		{line: "// TODOS are counted elsewhere", want: false},
+		{line: "// Todo defers the decision", want: false},
+		{line: "// todo list GitLab ships", want: false},
+		{line: "// todo, and time-tracking routes", want: false},
+		{line: "// fixme", want: false},
+		{line: "// TO", want: false},
 		{line: "// nothing here", want: false},
 		{line: "x := TODO", want: false},
 	}
@@ -718,6 +842,7 @@ func TestFmtInt_AddsThousandsSeparators(t *testing.T) {
 		{in: 0, want: "0"},
 		{in: 999, want: "999"},
 		{in: 1000, want: "1,000"},
+		{in: 123456, want: "123,456"},
 		{in: 1234567, want: "1,234,567"},
 	}
 	for _, tt := range tests {
@@ -732,13 +857,15 @@ func TestFmtInt_AddsThousandsSeparators(t *testing.T) {
 // TestScanGoFile_SkipsRawStringFixtures verifies that a fake test embedded in
 // a multi-line raw string does not reach the line-level counters. A fixture
 // source holding a whole fake Go file must not inflate subtest, defer or
-// error-check totals, which is what the backtick-parity skip is for.
+// error-check totals, which is what the backtick-parity skip is for. The
+// subtest after the string closes is counted, which is what holds the skip to
+// ending where the string does.
 //
 // Declaration counting is no longer the line scanner's job — see
 // [TestScanGoDecls_CountsDeclarationsNotText] — so TestFuncs stays zero here.
 func TestScanGoFile_SkipsRawStringFixtures(t *testing.T) {
 	dir := t.TempDir()
-	src := "package p\n\nconst fixture = `\nfunc TestFake(t *testing.T) {\n\tt.Run(\"sub\", nil)\n}\n`\n\nfunc TestReal(t *testing.T) {}\n"
+	src := "package p\n\nconst fixture = `\nfunc TestFake(t *testing.T) {\n\tt.Run(\"sub\", nil)\n}\n`\n\nfunc TestReal(t *testing.T) {\n\tt.Run(\"real\", nil)\n}\n"
 	path := filepath.Join(dir, "x_test.go")
 	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -747,8 +874,8 @@ func TestScanGoFile_SkipsRawStringFixtures(t *testing.T) {
 	if _, err := scanGoFile(path, false, true, &s); err != nil {
 		t.Fatalf("scanGoFile: %v", err)
 	}
-	if s.Subtests != 0 {
-		t.Errorf("Subtests = %d, want 0 — the t.Run inside the raw string is data, not code", s.Subtests)
+	if s.Subtests != 1 {
+		t.Errorf("Subtests = %d, want 1: the t.Run inside the raw string is data, not code, and the one after the string closes is code", s.Subtests)
 	}
 	if s.TestFuncs != 0 {
 		t.Errorf("TestFuncs = %d, want 0 — the line scanner no longer counts declarations", s.TestFuncs)
@@ -1082,6 +1209,17 @@ func TestCountStructType_CountsOnlyStructTypeSpecs(t *testing.T) {
 			t.Errorf("StructTypes = %d, want 0", s.StructTypes)
 		}
 	})
+}
+
+// TestCountDecl_DeclarationNeitherFuncNorGen_IsPassedOver drives the guard no
+// parsed file reaches: a declaration that is neither a function nor a general
+// declaration, which only a failed parse produces, changes no counter.
+func TestCountDecl_DeclarationNeitherFuncNorGen_IsPassedOver(t *testing.T) {
+	var s repoStats
+	countDecl(&ast.BadDecl{}, false, false, &s)
+	if s != (repoStats{}) {
+		t.Errorf("countDecl(BadDecl) = %+v, want no counter moved", s)
+	}
 }
 
 // TestIsE2EPath_CountsTheSuiteAndNotThePlantedFixtures pins which tracked

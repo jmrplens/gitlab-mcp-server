@@ -228,6 +228,12 @@ func TestRequestDeclarations_DeclareWhatTheHandlerSends(t *testing.T) {
 
 // driveDeclaredAction runs one action's handler, as the catalog binds it to an
 // Enterprise client, against a stand-in that records what it posts.
+//
+// The client is testutil.NewTestClient's, so the pinned schema still judges
+// every document the handler sends, with request recording switched off for
+// it: recorded, these requests would be filed in the request inventory under
+// this command's package rather than a tool's, as copies of rows the work
+// item, epic and Terraform state packages already record.
 func driveDeclaredAction(t *testing.T, id string) *documentRecorder {
 	t.Helper()
 	params, driven := declarationDrivers[id]
@@ -235,6 +241,7 @@ func driveDeclaredAction(t *testing.T, id string) *documentRecorder {
 		t.Fatalf("no arguments drive %s; add them to declarationDrivers", id)
 	}
 	recorder := &documentRecorder{t: t}
+	t.Setenv(testutil.InventoryDirEnv, "")
 	client := testutil.NewTestClient(t, recorder)
 	client.SetEnterprise(true)
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: edition.Ultimate})
