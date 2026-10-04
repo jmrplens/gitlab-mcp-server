@@ -442,6 +442,30 @@ func TestReleaseLinkCreateBatch_SkipsInvalidEntries(t *testing.T) {
 	}
 }
 
+// TestReleaseLinkCreateBatch_NoCompleteEntry_RefusedBeforeAnyRequest
+// verifies that a list none of whose entries has both a name and a url is
+// refused before anything is sent, rather than answered as a success that
+// created nothing: the batch's request directive says every call that
+// succeeds sends one.
+func TestReleaseLinkCreateBatch_NoCompleteEntry_RefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error(errNoReachAPI)
+		http.NotFound(w, nil)
+	}))
+
+	out, err := CreateBatch(context.Background(), client, CreateBatchInput{
+		ProjectID: "42",
+		TagName:   testTagV120,
+		Links:     []LinkEntry{{Name: "", URL: "https://example.com"}, {Name: "NoURL", URL: ""}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "no entry of links has both a name and a url") {
+		t.Fatalf("CreateBatch() error = %v, want the refusal of a list with no complete entry", err)
+	}
+	if len(out.Created) != 0 || len(out.Failed) != 0 {
+		t.Errorf("CreateBatch() = %+v, want the zero output beside the refusal", out)
+	}
+}
+
 // TestReleaseLinkCreateBatch_EmptyLinks verifies that CreateBatch returns
 // an error when the links array is empty.
 func TestReleaseLinkCreateBatch_EmptyLinks(t *testing.T) {

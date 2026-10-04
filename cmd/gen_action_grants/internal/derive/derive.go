@@ -99,13 +99,13 @@ type Result struct {
 // deriver holds what every action's derivation shares.
 type deriver struct {
 	prog       *actionrequests.Program
-	sdk        SDK
+	sdk        Requester
 	directives *directives
 	bodies     map[*types.Func]*node
 }
 
 // Derive derives every catalog action's requests.
-func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk SDK, declarations []Declaration) Result {
+func Derive(prog *actionrequests.Program, actions []actionrequests.Action, sdk Requester, declarations []Declaration) Result {
 	d := &deriver{
 		prog:       prog,
 		sdk:        sdk,

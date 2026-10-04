@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -157,7 +158,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // CreateBatch adds multiple asset links to a release in a single tool call.
 // Each link is created sequentially; failures are collected without aborting
-// the remaining links.
+// the remaining links. A list none of whose entries has both a name and a url
+// is refused before anything is sent, since it would create nothing.
 func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateBatchInput) (CreateBatchOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return CreateBatchOutput{}, err
@@ -171,14 +173,17 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 	if len(input.Links) == 0 {
 		return CreateBatchOutput{}, errors.New("CreateBatch: links array is required and must not be empty")
 	}
+	if !slices.ContainsFunc(input.Links, complete) {
+		return CreateBatchOutput{}, errors.New("CreateBatch: no entry of links has both a name and a url, so there is no link to create; give each link a name and a url")
+	}
 
 	out := CreateBatchOutput{Created: make([]Output, 0, len(input.Links))}
-	//gitlab:request mandatory: the handler refuses an empty list, so the loop body runs at least once
+	//gitlab:request mandatory: the handler refuses a list with no entry holding both a name and a url, so the loop sends at least one request
 	for i, entry := range input.Links {
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
-		if entry.Name == "" || entry.URL == "" {
+		if !complete(entry) {
 			out.Failed = append(out.Failed, fmt.Sprintf("link[%d]: name and url are required", i))
 			continue
 		}
@@ -203,6 +208,12 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 		out.Created = append(out.Created, ToOutput(l))
 	}
 	return out, nil
+}
+
+// complete reports whether a batch entry carries the two fields GitLab
+// requires of a link, which is what decides whether it is sent.
+func complete(entry LinkEntry) bool {
+	return entry.Name != "" && entry.URL != ""
 }
 
 func releaseLinkType(url, explicit string) gl.LinkTypeValue {

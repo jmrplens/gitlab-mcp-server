@@ -40,6 +40,29 @@ var boundaryConstants = map[string]string{
 	"instance": "finegrained.BoundaryInstance",
 }
 
+// causeConstants and effectConstants spell each cause and effect as the
+// constant that names it, so the table reads the vocabulary finegrained
+// declares rather than repeating its values.
+var (
+	causeConstants = map[finegrained.Cause]string{
+		finegrained.CauseMutationUndeclared:   "finegrained.CauseMutationUndeclared",
+		finegrained.CauseTypeUndeclared:       "finegrained.CauseTypeUndeclared",
+		finegrained.CausePayloadUndeclared:    "finegrained.CausePayloadUndeclared",
+		finegrained.CauseBoundaryUnresolvable: "finegrained.CauseBoundaryUnresolvable",
+		finegrained.CauseRESTTodo:             "finegrained.CauseRESTTodo",
+		finegrained.CauseRESTUndeclared:       "finegrained.CauseRESTUndeclared",
+		finegrained.CauseNotGranted:           "finegrained.CauseNotGranted",
+	}
+	effectConstants = map[finegrained.Effect]string{
+		finegrained.EffectNull:              "finegrained.EffectNull",
+		finegrained.EffectNullOrEmpty:       "finegrained.EffectNullOrEmpty",
+		finegrained.EffectRemoved:           "finegrained.EffectRemoved",
+		finegrained.EffectListNull:          "finegrained.EffectListNull",
+		finegrained.EffectRefused:           "finegrained.EffectRefused",
+		finegrained.EffectCommittedThenNull: "finegrained.EffectCommittedThenNull",
+	}
+)
+
 // renderTable writes the table as Go source of keyed composite literals, so a
 // field added to a finegrained type leaves an older table compiling.
 func renderTable(table *finegrained.Table) []byte {
@@ -47,8 +70,8 @@ func renderTable(table *finegrained.Table) []byte {
 	b.WriteString(tableHeader)
 	fmt.Fprintf(&b, "Version: %q,\nBucket: %q,\n", table.Version, table.Bucket)
 	writeStrings(&b, "Permissions", table.Permissions)
-	writeStrings(&b, "Display", table.Display)
-	writeStrings(&b, "RefusalDisplay", table.RefusalDisplay)
+	writeStrings(&b, "Displays", table.Displays)
+	fmt.Fprintf(&b, "Display: %s,\n", uint16s(table.Display))
 	b.WriteString("Assignables: []finegrained.Assignable{\n")
 	for _, a := range table.Assignables {
 		fmt.Fprintf(&b, "{Name: %q, Permissions: %s, Boundaries: %s", a.Name, uint16s(a.Permissions), boundary(a.Boundaries))
@@ -86,7 +109,7 @@ func renderTable(table *finegrained.Table) []byte {
 		}
 		writeIndices(&b, "Groups", e.Groups)
 		writeFlag(&b, "Undeclared", e.Undeclared)
-		fmt.Fprintf(&b, ", Effect: %q},\n", e.Effect)
+		fmt.Fprintf(&b, ", Effect: %s},\n", constantOf(effectConstants, e.Effect))
 	}
 	b.WriteString("},\n")
 	b.WriteString("Actions: []finegrained.Requirement{\n")
@@ -123,7 +146,19 @@ func renderTable(table *finegrained.Table) []byte {
 
 // denial spells one denial's fields as a keyed literal body.
 func denial(d finegrained.Denial) string {
-	return fmt.Sprintf("{Cause: %q, Element: %q, Effect: %q}", d.Cause, d.Element, d.Effect)
+	return fmt.Sprintf("{Cause: %s, Element: %q, Effect: %s}",
+		constantOf(causeConstants, d.Cause), d.Element, constantOf(effectConstants, d.Effect))
+}
+
+// constantOf spells a cause or an effect as the constant that names it. A
+// value finegrained declares and this table does not name is a defect of the
+// table above, which the repository's rule says to state at the leaf.
+func constantOf[V ~string](names map[V]string, value V) string {
+	name, ok := names[value]
+	if !ok {
+		cmdutil.MustDo(fmt.Errorf("%T %q has no constant in the table writer", value, value))
+	}
+	return name
 }
 
 // writeStrings writes a string slice field, one value per line.

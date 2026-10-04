@@ -63,9 +63,9 @@ func Digest(document string) string {
 	return hex.EncodeToString(sum[:])[:12]
 }
 
-// SDK is what the derivation asks of client-go: the requests one service
-// method can send.
-type SDK interface {
+// Requester is what the derivation asks of client-go: the requests one
+// service method can send.
+type Requester interface {
 	// Requests answers the requests a method sends on one call, keyed the way
 	// a handler names it ("Issues.GetIssue"). Routes are alternatives (a call
 	// sends one of them) and documents are all posted; known is false for a

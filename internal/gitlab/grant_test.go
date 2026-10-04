@@ -282,7 +282,7 @@ func TestClient_ReadFineGrained_ReadsWhatTheTokenMayRead(t *testing.T) {
 func refreshTable() *finegrained.Table {
 	return &finegrained.Table{
 		Version: "19.4.1-ee", Bucket: "19.4",
-		Permissions: []string{"read_project"}, Display: []string{"Project: Read"}, RefusalDisplay: []string{"Project: Read"},
+		Permissions: []string{"read_project"}, Displays: []string{"", "Project: Read"}, Display: []uint16{1},
 		Assignables: []finegrained.Assignable{{Name: "project_read", Permissions: []uint16{0}, Boundaries: finegrained.BoundaryProject, Grantable: true}},
 		Groups:      []finegrained.Group{{Perms: []uint16{0}, Any: finegrained.BoundaryProject}},
 		Operations:  []finegrained.Operation{{Name: "GET /projects/:id", Groups: []uint32{0}}},

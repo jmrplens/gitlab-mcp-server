@@ -169,10 +169,13 @@ func (t *Table) groupWords(index uint32) (words string, count int) {
 }
 
 // displayOf names one raw permission the way the token creation page offers
-// it, or by its raw name when no assignable a token can hold expands to it.
+// it, or by its raw name when no assignable a token can hold expands to it,
+// which is also the answer for a permission past the end of Display.
 func (t *Table) displayOf(perm uint16) string {
-	if display := t.Display[perm]; display != "" {
-		return display
+	if int(perm) < len(t.Display) {
+		if display := t.Displays[t.Display[perm]]; display != "" {
+			return display
+		}
 	}
 	return t.Permissions[perm]
 }

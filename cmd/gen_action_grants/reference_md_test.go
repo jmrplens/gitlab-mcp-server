@@ -142,7 +142,8 @@ func TestRenderReference_OneTablePerDomain(t *testing.T) {
 	table := &finegrained.Table{
 		Version:     "19.4.1-ee",
 		Permissions: []string{"read_issue"},
-		Display:     []string{"Issue: Read"},
+		Displays:    []string{"", "Issue: Read"},
+		Display:     []uint16{1},
 		Groups:      []finegrained.Group{{Perms: []uint16{0}, Any: finegrained.BoundaryProject}},
 		Operations:  []finegrained.Operation{{Name: "GET /projects/:id/issues", Groups: []uint32{0}}},
 		Actions: []finegrained.Requirement{

@@ -2,6 +2,7 @@ package sdkroutes
 
 import (
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 )
@@ -90,7 +91,9 @@ func TestSpellings_PassesOverAnEmptySpelling(t *testing.T) {
 
 // TestCombinations_TakesOneSpellingPerPieceUpToTheBound verifies the order of
 // the combinations, the single empty combination of no pieces, and the bound,
-// which a piece with more spellings than it allows reaches on its own.
+// which a piece with more spellings than it allows reaches on its own, past
+// which one combination of overflow pieces follows the ones kept, the last
+// piece's included when the bound was reached at the first.
 func TestCombinations_TakesOneSpellingPerPieceUpToTheBound(t *testing.T) {
 	got := combinations([][]string{{"a", "b"}, {"1"}, {"x", "y"}})
 	want := [][]string{{"a", "1", "x"}, {"a", "1", "y"}, {"b", "1", "x"}, {"b", "1", "y"}}
@@ -105,20 +108,36 @@ func TestCombinations_TakesOneSpellingPerPieceUpToTheBound(t *testing.T) {
 		wide[i] = strconv.Itoa(i)
 	}
 	bounded := combinations([][]string{{"p"}, wide})
-	if len(bounded) != maxFolds || bounded[maxFolds-1][1] != strconv.Itoa(maxFolds-1) {
-		t.Errorf("combinations() of a %d-way piece = %d combinations ending %q, want the first %d", len(wide), len(bounded), bounded[len(bounded)-1], maxFolds)
+	if len(bounded) != maxFolds+1 || bounded[maxFolds-1][1] != strconv.Itoa(maxFolds-1) {
+		t.Errorf("combinations() of a %d-way piece = %d combinations, want the first %d and one more", len(wide), len(bounded), maxFolds)
+	}
+	if last := bounded[len(bounded)-1]; !reflect.DeepEqual(last, []string{overflow, overflow}) {
+		t.Errorf("combinations() past the bound ends %q, want an overflow piece for each piece", last)
+	}
+	early := combinations([][]string{wide, {"z"}})
+	if len(early) != maxFolds+1 || !reflect.DeepEqual(early[maxFolds], []string{overflow, overflow}) {
+		t.Errorf("combinations() bounded at the first piece = %d combinations ending %q, want %d and the overflow one", len(early), early[len(early)-1], maxFolds+1)
 	}
 }
 
-// TestLimit_KeepsTheBoundAndDropsRepeats verifies the bound on spellings.
+// TestLimit_KeepsTheBoundAndDropsRepeats verifies the bound on spellings, the
+// overflow piece after the ones kept when a distinct spelling was left out,
+// and none when only repeats were.
 func TestLimit_KeepsTheBoundAndDropsRepeats(t *testing.T) {
 	var values []string
 	for i := range maxFolds + 4 {
 		values = append(values, string(rune('a'+i)), string(rune('a'+i)))
 	}
 	kept := limit(values)
-	if len(kept) != maxFolds || kept[0] != "a" || kept[maxFolds-1] != string(rune('a'+maxFolds-1)) {
-		t.Errorf("limit() = %v, want the first %d distinct spellings", kept, maxFolds)
+	if len(kept) != maxFolds+1 || kept[0] != "a" || kept[maxFolds-1] != string(rune('a'+maxFolds-1)) || kept[maxFolds] != overflow {
+		t.Errorf("limit() = %q, want the first %d distinct spellings and the overflow piece", kept, maxFolds)
+	}
+	var exact []string
+	for i := range maxFolds {
+		exact = append(exact, string(rune('a'+i)), string(rune('a'+i)))
+	}
+	if got := limit(exact); len(got) != maxFolds || slices.Contains(got, overflow) {
+		t.Errorf("limit() of %d distinct spellings, each repeated = %q, want them all and no overflow piece", maxFolds, got)
 	}
 	if empty := limit(nil); empty != nil {
 		t.Errorf("limit(nil) = %v, want nil", empty)

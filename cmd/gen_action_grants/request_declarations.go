@@ -195,15 +195,15 @@ var requestDeclarations = []derive.Declaration{
 		Reason:   "the path is GenericPackages.FormatPackageURL's, which formats the generic package file route and sends nothing; the handler sends the GET itself to stream the body",
 		Replaces: "raw-path packages.newDownloadRequest", Requests: []derive.Request{rest("GET", "/projects/:/packages/generic/:/:/:")},
 	},
-	workItemDeclaration("group.epic_create", "WorkItems.CreateWorkItem", "CreateWorkItem", createWorkItemDocument),
-	workItemDeclaration("group.epic_get", "WorkItems.GetWorkItem", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("group.epic_list", "WorkItems.ListWorkItems", "ListWorkItems", listEpicsDocument),
-	workItemDeclaration("group.epic_update", "WorkItems.UpdateWorkItem", "UpdateWorkItem", updateWorkItemDocument),
-	workItemDeclaration("issue.work_item_create", "WorkItems.CreateWorkItem", "CreateWorkItem", createWorkItemDocument),
-	workItemDeclaration("issue.work_item_get", "WorkItems.GetWorkItem", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("issue.work_item_list", "WorkItems.ListWorkItems", "ListWorkItems", listWorkItemsDocument),
-	workItemDeclaration("issue.work_item_update", "WorkItems.GetWorkItem", "GetWorkItem", getWorkItemDocument),
-	workItemDeclaration("issue.work_item_update", "WorkItems.UpdateWorkItem", "UpdateWorkItem", updateWorkItemDocument),
+	workItemDeclaration("group.epic_create", "CreateWorkItem", createWorkItemDocument),
+	workItemDeclaration("group.epic_get", "GetWorkItem", getWorkItemDocument),
+	workItemDeclaration("group.epic_list", "ListWorkItems", listEpicsDocument),
+	workItemDeclaration("group.epic_update", "UpdateWorkItem", updateWorkItemDocument),
+	workItemDeclaration("issue.work_item_create", "CreateWorkItem", createWorkItemDocument),
+	workItemDeclaration("issue.work_item_get", "GetWorkItem", getWorkItemDocument),
+	workItemDeclaration("issue.work_item_list", "ListWorkItems", listWorkItemsDocument),
+	workItemDeclaration("issue.work_item_update", "GetWorkItem", getWorkItemDocument),
+	workItemDeclaration("issue.work_item_update", "UpdateWorkItem", updateWorkItemDocument),
 	{
 		Action: "admin.terraform_state_get", Category: categoryFormat,
 		Reason:   "client-go formats the project path and the state name into the query with %q",
@@ -216,10 +216,12 @@ var requestDeclarations = []derive.Declaration{
 	},
 }
 
-// workItemDeclaration declares the document a client-go work item method
-// assembles from its template. TestRequestDeclarations_DeclareWhatTheHandlerSends
-// holds each to what the handler makes client-go send.
-func workItemDeclaration(action, method, name, document string) derive.Declaration {
+// workItemDeclaration declares the document a client-go work item method,
+// named by its name on the WorkItems service, assembles from its template.
+// TestRequestDeclarations_DeclareWhatTheHandlerSends holds each to what the
+// handler makes client-go send.
+func workItemDeclaration(action, name, document string) derive.Declaration {
+	method := "WorkItems." + name
 	return derive.Declaration{
 		Action: action, Category: categoryTemplate,
 		Reason:   "client-go executes the " + name + " text/template of workitems.go at run time; the document is that template evaluated with what the handler hands the method",

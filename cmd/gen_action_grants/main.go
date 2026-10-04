@@ -1,6 +1,8 @@
 package main
 
 import (
+	// embed is imported for its go:embed directive alone, which reads the
+	// table stub into tableStub.
 	_ "embed"
 	"errors"
 	"flag"
@@ -88,7 +90,7 @@ type options struct {
 type sources struct {
 	catalog func() ([]actionrequests.Action, error)
 	load    func(root string, overlay map[string][]byte) (*actionrequests.Program, error)
-	sdk     func(prog *actionrequests.Program) (derive.SDK, error)
+	sdk     func(prog *actionrequests.Program) (derive.Requester, error)
 	record  func(root string) (*apilive.Document, error)
 	schema  func() (*gqlast.Schema, error)
 	// requests and grants are the declaration tables the derivation and the
@@ -119,7 +121,7 @@ func liveSources() sources {
 
 // readSDK reads client-go's routes and documents from the module the loaded
 // program compiles against.
-func readSDK(prog *actionrequests.Program) (derive.SDK, error) {
+func readSDK(prog *actionrequests.Program) (derive.Requester, error) {
 	dir := clientGoDir(prog.Packages())
 	documents, err := graphqldocs.SDKDocuments(dir)
 	if err != nil {

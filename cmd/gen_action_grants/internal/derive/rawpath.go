@@ -42,7 +42,8 @@ const placeholder = ":"
 const maxFoldDepth = 16
 
 // maxSpellings bounds how many spellings one expression folds to, so a path
-// built from several branched pieces cannot multiply without end.
+// built from several branched pieces cannot multiply without end. What the
+// bound leaves out is folded to [unknownPiece] rather than dropped.
 const maxSpellings = 16
 
 // fold evaluates a string expression to every spelling it can take.
@@ -186,13 +187,16 @@ func (d *deriver) sprintf(format string, args []ast.Expr, at *frame, depth int) 
 }
 
 // combine concatenates every spelling of a with every spelling of b, up to
-// [maxSpellings].
+// [maxSpellings]. The spellings past the bound fold to one [unknownPiece]
+// after the ones kept, so a path that multiplies further reads as the routes
+// kept and one unresolved request after them, rather than as the routes kept
+// alone, which would leave the rest out of the derivation without a word.
 func combine(a, b []string) []string {
 	var out []string
 	for _, left := range a {
 		for _, right := range b {
 			if len(out) == maxSpellings {
-				return out
+				return append(out, unknownPiece)
 			}
 			out = append(out, left+right)
 		}

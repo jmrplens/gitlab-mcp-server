@@ -15,7 +15,8 @@ func describeTable() *Table {
 		Permissions: []string{"read_a", "read_b", "write_c", "read_d"},
 		// read_b has no words and read_d none either, the slice stopping
 		// short of it, so both fall back to their raw names.
-		Display: []string{"A: Read", "", "C: Write"},
+		Displays: []string{"", "A: Read", "C: Write"},
+		Display:  []uint16{1, 0, 2},
 		Groups: []Group{
 			{Perms: []uint16{0}, Any: BoundaryProject},
 			{Perms: []uint16{1}, Any: BoundaryGroup},

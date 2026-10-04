@@ -201,9 +201,30 @@ func TestRead_FoldsMethod_ReadsEveryExpressionShape(t *testing.T) {
 	if len(many) != maxFolds {
 		t.Errorf("a path with five four-way choices folded to %d spellings, want the bound %d", len(many), maxFolds)
 	}
-	wantUnresolved := []string{"RepositoriesService.Folds: the path of a request it builds folds to no static segment"}
+	wantUnresolved := []string{
+		"RepositoriesService.Folds: the path of a request it builds folds to more spellings than the reading keeps",
+		"RepositoriesService.Folds: the path of a request it builds folds to no static segment",
+	}
 	if !reflect.DeepEqual(method.Unresolved, wantUnresolved) {
 		t.Errorf("Unresolved = %v, want %v", method.Unresolved, wantUnresolved)
+	}
+}
+
+// TestRead_ManyChoicesMethod_ReportsTheTemplatePastTheBound verifies a
+// template whose arguments multiply past the bound keeps the routes the bound
+// allows and reports the rest as unresolved, rather than reading the routes
+// kept as all the method sends.
+func TestRead_ManyChoicesMethod_ReportsTheTemplatePastTheBound(t *testing.T) {
+	method, ok := fixture(t).Method("Issues.ManyChoices")
+	if !ok {
+		t.Fatal(`Method("Issues.ManyChoices") not found`)
+	}
+	if len(method.Routes) != maxFolds {
+		t.Errorf("a template with five four-way arguments read %d routes, want the bound %d", len(method.Routes), maxFolds)
+	}
+	want := []string{"IssuesService.ManyChoices: a path it formats folds to more spellings than the reading keeps"}
+	if !reflect.DeepEqual(method.Unresolved, want) {
+		t.Errorf("Unresolved = %v, want %v", method.Unresolved, want)
 	}
 }
 
@@ -231,8 +252,8 @@ func TestRead_FixturePackage_ReadsOnlyExportedServiceMethods(t *testing.T) {
 // and sorted.
 func TestSDK_Methods_ListsEveryEntryInKeyOrder(t *testing.T) {
 	methods := fixture(t).Methods()
-	if len(methods) != 34 {
-		t.Errorf("Methods() listed %d, want 34", len(methods))
+	if len(methods) != 35 {
+		t.Errorf("Methods() listed %d, want 35", len(methods))
 	}
 	for i := 1; i < len(methods); i++ {
 		if methods[i-1].Key() >= methods[i].Key() {

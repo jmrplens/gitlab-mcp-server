@@ -182,18 +182,16 @@ func (j *joiner) vocabulary() finegrained.Table {
 	for _, assignable := range granular.Assignable {
 		byName[assignable.Name] = assignable
 	}
-	table := finegrained.Table{
-		Version:        j.record.Source.Version,
-		Bucket:         finegrained.Bucket(j.record.Source.Version),
-		Permissions:    permissions,
-		Display:        make([]string, len(permissions)),
-		RefusalDisplay: make([]string, len(permissions)),
-	}
+	displays := make([]string, len(permissions))
 	for i, name := range permissions {
-		match := granular.RawToAssignable[name]
-		table.Display[i] = byName[match.FirstAvailable].Display
-		table.RefusalDisplay[i] = byName[match.First].Display
+		displays[i] = byName[granular.RawToAssignable[name].FirstAvailable].Display
 	}
+	table := finegrained.Table{
+		Version:     j.record.Source.Version,
+		Bucket:      finegrained.Bucket(j.record.Source.Version),
+		Permissions: permissions,
+	}
+	table.Displays, table.Display = indexDisplays(displays)
 	for _, assignable := range granular.Assignable {
 		entry := finegrained.Assignable{
 			Name:       assignable.Name,
@@ -214,6 +212,20 @@ func (j *joiner) vocabulary() finegrained.Table {
 		table.PublicAnonymous[finegrained.PublicGroup] = j.bitset(public.Group, len(permissions))
 	}
 	return table
+}
+
+// indexDisplays holds each display once, sorted with the empty one first, and
+// says per permission where its display sits in that list.
+func indexDisplays(displays []string) (distinct []string, index []uint16) {
+	distinct = append([]string{""}, displays...)
+	slices.Sort(distinct)
+	distinct = slices.Compact(distinct)
+	index = make([]uint16, len(displays))
+	for i, display := range displays {
+		at, _ := slices.BinarySearch(distinct, display)
+		index[i] = uint16(at) //#nosec G115 -- a position among the displays, which are no more than the permissions a uint16 already indexes
+	}
+	return distinct, index
 }
 
 // bitset sets one bit per named permission.

@@ -410,6 +410,8 @@ func fixtureActions() []derive.Action {
 		action("graphql.plain_items", graphQL(`query { version plain { items { name } } }`)),
 		action("graphql.viewer", graphQL(`query { viewer { username } }`)),
 		action("graphql.labels", graphQL(`query { project(fullPath: "a") { name issues { nodes { id labels { title } } } } }`)),
+		action("graphql.list_mid_spine", graphQL(`query { project(fullPath: "a") { issues { nodes { author { username } } } } }`)),
+		action("graphql.list_root_first", graphQL(`query { users { nodes { username } } viewer { username } }`)),
 		action("graphql.sdk_named", derive.Use{Kind: derive.KindGraphQL, Document: `query { plain { name items { name } } }`, SDKMethods: []string{"Things.Get"}}),
 		action("graphql.document_named", derive.Use{
 			Kind: derive.KindGraphQL, Document: `query { plain { items { name } name } }`, Name: "plainQuery",
@@ -489,7 +491,9 @@ func fixtureDeclarations() Declarations {
 // is refused or whose answer it loses; a group work item, declared at a
 // boundary it never resolves to, read and written; an action one of whose
 // ways no token passes, kept as a denied way beside the ways that run, each
-// denial once, with the GraphQL and collection flags read from every way; a
+// denial once, with the GraphQL and collection flags read from every way, and
+// the collection flag from a list anywhere on any root's spine, one that does
+// not end the spine and one under a root before the last included; a
 // document named by its own name, its client-go method or its site, in that
 // order, and by none; a field named like a connection's items that is no
 // connection's; a document whose roots are all scalars, and mutations whose
@@ -567,6 +571,10 @@ func TestJoin_Fixture_PlacesEachRequest(t *testing.T) {
 			"    spine project Project null [read_project @ project]\n" +
 			"    off project.issues.nodes Issue removed-items [read_issue @ project]\n" +
 			"degraded project.issues.nodes.labels Label list-null undeclared\ngraphql\n",
+		"graphql.list_mid_spine": issuesQuery,
+		"graphql.list_root_first": "path\n  query users viewer (fixture.Handler)\n" +
+			"    spine users.nodes UserCore removed-items [read_user @ user]\n" +
+			"    spine viewer UserCore null [read_user @ user]\ngraphql collection\n",
 		"rest.either":   issuesRoute + "path\n  GET /groups/:id(/-)/epics\n    group read_epic @ project or group\n",
 		"rest.superset": issuesRoute,
 		"rest.instance": "path\n  GET /instance/things\n    group read_user @ project or group or user or instance\n",
@@ -668,12 +676,33 @@ func TestJoin_Fixture_SharesAnOperationUntilADeclarationDeparts(t *testing.T) {
 	}
 }
 
+// TestJoin_Fixture_HoldsEachDisplayOnce verifies the words a permission is
+// offered by are held once each, sorted with the empty words first, and that a
+// permission no token can be granted points at the empty words.
+func TestJoin_Fixture_HoldsEachDisplayOnce(t *testing.T) {
+	table := Join(fixtureRecord(), fixtureSchema(t), nil, Declarations{}).Table
+	if len(table.Displays) == 0 || table.Displays[0] != "" || !slices.IsSorted(table.Displays) ||
+		len(slices.Compact(slices.Clone(table.Displays))) != len(table.Displays) {
+		t.Errorf("displays %q are not each held once, sorted, with the empty words first", table.Displays)
+	}
+	if len(table.Display) != len(table.Permissions) {
+		t.Fatalf("%d displays for %d permissions", len(table.Display), len(table.Permissions))
+	}
+	roleOnly := slices.Index(table.Permissions, "read_role_only")
+	if roleOnly < 0 {
+		t.Fatalf("permissions %q lack read_role_only", table.Permissions)
+	}
+	if table.Display[roleOnly] != 0 {
+		t.Errorf("read_role_only, which no token can be granted, is offered as %q", table.Displays[table.Display[roleOnly]])
+	}
+}
+
 // TestJoin_Fixture_ReadsTheVocabulary verifies the table carries the record's
 // vocabulary: every raw permission an assignable expands to, sorted, with the
-// words a grant names it by (the first assignable a token can be granted) and
-// the words GitLab's refusal names it by (the first assignable of any kind,
-// deprecated included), each assignable's boundaries and whether a token can
-// be granted it, and the anonymous policy as bits over the permissions.
+// words a grant names it by (the first assignable a token can be granted,
+// never a deprecated one that comes before it), each assignable's boundaries
+// and whether a token can be granted it, and the anonymous policy as bits
+// over the permissions.
 func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	table := Join(fixtureRecord(), fixtureSchema(t), nil, Declarations{}).Table
 	if table.Version != "19.4.1-ee" || table.Bucket == "" {
@@ -683,8 +712,8 @@ func TestJoin_Fixture_ReadsTheVocabulary(t *testing.T) {
 	if index < 0 || !slices.IsSorted(table.Permissions) {
 		t.Fatalf("permissions %q are not sorted or lack read_issue", table.Permissions)
 	}
-	if table.Display[index] != "Issue: Read" || table.RefusalDisplay[index] != "Issue: Read (old)" {
-		t.Errorf("read_issue is granted as %q and refused as %q", table.Display[index], table.RefusalDisplay[index])
+	if got := table.Displays[table.Display[index]]; got != "Issue: Read" {
+		t.Errorf("read_issue is granted as %q, want Issue: Read rather than its deprecated first match", got)
 	}
 	roleOnly := slices.IndexFunc(table.Assignables, func(a finegrained.Assignable) bool { return a.Name == "read_role_only" })
 	if roleOnly < 0 || table.Assignables[roleOnly].Grantable {

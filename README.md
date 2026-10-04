@@ -475,40 +475,40 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,467 |       348,542 |
-| Unit tests (`_test.go`)  |     1,016 |       662,335 |
+| Source (`.go`, non-test) |     1,467 |       346,946 |
+| Unit tests (`_test.go`)  |     1,016 |       662,533 |
 | End-to-end tests         |       517 |       112,584 |
-| **Total**                | **3,000** | **1,123,461** |
+| **Total**                | **3,000** | **1,122,063** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 11,700 |
-| . Exported (public)             |  3,467 |
-| . Unexported (private)          |  8,233 |
-| Unit test functions (`TestXxx`) | 19,263 |
-| Subtests (`t.Run(...)`)         |  7,267 |
+| Source functions                | 11,704 |
+| . Exported (public)             |  3,468 |
+| . Unexported (private)          |  8,236 |
+| Unit test functions (`TestXxx`) | 19,268 |
+| Subtests (`t.Run(...)`)         |  7,268 |
 | End-to-end test functions       |  1,456 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.90× more tests than code |
-| Average source file length         |                 ~238 lines |
+| Test lines vs source lines         | 1.91× more tests than code |
+| Average source file length         |                 ~237 lines |
 | Average test file length           |                 ~652 lines |
-| Comment lines in source            |  84,789 (~24.3% of source) |
+| Comment lines in source            |  84,826 (~24.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            |  Count |
 | ---------------------------------- | -----: |
-| `if err != nil` checks             | 10,180 |
-| `defer` statements                 |  1,367 |
+| `if err != nil` checks             | 10,183 |
+| `defer` statements                 |  1,368 |
 | `struct` types defined             |  3,734 |
-| `//nolint` suppressions            |    249 |
+| `//nolint` suppressions            |    248 |
 | `TODO` / `FIXME` / `HACK` comments |      0 |
 
 ### Project
@@ -523,15 +523,15 @@ and the workaround this server carries until it ships.
 
 | Record              | File                                                    |
 | ------------------- | ------------------------------------------------------- |
-| Longest source file | `internal/tools/actiongrants/table_gen.go`. 7,888 lines |
+| Longest source file | `internal/tools/actiongrants/table_gen.go`. 6,171 lines |
 | Longest test file   | `cmd/server/main_test.go`. 15,339 lines                 |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~6,337 pages of A4                                                                                      |
-| Source lines mentioning `"gitlab"`   | 15,803 (impossible to avoid)                                                                            |
+| Source code printed at 55 lines/page | ~6,308 pages of A4                                                                                      |
+| Source lines mentioning `"gitlab"`   | 15,798 (impossible to avoid)                                                                            |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                        |
 | Longest test function name           | `TestDomainCoverageFor_GitLabClientRegisterToolsOnAUtilitySurface_NamesNoMissingConstructor` (90 chars) |
 

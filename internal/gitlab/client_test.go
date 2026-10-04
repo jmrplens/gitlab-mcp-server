@@ -2046,7 +2046,7 @@ func TestClient_CrossHostRedirect_DropsCredential(t *testing.T) {
 		{
 			name: "health probe",
 			do: func(c *Client) error {
-				if verdict := c.CheckCredential(context.Background()); verdict == CredentialRefused {
+				if c.CheckCredential(context.Background()) == CredentialRefused {
 					return errors.New("CheckCredential() = CredentialRefused against a 200 backend")
 				}
 				return nil

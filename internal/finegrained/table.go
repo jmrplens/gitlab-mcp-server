@@ -118,8 +118,8 @@ type Requirement struct {
 	// for: an input that selects a denied GraphQL way is answered null too.
 	GraphQL bool
 	// Collection is set when the answer spine of any way, a denied one
-	// included, ends in a list or a connection, which is what an empty answer
-	// is worth a hint for.
+	// included, passes through a list or a connection, which is what an
+	// empty answer is worth a hint for.
 	Collection bool
 }
 
@@ -218,14 +218,16 @@ type Table struct {
 	Bucket  string
 	// Permissions are the raw permission names, sorted.
 	Permissions []string
-	// Display is, per raw permission, the words of the first assignable a
-	// token can be granted that expands to it ("Merge Request: Approve"),
-	// which is what the token creation page offers; empty when none can.
-	Display []string
-	// RefusalDisplay is, per raw permission, the words GitLab's own refusal
-	// prints, deprecated names included.
-	RefusalDisplay []string
-	Assignables    []Assignable
+	// Displays are the words GitLab's token creation page offers an
+	// assignable permission by ("Merge Request: Approve"), each once and
+	// sorted, the first of them empty.
+	Displays []string
+	// Display is, per raw permission, the index in Displays of the words of
+	// the first assignable a token can be granted that expands to it; 0, the
+	// empty words, when none can. Many raw permissions share one assignable,
+	// so the words are held once and indexed rather than repeated.
+	Display     []uint16
+	Assignables []Assignable
 	// PublicAnonymous are bit sets over Permissions, indexed by
 	// [PublicProject] and [PublicGroup]: the anonymous policy GitLab evaluated
 	// on a public project and group.

@@ -82,6 +82,12 @@ func (s *IssuesService) ListNotes(pid any, mergeRequest bool) ([]*Issue, *Respon
 	return do[[]*Issue](s.client, withPath(routeProjectsIDIDNotes, ProjectID{pid}, collection))
 }
 
+// ManyChoices formats a template whose five arguments each fold four ways, so
+// its combinations multiply past the bound.
+func (s *IssuesService) ManyChoices() ([]*Issue, *Response, error) {
+	return do[[]*Issue](s.client, withPath(routeFiveChoices, choice(), choice(), choice(), choice(), choice()))
+}
+
 // ListDiscussions hands a collection picked the same way to a helper, which
 // is entered once per collection.
 func (s *IssuesService) ListDiscussions(pid any, mergeRequest bool) ([]*Issue, *Response, error) {

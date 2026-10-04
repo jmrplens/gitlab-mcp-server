@@ -20,6 +20,7 @@ var (
 	routeOnlyPlaceholders            = route("%s/%s")
 	routeProjectsIDIDNotes           = route("projects/%s/%s/notes")
 	routeProjectsIDIDDiscussions     = route("projects/%s/%s/discussions")
+	routeFiveChoices                 = route("choices/%s/%s/%s/%s/%s")
 	notARoute                        = other("projects")
 	tooManyArgs                      = route("projects", "issues")
 	notALiteral                      = route(routeSearch)

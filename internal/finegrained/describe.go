@@ -142,10 +142,7 @@ func (t *Table) needs(groups []uint32) []Need {
 func (t *Table) need(group *Group) Need {
 	need := Need{At: group.Any.Names()}
 	for _, perm := range group.Perms {
-		word := t.Permissions[perm]
-		if int(perm) < len(t.Display) && t.Display[perm] != "" {
-			word = t.Display[perm]
-		}
+		word := t.displayOf(perm)
 		if !slices.Contains(need.Permissions, word) {
 			need.Permissions = append(need.Permissions, word)
 		}

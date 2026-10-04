@@ -969,15 +969,24 @@ func TestDerive_Fixture_RecordsWhereEachRequestCameFrom(t *testing.T) {
 
 // TestDerive_Fixture_SpellingsStopAtTheBound verifies a path whose pieces
 // multiply past the bound keeps the first sixteen spellings rather than
-// growing without end, and that a local declared with a value, a string
-// helper and a closure inside it fold like any other piece.
+// growing without end, and reports what it left out as one request it could
+// not read rather than dropping it, and that a local declared with a value, a
+// string helper and a closure inside it fold like any other piece.
 func TestDerive_Fixture_SpellingsStopAtTheBound(t *testing.T) {
 	act := actionByID(t, deriveWithin(t, nil), "fixture.spellings")
-	if len(act.Uses) != maxSpellings {
-		t.Fatalf("fixture.spellings derives %d requests, want %d", len(act.Uses), maxSpellings)
+	if len(act.Uses) != maxSpellings+1 {
+		t.Fatalf("fixture.spellings derives %d requests, want %d", len(act.Uses), maxSpellings+1)
 	}
 	if first := act.Uses[0].Key(); first != "GET /projects/a/v/outer/:" {
 		t.Errorf("the first spelling is %q, want GET /projects/a/v/outer/:", first)
+	}
+	for _, use := range act.Uses[:maxSpellings] {
+		if use.Kind != KindREST {
+			t.Errorf("a kept spelling derives %s, want a REST request", use.Key())
+		}
+	}
+	if last := act.Uses[maxSpellings]; last.Kind != KindUnresolved || last.Reason != "raw-path grants.Spellings" {
+		t.Errorf("past the bound fixture.spellings derives %s %q, want an unresolved raw-path grants.Spellings", last.Kind, last.Reason)
 	}
 }
 

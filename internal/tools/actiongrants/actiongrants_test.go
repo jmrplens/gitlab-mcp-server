@@ -59,7 +59,7 @@ func TestBuild_OnlyAFineGrainedTokenGetsAnAuthority(t *testing.T) {
 	if read == nil || read.Table() != Table() || read.Phase() != finegrained.PhaseGranted || read.Reported() != Table().Version {
 		t.Errorf("Build(true, read) = %+v, want phase B over the generated table at its own version", read)
 	}
-	if again := Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}); again == unread {
+	if Build(true, finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}) == unread {
 		t.Error("Build returned the same authority twice; each credential gets its own")
 	}
 }

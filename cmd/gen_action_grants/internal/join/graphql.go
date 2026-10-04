@@ -102,7 +102,9 @@ type Operation struct {
 	Undeclared string
 	// Elements are every judged position the operation selects.
 	Elements []Element
-	// Collection is set when the spine ends in a list or a connection.
+	// Collection is set when the answer spine of some root field passes
+	// through a list or a connection's items: an empty list there empties
+	// the answer, wherever on the spine it sits.
 	Collection bool
 	// Paths are the path of every object position the document selects, for
 	// the record of what this server sends.
@@ -154,7 +156,7 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 		}
 		for _, on := range spineFrom(start) {
 			spine[on] = true
-			out.Collection = on.sig.list || on.connectionItem
+			out.Collection = out.Collection || on.sig.list || on.connectionItem
 		}
 	}
 	out.Skip = skipped > 0 && skipped == len(out.RootFields)

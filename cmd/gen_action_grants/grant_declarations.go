@@ -38,22 +38,29 @@ var epicPositions = []struct {
 	paths  []string
 }{
 	{"group.epic_create", []string{"workItemCreate.workItem"}},
-	{"group.epic_delete", []string{"namespace.workItem"}},
-	{"group.epic_discussion_add_note", []string{"namespace.workItem"}},
-	{"group.epic_discussion_create", []string{"namespace.workItem"}},
-	{"group.epic_discussion_get", []string{"namespace.workItem"}},
-	{"group.epic_discussion_list", []string{"namespace.workItem"}},
-	{"group.epic_get", []string{"namespace.workItem"}},
-	{"group.epic_issue_assign", []string{"namespace.workItem", "workItemUpdate.workItem"}},
-	{"group.epic_issue_list", []string{"namespace.workItem"}},
-	{"group.epic_issue_remove", []string{"namespace.workItem"}},
-	{"group.epic_issue_update", []string{"namespace.workItem"}},
+	{"group.epic_delete", []string{epicInNamespace}},
+	{"group.epic_discussion_add_note", []string{epicInNamespace}},
+	{"group.epic_discussion_create", []string{epicInNamespace}},
+	{"group.epic_discussion_get", []string{epicInNamespace}},
+	{"group.epic_discussion_list", []string{epicInNamespace}},
+	{"group.epic_get", []string{epicInNamespace}},
+	{"group.epic_issue_assign", []string{epicInNamespace, epicWritten}},
+	{"group.epic_issue_list", []string{epicInNamespace}},
+	{"group.epic_issue_remove", []string{epicInNamespace}},
+	{"group.epic_issue_update", []string{epicInNamespace}},
 	{"group.epic_list", []string{"namespace.workItems.nodes"}},
-	{"group.epic_note_create", []string{"namespace.workItem"}},
-	{"group.epic_note_get", []string{"namespace.workItem"}},
-	{"group.epic_note_list", []string{"namespace.workItem"}},
-	{"group.epic_update", []string{"namespace.workItem", "workItemUpdate.workItem"}},
+	{"group.epic_note_create", []string{epicInNamespace}},
+	{"group.epic_note_get", []string{epicInNamespace}},
+	{"group.epic_note_list", []string{epicInNamespace}},
+	{"group.epic_update", []string{epicInNamespace, epicWritten}},
 }
+
+// The two positions most epic actions reach the epic at: the group's work
+// item a document reads, and the one a write answers with.
+const (
+	epicInNamespace = "namespace.workItem"
+	epicWritten     = "workItemUpdate.workItem"
+)
 
 // groupWorkItems declares every epic position as one no fine-grained token
 // resolves a boundary for.
