@@ -601,6 +601,13 @@ type GraphQLError struct {
 }
 
 // GraphQLTopLevelError formats top-level GraphQL response errors, if any.
+//
+// The error it returns keeps each message apart as well as joined into its
+// text, because a message is read whole: GitLab refuses a GraphQL mutation a
+// fine-grained token lacks the permission for with one errors[] entry whose
+// message is exactly the sentence its authorization service wrote, and one of
+// those sentences, "404 Not Found", means something only as a whole entry
+// ([fineGrainedRefusalOf]).
 func GraphQLTopLevelError(operation string, responseErrors []GraphQLError) error {
 	if len(responseErrors) == 0 {
 		return nil
@@ -613,10 +620,24 @@ func GraphQLTopLevelError(operation string, responseErrors []GraphQLError) error
 		}
 	}
 	if len(messages) == 0 {
-		return fmt.Errorf("%s: %d GraphQL errors with empty messages", operation, len(responseErrors))
+		return &topLevelGraphQLError{text: fmt.Sprintf("%s: %d GraphQL errors with empty messages", operation, len(responseErrors))}
 	}
-	return fmt.Errorf("%s GraphQL errors: %s", operation, strings.Join(messages, "; "))
+	return &topLevelGraphQLError{
+		text:     fmt.Sprintf("%s GraphQL errors: %s", operation, strings.Join(messages, "; ")),
+		messages: messages,
+	}
 }
+
+// topLevelGraphQLError is the error [GraphQLTopLevelError] returns: its text,
+// and the non-empty messages of the response's errors[] entries, trimmed, one
+// per entry.
+type topLevelGraphQLError struct {
+	text     string
+	messages []string
+}
+
+// Error returns the text [GraphQLTopLevelError] formatted.
+func (e *topLevelGraphQLError) Error() string { return e.text }
 
 // GraphQLMutationError formats mutation payload errors, if any.
 func GraphQLMutationError(operation string, payloadErrors []string) error {

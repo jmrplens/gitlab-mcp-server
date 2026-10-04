@@ -69,13 +69,24 @@ type gqlMutationPayload struct {
 // vulnerabilityMutationResponse is the envelope every state mutation answers
 // with: one payload under the mutation's own name. A map rather than one
 // field per mutation, because each document selects one of the four and a
-// struct naming all four would hold three that are always empty.
+// struct naming all four would hold three that are always empty. The payload
+// is a pointer so that a mutation GitLab refused, which it answers with the
+// payload null and the reason in the top-level errors, is told apart from one
+// that ran.
 type vulnerabilityMutationResponse struct {
-	Data map[string]gqlMutationPayload `json:"data"`
+	Data   map[string]*gqlMutationPayload `json:"data"`
+	Errors []toolutil.GraphQLError        `json:"errors"`
 }
 
 // runVulnerabilityMutation sends one state mutation and reads its payload
 // back from under payloadKey, the name of the mutation the document selects.
+//
+// A mutation GitLab refused answers HTTP 200 with the payload null and one
+// top-level errors[] entry, which client-go does not turn into an error: a
+// refusal of the vulnerability's permission, a fine-grained token's grant
+// lacking it among them (GitLab's sentence naming the permission). Reading the
+// payload alone reported that refusal as a state change that happened, with
+// an empty vulnerability.
 func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, operation, query, hint string, vars map[string]any, payloadKey string) (MutationOutput, error) {
 	var resp vulnerabilityMutationResponse
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: query, Variables: vars}, &resp, gl.WithContext(ctx))
@@ -84,6 +95,12 @@ func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	result := resp.Data[payloadKey]
+	if result == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError(operation, resp.Errors); graphQLErr != nil {
+			return MutationOutput{}, graphQLErr
+		}
+		return MutationOutput{}, fmt.Errorf("%s: GitLab answered with no %s payload", operation, payloadKey)
+	}
 	if len(result.Errors) > 0 {
 		return MutationOutput{}, fmt.Errorf("%s: %s", operation, result.Errors[0])
 	}

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -1545,7 +1546,7 @@ func TestCheckCredentialDetail_FineGrainedRefusal_CarriesGitLabsSentence(t *test
 		{name: "GitLab's document", body: granularRefusalBody, wantVerdict: CredentialAcceptedPermissionMissing, wantDescription: granularRefusalSentence},
 		{
 			name:        "a document past the probe's bound",
-			body:        `{"error":"insufficient_granular_scope","error_description":"` + strings.Repeat("x", credentialProbeBodyBytes) + `"}`,
+			body:        `{"error":"insufficient_granular_scope","error_description":"` + strings.Repeat("x", refusalBodyBytes) + `"}`,
 			wantVerdict: CredentialRefused,
 		},
 	}
@@ -2507,5 +2508,371 @@ func TestDetectTier_GitLabComFreeIsAnAnswer(t *testing.T) {
 				t.Errorf("namespacePlanAnswers(%q) = %v, want %v", tc.plan, got, tc.answered)
 			}
 		})
+	}
+}
+
+// metadataRefusalBody is GitLab's answer to GET /api/v4/version for a
+// fine-grained token not granted Metadata: Read (lib/api/metadata.rb declares
+// read_metadata at the instance boundary), as its API guard renders it.
+const metadataRefusalBody = `{"error":"insufficient_granular_scope","error_description":"` + missingMetadataSentence + `"}`
+
+// versionRefusingInstance is a stand-in GitLab that refuses the version
+// endpoint with metadataRefusalBody while refuse holds, and answers it with
+// answer otherwise, and counts every request that reached the endpoint. It
+// answers the license and namespace listings as a non-administrator's token on
+// a self-managed instance is answered, so a tier probe run against it resolves
+// nothing and goes on to ask for the edition.
+type versionRefusingInstance struct {
+	url      string
+	refuse   atomic.Bool
+	answer   atomic.Pointer[string]
+	versions atomic.Int32
+}
+
+func newVersionRefusingInstance(t *testing.T) *versionRefusingInstance {
+	t.Helper()
+	instance := &versionRefusingInstance{}
+	instance.refuse.Store(true)
+	answer := `{"version":"19.4.1-ee","enterprise":true}`
+	instance.answer.Store(&answer)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v4/version":
+			instance.versions.Add(1)
+			if instance.refuse.Load() {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(metadataRefusalBody))
+				return
+			}
+			_, _ = w.Write([]byte(*instance.answer.Load()))
+		case "/api/v4/license":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"403 Forbidden"}`))
+		case "/api/v4/namespaces":
+			_, _ = w.Write([]byte(`[{"id":1,"full_path":"someone","plan":"default"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	instance.url = srv.URL
+	return instance
+}
+
+// captureClientLog routes the default logger to a buffer at debug level for
+// the rest of the test, and returns the buffer.
+func captureClientLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
+}
+
+// TestInitialize_FineGrainedVersionRefusal_IsReachableWithTheVersionUnknown
+// verifies the refusal a fine-grained token without Metadata: Read gets from
+// the version endpoint: the instance answered and authenticated the token, so
+// the client is initialized, no lazy re-initialization is armed, no version is
+// returned or kept, and GitLab's sentence is kept for the caller that has to
+// say so. Before, the refusal was a failure: the client re-asked on every SDK
+// request once per cooldown for the life of the process, and the start never
+// resolved identity or tier.
+func TestInitialize_FineGrainedVersionRefusal_IsReachableWithTheVersionUnknown(t *testing.T) {
+	instance := newVersionRefusingInstance(t)
+	client, err := NewClient(newTestConfig(instance.url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	version, err := client.Initialize(t.Context())
+	if err != nil {
+		t.Fatalf("Initialize() error = %v, want the refusal read as a reachable instance", err)
+	}
+	if version != "" || client.Version() != "" {
+		t.Errorf("Initialize() version = %q and Version() = %q, want both empty for a version the token may not read", version, client.Version())
+	}
+	if !client.IsInitialized() {
+		t.Error("the client is not initialized after GitLab authenticated the token")
+	}
+	if sentence, refused := client.VersionRefusal(); !refused || sentence != missingMetadataSentence {
+		t.Errorf("VersionRefusal() = %q, %v, want GitLab's sentence, true", sentence, refused)
+	}
+
+	client.EnableLazyInit()
+	client.EnsureInitialized(t.Context())
+	if got := instance.versions.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times, want once: an initialized client never asks again", got)
+	}
+}
+
+// TestInitialize_OtherRefusalsOfTheVersion_StayFailures is the negative half:
+// only a 403 carrying GitLab's fine-grained code is a reachable instance. A
+// classic token's missing scope, a plain 403, the same code on a 401 and a
+// body past the probe's bound are failures, as they were, and none of them is
+// kept as a refusal.
+func TestInitialize_OtherRefusalsOfTheVersion_StayFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "a classic token's missing scope", status: http.StatusForbidden, body: `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`},
+		{name: "a plain 403", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`},
+		{name: "the fine-grained code on a 401", status: http.StatusUnauthorized, body: metadataRefusalBody},
+		{name: "a refusal past the probe's bound", status: http.StatusForbidden, body: `{"error":"insufficient_granular_scope","error_description":"` + strings.Repeat("x", refusalBodyBytes) + `"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+
+			if _, err = client.Initialize(t.Context()); err == nil {
+				t.Error("Initialize() error = nil, want a failure")
+			}
+			if client.IsInitialized() {
+				t.Error("the client is initialized after a refusal that is not the fine-grained one")
+			}
+			if _, refused := client.VersionRefusal(); refused {
+				t.Error("VersionRefusal() = true for a refusal that is not the fine-grained one")
+			}
+		})
+	}
+}
+
+// TestEnsureInitialized_FineGrainedVersionRefusal_EndsLazyInitialization
+// verifies the lazy path reads the refusal the way the start does: a client
+// that went into lazy re-initialization because GitLab was unreachable at
+// start recovers on the refusal and stops asking.
+func TestEnsureInitialized_FineGrainedVersionRefusal_EndsLazyInitialization(t *testing.T) {
+	instance := newVersionRefusingInstance(t)
+	client, err := NewClient(newTestConfig(instance.url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	client.EnableLazyInit()
+
+	client.EnsureInitialized(t.Context())
+	if !client.IsInitialized() || client.needsLazyInit.Load() {
+		t.Fatalf("initialized = %v, lazy re-initialization armed = %v; want true and false after the refusal",
+			client.IsInitialized(), client.needsLazyInit.Load())
+	}
+}
+
+// TestDetectEnterprise_VersionRefused_UsesTheFallbackWithoutAsking verifies
+// edition detection for a token GitLab refuses the version endpoint: the
+// configured fallback, logged at debug and never as a failed detection, and
+// the endpoint asked once whichever of the two paths learned the refusal. The
+// grant cannot change, so asking again only repeats the refusal.
+func TestDetectEnterprise_VersionRefused_UsesTheFallbackWithoutAsking(t *testing.T) {
+	tests := []struct {
+		name       string
+		initialize bool
+	}{
+		{name: "learned by the start", initialize: true},
+		{name: "learned by the detection", initialize: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertEditionFallbackAskedOnce(t, tt.initialize)
+		})
+	}
+}
+
+// assertEditionFallbackAskedOnce runs edition detection twice for a token the
+// stand-in refuses the version endpoint, after a start when initialize is
+// set, and holds it to the fallback, one request and no warning.
+func assertEditionFallbackAskedOnce(t *testing.T, initialize bool) {
+	t.Helper()
+	instance := newVersionRefusingInstance(t)
+	client, err := NewClient(newTestConfig(instance.url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if initialize {
+		if _, err = client.Initialize(t.Context()); err != nil {
+			t.Fatalf("Initialize() error = %v", err)
+		}
+	}
+	logged := captureClientLog(t)
+
+	for range 2 {
+		if !client.DetectEnterprise(t.Context(), true) {
+			t.Error("DetectEnterprise() = false, want the fallback true")
+		}
+	}
+	if !client.IsEnterprise() {
+		t.Error("the client does not carry the fallback edition")
+	}
+	if got := instance.versions.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times, want once", got)
+	}
+	if strings.Contains(logged.String(), `"level":"WARN"`) {
+		t.Errorf("a refusal the token's grant decides was logged as a warning:\n%s", logged)
+	}
+	if !strings.Contains(logged.String(), "the token may not read the instance version") {
+		t.Errorf("the fallback's reason was not logged:\n%s", logged)
+	}
+}
+
+// TestDetectTier_VersionRefused_ResolvesFreeWithoutCallingItCE verifies the
+// tier a token GitLab refuses the version endpoint resolves when the license
+// and the namespace plans answer nothing: Free, as before, with no warning
+// (the start already gave one) and without a debug line claiming a CE build,
+// since the edition is exactly what the token could not read. The version
+// endpoint is asked once, by the start.
+func TestDetectTier_VersionRefused_ResolvesFreeWithoutCallingItCE(t *testing.T) {
+	instance := newVersionRefusingInstance(t)
+	client, err := NewClient(newTestConfig(instance.url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if _, err = client.Initialize(t.Context()); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+	logged := captureClientLog(t)
+
+	if got := client.DetectTier(t.Context()); got != edition.Free {
+		t.Errorf("DetectTier() = %v, want Free", got)
+	}
+	if strings.Contains(logged.String(), "on a CE instance") || strings.Contains(logged.String(), `"level":"WARN"`) {
+		t.Errorf("the tier fallback called the build CE or warned:\n%s", logged)
+	}
+	if !strings.Contains(logged.String(), "no edition the token may read") {
+		t.Errorf("the tier fallback did not say the edition was unreadable:\n%s", logged)
+	}
+	if got := instance.versions.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times, want once", got)
+	}
+}
+
+// TestVersionRefusal_ALaterAnswer_ClearsIt verifies that a refusal stands only
+// until the version endpoint answers: GitLab's one refusal that can change
+// while a process runs is fine-grained tokens not yet enabled for the user,
+// and an administrator may enable them. The answer is kept as the version.
+func TestVersionRefusal_ALaterAnswer_ClearsIt(t *testing.T) {
+	instance := newVersionRefusingInstance(t)
+	client, err := NewClient(newTestConfig(instance.url, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if _, err = client.Initialize(t.Context()); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	instance.refuse.Store(false)
+	version, err := client.Initialize(t.Context())
+	if err != nil || version != "19.4.1-ee" {
+		t.Fatalf("Initialize() = %q, %v; want the version the instance now answers", version, err)
+	}
+	if _, refused := client.VersionRefusal(); refused {
+		t.Error("VersionRefusal() = true after the version endpoint answered")
+	}
+	if got := client.Version(); got != "19.4.1-ee" {
+		t.Errorf("Version() = %q, want 19.4.1-ee", got)
+	}
+}
+
+// TestVersion_OnlyAVersionGitLabCouldSend_IsKept verifies what the client
+// keeps of the version an instance reports: three numbers and an optional
+// suffix of letters, digits and dots, at most 64 bytes. Anything else is kept
+// as no version at all, since the string is the instance's and a reader
+// prints it and matches it against recorded releases. The 64-byte and 65-byte
+// rows pin the bound from both sides.
+func TestVersion_OnlyAVersionGitLabCouldSend_IsKept(t *testing.T) {
+	atBound := "19.4.1-" + strings.Repeat("e", versionMaxBytes-len("19.4.1-"))
+	tests := []struct {
+		name     string
+		reported string
+		want     string
+	}{
+		{name: "an enterprise release", reported: "19.4.1-ee", want: "19.4.1-ee"},
+		{name: "GitLab.com's pre-release", reported: "19.5.0-pre", want: "19.5.0-pre"},
+		{name: "a bare release", reported: "17.0.0", want: "17.0.0"},
+		{name: "a dotted suffix", reported: "19.4.1-rc1.ee", want: "19.4.1-rc1.ee"},
+		{name: "at the bound", reported: atBound, want: atBound},
+		{name: "past the bound", reported: atBound + "e", want: ""},
+		{name: "two numbers", reported: "19.4", want: ""},
+		{name: "a prefix", reported: "v19.4.1", want: ""},
+		{name: "an empty suffix", reported: "19.4.1-", want: ""},
+		{name: "a build suffix", reported: "19.4.1-ee+abc", want: ""},
+		{name: "a trailing line", reported: "19.4.1\n", want: ""},
+		{name: "prose", reported: "latest and greatest", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			instance := newVersionRefusingInstance(t)
+			reported, err := json.Marshal(map[string]string{"version": tt.reported})
+			if err != nil {
+				t.Fatalf("encoding the version: %v", err)
+			}
+			answer := string(reported)
+			instance.answer.Store(&answer)
+			instance.refuse.Store(false)
+			client, err := NewClient(newTestConfig(instance.url, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+
+			if _, err = client.Initialize(t.Context()); err != nil {
+				t.Fatalf("Initialize() error = %v", err)
+			}
+			if got := client.Version(); got != tt.want {
+				t.Errorf("Version() after %q = %q, want %q", tt.reported, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestVersion_NothingRead_IsEmpty verifies the version of a client whose
+// version endpoint has not answered.
+func TestVersion_NothingRead_IsEmpty(t *testing.T) {
+	client, err := NewClient(newTestConfig("https://gitlab.example.com", testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.Version(); got != "" {
+		t.Errorf("Version() = %q before any read, want empty", got)
+	}
+}
+
+// TestVersionDirect_UnexpectedAnswer_QuotesItsHeadOnly verifies what the
+// version probe's error quotes of an answer it cannot use: the first 512 bytes
+// of the body, as it always has, now that it reads further to recognize
+// GitLab's fine-grained refusal.
+func TestVersionDirect_UnexpectedAnswer_QuotesItsHeadOnly(t *testing.T) {
+	head := strings.Repeat("h", versionErrorBodyBytes)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(head + "TAIL"))
+	}))
+	t.Cleanup(srv.Close)
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	_, err = client.Initialize(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "HTTP 502: "+head) || strings.Contains(err.Error(), "TAIL") {
+		t.Errorf("Initialize() error = %v, want the status and the body's first %d bytes and nothing after", err, versionErrorBodyBytes)
+	}
+}
+
+// TestVersionRefusedError_NamesTheRefusalAndNotGitLabsSentence verifies the
+// error the probe hands its callers for the fine-grained refusal: it says what
+// happened in this server's words, and leaves GitLab's sentence, the
+// instance's text, to [Client.VersionRefusal].
+func TestVersionRefusedError_NamesTheRefusalAndNotGitLabsSentence(t *testing.T) {
+	err := &versionRefusedError{description: missingMetadataSentence}
+	if strings.Contains(err.Error(), "Metadata: Read") || !strings.Contains(err.Error(), "fine-grained permission") {
+		t.Errorf("versionRefusedError.Error() = %q, want the refusal named without GitLab's sentence", err.Error())
 	}
 }

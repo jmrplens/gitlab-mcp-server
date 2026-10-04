@@ -1259,6 +1259,112 @@ func TestUpdateOrder_MutationAPIError(t *testing.T) {
 	}
 }
 
+// TestEpicIssueMutations_Refused_IsAnErrorNamingGitLabsReason verifies the
+// three handlers that send workItemUpdate against a mutation GitLab refused.
+// GitLab answers it with HTTP 200, the workItemUpdate field null and the
+// reason in the top-level errors, which client-go does not turn into an error;
+// each handler used to read the null payload as a link, an unlink or a
+// reorder that had happened. Three answers are held for each: a fine-grained
+// token not granted Work Item: Update, whose sentence the errors layer then
+// describes as the missing permission it is, GitLab's generic refusal, and a
+// null payload with no reason at all, which is an error rather than a success
+// too. The mutation is held to having been sent once, so the error is the
+// refusal of the request that reached GitLab and not a failure before it.
+func TestEpicIssueMutations_Refused_IsAnErrorNamingGitLabsReason(t *testing.T) {
+	const fineGrained = "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Work Item: Update]."
+	answers := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "a fine-grained token without the permission",
+			body: `{"data":{"workItemUpdate":null},"errors":[{"message":"` + fineGrained + `","path":["workItemUpdate"]}]}`,
+			want: "GraphQL errors: " + fineGrained,
+		},
+		{
+			name: "GitLab's generic refusal",
+			body: `{"data":{"workItemUpdate":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`,
+			want: "you don't have permission to perform this action",
+		},
+		{
+			name: "no payload and no reason",
+			body: `{"data":{"workItemUpdate":null}}`,
+			want: ": GitLab answered with no workItemUpdate payload",
+		},
+	}
+	handlers := []struct {
+		name string
+		op   string
+		call func(ctx context.Context, client *gitlabclient.Client) error
+	}{
+		{
+			name: "Assign",
+			op:   "epicIssueAssign",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Assign(ctx, client, AssignInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
+				return err
+			},
+		},
+		{
+			name: "Remove",
+			op:   "epicIssueRemove",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Remove(ctx, client, RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
+				return err
+			},
+		},
+		{
+			name: "UpdateOrder",
+			op:   "epicIssueUpdate",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := UpdateOrder(ctx, client, UpdateInput{
+					FullPath: testFullPath, IID: 1,
+					ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",
+					RelativePosition: "BEFORE",
+				})
+				return err
+			},
+		},
+	}
+	for _, h := range handlers {
+		for _, answer := range answers {
+			t.Run(h.name+"/"+answer.name, func(t *testing.T) {
+				var mutations atomic.Int32
+				client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{
+					"workItem(iid": resolveHandler(testChildProject),
+					"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+						mutations.Add(1)
+						testutil.RespondJSON(w, http.StatusOK, answer.body)
+					},
+				}))
+				err := h.call(context.Background(), client)
+				if err == nil {
+					t.Fatalf("%s() = nil, want the refusal reported as an error", h.name)
+				}
+				if !strings.HasPrefix(err.Error(), h.op) || !strings.Contains(err.Error(), answer.want) {
+					t.Errorf("%s() error = %q, want it to begin %q and contain %q", h.name, err, h.op, answer.want)
+				}
+				if got := mutations.Load(); got != 1 {
+					t.Errorf("workItemUpdate sent %d times, want once", got)
+				}
+			})
+		}
+		t.Run(h.name+"/the errors layer names the missing permission", func(t *testing.T) {
+			client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": resolveHandler(testChildProject),
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":null},"errors":[{"message":"`+fineGrained+`"}]}`)
+				},
+			}))
+			err := h.call(context.Background(), client)
+			if got := toolutil.SanitizeError(err).Error(); !strings.HasPrefix(got, "access denied: this call needs the fine-grained project permission [Work Item: Update]") {
+				t.Errorf("SanitizeError(%s()) = %q, want it to lead with the missing permission", h.name, got)
+			}
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // Input guards
 // --------------------------------------------------------------------------
