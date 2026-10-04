@@ -639,6 +639,12 @@ type fakeGitLab struct {
 	versionRefusal string
 	// versionReads counts the requests that reached the version endpoint.
 	versionReads atomic.Int32
+	// versionHold, when set, holds every answer of the version endpoint until
+	// it is closed, which is how a test keeps the server's startup, whose
+	// first request that is, from finishing before it has sent what it means
+	// to send while the catalog is still being prepared. Set it before the
+	// server starts.
+	versionHold chan struct{}
 	// namespacePlan, when set, is the plan the namespace listing reports for
 	// the one namespace the token administers, the way GitLab.com reports a
 	// subscription; empty leaves the listing unanswered. Set it before the
@@ -666,8 +672,15 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	blocked := make(chan struct{})
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, r *http.Request) {
 		fake.versionReads.Add(1)
+		if fake.versionHold != nil {
+			select {
+			case <-fake.versionHold:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if fake.versionRefusal != "" {
 			refusal, _ := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": fake.versionRefusal})
 			w.Header().Set("Content-Type", "application/json")

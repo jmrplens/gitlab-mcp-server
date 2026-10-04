@@ -3,7 +3,7 @@ package tenancy
 import "fmt"
 
 // Decisions returns every row of the register: one per requirement of the
-// specification, eighty-two in all.
+// specification, eighty-four in all.
 //
 // The rows are grouped by the question they answer (spec: The five questions),
 // in the order the specification asks them (identify, admit, authorize, allow,
@@ -49,7 +49,7 @@ func requirementIDs() []string {
 		{"RTC", 7},
 		{"HLD", 11},
 		{"POL", 9},
-		{"AUT", 6},
+		{"AUT", 7},
 		{"DST", 3},
 		{"END", 5},
 		{"RQB", 10},
@@ -79,6 +79,8 @@ const (
 	pkgTools         = "internal/tools"
 	pkgVisibility    = "internal/tools/toolvisibility"
 	pkgDynamic       = "internal/tools/dynamic"
+	pkgFinegrained   = "internal/finegrained"
+	pkgActiongrants  = "internal/tools/actiongrants"
 )
 
 // Site builders, so a row reads as the list of what it names.

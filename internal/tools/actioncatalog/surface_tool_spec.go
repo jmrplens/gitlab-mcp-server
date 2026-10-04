@@ -114,6 +114,12 @@ func (spec SurfaceToolSpec) ActionSpec() (toolutil.ActionSpec, error) {
 		return toolutil.ActionSpec{}, err
 	}
 	spec = CloneSurfaceToolSpec(spec)
+	// The canonical ID the catalog would give the action, spelled the way the
+	// catalog assembly spells it for a group with a base domain. The meta and
+	// individual surfaces register a standalone utility from this projection
+	// rather than through a catalog, and its dispatcher decides by the ID what
+	// a fine-grained session may run.
+	spec.Route.ActionID = spec.BaseDomain + "." + spec.ActionName
 	return toolutil.NewActionSpec(spec.ActionName, spec.Route, toolutil.ActionSpecOptions{
 		Aliases:        spec.Aliases,
 		Tags:           spec.Tags,

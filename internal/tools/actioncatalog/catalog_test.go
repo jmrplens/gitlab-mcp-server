@@ -341,6 +341,9 @@ func TestCatalog_AddAction_ReadsTheFineGrainedRowByCanonicalID(t *testing.T) {
 			if action.FineGrained != testCase.want {
 				t.Errorf("FineGrained = %p, want %p", action.FineGrained, testCase.want)
 			}
+			if want := domain + "." + testCase.action.Name; action.Route.ActionID != want {
+				t.Errorf("Route.ActionID = %q, want %q, the ID the dispatchers decide by", action.Route.ActionID, want)
+			}
 		})
 	}
 }

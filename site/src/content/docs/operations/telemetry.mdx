@@ -226,8 +226,9 @@ call arrived well formed and this server chose not to run it:
 | `invalid_params`            | the parameters do not fit the action          |
 | `unknown_action`            | no action by that name exists on this surface |
 | `rate_limited`              | the deployment's own limit rejected the call  |
+| `fine_grained`              | a fine-grained token cannot run that action   |
 
-Those five are the whole set, which is what makes the attribute affordable as a
+Those six are the whole set, which is what makes the attribute affordable as a
 metric dimension as well as a span attribute: a deployment refusing every third
 call looks exactly like a healthy one on a duration histogram alone.
 

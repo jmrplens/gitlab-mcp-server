@@ -111,6 +111,14 @@ type ActionRoute struct {
 	// from the spec, so the declared kind and the served annotation are one
 	// value.
 	ContentKind string
+	// ActionID is the canonical catalog ID of the action this route runs,
+	// such as issue.list. The catalog sets it, and so does the projection of a
+	// standalone utility, for the same reason the fields above travel here:
+	// the dispatchers see the route and not the catalog, and what a
+	// fine-grained session may run is decided by that ID ([FineGrainedRefusal],
+	// [FineGrainedNotes]). Empty on a route no catalog projected, which
+	// nothing decides.
+	ActionID string
 }
 
 // ParameterGuidance carries compact model-facing hints for parameters that are
@@ -2476,6 +2484,12 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 			LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), refusal)
 			return validationResult, nil, nil
 		}
+		// Before the confirmation and the route's safe-mode preview, so a
+		// write a fine-grained session may not run is refused rather than
+		// offered for confirmation or previewed. See [FineGrainedRefusal].
+		if withheld := FineGrainedRefusal(ctx, req, metaCallName(toolName, input.Action), route.ActionID, ""); withheld != nil {
+			return withheld, nil, nil
+		}
 		// input.Action is the route now, after both alias rewrites, and it is
 		// what telemetry should name rather than what the arguments said:
 		// get with an environment name runs protected_get. The dynamic surface
@@ -2516,9 +2530,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 			if validationErr, matched := errors.AsType[*ParamValidationError](err); matched {
 				return ErrorResult(fmt.Sprintf("%s/%s: %s", toolName, input.Action, validationErr.Error())), nil, nil
 			}
-			return nil, nil, err
+			return nil, nil, FineGrainedErrorNote(ctx, route.ActionID, err)
 		}
-		callResult, structured := FinishToolResult(formatResult(result), result, route, input.Params)
+		callResult, structured := FinishToolResult(FineGrainedNotes(ctx, route.ActionID, formatResult(result), result), result, route, input.Params)
 		return callResult, structured, nil
 	}
 }

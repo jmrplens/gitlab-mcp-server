@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // ServerFactory creates a fully configured [*mcp.Server] with all tools,
@@ -1431,6 +1432,16 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 			knownScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		}
 	}
+	// What a fine-grained token may be shown, on the entry's own client, since
+	// the entry is per credential and every request of it binds that client
+	// (register row AUT-007). It is read from whatever scopes are known, and
+	// under --ignore-scopes only the scopes the OAuth verifier handed in are:
+	// that flag skips the scope filter and the read-only narrowing and has
+	// nothing to say about the token kind, but it also skips the self request
+	// above, so in legacy mode a fine-grained token is not recognized under it
+	// until the token is detected on its own (DetectToken, phase B). A classic
+	// token gets nil.
+	client.SetAuthority(actiongrants.Build(gitlabclient.FineGrained(knownScopes)))
 	if p.cfg.IgnoreScopes {
 		return entryCfg
 	}
