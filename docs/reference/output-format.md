@@ -229,6 +229,30 @@ The branch **"nonexistent" in project 42** does not exist or is not accessible w
 
 Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 22 "get" handlers across 22 domains (`toolutil.NotFoundResult` call sites under `internal/tools/`).
 
+### Fine-grained Token Responses
+
+A session on a fine-grained personal access token gets two things a classic one never does ([Fine-grained Tokens](../guides/fine-grained-tokens.md)).
+
+**A withheld call** is answered with `isError: true` and one sentence, before anything is sent to GitLab and before a confirmation or a safe-mode preview is offered. It names the action by its canonical ID and opens with one of two stable texts, which a client can match:
+
+```text
+action "branch.create" exists but this fine-grained personal access token was not granted what it needs: the project permission [Branch: Create], as GitLab 19.4.1 declares it. Create a fine-grained token that grants it, or use a classic token with the api scope (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+```
+
+```text
+action "custom_emoji.list" exists but is not available to a fine-grained personal access token: GitLab 19.4.1 declares no fine-grained permission on the GraphQL type CustomEmoji this action reads, and removes the items from such a list. Use a classic personal access token with read_api for reads or api for writes (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+```
+
+The first is a permission the grant lacks, named in the words the token creation page offers and grouped by the boundary it is held at; the second is an action no fine-grained token reaches at the GitLab release named, with what GitLab does to the answer (answers it null, removes the items, refuses the write, or commits the write and answers null). When the grant was not evaluated the second form adds why, such as `The token cannot read its own grant (a token created with Personal Access Token: Read can), so the grant was not evaluated.` On the dynamic surface either sentence is prefixed with `gitlab_execute_action:` and a space. The refusal carries the reason class `fine_grained` in the server's log and telemetry.
+
+**A note beside a served answer**, written into the next steps (and so into `next_steps` in JSON), where GitLab's GraphQL answer can be empty for the credential with no error:
+
+- On an answer GitLab leaves partly empty for a fine-grained token, the parts as the GraphQL selections that reach them, with the type GitLab checks there and why: `GitLab 19.4.1 leaves part of this answer empty for a fine-grained personal access token, with no error: ... Empty there does not mean there is nothing.`
+- On a not-found answer of an action that reads GraphQL: `Over GraphQL, GitLab answers null with no error for an object a fine-grained personal access token is not granted, or that sits in a project or group outside its grant, so not found may mean this token cannot see it rather than that it does not exist.`
+- On an empty list from an action whose answer is a GraphQL list or connection: `Over GraphQL, GitLab leaves out of a list, with no error, the items a fine-grained personal access token is not granted, so an empty answer may mean this token cannot see them rather than that there are none.`
+
+A safe-mode preview carries none of the notes, since nothing was sent to GitLab.
+
 ## Embedded Resources
 
 A get result can attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.

@@ -111,8 +111,14 @@ for the fork, branch, fix, test and MR workflow.
   - [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing)
   - [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500)
   - [The admin token route takes no granular scopes, and no client-go create option carries them](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them)
+  - [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes)
   - [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)
   - [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)
+  - [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for)
+  - [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission)
+  - [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)
+  - [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token)
+  - [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -263,6 +269,12 @@ readable without opening the tracker:
 | 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
+| 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | No | No | No | No | Yes, a second request by the token's id |
+| 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list; nothing raised by us, see [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) | No | No | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
+| 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason |
+| 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | No | No | No | Yes, for a fine-grained token, on the epic actions | Withheld with the reason |
+| 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | No | No | No | No | Not needed; the live record computes the undeclared set itself |
+| 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
@@ -549,6 +561,28 @@ knowledge graph's newest tag, v0.136.0 of 2026-09-30, predates its merge, so
 every merge recorded here as unreleased still is. The Go change of row 81,
 gobco, go-selfupdate and the client-go umbrella and 4.0 issues are where their
 sections left them.
+
+Rows 86 to 91 were added on 2026-10-02 for
+[issue 952](https://github.com/jmrplens/gitlab-mcp-server/issues/952), which
+reads a fine-grained personal access token's grant and judges every action
+against what GitLab declares. They are what that work found in GitLab itself,
+read from the `v19.4.1-ee` source (`26212baa`), the release the live record and
+the permission table are taken from, and measured on a 19.4.1 instance by the
+end-to-end suite's direct probes where a section says so. They follow rows 82 to
+85, which the register gained on 2026-09-30 for the same issue, and none of them
+repeats those four: creating such a token
+([row 82](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them)),
+the refusal naming the missing permissions only as labels in prose
+([row 83](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose)),
+the client-go helper for the RFC 6750 fields of a refusal
+([row 84](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal))
+and the refusal naming a deprecated permission's label
+([row 85](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)).
+Nothing has been raised upstream for any of the six;
+contributing the missing GraphQL declarations of rows 87 to 89 is
+[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), and
+serving over REST what GraphQL cannot serve a fine-grained token is
+[issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -1360,7 +1394,12 @@ can reuse whichever basic-user struct the wrapper settles on.
   through the three token readers in `internal/toolutil/sent_shapes.go`, in
   every package that presents a token: `accesstokens`,
   `impersonationtokens`, `users`, `groupserviceaccounts` and
-  `projectserviceaccounts`. They retire when the structs carry the fields.
+  `projectserviceaccounts`. `gitlab.ReadGrant` (`internal/gitlab/grant.go`)
+  carries the capture as well: it reads a fine-grained token's own
+  `granular_scopes` from `GET /personal_access_tokens/:id` to judge what the
+  token is served (issue 952), since
+  `GetSinglePersonalAccessTokenByID` decodes the answer and drops them. They
+  retire when the structs carry the fields.
 
 **What**: `PersonalAccessToken` in `personal_access_tokens.go` and the three
 types built on it, held against the entities that render them at the pinned
@@ -7146,6 +7185,49 @@ I would like to take this, following the proposal above and the approach of !245
 
 </details>
 
+### A token's own description omits its granular scopes
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. It costs every fine-grained session one request more
+  each time its grant is read: once when the session starts and on every
+  revalidation.
+- **Workaround**: yes. `gitlab.DetectToken` (`internal/gitlab/scopes.go`)
+  reads the token's id from `GET /personal_access_tokens/self`, and
+  `gitlab.ReadGrant` (`internal/gitlab/grant.go`) then asks
+  `GET /personal_access_tokens/:id` for the grant, through the captured
+  response, since client-go does not model the field either
+  ([row 32](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still)).
+  Both routes need the same permission of a fine-grained token, Personal
+  Access Token: Read, so the second request is the only cost. What retires it
+  is the self route presenting the field. The request side of the same field,
+  creating a token with a grant, is
+  [row 82](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them).
+
+**Where**: `lib/api/personal_access_tokens/self_information.rb` at
+`v19.4.1-ee`, `get 'self'`, presents the token with
+`Entities::PersonalAccessToken` and no options, while
+`lib/api/entities/personal_access_token.rb` exposes `granular_scopes` only
+`if: ->(token, options) { token.granular? && options[:with_granular_scopes] }`.
+The list, the get by id and the rotate routes in
+`lib/api/personal_access_tokens.rb` pass `with_granular_scopes: true`; the
+self route does not.
+
+**What**: a fine-grained token asking about itself is told it is granular
+(`granular: true`, `scopes: ["granular"]`) and not what it was granted, which
+is the one question a client holding such a token needs answered. It has to
+ask again by its own id, through a route meant for listing a user's tokens.
+
+**How we found it**: issue 952's research into how this server could read a
+grant, reading the two routes side by side, and confirmed against client-go,
+whose `GetSinglePersonalAccessToken` decodes the self answer.
+
+**Proposal**: pass `with_granular_scopes: true`, and the
+`project_ids_by_namespace_id` the entity reads, on the self route as the get
+by id does, with a request spec for a granular token. The route already
+preloads nothing for it, so the preload the get by id uses comes with it.
+
 ### The fine-grained refusal names the missing permissions only as display labels in prose
 
 - **Reported**: no. The issue is drafted below and goes before row 84's, which
@@ -7617,6 +7699,233 @@ I ran into this while maintaining [gitlab-mcp-server](https://github.com/jmrplen
 ```
 
 </details>
+
+### `available_for_permission` ignores `available_for`
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, and nothing at 19.4.1 reaches it.
+- **Workaround**: not needed. `cmd/gen_api_live` records, for each raw
+  permission, the first assignable definition a fine-grained token can be
+  granted (not deprecated and `available_for?(:granular_access_token)`), and
+  that is the name this server prints.
+
+**Where**: `lib/authz/permission_groups/assignable.rb` at `v19.4.1-ee`:
+`available_for_permission(permission)` filters `available_definitions`,
+which rejects deprecated definitions only, while `available_for?(consumer)`
+beside it is what tells a definition a token may hold from one only a role
+may.
+
+**What**: the method meant to name a permission a user can grant can name
+one no token can be granted. At 19.4.1 one assignable is role-only,
+`system_access/enterprise_user/read_email.yml` (`available_for: [role]`),
+and no route or directive declares its permission, so nothing prints it
+today. It matters because the fix
+[row 85](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)
+proposes for the refusal's label switches to this method, and so would carry
+the gap into every refusal the day a role-only definition shares a raw
+permission with a route.
+
+**How we found it**: defining the name the withheld answers and the
+reference page print, when the live record gained its fine-grained half
+(issue 952).
+
+**Proposal**: filter on `available_for?(:granular_access_token)` as well
+where the caller is about a token, or give the method the consumer as an
+argument, and carry it into row 85's change.
+
+### GraphQL types and mutations this server reaches declare no fine-grained permission
+
+- **Reported**: GitLab tracks every one of them on its own pending list,
+  `config/authz/graphql/authorization_todo.txt`, which at `v19.4.1-ee` names
+  862 types and 61 mutations and forbids new entries; nothing has been raised
+  by us. Contributing the declarations this server needs is
+  [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055).
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for a fine-grained personal access token, whatever its
+  grant: 37 actions cannot be served it and 8 are served with parts of their
+  answer empty. A classic token is unaffected.
+- **Workaround**: yes. The 37 are withheld from every fine-grained session
+  with the reason, the GitLab release the verdict comes from and the way out,
+  a classic token (register row `AUT-007`), so a model is never handed an
+  empty answer that reads as "nothing there"; the 8 are served with a note
+  naming each part GitLab leaves empty. `cmd/gen_action_grants` derives both
+  sets from the handlers and the live record, and `make audit-1to1-grants-report`
+  prints this list as issue 1055's worklist. Serving over REST what GraphQL
+  cannot serve such a token is
+  [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
+  Each declaration GitLab adds retires its line, once the live record is taken
+  from the release that carries it.
+
+**Where**: GitLab's GraphQL authorization of a fine-grained token
+(`lib/gitlab/graphql/authz/granular_scope_authorization.rb` at `v19.4.1-ee`):
+an enforced object type or a mutation whose class carries no
+`authorize_granular_token` directive denies every fine-grained token
+(`return error(default_error_message) if token.granular?`), and a denied
+object is answered `null`, or left out of a connection, with no error
+(`app/graphql/types/base_object.rb`; the schema keeps graphql-ruby's
+`unauthorized_object`).
+
+**What**: the undeclared types and mutations on a path this server's
+documents reach, as `go run ./cmd/audit_1to1/ -scope=grants` reports them at
+19.4.1:
+
+| Type or mutation                                                                                           | What a fine-grained token gets                    | Actions                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `Namespace`                                                                                                | `null` for every root `namespace(fullPath:)` read | 24: 14 epic actions, the work item reads and writes and the saved view reads, `achievement.list` and two more                |
+| `UserAchievement`, `CustomEmoji`, `BranchRule`, `ProjectTargetBranchRule`, `PipelineSecurityReportFinding` | The items removed from the list                   | `achievement.user_list`, `custom_emoji.list`, `branch.rule_list`, `project.target_branch_rule_list`, `security_finding.list` |
+| `CiCatalogResource`, `SecurityReportSummary`, `VulnerabilitySeveritiesCount`                               | `null`                                            | `ci_catalog.get`, `ci_catalog.list`, `vulnerability.pipeline_security_summary`, `vulnerability.severity_count`               |
+| `ScanProfileProjectStatus`                                                                                 | A list of non-null items answered `null` whole    | `security_scan_profile.list_project_statuses`                                                                                |
+| `bulkUpdateSecurityAttributes`, `securityScanProfileAttach`, `securityScanProfileDetach`                   | Refused, nothing runs                             | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                             |
+| `VulnerabilityIssueLink`, `VulnerabilityFindingTokenStatus`, `VulnerableKubernetesResource`                | Those fields empty, the rest served               | `vulnerability.get`, `vulnerability.list` and the four state mutations                                                       |
+| `QuickActionsStatus`                                                                                       | That payload field empty, the note served         | `group.epic_note_update`, `group.epic_discussion_update_note`                                                                |
+
+The probes of `test/e2e/gitlab` measured the shapes on a 19.4.1 instance: a
+`namespace(fullPath:)` read answers `null`, a project's `branchRules` loses
+its items and `vulnerabilitySeveritiesCount` answers `null`, each with no
+error, where a classic token reads them
+(`TestFineGrainedProbes_UndeclaredGraphQLTypes_AreEmptyWithNoError`,
+`TestFineGrainedProbes_SeverityCount_IsNullWithNoError`). For four of the
+types a REST route of the same resource does declare a permission (the
+protected branches routes for `BranchRule`, the namespace routes for
+`Namespace`, the issue links routes for `VulnerabilityIssueLink`, the epic
+routes for `WorkItem` in row 89), which is where the declaration GitLab would
+add can start from.
+
+**How we found it**: the fine-grained derivation of issue 952, which walks
+every GraphQL document an action sends against the authorization a booted
+19.4.1 records (`cmd/gen_api_live`), and the direct probes above.
+
+**Proposal**: declare `authorize_granular_token` on each, starting with
+`Namespace`, which alone withholds 24 actions, at the boundary and with the
+permission the matching REST route already declares where one exists.
+
+### A declared mutation whose payload type declares nothing commits the write and answers null
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for a fine-grained personal access token: 20 writes
+  cannot be served it.
+- **Workaround**: yes. The 20 are withheld from every fine-grained session
+  with the reason (register row `AUT-007`), and the reason says that GitLab
+  commits such a write and answers null. Serving them would be worse than
+  withholding them: a client that reads a null payload as "not done" and
+  retries repeats a write GitLab already made.
+
+**Where**: `app/graphql/mutations/base_mutation.rb` and
+`lib/gitlab/graphql/authz/granular_scope_authorization.rb` at `v19.4.1-ee`. A
+mutation is authorized before it resolves, against its own directive, so a
+grant that holds the mutation's permission passes and the write runs; the
+objects of the payload are authorized after, each against its own type, and
+an enforced type with no directive denies every fine-grained token, so the
+payload field comes back `null` with no error.
+
+**What**: the payload types that declare nothing and the writes that answer
+with them: `Achievement` (`achievement.create`, `achievement.update`,
+`achievement.delete`), `UserAchievement` (`achievement.award`,
+`achievement.revoke` and the three `achievement.user_achievement_*` writes),
+`CustomEmoji` (`custom_emoji.create`, `custom_emoji.delete`),
+`WorkItemType` (`issue.work_item_create`, through `WorkItem.workItemType`, a
+non-null field whose null takes the work item with it),
+`WorkItemSavedViewType` (the four saved view writes),
+`ProjectTargetBranchRule` (`project.target_branch_rule_create`),
+`SecurityAttribute` (`security_attribute.create`, `security_attribute.update`)
+and `SecurityCategory` (`security_category.create`,
+`security_category.update`). The write is not refused, so a token that holds
+the mutation's permission changes GitLab and is told nothing it can tell from
+a write that did not happen.
+
+Read from the source. The same answer, a committed write and a `null`
+payload with no error, was measured on a 19.4.1 instance for the group work
+item of row 89, which reaches it by another path.
+
+**How we found it**: the fine-grained derivation of issue 952, which judges a
+mutation's payload as part of its answer.
+
+**Proposal**: the declarations of row 87 for the payload types close it for
+these; the class closes when a payload object no fine-grained token may read
+is refused with an `errors[]` entry rather than nulled, or when a mutation is
+refused before it runs if its payload type declares nothing.
+
+### WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, for a fine-grained personal access token: the 15 epic
+  actions it withholds, and the GraphQL way of `group.epic_list`, whose REST
+  way is served. `Namespace` (row 87) decides 14 of the 15 and that way
+  first, so declaring `Namespace` alone would not serve them.
+- **Workaround**: yes. Every epic position the epic actions reach is declared
+  in `cmd/gen_action_grants/grant_declarations.go` (category
+  `group-work-item`) as one no fine-grained token passes, and the actions are
+  withheld with the reason (register row `AUT-007`).
+
+**Where**: `app/graphql/types/work_item_type.rb` at `v19.4.1-ee` declares
+`authorize_granular_token permissions: :read_work_item, boundary: :project,
+boundary_type: :project`. An epic is a group's work item, whose boundary
+`lib/gitlab/graphql/authz/boundary_extractor.rb` cannot resolve to a project,
+so the extractor returns no boundary and the service refuses
+(`app/services/authz/tokens/authorize_granular_scopes_service.rb`). The
+mutation `workItemUpdate` declares both the project and the group boundary
+(`app/graphql/mutations/work_items/update.rb`), so the write itself passes.
+
+**What**: measured on a 19.4.1 instance with a token granted Work Item: Read
+and Work Item: Update on the epic's group: `workItem(id:)` of the epic
+answers `null` with no error where a classic token reads it, and
+`workItemUpdate` on it renames the epic and answers `workItem: null` with no
+error (`TestFineGrainedProbes_GroupWorkItem_ResolvesNoBoundary` in
+`test/e2e/gitlab/ee`). A grant on the group can therefore change an epic and
+never read it.
+
+**How we found it**: issue 952's derivation, read from the source, then the
+probe above, which also showed the write committing where the source reading
+had expected a refusal.
+
+**Proposal**: declare `WorkItem` at the group boundary beside the project
+one, as `workItemUpdate` already does.
+
+### The pending-permission check exempts every type named `*Edge` or `*Payload`
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. No action of this server reaches any of the three types
+  below.
+- **Workaround**: not needed. `cmd/gen_api_live` records which types GitLab
+  enforces and which declare a fine-grained permission, and the derivation
+  reads that rather than GitLab's list, so these three would be judged like
+  any other undeclared type.
+
+**Where**: `graphql_object_type?` in
+`lib/tasks/gitlab/permissions/graphql/schema_directives.rb` at `v19.4.1-ee`,
+which the validation task (`validate_task.rb`, `current_entry_sources`) uses
+to decide which types must either declare a permission or sit on
+`authorization_todo.txt`, returns false for every name ending in `Payload`,
+`Connection` or `Edge`.
+
+**What**: the suffixes are meant to pass over the framing graphql-ruby
+generates, but a hand-written type can carry one of those names too. Three
+enforced object types that declare no permission are exempted by name and so
+are on neither side of the check: `DependencyPathEdge`
+(`ee/app/graphql/types/sbom/dependency_path_edge.rb`, a `BaseObject` with
+the comment that authorization is on the parent),
+`NamespaceWorkItemChangesPayload` and `PushEventPayload`
+(`app/graphql/types/users/push_event_payload_type.rb`). A fine-grained token
+reaching any of them is denied as any undeclared type is, and nothing in
+GitLab's tooling lists it as pending.
+
+**How we found it**: when the live record gained its fine-grained half,
+comparing the enforced types that declare nothing with the set GitLab's own
+rule computes, which the record holds beside `authorization_todo.txt`.
+
+**Proposal**: exempt the generated connection and edge types by their class
+(the types graphql-ruby builds for a connection) rather than by their name,
+so a hand-written type ending in `Edge` or `Payload` is checked like any
+other.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

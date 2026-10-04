@@ -10,6 +10,8 @@ The [dynamic toolset](../../concepts/dynamic-tools.md) reuses the same canonical
 
 This directory is a domain-oriented reference, not a one-heading-per-runtime-tool dump. The table below groups related actions into stable user-facing domains so humans can scan the API surface without reading more than a thousand individual entries. For the exact runtime catalog exposed by the current `GITLAB_MCP_TOOL_SURFACE`, including every action ID, input schema, output schema, annotations, compatibility names, and deprecation state, read `gitlab://tools` and then `gitlab://tools/{id}` from the MCP server.
 
+What a fine-grained personal access token needs for each action, in the permissions GitLab's token creation page offers, is listed in [Fine-grained Permissions](../fine-grained-permissions.md), generated from the handlers and from what GitLab 19.4.1 declares; `gitlab://tools/{id}` serves the same for one action in its `fine_grained` block. [Fine-grained Tokens](../../guides/fine-grained-tokens.md) is the guide.
+
 ## Domains
 
 | Domain                              | Tools | Meta-tool                                                                              | Document                                                 |

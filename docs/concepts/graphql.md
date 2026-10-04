@@ -251,6 +251,33 @@ if len(resp.Data.VulnerabilityDismiss.Errors) > 0 {
 }
 ```
 
+A mutation GitLab refuses outright answers neither way: the payload is `null` and the reason is a top-level `errors[]` entry. A handler that decodes the payload as a value reads that as the zero payload with no errors, which is a success, so a mutation handler decodes its payload as a pointer beside the top-level `errors` and returns `toolutil.GraphQLTopLevelError` when the payload is absent. That is how a fine-grained token's refusal reaches the caller (next section).
+
+## Fine-grained Personal Access Tokens
+
+GitLab judges a fine-grained personal access token on GraphQL in a way REST callers never see, because GraphQL authorizes each object of an answer on its own. At 19.4.1 a type or mutation declares the fine-grained permissions it needs with a directive, at a boundary (project, group, user or instance), and a token is judged against them as follows (read from `lib/gitlab/graphql/authz/` and `app/graphql/types/base_object.rb` at `v19.4.1-ee`, and measured by the end-to-end suite's direct probes on a 19.4.1 instance):
+
+| What the document reaches                                                                                                       | What GitLab answers a fine-grained token                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A declared object the grant reaches                                                                                             | The object                                                                                                                                                                 |
+| A declared object the grant does not reach, at a nullable position                                                              | `null`, with no error                                                                                                                                                      |
+| Items of a connection, or of a list whose type carries abilities, the grant does not reach                                      | The items are removed, with no error                                                                                                                                       |
+| A non-null position the grant does not reach                                                                                    | Its null travels to the nearest nullable position above it                                                                                                                 |
+| An enforced object type that declares nothing (`Namespace`, `BranchRule`, `CustomEmoji` among 862 on GitLab's own pending list) | `null`, or the items removed, for every fine-grained token whatever its grant                                                                                              |
+| A declared mutation the grant does not reach                                                                                    | `200`, the field `null`, and one `errors[]` entry: `Access denied: This operation requires a fine-grained personal access token with the following ... permissions: [...]` |
+| A mutation that declares nothing                                                                                                | Refused for every fine-grained token, with GitLab's generic resource-access error                                                                                          |
+| A declared mutation whose payload type declares nothing                                                                         | The write **commits**, and the answer is `null`                                                                                                                            |
+| An object that never resolves to the boundary its type declares (a group's work item, declared at the project boundary only)    | `null` for a read; a write on it commits and answers `null`                                                                                                                |
+
+The REST asymmetry this server's authorization rests on, that a wrong "yes" surfaces as GitLab's own `403` on the one call that needed the permission ([ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md)), does not hold here: a wrong "yes" on GraphQL is an empty answer that reads as "nothing there". So `cmd/gen_action_grants` walks every document an action sends against what GitLab 19.4.1 records (`docs/development/gitlab-api-live.json`) and judges the **answer spine**, the objects from the root field down to the first one that selects more than one field, as part of the action's requirement:
+
+- An undeclared type on the spine, or an undeclared mutation, or a payload that commits and answers null, makes the action **withheld** from every fine-grained session, with the reason. 58 actions are withheld this way at 19.4.1, all through GraphQL; withholding the writes whose payload is undeclared also keeps an assistant from repeating a write it read as not done.
+- An abstract position (a union or an interface) is judged as its worst member, since GitLab authorizes the type each item resolves to.
+- A declared position a non-null chain carries onto the spine is judged as part of it, since denying it nulls the spine.
+- Anything else denied is **degraded**: the action is served, and the answer carries a note naming each part GitLab leaves empty, written as the GraphQL selection that reaches it (`vulnerability { issueLinks { nodes } }`), and the permission a declared one needs.
+
+A not-found answer of an action that reads GraphQL, and an empty list from one whose answer is a GraphQL list, carry a note too, since either can be the grant rather than the data. See [Fine-grained Tokens](../guides/fine-grained-tokens.md#what-an-empty-answer-can-mean) and [Fine-grained Permissions](../reference/fine-grained-permissions.md), which prints the spine verdict of every action.
+
 ## Shared Utilities
 
 The `internal/toolutil/graphql.go` module provides shared GraphQL infrastructure:
