@@ -100,6 +100,17 @@ const starlightDialect = {
 
 const siteContentRoot = path.join(repoRoot, "site", "src", "content") + path.sep;
 
+// The documentation site's own address, in both spellings: the GitHub Pages
+// origin it is served from and the path-preserving redirect every page here
+// links to. A link to it is a link into site/src/content/docs, which this
+// checker can read, so it is held to its page and its anchor like a relative
+// link rather than skipped as somebody else's server. Issue 1163 made the site
+// the one home of the user documentation; without this, every link the README
+// and the files that used to point into docs/ carry would go unchecked.
+const siteAddress =
+	/^https?:\/\/(?:jmrp\.io\/docs|jmrplens\.github\.io)\/gitlab-mcp-server(?=[/#?]|$)/i;
+const siteDocsRoot = path.join(repoRoot, "site", "src", "content", "docs");
+
 const anchorCache = new Map();
 
 const issues = [];
@@ -200,6 +211,10 @@ function withoutCodeSpans(line) {
 
 function checkTarget(file, line, rawTarget) {
 	const target = normalizeTarget(rawTarget);
+	if (siteAddress.test(target)) {
+		checkSiteTarget(file, line, target);
+		return;
+	}
 	if (shouldSkipTarget(target)) {
 		return;
 	}
@@ -238,6 +253,36 @@ function checkTarget(file, line, rawTarget) {
 	}
 
 	checkFragment(file, line, target, pageOf(resolved), fragment);
+}
+
+// checkSiteTarget holds a link to the documentation site to the page that
+// serves it. Starlight routes a page by its path under the docs collection, a
+// folder by the index inside it, and the Spanish pages by the same path under
+// es/, so the route alone names the file. A route ending in an extension is a
+// file the site serves as it is (llms.txt, a chart, the sitemap), which has no
+// page and no headings to hold it to.
+function checkSiteTarget(file, line, target) {
+	const rest = target.replace(siteAddress, "");
+	const hash = rest.indexOf("#");
+	const fragment = hash === -1 ? "" : rest.slice(hash + 1);
+	const route = safeDecodeURIComponent(
+		(hash === -1 ? rest : rest.slice(0, hash)).replace(/\?.*$/, ""),
+	).replace(/^\/+|\/+$/g, "");
+	if (/\.[a-z0-9]+$/i.test(route)) {
+		return;
+	}
+	const base = path.join(siteDocsRoot, route === "" ? "index" : route);
+	const resolved = [
+		`${base}.mdx`,
+		`${base}.md`,
+		path.join(base, "index.mdx"),
+		path.join(base, "index.md"),
+	].find((candidate) => existsSync(candidate));
+	if (!resolved) {
+		issues.push({ file, line, target, reason: `no site page serves /${route}` });
+		return;
+	}
+	checkFragment(file, line, target, resolved, fragment);
 }
 
 // pageOf names the file whose headings answer a fragment. A link can resolve to
@@ -299,7 +344,8 @@ function normalizeTarget(rawTarget) {
 }
 
 // shouldSkipTarget names what this checker cannot answer for. A scheme is
-// somebody else's server; a root-relative path is a route on the documentation
+// somebody else's server, the documentation site's own address aside, which
+// checkTarget hands to checkSiteTarget first; a root-relative path is a route on the documentation
 // site rather than a file here, and the site validates its own routes and their
 // anchors at build time through starlight-links-validator.
 //

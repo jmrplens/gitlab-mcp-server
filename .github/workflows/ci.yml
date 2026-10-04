@@ -15,8 +15,8 @@
 #   coverage ─── sonarcloud
 #   docker (×2) ─── docker-build
 #   cross_platform (×3) ─── cross_platform_summary
-#   generated · golangci-lint · govulncheck · markdown · site-lint · hadolint
-#   server-json-schema · supply-chain · docs-audit · em-dash ─── checks
+#   generated · golangci-lint · govulncheck · markdown · site-lint · site-build
+#   hadolint · server-json-schema · supply-chain · docs-audit · em-dash ─── checks
 #                                                                   └──► ci
 #
 # Every edge joins neighbouring columns, and that is deliberate. GitHub draws
@@ -166,6 +166,11 @@ jobs:
         run: make check-model-results
       - name: Check documented tool names exist
         run: make check-doc-tool-names
+      # Every pipe table of README.md, docs/ and the site in the one shape the
+      # formatter writes. It ran in no job before issue 1163, while the site's
+      # .prettierignore leaves its tables to it on the assumption that it did.
+      - name: Check Markdown tables are formatted
+        run: make check-md-tables
       - name: Check no read-only action reaches a GraphQL mutation
         run: make check-readonly-graphql
       # The half of `unused` staticcheck cannot reach: it judges a const group
@@ -755,8 +760,7 @@ jobs:
           cache-dependency-path: site/pnpm-lock.yaml
       # The build-independent half of `pnpm run lint`: type check, palette
       # contrast, chip parity, i18n parity, llms index coverage, eslint,
-      # prettier. The dist-dependent gates (html-validate, htmlhint, pa11y)
-      # stay in the Pages workflow, which is the one that builds the site.
+      # prettier. The dist-dependent half is site-build's.
       - name: Install site dependencies
         run: pnpm install --frozen-lockfile
         working-directory: site
@@ -774,6 +778,69 @@ jobs:
           pnpm run llms:check
           pnpm run eslint
           pnpm run format:check
+        working-directory: site
+
+  # The documentation site built on every change, not only after a merge.
+  # Until issue 1163 the site was built by the Pages workflow alone, which runs
+  # on main: a broken root-relative link, a missing anchor (both are
+  # starlight-links-validator's, which runs inside the build), a Mermaid block
+  # that does not render, or invalid HTML reached main before anything said so,
+  # and the dist gates below ran in no workflow at all. The site is the one
+  # home of the user documentation now, so it is held like the code.
+  site-build:
+    name: "📚 Site build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Like site-lint, this job installs the site's dependencies and runs code
+      # this repository did not write, so it holds no credential beyond the
+      # workflow's read token and keeps none on disk.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Read the pinned pnpm version
+        id: pnpm
+        run: echo "spec=$(jq -r .packageManager site/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pnpm-cache
+        with:
+          path: ~/setup-pnpm
+          key: pnpm-${{ runner.os }}-${{ steps.pnpm.outputs.spec }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
+        with:
+          package_json_file: site/package.json
+      - name: Put the cached pnpm on PATH
+        if: steps.pnpm-cache.outputs.cache-hit == 'true'
+        run: echo "$HOME/setup-pnpm/node_modules/.bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: site/.node-version
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      # rehype-mermaid renders every Mermaid block with a headless Chromium at
+      # build time, the same browser and the same cache key as the Pages build.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: site
+      - name: Build the site
+        run: pnpm run build
+        working-directory: site
+      # The half of `pnpm run lint` that reads dist. pa11y stays out: it needs
+      # a preview server and a browser session per page, and a11y:check holds
+      # the structural part of it (headings and labels) without one.
+      - name: Dist gates
+        run: |
+          pnpm run html-validate
+          pnpm run htmlhint
+          pnpm run a11y:check
         working-directory: site
 
   hadolint:
@@ -1043,6 +1110,7 @@ jobs:
       - govulncheck
       - analyze-md
       - site-lint
+      - site-build
       - hadolint
       - server-json-schema
       - supply-chain
