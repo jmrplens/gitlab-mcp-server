@@ -47,7 +47,10 @@
 // it blocks and, as a lead and never a verdict, the REST routes this server
 // already calls that declare a permission for the same resource; and two
 // cross-checks of the derivation, at package grain against the request
-// inventory and at action grain against an end-to-end run's request counts.
-// Both cross-checks are leads: the inventory names a package and never an
-// action, and a count is a floor that cannot say which route was sent.
+// inventory and at action grain against an end-to-end run's request counts
+// and the routes its client spans reached. Both cross-checks are leads: the
+// inventory names a package and never an action, a count is a floor, and a
+// route a trace reached that the derivation does not name is a positive claim
+// that the derivation under-approximates the action, read from a record the
+// run does not commit.
 package grants

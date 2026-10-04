@@ -132,3 +132,31 @@ func initBytes(t *testing.T, command ...string) int {
 	}
 	return total
 }
+
+// TestTable_NamesTheRoutesTheHandlersSend holds the generated table's routes
+// to the requests the binary's handlers send, as the client span of each
+// names it: an issue list, an issue read by a project's escaped path, a file
+// written by an escaped file path, the raw file's HEAD read off its GET (the
+// route GitLab mounts only as a GET, whose authorization a HEAD carries, which
+// a booted 19.4.1 shows), the GraphQL endpoint, and a route no action calls,
+// which no template names.
+func TestTable_NamesTheRoutesTheHandlersSend(t *testing.T) {
+	cases := []struct {
+		method, path, want string
+	}{
+		{"GET", "/api/v4/projects/7/issues", "/api/v4/projects/:id/issues"},
+		{"GET", "/api/v4/projects/group%2Fproject/issues/3", "/api/v4/projects/:id/issues/:issue_iid"},
+		{"POST", "/api/v4/projects/7/repository/files/docs%2Fguide.md", "/api/v4/projects/:id/repository/files/:file_path"},
+		{"HEAD", "/api/v4/projects/7/repository/files/README.md/raw", "/api/v4/projects/:id/repository/files/:file_path/raw"},
+		{"POST", "/api/graphql", "/api/graphql"},
+		{"GET", "/api/v4/version", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			got, known := Table().RouteTemplate(tc.method, tc.path)
+			if got != tc.want || known != (tc.want != "") {
+				t.Errorf("RouteTemplate = %q, %t; want %q", got, known, tc.want)
+			}
+		})
+	}
+}

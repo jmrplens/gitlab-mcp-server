@@ -60,6 +60,40 @@ var exemptedActions = map[string]actionExemption{}
 // runtime with no entry has no floor.
 var assertedFloors = map[string]int{}
 
+// fineGrainedFloors is the least each runtime's sessions on a fine-grained
+// token must show for -check to pass, keyed by the -runtime selector like
+// [assertedFloors], and applied to a live run alone ([checkFineGrained]).
+//
+// The figures are what issue 952's scenarios reach on GitLab 19.4.1, each
+// runtime's the fewest any of its runs reached, so a run passes them only if
+// the fine-grained scenarios ran and saw both halves: actions served, and
+// actions no fine-grained token reaches refused for the credential before
+// anything reached GitLab. The fine-grained sessions are those scenarios'
+// alone, so a run of them by name reaches the figures a complete run does,
+// which is how the EE figure was measured again once the attestation
+// scenario pinned the flag its routes answer behind.
+//
+// They have to hold on a release the table was not recorded from as well,
+// since the complete runs and CI's run pull the latest images and a scenario
+// asserts what that release decides there rather than skipping. So the
+// refused floor counts only the cells of actions the table denies to every
+// fine-grained token, which every phase withholds: on CE the branch rule list
+// and the work item create, on EE those and the epic read, the security
+// attribute create and the vulnerability count, three surfaces each. The
+// write a grant does not reach (a branch create) is withheld only where the
+// grant decides the calls and is GitLab's own refusal elsewhere, so its three
+// cells are not counted. Every asserted cell is a call a scenario makes in
+// every phase, on each of the three surfaces: the eight actions the common
+// scenarios run, and on EE the attestation list and the vulnerability list
+// too. The two public reads among them, the issue links and the attestations,
+// are served whether or not the grant decides the listing; only the
+// assertion that the listing leaves them out waits for a phase that decides
+// it.
+var fineGrainedFloors = map[string]fineGrainedFloor{
+	"ce": {Asserted: 24, Refused: 6},
+	"ee": {Asserted: 30, Refused: 15},
+}
+
 // declaredCategories is the set a category must belong to, so a typo does
 // not invent a fourth kind of exemption.
 var declaredCategories = map[string]bool{

@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -385,4 +387,155 @@ func TestNewTransport_ADeclaredHostAndItsPortLabelTheMetric(t *testing.T) {
 	if _, hasPort := attrs.Value(attrServerPort); !hasPort {
 		t.Error("the metric carries no server.port beside a declared host, so two ports on one host collapse into one series")
 	}
+}
+
+// TestNewTransport_ADeclaredRouteNamesTheSpanAndNeverThePath covers the one
+// place a GitLab call's span says which endpoint it reached.
+//
+// The template comes from the function the server declares at startup, which
+// answers from the table the binary carries, so what lands on the span is a
+// template with every identifier a placeholder and never the path the request
+// carried. The span is named after it the way the convention names a client
+// span with a template, and the metric is not given it, since a dimension the
+// metric did not have is a cardinality nobody asked for. A request the
+// function knows no route for keeps the method alone, and an undeclared
+// function names no route at all.
+func TestNewTransport_ADeclaredRouteNamesTheSpanAndNeverThePath(t *testing.T) {
+	previous := routeTemplates.Load()
+	t.Cleanup(func() { routeTemplates.Store(previous) })
+
+	reader, restore := newMetricRecorder(t)
+	t.Cleanup(restore)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	const issuesPath = "/api/v4/projects/acme%2Fprivate-repo/issues"
+	const template = "/api/v4/projects/:id/issues"
+	var asked []string
+	SetRouteTemplates(func(method, escapedPath string) (string, bool) {
+		asked = append(asked, method+" "+escapedPath)
+		return template, escapedPath == issuesPath
+	})
+
+	t.Run("a known route names the span and rides as url.template", func(t *testing.T) {
+		span := clientSpanOf(t, upstream.URL+issuesPath)
+		if span.Name() != "GET "+template {
+			t.Errorf("span name = %q, want %q", span.Name(), "GET "+template)
+		}
+		value, ok := attrOf(span, AttrURLTemplate)
+		if !ok || value.AsString() != template {
+			t.Errorf("url.template = %q (present %t), want %q", value.AsString(), ok, template)
+		}
+		if got := asked[len(asked)-1]; got != "GET "+issuesPath {
+			t.Errorf("the function was asked about %q, want the escaped path without its query, %q", got, "GET "+issuesPath)
+		}
+	})
+
+	t.Run("an unknown route keeps the method alone", func(t *testing.T) {
+		span := clientSpanOf(t, upstream.URL+"/api/v4/version")
+		if span.Name() != http.MethodGet {
+			t.Errorf("span name = %q, want %q", span.Name(), http.MethodGet)
+		}
+		if value, ok := attrOf(span, AttrURLTemplate); ok {
+			t.Errorf("url.template = %q for a route the function does not know", value.AsString())
+		}
+	})
+
+	t.Run("the metric is never given the template", func(t *testing.T) {
+		recorded := collectedHistogram(t, reader, "http.client.request.duration")
+		histogram, ok := recorded.Data.(metricdata.Histogram[float64])
+		if !ok {
+			t.Fatalf("data is %T, want a float64 histogram", recorded.Data)
+		}
+		for _, point := range histogram.DataPoints {
+			if value, has := point.Attributes.Value(AttrURLTemplate); has {
+				t.Errorf("a data point carries url.template = %q", value.AsString())
+			}
+		}
+	})
+
+	t.Run("a nil function names no route", func(t *testing.T) {
+		SetRouteTemplates(nil)
+		span := clientSpanOf(t, upstream.URL+issuesPath)
+		if span.Name() != http.MethodGet {
+			t.Errorf("span name = %q with no function declared, want %q", span.Name(), http.MethodGet)
+		}
+		if value, ok := attrOf(span, AttrURLTemplate); ok {
+			t.Errorf("url.template = %q with no function declared", value.AsString())
+		}
+	})
+}
+
+// TestNewTransport_ASpanNothingRecordsAsksForNoRoute covers what the lookup
+// costs a deployment that exports nothing, which is the default: the
+// transport wraps every GitLab call whatever telemetry says, and a span
+// nothing records is never read, so the route function is not asked, while
+// the request still reaches GitLab.
+func TestNewTransport_ASpanNothingRecordsAsksForNoRoute(t *testing.T) {
+	previousRoutes := routeTemplates.Load()
+	t.Cleanup(func() { routeTemplates.Store(previousRoutes) })
+	previousTracer := otel.GetTracerProvider()
+	t.Cleanup(func() { otel.SetTracerProvider(previousTracer) })
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample())))
+
+	asked := 0
+	SetRouteTemplates(func(string, string) (string, bool) {
+		asked++
+		return "/api/v4/projects/:id/issues", true
+	})
+	var reached atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	client := &http.Client{Transport: NewTransport(nil)}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, upstream.URL+"/api/v4/projects/1/issues", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("the request failed: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if got := reached.Load(); got != 1 {
+		t.Errorf("GitLab was reached %d times, want once", got)
+	}
+	if asked != 0 {
+		t.Errorf("the route function was asked %d times for a span nothing records, want none", asked)
+	}
+}
+
+// clientSpanOf sends one GET to url, with a query a template must never
+// carry, through the instrumented transport under a parent span, and returns
+// the client span it recorded.
+func clientSpanOf(t *testing.T, url string) sdktrace.ReadOnlySpan {
+	t.Helper()
+	recorder := newRecorder(t)
+	ctx, parent := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)).
+		Tracer("test").Start(context.Background(), "tools/call")
+	client := &http.Client{Transport: NewTransport(nil)}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url+"?search=secret", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("the request failed: %v", err)
+	}
+	_ = resp.Body.Close()
+	parent.End()
+	for _, span := range recorder.Ended() {
+		if span.SpanKind() == trace.SpanKindClient {
+			return span
+		}
+	}
+	t.Fatal("no client span was recorded")
+	return nil
 }

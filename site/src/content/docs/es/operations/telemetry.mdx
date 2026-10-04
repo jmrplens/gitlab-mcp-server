@@ -178,6 +178,17 @@ es la de por defecto, cada llamada nombra las mismas dos herramientas, así que
 incidencias como si borró una rama. El atributo de acción es lo único que las
 distingue.
 
+El span hijo de una llamada a GitLab registra el método, el host, el puerto y el
+estado de la respuesta y, cuando la ruta es una de las que contiene la tabla de
+permisos de grano fino del servidor, `url.template`: la ruta tal como GitLab la
+declara, por ejemplo `/api/v4/projects/:id/issues`, que también da nombre al
+span. La plantilla lleva los marcadores y nunca los valores con que una petición
+los rellenó, y una instancia instalada bajo una ruta propia
+(`https://host/gitlab`) recibe la misma plantilla, sin la ruta que precede a
+`/api/`; una ruta que la tabla no contiene no lleva ninguna, y su span se
+nombra solo por el método. Es un atributo del span y nunca una dimensión de las
+métricas.
+
 ### Métricas
 
 | Instrumento                            | Unidad       | Qué responde                                      |
@@ -352,8 +363,10 @@ Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
 - **Cuerpos y mensajes de error de GitLab.** Un fallo registra una clasificación
   como `-32603`, nunca el texto, que puede nombrar rutas privadas.
 - **URL completas de las llamadas a GitLab.** El span hijo registra el método,
-  el host y el estado; el span padre ya nombra la acción, que identifica la
-  familia de endpoints de forma más legible que una URL.
+  el host, el estado y, cuando la tabla del servidor la contiene, la plantilla
+  de la ruta, que nombra el endpoint con marcadores donde la URL llevaría rutas
+  de proyecto, identificadores y valores de consulta. El span padre ya nombra la
+  acción.
 
 Una prueba de extremo a extremo lanza tráfico real con una ruta de proyecto
 distintiva, una consulta de búsqueda y un token, y luego busca los tres en cada

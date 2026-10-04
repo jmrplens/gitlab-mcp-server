@@ -497,6 +497,7 @@ func dispatchLine(traceID string, kept traceSpans) *e2ecalls.Dispatch {
 		ErrorType:     kept.dispatch.errorType,
 		Status:        kept.dispatch.status,
 		Requests:      kept.requests,
+		Routes:        slices.Clone(kept.routes),
 	}
 }
 
@@ -605,6 +606,7 @@ func (c *sessionConn) describeSession(line *e2ecalls.Call) {
 	line.Surface = string(c.cfg.Surface)
 	line.Mode = string(c.cfg.Mode)
 	line.Capabilities = string(c.cfg.Capabilities)
+	line.Credential = c.credentialKind()
 	if c.inst != nil {
 		line.Requirement = c.inst.requirement.token()
 	}
@@ -1008,6 +1010,7 @@ func sessionLines() []e2ecalls.Enveloper {
 			Mode:              string(conn.cfg.Mode),
 			Capabilities:      string(conn.cfg.Capabilities),
 			Transport:         string(conn.cfg.Transport),
+			Credential:        conn.credentialKind(),
 			Tools:             slices.Clone(conn.served.tools),
 			Resources:         slices.Clone(conn.served.resources),
 			ResourceTemplates: slices.Clone(conn.served.templates),

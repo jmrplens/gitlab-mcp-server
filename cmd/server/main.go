@@ -872,6 +872,10 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
 
 	mcpotel.SetMetricServerAddresses(metricHostsFor(hcfg, os.Getenv("GITLAB_URL")))
+	// The routes a GitLab call's span may name are the ones the binary's own
+	// table carries, each a template with no identifier in it, so the span
+	// says which endpoint was called without saying which project or file.
+	mcpotel.SetRouteTemplates(actiongrants.Table().RouteTemplate)
 
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryShutdownTimeout)

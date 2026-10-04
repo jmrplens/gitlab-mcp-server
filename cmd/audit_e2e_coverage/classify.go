@@ -434,6 +434,9 @@ type classification struct {
 	diagnostics diagnostics
 	// skipReasons is the reason each skipped test gave, by test name.
 	skipReasons map[string]string
+	// fineGrained holds the lines of the sessions on a fine-grained token,
+	// which every other field leaves out (see fine_grained.go).
+	fineGrained *fineGrainedFold
 }
 
 // The capability kinds, which are the keys of [classification.capabilities].
@@ -539,10 +542,15 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 		modes:              map[shapeKey]*modeEvidence{},
 		called:             map[shapeKey]map[string]bool{},
 		skipReasons:        map[string]string{},
+		fineGrained:        newFineGrainedFold(),
 	}
 	c.foldSessions()
 	c.foldSkips()
 	for _, call := range rt.calls {
+		if isFineGrained(call.Credential) {
+			c.fineGrained.foldCall(call)
+			continue
+		}
 		c.foldCall(call)
 	}
 	c.fillActionCells()
@@ -581,6 +589,10 @@ func classify(rt *runtimeRecords, catalog *servedCatalog) *classification {
 // a join on the label would lend one the other's calls.
 func (c *classification) foldSessions() {
 	for _, session := range c.rt.sessions {
+		if isFineGrained(session.Credential) {
+			c.fineGrained.foldSession(session)
+			continue
+		}
 		key := shapeKey{surface: session.Surface, mode: session.Mode}
 		shape, seen := c.shapes[key]
 		if !seen {

@@ -149,6 +149,30 @@ const (
 	OutcomeRefusedPrefix = "refused:"
 )
 
+// The kinds of credential a session runs with. The kind is a coordinate of
+// what a session serves, beside its surface and mode: a fine-grained personal
+// access token is listed only what its grant reaches and refused the rest with
+// a reason no classic token is ever given (issue 952), so a call credited
+// without it would fold that refusal into the classic session's cells.
+const (
+	// CredentialClassic is a token whose scopes decide what it may do, which
+	// is every token the suite ran with before fine-grained ones. A line that
+	// carries no kind was written by such a session, and reads as this.
+	CredentialClassic = "classic"
+	// CredentialFineGrained is a fine-grained personal access token, judged
+	// per action from its grant.
+	CredentialFineGrained = "fine-grained"
+)
+
+// CredentialKind reads the kind a session or call line carries, the empty
+// value of a line written before the field existed reading as classic.
+func CredentialKind(kind string) string {
+	if kind == "" {
+		return CredentialClassic
+	}
+	return kind
+}
+
 // Whether a package ran at all. A refused run is recorded rather than left
 // silent, because a missing run line and a run that refused to start are
 // different answers to "was this runtime exercised".
@@ -366,6 +390,11 @@ type Session struct {
 	Capabilities string `json:"capabilities"`
 	// Transport is how the harness reached the binary.
 	Transport string `json:"transport"`
+	// Credential is the kind of credential the session ran with: one of the
+	// Credential* constants, written only for a fine-grained one, so a line
+	// with none reads as classic ([CredentialKind]) and every line written
+	// before the field reads as what it was.
+	Credential string `json:"credential,omitempty"`
 	// Tools are the tool names the session listed.
 	Tools []string `json:"tools,omitempty"`
 	// Resources are the static resource URIs the session listed.
@@ -433,6 +462,9 @@ type Call struct {
 	Mode string `json:"mode"`
 	// Capabilities is the resource and prompt surface of the session.
 	Capabilities string `json:"capabilities"`
+	// Credential repeats the session's credential kind, written only for a
+	// fine-grained one, as [Session.Credential] is.
+	Credential string `json:"credential,omitempty"`
 	// Requirement is the runtime requirement of the package that made the
 	// call.
 	Requirement string `json:"requirement"`
@@ -506,6 +538,19 @@ type Dispatch struct {
 	// that reached no GitLab (a refusal, a safe-mode preview) and is
 	// occasionally that drop.
 	Requests int `json:"requests,omitempty"`
+	// Routes are the routes those requests were sent to, each a method and a
+	// path template as GitLab's own record spells the route ("GET
+	// /projects/:id/issues"), sorted and deduplicated. A request whose span
+	// named no route, one to an endpoint the server's table does not hold,
+	// is counted in Requests and named here by its method alone, so a reader
+	// can tell a route nobody derived from a span that carried none.
+	//
+	// It is what lets a reader compare what a handler was seen calling with
+	// what the derivation says it calls route by route rather than by count,
+	// which is the one per-action oracle for a request the derivation left
+	// out. The same floor applies to it as to Requests, since both are read
+	// from the same spans.
+	Routes []string `json:"routes,omitempty"`
 }
 
 // Skip is a test that did not run, with the reason it gave.

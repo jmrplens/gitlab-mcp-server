@@ -10,7 +10,8 @@
 // optional requests, keeping them in the order the handler makes them. A
 // //gitlab:request directive beside a request says what the syntax cannot,
 // and a declaration in request_declarations.go answers a request the walk
-// reaches and cannot read. The join matches each REST request to a route of
+// reaches and cannot read, or one GitLab answers with a redirect to another
+// of its routes, which the client follows with the same token. The join matches each REST request to a route of
 // docs/development/gitlab-api-live.json and judges each GraphQL document
 // position by position against the authorization recorded for it, and a
 // declaration in grant_declarations.go answers what the record cannot place.

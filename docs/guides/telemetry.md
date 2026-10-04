@@ -179,6 +179,19 @@ surface every tool call names the same two tools, so `gen_ai.tool.name` is
 `gitlab_execute_action` whether the server listed issues or deleted a branch.
 The action attribute is the only thing that tells them apart.
 
+The child span of a GitLab call carries `http.request.method`, the host and port
+it was sent to and the response status, and, when the route is one the server's
+fine-grained permission table holds, `url.template`: the route
+as GitLab declares it, such as `/api/v4/projects/:id/issues`, which also names
+the span (`GET /api/v4/projects/:id/issues`). The template carries the
+placeholders and never the values a request filled in. An instance installed
+under a path of its own (a relative URL root, `https://host/gitlab`) gets the
+same template: the path in front of `/api/` is the instance's and is left out.
+A request to a route the table does not hold, `/api/v4/version` among them,
+carries no template, and its span is named by its method alone. The template is a span attribute only: it is
+not a dimension of `http.client.request.duration`, whose series it would
+multiply by every route GitLab serves.
+
 ### Metrics
 
 | Instrument                             | Unit         | What it answers                                                        |
@@ -363,9 +376,10 @@ Not by default and not by any setting, because there is no setting:
 - Your GitLab token, or any header a client sent.
 - GitLab response bodies, and GitLab error messages. A failure records a
   classification such as `-32603`, never the text, which can name private paths.
-- Full URLs of GitLab calls. The child span records the method, the host and the
-  status, and the parent span already names the action, which identifies the
-  endpoint family more legibly than a URL would.
+- Full URLs of GitLab calls. The child span records the method, the host, the
+  status and, where the server's table holds it, the route template, which
+  names the endpoint with placeholders where the URL would carry project paths,
+  identifiers and query values. The parent span already names the action.
 - `token_suffix`, the last four characters of an HTTP client's credential. It
   keeps being written to stderr, where it is what an operator correlates a
   refusal by on their own terminal, and it is stripped from the exported copy of

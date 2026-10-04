@@ -51,6 +51,10 @@ type report struct {
 	UncalledTools []uncalledRow `json:"uncalled_tools"`
 	// Diagnostics is about the record rather than about coverage.
 	Diagnostics diagnostics `json:"diagnostics"`
+	// FineGrained is what the sessions on a fine-grained token served and
+	// what their calls answered, kept out of every figure above; absent when
+	// no such session ran.
+	FineGrained *fineGrainedReport `json:"fine_grained,omitempty"`
 	// Results is the results join, when -results was given.
 	Results *resultsJoin `json:"results,omitempty"`
 	// Check is the -check verdict for this runtime, when asked for.
@@ -221,6 +225,7 @@ func buildReport(c *classification) *report {
 		UnresolvedTools:    c.unresolved,
 		UncalledTools:      uncalledRows(c),
 		Diagnostics:        c.diagnostics,
+		FineGrained:        c.fineGrained.report(),
 	}
 	rep.Actions, rep.Levels = actionRows(c)
 	rep.Cells = cellRows(c.cells)
@@ -406,7 +411,9 @@ func summarize(c *classification, rep *report) summary {
 		Capabilities:   map[string]map[state]int{},
 	}
 	for _, call := range c.rt.calls {
-		if call.Purpose == e2ecalls.PurposeTest {
+		// A fine-grained session's call is counted in its own section, like
+		// every other figure of one.
+		if call.Purpose == e2ecalls.PurposeTest && !isFineGrained(call.Credential) {
 			s.TestCalls++
 		}
 	}

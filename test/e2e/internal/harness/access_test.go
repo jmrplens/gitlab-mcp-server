@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
@@ -55,6 +57,34 @@ func TestEnvAccessors_StubInstance_HandOverWhatTheProbeFound(t *testing.T) {
 	}
 	if runtime.Tier != edition.Free || runtime.TierConfirmed {
 		t.Errorf("Runtime().Tier = %s (confirmed=%t), want Free from a stub with no license", runtime.Tier, runtime.TierConfirmed)
+	}
+}
+
+// TestEnvClientFor_SendsTheCredentialItWasGiven checks that a client built for
+// another credential reaches the run's instance with that credential and not
+// the run's, which is the whole of what a fixture acting as another user and
+// a direct probe of a fine-grained token rely on.
+func TestEnvClientFor_SendsTheCredentialItWasGiven(t *testing.T) {
+	var sent atomic.Value
+	stub := startStubGitLab(t, stubRoute{pattern: "/api/v4/projects", handler: func(w http.ResponseWriter, r *http.Request) {
+		sent.Store(r.Header.Get("PRIVATE-TOKEN"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}})
+	env := newEnv(t, instanceForStub(t, stub))
+
+	client, err := env.ClientFor("glpat-another")
+	if err != nil {
+		t.Fatalf("ClientFor: %v", err)
+	}
+	if client == env.Client() {
+		t.Fatal("ClientFor handed back the run's own client")
+	}
+	if _, _, err = client.GL().Projects.ListProjects(nil, gl.WithContext(t.Context())); err != nil {
+		t.Fatalf("listing projects with the other credential: %v", err)
+	}
+	if got, _ := sent.Load().(string); got != "glpat-another" {
+		t.Errorf("the request carried token %q, want the one ClientFor was given", got)
 	}
 }
 

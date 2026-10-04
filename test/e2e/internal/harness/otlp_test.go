@@ -749,3 +749,42 @@ func TestSpanReceiver_IsReachedOnLoopbackOnly(t *testing.T) {
 		t.Errorf("the receiver listens on %q, want loopback", received.url)
 	}
 }
+
+// TestSpanReceiver_RequestSpans_NameTheRoutesTheyReached covers the route
+// each GitLab client span adds to its trace.
+//
+// The span carries the route as the server's table spells it, under the v4
+// API prefix the request record leaves out, so the receiver strips the prefix
+// and keeps the method beside it. A span with no template, a request to a
+// route the table does not hold, is named by its method alone; the GraphQL
+// endpoint keeps its own path; and a route the trace reached twice, a retry
+// or a paginated read, is named once, the list sorted.
+func TestSpanReceiver_RequestSpans_NameTheRoutesTheyReached(t *testing.T) {
+	received := startTestReceiver(t)
+	received.issue(testTraceID, &sessionConn{})
+
+	routed := func(method, template string) *tracepb.Span {
+		span := stubRequestSpan(testTraceID, method)
+		span.Attributes = append(span.Attributes, &commonpb.KeyValue{
+			Key:   string(mcpotel.AttrURLTemplate),
+			Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: template}},
+		})
+		return span
+	}
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(
+		routed(http.MethodPost, "/api/v4/projects/:id/issues"),
+		routed(http.MethodGet, "/api/v4/projects/:id"),
+		routed(http.MethodGet, "/api/v4/projects/:id"),
+		routed(http.MethodPost, "/api/graphql"),
+		stubRequestSpan(testTraceID, http.MethodHead),
+	)), "")
+
+	kept, _ := received.lookup(testTraceID)
+	want := []string{"GET /projects/:id", "HEAD", "POST /api/graphql", "POST /projects/:id/issues"}
+	if strings.Join(kept.routes, "|") != strings.Join(want, "|") {
+		t.Errorf("routes = %q, want %q", kept.routes, want)
+	}
+	if kept.requests != 5 {
+		t.Errorf("requests = %d, want every one of the five spans counted", kept.requests)
+	}
+}
