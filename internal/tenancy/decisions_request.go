@@ -81,5 +81,16 @@ func requestDecisions() []Decision {
 			// Local to the function, so the function is the site.
 			enforce("internal/tools/dependencies", "DownloadExport"),
 			enforce(pkgToolutil, "maxGitLabMessageLen")),
+		// A fine-grained token's grant is the minter's to size: every project
+		// or group id becomes a scope of its own, each scope may name every
+		// assignable permission, so the body GitLab answers the grant read
+		// with is bounded where it is read, below the client's ceiling of
+		// RQB-009, and its scopes are counted as they are decoded. A grant
+		// past either bound is not evaluated, and the session stays in phase
+		// A with the reason (AUT-008).
+		bound("RQB-011", "a fine-grained token's grant, as read",
+			enforce(pkgGitLab, "GrantMaxBytes"),
+			enforce(pkgGitLab, "GrantMaxScopes"),
+			enforce(pkgGitLab, "WithResponseLimit")),
 	}
 }

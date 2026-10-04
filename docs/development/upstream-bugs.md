@@ -4993,14 +4993,14 @@ neither, and the ADR now says so.
   which the call middleware makes of a fine-grained session's call to a
   registered tool whose action it may not run, before the SDK decodes the
   arguments (`CallMiddleware` in `internal/tools/toolvisibility/fine_grained.go`,
-  the Withheld channel of row AUT-007). The same refusal made by dynamic
+  the Withheld channel of rows AUT-007 and AUT-008). The same refusal made by dynamic
   execute, inside its handler, is labeled by the dispatcher like any served
   call. No middleware here makes a `prompts/get` or `resources/read` result.
   Each refusal keeps its channel, its text and its error flag: row RTC-001
   declares the ToolError channel for `tools/call` so that a model reads the
   refusal as a tool result it can back off from, which moving it to the
   `-42900` JSON-RPC error the limiter writes for the other metered methods
-  would have traded away, and row AUT-007 declares the Withheld channel, which
+  would have traded away, and rows AUT-007 and AUT-008 declare the Withheld channel, which
   a model reads as a tool result saying why and what to do. This entry used to say
   the field could not be set from outside the SDK, because the setter is
   unexported; the public decoder sets it, which is how the sibling project

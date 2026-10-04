@@ -110,6 +110,10 @@ type Client struct {
 	// unauthorizedOnce makes a 401 naming the credential reach the hook once:
 	// the verdict is final, so a second one would only repeat it.
 	unauthorizedOnce sync.Once
+	// onRecovered is told when a lazy re-initialization succeeds. A stdio
+	// start uses it to ask again what it could not ask while the instance was
+	// away. See [Client.SetOnRecovered].
+	onRecovered atomic.Pointer[func()]
 
 	// authority is what this client's credential may do as a fine-grained
 	// personal access token, nil for any other credential. See
@@ -152,6 +156,20 @@ func (c *Client) notifyUnauthorized(answer UnauthorizedAnswer) {
 		return
 	}
 	(*fn)(answer)
+}
+
+// SetOnRecovered registers fn to run each time a lazy re-initialization
+// succeeds ([Client.EnsureInitialized]); a nil fn clears it. fn runs on the
+// goroutine whose SDK request recovered the client, holding the
+// initialization lock and before that request is sent, so it must be cheap
+// and must not block: a stdio start hands it a send that does not wait, and
+// asks GitLab what it could not ask at startup on a goroutine of its own.
+func (c *Client) SetOnRecovered(fn func()) {
+	if fn == nil {
+		c.onRecovered.Store(nil)
+		return
+	}
+	c.onRecovered.Store(&fn)
 }
 
 // initCooldown is the minimum interval between lazy re-initialization attempts
@@ -527,6 +545,9 @@ func (c *Client) EnsureInitialized(ctx context.Context) {
 	}
 	c.needsLazyInit.Store(false)
 	slog.InfoContext(ctx, "gitlab client recovered. Lazy initialization succeeded")
+	if fn := c.onRecovered.Load(); fn != nil {
+		(*fn)()
+	}
 }
 
 // EnableLazyInit enables lazy re-initialization on subsequent API calls.
@@ -575,6 +596,32 @@ func (c *Client) VersionRefusal() (string, bool) {
 		return *refusal, true
 	}
 	return "", false
+}
+
+// ReadVersion asks /api/v4/version now, through the health client, and returns
+// the version the instance reported when it is one ([Client.Version]'s rule),
+// with whether the instance answered at all.
+//
+// An answer is a 200 naming a version, readable or not, or GitLab's refusal of
+// the fine-grained permission the endpoint needs (Metadata: Read): both say
+// what this token will be told, and both leave the version "" when it is not
+// one this server can read. A transport failure, a timeout, any other status
+// and a body naming no version are no answer, which a caller holding a version
+// from an earlier read keeps, rather than reading an instance that did not
+// answer as one with no version.
+//
+// It is the read a fine-grained token's authority is chosen by (the bucket of
+// the recorded table it is matched against), made when a pool entry is built
+// and again on each accepted revalidation, and on stdio by the same timer.
+func (c *Client) ReadVersion(ctx context.Context) (string, bool) {
+	_, err := c.versionDirect(ctx)
+	if _, refused := errors.AsType[*versionRefusedError](err); refused {
+		return "", true
+	}
+	if err != nil {
+		return "", false
+	}
+	return c.Version(), true
 }
 
 // versionPattern is the shape of a version GitLab reports: three numbers and
@@ -754,11 +801,14 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 			if ns == nil || !namespacePlanAnswers(ns.Plan) {
 				continue
 			}
+			// Free is the lowest tier and best starts there, so max needs no
+			// case for the first answer. Every namespace that answers is
+			// logged, which is what the line says; logging only a raise left
+			// a comparison whose boundary decided nothing but whether a
+			// second namespace on the tier already held was named.
 			tier := edition.TierFromPlan(ns.Plan)
-			if !found || tier > best {
-				best, found = tier, true
-				slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
-			}
+			best, found = max(best, tier), true
+			slog.DebugContext(ctx, "a namespace reports a plan", "namespace", ns.FullPath, "plan", ns.Plan, "tier", tier.String())
 		}
 
 		// Nothing a later page carries can raise the answer past the highest

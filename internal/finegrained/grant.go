@@ -3,19 +3,22 @@ package finegrained
 import (
 	"encoding/json"
 	"slices"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // GrantAccess is the access level of one granular scope, which says what
-// namespaces it reaches (app/models/authz/granular_scope.rb).
-type GrantAccess uint8
+// namespaces it reaches (app/models/authz/granular_scope.rb). It is the
+// register's type, the input [tenancy.CoverableAt] reads.
+type GrantAccess = tenancy.GrantAccess
 
 // The access levels GitLab 19.4 defines.
 const (
-	AccessPersonalProjects GrantAccess = iota + 1
-	AccessSelectedMemberships
-	AccessAllMemberships
-	AccessUser
-	AccessInstance
+	AccessPersonalProjects    = tenancy.AccessPersonalProjects
+	AccessSelectedMemberships = tenancy.AccessSelectedMemberships
+	AccessAllMemberships      = tenancy.AccessAllMemberships
+	AccessUser                = tenancy.AccessUser
+	AccessInstance            = tenancy.AccessInstance
 )
 
 // accessNames are the spellings GitLab's API entity exposes, by level.
@@ -30,21 +33,22 @@ var accessNames = map[string]GrantAccess{
 // NamespaceKind is the kind of namespace a scope is attached to, read from
 // what the entity exposes: a project id only for a project namespace, a group
 // id only for a group (lib/api/entities/personal_access_token_granular_scope.rb).
-type NamespaceKind uint8
+// It is the register's type, the input [tenancy.CoverableAt] reads.
+type NamespaceKind = tenancy.NamespaceKind
 
 // The namespace kinds a scope can carry.
 const (
 	// NamespaceNone is a scope with no namespace: all memberships, the user
 	// and the instance.
-	NamespaceNone NamespaceKind = iota
+	NamespaceNone = tenancy.NamespaceNone
 	// NamespaceUser is the creating user's own namespace, which a personal
 	// projects scope carries and the entity exposes as neither id.
-	NamespaceUser
+	NamespaceUser = tenancy.NamespaceUser
 	// NamespaceGroup is a group, which covers the group and every project
 	// under it.
-	NamespaceGroup
+	NamespaceGroup = tenancy.NamespaceGroup
 	// NamespaceProject is one project's namespace.
-	NamespaceProject
+	NamespaceProject = tenancy.NamespaceProject
 )
 
 // Scope is one granular scope of a grant.
@@ -130,16 +134,21 @@ func decodeScope(entry rawScope) (Scope, bool) {
 		return Scope{}, false
 	}
 	scope := Scope{Access: access, Permissions: slices.Clone(entry.Permissions)}
-	switch {
-	case entry.ProjectID != nil:
+	if entry.ProjectID != nil {
 		scope.Namespace, scope.NamespaceID = NamespaceProject, *entry.ProjectID
-	case entry.GroupID != nil:
+		return scope, true
+	}
+	if entry.GroupID != nil {
 		scope.Namespace, scope.NamespaceID = NamespaceGroup, *entry.GroupID
-	case access == AccessPersonalProjects:
+		return scope, true
+	}
+	if access == AccessPersonalProjects {
 		// Both creation paths attach a personal projects scope to the creating
 		// user's namespace, which the entity exposes as neither id.
 		scope.Namespace = NamespaceUser
-	case access == AccessSelectedMemberships:
+		return scope, true
+	}
+	if access == AccessSelectedMemberships {
 		return Scope{}, false
 	}
 	return scope, true

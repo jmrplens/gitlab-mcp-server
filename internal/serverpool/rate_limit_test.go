@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -412,4 +413,40 @@ func TestAuthRateLimiter_SweepLocked_DropsOnlyWhatIsPastTheWindow(t *testing.T) 
 	if pastKept {
 		t.Error("a record one nanosecond past the window survived the sweep")
 	}
+}
+
+// TestAuthRateLimiter_AtTheCap_SweepsAnEighthOfAWindowApart holds the insert
+// path's sweep at a full table to its spacing, at the exact instant, which only
+// a bubble with its own clock can reach: a sweep made an eighth of a window
+// after the last one runs, and finds the records whose window has passed.
+func TestAuthRateLimiter_AtTheCap_SweepsAnEighthOfAWindowApart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		limiter := NewAuthRateLimiter(5, 80*time.Second)
+		for i := range maxTrackedAuthSources {
+			limiter.RecordFailure("10.1." + strconv.Itoa(i))
+		}
+		tracked := func() int {
+			limiter.mu.Lock()
+			defer limiter.mu.Unlock()
+			return len(limiter.failures)
+		}
+		// sequential: each refused address moves the last sweep the next one is measured from
+		for _, step := range []struct {
+			address string
+			after   time.Duration
+		}{
+			{"10.2.0.1", 0},
+			{"10.2.0.2", 71 * time.Second},
+		} {
+			time.Sleep(step.after)
+			if limiter.RecordFailure(step.address); tracked() != maxTrackedAuthSources {
+				t.Fatalf("%s was tracked %v in, while every record was live", step.address, step.after)
+			}
+		}
+		time.Sleep(10 * time.Second)
+		limiter.RecordFailure("10.2.0.3")
+		if got := tracked(); got != 1 {
+			t.Errorf("%d sources tracked an eighth of a window after the last sweep, with every window passed; want the new source alone", got)
+		}
+	})
 }

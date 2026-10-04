@@ -716,7 +716,7 @@ func allowDecisions() []Decision {
 			ID: "POL-005", Question: Allow, Kind: Rule, Class: ClassR, Disposition: Mechanism,
 			Resource: "one build shared by concurrent requests for one entry",
 			Key:      KeyEntry, StdioKey: KeyNone,
-			Sites: []Site{enforce(pkgPool, "ServerPool.GetOrCreateEntry")},
+			Sites: []Site{enforce(pkgPool, "ServerPool.GetOrCreateEntryWithFacts")},
 		},
 		{
 			ID: "IDN-009", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Ruled,

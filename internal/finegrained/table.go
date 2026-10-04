@@ -3,54 +3,40 @@ package finegrained
 import (
 	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // Boundary is a set of GitLab's boundary types (app/models/authz/boundary.rb):
-// the kinds of object a fine-grained permission is granted and checked at.
-type Boundary uint8
+// the kinds of object a fine-grained permission is granted and checked at. It
+// is the register's type, since the one rule that says what a grant covers
+// lives there ([tenancy.CoverableAt], register row AUT-008), and this package
+// writes its tables in the same vocabulary rather than in a copy of it.
+type Boundary = tenancy.Boundary
 
 // The four boundary types, one bit each, so a requirement that any of several
 // boundaries may satisfy is one value.
 const (
-	BoundaryProject Boundary = 1 << iota
-	BoundaryGroup
-	BoundaryUser
-	BoundaryInstance
+	BoundaryProject  = tenancy.BoundaryProject
+	BoundaryGroup    = tenancy.BoundaryGroup
+	BoundaryUser     = tenancy.BoundaryUser
+	BoundaryInstance = tenancy.BoundaryInstance
 )
 
 // AllBoundaries is every boundary type, which is what a requirement whose
 // boundary GitLab computes at run time with no declared type may resolve to.
-const AllBoundaries = BoundaryProject | BoundaryGroup | BoundaryUser | BoundaryInstance
-
-// boundaryNames are the spellings GitLab's enum and boundary extractor
-// compare, lower case, in bit order.
-var boundaryNames = [...]string{"project", "group", "user", "instance"}
+const AllBoundaries = tenancy.AllBoundaries
 
 // ParseBoundary reads one boundary type as GitLab spells it, and reports false
 // for anything else.
 func ParseBoundary(name string) (Boundary, bool) {
-	for i, known := range boundaryNames {
-		if name == known {
-			return Boundary(1) << i, true
+	for _, boundary := range [...]Boundary{BoundaryProject, BoundaryGroup, BoundaryUser, BoundaryInstance} {
+		if name == boundary.String() {
+			return boundary, true
 		}
 	}
 	return 0, false
 }
-
-// Names spells the set as GitLab does, in bit order.
-func (b Boundary) Names() []string {
-	var names []string
-	for i, name := range boundaryNames {
-		if b&(Boundary(1)<<i) != 0 {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
-// String joins the names with " or ", which is how a refusal reads a
-// requirement any of them may satisfy.
-func (b Boundary) String() string { return strings.Join(b.Names(), " or ") }
 
 // Group is one requirement GitLab checks on its own: every raw permission in
 // Perms, held at one boundary type among Any. A REST route has one for its
@@ -257,16 +243,23 @@ type Table struct {
 // Requirement returns the row for one canonical action ID, or nil when the
 // table has none.
 func (t *Table) Requirement(id string) *Requirement {
+	_, row := t.requirementIndex(id)
+	return row
+}
+
+// requirementIndex returns the index and the row for one canonical action ID,
+// or a nil row when the table has none.
+func (t *Table) requirementIndex(id string) (int, *Requirement) {
 	if t == nil {
-		return nil
+		return 0, nil
 	}
 	i, found := slices.BinarySearchFunc(t.Actions, id, func(row Requirement, target string) int {
 		return strings.Compare(row.ID, target)
 	})
 	if !found {
-		return nil
+		return 0, nil
 	}
-	return &t.Actions[i]
+	return i, &t.Actions[i]
 }
 
 // Assignable returns the assignable permission of one name, deprecated ones

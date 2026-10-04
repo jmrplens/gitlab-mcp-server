@@ -3,6 +3,7 @@ package serverpool
 import (
 	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -501,4 +502,85 @@ func TestDistinctTokenBudget_CapAdmitsNewAddressesOnceRecordsLapse(t *testing.T)
 	if warned {
 		t.Error("the saturation warning is still armed after the table recovered, so a second episode would be silent")
 	}
+}
+
+// TestDistinctTokenBudget_ClockEdges_FallWhereTheyAreWritten holds each
+// comparison against the clock to the side of its edge the code says it is
+// on, at the exact instant, which only a bubble with its own clock can reach:
+// a block has lifted at the instant it ends, a window has not ended at the
+// instant it is a window long, and a record silent for exactly the ladder's
+// length is forgotten, its next block starting from the first rung again.
+func TestDistinctTokenBudget_ClockEdges_FallWhereTheyAreWritten(t *testing.T) {
+	t.Run("a block lifts at the instant it ends", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			b := NewDistinctTokenBudget(2, time.Minute, 2*time.Second)
+			b.Charge("10.0.0.1", "glpat-a")
+			if !b.Charge("10.0.0.1", "glpat-b") {
+				t.Fatal("the second distinct token did not raise a block")
+			}
+			if blocked, remaining := b.Blocked("10.0.0.1"); !blocked || remaining != 2*time.Second {
+				t.Fatalf("Blocked = %v, %v; want true for the whole first rung", blocked, remaining)
+			}
+			time.Sleep(2 * time.Second)
+			if blocked, remaining := b.Blocked("10.0.0.1"); blocked || remaining != 0 {
+				t.Errorf("Blocked at the block's end = %v, %v; want it lifted", blocked, remaining)
+			}
+		})
+	})
+	t.Run("a window a window long has not ended", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			b := NewDistinctTokenBudget(2, time.Minute, 2*time.Second)
+			b.Charge("10.0.0.1", "glpat-a")
+			time.Sleep(time.Minute)
+			if !b.Charge("10.0.0.1", "glpat-b") {
+				t.Error("a second token exactly a window after the first was counted in a new window")
+			}
+		})
+	})
+	t.Run("silence the ladder's length long forgets the ladder", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			b := NewDistinctTokenBudget(2, time.Minute, 2*time.Second)
+			b.Charge("10.0.0.1", "glpat-a")
+			b.Charge("10.0.0.1", "glpat-b")
+			time.Sleep(b.resetAfter())
+			b.Charge("10.0.0.1", "glpat-c")
+			b.Charge("10.0.0.1", "glpat-d")
+			if _, remaining := b.Blocked("10.0.0.1"); remaining != 2*time.Second {
+				t.Errorf("the block after the ladder's length of silence lasts %v, want the first rung's 2s", remaining)
+			}
+		})
+	})
+}
+
+// TestDistinctTokenBudget_AtTheCap_SweepsAnEighthOfAWindowApart holds the
+// insert path's sweep at a full table to its spacing and to what a sweep
+// forgets: a sweep is due exactly an eighth of a window after the last one,
+// not sooner and not a window's multiple later, and a record silent exactly
+// the ladder's length is dropped, which is what makes room for the new
+// address.
+func TestDistinctTokenBudget_AtTheCap_SweepsAnEighthOfAWindowApart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		b := NewDistinctTokenBudget(maxTrackedAuthSources, 80*time.Second, time.Second)
+		for i := range maxTrackedAuthSources {
+			b.Charge("10.1."+strconv.Itoa(i), "glpat-held")
+		}
+		// sequential: each refused address moves the last sweep the next one is measured from
+		for _, step := range []struct {
+			address string
+			after   time.Duration
+		}{
+			{"10.2.0.1", 0},
+			{"10.2.0.2", 50 * time.Second},
+		} {
+			time.Sleep(step.after)
+			if b.Charge(step.address, "glpat-new"); b.Len() != maxTrackedAuthSources {
+				t.Fatalf("%s was tracked %v in, while every record was live", step.address, step.after)
+			}
+		}
+		time.Sleep(10 * time.Second)
+		b.Charge("10.2.0.3", "glpat-new")
+		if got := b.Len(); got != 1 {
+			t.Errorf("Len = %d an eighth of a window after the last sweep, with every record silent the ladder's length; want the new address alone", got)
+		}
+	})
 }

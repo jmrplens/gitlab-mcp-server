@@ -3,59 +3,225 @@
 package gitlab
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
-// TestDetectScopes_Success verifies that DetectScopes returns the scopes reported by the /personal_access_tokens/self endpoint.
-func TestDetectScopes_Success(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":     1,
-			"scopes": []string{"api", "read_user"},
-			"active": true,
-		})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID verifies what the self
+// endpoint's answers are read as: a classic token's scopes and id with no
+// grant to read; a fine-grained token's single scope and its id with its grant
+// readable; a fine-grained token with no id reported, whose grant cannot be
+// asked for; GitLab's 403 refusing a fine-grained token Personal Access Token:
+// Read, read as that token with no id and its grant unreadable; and every
+// other failure, a 404, a 503 and a classic 403 among them, as nothing known,
+// the token's kind included.
+func TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID(t *testing.T) {
+	refusal := `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a ` +
+		`fine-grained personal access token with the following user permissions: [read_personal_access_token]"}`
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   TokenFacts
+	}{
+		{
+			name: "classic", status: http.StatusOK, body: `{"id":7,"scopes":["api","read_user"],"active":true}`,
+			want: TokenFacts{Scopes: []string{"api", "read_user"}, ID: 7},
+		},
+		{
+			name: "fine-grained", status: http.StatusOK, body: `{"id":9,"scopes":["granular"],"active":true}`,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true},
+		},
+		{
+			name: "fine-grained with no id", status: http.StatusOK, body: `{"scopes":["granular"],"active":true}`,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true},
+		},
+		{
+			name: "fine-grained refused its own description", status: http.StatusForbidden, body: refusal,
+			want: TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true},
+		},
+		{
+			name: "classic refused", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`,
+			want: TokenFacts{KindUnknown: true},
+		},
+		{name: "not available", status: http.StatusNotFound, body: `{}`, want: TokenFacts{KindUnknown: true}},
+		{name: "unavailable", status: http.StatusServiceUnavailable, body: `{}`, want: TokenFacts{KindUnknown: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
 
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if len(scopes) != 2 {
-		t.Fatalf("expected 2 scopes, got %d: %v", len(scopes), scopes)
-	}
-	if scopes[0] != "api" || scopes[1] != "read_user" {
-		t.Errorf("unexpected scopes: %v", scopes)
+			client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+			if err != nil {
+				t.Fatalf("NewClient() error: %v", err)
+			}
+			got := DetectToken(context.Background(), client.GL())
+			if !sameFacts(got, tc.want) {
+				t.Errorf("DetectToken() = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
-// TestDetectScopes_EndpointNotAvailable verifies that DetectScopes returns nil when the scope endpoint responds with 404.
-func TestDetectScopes_EndpointNotAvailable(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+// sameFacts reports whether two token facts say the same thing, field by field.
+func sameFacts(got, want TokenFacts) bool {
+	return slices.Equal(got.Scopes, want.Scopes) && got.ID == want.ID && got.FineGrained == want.FineGrained &&
+		got.GrantReadable == want.GrantReadable && got.KindUnknown == want.KindUnknown
+}
 
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+// TestDetectToken_NoAnswer_IsNothingKnown verifies an instance that does not
+// answer the self request at all, a connection refused rather than any status,
+// is read as nothing known, the token's kind included: a failure that carries
+// no response is not GitLab's refusal of a fine-grained token, and reading it
+// as one would withhold actions from a classic token whose instance was
+// briefly away, while reading it as a classic token for good would serve a
+// fine-grained one every action for as long as nothing asked again.
+func TestDetectToken_NoAnswer_IsNothingKnown(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close()
+
+	client, err := NewClientWithTokenRetries(url, testValidToken, false, true)
 	if err != nil {
 		t.Fatalf("NewClient() error: %v", err)
 	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if scopes != nil {
-		t.Errorf("expected nil scopes on 404, got %v", scopes)
+	got := DetectToken(context.Background(), client.GL())
+	if !sameFacts(got, TokenFacts{KindUnknown: true}) {
+		t.Errorf("DetectToken() = %+v, want nothing known", got)
+	}
+}
+
+// TestDetectToken_WarnsOnlyWhenNothingAnswered verifies the one warning a
+// start or an entry build gives about the token: written when the self
+// endpoint did not answer, since the whole catalog is then served, and not
+// when it described the token.
+func TestDetectToken_WarnsOnlyWhenNothingAnswered(t *testing.T) {
+	var up atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"scopes":["api"],"active":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	DetectToken(context.Background(), client.GL())
+	if !strings.Contains(logged.String(), `"level":"WARN","msg":"failed to detect PAT scopes, all tools will be registered"`) {
+		t.Errorf("an unanswered detection logged %s; want the warning", logged.String())
+	}
+	logged.Reset()
+	up.Store(true)
+	DetectToken(context.Background(), client.GL())
+	if strings.Contains(logged.String(), `"level":"WARN"`) {
+		t.Errorf("an answered detection logged %s; want no warning", logged.String())
+	}
+}
+
+// TestRedetectToken_AsksAgainAndLogsAFailureQuietly verifies the read a caller
+// repeats for a token whose kind is unknown: it reads an answer as DetectToken
+// does and logs it the same way, while a failure, which can repeat on every
+// round for as long as the instance does not answer, is logged at DEBUG and
+// never as the warning DetectToken gives the first one, and a round the
+// process cancelled is not logged at all.
+func TestRedetectToken_AsksAgainAndLogsAFailureQuietly(t *testing.T) {
+	var up atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":9,"scopes":["granular"],"active":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	if got := RedetectToken(context.Background(), client.GL()); !sameFacts(got, TokenFacts{KindUnknown: true}) {
+		t.Errorf("RedetectToken() with no answer = %+v, want the kind still unknown", got)
+	}
+	if !strings.Contains(logged.String(), `"level":"DEBUG","msg":"the token's kind is still unknown"`) ||
+		strings.Contains(logged.String(), `"level":"WARN"`) {
+		t.Errorf("a failed re-read logged %s; want one DEBUG line and no warning", logged.String())
+	}
+
+	logged.Reset()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := RedetectToken(cancelled, client.GL()); !sameFacts(got, TokenFacts{KindUnknown: true}) {
+		t.Errorf("RedetectToken() on a cancelled round = %+v, want the kind still unknown", got)
+	}
+	if logged.Len() != 0 {
+		t.Errorf("a cancelled round logged %s; want nothing", logged.String())
+	}
+
+	up.Store(true)
+	want := TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
+	if got := RedetectToken(context.Background(), client.GL()); !sameFacts(got, want) {
+		t.Errorf("RedetectToken() once answered = %+v, want %+v", got, want)
+	}
+}
+
+// TestFactsFromScopes_AppliesDetectTokensRule verifies the facts built from
+// scopes and an id read elsewhere follow the rule DetectToken applies: the
+// kind from the list, and the grant readable only for a fine-grained token
+// whose id is known.
+func TestFactsFromScopes_AppliesDetectTokensRule(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		scopes []string
+		id     int64
+		want   TokenFacts
+	}{
+		{"classic with an id", []string{"api"}, 3, TokenFacts{Scopes: []string{"api"}, ID: 3}},
+		{"fine-grained with an id", []string{ScopeGranular}, 3, TokenFacts{Scopes: []string{ScopeGranular}, ID: 3, FineGrained: true, GrantReadable: true}},
+		{"fine-grained without one", []string{ScopeGranular}, 0, TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FactsFromScopes(tc.scopes, tc.id)
+			if !slices.Equal(got.Scopes, tc.want.Scopes) || got.ID != tc.want.ID ||
+				got.FineGrained != tc.want.FineGrained || got.GrantReadable != tc.want.GrantReadable {
+				t.Errorf("FactsFromScopes() = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -214,32 +380,5 @@ func TestCatalogScopes_FineGrainedReadsAsUnknown(t *testing.T) {
 				t.Errorf("CatalogScopes(%#v) = %#v, want %#v", tt.scopes, got, tt.want)
 			}
 		})
-	}
-}
-
-// TestDetectScopes_FineGrainedTokenReportsItsSingleScope verifies that a
-// fine-grained token's list reaches the callers as GitLab reports it, so the
-// predicates above see the shape they are written for: detection names the
-// scopes and never interprets them.
-func TestDetectScopes_FineGrainedTokenReportsItsSingleScope(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":     1,
-			"scopes": []string{ScopeGranular},
-			"active": true,
-		})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	scopes := DetectScopes(context.Background(), client.GL())
-	if !FineGrained(scopes) {
-		t.Errorf("DetectScopes() = %#v, want the fine-grained list", scopes)
 	}
 }

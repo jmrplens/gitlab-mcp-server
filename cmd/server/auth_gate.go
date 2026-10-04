@@ -338,6 +338,26 @@ func verifiedScopes(r *http.Request) []string {
 	return info.Scopes
 }
 
+// verifiedFacts is [verifiedScopes] with the token's own id, when the OAuth
+// layer's introspection read one from the self endpoint ([oauth.TokenIDKey]):
+// what the pool needs to read a fine-grained token's grant without asking the
+// self endpoint a second time. It is nil whenever verifiedScopes is, so the
+// pool detects the token itself exactly when it used to. When no introspection
+// endpoint answered, the scopes are the verifier's assumption
+// ([oauth.ScopesAssumedKey]) and say nothing of the token's kind, so the facts
+// say the kind is unknown, which has the pool ask the self endpoint itself.
+func verifiedFacts(r *http.Request) *gitlabclient.TokenFacts {
+	scopes := verifiedScopes(r)
+	if scopes == nil {
+		return nil
+	}
+	extra := auth.TokenInfoFromContext(r.Context()).Extra
+	id, _ := extra[oauth.TokenIDKey].(int64)
+	facts := gitlabclient.FactsFromScopes(scopes, id)
+	facts.KindUnknown, _ = extra[oauth.ScopesAssumedKey].(bool)
+	return &facts
+}
+
 // extractCredential returns the credential the gate authenticates with,
 // honoring bearerOnly.
 func (g *mcpServerGate) extractCredential(r *http.Request) string {
@@ -633,7 +653,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 		return nil, doorPermissionFailure(sentence)
 	}
 
-	entry, err := g.pool.GetOrCreateEntry(token, options.GitLabURL, verifiedScopes(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
+	entry, err := g.pool.GetOrCreateEntryWithFacts(token, options.GitLabURL, verifiedFacts(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
 	if missing, isMissing := errors.AsType[*serverpool.PermissionMissingError](err); isMissing {
 		// GitLab accepted the token and judged its fine-grained grant, which
 		// lacks User: Read. Not charged (INV-007): the credential is genuine,

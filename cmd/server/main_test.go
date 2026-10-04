@@ -4510,7 +4510,8 @@ func TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole(t *te
 // scope step of stdio startup. A token GitLab reports as read_api is served the
 // read-only catalog (ADR-0018); a token whose scopes cannot be read is served
 // everything and the operator is told why at debug level; and a deployment
-// that ignores scopes does not ask at all.
+// that ignores scopes still asks what the token is, since its kind decides
+// what a fine-grained token is withheld, and narrows nothing by its scopes.
 func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -4523,7 +4524,7 @@ func TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot(t *testing.
 	}{
 		{name: "a read_api token", answers: true, wantScopes: []string{"read_api"}, wantReadOnly: true, wantAsked: true},
 		{name: "scopes that cannot be read", wantAsked: true, wantNote: true},
-		{name: "scopes ignored", ignore: true, answers: true},
+		{name: "scopes ignored", ignore: true, answers: true, wantAsked: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

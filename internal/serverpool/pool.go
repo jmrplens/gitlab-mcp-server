@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
@@ -67,6 +68,20 @@ type Entry struct {
 	// window after either, which is where a token deleted in the meantime is
 	// most likely to be refused first. See [Entry.claimConfirmation].
 	lastConfirmProbe atomic.Pointer[time.Time]
+	// token is what the self endpoint, or the OAuth verifier, said about the
+	// entry's credential: the token's kind, and for a fine-grained token that
+	// may read its grant, the id the grant is re-read by on each accepted
+	// revalidation. It is set when the entry is built, and replaced once by
+	// the revalidation that first learns the kind of a token whose kind was
+	// unknown ([redetectKind]), which is why it is read and written under
+	// tokenMu once the entry is published ([Entry.tokenFacts]). The id is
+	// never logged.
+	token   gitlabclient.TokenFacts
+	tokenMu sync.Mutex
+	// rereadKept is set the first time a revalidation's re-read of a
+	// fine-grained token kept its authority, so the reason is logged once per
+	// entry and not on every round.
+	rereadKept atomic.Bool
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -119,6 +134,21 @@ func (e *Entry) Owner() string {
 		return ""
 	}
 	return e.owner
+}
+
+// tokenFacts returns what the entry knows of its token, read under the lock
+// the revalidation that learns a token's kind writes it under.
+func (e *Entry) tokenFacts() gitlabclient.TokenFacts {
+	e.tokenMu.Lock()
+	defer e.tokenMu.Unlock()
+	return e.token
+}
+
+// setTokenFacts replaces what the entry knows of its token.
+func (e *Entry) setTokenFacts(facts gitlabclient.TokenFacts) {
+	e.tokenMu.Lock()
+	defer e.tokenMu.Unlock()
+	e.token = facts
 }
 
 // UserIdentity is the GitLab user a pooled credential belongs to.
@@ -542,14 +572,11 @@ func WithIdleTimeout(d time.Duration) Option {
 // default, and a value above [maxCredentialAgeCeiling] is clamped down to it.
 func WithMaxCredentialAge(d time.Duration) Option {
 	return func(p *ServerPool) {
-		switch {
-		case d <= 0:
+		if d <= 0 {
 			p.maxCredentialAge = DefaultMaxCredentialAge
-		case d > maxCredentialAgeCeiling:
-			p.maxCredentialAge = maxCredentialAgeCeiling
-		default:
-			p.maxCredentialAge = d
+			return
 		}
+		p.maxCredentialAge = min(d, maxCredentialAgeCeiling)
 	}
 }
 
@@ -625,6 +652,23 @@ func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []str
 // of the same configuration shape: the server no longer identifies the caller,
 // and the entry does.
 func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) (*Entry, error) {
+	if scopes == nil {
+		return p.GetOrCreateEntryWithFacts(token, gitlabURL, nil)
+	}
+	facts := gitlabclient.FactsFromScopes(scopes, 0)
+	return p.GetOrCreateEntryWithFacts(token, gitlabURL, &facts)
+}
+
+// GetOrCreateEntryWithFacts is [ServerPool.GetOrCreateEntry] for a caller that
+// has already learned what the token is: its scopes and, for a personal access
+// token, its id, as the OAuth verifier's introspection read them from the same
+// instance for the same token (its cache keys on both). The id is what lets a
+// fine-grained token's grant be read without asking the self endpoint again.
+// A nil known means nothing was learned, and the pool asks the self endpoint
+// itself ([gitlabclient.DetectToken]). So does a known whose kind is unknown
+// ([gitlabclient.TokenFacts.KindUnknown]), keeping what it was handed when the
+// self endpoint does not answer either.
+func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *gitlabclient.TokenFacts) (*Entry, error) {
 	if token == "" {
 		return nil, errors.New("empty token: authentication required")
 	}
@@ -640,25 +684,30 @@ func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) 
 	// in this file, and it has to be: both arms of the switch below take the
 	// write lock — dropRejectedEntry directly, the stale arm through the slow
 	// path — and a read lock still held there deadlocks the process. The block
-	// under it is three field reads that cannot panic, so defer buys nothing
-	// here and costs the function.
+	// under it is a map read and, for an entry it finds, two field reads, none
+	// of which can panic, so defer buys nothing here and costs the function.
 	p.mu.RLock()
 	cached, ok := p.entries[key]
-	// Read under the same lock that guards the field: lastValidated is
-	// written by the revalidation and confirmation goroutines.
-	stale := ok && p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
-	rejected := ok && cached.rejected.Load()
+	// Read only for an entry the pool holds, and under the same lock that
+	// guards the field: lastValidated is written by the revalidation and
+	// confirmation goroutines. Both stay false for a key the pool does not
+	// hold, which is what lets the cases below name them alone.
+	var stale, rejected bool
+	if ok {
+		stale = p.maxCredentialAge > 0 && time.Since(cached.lastValidated) > p.maxCredentialAge
+		rejected = cached.rejected.Load()
+	}
 	p.mu.RUnlock()
 
 	switch {
-	case ok && rejected:
+	case rejected:
 		// GitLab refused this entry's credential on a call and the eviction
 		// that follows has not taken the lock yet. Dropping it here, rather
 		// than serving it once more, sends this request down the slow path,
 		// which rebuilds and re-verifies; the pending eviction then finds
 		// nothing under the key and does nothing.
 		p.dropRejectedEntry(key, cached)
-	case ok && stale:
+	case stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
 		// sends this very request down the slow path, which rebuilds and
@@ -694,7 +743,7 @@ func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) 
 	p.metrics.Misses.Add(1)
 
 	built, err, _ := p.building.Do(key, func() (any, error) {
-		entry, buildErr := p.buildEntry(token, gitlabURL, scopes)
+		entry, buildErr := p.buildEntry(token, gitlabURL, known)
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -726,7 +775,7 @@ func entryFromBuild(built any) (*Entry, error) {
 // and builds the MCP server for a new pool key. It performs network I/O and must
 // be called without holding p.mu. The returned entry has no LRU element or
 // timestamps yet; insertEntry finalizes those under the lock.
-func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (*Entry, error) {
+func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.TokenFacts) (*Entry, error) {
 	if p.factory == nil {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
 	}
@@ -780,7 +829,10 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 		return nil, verifyErr
 	}
 
-	entryCfg := p.entryConfig(client, gitlabURL, knownScopes)
+	entryCfg, facts, err := p.entryConfig(client, gitlabURL, known)
+	if err != nil {
+		return nil, err
+	}
 	server, err := p.factory(client, entryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("creating MCP server for pool: %w", err)
@@ -803,6 +855,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 		// Minted before anything can observe the entry, and never again: see
 		// [Entry.Owner] for why it is random rather than derived.
 		owner: rand.Text(),
+		token: facts,
 	}
 	// The first data call GitLab refuses is the revocation signal. Without
 	// this, a token revoked while its entry was live kept being served until
@@ -1405,49 +1458,170 @@ func (p *ServerPool) verifyUnderProbeBound(client *gitlabclient.Client) error {
 // ceiling on a single round trip rather than on a retry budget.
 const credentialCheckTimeout = 5 * time.Second
 
+// entryDetectTimeout bounds everything an entry build asks GitLab after the
+// credential probe: the tier, the token's own description, and for a
+// fine-grained token its grant and the instance version.
+const entryDetectTimeout = 10 * time.Second
+
 // entryConfig builds the per-pool-entry server configuration, applying the
-// resolved GitLab URL plus optional edition and token-scope discovery.
-func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, knownScopes []string) *config.ServerConfig {
+// resolved GitLab URL plus optional edition and token-scope discovery, and
+// attaches what a fine-grained token may be shown to the entry's client. It
+// returns what was learned about the token, which the entry keeps for its
+// revalidations, and fails only when the fine-grained reads found no probe
+// slot free ([ErrCredentialProbeBusy]).
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts) (*config.ServerConfig, gitlabclient.TokenFacts, error) {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
+	ctx, cancel := context.WithTimeout(p.lifetime(), entryDetectTimeout)
+	defer cancel()
+
 	// Detect the tier from the instance license only when the operator did not
 	// pin it explicitly via --tier/GITLAB_MCP_TIER.
-	autoDetectTier := !p.cfg.TierExplicit
-	needScopes := !p.cfg.IgnoreScopes && knownScopes == nil
-	if autoDetectTier || needScopes {
-		ctx, cancel := context.WithTimeout(p.lifetime(), 10*time.Second)
-		defer cancel()
+	if !p.cfg.TierExplicit {
+		entryCfg.Tier = client.DetectTier(ctx)
+	}
 
-		if autoDetectTier {
-			entryCfg.Tier = client.DetectTier(ctx)
-		}
-
-		if needScopes {
-			// The PAT self endpoint does not answer for an OAuth access
-			// token, which is why the caller may hand the scopes in: in
-			// oauth mode they were already resolved to verify the token,
-			// and asking GitLab a second question it cannot answer would
-			// only lose the answer.
-			knownScopes = gitlabclient.DetectScopes(ctx, client.GL())
+	// The PAT self endpoint does not answer for an OAuth access token, which
+	// is why the caller may hand what it learned in: in oauth mode the
+	// verifier already asked the same instance about the same token, and
+	// asking GitLab a second question it cannot answer would only lose the
+	// answer. It is asked under --ignore-scopes too: that flag skips the scope
+	// filter and the read-only narrowing, and the token's kind decides what a
+	// fine-grained token is withheld, which is not scope filtering, so
+	// skipping the request would silently serve such a token every action.
+	// What the verifier handed in is asked about too when its kind is
+	// unknown, which is when no introspection endpoint answered and its scopes
+	// are an assumption: the self endpoint is then asked the question that went
+	// unanswered, and its answer replaces the assumption, while a self
+	// endpoint that does not answer either leaves it in place.
+	facts := gitlabclient.TokenFacts{KindUnknown: true}
+	if known != nil {
+		facts = *known
+	}
+	if facts.KindUnknown {
+		if detected := gitlabclient.DetectToken(ctx, client.GL()); known == nil || !detected.KindUnknown {
+			facts = detected
 		}
 	}
+
 	// What a fine-grained token may be shown, on the entry's own client, since
 	// the entry is per credential and every request of it binds that client
-	// (register row AUT-007). It is read from whatever scopes are known, and
-	// under --ignore-scopes only the scopes the OAuth verifier handed in are:
-	// that flag skips the scope filter and the read-only narrowing and has
-	// nothing to say about the token kind, but it also skips the self request
-	// above, so in legacy mode a fine-grained token is not recognized under it
-	// until the token is detected on its own (DetectToken, phase B). A classic
-	// token gets nil.
-	client.SetAuthority(actiongrants.Build(gitlabclient.FineGrained(knownScopes)))
-	if p.cfg.IgnoreScopes {
-		return entryCfg
+	// (register rows AUT-007 and AUT-008). A classic token gets nil.
+	authority, err := p.fineGrainedAuthority(ctx, client, facts)
+	if err != nil {
+		return nil, facts, err
 	}
-	entryCfg.TokenScopes = knownScopes
+	client.SetAuthority(authority)
+	if p.cfg.IgnoreScopes {
+		return entryCfg, facts, nil
+	}
+	entryCfg.TokenScopes = facts.Scopes
 	applyScopeReadOnly(entryCfg)
-	return entryCfg
+	return entryCfg, facts, nil
+}
+
+// fineGrainedAuthority returns what a fine-grained token may be shown, judged
+// from its grant and the instance version, and nil for any other token.
+//
+// The two reads a token that may read its grant costs are made holding one of
+// the pool's credential probe slots (POL-006), taken only around them, after
+// the tier and the token were detected, and given back at once: every new
+// minted token is a new key, so these reads are as much an unauthenticated
+// flood's lever as the credential probe is, while holding the slot through the
+// tier's namespace paging would keep it for no reason. No slot free within the
+// probe wait is [ErrCredentialProbeBusy], the 503 that row already answers.
+// A token that may not read its grant reads nothing and takes no slot.
+func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) (*finegrained.Authority, error) {
+	if !facts.FineGrained {
+		return nil, nil //nolint:nilnil // no authority and no error is what a token that is not fine-grained is worth, and the entry stores it as such
+	}
+	reading := finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}
+	if facts.GrantReadable {
+		var err error
+		if reading, err = p.readUnderProbeSlot(ctx, client, facts); err != nil {
+			return nil, err
+		}
+	}
+	authority := actiongrants.Build(true, reading)
+	if authority.Phase() == finegrained.PhaseUnknown {
+		slog.InfoContext(ctx, "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches",
+			authority.LogArgs()...)
+	}
+	return authority, nil
+}
+
+// readUnderProbeSlot makes a fine-grained token's two reads holding one of the
+// pool's probe slots, released by defer for the reason
+// [ServerPool.verifyUnderProbeBound] gives.
+func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) (finegrained.Reading, error) {
+	release, err := p.acquireProbeSlot()
+	if err != nil {
+		return finegrained.Reading{}, err
+	}
+	defer release()
+	return client.ReadFineGrained(ctx, facts), nil
+}
+
+// refreshAuthority re-reads a fine-grained entry's grant and the instance
+// version after its credential was accepted on revalidation, and replaces the
+// authority its client carries when the reads answered
+// ([gitlabclient.Client.RefreshAuthority]). It takes no probe slot: the sweep
+// is one goroutine walking the entries in turn, so it adds at most one read in
+// flight, under the context the sweep already gives each entry, and a slow
+// instance lengthens the sweep without holding a slot another tenant waits
+// for. A re-read that moved the token to another verdict, such as an instance
+// upgraded to a release no table records, is logged with the same arguments an
+// entry build in phase A logs; one that kept the authority is logged once per
+// entry, with its reason and nothing else. An entry whose token's kind is
+// still unknown is asked that instead ([redetectKind]).
+func (p *ServerPool) refreshAuthority(ctx context.Context, entry *Entry) {
+	facts := entry.tokenFacts()
+	if facts.KindUnknown {
+		redetectKind(ctx, entry)
+		return
+	}
+	moved, reason := entry.client.RefreshAuthority(ctx, facts, actiongrants.Table())
+	if moved != nil {
+		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
+		return
+	}
+	if reason != "" && entry.rereadKept.CompareAndSwap(false, true) {
+		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read could not be used; keeping what it was shown",
+			"reason", reason)
+	}
+}
+
+// redetectKind asks the self endpoint again about an entry whose token's kind
+// nothing has said yet: its build found the endpoint unanswered, or was handed
+// the OAuth verifier's assumption when no introspection endpoint answered. An
+// answer replaces what the entry knows of its token, so later revalidations
+// re-read a fine-grained token's grant like any other, and a fine-grained
+// token's client is given its authority at once, judged from its grant and the
+// version as an entry build judges it, but with no probe slot, for the reason
+// [ServerPool.refreshAuthority] gives. Until then the entry is served as a
+// classic token with the scopes its build read, which withholds nothing a
+// grant would.
+//
+// The entry's configuration is not rebuilt: its scope filter and read-only
+// narrowing stay what its build decided, since they name the server the entry
+// shares with every credential of its shape, while a fine-grained token's
+// authority is its client's own. The line written once the kind is learned
+// names the phase and the reason as an entry build in phase A does, and never
+// the token's id.
+func redetectKind(ctx context.Context, entry *Entry) {
+	detected := gitlabclient.RedetectToken(ctx, entry.client.GL())
+	if detected.KindUnknown {
+		return
+	}
+	entry.setTokenFacts(detected)
+	if !detected.FineGrained {
+		return
+	}
+	authority := actiongrants.Build(true, entry.client.ReadFineGrained(ctx, detected))
+	slog.InfoContext(ctx, "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown",
+		authority.LogArgs()...)
+	entry.client.SetAuthority(authority)
 }
 
 // applyScopeReadOnly narrows an entry to read-only when its token cannot
@@ -1858,38 +2032,53 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 			return
 		}
 
-		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		check := entry.client.CheckCredentialDetail(checkCtx)
-		cancel()
+		p.revalidateEntry(ctx, key, entry)
+	}
+}
 
-		// An accepted credential refused the probe's own permission is read
-		// as accepted: the question here is whether GitLab still takes the
-		// token, and the entry already serves what its grant allows.
-		switch check.Verdict {
-		case gitlabclient.CredentialRefused:
-			slog.WarnContext(ctx,
-				"server pool: gitlab rejected a pooled credential, evicting entry",
-				"status", check.Status,
-				"age", time.Since(entry.createdAt).Round(time.Second),
-			)
-			p.metrics.RevalidationsFailed.Add(1)
-			p.evictByKey(key)
-		case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
-			p.metrics.RevalidationsSucceeded.Add(1)
-			p.mu.Lock()
-			if e, ok := p.entries[key]; ok {
-				e.lastValidated = time.Now()
-			}
-			p.mu.Unlock()
-		default:
-			slog.WarnContext(ctx,
-				"server pool: token revalidation could not reach a verdict, keeping entry",
-				"status", check.Status,
-				"error", check.Err,
-				"age", time.Since(entry.createdAt).Round(time.Second),
-			)
-			p.metrics.RevalidationsTransient.Add(1)
+// revalidateEntry is one entry's turn of [ServerPool.revalidateAll]: the
+// credential probe, and for an accepted fine-grained token the re-read of its
+// grant and of the instance version, or for an accepted token whose kind is
+// not known the question of its kind, all under the one context the sweep gives
+// the entry, so a slow instance lengthens the sweep and never holds anything
+// another tenant waits for.
+func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Entry) {
+	checkCtx, cancel := context.WithTimeout(ctx, entryDetectTimeout)
+	defer cancel()
+	check := entry.client.CheckCredentialDetail(checkCtx)
+
+	// An accepted credential refused the probe's own permission is read as
+	// accepted: the question here is whether GitLab still takes the token, and
+	// the entry already serves what its grant allows.
+	switch check.Verdict {
+	case gitlabclient.CredentialRefused:
+		slog.WarnContext(ctx,
+			"server pool: gitlab rejected a pooled credential, evicting entry",
+			"status", check.Status,
+			"age", time.Since(entry.createdAt).Round(time.Second),
+		)
+		p.metrics.RevalidationsFailed.Add(1)
+		p.evictByKey(key)
+	case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
+		p.metrics.RevalidationsSucceeded.Add(1)
+		p.mu.Lock()
+		if e, ok := p.entries[key]; ok {
+			e.lastValidated = time.Now()
 		}
+		p.mu.Unlock()
+		// A busy entry is never rebuilt, since an accepted revalidation keeps
+		// its credential inside the age ceiling, so this re-read is what keeps
+		// a fine-grained token's authority in step with its instance, and what
+		// learns the kind of a token its build could not tell.
+		p.refreshAuthority(checkCtx, entry)
+	default:
+		slog.WarnContext(ctx,
+			"server pool: token revalidation could not reach a verdict, keeping entry",
+			"status", check.Status,
+			"error", check.Err,
+			"age", time.Since(entry.createdAt).Round(time.Second),
+		)
+		p.metrics.RevalidationsTransient.Add(1)
 	}
 }
 

@@ -2632,3 +2632,84 @@ func TestNewGitLabVerifier_RefusedTokenGivesItsSlotBack(t *testing.T) {
 		t.Errorf("%d slots still held after both verifications ended, want 0", got)
 	}
 }
+
+// TestIntrospectToken_SelfReportsTheTokensID_TravelsInTheAdmission verifies
+// the id the self endpoint reports for a personal access token is read with
+// its scopes and carried in the admitted token info under TokenIDKey, which is
+// what lets the pool read a fine-grained token's grant without asking the self
+// endpoint again, and that an admission with no id carries none.
+func TestIntrospectToken_SelfReportsTheTokensID_TravelsInTheAdmission(t *testing.T) {
+	t.Parallel()
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/personal_access_tokens/self" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":7,"scopes":["granular"],"active":true}`))
+	}))
+	t.Cleanup(instance.Close)
+
+	result := introspectToken(t.Context(), instance.Client(), instance.URL, "glpat-fine")
+	if result.tokenID != 7 || !slices.Equal(result.scopes, []string{"granular"}) {
+		t.Fatalf("introspectToken() = %+v, want the granular scope and id 7", result)
+	}
+	info := admitToken(nil, instance.URL, "glpat-fine", time.Minute, gitlabUserResponse{ID: 1, Username: "u"}, result)
+	if id, _ := info.Extra[TokenIDKey].(int64); id != 7 {
+		t.Errorf("admitted Extra[%s] = %v, want int64 7", TokenIDKey, info.Extra[TokenIDKey])
+	}
+	none := admitToken(nil, instance.URL, "gloas-x", time.Minute, gitlabUserResponse{ID: 1, Username: "u"}, introspection{scopes: []string{"api"}})
+	if _, carried := none.Extra[TokenIDKey]; carried {
+		t.Errorf("an admission with no id carries %v", none.Extra[TokenIDKey])
+	}
+}
+
+// TestAdmitToken_AssumedScopes_SaySoInTheAdmission verifies an admission whose
+// scopes are the assumption an unanswered introspection falls back to carries
+// ScopesAssumedKey, so the pool asks the token's kind itself rather than read
+// the assumption as a classic token, and that one whose scopes GitLab answered
+// carries no such key.
+func TestAdmitToken_AssumedScopes_SaySoInTheAdmission(t *testing.T) {
+	t.Parallel()
+	user := gitlabUserResponse{ID: 1, Username: "u"}
+	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := down.URL
+	down.Close()
+
+	assumed := admitToken(nil, url, "glpat-x", time.Minute, user, introspectToken(t.Context(), http.DefaultClient, url, "glpat-x"))
+	if flag, _ := assumed.Extra[ScopesAssumedKey].(bool); !flag {
+		t.Errorf("an admission on assumed scopes carries Extra[%s] = %v, want true", ScopesAssumedKey, assumed.Extra[ScopesAssumedKey])
+	}
+	answered := admitToken(nil, url, "glpat-y", time.Minute, user, introspection{scopes: []string{"api"}, answered: true})
+	if _, carried := answered.Extra[ScopesAssumedKey]; carried {
+		t.Errorf("an admission on answered scopes carries Extra[%s] = %v", ScopesAssumedKey, answered.Extra[ScopesAssumedKey])
+	}
+}
+
+// TestTokenIDFrom_ReadsOnlyAnExactPositiveWholeNumber verifies the id is read
+// from the decoded number only when it is a positive whole number a float64
+// carries exactly, and is 0 for anything else, a string included.
+func TestTokenIDFrom_ReadsOnlyAnExactPositiveWholeNumber(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		raw  any
+		want int64
+	}{
+		{"a whole number", float64(7), 7},
+		{"the smallest one", float64(1), 1},
+		{"the largest exact one", float64(maxExactTokenID), maxExactTokenID},
+		{"past it", float64(maxExactTokenID) * 2, 0},
+		{"zero", float64(0), 0},
+		{"negative", float64(-3), 0},
+		{"a fraction", 1.5, 0},
+		{"a string", "7", 0},
+		{"absent", nil, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tokenIDFrom(tc.raw); got != tc.want {
+				t.Errorf("tokenIDFrom(%v) = %d, want %d", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
