@@ -67,7 +67,7 @@ gitlab-mcp-server/
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 178 packages under internal/tools/... (168 with action_specs.go)
+│   ├── tools/                   # Tool orchestration layer + 180 packages under internal/tools/... (149 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
 │   │   ├── meta_tool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
@@ -75,7 +75,7 @@ gitlab-mcp-server/
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # 178 packages under internal/tools/... in total
+│   │   └── ...                  # 180 packages under internal/tools/... in total
 │   ├── resources/               # 45 MCP resource handlers
 │   └── prompts/                 # 37 MCP prompt handlers
 ├── test/e2e/                    # End-to-end integration tests (gitlab/ + internal/ + infra)
