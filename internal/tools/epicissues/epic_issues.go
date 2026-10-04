@@ -221,11 +221,42 @@ type gqlWorkItemUpdatePayload struct {
 	Errors   []string             `json:"errors"`
 }
 
-// gqlMutationResponse is the response for workItemUpdate mutations.
+// gqlMutationResponse is the response for workItemUpdate mutations. The
+// payload is a pointer and the top-level errors are decoded beside it, so that
+// a mutation GitLab refused is told apart from one that ran
+// ([workItemUpdateError]).
 type gqlMutationResponse struct {
 	Data struct {
-		WorkItemUpdate gqlWorkItemUpdatePayload `json:"workItemUpdate"`
+		WorkItemUpdate *gqlWorkItemUpdatePayload `json:"workItemUpdate"`
 	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// workItemUpdateError is the error a workItemUpdate mutation answered with,
+// nil when it ran: GitLab's reason when it answered with no payload, an
+// error naming the missing payload when it gave no reason either, and the
+// first payload error otherwise.
+//
+// GitLab answers a mutation it refuses with HTTP 200, the field null and the
+// reason as one top-level errors[] entry, which client-go does not turn into
+// an error: a token without the role through authorized_find!, and a
+// fine-grained token whose grant lacks Work Item: Update through
+// authorize_granular_token (app/graphql/mutations/work_items/update.rb at
+// v19.4.1-ee), whose sentence names the permission. The payload used to be
+// read as a value, which decodes null as its zero, so a refused link, unlink
+// or reorder was reported as done.
+func workItemUpdateError(operation string, resp gqlMutationResponse) error {
+	payload := resp.Data.WorkItemUpdate
+	if payload == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError(operation, resp.Errors); graphQLErr != nil {
+			return graphQLErr
+		}
+		return errors.New(operation + ": GitLab answered with no workItemUpdate payload")
+	}
+	if len(payload.Errors) > 0 {
+		return fmt.Errorf("%s: %s", operation, payload.Errors[0])
+	}
+	return nil
 }
 
 // normalizeState maps GraphQL work item states (OPEN, CLOSED) to
@@ -482,8 +513,8 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 			"the child issue may already be linked to another epic, or you lack Reporter role on the group; epics require GitLab Premium or Ultimate")
 	}
 
-	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
-		return AssignOutput{}, fmt.Errorf("epicIssueAssign: %s", resp.Data.WorkItemUpdate.Errors[0])
+	if refused := workItemUpdateError("epicIssueAssign", resp); refused != nil {
+		return AssignOutput{}, refused
 	}
 
 	return AssignOutput{EpicGID: epicGID, ChildGID: childGID}, nil
@@ -531,8 +562,8 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 			"the issue may not be linked to this epic; verify with group.epic_issue_list; removing requires Reporter role")
 	}
 
-	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
-		return AssignOutput{}, fmt.Errorf("epicIssueRemove: %s", resp.Data.WorkItemUpdate.Errors[0])
+	if refused := workItemUpdateError("epicIssueRemove", resp); refused != nil {
+		return AssignOutput{}, refused
 	}
 
 	return AssignOutput{EpicGID: epicGID, ChildGID: childGID}, nil
@@ -587,8 +618,8 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 			"child_id and adjacent_id must both be GIDs of issues already linked to this epic; relative_position must be BEFORE or AFTER; reordering requires Reporter role")
 	}
 
-	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
-		return ListOutput{}, fmt.Errorf("epicIssueUpdate: %s", resp.Data.WorkItemUpdate.Errors[0])
+	if refused := workItemUpdateError("epicIssueUpdate", resp); refused != nil {
+		return ListOutput{}, refused
 	}
 
 	// The mutation answers with the child that moved, not with the epic's

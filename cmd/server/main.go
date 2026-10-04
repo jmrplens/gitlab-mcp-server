@@ -1545,6 +1545,9 @@ func prepareStdioCatalog(
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
+		if sentence, refused := client.VersionRefusal(); refused {
+			warnVersionRefused(ctx, sentence)
+		}
 		userInfo, userErr := client.CurrentUser(ctx)
 		if userErr != nil {
 			slog.WarnContext(ctx, "could not resolve user identity at startup", "error", userErr)

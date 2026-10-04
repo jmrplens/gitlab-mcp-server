@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const sampleEmojiNode = `{
@@ -618,6 +619,102 @@ func TestDelete_ServerError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{ID: "gid://gitlab/CustomEmoji/1"})
 	if err == nil {
 		t.Fatal("expected error for server error, got nil")
+	}
+}
+
+// Refused mutations.
+
+// TestMutations_Refused_IsAnErrorNamingGitLabsReason verifies Create and
+// Delete against a mutation GitLab refused. GitLab answers it with HTTP 200,
+// the mutation's field null and the reason in the top-level errors, which
+// client-go does not turn into an error; Delete used to read the null payload
+// as a deletion that had happened, and Create as an emoji GitLab did not
+// return, dropping GitLab's reason. Three answers are held for each: a
+// fine-grained token not granted the permission, whose sentence the errors
+// layer then describes as the missing permission it is, GitLab's generic
+// refusal, and a null payload with no reason at all, which is an error rather
+// than a success too.
+func TestMutations_Refused_IsAnErrorNamingGitLabsReason(t *testing.T) {
+	handlers := []struct {
+		name       string
+		op         string
+		field      string
+		permission string
+		call       func(ctx context.Context, t *testing.T, handler http.Handler) error
+	}{
+		{
+			name:       "Create",
+			op:         "create_custom_emoji",
+			field:      "createCustomEmoji",
+			permission: "Custom Emoji: Create",
+			call: func(ctx context.Context, t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := Create(ctx, testutil.NewTestClient(t, handler), CreateInput{GroupPath: "my-group", Name: "party_parrot", URL: "https://example.com/party_parrot.gif"})
+				return err
+			},
+		},
+		{
+			name:       "Delete",
+			op:         "delete_custom_emoji",
+			field:      "destroyCustomEmoji",
+			permission: "Custom Emoji: Delete",
+			call: func(ctx context.Context, t *testing.T, handler http.Handler) error {
+				t.Helper()
+				return Delete(ctx, testutil.NewTestClient(t, handler), DeleteInput{ID: "gid://gitlab/CustomEmoji/1"})
+			},
+		},
+	}
+	for _, h := range handlers {
+		fineGrained := "Access denied: This operation requires a fine-grained personal access token with the following group permissions: [" + h.permission + "]."
+		answers := []struct {
+			name string
+			body string
+			want string
+		}{
+			{
+				name: "a fine-grained token without the permission",
+				body: `{"data":{"` + h.field + `":null},"errors":[{"message":"` + fineGrained + `","path":["` + h.field + `"]}]}`,
+				want: h.op + " GraphQL errors: " + fineGrained,
+			},
+			{
+				name: "GitLab's generic refusal",
+				body: `{"data":{"` + h.field + `":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`,
+				want: "you don't have permission to perform this action",
+			},
+			{
+				name: "no payload and no reason",
+				body: `{"data":{"` + h.field + `":null}}`,
+				want: h.op + ": GitLab answered with no " + h.field + " payload",
+			},
+		}
+		for _, answer := range answers {
+			t.Run(h.name+"/"+answer.name, func(t *testing.T) {
+				handler := graphqlMux(map[string]http.HandlerFunc{
+					h.field: func(w http.ResponseWriter, _ *http.Request) {
+						testutil.RespondJSON(w, http.StatusOK, answer.body)
+					},
+				})
+				err := h.call(context.Background(), t, handler)
+				if err == nil {
+					t.Fatalf("%s() = nil, want the refusal reported as an error", h.name)
+				}
+				if !strings.Contains(err.Error(), answer.want) {
+					t.Errorf("%s() error = %q, want it to contain %q", h.name, err, answer.want)
+				}
+			})
+		}
+		t.Run(h.name+"/the errors layer names the missing permission", func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				h.field: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"`+h.field+`":null},"errors":[{"message":"`+fineGrained+`"}]}`)
+				},
+			})
+			err := h.call(context.Background(), t, handler)
+			want := "access denied: this call needs the fine-grained group permission [" + h.permission + "]"
+			if got := toolutil.SanitizeError(err).Error(); !strings.HasPrefix(got, want) {
+				t.Errorf("SanitizeError(%s()) = %q, want it to begin %q", h.name, got, want)
+			}
+		})
 	}
 }
 

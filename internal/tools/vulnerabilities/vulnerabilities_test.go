@@ -862,6 +862,67 @@ func TestDismiss_APIError(t *testing.T) {
 	}
 }
 
+// TestDismiss_RefusedMutation_IsAnErrorNamingGitLabsReason verifies a state
+// mutation GitLab refused. GitLab answers it with HTTP 200, the payload null
+// and the reason in the top-level errors, which client-go does not turn into
+// an error; the handler used to read the null payload as a dismissal that
+// happened, with an empty vulnerability. Two refusals are held: a
+// fine-grained token not granted the permission, whose sentence names it and
+// which the errors layer then describes as the missing permission it is, and
+// GitLab's generic refusal. The last row is a null payload with no reason at
+// all, which is an error rather than a success too.
+func TestDismiss_RefusedMutation_IsAnErrorNamingGitLabsReason(t *testing.T) {
+	const fineGrained = "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Vulnerability: Update]."
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "a fine-grained token without the permission",
+			body: `{"data":{"vulnerabilityDismiss":null},"errors":[{"message":"` + fineGrained + `","path":["vulnerabilityDismiss"]}]}`,
+			want: "dismiss_vulnerability GraphQL errors: " + fineGrained,
+		},
+		{
+			name: "GitLab's generic refusal",
+			body: `{"data":{"vulnerabilityDismiss":null},"errors":[{"message":"The resource that you are attempting to access does not exist or you don't have permission to perform this action"}]}`,
+			want: "you don't have permission to perform this action",
+		},
+		{
+			name: "no payload and no reason",
+			body: `{"data":{"vulnerabilityDismiss":null}}`,
+			want: "dismiss_vulnerability: GitLab answered with no vulnerabilityDismiss payload",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"vulnerabilityDismiss": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+				},
+			})
+			out, err := Dismiss(context.Background(), testutil.NewTestClient(t, handler), DismissInput{ID: "gid://gitlab/Vulnerability/42"})
+			if err == nil {
+				t.Fatalf("Dismiss() = %+v, want the refusal reported as an error", out)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Dismiss() error = %q, want it to contain %q", err, tt.want)
+			}
+		})
+	}
+	t.Run("the errors layer names the missing permission", func(t *testing.T) {
+		handler := graphqlMux(map[string]http.HandlerFunc{
+			"vulnerabilityDismiss": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"data":{"vulnerabilityDismiss":null},"errors":[{"message":"`+fineGrained+`"}]}`)
+			},
+		})
+		_, err := Dismiss(context.Background(), testutil.NewTestClient(t, handler), DismissInput{ID: "gid://gitlab/Vulnerability/42"})
+		if got := toolutil.SanitizeError(err).Error(); !strings.HasPrefix(got, "access denied: this call needs the fine-grained project permission [Vulnerability: Update]") {
+			t.Errorf("SanitizeError(Dismiss()) = %q, want it to lead with the missing permission", got)
+		}
+	})
+}
+
 // Confirm tests.
 
 // TestConfirm_Success verifies that confirming a vulnerability via the

@@ -4445,6 +4445,67 @@ func TestPrepareStdioCatalog_APinnedTier_SurvivesADegradedStart(t *testing.T) {
 	}
 }
 
+// TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole covers
+// a stdio start whose fine-grained token GitLab refuses the instance version
+// (no Metadata: Read) and allows everything else startup asks. The start is
+// not degraded: the client is initialized with no lazy re-initialization
+// armed, the identity is resolved, the tier is detected from the namespace
+// plan GitLab.com reports, the version endpoint is asked once, and the
+// operator is told once, at WARN, which permission the refusal named. Before,
+// the refusal was read as an unreachable instance: identity and tier were
+// never resolved and every SDK request re-asked the version once per cooldown.
+func TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole(t *testing.T) {
+	var versionReads atomic.Int64
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			versionReads.Add(1)
+			testutil.RespondJSON(w, http.StatusForbidden, `{"error":"insufficient_granular_scope","error_description":"Access denied: This operation requires a fine-grained personal access token with the following instance permissions: [Metadata: Read]."}`)
+		case "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case "/api/v4/license":
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case "/api/v4/namespaces":
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"full_path":"paid-group","plan":"ultimate"}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		GitLabToken:    testToken,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		IgnoreScopes:   true,
+		DisableRetries: true,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+	logged := captureLogMessages(t)
+	identity := &deferredIdentity{}
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, identity); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+
+	if !client.IsInitialized() {
+		t.Error("the client is not initialized after GitLab authenticated the token")
+	}
+	assertStartupIdentity(t, identity.resolved.Load(), true)
+	if serverCfg.Tier != edition.Ultimate {
+		t.Errorf("tier = %s, want ultimate detected from the namespace plan", serverCfg.Tier)
+	}
+	if !logged(versionRefusedMessage) {
+		t.Error("the start did not warn that the token may not read the instance version")
+	}
+	if logged("Server will start in degraded mode") {
+		t.Error("the start called a reachable instance degraded")
+	}
+	client.EnsureInitialized(t.Context())
+	if got := versionReads.Load(); got != 1 {
+		t.Errorf("the version endpoint was asked %d times, want once", got)
+	}
+}
+
 // TestPrepareStdioCatalog_TokenScopes_NarrowTheSurfaceOrSayWhyNot covers the
 // scope step of stdio startup. A token GitLab reports as read_api is served the
 // read-only catalog (ADR-0018); a token whose scopes cannot be read is served
