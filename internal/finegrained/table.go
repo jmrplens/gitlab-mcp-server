@@ -118,8 +118,8 @@ type Requirement struct {
 	// for: an input that selects a denied GraphQL way is answered null too.
 	GraphQL bool
 	// Collection is set when the answer spine of any way, a denied one
-	// included, ends in a list or a connection, which is what an empty answer
-	// is worth a hint for.
+	// included, passes through a list or a connection, which is what an
+	// empty answer is worth a hint for.
 	Collection bool
 }
 
