@@ -171,6 +171,14 @@ Unknown parameters, including unsupported security-sensitive fields such as `mas
 
 The response is the existing action response: the same Markdown and structured result returned by the backing meta-tool handler. If the action ID is unknown, execute returns `isError: true` and may suggest nearby canonical IDs. If params fail validation, the backing handler returns the same repairable validation error it would return in meta-tool mode.
 
+An action that exists and is withheld from the session is never answered as unknown, since a model told "unknown action" concludes the server lacks the capability. Execute names the cause instead, one of three:
+
+- **The credential's scope**: a token without the `api` scope is served a read-only catalog, and a write is answered `action "issue.create" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it`, with the way out (reauthorize with `api`).
+- **The operator**: an action `--read-only` removed is answered `... this deployment is configured to withhold it`, with the way out (ask the operator). An action removed by name with `--exclude-tools` is not reported, since the operator asked for it not to exist.
+- **A fine-grained token**: execute resolves the action and, before validating its parameters or asking for confirmation, answers `action "branch.create" exists but this fine-grained personal access token was not granted what it needs: ...` with the permission GitLab declares, or `... exists but is not available to a fine-grained personal access token: ...` with why no fine-grained token reaches it ([Fine-grained Tokens](../guides/fine-grained-tokens.md#reading-a-withheld-answer)).
+
+Find follows the same split. A scope or operator narrowing removes the actions from the catalog find searches. A fine-grained session searches the whole catalog and has the actions it may not run left out of its results before the limit is applied, so the next best match takes its place, while execute still resolves them and answers with the reason. A `related_actions` link to a withheld action is kept, since following it explains the narrowing.
+
 ## Example Calls
 
 ### Find
@@ -226,6 +234,7 @@ Dynamic mode is designed for repairable failures. Models should treat `isError: 
 | Missing find query                      | Error result with example query terms                      | Retry `gitlab_find_action` with domain, resource, verb, and filters                            |
 | Find query over 256 characters          | Error result naming the limit                              | Search for one thing at a time and call again for the next                                     |
 | Unknown action ID                       | Error result, often with `Did you mean ...?` canonical IDs | Find the suggested canonical action ID                                                         |
+| Action withheld from this session       | Error result: `action "..." exists but ...` and the cause  | Do not report the capability as missing; tell the user the way out the result names            |
 | Ambiguous alias                         | Error result listing the valid canonical targets           | Pick one listed `domain.action` ID and find or describe it                                     |
 | Invalid params                          | Backing handler validation error                           | Call `gitlab_find_action` and rebuild `params` from `input_schema`                             |
 | Destructive action without confirmation | Error result explaining that `confirm=true` is required    | Ask the user for explicit approval, then retry with top-level `confirm: true` only if approved |
@@ -416,6 +425,8 @@ production-like low-token configuration.
 | Only two tools appear                   | Dynamic mode is enabled                                    | This is expected. Use `gitlab_find_action` to discover actions and schemas                                     |
 | Find returns many broad list actions    | Query is too generic                                       | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me`         |
 | Execute says the action is unknown      | The model invented an action ID or the action was excluded | Find again and execute the canonical action ID from the result                                                 |
+| Execute says the action exists but ...  | The session's credential or the operator withholds it      | Follow the way out the answer names: another scope, the operator, or a fine-grained token that grants it       |
+| Find never returns an expected action   | A fine-grained session is offered what its grant reaches   | Read `gitlab://tools/{id}` of the action, whose `withheld` block says why                                      |
 | Execute rejects parameters              | Params do not match the found schema                       | Call `gitlab_find_action` for that action and retry with the exact field names and types                       |
 | Destructive action returns an error     | Confirmation is missing or policy blocks mutation          | Add top-level `confirm:true` only when intentional, or check `GITLAB_MCP_READ_ONLY` and `GITLAB_MCP_SAFE_MODE` |
 | Resources and prompts still use context | Capability surface is still full                           | Set `GITLAB_MCP_CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                  |

@@ -337,29 +337,30 @@ Withdrawn. The Enterprise dynamic table published here, last refreshed from a Do
 
 Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**. Use this map for the source-of-truth reference on a specific area:
 
-| Document                                              | Description                                                                                                                                     |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Install paths, first query, per-client configuration                                                                                            |
-| [Installation](docs/guides/installation.md)           | Every install channel (binary, Homebrew, winget, Docker, npm, PyPI, NuGet, `.mcpb`, Agent Plugins, hosted), verification, upgrade and uninstall |
-| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                                                                          |
-| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                                                                                     |
-| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                                                                                |
-| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                                                                                        |
-| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                                                                                  |
-| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow                                                          |
-| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                                                                                |
-| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps                                                                |
-| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return                                                                     |
-| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit                                                                 |
-| [Meta-Tools](docs/concepts/meta-tools.md)             | 34/51/52 domain meta-tools with action dispatching                                                                                              |
-| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples                                                                 |
-| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                                                                             |
-| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                                                                                 |
-| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results                                                          |
-| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                                                                                  |
-| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                                                                                |
-| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                                                                          |
-| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                                                                                |
+| Document                                                  | Description                                                                                                                                     |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)                | Install paths, first query, per-client configuration                                                                                            |
+| [Installation](docs/guides/installation.md)               | Every install channel (binary, Homebrew, winget, Docker, npm, PyPI, NuGet, `.mcpb`, Agent Plugins, hosted), verification, upgrade and uninstall |
+| [IDE Configuration](docs/guides/ide-configuration.md)     | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                                                                          |
+| [Configuration](docs/reference/configuration.md)          | Environment variables, transport modes, TLS                                                                                                     |
+| [Environment Variables](docs/reference/env.md)            | Exhaustive environment variable table with defaults and examples                                                                                |
+| [CLI Reference](docs/reference/cli.md)                    | All command-line flags, exit codes, and runtime examples                                                                                        |
+| [HTTP Server Mode](docs/guides/http-server-mode.md)       | Shared HTTP deployments, authentication, server pool isolation                                                                                  |
+| [OAuth App Setup](docs/guides/oauth-app-setup.md)         | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow                                                          |
+| [Fine-grained Tokens](docs/guides/fine-grained-tokens.md) | What to grant a fine-grained personal access token, what it is served, and how to read a withheld answer                                        |
+| [CI/CD](docs/guides/ci-cd.md)                             | Running the server inside GitLab CI and GitHub Actions pipelines                                                                                |
+| [Output Format](docs/reference/output-format.md)          | The response contract every tool follows: content blocks, pagination, next steps                                                                |
+| [Error Handling](docs/concepts/error-handling.md)         | Error classification, GitLab message extraction, and the hints tools return                                                                     |
+| [Tools Reference](docs/reference/tools/README.md)         | All individual tools with input/output schemas, including GitLab.com-only Orbit                                                                 |
+| [Meta-Tools](docs/concepts/meta-tools.md)                 | 34/51/52 domain meta-tools with action dispatching                                                                                              |
+| [Dynamic Toolset](docs/concepts/dynamic-tools.md)         | 2-tool low-token mode with canonical action catalog, safety model, and examples                                                                 |
+| [Resources](docs/reference/resources.md)                  | All 45 resources with URI templates                                                                                                             |
+| [Prompts](docs/reference/prompts.md)                      | All 37 prompts with arguments and output format                                                                                                 |
+| [Testing](docs/development/testing/README.md)             | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results                                                          |
+| [Security](docs/concepts/security.md)                     | Security model, token scopes, input validation                                                                                                  |
+| [Architecture](docs/concepts/architecture.md)             | System architecture, component design, data flow                                                                                                |
+| [Development Guide](docs/development/development.md)      | Building, testing, CI/CD, contributing                                                                                                          |
+| [Troubleshooting](docs/guides/troubleshooting.md)         | Common startup, token, TLS, transport, and tool-discovery issues                                                                                |
 
 ## FAQ
 

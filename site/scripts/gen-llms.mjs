@@ -171,6 +171,7 @@ const SECTIONS = [
 		labelEs: "Operaciones",
 		slugs: [
 			"operations/security",
+			"operations/fine-grained-tokens",
 			"operations/privacy",
 			"operations/telemetry",
 			"operations/http-server",

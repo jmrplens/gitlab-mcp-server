@@ -56,7 +56,11 @@ action.**
   mutate. The entry is per token, so one client's `read_api` credential never
   narrows another's. [Since 2.8.0 stdio applies the same narrowing once at
   startup, through `gitlabclient.NarrowToTokenScope`, which the pool's
-  `applyScopeReadOnly` delegates to.]
+  `applyScopeReadOnly` delegates to.] [Since issue 952 a fine-grained personal
+  access token is not such a token. Its scope list is the single value
+  `granular`, which names no authority, so it is unknown authority rather than
+  read-only, and what it is served is decided per action by its grant
+  ([ADR-0024](adr-0024-fine-grained-token-authority-per-action.md)).]
 - `oauth.RequiredScope` keeps its name but changes role: it is what the
   `WWW-Authenticate` challenge **recommends** on a 401, not what admission
   requires. The `insufficient_scope` 403 names `MinimumScope` instead: RFC 6750
@@ -158,7 +162,11 @@ without executing.
 - NEG-002: Unknown scopes (`nil`) count as write-capable. A GitLab too old to
   answer the introspection endpoints keeps the full surface rather than
   silently losing every mutating tool. The failure mode moves to GitLab's own
-  403 on the write that is actually attempted.
+  403 on the write that is actually attempted. [The asymmetry is REST's. On
+  GraphQL a wrong "yes" is silent, an answer GitLab leaves null or empty for
+  the credential rather than a 403, which is why ADR-0024 judges a
+  fine-grained token's GraphQL actions by the objects their answers are made
+  of.]
 - NEG-003: `scopes_supported` listing `api` first is a deliberate reading of
   the specification's note that the field "is intended to represent the
   minimal set of scopes necessary for basic functionality". Listing only
@@ -221,3 +229,7 @@ without executing.
   settles the layer below this one: whether a token was issued for this server
   at all, which GitLab's authorization server cannot express and which
   `--oauth-client-uid` verifies by other means.
+- [ADR-0024](adr-0024-fine-grained-token-authority-per-action.md) applies this
+  record's authority per action to a fine-grained personal access token, whose
+  grant rather than its scopes decides it, and keeps this record's asymmetry on
+  REST only.

@@ -16,9 +16,9 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ```text
 gitlab-mcp-server/
-├── cmd/                    # server + 42 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
+├── cmd/                    # server + 45 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
 │   ├── server/             # MCP server entry point (+ --shutdown, --probe flags)
-│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk; -validate-docs)
+│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk|paths|grants; -validate-docs); grants is R-GRANT, the fine-grained table held to the live GitLab record
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
 │   ├── audit_doc_coverage/ # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
@@ -38,6 +38,7 @@ gitlab-mcp-server/
 │   ├── audit_tenancy/      # Holds the tenant policy register (internal/tenancy) to the code: sites, values, refusals, charges, reasons, and nothing shaped like a limit, in a shape its tripwire reads, outside a row or an exemption (docs/development/cmd-utilities.md lists what it cannot see); -compare-binaries proves a move changed no code (make check-tenancy)
 │   ├── audit_graphql_documents/ # Every raw GraphQL document under ./internal/... is one the pinned GitLab schema accepts (make check-graphql-documents); the documents client-go builds are judged by the test transport alone
 │   ├── gen_graphql_schema/ # Pins the GitLab GraphQL schema from a live introspection (make gen-graphql-schema; --check gates it)
+│   ├── gen_action_grants/  # Derives each action's requests from its handlers and joins them to what GitLab declares a fine-grained token needs: action-requests.json, the compiled table and docs/reference/fine-grained-permissions.md (make gen-action-grants; check-action-grants and check-action-grants-derivation gate it)
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
 │   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run; -check-files gates test-file naming)
 │   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
@@ -54,10 +55,11 @@ gitlab-mcp-server/
 │   ├── gen_third_party_notices/ # THIRD_PARTY_NOTICES from the release binaries' build information and the module cache (GoReleaser's sboms, the Dockerfile, make mcpb)
 │   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger
 │   ├── gen_model_results/  # Folds a model evaluation run's shards into the published record
-│   └── internal/           # Helpers shared by the commands (apidocs, auditshared, docgen, mcpsurface)
+│   └── internal/           # Helpers shared by the commands (actionrequests, apidocs, auditshared, docgen, mcpsurface, sdkroutes)
 ├── internal/
 │   ├── config/             # Configuration loading (dotenv files, flags, env vars, HTTP env overlay)
 │   ├── edition/            # Licensing tier model (Free/Premium/Ultimate)
+│   ├── finegrained/        # What a fine-grained token needs per action: the table types, the phase A and B authority, the withheld words (issue 952, ADR-0024)
 │   ├── gitlab/             # GitLab API client wrapper
 │   ├── oauth/              # OAuth HTTP mode: token cache, GitLab verifier, RFC 9728 metadata
 │   ├── serverpool/         # HTTP mode: per-token+URL server pool & LRU cache
@@ -70,6 +72,7 @@ gitlab-mcp-server/
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema
 │   ├── tools/              # Tool orchestration layer + 179 internal/tools packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
+│   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
@@ -87,7 +90,7 @@ gitlab-mcp-server/
 │   ├── progress/           # MCP progress notifications
 │   └── elicitation/        # MCP elicitation capability
 ├── docs/                   # Documentation (Diátaxis: guides/, reference/, concepts/, development/)
-│   ├── guides/             # installation, ide-configuration.md, oauth-app-setup.md, http-server-mode, remote-deployment, telemetry
+│   ├── guides/             # installation, ide-configuration.md, oauth-app-setup.md, fine-grained-tokens.md, http-server-mode, remote-deployment, telemetry
 │   ├── reference/          # cli, configuration, env, output format, tools/ (per domain), resources, prompts, capabilities/
 │   ├── concepts/           # architecture, dynamic tools, meta-tools, error handling, GraphQL, security
 │   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities
@@ -126,6 +129,7 @@ gitlab-mcp-server/
 
 - Stdio mode uses `GITLAB_URL`; HTTP mode requires `--gitlab-url` (one instance fixes it, several publish an allow-list the `GITLAB-URL` header selects from) unless `--allow-any-gitlab-url` is passed, which lets the header name any host and is meant for single-user local deployments only
 - Authentication via `GITLAB_TOKEN` (Personal Access Token); the token is read from the environment or a dotenv file (`~/.gitlab-mcp-server.env`, or the file `GITLAB_MCP_ENV_FILE` names), never from a working-directory `.env` and never from a flag
+- A fine-grained personal access token (scopes `["granular"]`) is unknown authority, never read-only: its grant, read with the token itself and judged per action against what GitLab declares (`internal/finegrained`, `internal/tools/actiongrants`), decides what each session is listed and may call, per request and never through a shared catalog, shape or manifest key (ADR-0024, `docs/guides/fine-grained-tokens.md`). Refusals name the action by its canonical ID rather than a tool name; `make check-action-grants-derivation`, `make check-action-grants` and `make audit-1to1-grants` (steps 26 to 28 of `make analyze`) hold the derivation and the table
 - Self-signed TLS certificates: skip verification when `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation
 - Rate limiting awareness and retry logic
