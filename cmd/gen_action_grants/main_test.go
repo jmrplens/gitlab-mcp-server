@@ -188,7 +188,7 @@ func fixtureSources(t *testing.T, names ...string) sources {
 		load: func(string, map[string][]byte) (*actionrequests.Program, error) {
 			return prog, nil
 		},
-		sdk:    func(*actionrequests.Program) (derive.SDK, error) { return mainSDK{}, nil },
+		sdk:    func(*actionrequests.Program) (derive.Requester, error) { return mainSDK{}, nil },
 		record: func(string) (*apilive.Document, error) { return mainRecord(), nil },
 		schema: func() (*gqlast.Schema, error) { return graphqlschema.Load([]byte(mainSDL)) },
 	}
@@ -346,7 +346,7 @@ func TestDeriveAndJoin_NamesTheStageThatFailed(t *testing.T) {
 			in.load = func(string, map[string][]byte) (*actionrequests.Program, error) { return nil, failure }
 		}, want: "load the program: refused"},
 		{name: "client-go", spoil: func(in *sources) {
-			in.sdk = func(*actionrequests.Program) (derive.SDK, error) { return nil, failure }
+			in.sdk = func(*actionrequests.Program) (derive.Requester, error) { return nil, failure }
 		}, want: "refused"},
 		{name: "record", spoil: func(in *sources) {
 			in.record = func(string) (*apilive.Document, error) { return nil, failure }

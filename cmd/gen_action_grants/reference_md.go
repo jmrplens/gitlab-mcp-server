@@ -127,22 +127,26 @@ func servedEmptyText(description *finegrained.Description) string {
 	return strings.Join(parts, ", ")
 }
 
+// noPermission opens every denial whose cause is that GitLab declares no
+// fine-grained permission for what the action reaches.
+const noPermission = "GitLab declares no fine-grained permission for "
+
 // denialText says why no fine-grained token reaches an action.
 func denialText(denial *finegrained.Denial) string {
 	element := "`" + denial.Element + "`"
 	switch denial.Cause {
 	case finegrained.CauseMutationUndeclared:
-		return "GitLab declares no fine-grained permission for the mutation " + element + ", and refuses it"
+		return noPermission + "the mutation " + element + ", and refuses it"
 	case finegrained.CauseTypeUndeclared:
-		return "GitLab declares no fine-grained permission for " + element + ", which the answer is made of"
+		return noPermission + element + ", which the answer is made of"
 	case finegrained.CausePayloadUndeclared:
-		return "GitLab declares no fine-grained permission for " + element + " in the answer, so the write commits and its answer is lost"
+		return noPermission + element + " in the answer, so the write commits and its answer is lost"
 	case finegrained.CauseBoundaryUnresolvable:
 		return element + " is declared at a boundary the object the action reaches never resolves to, " + unresolvedEffect(denial.Effect)
 	case finegrained.CauseRESTTodo:
 		return "GitLab marks " + element + " as not yet supported for fine-grained tokens"
 	default:
-		return "GitLab declares no fine-grained permission for " + element
+		return noPermission + element
 	}
 }
 

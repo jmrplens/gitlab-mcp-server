@@ -10,7 +10,7 @@ import (
 )
 
 // fixtureDeriver builds the deriver Derive builds, over the fixture program.
-func fixtureDeriver(t *testing.T, sdk SDK) *deriver {
+func fixtureDeriver(t *testing.T, sdk Requester) *deriver {
 	t.Helper()
 	prog := loadGrants(t)
 	return &deriver{
