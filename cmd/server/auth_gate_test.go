@@ -23,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -2468,6 +2469,273 @@ func TestMCPServerGate_ABlockedRequest_IsCountedUnderTheBudgetThatRefusedIt(t *t
 			}
 			if got := gate.blocks.counts(); got != tc.want {
 				t.Errorf("counts = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// gatePermissionGitLab is a stub instance that answers the credential probe,
+// GET /api/v4/user, with GitLab's refusal of a fine-grained permission
+// carrying sentence, counting the probes it is asked.
+func gatePermissionGitLab(t *testing.T, sentence string, probes *atomic.Int64) string {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"error": "insufficient_granular_scope", "error_description": sentence})
+	if err != nil {
+		t.Fatalf("marshal the refusal: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		probes.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write(body)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// TestMCPServerGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged
+// covers the legacy door for a fine-grained token GitLab accepted and refused
+// the permission to read its own user. It is answered 403 with no challenge
+// and GitLab's sentence in the body, never charged however often it comes back
+// (a request carrying no credential afterwards still gets the plain 401 rather
+// than the 429 an exhausted budget would give), and remembered, so the
+// instance is probed once for every one of those requests. Without a
+// rejected-token structure it is answered the same and probed each time.
+func TestMCPServerGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged(t *testing.T) {
+	const requests = authFailureLimit * 2
+	tests := []struct {
+		name       string
+		remember   bool
+		wantProbes int64
+	}{
+		{name: "remembered", remember: true, wantProbes: 1},
+		{name: "not remembered", wantProbes: requests},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var probes atomic.Int64
+			gate := newGateAgainst(t, okFactory, gatePermissionGitLab(t, userReadSentence, &probes))
+			if tt.remember {
+				gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			}
+			handler := gate.middleware(http.NotFoundHandler())
+
+			for i := range requests {
+				assertLegacyPermissionRefusal(t, i, handler)
+			}
+			if got := probes.Load(); got != tt.wantProbes {
+				t.Errorf("GET /api/v4/user was asked %d times for %d requests, want %d", got, requests, tt.wantProbes)
+			}
+			if gate.pool.Size() != 0 {
+				t.Errorf("pool size = %d, want 0: a credential the probe was not answered for is not served", gate.pool.Size())
+			}
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")))
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("status = %d, want %d: the permission refusals must not have spent the failure budget", rec.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+// assertLegacyPermissionRefusal sends request i, carrying the fine-grained
+// token, through handler and holds its answer to the legacy door's permission
+// refusal: 403, no challenge, and the fixed words followed by GitLab's
+// sentence.
+func assertLegacyPermissionRefusal(t *testing.T, i int, handler http.Handler) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", "glpat-fine-grained")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("request %d: status = %d, want %d", i, rec.Code, http.StatusForbidden)
+	}
+	if challenge := rec.Header().Get("WWW-Authenticate"); challenge != "" {
+		t.Errorf("request %d: WWW-Authenticate = %q, want none on the legacy door's 403", i, challenge)
+	}
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if want := doorPermissionPrefix + doorPermissionAdvice + " GitLab said: " + userReadSentence; decoded.Error.Code != errCodeForbidden || decoded.Error.Message != want {
+		t.Errorf("request %d: error = %d %q\nwant %d %q", i, decoded.Error.Code, decoded.Error.Message, errCodeForbidden, want)
+	}
+}
+
+// TestMCPServerGate_PermissionMissing_QuotesAHostileSentenceOnlyFilteredAndCut
+// is the legacy door's half of the bearer guard's test of the same name. The
+// instance's sentence, which under --allow-any-gitlab-url is the caller's own,
+// carries quotes, a backslash, control characters and another script: the
+// first answer, the one GitLab was asked for, quotes it only as printable
+// ASCII within 512 bytes with its printable text kept, and so does the answer
+// served from memory. A gate without a rejected-token structure answers the
+// same, asking GitLab each time.
+func TestMCPServerGate_PermissionMissing_QuotesAHostileSentenceOnlyFilteredAndCut(t *testing.T) {
+	// As long as the probe allows: GitLab's whole error document around it
+	// has to fit the 4 KiB the credential probe reads, or the probe reads a
+	// truncated document and proves only a refusal.
+	hostile := `Access denied: "quoted" \ back` + "\r\n\x00é" + strings.Repeat("x", 3900)
+	for name, remember := range map[string]bool{"remembered": true, "not remembered": false} {
+		t.Run(name, func(t *testing.T) {
+			var probes atomic.Int64
+			gate := newGateAgainst(t, okFactory, gatePermissionGitLab(t, hostile, &probes))
+			if remember {
+				gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			}
+			handler := gate.middleware(http.NotFoundHandler())
+
+			for i := range 2 {
+				assertLegacyHostileQuotation(t, i, handler)
+				wantProbes := int64(i + 1)
+				if remember {
+					wantProbes = 1
+				}
+				if got := probes.Load(); got != wantProbes {
+					t.Errorf("request %d: GET /api/v4/user was asked %d times, want %d", i, got, wantProbes)
+				}
+			}
+		})
+	}
+}
+
+// assertLegacyHostileQuotation sends request i, carrying the token a hostile
+// instance refused, through handler and holds the legacy door's answer to
+// quoting that instance's sentence only filtered and cut: 403, the fixed words,
+// and then printable ASCII within 512 bytes that keeps the sentence's
+// printable start.
+func assertLegacyHostileQuotation(t *testing.T, i int, handler http.Handler) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", "glpat-hostile")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("request %d: status = %d, want %d: %s", i, rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+	message := decodeJSONRPCError(t, rec.Body.String()).Error.Message
+	quoted, found := strings.CutPrefix(message, doorPermissionPrefix+doorPermissionAdvice+" GitLab said: ")
+	if !found {
+		t.Fatalf("request %d: message = %q, want the prefix, the advice and GitLab's sentence", i, message)
+	}
+	if len(quoted) > 512 || strings.ContainsFunc(quoted, func(r rune) bool { return r < ' ' || r > '~' }) {
+		t.Errorf("request %d: quoted sentence is %d bytes and carries %q, want printable ASCII within 512 bytes", i, len(quoted), quoted)
+	}
+	if !strings.HasPrefix(quoted, `Access denied: "quoted" \ back x`) {
+		t.Errorf("request %d: quoted sentence = %q, want its printable text kept", i, quoted)
+	}
+}
+
+// TestMCPServerGate_KnownRefusalOfAnotherKind_IsNotTheDoorPermissionRefusal
+// covers the gate reading a rejected-token structure that knows the presented
+// credential under another kind. That is the structure's ordinary state in
+// oauth mode, where the bearer guard shares it and records invalid tokens and
+// tokens of an application the deployment does not admit there too. The gate
+// answers only the missing permission from memory, so for either of the others
+// it asks the pool, which probes GitLab and admits the credential; the
+// permission row, recorded under the same key, is what shows the lookup finds
+// the credential at all.
+func TestMCPServerGate_KnownRefusalOfAnotherKind_IsNotTheDoorPermissionRefusal(t *testing.T) {
+	tests := []struct {
+		name       string
+		record     func(rejected *oauth.RejectedTokens, instance string)
+		wantStatus int
+		wantAsked  bool
+	}{
+		{
+			name:      "an invalid token",
+			record:    func(rejected *oauth.RejectedTokens, instance string) { rejected.Record(instance, gateTestToken) },
+			wantAsked: true,
+		},
+		{
+			name: "a token of an application the deployment does not admit",
+			record: func(rejected *oauth.RejectedTokens, instance string) {
+				rejected.RecordKind(instance, gateTestToken, oauth.RejectionUnaccepted)
+			},
+			wantAsked: true,
+		},
+		{
+			name: "the missing permission",
+			record: func(rejected *oauth.RejectedTokens, instance string) {
+				rejected.RecordPermissionMissing(instance, gateTestToken, userReadSentence)
+			},
+			wantStatus: http.StatusForbidden,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var probes atomic.Int64
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+				probes.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":42,"username":"testuser"}`))
+			})
+			instance := httptest.NewServer(mux)
+			t.Cleanup(instance.Close)
+			gate := newGateAgainst(t, okFactory, instance.URL)
+			gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			tt.record(gate.rejected, instance.URL)
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+			_, failure := gate.resolve(req)
+			gotStatus := 0
+			if failure != nil {
+				gotStatus = failure.status
+			}
+			if gotStatus != tt.wantStatus {
+				t.Errorf("resolve failure = %+v, want status %d (0 is admission)", failure, tt.wantStatus)
+			}
+			if n := probes.Load(); (n > 0) != tt.wantAsked {
+				t.Errorf("GET /api/v4/user was asked %d times, want asked = %v", n, tt.wantAsked)
+			}
+		})
+	}
+}
+
+// TestDoorPermissionDetail_QuotesGitLabOnlyWhenItSaidSomething holds the tail
+// of the doors' permission refusal: the advice alone when GitLab gave no
+// sentence, and the advice followed by the sentence when it did.
+func TestDoorPermissionDetail_QuotesGitLabOnlyWhenItSaidSomething(t *testing.T) {
+	if got := doorPermissionDetail(""); got != doorPermissionAdvice {
+		t.Errorf("doorPermissionDetail(\"\") = %q, want the advice alone", got)
+	}
+	if got, want := doorPermissionDetail("Access denied."), doorPermissionAdvice+" GitLab said: Access denied."; got != want {
+		t.Errorf("doorPermissionDetail = %q, want %q", got, want)
+	}
+}
+
+// TestSentencePermissions_CountsTheListAndNamesAtMostThree holds what a door's
+// log line reads of GitLab's sentence: every name of the bracketed list
+// counted, at most three named, each cut at 64 bytes, and nothing read from a
+// sentence with no list, an unclosed one or an empty one.
+func TestSentencePermissions_CountsTheListAndNamesAtMostThree(t *testing.T) {
+	long := strings.Repeat("n", maxLoggedPermissionBytes+10)
+	tests := []struct {
+		name      string
+		sentence  string
+		wantCount int
+		wantNames []string
+	}{
+		{name: "one permission", sentence: userReadSentence, wantCount: 1, wantNames: []string{"User: Read"}},
+		{
+			name:      "more than three",
+			sentence:  "Access denied: [Project: Read, Issue: Read, Issue: Create, Merge Request: Read]",
+			wantCount: 4, wantNames: []string{"Project: Read", "Issue: Read", "Issue: Create"},
+		},
+		{name: "a long name is cut", sentence: "[" + long + "]", wantCount: 1, wantNames: []string{long[:maxLoggedPermissionBytes]}},
+		{name: "the last list is read", sentence: "a [b] then [User: Read]", wantCount: 1, wantNames: []string{"User: Read"}},
+		{name: "empty entries are skipped", sentence: "[, User: Read ,]", wantCount: 1, wantNames: []string{"User: Read"}},
+		{name: "no list", sentence: "Access denied: Fine-grained personal access tokens are not yet supported."},
+		{name: "an unclosed list", sentence: "Access denied: [User: Read"},
+		{name: "an empty list", sentence: "Access denied: []"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, names := sentencePermissions(tt.sentence)
+			if count != tt.wantCount || !slices.Equal(names, tt.wantNames) {
+				t.Errorf("sentencePermissions(%q) = %d, %q; want %d, %q", tt.sentence, count, names, tt.wantCount, tt.wantNames)
 			}
 		})
 	}

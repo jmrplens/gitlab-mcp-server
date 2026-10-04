@@ -22,6 +22,11 @@ func admitDecisions() []Decision {
 	classify := refuse(pkgServer, "bearerGuard.classify")
 	invalidToken := refuse(pkgServer, "bearerGuard.invalidTokenFailure")
 	unaccepted := refuse(pkgServer, "bearerGuard.unacceptedRecipientFailure")
+	// The two doors' answer to a credential GitLab accepted and refused the
+	// permission to read its own user, the legacy gate's with no challenge
+	// and the bearer guard's with an insufficient_scope one.
+	gatePermission := refuse(pkgServer, "doorPermissionFailure")
+	guardPermission := refuse(pkgServer, "bearerGuard.permissionMissingFailure")
 	rejectedCharges := []string{"AUB-001", "AUB-002", "AUB-003"}
 	blocked := func(at Site) Refusal {
 		return Refusal{
@@ -30,31 +35,69 @@ func admitDecisions() []Decision {
 		}
 	}
 	blockedRefusals := []Refusal{blocked(resolve), blocked(check)}
+	permissionMissing := func(at Site, challenge bool) Refusal {
+		return Refusal{
+			Methods: []string{MethodGate}, Channel: Gate, Code: CodeForbidden, Status: 403,
+			Challenge: challenge, Prefix: permissionPrefix, Answer: WidenScope, At: at,
+		}
+	}
 
 	return []Decision{
 		{
+			// A credential GitLab accepted and refused the probe its
+			// fine-grained permission, User: Read, is answered 403 and not
+			// charged (INV-007): GitLab authenticated the token before it
+			// judged the grant, so it is genuine, and why F-17 left this row
+			// (issue 952). The challenge-free body quotes GitLab's sentence,
+			// filtered to printable ASCII and cut at 512 bytes. The verdict is
+			// remembered for the token's instance in ADM-006's structure,
+			// since nothing else bounds it: such a request builds no entry and
+			// is charged nothing, so the same token is answered from memory
+			// for the cache's lifetime rather than holding a probe slot per
+			// request. What stays bounded in concurrency alone, by POL-006's
+			// slots and never in rate, is a flood of distinct minted tokens,
+			// each a genuine credential of a real account.
 			ID: "ADM-001", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "admission of a legacy credential GitLab did not refuse",
 			Key:      KeyEntry, StdioKey: KeyNone,
-			Findings: []string{"F-08", "F-17"},
+			Decided:  []string{"issue 952"},
+			Findings: []string{"F-08"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
 					Challenge: true, Prefix: rejectedPrefix, Answer: Reauthorize, Charged: rejectedCharges, At: resolve,
 				},
 				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, resolve),
+				permissionMissing(gatePermission, false),
 			},
-			Sites: []Site{enforce(pkgPool, "verifyCredential"), resolve},
+			Sites: []Site{
+				enforce(pkgPool, "verifyCredential"),
+				enforce(pkgGitLab, "credentialVerdictFor"),
+				enforce(pkgGitLab, "PermissionRefusal"),
+				resolve, gatePermission,
+			},
 		},
 		{
+			// The same verdict at the OAuth door, from the verifier's own
+			// GET /user, answered 403 with an insufficient_scope challenge
+			// whose error_description is this server's constant; GitLab's
+			// sentence travels in the body only, filtered and cut as the
+			// legacy gate's is, and is never charged. It is cached as ADM-006's
+			// RejectionPermissionMissing for the reason ADM-001 gives, which
+			// matters more here: the verifier collapses nothing, so one
+			// genuine token sent by enough concurrent requests would otherwise
+			// hold every ADM-014 slot. A flood of distinct minted tokens is
+			// bounded in concurrency alone, by those slots. A fine-grained
+			// token meets the read_api minimum (SatisfiesMinimum): its one
+			// scope names no authority, which is why F-17 left this row too.
 			ID: "ADM-002", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Valued,
 			Resource: "admission of an OAuth token at the read_api minimum",
 			Key:      KeyVerified, StdioKey: KeyNone,
 			Values: []string{"UpstreamRetryAfter"}, Source: Constant, Zero: ZeroNotApplicable,
-			Decided: []string{"ADR-0018"},
+			Decided: []string{"ADR-0018", "issue 952"},
 			// The verification's round trips to GitLab run under ADM-014's
 			// slots, which answered F-30 (issue 950).
-			Findings: []string{"F-08", "F-17"},
+			Findings: []string{"F-08"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
@@ -79,23 +122,36 @@ func admitDecisions() []Decision {
 					RetryAfter: RetryAfterFixed, Prefix: "GitLab could not verify this token right now.",
 					Answer: RetryLater, At: classify,
 				},
+				permissionMissing(guardPermission, true),
 			},
 			Sites: []Site{
 				alias(pkgServer, "upstreamRetryAfter", "UpstreamRetryAfter"),
 				enforce(pkgOAuth, "NewGitLabVerifierFor"),
 				enforce(pkgOAuth, "newGitLabVerifier"),
 				enforce(pkgOAuth, "askIdentity"),
-				classify, invalidToken, check,
+				enforce(pkgOAuth, "SatisfiesMinimum"),
+				enforce(pkgGitLab, "PermissionRefusal"),
+				classify, invalidToken, check, guardPermission,
 			},
 		},
 		{
+			// A 403 carrying insufficient_granular_scope on the token's own
+			// description is itself an answer: that route's boundary is the
+			// user and names no root namespace, so only a fine-grained token
+			// is refused a grant there, and introspection reads it as such a
+			// token's one scope without asking /oauth/token/info.
 			ID: "ADM-003", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the scopes assumed when introspection cannot answer",
 			Key:      KeyVerified, StdioKey: KeyNone,
 			Findings: []string{"F-09"},
-			Sites:    []Site{enforce(pkgOAuth, "introspectToken")},
+			Sites:    []Site{enforce(pkgOAuth, "introspectToken"), enforce(pkgOAuth, "fetchIntrospection")},
 		},
 		{
+			// A token GitLab refused the permission to read its own user is
+			// a personal access token, the only kind GitLab judges a
+			// fine-grained grant of, so a pinned deployment answers it with
+			// this row's refusal (pinnedRefusalOf) rather than ADM-002's,
+			// whose advice names two credentials the pin refuses.
 			ID: "ADM-004", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the OAuth applications whose tokens are admitted",
 			Key:      KeyApplication, StdioKey: KeyNone,
@@ -114,7 +170,7 @@ func admitDecisions() []Decision {
 					Answer:     RetryLater, At: classify,
 				},
 			},
-			Sites: []Site{enforce(pkgOAuth, "acceptedRecipient"), unaccepted, classify},
+			Sites: []Site{enforce(pkgOAuth, "acceptedRecipient"), enforce(pkgOAuth, "pinnedRefusalOf"), unaccepted, classify},
 		},
 		{
 			ID: "ADM-005", Question: Admit, Kind: Lifetime, Class: ClassC, Disposition: Valued,
@@ -153,6 +209,16 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// It also remembers a token GitLab accepted and refused the
+			// permission to read its own user (RejectionPermissionMissing),
+			// recorded only when GET /user answered 403 with
+			// insufficient_granular_scope: by the bearer guard in OAuth mode,
+			// and by the legacy gate in a structure of this same shape, sized
+			// by the same two values. A refusal served from here is the one the
+			// round trip gave, uncharged as the fresh one is (issue 952),
+			// because nothing at GitLab 19.4 edits a grant after its token is
+			// created; the TTL bounds how long a feature flag an administrator
+			// turns on for the user stays unseen.
 			ID: "ADM-006", Question: Admit, Kind: Lifetime, Class: ClassA, Disposition: Valued,
 			Resource: "how long, and how many, rejected tokens are remembered",
 			Key:      KeyRefused, StdioKey: KeyNone, Table: true,
@@ -165,12 +231,17 @@ func admitDecisions() []Decision {
 					Challenge: true, Prefix: rejectedPrefix, Answer: Reauthorize, Charged: rejectedCharges,
 					At: check, Via: invalidToken,
 				},
+				permissionMissing(gatePermission, false),
+				permissionMissing(guardPermission, true),
 			},
 			Sites: []Site{
 				alias(pkgServer, "rejectedTokenTTL", "RejectedTokenTTL"),
 				alias(pkgServer, "rejectedTokenMaxSize", "RejectedTokenCapacity"),
 				enforce(pkgServer, "registerOAuthMCPHandlers"),
-				check, invalidToken,
+				enforce(pkgServer, "registerLegacyMCPHandlers"),
+				enforce(pkgOAuth, "RejectedTokens.RecordPermissionMissing"),
+				enforce(pkgOAuth, "RejectedTokens.LookupRefusal"),
+				check, invalidToken, resolve, classify, gatePermission, guardPermission,
 			},
 		},
 		{

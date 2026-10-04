@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -101,8 +103,15 @@ func RequiredScope(readOnly, safeMode bool) string {
 // hinge on a normalization step somewhere else: the day a token's scopes
 // arrive by another route, every api-only token gets a 403 for lacking a
 // scope it strictly supersedes.
+//
+// A fine-grained personal access token meets any minimum
+// ([gitlabclient.FineGrained]). Its one legacy scope, granular, names no
+// authority: what it may do is a grant GitLab judges per call, so it is
+// unknown authority (ADR-0018, ADR-0024), admitted as a classic token whose
+// scopes are unknown is, and refused by GitLab itself on the call its grant
+// does not cover.
 func SatisfiesMinimum(granted []string, minimum string) bool {
-	if minimum == "" {
+	if minimum == "" || gitlabclient.FineGrained(granted) {
 		return true
 	}
 	if slices.Contains(granted, minimum) {
@@ -229,10 +238,50 @@ var ErrUnacceptedRecipient = errors.New("token was not issued to an OAuth applic
 // for the whole TTL over a transient outage.
 var ErrRecipientUnverifiable = errors.New("token recipient could not be verified")
 
+// ErrPermissionMissing reports a token GitLab accepts as genuine whose
+// fine-grained grant cannot read its own user: GET /api/v4/user answered 403
+// with insufficient_granular_scope. [PermissionMissingError] carries GitLab's
+// sentence for it.
+//
+// It is apart from [ErrInsufficientScope] because the way out differs. A
+// classic token lacking a scope is fixed by reauthorizing with the named scope;
+// a fine-grained token's grant cannot be changed after it is created, so the
+// holder needs a new token that grants User: Read, or a classic one, and being
+// told to reauthorize with api would send them to an authorization flow that
+// cannot help. It is apart from [auth.ErrInvalidToken] for the reason
+// ErrInsufficientScope is: the credential is valid, so it is not charged to the
+// caller's authentication-failure budget.
+var ErrPermissionMissing = errors.New("token lacks the fine-grained permission to read its own user")
+
+// PermissionMissingError is [ErrPermissionMissing] with the sentence GitLab
+// gave, as the instance sent it.
+type PermissionMissingError struct {
+	// Description is GitLab's error_description, unfiltered: the instance's
+	// own text, which a door bounds and filters with [QuotedDescription]
+	// before quoting it.
+	Description string
+}
+
+// Error names the verdict and never the sentence, so a log line built from
+// the error carries no text the instance chose.
+func (e *PermissionMissingError) Error() string { return ErrPermissionMissing.Error() }
+
+// Unwrap lets errors.Is find [ErrPermissionMissing].
+func (e *PermissionMissingError) Unwrap() error { return ErrPermissionMissing }
+
 // insufficientScopeLimit bounds how much of a rejection body is read. The body
 // is attacker-adjacent — it comes from whatever host the request selected — and
-// nothing legitimate needs more than this to name an error code.
+// nothing legitimate needs more than this to name an error code and GitLab's
+// sentence for it.
 const insufficientScopeLimit = 4 << 10
+
+// readRefusal reads the body of a refusal as far as [insufficientScopeLimit].
+// A body longer than that is not one GitLab writes for a refusal, and is read
+// as far as the limit and no further, which leaves it undecodable.
+func readRefusal(resp *http.Response) []byte {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, insufficientScopeLimit))
+	return body
+}
 
 // isInsufficientScope reports whether GitLab's 403 says the token is genuine but
 // under-scoped, rather than that the caller may not do this at all.
@@ -246,15 +295,18 @@ const insufficientScopeLimit = 4 << 10
 // is rack-oauth2's JSON error document. A 403 raised by Grape's own forbidden!
 // (an account blocked, an IP restriction) carries a "message" key instead and no
 // "error", so it keeps being treated as an invalid credential.
-func isInsufficientScope(resp *http.Response) bool {
+//
+// GitLab's other spelling, insufficient_granular_scope for a fine-grained
+// grant, is not read here: [gitlabclient.PermissionRefusal] reads it first,
+// and it is answered as [ErrPermissionMissing].
+func isInsufficientScope(body []byte) bool {
 	var payload struct {
 		Error string `json:"error"`
 	}
-	if decodeInstanceJSON(io.LimitReader(resp.Body, insufficientScopeLimit), &payload) != nil {
+	if decodeInstanceJSON(bytes.NewReader(body), &payload) != nil {
 		return false
 	}
-	// GitLab emits both spellings, the second for granular PAT scopes.
-	return payload.Error == "insufficient_scope" || payload.Error == "insufficient_granular_scope"
+	return payload.Error == "insufficient_scope"
 }
 
 // gitlabUserResponse holds the minimal fields from GitLab's /api/v4/user endpoint.
@@ -581,7 +633,7 @@ func newGitLabVerifier(resolve InstanceResolver, client *http.Client, cacheTTL t
 
 		user, err := askIdentity(ctx, client, gitlabURL, token)
 		if err != nil {
-			return nil, err
+			return nil, pinnedRefusalOf(clientUIDs, err)
 		}
 
 		// The token's REAL scopes, introspected rather than assumed: a
@@ -637,7 +689,14 @@ func askIdentity(ctx context.Context, client *http.Client, gitlabURL, token stri
 	case http.StatusUnauthorized:
 		return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
 	case http.StatusForbidden:
-		if isInsufficientScope(resp) {
+		body := readRefusal(resp)
+		// On this route, whose boundary is the user and names no root
+		// namespace, only a fine-grained token is refused a grant: GitLab
+		// authenticated it first, so it is genuine.
+		if description, missing := gitlabclient.PermissionRefusal(body); missing {
+			return user, &PermissionMissingError{Description: description}
+		}
+		if isInsufficientScope(body) {
 			return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, ErrInsufficientScope)
 		}
 		return user, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
@@ -760,7 +819,8 @@ type introspection struct {
 // expiry", which is exactly the bug this exists to prevent.
 func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token string) introspection {
 	var refused atomic.Bool
-	if payload := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token, &refused); payload != nil {
+	payload, fineGrained := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token, &refused)
+	if payload != nil {
 		if scopes := stringSlice(payload["scopes"]); scopes != nil {
 			return introspection{
 				scopes:   expandImpliedScopes(scopes),
@@ -769,12 +829,23 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 			}
 		}
 	}
-	if payload := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token, &refused); payload != nil {
-		if scopes := stringSlice(payload["scope"]); scopes != nil {
+	if fineGrained {
+		// GitLab refused the token's own description a fine-grained
+		// permission, Personal Access Token: Read. That refusal is itself the
+		// answer: the route's boundary is the user and names no root
+		// namespace, so no enforcement of fine-grained tokens applies to it,
+		// and only a fine-grained token is refused a grant there. It carries
+		// the one scope such a token has, which the door reads as unknown
+		// authority ([SatisfiesMinimum]), and /oauth/token/info, which knows
+		// nothing of a personal access token, is not asked.
+		return introspection{scopes: []string{gitlabclient.ScopeGranular}, answered: true}
+	}
+	if info, _ := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token, &refused); info != nil {
+		if scopes := stringSlice(info["scope"]); scopes != nil {
 			return introspection{
 				scopes:         expandImpliedScopes(scopes),
-				expiry:         expiryFromSeconds(payload["expires_in"]),
-				applicationUID: applicationUID(payload["application"]),
+				expiry:         expiryFromSeconds(info["expires_in"]),
+				applicationUID: applicationUID(info["application"]),
 				answered:       true,
 			}
 		}
@@ -805,6 +876,26 @@ func applicationUID(raw any) string {
 	}
 	uid, _ := app["uid"].(string)
 	return uid
+}
+
+// pinnedRefusalOf is the verdict a deployment that pins its OAuth applications
+// gives a token GitLab refused the permission to read its own user, and err
+// unchanged in every other case.
+//
+// Only a personal access token is ever refused a fine-grained grant: at
+// v19.4.1-ee the only token class that includes Authz::GranularTokenInterface
+// is PersonalAccessToken, and on GET /api/v4/user, whose boundary is the user
+// and names no root namespace, only a fine-grained one is judged. A personal
+// access token belongs to no OAuth application, so [acceptedRecipient] would
+// refuse it on every path introspection could take. Answering the missing
+// permission instead would tell its holder to create a fine-grained token that
+// grants User: Read, or to use a classic one, and this deployment refuses both,
+// so the holder is told the truth the recipient check would end in.
+func pinnedRefusalOf(pinned []string, err error) error {
+	if len(pinned) == 0 || !errors.Is(err, ErrPermissionMissing) {
+		return err
+	}
+	return fmt.Errorf("token is a personal access token, and this deployment admits only tokens issued to its own OAuth applications: %w", ErrUnacceptedRecipient)
 }
 
 // acceptedRecipient reports whether a token may be admitted under an operator's
@@ -918,21 +1009,24 @@ func expandImpliedScopes(scopes []string) []string {
 	return scopes
 }
 
-// fetchScopes reads one introspection endpoint and returns the named
-// string-array field, or nil when the endpoint does not answer for this
+// fetchIntrospection reads one introspection endpoint and returns the JSON
+// object it answered with, or nil when the endpoint does not answer for this
 // token kind.
+//
 // refused reports that the endpoint answered about this credential rather than
 // being unavailable, which is what separates "cannot ask" from "asked and was
-// told no".
-func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, token string, refused *atomic.Bool) map[string]any {
+// told no". The second result reports that the refusal was GitLab's refusal of
+// a fine-grained permission ([gitlabclient.PermissionRefusal]), which its
+// caller reads as proof of the token's kind where the route allows that.
+func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, token string, refused *atomic.Bool) (map[string]any, bool) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -942,7 +1036,11 @@ func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, toke
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			refused.Store(true)
 		}
-		return nil
+		if resp.StatusCode != http.StatusForbidden {
+			return nil, false
+		}
+		_, fineGrained := gitlabclient.PermissionRefusal(readRefusal(resp))
+		return nil, fineGrained
 	}
 	// Deliberately not decodeInstanceJSON: refusing a body here is not the
 	// strict reading it looks like. A nil return means "the endpoint did not
@@ -955,7 +1053,7 @@ func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, toke
 	// mode is refusal, not here.
 	var payload map[string]any
 	if json.NewDecoder(io.LimitReader(resp.Body, verificationBodyLimit)).Decode(&payload) != nil {
-		return nil
+		return nil, false
 	}
-	return payload
+	return payload, false
 }

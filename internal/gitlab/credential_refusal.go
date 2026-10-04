@@ -2,6 +2,8 @@ package gitlab
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"net/http"
 	"strings"
 
@@ -73,7 +75,8 @@ const invalidTokenCode = "invalid_token"
 // It is not the rule the credential probe's answer is read by,
 // [credentialVerdictFor], which is the opposite and is right where it is
 // used: GET /user asks about the credential and nothing else, so any 401 or
-// 403 there is about the credential.
+// 403 there is about the credential, but for the one 403 that says the
+// credential was accepted, [PermissionRefusal]'s.
 func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 	return answeredByGraphQL(req) || carriesInvalidToken(body)
 }
@@ -182,6 +185,50 @@ func answeredByGraphQL(req *http.Request) bool {
 // is invalid_token.
 func carriesInvalidToken(body []byte) bool {
 	return errorCode(body) == invalidTokenCode
+}
+
+// GranularScopeRefusalCode is the RFC 6750 error code GitLab's API guard writes
+// into a 403 that refuses a call a permission a fine-grained token was not
+// granted (lib/api/api_guard.rb at v19.4.1-ee, which renders every
+// Gitlab::Auth::GranularPermissionsError as rack-oauth2's Forbidden with this
+// code and the refusing service's sentence as error_description).
+//
+// It is exported for the one other reader of such a 403, the OAuth verifier,
+// so the spelling the two doors act on lives here once.
+const GranularScopeRefusalCode = "insufficient_granular_scope"
+
+// PermissionRefusal reports whether body is GitLab's refusal of a permission
+// a fine-grained grant lacks, and returns the sentence GitLab gave for it.
+//
+// The answer says the credential was accepted: GitLab authenticates the token
+// first and judges the grant after (lib/api/helpers.rb, current_user then
+// authorize_granular_token_scopes!), so a body carrying this code was written
+// for a token the instance knows. It does not say the token is fine-grained:
+// GitLab answers a classic token with the same code under a root namespace
+// that enforces fine-grained tokens. On GET /api/v4/user, whose boundary is the
+// user and names no root namespace, only a fine-grained token receives it.
+//
+// The sentence is GitLab's text as sent, which under --allow-any-gitlab-url is
+// whatever the caller's own instance chose to write. A reader that quotes it to
+// a caller or writes it to a log bounds and filters it first.
+//
+// The body is decoded strictly, refusing an object that names a member twice,
+// for the reason decodeInstanceJSON in internal/oauth gives: this decides how a
+// door answers a credential, and a body two readers could read two ways is not
+// taken as proof of anything. A body that does not decode reports false, which
+// every caller reads as the refusal it was before this code was recognized.
+func PermissionRefusal(body []byte) (string, bool) {
+	var answer struct {
+		Error       string `json:"error"`
+		Description string `json:"error_description"`
+	}
+	if jsonv2.Unmarshal(body, &answer, json.DefaultOptionsV1(), jsontext.AllowDuplicateNames(false)) != nil {
+		return "", false
+	}
+	if answer.Error != GranularScopeRefusalCode {
+		return "", false
+	}
+	return answer.Description, true
 }
 
 // errorCode returns the RFC 6750 error code body carries: the string member

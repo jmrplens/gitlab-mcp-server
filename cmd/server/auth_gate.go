@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -299,6 +300,13 @@ type mcpServerGate struct {
 	// for the session's standalone stream. A gate built without one, which
 	// only the tests build, counts no session.
 	statefulSessions *processSlots
+	// rejected remembers the credentials GitLab accepted and refused the
+	// permission to read their own user, so the gate answers the same
+	// credential again from memory instead of building an entry that fails
+	// the same probe (ADM-006). In oauth mode it is the bearer guard's
+	// structure, which records that verdict first. Nil in tests that build a
+	// gate without one, where nothing is remembered.
+	rejected *oauth.RejectedTokens
 	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
 	// may skip authentication.
 	//
@@ -616,7 +624,28 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 	}
 	logIgnoredRequestOptions(token, options)
 
+	// A credential GitLab accepted and refused the permission to read its own
+	// user is answered from memory: it builds no entry and is charged
+	// nothing, so without this every request carrying it would hold one of
+	// the pool's probe slots for another GET /user with the same answer.
+	if sentence, known := g.knownPermissionRefusal(options.GitLabURL, token); known {
+		logDoorPermissionRefusal(r.Context(), "request rejected at the gate: token already known to lack the permission to read its own user", sentence)
+		return nil, doorPermissionFailure(sentence)
+	}
+
 	entry, err := g.pool.GetOrCreateEntry(token, options.GitLabURL, verifiedScopes(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
+	if missing, isMissing := errors.AsType[*serverpool.PermissionMissingError](err); isMissing {
+		// GitLab accepted the token and judged its fine-grained grant, which
+		// lacks User: Read. Not charged (INV-007): the credential is genuine,
+		// and charging it would let its holder lock their own address out.
+		// Remembered, so the next request with it asks GitLab nothing.
+		sentence := oauth.QuotedDescription(missing.Description)
+		if g.rejected != nil {
+			g.rejected.RecordPermissionMissing(options.GitLabURL, token, missing.Description)
+		}
+		logDoorPermissionRefusal(r.Context(), "request rejected at the gate: gitlab accepted the token and refused it the permission to read its own user", sentence)
+		return nil, doorPermissionFailure(sentence)
+	}
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
@@ -984,4 +1013,108 @@ func (g *mcpServerGate) invalidTokenChallenge() string {
 		return g.challenge
 	}
 	return g.challenge + `, error="invalid_token", error_description="the access token is expired, revoked, or not valid for this GitLab instance"`
+}
+
+// knownPermissionRefusal reports whether this deployment already knows GitLab
+// accepted this credential and refused it the permission to read its own
+// user, and returns the sentence it was refused with, as it was quoted then.
+func (g *mcpServerGate) knownPermissionRefusal(instance, token string) (string, bool) {
+	if g.rejected == nil {
+		return "", false
+	}
+	kind, sentence, known := g.rejected.LookupRefusal(instance, token)
+	return sentence, known && kind == oauth.RejectionPermissionMissing
+}
+
+// doorPermissionPrefix is the stable leading text of the refusal both doors
+// give a credential GitLab accepted and refused the permission to read its own
+// user (register rows ADM-001, ADM-002 and ADM-006).
+const doorPermissionPrefix = "GitLab accepted this token and refused it the permission to read its own user."
+
+// doorPermissionAdvice follows the prefix: why the door needs the permission,
+// and the two ways out. It says a new token rather than a changed one because
+// nothing at GitLab 19.4 edits a fine-grained grant after its token is created,
+// and it qualifies the classic token as every way out this server offers does:
+// an instance that requires fine-grained tokens no longer lets anyone create a
+// classic one, and a group that requires them refuses one.
+// It is one literal rather than a concatenation: a constant has no statement to
+// cover, so the mutation gate reports every operator of a concatenation as a
+// mutant nothing can reach.
+const doorPermissionAdvice = " This server identifies every caller with GET /api/v4/user, which a fine-grained personal access token reaches only when it grants User: Read, and a token's grant cannot be changed after it is created: create a fine-grained token that grants User: Read, or use a classic token with the read_api or api scope (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. The token itself is valid."
+
+// doorPermissionChallengeDescription is the error_description the bearer
+// guard's challenge carries for the same refusal. It is this server's constant
+// and never GitLab's sentence: RFC 6749 section 5.2 allows error_description a
+// narrower set of characters than a JSON body, and the sentence is the
+// instance's, which under --allow-any-gitlab-url is the caller's own.
+const doorPermissionChallengeDescription = "GitLab refused this token the permission to read its own user"
+
+// doorPermissionDetail is everything after [doorPermissionPrefix]: the advice,
+// and GitLab's own sentence when there is one, already bounded and filtered
+// by [oauth.QuotedDescription]. GitLab's sentence is what tells the holder
+// which of its refusals this was: the missing permission, or fine-grained
+// tokens not yet enabled for the user.
+func doorPermissionDetail(sentence string) string {
+	if sentence == "" {
+		return doorPermissionAdvice
+	}
+	return doorPermissionAdvice + " GitLab said: " + sentence
+}
+
+// doorPermissionFailure is the legacy gate's 403 for a credential GitLab
+// accepted and refused the permission to read its own user. It carries no
+// challenge, as no other legacy refusal but a 401 does: the challenge legacy
+// mode sends names no error and no authorization server a client could act on.
+func doorPermissionFailure(sentence string) *gateFailure {
+	return &gateFailure{
+		status:  http.StatusForbidden,
+		code:    errCodeForbidden,
+		message: doorPermissionPrefix + doorPermissionDetail(sentence),
+	}
+}
+
+// maxLoggedPermissions and maxLoggedPermissionBytes bound what a door's log
+// line names of the permissions GitLab's sentence lists: how many, and how
+// long each may be. The sentence is the instance's, so its list is too.
+const (
+	maxLoggedPermissions     = 3
+	maxLoggedPermissionBytes = 64
+)
+
+// logDoorPermissionRefusal writes the operator's line for a permission refusal
+// at either door: the number of permissions GitLab's sentence lists and at
+// most three of them, each cut short, and never the sentence, the token or
+// anything else about the caller (VAL-010).
+func logDoorPermissionRefusal(ctx context.Context, message, sentence string) {
+	count, named := sentencePermissions(sentence)
+	refusalLog.log(ctx, slog.LevelInfo, message, "permissions", count, "named", strings.Join(named, "; "))
+}
+
+// sentencePermissions reads the bracketed list GitLab's refusal of a missing
+// permission ends with ("... permissions: [User: Read, Project: Read]."), and
+// returns how many names it holds and the first [maxLoggedPermissions] of
+// them, each cut at [maxLoggedPermissionBytes]. A sentence without a list,
+// GitLab's other refusals among them, names none. The sentence has already
+// been through [oauth.QuotedDescription], so it is ASCII and a cut splits no
+// rune.
+func sentencePermissions(sentence string) (count int, named []string) {
+	open := strings.LastIndexByte(sentence, '[')
+	if open < 0 {
+		return 0, nil
+	}
+	list, _, closed := strings.Cut(sentence[open+1:], "]")
+	if !closed {
+		return 0, nil
+	}
+	for name := range strings.SplitSeq(list, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		count++
+		if len(named) < maxLoggedPermissions {
+			named = append(named, name[:min(len(name), maxLoggedPermissionBytes)])
+		}
+	}
+	return count, named
 }

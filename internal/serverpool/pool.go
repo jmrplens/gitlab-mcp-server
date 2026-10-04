@@ -929,11 +929,14 @@ func (p *ServerPool) confirmUnexplainedRefusal(key string, entry *Entry) {
 
 	ctx, cancel := context.WithTimeout(p.lifetime(), credentialCheckTimeout)
 	defer cancel()
+	// A credential GitLab accepted and refused the probe's own permission is
+	// still one GitLab accepts, which is all this asks: the entry was built,
+	// and a 401 naming nothing is then a permission refusal of the call.
 	switch entry.client.CheckCredential(ctx) {
 	case gitlabclient.CredentialRefused:
 		entry.rejected.Store(true)
 		p.evictRejectedCredential(key, entry)
-	case gitlabclient.CredentialAccepted:
+	case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
 		p.keepConfirmedEntry(key, entry)
 	default:
 		slog.Debug("server pool: could not confirm a 401 that named no cause, keeping the entry")
@@ -1218,6 +1221,36 @@ func (p *ServerPool) existingEntryLocked(key string) (*Entry, bool) {
 // verdict from GitLab about the token. Callers map it to 401 rather than 503.
 var ErrInvalidCredential = errors.New("gitlab rejected the credential")
 
+// ErrCredentialLacksProbePermission reports that GitLab accepted the
+// credential and refused the credential probe a permission its fine-grained
+// grant lacks: User: Read, on GET /api/v4/user.
+//
+// It is a verdict, like [ErrInvalidCredential], and the opposite one. The token
+// is genuine, since GitLab judges a grant only after it has authenticated the
+// token, so the caller must not be charged an authentication failure for it
+// or told to reauthorize a token that works (INV-007); and it is not served,
+// since the probe is what the pool admits on and this one was not answered.
+// Callers map it to 403 and quote GitLab's sentence, which
+// [PermissionMissingError] carries.
+var ErrCredentialLacksProbePermission = errors.New("gitlab accepted the credential and refused it the permission the credential probe needs")
+
+// PermissionMissingError is [ErrCredentialLacksProbePermission] with the
+// sentence GitLab refused the probe with, as the instance sent it.
+type PermissionMissingError struct {
+	// Description is GitLab's error_description, unfiltered: the instance's
+	// own text, which a caller bounds and filters before quoting it.
+	Description string
+}
+
+// Error names the verdict and never the sentence, so a log line built from the
+// error carries no text the instance chose.
+func (e *PermissionMissingError) Error() string {
+	return ErrCredentialLacksProbePermission.Error()
+}
+
+// Unwrap lets errors.Is find [ErrCredentialLacksProbePermission].
+func (e *PermissionMissingError) Unwrap() error { return ErrCredentialLacksProbePermission }
+
 // verifyCredential asks GitLab whether the token is usable before the pool
 // admits an entry for it.
 //
@@ -1238,12 +1271,22 @@ var ErrInvalidCredential = errors.New("gitlab rejected the credential")
 // entry is admitted: failing closed whenever GitLab is unreachable would turn
 // an instance outage into a total denial of service, which is worse than the
 // churn this prevents.
+//
+// One 403 is not a rejection: GitLab's refusal of a fine-grained permission,
+// which says the token was accepted and cannot read its own user. It is
+// refused with [PermissionMissingError] rather than admitted, because the
+// probe the pool trusts was not answered, and rather than rejected, because
+// charging a genuine credential lets its holder lock their own address out.
 func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
 
-	if client.CredentialRejected(ctx) {
+	check := client.CheckCredentialDetail(ctx)
+	if check.Verdict == gitlabclient.CredentialRefused {
 		return fmt.Errorf("%w", ErrInvalidCredential)
+	}
+	if check.Verdict == gitlabclient.CredentialAcceptedPermissionMissing {
+		return &PermissionMissingError{Description: check.Description}
 	}
 	return nil
 }
@@ -1808,6 +1851,9 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		check := entry.client.CheckCredentialDetail(checkCtx)
 		cancel()
 
+		// An accepted credential refused the probe's own permission is read
+		// as accepted: the question here is whether GitLab still takes the
+		// token, and the entry already serves what its grant allows.
 		switch check.Verdict {
 		case gitlabclient.CredentialRefused:
 			slog.WarnContext(ctx,
@@ -1817,7 +1863,7 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 			)
 			p.metrics.RevalidationsFailed.Add(1)
 			p.evictByKey(key)
-		case gitlabclient.CredentialAccepted:
+		case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
 			p.metrics.RevalidationsSucceeded.Add(1)
 			p.mu.Lock()
 			if e, ok := p.entries[key]; ok {

@@ -780,25 +780,37 @@ const (
 	CredentialUnanswered CredentialVerdict = iota
 	// CredentialAccepted means GitLab answered the probe with a 2xx.
 	CredentialAccepted
-	// CredentialRefused means GitLab answered the probe with 401 or 403.
+	// CredentialRefused means GitLab answered the probe with 401 or 403, other
+	// than the one 403 [CredentialAcceptedPermissionMissing] reads.
 	CredentialRefused
+	// CredentialAcceptedPermissionMissing means GitLab accepted the credential
+	// and refused the probe a permission its fine-grained grant lacks: a 403
+	// whose body carries [GranularScopeRefusalCode] ([PermissionRefusal]). The
+	// token is genuine, since GitLab judges a grant only after it has
+	// authenticated the token, and on GET /api/v4/user the grant it lacks is
+	// User: Read.
+	CredentialAcceptedPermissionMissing
 )
 
 // CheckCredential asks GitLab whether it accepts this credential, and reports
-// which of the three answers it got.
+// which of the four answers it got.
 //
-// Three and not two, because two callers need different halves of them.
-// Admission ([Client.CredentialRejected]) needs only to know whether GitLab
-// refused, and admits on anything else so that an instance outage is not a
-// total denial of service. The pool's confirmation of a 401 that named no
-// cause needs to know whether GitLab accepted: keeping an entry and recording
+// Four and not two, because the callers need different parts of them.
+// Admission needs to know whether GitLab refused, and admits on no verdict so
+// that an instance outage is not a total denial of service; it also needs the
+// fourth answer apart, because a credential GitLab accepted and refused the
+// probe's permission is neither a refusal to charge nor a credential to serve
+// ([Client.CheckCredentialDetail] carries GitLab's sentence for it). The
+// pool's confirmation of a 401 that named no cause needs to know whether
+// GitLab accepted, which both acceptances say: keeping an entry and recording
 // that its credential was just checked is only honest on a real answer, and a
 // 500 read as "accepted" would push back the credential-age ceiling on the
-// strength of a question GitLab never answered. The pool's periodic
-// revalidation reads all three, through [Client.CheckCredentialDetail] so it
-// can log what each was read from: it evicts on a refusal, stamps the entry on
-// an acceptance, and counts anything else as no verdict, since treating a
-// briefly unreachable GitLab as a refusal would evict every tenant at once.
+// strength of a question GitLab never answered. The pool's
+// periodic revalidation reads them all, through [Client.CheckCredentialDetail]
+// so it can log what each was read from: it evicts on a refusal, stamps the
+// entry on an acceptance, and counts anything else as no verdict, since
+// treating a briefly unreachable GitLab as a refusal would evict every tenant
+// at once.
 //
 // It issues GET /api/v4/user through the raw health client rather than the SDK
 // on purpose: client-go wraps requests in retryablehttp with RetryMax 5 and a
@@ -823,6 +835,11 @@ type CredentialCheck struct {
 	// Status is the HTTP status GitLab answered the probe with, and 0 when no
 	// response arrived.
 	Status int
+	// Description is GitLab's own sentence for a
+	// [CredentialAcceptedPermissionMissing] verdict, as the instance sent it,
+	// and empty for every other verdict. It is the instance's text, so a door
+	// that quotes it bounds and filters it first.
+	Description string
 	// Err is nil when GitLab answered with a verdict. Otherwise it says why
 	// there was none: the error that stopped the request from being built or
 	// answered (a refused connection, a TLS failure, a timeout), or, when a
@@ -851,24 +868,45 @@ func (c *Client) CheckCredentialDetail(ctx context.Context) CredentialCheck {
 		return CredentialCheck{Err: err}
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
+	// Read whatever the answer is, so the connection can be reused, and keep
+	// it: the one 403 that is not a refusal is told apart only by its body. A
+	// body longer than this is not one GitLab writes for that 403, and is
+	// read as far as this and no further.
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, credentialProbeBodyBytes))
 
-	check := CredentialCheck{Verdict: credentialVerdictFor(resp.StatusCode), Status: resp.StatusCode}
-	if check.Verdict == CredentialUnanswered {
+	check := CredentialCheck{Verdict: credentialVerdictFor(resp.StatusCode, body), Status: resp.StatusCode}
+	switch check.Verdict {
+	case CredentialUnanswered:
 		check.Err = fmt.Errorf("the credential probe was answered HTTP %d, which is neither an acceptance nor a refusal", resp.StatusCode)
+	case CredentialAcceptedPermissionMissing:
+		check.Description, _ = PermissionRefusal(body)
 	}
 	return check
 }
 
-// credentialVerdictFor reads the status the credential probe was answered
-// with. Only an explicit 401 or 403 refuses and only a 2xx accepts; every
-// other status is no verdict at all.
+// credentialProbeBodyBytes is how much of the credential probe's answer is
+// read: enough for GitLab's error document naming a missing fine-grained
+// permission, whose sentence is a few hundred bytes, and a bound on what an
+// instance can make the probe hold.
+const credentialProbeBodyBytes = 4 << 10
+
+// credentialVerdictFor reads the status and body the credential probe was
+// answered with. Only an explicit 401 or 403 refuses and only a 2xx accepts;
+// every other status is no verdict at all. The one exception is a 403 whose
+// body is GitLab's refusal of a fine-grained permission ([PermissionRefusal]),
+// which says the credential was accepted and refused the probe's own
+// permission.
 //
-// Written as two ifs rather than a tagless switch, because a case expression
+// Written as ifs rather than a tagless switch, because a case expression
 // carries no statement counter of its own: the mutation gate reports every
 // mutant in one as not covered, and the boundaries of the 2xx range are
 // exactly where a mutant is worth seeing killed.
-func credentialVerdictFor(status int) CredentialVerdict {
+func credentialVerdictFor(status int, body []byte) CredentialVerdict {
+	if status == http.StatusForbidden {
+		if _, missing := PermissionRefusal(body); missing {
+			return CredentialAcceptedPermissionMissing
+		}
+	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
 		return CredentialRefused
 	}
@@ -876,16 +914,6 @@ func credentialVerdictFor(status int) CredentialVerdict {
 		return CredentialAccepted
 	}
 	return CredentialUnanswered
-}
-
-// CredentialRejected reports whether GitLab actively refuses this credential.
-//
-// It is [Client.CheckCredential] read by admission: only an explicit 401 or
-// 403 counts as a rejection, and every other outcome, a transport error, a 404
-// from a stubbed instance, a 5xx, means no verdict was obtained and is
-// reported as false, so callers fail open.
-func (c *Client) CredentialRejected(ctx context.Context) bool {
-	return c.CheckCredential(ctx) == CredentialRefused
 }
 
 // newHealthClient builds the raw HTTP client used for the version, credential

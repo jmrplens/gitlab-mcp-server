@@ -382,6 +382,130 @@ func TestOAuth_RejectedTokenIsNotRelayedUpstreamEveryTime(t *testing.T) {
 	}
 }
 
+// TestOAuth_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged drives the
+// OAuth door with fine-grained tokens GitLab accepts and refuses the
+// permission to read their own user, which the verifier asks.
+//
+// Each is answered 403 with an insufficient_scope challenge whose description
+// is the server's own constant, and GitLab's sentence in the body; never
+// charged, so past the failure budget it is still a 403; and remembered, so
+// GitLab is asked once for any number of requests carrying the token. A
+// hostile instance's sentence, which under --allow-any-gitlab-url is the
+// caller's own, reaches the challenge not at all and the body only as
+// printable ASCII within 512 bytes. A deployment pinned to its OAuth
+// applications answers the same token with its recipient refusal instead.
+func TestOAuth_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged(t *testing.T) {
+	const (
+		refused = "glpat-fine-grained-without-user-read"
+		hostile = "glpat-fine-grained-hostile-instance"
+	)
+	hostileSentence := `Access denied: "hostile" \ ` + "\r\n\x01" + strings.Repeat("x", 3800)
+	gitlab := startFineGrainedFakeGitLab(t, map[string]fineGrainedToken{
+		refused: {userRefusal: userReadSentence},
+		hostile: {userRefusal: hostileSentence},
+	})
+	srv := oauthServer(t, gitlab.url)
+
+	t.Run("named, uncharged and asked once", func(t *testing.T) {
+		const attempts = 15
+		for i := range attempts {
+			assertOAuthPermissionRefusal(t, i, srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + refused})))
+		}
+		if n := gitlab.userCalls(refused); n != 1 {
+			t.Errorf("GET /api/v4/user was asked %d times for %d requests carrying one token, want once", n, attempts)
+		}
+	})
+
+	t.Run("a hostile sentence is filtered and cut", func(t *testing.T) {
+		got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + hostile}))
+		if got.status != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusForbidden, truncate(got.body))
+		}
+		if challenge := got.header.Get("WWW-Authenticate"); strings.Contains(challenge, "hostile") || !strings.Contains(challenge, permissionChallengeDescription) {
+			t.Errorf("challenge = %q, want the server's own description and nothing of the instance's", challenge)
+		}
+		message := decodeJSONRPCError(t, got.body).Error.Message
+		_, said, found := strings.Cut(message, "GitLab said: ")
+		if !found || !strings.HasPrefix(said, `Access denied: "hostile" \ xxx`) {
+			t.Fatalf("message = %q, want GitLab's sentence quoted with its printable text kept", message)
+		}
+		if len(said) > 512 || strings.ContainsFunc(said, func(r rune) bool { return r < ' ' || r > '~' }) {
+			t.Errorf("quoted sentence is %d bytes: %q; want printable ASCII within 512 bytes", len(said), said)
+		}
+	})
+
+	// Only a personal access token is refused a fine-grained grant, and a
+	// deployment that pins its OAuth applications admits none, so there the
+	// token is told what the recipient check would end in rather than sent to
+	// create a token this deployment refuses too. Still uncharged, and still
+	// remembered.
+	t.Run("a pinned deployment refuses it as a token of no admitted application", func(t *testing.T) {
+		pinned := oauthServer(t, gitlab.url, "--oauth-client-uid=5a4f1c0e-ours")
+		before := gitlab.userCalls(refused)
+		assertRecipientRefusal(t, pinned, refused, publishedResourceDocumentation(t, pinned))
+		assertRefusalIsFree(t, pinned, refused)
+		if n := gitlab.userCalls(refused) - before; n != 1 {
+			t.Errorf("GET /api/v4/user was asked %d times for 13 requests carrying one token, want once", n)
+		}
+	})
+}
+
+// permissionChallengeDescription is the error_description the OAuth door's
+// challenge carries for a token GitLab refused the permission to read its own
+// user: the server's constant, never the instance's sentence.
+const permissionChallengeDescription = `error_description="GitLab refused this token the permission to read its own user"`
+
+// assertOAuthPermissionRefusal holds attempt i's answer to the OAuth door's
+// permission refusal: 403, an insufficient_scope challenge carrying the
+// server's own description, and -40300 with GitLab's sentence quoted last.
+func assertOAuthPermissionRefusal(t *testing.T, i int, got response) {
+	t.Helper()
+	if got.status != http.StatusForbidden {
+		t.Fatalf("attempt %d: status = %d, want %d: %s", i, got.status, http.StatusForbidden, truncate(got.body))
+	}
+	challenge := got.header.Get("WWW-Authenticate")
+	if !strings.Contains(challenge, `error="insufficient_scope"`) || !strings.Contains(challenge, permissionChallengeDescription) {
+		t.Errorf("attempt %d: challenge = %q, want insufficient_scope with the server's own description", i, challenge)
+	}
+	body := decodeJSONRPCError(t, got.body)
+	if body.Error.Code != -40300 || !strings.HasSuffix(body.Error.Message, "GitLab said: "+userReadSentence) {
+		t.Errorf("attempt %d: error = %d %q, want -40300 quoting GitLab", i, body.Error.Code, body.Error.Message)
+	}
+}
+
+// TestOAuth_FineGrainedTokenIsAdmittedAsUnknownAuthority drives the OAuth door
+// with fine-grained tokens that may read their own user, one that may also
+// describe itself and one that may not. Both are admitted and served a tool
+// list: the one scope such a token has, granular, names no authority, so the
+// read_api minimum does not refuse it, and GitLab judges each call against the
+// grant. The second one's refused self description is itself the answer, since
+// only a fine-grained token is refused a grant on that route, so
+// /oauth/token/info is never asked for either.
+func TestOAuth_FineGrainedTokenIsAdmittedAsUnknownAuthority(t *testing.T) {
+	const (
+		describable   = "glpat-fine-grained-reads-itself"
+		undescribable = "glpat-fine-grained-cannot-read-itself"
+	)
+	gitlab := startFineGrainedFakeGitLab(t, map[string]fineGrainedToken{
+		describable: {},
+		undescribable: {selfRefusal: "Access denied: This operation requires a fine-grained personal access token " +
+			"with the following user permissions: [Personal Access Token: Read]."},
+	})
+	srv := oauthServer(t, gitlab.url)
+
+	for _, token := range []string{describable, undescribable} {
+		t.Run(token, func(t *testing.T) {
+			got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + token}))
+			if got.status != http.StatusOK || !strings.Contains(got.body, `"tools"`) {
+				t.Fatalf("status = %d, want %d and a tool list: %s", got.status, http.StatusOK, truncate(got.body))
+			}
+		})
+	}
+	if n := gitlab.tokenInfoCalls(); n != 0 {
+		t.Errorf("/oauth/token/info was asked %d times, want none: a fine-grained token's refused self description is the answer", n)
+	}
+}
+
 // TestOAuth_ThrottledUpstreamIsNotBlamedOnTheToken verifies the classification
 // that keeps a GitLab outage from looking like a credential problem.
 //

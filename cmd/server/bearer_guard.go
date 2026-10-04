@@ -246,11 +246,20 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		// later: an unadmitted recipient would be told its token is expired,
 		// and would start being charged the budget the first refusal spared
 		// it.
-		if kind, cached := g.rejected.Lookup(instance, token); cached {
-			if kind == oauth.RejectionUnaccepted {
+		if kind, sentence, cached := g.rejected.LookupRefusal(instance, token); cached {
+			switch kind {
+			case oauth.RejectionUnaccepted:
 				refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known not to be issued to an admitted OAuth application",
 					"token_suffix", safeTokenSuffix(token))
 				return g.unacceptedRecipientFailure()
+			case oauth.RejectionPermissionMissing:
+				// GitLab accepted this token and refused it the permission
+				// to read its own user. Answered from memory, uncharged as
+				// the fresh refusal is, because otherwise one genuine token
+				// sent by enough concurrent requests would hold every
+				// verification slot.
+				logDoorPermissionRefusal(r.Context(), "request rejected: token already known to lack the permission to read its own user", sentence)
+				return g.permissionMissingFailure(sentence)
 			}
 			g.recordFailure(ip, source, token)
 			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
@@ -335,6 +344,24 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 				"error_description", g.missingScopeDescription(),
 			)),
 		}
+	}
+
+	// A fine-grained token GitLab accepted and refused the permission to read
+	// its own user, GET /api/v4/user answering 403 insufficient_granular_scope.
+	// It is not insufficient scope in the classic sense: a grant cannot be
+	// changed after its token is created, so the holder needs another token,
+	// and reauthorizing with api would not help. Not charged (INV-007), since
+	// the token is genuine, and cached, since the verdict holds for the token's
+	// life and nothing else stops the same token costing a verification slot
+	// on every request. The objection above to caching insufficient scope does
+	// not hold here: nothing at GitLab 19.4 edits a grant.
+	if missing, isMissing := errors.AsType[*oauth.PermissionMissingError](err); isMissing {
+		sentence := oauth.QuotedDescription(missing.Description)
+		if g.rejected != nil {
+			g.rejected.RecordPermissionMissing(instance, token, missing.Description)
+		}
+		logDoorPermissionRefusal(ctx, "request rejected: gitlab accepted the token and refused it the permission to read its own user", sentence)
+		return g.permissionMissingFailure(sentence)
 	}
 
 	// The recipient check could not be made. The request is refused, because a
@@ -462,6 +489,29 @@ func (g *bearerGuard) unacceptedRecipientFailure() *gateFailure {
 		code:    errCodeUnauthorized,
 		message: "This token is valid for the GitLab instance, but it was not issued to an OAuth application this deployment admits. Obtain a token from the application the operator published; see the resource documentation, named as error_uri in the WWW-Authenticate challenge and as resource_documentation in the protected-resource metadata.",
 		header:  newHeader(headerWWWAuthenticate, g.challenge(params...)),
+	}
+}
+
+// permissionMissingFailure builds the 403 shared by a fine-grained token GitLab
+// has just refused the permission to read its own user and one answered from
+// the rejected-token cache.
+//
+// The challenge is insufficient_scope, RFC 6750's code for a genuine token
+// that lacks what the request needs, naming the minimum scope as the sibling
+// refusal does, since a token carrying it is what this door admits. Its
+// error_description is this server's constant: GitLab's sentence reaches the
+// caller in the body only, already filtered and cut by
+// [oauth.QuotedDescription].
+func (g *bearerGuard) permissionMissingFailure(sentence string) *gateFailure {
+	return &gateFailure{
+		status:  http.StatusForbidden,
+		code:    errCodeForbidden,
+		message: doorPermissionPrefix + doorPermissionDetail(sentence),
+		header: newHeader(headerWWWAuthenticate, oauthChallenge(
+			g.minimumScope, g.metadataURL,
+			"error", "insufficient_scope",
+			"error_description", doorPermissionChallengeDescription,
+		)),
 	}
 }
 
