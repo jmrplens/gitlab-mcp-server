@@ -50,7 +50,6 @@ gitlab-mcp-server/
 │   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go
 │   ├── gen_lhm_manifest/   # Capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/           # llms.txt / llms-full.txt
-│   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
 │   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
 │   ├── gen_third_party_notices/ # THIRD_PARTY_NOTICES from the release binaries' build information, the packages they link and the module cache (GoReleaser's sboms, the Dockerfile, make mcpb)
 │   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger

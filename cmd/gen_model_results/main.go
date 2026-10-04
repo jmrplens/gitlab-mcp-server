@@ -463,8 +463,8 @@ const gitProbeTimeout = 10 * time.Second
 // askGit runs one git command and reports whether it exited zero.
 //
 // The program is resolved to an absolute path first, which is how every other
-// command here runs a tool it did not build (cmd/gen_stats resolves git this
-// way, cmd/gen_icon_webp its two converters): the lookup is the same one exec
+// command here runs a tool it did not build (cmd/gen_orbit_record resolves git
+// this way, cmd/gen_icon_webp its two converters): the lookup is the same one exec
 // would do, and what changes is that the program is decided here rather than
 // by whatever the process's PATH happens to hold when the command is started.
 // A machine with no git reports that as the error it is, which is the silence

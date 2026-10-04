@@ -55,7 +55,6 @@ gitlab-mcp-server/
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt
 │   ├── gen_model_corpus/        # Renders the model evaluation corpus breadth ledger
 │   ├── gen_model_results/       # Folds a model evaluation run's shards into the published record
-│   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
 │   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
 │   └── internal/                # Shared helpers for the commands above (actionids, apidocs, auditshared, docgen, mcpsurface)

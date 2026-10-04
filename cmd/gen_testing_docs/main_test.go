@@ -2333,7 +2333,7 @@ func TestCoverageRationale_KeyFamilies_SelectsText(t *testing.T) {
 	}{
 		{key: "testutil", want: "some helpers are exercised"},
 		{key: "cmd/server", want: "entry-point glue"},
-		{key: "cmd/gen_stats", want: "developer command formatting"},
+		{key: "cmd/gen_llms", want: "developer command formatting"},
 		{key: "branches", want: "review this package"},
 	}
 	for _, tt := range tests {

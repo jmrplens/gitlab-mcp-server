@@ -1219,7 +1219,7 @@ func TestEffectiveToolSurface(t *testing.T) {
 // quietly deleted from any of the three cases would have turned a documented
 // value into a startup error, and nothing here would have noticed. They are
 // cheap to pin because the function is pure, and they are the values operators
-// copy out of the README.
+// copy out of the documentation.
 //
 // The boolean spellings this table also carried are gone with META_TOOLS: a
 // tool surface named "true" meant the meta catalog only because the deprecated

@@ -85,7 +85,7 @@ make inspector-stop
 
 | You edited                                          | Run                                                               |
 | --------------------------------------------------- | ----------------------------------------------------------------- |
-| Domain tool (added/renamed/changed input or output) | `go run ./cmd/audit_tokens/ -footprint` + `go run ./cmd/gen_stats/` |
+| Domain tool (added/renamed/changed input or output) | `go run ./cmd/audit_tokens/ -footprint`                           |
 | ActionSpec metadata (catalog routes)                | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI) |
 | Pipe tables in `README.md` or `docs/`               | `go run ./cmd/format_md_tables/` (and `--check`)                  |
 | Tests, after a test phase                           | `go run ./cmd/gen_testing_docs/` (and `--check`)                  |
@@ -94,13 +94,14 @@ make inspector-stop
 
 `make audit-docs` runs the combined documentation gate locally. **CI does not
 run that target**, but every `check-*` freshness gate is now wired into CI
-individually: the `test` job runs the eight Go ones (`check-llms`,
-`check-lhm-manifest`, `check-server-json`, `check-openplugin`, `check-stats`,
+individually: the `generated` job runs the eight Go ones (`check-llms`,
+`check-lhm-manifest`, `check-server-json`, `check-openplugin`,
 `check-footprint`, `check-site-stats`, `check-action-catalog-manifest`,
 `check-testing-docs`) and the `analyze-md` job runs the two that need Node
 (`check-doc-links`, `check-mcpb`). Adding a new `check-*` target means adding
-it to one of those two jobs — `check-stats` and `check-footprint` sat stale on
-`main` for several releases precisely because nothing gated them, and
+it to one of those two jobs. The README statistics, since removed, and
+`check-footprint` sat stale on `main` for several releases precisely because
+nothing gated them, and
 `docs/development/testing/testing.md` drifted for the same reason.
 `check-testing-docs` gates everything in that file a checkout determines and
 not the coverage columns, which no two machines agree on; refresh those with
@@ -133,7 +134,7 @@ For a full walkthrough use the `create-mcp-tool` skill
 5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
    in the sub-package `markdown.go` `init()`. List formatters must add
    `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
-6. **Refresh**: `audit_tokens -footprint` + `gen_stats`, `gen_action_catalog_manifest`, `format_md_tables`,
+6. **Refresh**: `audit_tokens -footprint`, `gen_action_catalog_manifest`, `format_md_tables`,
    `gen_testing_docs`, `gen_llms`, `gen_lhm_manifest` (run `--check` on each before pushing).
 7. **Verify**: `make test-pkg PKG={domain}` and
    `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.

@@ -26,9 +26,8 @@
 // that IsTestFunction excludes; routing it through here would drop those
 // findings from the documentation audit.
 //
-// Discovery of the corpus itself is deliberately not here. cmd/gen_stats asks
-// git for the tracked files so that its --check is a function of what is
-// committed, and cmd/gen_testing_docs enumerates packages through go list
-// because it describes packages; sharing the predicate is what those two
-// needed, and sharing the input universe would break both.
+// Discovery of the corpus itself is deliberately not here. cmd/gen_testing_docs
+// enumerates packages through go list because it describes packages, and each
+// auditor walks the tree it judges; sharing the predicate is what they needed,
+// and one input universe for all of them would describe none of them.
 package testsource

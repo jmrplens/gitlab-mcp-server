@@ -28,7 +28,6 @@ dist/
 /find_dupes
 /gen_icon_webp
 /gen_llms
-/gen_stats
 /gitlab-mcp-server
 
 # Go workspace lock (Go 1.18+, only relevant if go.work is added)
@@ -151,7 +150,6 @@ image.png
 /gen_action_catalog_manifest
 /gen_lhm_manifest
 /gen_llms
-/gen_stats
 /gen_testing_docs
 /godoc_tool
 /gitlab-mcp-server
