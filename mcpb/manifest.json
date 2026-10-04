@@ -95,7 +95,7 @@
     "gitlab_token": {
       "type": "string",
       "title": "GitLab Personal Access Token",
-      "description": "Personal Access Token (glpat-…) with `api` scope. Create one under GitLab → User Settings → Access Tokens.",
+      "description": "Personal Access Token (glpat-…) with `api` scope. Create one in GitLab under your avatar → Edit profile → Access → Personal access tokens.",
       "sensitive": true,
       "required": true
     },

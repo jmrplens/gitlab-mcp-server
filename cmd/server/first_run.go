@@ -51,8 +51,8 @@ and speaks to it over this program's standard input and output.
 Nothing is configured yet. The server needs two values:
 
   GITLAB_URL     your GitLab instance, for example https://gitlab.com
-  GITLAB_TOKEN   a personal access token, created under
-                 User settings > Access tokens on that instance
+  GITLAB_TOKEN   a personal access token, created on that instance under
+                 your avatar > Edit profile > Access > Personal access tokens
 
 Set them in your MCP client's configuration rather than in this terminal. The
 per-client JSON, and the OAuth alternative if you would rather not paste a

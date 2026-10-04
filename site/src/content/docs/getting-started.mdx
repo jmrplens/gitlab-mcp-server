@@ -37,7 +37,7 @@ head:
             "@type": "HowToStep",
             "position": 1,
             "name": "Create a personal access token",
-            "text": "In GitLab, go to Preferences, then Access Tokens, and create a new token with the api scope. Copy it — you need it for configuration. For a read-only setup, use a token with the read_api scope: the server detects it and serves only the read actions.",
+            "text": "In GitLab, select your avatar, then Edit profile, Access and Personal access tokens, and create a new token with the api scope. Copy it: you need it for configuration. For a read-only setup, use a token with the read_api scope: the server detects it and serves only the read actions.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#creating-a-personal-access-token"
           },
           {
@@ -65,7 +65,7 @@ head:
       }
 faq:
   - q: "What GitLab token scope does GitLab MCP Server need?"
-    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope: the server detects the scope at startup and serves only the read actions, and GITLAB_MCP_READ_ONLY=true does the same for a token that could write. Create tokens under GitLab, then Preferences, then Access Tokens."
+    a: "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope: the server detects the scope at startup and serves only the read actions, and GITLAB_MCP_READ_ONLY=true does the same for a token that could write. Create tokens in GitLab under your avatar, then Edit profile, Access and Personal access tokens."
   - q: "How do I connect GitLab MCP Server to a self-managed GitLab instance?"
     a: "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_MCP_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
   - q: "Which tool mode does GitLab MCP Server use by default?"
@@ -100,7 +100,7 @@ Before you begin, make sure you have:
 
 ### Creating a personal access token
 
-1. Go to **GitLab → Preferences → Access Tokens**
+1. In GitLab, select your avatar, then **Edit profile** > **Access** > **Personal access tokens**
 2. Create a new token with the **`api`** scope
 3. Copy the token — you'll need it for configuration
 
@@ -627,7 +627,7 @@ For zero-config token management, use OAuth mode. Users authorize through the br
 ./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com
 ```
 
-MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application.
+MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [OAuth application](/gitlab-mcp-server/operations/oauth-app/) for creating the required GitLab OAuth Application.
 
 :::caution
 Clients must be configured with the `clientId` of a GitLab OAuth Application that has the scope the deployment asks for checked: `api` on a deployment that can write, `read_api` on one that runs `--read-only` or `--safe-mode`. GitLab refuses the authorization with `invalid_scope` when the application lacks the scope a client asks for. Without `clientId`, clients fall back to Dynamic Client Registration (DCR) which assigns the `mcp` scope instead of `api`, causing most operations to fail. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for per-client examples.
