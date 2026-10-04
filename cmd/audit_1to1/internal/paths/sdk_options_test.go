@@ -5,6 +5,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -179,20 +181,19 @@ func TestWalkOptionParams_AChainDeeperThanTheBound_NamesTheDeepestParam(t *testi
 	}
 }
 
-// TestSDKOptionReaders_EmbedsTagsAndParameters verifies three readings the
-// client-go source exercises and the fixture above does not: an embedded type
-// that is not an option struct contributes nothing, a json key spelled "-,"
-// is the key "-" rather than a hidden field, and a method taking one option
-// struct twice, or a variadic one, names it once and the variadic never.
-func TestSDKOptionReaders_EmbedsTagsAndParameters(t *testing.T) {
+// TestSDKOptionReaders_EmbedsAndTags verifies two readings the client-go
+// source exercises and the fixture above does not: an embedded type that is
+// not an option struct contributes nothing, and a json key spelled "-," is the
+// key "-" rather than a hidden field. Which option structs a method takes, each
+// once and the variadic tail never, is cmd/internal/sdkroutes' reading and is
+// held by its own suite.
+func TestSDKOptionReaders_EmbedsAndTags(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", `package gitlab
 
 type WithBaseOptions struct {
 	Base
 	ListOptions
 }
-
-func (s *Service) Twice(a *FooOptions, b *FooOptions, name string, options ...TransportOptions) {}
 `, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -204,9 +205,6 @@ func (s *Service) Twice(a *FooOptions, b *FooOptions, name string, options ...Tr
 	key, always, published := jsonField(&ast.BasicLit{Kind: token.STRING, Value: "`json:\"-,\"`"}, "Dash")
 	if key != "-" || !always || !published {
 		t.Errorf("jsonField(-,) = %q, %t, %t; want the key \"-\", always, published", key, always, published)
-	}
-	if got := optionParameters(file.Decls[1].(*ast.FuncDecl)); !reflect.DeepEqual(got, []string{"FooOptions"}) {
-		t.Errorf("optionParameters() = %v, want [FooOptions]", got)
 	}
 }
 
@@ -227,7 +225,7 @@ func TestWalkOptionParams_AnUnknownType_VisitsNothing(t *testing.T) {
 // cannot parse leaves the check with nothing to say rather than failing the
 // scope over somebody else's source tree.
 func TestReadSDKOptions_AnUnreadableDirectory_ReadsNothing(t *testing.T) {
-	for _, dir := range []string{"", t.TempDir()} {
+	for _, dir := range []string{"", t.TempDir(), filepath.Join(t.TempDir(), "absent")} {
 		t.Run(dir, func(t *testing.T) {
 			if options := readSDKOptions(dir); len(options.Types) != 0 || len(options.Routes) != 0 {
 				t.Errorf("readSDKOptions(%q) = %+v, want nothing", dir, options)
@@ -238,10 +236,10 @@ func TestReadSDKOptions_AnUnreadableDirectory_ReadsNothing(t *testing.T) {
 
 // TestSDKOptionReaders_ShapesClientGoHasNotUsed verifies the readers' answers
 // for the shapes client-go's source does not use today and a later release
-// could: a struct with no field list reads as no field, a tag that is not a
-// string literal and a json tag that names no key both leave the field under
+// could: a struct with no field list reads as no field, and a tag that is not
+// a string literal and a json tag that names no key both leave the field under
 // its Go name as encoding/json would, the second omitted when empty as its
-// option says, and a method with no parameter list takes no option struct.
+// option says.
 func TestSDKOptionReaders_ShapesClientGoHasNotUsed(t *testing.T) {
 	if got := optionFields(&ast.StructType{}); len(got.Fields) != 0 || len(got.Embedded) != 0 {
 		t.Errorf("optionFields(no field list) = %+v, want nothing", got)
@@ -261,8 +259,54 @@ func TestSDKOptionReaders_ShapesClientGoHasNotUsed(t *testing.T) {
 			}
 		})
 	}
-	if got := optionParameters(&ast.FuncDecl{Type: &ast.FuncType{}}); got != nil {
-		t.Errorf("optionParameters(no parameter list) = %v, want none", got)
+}
+
+// TestParseSDKFiles_WhatItReads_IsTheSourceAndNothingBeside verifies which
+// files the option structs are read from: the Go source directly in the
+// directory, and not a test file, a file that does not parse, a file that is
+// not named as Go source although it parses as Go, or anything in a
+// subdirectory, each of which would add a struct client-go does not send.
+func TestParseSDKFiles_WhatItReads_IsTheSourceAndNothingBeside(t *testing.T) {
+	dir := sdkSourceIn(t, map[string]string{
+		"options.go":      "package gitlab\n\ntype GoodOptions struct{}\n",
+		"options_test.go": "package gitlab\n\ntype FromATestOptions struct{}\n",
+		"broken.go":       "package gitlab\n\ntype Unclosed struct {\n",
+		"notes.txt":       "package gitlab\n\ntype FromProseOptions struct{}\n",
+	})
+	if err := os.Mkdir(filepath.Join(dir, "nested.go"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	files := parseSDKFiles(dir)
+
+	if len(files) != 1 || files[0].Name.Name != "gitlab" || len(files[0].Decls) != 1 {
+		t.Fatalf("parseSDKFiles() read %d file(s), want options.go alone", len(files))
+	}
+	if options := readSDKOptions(dir); !reflect.DeepEqual(mapKeys(options.Types), []string{"GoodOptions"}) {
+		t.Errorf("readSDKOptions() read %v, want [GoodOptions]", mapKeys(options.Types))
+	}
+}
+
+// TestStringLiteral_ALiteralTheParserWouldRefuse_IsNotRead verifies the one
+// branch a parsed fixture cannot reach: go/parser rejects a file holding a
+// string it cannot unquote, so the guard is only reachable from a node built by
+// hand. It is kept because this walks an AST it did not build the invariants
+// of, and reading a broken tag as a key would name a param nothing sends.
+func TestStringLiteral_ALiteralTheParserWouldRefuse_IsNotRead(t *testing.T) {
+	cases := []struct {
+		name string
+		expr ast.Expr
+	}{
+		{name: "not a literal at all", expr: ast.NewIdent("path")},
+		{name: "a literal that is not a string", expr: &ast.BasicLit{Kind: token.INT, Value: "5"}},
+		{name: "a string that does not unquote", expr: &ast.BasicLit{Kind: token.STRING, Value: `"unterminated`}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if value, ok := stringLiteral(testCase.expr); ok {
+				t.Errorf("stringLiteral() = %q, true; want it refused", value)
+			}
+		})
 	}
 }
 
@@ -304,25 +348,6 @@ func TestOptionFields_AnEmbedThatIsNoOptionStruct_IsNotPromoted(t *testing.T) {
 
 	if !reflect.DeepEqual(got.Embedded, []string{"ListOptions"}) {
 		t.Errorf("Embedded = %v, want the option struct alone", got.Embedded)
-	}
-}
-
-// TestOptionParameters_TheSameStructTwice_IsNamedOnce verifies that a method
-// taking one option struct in two parameters is recorded as taking it once,
-// so its routes are not credited to the struct twice.
-func TestOptionParameters_TheSameStructTwice_IsNamedOnce(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "fixture.go",
-		"package fixture\n\nfunc (s *S) Update(a *UpdateOptions, b *UpdateOptions, c *OtherOptions, options ...RequestOptionFunc) {}\n", 0)
-	if err != nil {
-		t.Fatalf("parse the fixture: %v", err)
-	}
-	function, isFunc := file.Decls[0].(*ast.FuncDecl)
-	if !isFunc {
-		t.Fatal("the fixture declares no function")
-	}
-
-	if got := optionParameters(function); !reflect.DeepEqual(got, []string{"UpdateOptions", "OtherOptions"}) {
-		t.Errorf("optionParameters() = %v, want each option struct once", got)
 	}
 }
 

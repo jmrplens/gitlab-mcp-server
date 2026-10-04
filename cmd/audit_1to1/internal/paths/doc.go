@@ -159,10 +159,13 @@
 // chain in which every link already existed. A converter pairs an output type
 // with a client-go struct, which is what structs.CollectOutputPairings reads
 // out of the same pass the field diff runs over; client-go's service methods
-// say which endpoints answer with that struct, which readSDKRoutes reads out of
-// the SDK source the handlers compile against; and the document says what those
-// endpoints send. Nothing in it consults the inventory, which is the point: the
-// inventory cannot be sharpened, because it records a package by construction.
+// say which endpoints answer with that struct, which readSDKRoutes cuts from
+// cmd/internal/sdkroutes, the one reader of the request each client-go method
+// sends, following a method into the helpers it delegates to with the
+// constants it hands them, so a collection a helper is told survives in the
+// route; and the document says what those endpoints send. Nothing in it
+// consults the inventory, which is the point: the inventory cannot be
+// sharpened, because it records a package by construction.
 // The summary counts the types it compares (typed_types_compared), the fields
 // it reports (typed_unpublished_fields) and the three kinds of type it skips:
 // those no converter pairs (typed_types_without_pairing), those whose struct
@@ -186,11 +189,12 @@
 // service methods answering with that struct that the function holding the
 // literal references, or failing that the functions of the package calling it,
 // up to three calls up. Such a type is judged against the endpoints of those
-// methods alone, which readSDKMethodRoutes reads per method, because a compact
-// row is filled from one endpoint and a finding about it has to name that
-// endpoint rather than every endpoint answering with the struct; one whose
-// method was not found is judged against its struct's endpoints, as a converter
-// pairing would be. A type a converter pairs keeps its converter's endpoints.
+// methods alone, which readSDKMethodRoutes cuts per method from the same
+// reader, because a compact row is filled from one endpoint and a finding
+// about it has to name that endpoint rather than every endpoint answering with
+// the struct; one whose method was not found is judged against its struct's
+// endpoints, as a converter pairing would be. A type a converter pairs keeps
+// its converter's endpoints.
 // The types compared this way are named in shapes.typed.projections and counted
 // in typed_types_compared_through_projection. The wrapper around a paired
 // payload (`{issues: []IssueItem, pagination}`, or a struct that publishes

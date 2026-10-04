@@ -2,10 +2,17 @@ package paths
 
 import (
 	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sdkroutes"
 )
 
 const (
@@ -13,8 +20,8 @@ const (
 	// takes its parameters in. It is a naming convention rather than an
 	// interface, so it is what identifies one. The variadic tail every service
 	// method carries, RequestOptionFunc, is the transport's own and does not
-	// end in it, and [optionParameters] passes over a variadic parameter
-	// besides.
+	// end in it, and [sdkroutes.Method.Options] passes over a variadic
+	// parameter besides.
 	optionsSuffix = "Options"
 	// omitEmptyOption and omitZeroOption are the two json tag options that
 	// decide whether a field is written when it holds nothing. Both are read,
@@ -70,18 +77,18 @@ type sdkOptions struct {
 	// Types is every option struct the package declares, by name.
 	Types map[string]sdkOptionType
 	// Routes is, per option struct, the endpoints the methods taking it reach,
-	// in the spelling [routeShape] produces.
+	// in the spelling [sdkroutes.Route] carries.
 	Routes map[string][]sdkRoute
 }
 
 // readSDKOptions parses the client-go source in dir and returns every option
 // struct it declares together with the endpoints the methods taking one reach.
 //
-// It parses rather than type-checks for the reason [readSDKRoutes] does, and it
-// parses the same files a second time rather than sharing that pass: the two
-// answer different questions of the same source (which struct a method answers
-// with, which struct a method is given) and keeping them apart is worth one
-// walk of a directory that is already in the page cache.
+// The option structs are read here, since what their fields write is this
+// check's question alone; which endpoints a method given one reaches is
+// [sdkroutes]', the reading the per-struct and per-method views are cut from,
+// so a method that hands its options to a helper is credited with the route the
+// helper sends them to rather than with none.
 //
 // A directory that cannot be read, or a file that does not parse, contributes
 // nothing rather than failing the scope.
@@ -91,25 +98,69 @@ func readSDKOptions(dir string) sdkOptions {
 		return sdkOptions{}
 	}
 
-	templates := map[string]string{}
 	found := sdkOptions{Types: map[string]sdkOptionType{}}
 	for _, file := range files {
-		collectRouteTemplates(file, templates)
 		collectOptionTypes(file, found.Types)
 	}
+	found.Routes = routesBy(sdkroutes.Read(dir), func(method sdkroutes.Method) []string { return method.Options }, false)
+	return found
+}
 
-	routes := map[string]map[sdkRoute]bool{}
-	for _, file := range files {
-		for _, declaration := range file.Decls {
-			function, isFunction := declaration.(*ast.FuncDecl)
-			if !isFunction || function.Recv == nil {
-				continue
-			}
-			collectOptionRoutes(function, templates, routes)
+// parseSDKFiles parses every non-test Go file directly in dir.
+func parseSDKFiles(dir string) []*ast.File {
+	if dir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	fileSet := token.NewFileSet()
+	var files []*ast.File
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fileSet, filepath.Join(dir, name), nil, 0)
+		if parseErr != nil {
+			continue
+		}
+		files = append(files, file)
+	}
+	return files
+}
+
+// resultElement names the struct a type expression spells, and whether a
+// slice was passed through. A type qualified by another package, such as
+// bytes.Buffer, names no client-go struct and is left out.
+func resultElement(expr ast.Expr) (name string, many bool) {
+	for {
+		switch typed := expr.(type) {
+		case *ast.StarExpr:
+			expr = typed.X
+		case *ast.ArrayType:
+			many = true
+			expr = typed.Elt
+		case *ast.Ident:
+			return typed.Name, many
+		default:
+			return "", many
 		}
 	}
-	found.Routes = sortedRoutes(routes)
-	return found
+}
+
+// stringLiteral unquotes an untyped string literal.
+func stringLiteral(expr ast.Expr) (string, bool) {
+	literal, isLiteral := expr.(*ast.BasicLit)
+	if !isLiteral || literal.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconv.Unquote(literal.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 // collectOptionTypes records every `type XxxOptions struct { … }` declaration.
@@ -218,48 +269,6 @@ func jsonField(tag *ast.BasicLit, goName string) (key string, always, published 
 	options := strings.Split(rest, ",")
 	omitted := slices.Contains(options, omitEmptyOption) || slices.Contains(options, omitZeroOption)
 	return name, !omitted, true
-}
-
-// collectOptionRoutes records the endpoints one service method reaches, under
-// the name of every option struct it is given.
-func collectOptionRoutes(function *ast.FuncDecl, templates map[string]string, into map[string]map[sdkRoute]bool) {
-	names := optionParameters(function)
-	if len(names) == 0 {
-		return
-	}
-	verb, paths := requestShape(function.Body, templates)
-	for _, name := range names {
-		for _, path := range paths {
-			routes := into[name]
-			if routes == nil {
-				routes = map[sdkRoute]bool{}
-				into[name] = routes
-			}
-			routes[sdkRoute{Method: verb, Path: path}] = true
-		}
-	}
-}
-
-// optionParameters names the option structs one method takes, each once.
-//
-// The variadic transport tail carries nothing a body sends. Its name does not
-// end in Options, and a variadic parameter is skipped structurally as well,
-// which is what keeps that true if the tail is ever renamed.
-func optionParameters(function *ast.FuncDecl) []string {
-	if function.Type.Params == nil {
-		return nil
-	}
-	var names []string
-	for _, parameter := range function.Type.Params.List {
-		if _, variadic := parameter.Type.(*ast.Ellipsis); variadic {
-			continue
-		}
-		named, _ := resultElement(parameter.Type)
-		if isOptionTypeName(named) && !slices.Contains(names, named) {
-			names = append(names, named)
-		}
-	}
-	return names
 }
 
 // optionParam is one field of an option struct, named the way GitLab's record
