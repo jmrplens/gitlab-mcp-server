@@ -18,6 +18,9 @@ package tenancy
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func admitDecisions() []Decision {
 	resolve := refuse(pkgServer, "mcpServerGate.resolve")
+	// The gate's reading of the pool's refusal to build an entry: GitLab's
+	// verdict on a credential the gate had not met, or none.
+	gateClassify := refuse(pkgServer, "mcpServerGate.classify")
 	check := refuse(pkgServer, "bearerGuard.check")
 	classify := refuse(pkgServer, "bearerGuard.classify")
 	invalidToken := refuse(pkgServer, "bearerGuard.invalidTokenFailure")
@@ -27,6 +30,16 @@ func admitDecisions() []Decision {
 	// and the bearer guard's with an insufficient_scope one.
 	gatePermission := refuse(pkgServer, "doorPermissionFailure")
 	guardPermission := refuse(pkgServer, "bearerGuard.permissionMissingFailure")
+	// The two doors' answer to a credential GitLab accepted that carries
+	// neither read_api nor api (issue 952), the same pair of shapes.
+	gateBelowMinimum := refuse(pkgServer, "belowMinimumFailure")
+	guardBelowMinimum := refuse(pkgServer, "bearerGuard.insufficientScopeFailure")
+	belowMinimum := func(at Site, challenge bool, prefix string) Refusal {
+		return Refusal{
+			Methods: []string{MethodGate}, Channel: Gate, Code: CodeForbidden, Status: 403,
+			Challenge: challenge, Prefix: prefix, Answer: WidenScope, At: at,
+		}
+	}
 	rejectedCharges := []string{"AUB-001", "AUB-002", "AUB-003"}
 	blocked := func(at Site) Refusal {
 		return Refusal{
@@ -57,24 +70,40 @@ func admitDecisions() []Decision {
 			// request. What stays bounded in concurrency alone, by POL-006's
 			// slots and never in rate, is a flood of distinct minted tokens,
 			// each a genuine credential of a real account.
+			//
+			// The admission minimum is the one ADR-0018 set at the OAuth door,
+			// read_api or api, which issue 952 extended to this door and why
+			// F-08 left this row and ADM-002: a token GitLab accepted that
+			// carries neither is refused 403 with no challenge and not charged
+			// (INV-007), whether the probe said so, answering 403
+			// insufficient_scope, or the token's own description did, naming
+			// read_user or another scope below it. The description is asked
+			// before the tier, so such a token costs no tier request, and the
+			// minimum holds under --ignore-scopes. A token whose scopes nothing
+			// answered for is admitted, unknown counting as capable (ADR-0018),
+			// and an entry built for one that is later found below the minimum
+			// ends (ADM-006 remembers it).
 			ID: "ADM-001", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
-			Resource: "admission of a legacy credential GitLab did not refuse",
+			Resource: "admission of a legacy credential GitLab did not refuse, at the read_api minimum",
 			Key:      KeyEntry, StdioKey: KeyNone,
-			Decided:  []string{"issue 952"},
-			Findings: []string{"F-08"},
+			Decided: []string{"ADR-0018", "issue 952"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
-					Challenge: true, Prefix: rejectedPrefix, Answer: Reauthorize, Charged: rejectedCharges, At: resolve,
+					Challenge: true, Prefix: rejectedPrefix, Answer: Reauthorize, Charged: rejectedCharges, At: gateClassify,
 				},
-				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, resolve),
+				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, gateClassify),
 				permissionMissing(gatePermission, false),
+				belowMinimum(gateBelowMinimum, false, belowMinimumPrefix),
 			},
 			Sites: []Site{
 				enforce(pkgPool, "verifyCredential"),
+				enforce(pkgPool, "ServerPool.entryConfig"),
 				enforce(pkgGitLab, "credentialVerdictFor"),
 				enforce(pkgGitLab, "PermissionRefusal"),
-				resolve, gatePermission,
+				enforce(pkgGitLab, "MeetsMinimum"),
+				enforce(pkgGitLab, "BelowMinimum"),
+				resolve, gateClassify, gatePermission, gateBelowMinimum,
 			},
 		},
 		{
@@ -94,10 +123,11 @@ func admitDecisions() []Decision {
 			Resource: "admission of an OAuth token at the read_api minimum",
 			Key:      KeyVerified, StdioKey: KeyNone,
 			Values: []string{"UpstreamRetryAfter"}, Source: Constant, Zero: ZeroNotApplicable,
-			Decided: []string{"ADR-0018", "issue 952"},
 			// The verification's round trips to GitLab run under ADM-014's
-			// slots, which answered F-30 (issue 950).
-			Findings: []string{"F-08"},
+			// slots, which answered F-30 (issue 950). The minimum is the
+			// legacy door's too since issue 952 (ADM-001), the predicate
+			// shared (MeetsMinimum), which is why F-08 left this row.
+			Decided: []string{"ADR-0018", "issue 952"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnauthorized, Status: 401,
@@ -108,10 +138,7 @@ func admitDecisions() []Decision {
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeForbidden, Status: 403,
 					Challenge: true, Answer: WidenScope, At: check,
 				},
-				{
-					Methods: []string{MethodGate}, Channel: Gate, Code: CodeForbidden, Status: 403,
-					Challenge: true, Prefix: "GitLab rejected this token for lacking the scope", Answer: WidenScope, At: classify,
-				},
+				belowMinimum(guardBelowMinimum, true, insufficientScopePrefix),
 				{
 					Methods: []string{MethodGate}, Channel: Gate, Code: CodeUnavailable, Status: 503,
 					RetryAfter: RetryAfterUpstreamOrFixed, Prefix: "GitLab could not verify this token right now;",
@@ -130,8 +157,14 @@ func admitDecisions() []Decision {
 				enforce(pkgOAuth, "newGitLabVerifier"),
 				enforce(pkgOAuth, "askIdentity"),
 				enforce(pkgOAuth, "SatisfiesMinimum"),
+				enforce(pkgGitLab, "MeetsMinimum"),
 				enforce(pkgGitLab, "PermissionRefusal"),
-				classify, invalidToken, check, guardPermission,
+				classify, invalidToken, check, guardPermission, guardBelowMinimum,
+				// The gate behind the guard gives the guard's answer to a
+				// credential only the pool could judge: below the minimum where
+				// the verifier assumed api, or refused User: Read where the two
+				// probes disagreed.
+				gateClassify,
 			},
 		},
 		{
@@ -223,6 +256,19 @@ func admitDecisions() []Decision {
 			// because nothing at GitLab 19.4 edits a grant after its token is
 			// created; the TTL bounds how long a feature flag an administrator
 			// turns on for the user stays unseen.
+			//
+			// And it remembers a token GitLab accepted that carries neither
+			// read_api nor api (RejectionBelowMinimum, issue 952): recorded by
+			// the gate when the pool refuses it (on ADM-001's refusal in legacy
+			// mode, on ADM-002's behind the bearer guard), by the bearer guard
+			// on GET /user's 403 insufficient_scope, and by the pool, through
+			// the record the gate hands it, when it learns that of a credential
+			// it already serves and ends its entry. Served uncharged, in legacy
+			// mode in the gate's words and in OAuth mode in the guard's, which
+			// is the gate's answer there too, since a token's scopes cannot
+			// change after it is created: GitLab has no route that edits a
+			// personal access token's scopes, and an OAuth token granted more
+			// is a new token.
 			ID: "ADM-006", Question: Admit, Kind: Lifetime, Class: ClassA, Disposition: Valued,
 			Resource: "how long, and how many, rejected tokens are remembered",
 			Key:      KeyRefused, StdioKey: KeyNone, Table: true,
@@ -237,6 +283,8 @@ func admitDecisions() []Decision {
 				},
 				permissionMissing(gatePermission, false),
 				permissionMissing(guardPermission, true),
+				belowMinimum(gateBelowMinimum, false, belowMinimumPrefix),
+				belowMinimum(guardBelowMinimum, true, insufficientScopePrefix),
 			},
 			Sites: []Site{
 				alias(pkgServer, "rejectedTokenTTL", "RejectedTokenTTL"),
@@ -244,8 +292,11 @@ func admitDecisions() []Decision {
 				enforce(pkgServer, "registerOAuthMCPHandlers"),
 				enforce(pkgServer, "registerLegacyMCPHandlers"),
 				enforce(pkgOAuth, "RejectedTokens.RecordPermissionMissing"),
+				enforce(pkgOAuth, "RejectedTokens.RecordBelowMinimum"),
 				enforce(pkgOAuth, "RejectedTokens.LookupRefusal"),
-				check, invalidToken, resolve, classify, gatePermission, guardPermission,
+				enforce(pkgPool, "ServerPool.RememberBelowMinimum"),
+				enforce(pkgPool, "ServerPool.evictBelowMinimum"),
+				check, invalidToken, resolve, gateClassify, classify, gatePermission, guardPermission, gateBelowMinimum, guardBelowMinimum,
 			},
 		},
 		{
@@ -516,13 +567,13 @@ func admitDecisions() []Decision {
 			// by issue 950).
 			Findings: []string{"F-16"},
 			Refusals: []Refusal{
-				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, resolve),
+				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, gateClassify),
 			},
 			Sites: []Site{
 				alias(pkgPool, "maxConcurrentCredentialProbes", "CredentialProbes"),
 				alias(pkgPool, "credentialProbeQueueTimeout", "CredentialProbeWait"),
 				enforce(pkgPool, "New"),
-				resolve,
+				gateClassify,
 			},
 		},
 		{

@@ -201,9 +201,11 @@ something else.
 The three credential-pool instruments carry this server's own namespace rather
 than the convention's `mcp.`, because a credential pool is this deployment's
 concept and not the protocol's. `gitlab_mcp.credential_pool.eviction.reason`
-takes one of seven values: `size_pressure`, `size_pressure_busy`, `idle`,
-`stale_credential`, `rejected_credential`, `invalid_credential` and `rebuild`.
-All seven are exported from process start, zeros included, so a panel is never
+takes one of eight values: `size_pressure`, `size_pressure_busy`, `idle`,
+`stale_credential`, `rejected_credential`, `invalid_credential`,
+`below_minimum` (a credential GitLab accepts that carries neither `read_api`
+nor `api`, found so once its entry was serving) and `rebuild`. All eight are
+exported from process start, zeros included, so a panel is never
 empty for the ambiguous reason.
 
 `size_pressure_busy` is the one to alert on: it is the only path that ends a

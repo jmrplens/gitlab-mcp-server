@@ -14935,6 +14935,7 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 		"credential_evicted",
 		"credential_reset",
 		"credential_revoked",
+		"credential_insufficient",
 		"resource_gone",
 		"lifetime_reached",
 		"watcher_evicted",

@@ -236,15 +236,16 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	} else {
 		metricAttrs = append(metricAttrs, attrServerAddress.String(bounded))
 	}
-	switch {
-	case err != nil:
+	// An if chain rather than a tagless switch, whose case expressions carry
+	// no statement counter for the mutation tool to measure.
+	if err != nil {
 		// A transport error, which is the only failure this layer treats as
 		// one: no response arrived at all. The error text is not recorded,
 		// because it carries addresses and would make error.type unbounded.
 		span.SetStatus(codes.Error, "")
 		span.SetAttributes(attrErrorTypeForTransport.String(ErrorTypeOther))
 		metricAttrs = append(metricAttrs, attrErrorTypeForTransport.String(ErrorTypeOther))
-	case resp != nil:
+	} else if resp != nil {
 		status := attrHTTPResponseStatus.Int(resp.StatusCode)
 		span.SetAttributes(status)
 		metricAttrs = append(metricAttrs, status)

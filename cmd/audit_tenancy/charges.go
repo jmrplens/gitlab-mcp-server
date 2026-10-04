@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"net/textproto"
 	"slices"
 	"strings"
 
@@ -15,7 +16,8 @@ import (
 // code, per refusal return.
 //
 // In each function the table names, every return of a refusal is matched to
-// one row by its status and, where its text folds, by the row's prefix, and it
+// one row by its status, by whether it carries a challenge and, where its text
+// folds, by the row's prefix, and it
 // is charged exactly when a call of the function's charge helper precedes it
 // in the same block or in a block enclosing it. A return whose charged state
 // differs from its row's, a
@@ -51,9 +53,10 @@ func (g *gate) checkCharges() []Finding {
 }
 
 // pairingFindings holds each failure whose row the register holds to that
-// row's refusals: one of them is a gate refusal with the failure's status and
-// prefix, and each such refusal names a budget exactly when the failure is
-// charged. A failure naming no row is ValidateFailures' finding, not this one.
+// row's refusals: one of them is a gate refusal with the failure's status,
+// prefix and challenge, and each such refusal names a budget exactly when the
+// failure is charged. A failure naming no row is ValidateFailures' finding,
+// not this one.
 func (g *gate) pairingFindings() []Finding {
 	rows := map[string]tenancy.Decision{}
 	for _, d := range g.reg.decisions {
@@ -68,21 +71,21 @@ func (g *gate) pairingFindings() []Finding {
 		subject := keyOf(f.At) + " " + f.Kind
 		paired := false
 		for _, r := range d.Refusals {
-			if r.Channel != tenancy.Gate || r.Status != f.Status || r.Prefix != f.Prefix {
+			if r.Channel != tenancy.Gate || r.Status != f.Status || r.Prefix != f.Prefix || r.Challenge != f.Challenge {
 				continue
 			}
 			paired = true
 			if charged := len(r.Charged) > 0; charged != f.Charged {
 				found = append(found, Finding{
 					Rule: "G7", Subject: subject,
-					Message: fmt.Sprintf("is %s in the failure table, and %s's %d refusal beginning %q is %s", chargedWord(f.Charged), d.ID, f.Status, f.Prefix, chargedWord(charged)),
+					Message: fmt.Sprintf("is %s in the failure table, and %s's %s is %s", chargedWord(f.Charged), d.ID, refusalWords(f.Status, f.Prefix, f.Challenge), chargedWord(charged)),
 				})
 			}
 		}
 		if !paired {
 			found = append(found, Finding{
 				Rule: "G7", Subject: subject,
-				Message: fmt.Sprintf("names %s, which declares no gate refusal of status %d beginning %q", d.ID, f.Status, f.Prefix),
+				Message: fmt.Sprintf("names %s, which declares no gate %s", d.ID, refusalWords(f.Status, f.Prefix, f.Challenge)),
 			})
 		}
 	}
@@ -91,10 +94,11 @@ func (g *gate) pairingFindings() []Finding {
 
 // refusalReturn is one return of a refusal, as G7 reads it.
 type refusalReturn struct {
-	pos     token.Pos
-	status  int
-	text    string
-	charged bool
+	pos       token.Pos
+	status    int
+	text      string
+	challenge bool
+	charged   bool
 }
 
 // chargeWalk reads one function's refusal returns and charge calls.
@@ -244,8 +248,13 @@ func (w *chargeWalk) refusal(ret *ast.ReturnStmt, charged bool) bool {
 		// The result is typed as the gate's failure, so a literal there is
 		// one, and read as one wherever the rules list its type.
 		if rl, ok := w.g.refusalLiteral(info, e); ok {
+			challenge, readable := w.g.challenged(info, rl)
+			if !readable {
+				w.unreadable(ret, "returns a refusal whose headers the gate cannot read")
+				return false
+			}
 			status, _ := rl.intField(info, rl.typ.status)
-			w.returns = append(w.returns, refusalReturn{pos: ret.Pos(), status: status, text: w.g.leadingText(info, rl.fields[rl.typ.message]), charged: charged})
+			w.returns = append(w.returns, refusalReturn{pos: ret.Pos(), status: status, text: w.g.leadingText(info, rl.fields[rl.typ.message]), challenge: challenge, charged: charged})
 			return true
 		}
 	case *ast.CallExpr:
@@ -279,6 +288,11 @@ func (w *chargeWalk) constructed(ret *ast.ReturnStmt, call *ast.CallExpr, charge
 		return false
 	}
 	ctorInfo := ctor.info()
+	challenge, readable := w.g.challenged(ctorInfo, lits[0])
+	if !readable {
+		w.unreadable(ret, fmt.Sprintf("returns a refusal from %s, whose headers the gate cannot read", ctor.key))
+		return false
+	}
 	status, _ := lits[0].intField(ctorInfo, lits[0].typ.status)
 	text := ""
 	for _, arg := range call.Args {
@@ -290,8 +304,16 @@ func (w *chargeWalk) constructed(ret *ast.ReturnStmt, call *ast.CallExpr, charge
 	if text == "" {
 		text = w.g.leadingText(ctorInfo, lits[0].fields[lits[0].typ.message])
 	}
-	w.returns = append(w.returns, refusalReturn{pos: ret.Pos(), status: status, text: text, charged: charged})
+	w.returns = append(w.returns, refusalReturn{pos: ret.Pos(), status: status, text: text, challenge: challenge, charged: charged})
 	return true
+}
+
+// challenged reports whether a gate literal carries the challenge header, and
+// whether its headers could be read at all.
+func (g *gate) challenged(info *types.Info, rl refusalLit) (challenge, readable bool) {
+	headers, readable := g.headers(info, rl.fields[rl.typ.header])
+	_, challenge = headers[textproto.CanonicalMIMEHeaderKey(g.rules.headerChallenge)]
+	return challenge, readable
 }
 
 // unreadable records a return G7 could not read, which fails rather than
@@ -316,7 +338,7 @@ func (g *gate) matchReturns(subject string, rows []tenancy.Failure, returns []re
 		if best < 0 {
 			found = append(found, Finding{
 				Rule: "G7", Subject: subject, Position: g.p.position(ret.pos),
-				Message: fmt.Sprintf("returns a %d refusal beginning %q that no row of the failure table matches", ret.status, ret.text),
+				Message: fmt.Sprintf("returns a %s that no row of the failure table matches", refusalWords(ret.status, ret.text, ret.challenge)),
 			})
 			continue
 		}
@@ -333,27 +355,38 @@ func (g *gate) matchReturns(subject string, rows []tenancy.Failure, returns []re
 		if !matched[i] {
 			found = append(found, Finding{
 				Rule: "G7", Subject: subject + " " + row.Kind,
-				Message: fmt.Sprintf("is a %d refusal beginning %q in the failure table that no return of %s matches", row.Status, row.Prefix, subject),
+				Message: fmt.Sprintf("is a %s in the failure table that no return of %s matches", refusalWords(row.Status, row.Prefix, row.Challenge), subject),
 			})
 		}
 	}
 	return found
 }
 
+// refusalWords names a refusal by what identifies it: its status, the text it
+// begins with and, where it carries one, its challenge.
+func refusalWords(status int, text string, challenge bool) string {
+	words := fmt.Sprintf("%d refusal beginning %q", status, text)
+	if challenge {
+		words += " with a challenge"
+	}
+	return words
+}
+
 // matchScore is how well a row matches a return: zero when it does not, one
 // for a row with no prefix, and two for a row whose prefix begins the
-// return's text, so a return prefers the row that names it.
+// return's text, so a return prefers the row that names it. A row and a
+// return that disagree on the challenge never match.
 func matchScore(row tenancy.Failure, ret refusalReturn) int {
-	switch {
-	case row.Status != ret.status:
-		return 0
-	case row.Prefix == "":
-		return 1
-	case strings.HasPrefix(ret.text, row.Prefix):
-		return 2
-	default:
+	if row.Status != ret.status || row.Challenge != ret.challenge {
 		return 0
 	}
+	if row.Prefix == "" {
+		return 1
+	}
+	if strings.HasPrefix(ret.text, row.Prefix) {
+		return 2
+	}
+	return 0
 }
 
 // chargedWord renders a charged state.

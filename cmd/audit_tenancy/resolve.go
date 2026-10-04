@@ -221,14 +221,13 @@ func (p *program) position(pos token.Pos) string {
 
 // where is the position of a declaration's name.
 func (d *declaration) where(p *program) string {
-	switch {
-	case d.fn != nil:
+	if d.fn != nil {
 		return p.position(d.fn.Name.Pos())
-	case d.value != nil:
-		return p.position(d.value.Names[d.index].Pos())
-	default:
-		return p.position(d.typ.Name.Pos())
 	}
+	if d.value != nil {
+		return p.position(d.value.Names[d.index].Pos())
+	}
+	return p.position(d.typ.Name.Pos())
 }
 
 // initializer is the expression a const or var name is initialized with, or
@@ -259,14 +258,13 @@ func (d *declaration) body() ast.Node {
 // comments are the doc comments that describe the declaration: its own, and
 // the one on the const, var or type block that encloses it.
 func (d *declaration) comments() []*ast.CommentGroup {
-	switch {
-	case d.fn != nil:
+	if d.fn != nil {
 		return []*ast.CommentGroup{d.fn.Doc}
-	case d.value != nil:
-		return []*ast.CommentGroup{d.value.Doc, d.gen.Doc}
-	default:
-		return []*ast.CommentGroup{d.typ.Doc, d.gen.Doc}
 	}
+	if d.value != nil {
+		return []*ast.CommentGroup{d.value.Doc, d.gen.Doc}
+	}
+	return []*ast.CommentGroup{d.typ.Doc, d.gen.Doc}
 }
 
 // info is the type information of the declaration's package.

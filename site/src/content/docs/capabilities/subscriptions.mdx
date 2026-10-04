@@ -94,15 +94,16 @@ On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the cl
 }
 ```
 
-| `reason`             | What happened                                                 | What to do                                                          |
-| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `credential_evicted` | Size pressure took this credential's pooled entry             | Reconnect and subscribe again now; the credential is still valid    |
-| `credential_reset`   | The entry was reclaimed for idleness, staleness, or a rebuild | Reconnect and subscribe again; nothing is wrong with the credential |
-| `credential_revoked` | GitLab refused the credential                                 | Re-authenticate first; the same token will be refused again         |
-| `resource_gone`      | The watched resource answered 401, 403 or 404                 | Check access; subscribe again only if the resource comes back       |
-| `lifetime_reached`   | The absolute 24-hour watch lifetime ran out                   | Subscribe again; expected on a long-lived client                    |
-| `watcher_evicted`    | A demoted watch of yours was stopped at the watcher cap       | Subscribe again, and keep the session busy                          |
-| `shutdown`           | The server is stopping                                        | Reconnect; behind a balancer another instance will take you         |
+| `reason`                  | What happened                                                             | What to do                                                          |
+| ------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `credential_evicted`      | Size pressure took this credential's pooled entry                         | Reconnect and subscribe again now; the credential is still valid    |
+| `credential_reset`        | The entry was reclaimed for idleness, staleness, or a rebuild             | Reconnect and subscribe again; nothing is wrong with the credential |
+| `credential_revoked`      | GitLab refused the credential                                             | Re-authenticate first; the same token will be refused again         |
+| `credential_insufficient` | GitLab accepts the credential, which carries neither `read_api` nor `api` | Replace the token with one that does; its scopes cannot change      |
+| `resource_gone`           | The watched resource answered 401, 403 or 404                             | Check access; subscribe again only if the resource comes back       |
+| `lifetime_reached`        | The absolute 24-hour watch lifetime ran out                               | Subscribe again; expected on a long-lived client                    |
+| `watcher_evicted`         | A demoted watch of yours was stopped at the watcher cap                   | Subscribe again, and keep the session busy                          |
+| `shutdown`                | The server is stopping                                                    | Reconnect; behind a balancer another instance will take you         |
 
 `detail` is a sentence of advice, so a client that does not recognize the reason word can still act on it. A `status` field appears only on `resource_gone`, and it is relayed rather than interpreted: GitLab answers 404 for a resource you may not see, so a 404 here does not mean deleted. The vocabulary is closed and published in the server card's `subscriptions.end_reasons`, which is served in HTTP mode only: on stdio there is no endpoint to read it from, and the four reasons reachable there (`resource_gone`, `lifetime_reached`, `watcher_evicted` and `shutdown`) are documented on this page instead. Treat an unrecognized value as "an ending this client does not know", never as "any ending".
 

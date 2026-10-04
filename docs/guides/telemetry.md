@@ -216,7 +216,7 @@ namespace the semantic convention owns. They are published by HTTP mode only,
 and `capacity` is published beside `entries` so "how close to the bound" is
 answerable without typing the flag's value into a dashboard query.
 
-`gitlab_mcp.credential_pool.eviction.reason` takes one of seven values, one per
+`gitlab_mcp.credential_pool.eviction.reason` takes one of eight values, one per
 removal path, and every one of them is exported from process start whether it
 has fired or not, so a panel is never empty for the ambiguous reason:
 
@@ -228,6 +228,7 @@ has fired or not, so a panel is never empty for the ambiguous reason:
 | `stale_credential`    | The credential had not been re-checked against GitLab inside the age ceiling                                                                                                                                                                                                             |
 | `rejected_credential` | GitLab refused the credential on a call: a `401` naming the token, or a `401` the credential probe then confirmed, never a permission refusal. A GraphQL `401` to a token carrying neither `api` nor `read_api` names the token too ([Refused calls](http-server-mode.md#refused-calls)) |
 | `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                                                                                                                                                                                                               |
+| `below_minimum`       | GitLab accepted the credential and a confirmation or a revalidation found it carrying neither `read_api` nor `api`, the admission minimum, after its entry was built while its scopes could not be read ([Credential Verification](http-server-mode.md#credential-verification))         |
 | `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it                                                                                                                                                                                                        |
 
 `size_pressure_busy` is the one to alert on. It is the only path that ends a

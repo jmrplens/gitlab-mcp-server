@@ -52,6 +52,14 @@ const (
 	// is created, so the verdict holds for the token's life; the entry's TTL
 	// bounds how long a feature flag an administrator turns on stays unseen.
 	RejectionPermissionMissing
+	// RejectionBelowMinimum is the verdict that the token is genuine and
+	// carries neither read_api nor api, the minimum every door admits at
+	// (issue 952): GET /api/v4/user answered 403 with insufficient_scope, or
+	// the token's own description named only scopes below it. It is cached,
+	// uncharged like the fresh answer, because a token's scopes cannot change
+	// after it is created: GitLab has no route that edits a personal access
+	// token's scopes, and an OAuth token granted more scopes is a new token.
+	RejectionBelowMinimum
 )
 
 // rejection is one cached refusal: when it stops applying, what it was, and,
@@ -108,6 +116,14 @@ func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind)
 // --allow-any-gitlab-url is the caller's own.
 func (r *RejectedTokens) RecordPermissionMissing(gitlabURL, token, description string) {
 	r.record(gitlabURL, token, rejection{kind: RejectionPermissionMissing, description: QuotedDescription(description)})
+}
+
+// RecordBelowMinimum notes that GitLab accepted this token and that it carries
+// neither read_api nor api ([RejectionBelowMinimum]). Every door records it
+// through this one method, the fresh refusal's and the pool's alike, so the
+// refusal served from here is the one the round trip produced.
+func (r *RejectedTokens) RecordBelowMinimum(gitlabURL, token string) {
+	r.RecordKind(gitlabURL, token, RejectionBelowMinimum)
 }
 
 // record stores one refusal, its expiry set from the cache's TTL.

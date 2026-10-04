@@ -831,20 +831,55 @@ func TestLimit_RateLimitRefusalIsVisible(t *testing.T) {
 	}
 }
 
-// TestLimit_IgnoreScopesSkipsDetection verifies that --ignore-scopes actually
-// stops the scope probe rather than merely ignoring its result, which is the
-// difference between saving a round trip and not.
-func TestLimit_IgnoreScopesSkipsDetection(t *testing.T) {
-	gitlab := acceptingGitLab(t)
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--ignore-scopes")
+// TestLimit_IgnoreScopesReadsTheScopesAndSkipsTheNarrowing verifies what
+// --ignore-scopes does since issue 952. The token's scopes are still read,
+// because the admission minimum is judged on them and the flag never lifts it;
+// what it skips is the scope filter and the read-only narrowing. A read_api
+// token is therefore served a surface that finds a write under the flag, and
+// the read-only surface without it, both after its scopes were read. The
+// surface is asked rather than a log line read, since a line written after the
+// response can still be in the pipe when the response is read.
+func TestLimit_IgnoreScopesReadsTheScopesAndSkipsTheNarrowing(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		flags     []string
+		wantWrite bool
+	}{
+		{name: "with --ignore-scopes", flags: []string{"--ignore-scopes"}, wantWrite: true},
+		{name: "without it"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := startScopedFakeGitLab(t, map[string][]string{"glpat-reader": {"read_api"}})
+			srv := startServer(t, nil, append([]string{"--gitlab-url=" + gitlab.url}, tc.flags...)...)
 
-	got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-noscopes"}))
-	if got.status >= http.StatusInternalServerError {
-		t.Fatalf("status = %d", got.status)
+			found := findActionFor(t, srv, "glpat-reader", "create issue")
+			if awaitLog(t, srv, "detected PAT scopes") == "" {
+				t.Fatalf("the token's scopes were not read, and the minimum is judged on them:\n%s", srv.logs())
+			}
+			// A write action, named the way the catalog names it.
+			if served := strings.Contains(found, "issue_create"); served != tc.wantWrite {
+				t.Errorf("find_action reached issue_create = %v, want %v: %s", served, tc.wantWrite, truncate(found))
+			}
+		})
 	}
-	if strings.Contains(srv.logs(), "detected PAT scopes") {
-		t.Error("scope detection ran despite --ignore-scopes")
+}
+
+// findActionFor asks the dynamic surface's find tool for query with token in
+// the legacy header, and returns the answer's body. findActionAs is the same
+// call with its query fixed, for the cases about who asked rather than what.
+func findActionFor(t *testing.T, srv *server, token, query string) string {
+	t.Helper()
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"` + query + `"},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+	got := srv.do(t, request{
+		method:  http.MethodPost,
+		path:    "/mcp",
+		body:    body,
+		headers: map[string]string{"PRIVATE-TOKEN": token},
+	})
+	if got.status != http.StatusOK {
+		t.Fatalf("find_action(%q) for %s = %d: %s", query, token, got.status, truncate(got.body))
 	}
+	return got.body
 }
 
 // awaitLog returns the server's output once it contains want, or "" if it never

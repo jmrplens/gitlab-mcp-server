@@ -2541,6 +2541,154 @@ func TestMCPServerGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged(t *t
 	}
 }
 
+// TestMCPServerGate_BehindTheGuard_AnswersInTheGuardsWords covers the gate in
+// oauth mode, which refuses a genuine credential only where the verifier in
+// front could not judge it: a token below the minimum the verifier admitted
+// on its own api assumption, a personal access token no introspection
+// describes, and one refused User: Read where the pool's probe and the
+// verifier's disagree. The first answer, from the pool, and the later one,
+// from memory, are both the bearer guard's refusal with its insufficient_scope
+// challenge (RFC 6750 section 3.1), the answer the guard itself gives every
+// later request with that credential; before, the first one was the legacy
+// gate's, challenge-free and, below the minimum, worded otherwise.
+func TestMCPServerGate_BehindTheGuard_AnswersInTheGuardsWords(t *testing.T) {
+	guard := newTestGuard(nil)
+	tests := []struct {
+		name     string
+		instance func(t *testing.T, probes *atomic.Int64) string
+		want     *gateFailure
+	}{
+		{
+			name: "below the minimum",
+			instance: func(t *testing.T, probes *atomic.Int64) string {
+				t.Helper()
+				return gateBelowMinimumGitLab(t, false, probes)
+			},
+			want: guard.insufficientScopeFailure(),
+		},
+		{
+			name: "refused User: Read",
+			instance: func(t *testing.T, probes *atomic.Int64) string {
+				t.Helper()
+				return gatePermissionGitLab(t, userReadSentence, probes)
+			},
+			want: guard.permissionMissingFailure(oauth.QuotedDescription(userReadSentence)),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var probes atomic.Int64
+			gate := newGateAgainst(t, okFactory, tt.instance(t, &probes))
+			gate.challenge = oauthChallenge(oauth.ScopeAPI, testMetadataURL)
+			gate.oauthMode, gate.bearerOnly = true, true
+			gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			gate.guard = guard
+
+			for _, when := range []string{"found by the pool", "answered from memory"} {
+				t.Run(when, func(t *testing.T) {
+					assertGuardsAnswer(t, gate, tt.want)
+				})
+			}
+			if got := probes.Load(); got != 1 {
+				t.Errorf("GET /api/v4/user was asked %d times, want once: the second answer comes from memory", got)
+			}
+		})
+	}
+}
+
+// assertGuardsAnswer resolves one bearer request through gate and holds the
+// refusal to want, the guard's own: status, code, words and challenge.
+func assertGuardsAnswer(t *testing.T, gate *mcpServerGate, want *gateFailure) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set("Authorization", "Bearer glpat-narrow")
+	_, failure := gate.resolve(req)
+	if failure == nil || failure.status != want.status || failure.code != want.code || failure.message != want.message {
+		t.Fatalf("resolve failure = %+v, want the guard's %+v", failure, want)
+	}
+	if got := failure.header.Get(headerWWWAuthenticate); got != want.header.Get(headerWWWAuthenticate) || !strings.Contains(got, `error="insufficient_scope"`) {
+		t.Errorf("WWW-Authenticate = %q, want the guard's insufficient_scope challenge %q", got, want.header.Get(headerWWWAuthenticate))
+	}
+}
+
+// gateBelowMinimumGitLab is an instance that knows the token and finds it
+// below the read_api minimum, in one of the two ways GitLab says so: the
+// credential probe refused for want of a scope (refuseProbe), or accepted with
+// the token's own description naming read_user alone. Every probe is counted.
+func gateBelowMinimumGitLab(t *testing.T, refuseProbe bool, probes *atomic.Int64) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		probes.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if refuseProbe {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api read_api read_user"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":42,"username":"reader"}`))
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"scopes":["read_user"],"active":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// TestMCPServerGate_TokenBelowTheMinimum_IsForbiddenUnchargedAndRemembered
+// covers the legacy door for a token GitLab accepted that carries neither
+// read_api nor api (issue 952), whichever way GitLab says so. It is answered
+// 403 with no challenge, in the door's fixed words, never charged however
+// often it comes back (a request carrying no credential afterwards still gets
+// the plain 401 rather than the 429 an exhausted budget would give), builds no
+// entry, and is remembered, so the instance is probed once for every one of
+// those requests. Before, the token GET /api/v4/user refused was answered 401
+// and charged, and the read_user one was admitted and failed on every call.
+func TestMCPServerGate_TokenBelowTheMinimum_IsForbiddenUnchargedAndRemembered(t *testing.T) {
+	const requests = authFailureLimit * 2
+	for _, tt := range []struct {
+		name        string
+		refuseProbe bool
+	}{
+		{name: "refused by the probe for want of a scope", refuseProbe: true},
+		{name: "described as carrying read_user"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var probes atomic.Int64
+			gate := newGateAgainst(t, okFactory, gateBelowMinimumGitLab(t, tt.refuseProbe, &probes))
+			gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+			handler := gate.middleware(http.NotFoundHandler())
+
+			for i := range requests {
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+				req.Header.Set("PRIVATE-TOKEN", "glpat-narrow")
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if rec.Code != http.StatusForbidden || rec.Header().Get("WWW-Authenticate") != "" {
+					t.Fatalf("request %d: status %d with challenge %q, want 403 with none", i, rec.Code, rec.Header().Get("WWW-Authenticate"))
+				}
+				if decoded := decodeJSONRPCError(t, rec.Body.String()); decoded.Error.Code != errCodeForbidden || decoded.Error.Message != belowMinimumMessage {
+					t.Errorf("request %d: error = %d %q\nwant %d %q", i, decoded.Error.Code, decoded.Error.Message, errCodeForbidden, belowMinimumMessage)
+				}
+			}
+			if got := probes.Load(); got != 1 {
+				t.Errorf("GET /api/v4/user was asked %d times for %d requests, want once", got, requests)
+			}
+			if gate.pool.Size() != 0 {
+				t.Errorf("pool size = %d, want 0: a token below the minimum is not served", gate.pool.Size())
+			}
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")))
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("status = %d, want %d: the refusals must not have spent the failure budget", rec.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
 // assertLegacyPermissionRefusal sends request i, carrying the fine-grained
 // token, through handler and holds its answer to the legacy door's permission
 // refusal: 403, no challenge, and the fixed words followed by GitLab's
@@ -2658,6 +2806,13 @@ func TestMCPServerGate_KnownRefusalOfAnotherKind_IsNotTheDoorPermissionRefusal(t
 			name: "the missing permission",
 			record: func(rejected *oauth.RejectedTokens, instance string) {
 				rejected.RecordPermissionMissing(instance, gateTestToken, userReadSentence)
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "a token below the minimum",
+			record: func(rejected *oauth.RejectedTokens, instance string) {
+				rejected.RecordBelowMinimum(instance, gateTestToken)
 			},
 			wantStatus: http.StatusForbidden,
 		},

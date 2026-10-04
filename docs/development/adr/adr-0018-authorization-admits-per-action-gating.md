@@ -49,7 +49,12 @@ action.**
 
 - `oauth.MinimumScope` (`read_api`) is what the door checks, through
   `oauth.SatisfiesMinimum`, which treats `api` as covering `read_api`. The
-  only credential refused is one carrying no GitLab API scope at all.
+  only credential refused is one carrying no GitLab API scope at all. [Since
+  issue 952 the legacy HTTP door checks the same minimum through the same
+  predicate, `gitlabclient.MeetsMinimum`, which `SatisfiesMinimum` delegates
+  to: a token GitLab accepted that carries neither `read_api` nor `api` is
+  answered 403, uncharged, and remembered, while one whose scopes could not
+  be read is still admitted, as NEG-002 below says.]
 - A token that cannot write gets a read-only tool surface.
   `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` on the pool
   entry when `gitlabclient.WriteCapable` reports the token's scopes cannot

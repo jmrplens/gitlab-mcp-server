@@ -123,12 +123,42 @@ func refusedAGrant(err error) bool {
 
 // ScopeAPI is the GitLab scope that permits writes.
 //
-// Only the write scope is named here, and deliberately: this package answers
-// one question — can this token mutate GitLab — and the read scope is not
-// part of that answer. internal/oauth owns the full scope vocabulary for the
-// authorization layer; duplicating it here would be a second place to keep
-// in step with GitLab.
+// Only the two scopes this package's questions turn on are named here: this
+// one, which answers whether a token can mutate GitLab, and [ScopeReadAPI],
+// which with it answers whether a token reaches the API at all
+// ([MeetsMinimum]). internal/oauth owns the rest of the scope vocabulary for
+// the authorization layer, and names these two as the same strings.
 const ScopeAPI = "api"
+
+// ScopeReadAPI is the GitLab scope that permits reading the API, and the
+// minimum every door admits a classic token at (ADR-0018, issue 952).
+const ScopeReadAPI = "read_api"
+
+// MeetsMinimum reports whether a scope list GitLab answered with meets the
+// admission minimum, read_api, which api covers. A fine-grained token's list
+// meets it: its one scope names no authority, so it is unknown authority, and
+// GitLab judges its grant per call (ADR-0024).
+//
+// It judges an answer and nothing else, so a nil or empty list does not meet
+// it. A caller that holds no answer, because the token's scopes could not be
+// read, admits the token without asking ([BelowMinimum]), since unknown
+// scopes count as capable (ADR-0018); the OAuth door, whose verifier reports
+// an introspection that answered with no scope as an empty answer, asks it of
+// that answer and refuses.
+//
+// Every door asks this one predicate, so a scope that reaches the API is the
+// same scope at each of them.
+func MeetsMinimum(scopes []string) bool {
+	return FineGrained(scopes) || slices.Contains(scopes, ScopeReadAPI) || slices.Contains(scopes, ScopeAPI)
+}
+
+// BelowMinimum reports whether what is known of a token puts it below the
+// admission minimum: GitLab answered with its scopes and they do not meet it
+// ([MeetsMinimum]). A token whose scopes nothing answered for (nil) is not
+// below it, for the reason [WriteCapable] gives unknown scopes.
+func BelowMinimum(facts TokenFacts) bool {
+	return facts.Scopes != nil && !MeetsMinimum(facts.Scopes)
+}
 
 // ScopeGranular is the one legacy scope GitLab gives a fine-grained personal
 // access token. Its authority is not a scope at all but a grant of named

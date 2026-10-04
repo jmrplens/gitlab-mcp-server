@@ -6209,3 +6209,291 @@ const (
 	rereadKeptLog  = "server pool: a fine-grained token's re-read could not be used; keeping what it was shown"
 	kindLearnedLog = "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown"
 )
+
+// insufficientScopeBody is GitLab's answer to GET /api/v4/user for a token
+// that carries none of the scopes the route takes (lib/api/api_guard.rb at
+// v19.4.1-ee): a 403 whose RFC 6750 code is insufficient_scope.
+const insufficientScopeBody = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api read_api read_user"}`
+
+// belowMinimumGitLab is an instance whose credential probe and token
+// description a test sets: the probe answers 200, or 403 with userBody when
+// one is stored, and the description names selfScopes, or answers 500 when
+// none is stored, which leaves the token's kind unknown. It counts the license
+// reads a tier detection makes, so a test can tell whether the tier was asked.
+type belowMinimumGitLab struct {
+	*httptest.Server
+	userBody     atomic.Pointer[string]
+	selfScopes   atomic.Pointer[[]string]
+	licenseCalls atomic.Int64
+}
+
+func newBelowMinimumGitLab(t *testing.T) *belowMinimumGitLab {
+	t.Helper()
+	g := &belowMinimumGitLab{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if body := g.userBody.Load(); body != nil {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(*body))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":7,"username":"reader"}`))
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		scopes := g.selfScopes.Load()
+		if scopes == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "scopes": *scopes, "active": true})
+	})
+	mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+		g.licenseCalls.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	})
+	g.Server = httptest.NewServer(mux)
+	t.Cleanup(g.Close)
+	return g
+}
+
+// answer sets the scopes the token's own description names.
+func (g *belowMinimumGitLab) answer(scopes ...string) {
+	g.selfScopes.Store(&scopes)
+}
+
+// refuseForScope makes the credential probe answer 403 insufficient_scope.
+func (g *belowMinimumGitLab) refuseForScope() {
+	body := insufficientScopeBody
+	g.userBody.Store(&body)
+}
+
+// TestGetOrCreate_ProbeRefusedForWantOfAScope_IsRefusedBelowMinimum covers a
+// token GET /api/v4/user refuses with insufficient_scope, one carrying no
+// scope that reaches the API, read_repository or self_rotate alone among
+// them: it is refused with ErrCredentialBelowMinimum, which the gate answers
+// 403 and does not charge, never with ErrInvalidCredential, which it charges,
+// and no entry is built and no tier asked for it.
+func TestGetOrCreate_ProbeRefusedForWantOfAScope_IsRefusedBelowMinimum(t *testing.T) {
+	g := newBelowMinimumGitLab(t)
+	g.refuseForScope()
+	cfg := testConfig(g.URL)
+	cfg.TierExplicit = false
+	pool := New(cfg, testFactory())
+	t.Cleanup(pool.Close)
+
+	entry, err := pool.GetOrCreateEntry("glpat-self-rotate", g.URL, nil)
+	if entry != nil || !errors.Is(err, ErrCredentialBelowMinimum) || errors.Is(err, ErrInvalidCredential) {
+		t.Fatalf("GetOrCreateEntry = %v, %v; want no entry and ErrCredentialBelowMinimum alone", entry, err)
+	}
+	if n := g.licenseCalls.Load(); n != 0 || pool.Size() != 0 {
+		t.Errorf("license read %d times, pool size %d; want neither for a refused token", n, pool.Size())
+	}
+}
+
+// TestGetOrCreate_ScopesBelowTheMinimum_AreRefusedBeforeTheTier covers a token
+// the probe accepts and whose own description names no scope that reaches the
+// API: read_user is the usual one, since GET /api/v4/user takes it. It is
+// refused before the tier is asked, under --ignore-scopes as well, which skips
+// the scope filter and the narrowing and never the minimum. A token at the
+// minimum, and one whose scopes nothing answered for, are admitted and cost
+// the tier its request.
+func TestGetOrCreate_ScopesBelowTheMinimum_AreRefusedBeforeTheTier(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		scopes       []string
+		ignoreScopes bool
+		refused      bool
+	}{
+		{name: "read_user", scopes: []string{"read_user"}, refused: true},
+		{name: "read_user under ignore-scopes", scopes: []string{"read_user"}, ignoreScopes: true, refused: true},
+		{name: "repository scopes", scopes: []string{"read_repository", "write_repository"}, refused: true},
+		{name: "read_api", scopes: []string{"read_api"}},
+		{name: "read_user beside read_api", scopes: []string{"read_user", "read_api"}},
+		{name: "scopes nothing answered for"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBelowMinimumGitLab(t)
+			if tc.scopes != nil {
+				g.answer(tc.scopes...)
+			}
+			cfg := testConfig(g.URL)
+			cfg.TierExplicit = false
+			cfg.IgnoreScopes = tc.ignoreScopes
+			pool := New(cfg, testFactory())
+			t.Cleanup(pool.Close)
+
+			entry, err := pool.GetOrCreateEntry("glpat-"+strings.ReplaceAll(tc.name, " ", "-"), g.URL, nil)
+			if !tc.refused {
+				if err != nil || entry == nil || g.licenseCalls.Load() != 1 {
+					t.Fatalf("GetOrCreateEntry = %v, %v with the license read %d times; want an entry and one read",
+						entry, err, g.licenseCalls.Load())
+				}
+				return
+			}
+			if entry != nil || !errors.Is(err, ErrCredentialBelowMinimum) {
+				t.Fatalf("GetOrCreateEntry = %v, %v; want no entry and ErrCredentialBelowMinimum", entry, err)
+			}
+			if n := g.licenseCalls.Load(); n != 0 {
+				t.Errorf("the license was read %d times for a refused token, want none", n)
+			}
+		})
+	}
+}
+
+// belowMinimumEntry builds a pool over g that records every eviction cause
+// and every verdict handed to its below-minimum record, and the one entry the
+// tests then find below the minimum.
+func belowMinimumEntry(t *testing.T, g *belowMinimumGitLab, remember bool) (pool *ServerPool, entry *Entry, causes *[]EvictionCause, recorded *[]string) {
+	t.Helper()
+	causes, recorded = &[]EvictionCause{}, &[]string{}
+	pool = New(testConfig(g.URL), testFactory(), WithOnEvict(func(_ *Entry, cause EvictionCause) {
+		*causes = append(*causes, cause)
+	}))
+	t.Cleanup(pool.Close)
+	if remember {
+		pool.RememberBelowMinimum(func(gitlabURL, token string) {
+			*recorded = append(*recorded, gitlabURL+" "+token)
+		})
+	}
+	entry, err := pool.GetOrCreateEntry("glpat-narrow", g.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	return pool, entry, causes, recorded
+}
+
+// assertEndedBelowMinimum holds the pool to having ended the entry as below the
+// minimum: gone, counted apart from a credential GitLab refused, told to its
+// owner as CauseBelowMinimum, never marked rejected, and recorded as wanted.
+func assertEndedBelowMinimum(t *testing.T, pool *ServerPool, entry *Entry, causes, recorded, want []string) {
+	t.Helper()
+	stats := pool.Stats()
+	if pool.Size() != 0 || stats.BelowMinimumEvictions != 1 || stats.RejectedCredentialEvictions != 0 || stats.RevalidationsFailed != 0 {
+		t.Errorf("size %d, below-minimum %d, rejected %d, revalidations failed %d; want 0, 1, 0, 0",
+			pool.Size(), stats.BelowMinimumEvictions, stats.RejectedCredentialEvictions, stats.RevalidationsFailed)
+	}
+	if !slices.Equal(causes, []string{string(CauseBelowMinimum)}) || entry.rejected.Load() {
+		t.Errorf("eviction causes %v, rejected %v; want [%s] and not rejected", causes, entry.rejected.Load(), CauseBelowMinimum)
+	}
+	if !slices.Equal(recorded, want) {
+		t.Errorf("recorded %q, want %q", recorded, want)
+	}
+}
+
+// causeNames spells a list of eviction causes as strings.
+func causeNames(causes []EvictionCause) []string {
+	names := make([]string, len(causes))
+	for i, cause := range causes {
+		names[i] = string(cause)
+	}
+	return names
+}
+
+// TestConfirmUnexplainedRefusal_ProbeFindsTheCredentialBelowMinimum_EndsTheEntryAndRemembersIt
+// covers a confirmation of a 401 that named no cause, answered 403
+// insufficient_scope: the credential is genuine and below the minimum, so the
+// entry it was admitted to while that was not known ends as admission would
+// have refused it, and the verdict goes to the door's record so the next
+// request is refused from memory.
+func TestConfirmUnexplainedRefusal_ProbeFindsTheCredentialBelowMinimum_EndsTheEntryAndRemembersIt(t *testing.T) {
+	g := newBelowMinimumGitLab(t)
+	pool, entry, causes, recorded := belowMinimumEntry(t, g, true)
+	g.refuseForScope()
+
+	pool.confirmUnexplainedRefusal(sessionKey("glpat-narrow", g.URL), entry)
+
+	assertEndedBelowMinimum(t, pool, entry, causeNames(*causes), *recorded, []string{g.URL + " glpat-narrow"})
+}
+
+// TestRevalidateEntry_ProbeFindsTheCredentialBelowMinimum_EndsTheEntry covers
+// the same verdict on a revalidation round, with no record installed, which
+// ends the entry all the same: the next request then rebuilds it and reaches
+// the verdict at admission.
+func TestRevalidateEntry_ProbeFindsTheCredentialBelowMinimum_EndsTheEntry(t *testing.T) {
+	g := newBelowMinimumGitLab(t)
+	pool, entry, causes, recorded := belowMinimumEntry(t, g, false)
+	g.refuseForScope()
+
+	pool.revalidateEntry(t.Context(), sessionKey("glpat-narrow", g.URL), entry)
+
+	assertEndedBelowMinimum(t, pool, entry, causeNames(*causes), *recorded, []string{})
+	// GitLab still took the token, which is what a revalidation asks, so the
+	// round counts as one that succeeded, as the re-read of a token's kind
+	// counts the same verdict.
+	if got := pool.Stats().RevalidationsSucceeded; got != 1 {
+		t.Errorf("revalidations succeeded = %d, want 1", got)
+	}
+}
+
+// TestEvictBelowMinimum_NothingToHandTheVerdictTo_EndsTheEntryAllTheSame covers
+// an entry with no hand-off of its own, as an entry assembled outside the pool
+// carries, and a record installed as nil, which installs none: the entry ends
+// as below the minimum and nothing is called that is not there.
+func TestEvictBelowMinimum_NothingToHandTheVerdictTo_EndsTheEntryAllTheSame(t *testing.T) {
+	for _, tc := range []string{"the entry has no hand-off", "the record was installed as nil"} {
+		t.Run(tc, func(t *testing.T) {
+			g := newBelowMinimumGitLab(t)
+			pool, entry, causes, recorded := belowMinimumEntry(t, g, true)
+			if tc == "the entry has no hand-off" {
+				entry.rememberBelowMinimum = nil
+			} else {
+				pool.RememberBelowMinimum(nil)
+			}
+
+			pool.evictBelowMinimum(t.Context(), sessionKey("glpat-narrow", g.URL), entry)
+
+			assertEndedBelowMinimum(t, pool, entry, causeNames(*causes), *recorded, []string{})
+		})
+	}
+}
+
+// TestRevalidateEntry_KindLearnedBelowTheMinimum_EndsTheEntry covers a token
+// admitted while its description went unanswered, so its scopes and kind were
+// unknown, whose description, asked again on an accepted revalidation, names
+// only read_user: the entry ends and the verdict is recorded, while the facts
+// the entry held are left as they were.
+func TestRevalidateEntry_KindLearnedBelowTheMinimum_EndsTheEntry(t *testing.T) {
+	g := newBelowMinimumGitLab(t)
+	cfg := testConfig(g.URL)
+	cfg.IgnoreScopes = false
+	causes, recorded := []EvictionCause{}, []string{}
+	pool := New(cfg, testFactory(), WithOnEvict(func(_ *Entry, cause EvictionCause) { causes = append(causes, cause) }))
+	t.Cleanup(pool.Close)
+	pool.RememberBelowMinimum(func(gitlabURL, token string) { recorded = append(recorded, gitlabURL+" "+token) })
+	entry, err := pool.GetOrCreateEntry("glpat-narrow", g.URL, nil)
+	if err != nil || !entry.tokenFacts().KindUnknown {
+		t.Fatalf("GetOrCreateEntry = %v, %v; want an entry whose kind is unknown", entry, err)
+	}
+	g.answer("read_user")
+
+	pool.revalidateEntry(t.Context(), sessionKey("glpat-narrow", g.URL), entry)
+
+	assertEndedBelowMinimum(t, pool, entry, causeNames(causes), recorded, []string{g.URL + " glpat-narrow"})
+	if !entry.tokenFacts().KindUnknown {
+		t.Error("the facts of an entry about to go were replaced")
+	}
+}
+
+// TestEvictBelowMinimum_AnEntryNoLongerPooled_IsLeftAlone covers the verdict
+// arriving for an entry the key no longer holds, rebuilt meanwhile or already
+// gone: nothing is evicted, counted or recorded, since the entry under the key
+// now was admitted on a check of its own.
+func TestEvictBelowMinimum_AnEntryNoLongerPooled_IsLeftAlone(t *testing.T) {
+	g := newBelowMinimumGitLab(t)
+	pool, entry, causes, recorded := belowMinimumEntry(t, g, true)
+	key := sessionKey("glpat-narrow", g.URL)
+
+	pool.evictBelowMinimum(t.Context(), key, &Entry{})
+	pool.evictBelowMinimum(t.Context(), "no such key", entry)
+
+	if pool.Size() != 1 || pool.Stats().BelowMinimumEvictions != 0 || len(*causes) != 0 || len(*recorded) != 0 {
+		t.Errorf("size %d, below-minimum %d, causes %v, recorded %v; want the entry kept and nothing counted",
+			pool.Size(), pool.Stats().BelowMinimumEvictions, *causes, *recorded)
+	}
+}

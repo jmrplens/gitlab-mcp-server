@@ -1506,8 +1506,10 @@ func TestMiddleware_ASessionIdReachesTheSpanAndNeverTheMetric(t *testing.T) {
 // The two negative cases matter as much as the positive one. A call that still
 // cannot be named must record no action rather than an empty one, since an
 // attribute present and blank is worse than absent for anyone grouping by it;
-// and an identifier that resolves the domain but never the action must not have
-// its domain recorded twice, which on a metric is one key published twice.
+// an identifier that resolves the domain but never the action must not have
+// its domain recorded twice, which on a metric is one key published twice; and
+// one that resolves the action but never the domain must not record a blank
+// domain beside it.
 func TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan(t *testing.T) {
 	full := Identity{ActionID: "issue.list", Domain: "issue"}
 
@@ -1520,6 +1522,7 @@ func TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan(t *t
 		"the catalog arrives while the call waits": {answersLate: full, resolves: true, wantAction: "issue.list", wantDomain: "issue"},
 		"it still cannot be named":                 {},
 		"only the domain is ever known":            {answersLate: Identity{Domain: "issue"}, resolves: true, wantDomain: "issue"},
+		"only the action is ever known":            {answersLate: Identity{ActionID: "issue.list"}, resolves: true, wantAction: "issue.list"},
 	}
 
 	for name, tc := range tests {

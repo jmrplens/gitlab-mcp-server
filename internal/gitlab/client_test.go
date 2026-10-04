@@ -1572,8 +1572,8 @@ func TestPingDirect_NilContext(t *testing.T) {
 	}
 }
 
-// TestCheckCredential_FourAnswers_KeepsEachApart verifies that the credential
-// probe tells its four answers apart rather than folding one into another.
+// TestCheckCredential_FiveAnswers_KeepsEachApart verifies that the credential
+// probe tells its five answers apart rather than folding one into another.
 //
 // The refusal is the point of the probe: a 401 or a 403 on /api/v4/user is
 // the instance saying this credential is no longer good, and it is what makes
@@ -1582,11 +1582,13 @@ func TestPingDirect_NilContext(t *testing.T) {
 // that does not answer at all are "no verdict", and a refusal read from any of
 // them would turn one unreachable GitLab into a mass revocation. The pool's
 // confirmation of a 401 that named no cause reads the acceptance, which is only
-// honest when GitLab actually answered. And the one 403 whose body is GitLab's
-// refusal of a fine-grained permission is none of them: the credential was
-// accepted, and read as a refusal it would be charged and told to
-// reauthorize a token that works.
-func TestCheckCredential_FourAnswers_KeepsEachApart(t *testing.T) {
+// honest when GitLab actually answered. And the two 403s whose body is GitLab's
+// refusal of a fine-grained permission or of a scope are none of them: the
+// credential was accepted, and read as a refusal it would be charged and told
+// to reauthorize a token that works. The scope refusal is told apart only by
+// its code, so the same code on a 401, and a 403 whose body carries another
+// code or none, still refuse.
+func TestCheckCredential_FiveAnswers_KeepsEachApart(t *testing.T) {
 	tests := []struct {
 		name       string
 		status     int
@@ -1598,7 +1600,9 @@ func TestCheckCredential_FourAnswers_KeepsEachApart(t *testing.T) {
 		{name: "204 accepts", status: http.StatusNoContent, want: CredentialAccepted},
 		{name: "401 refuses", status: http.StatusUnauthorized, want: CredentialRefused},
 		{name: "403 refuses", status: http.StatusForbidden, want: CredentialRefused},
-		{name: "403 for a classic scope refuses", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`, want: CredentialRefused},
+		{name: "403 for a classic scope accepts the credential below the minimum", status: http.StatusForbidden, body: `{"error":"insufficient_scope"}`, want: CredentialAcceptedBelowMinimum},
+		{name: "401 carrying the scope code still refuses", status: http.StatusUnauthorized, body: `{"error":"insufficient_scope"}`, want: CredentialRefused},
+		{name: "403 carrying another code refuses", status: http.StatusForbidden, body: `{"error":"invalid_token"}`, want: CredentialRefused},
 		{name: "403 for a fine-grained permission accepts the credential", status: http.StatusForbidden, body: granularRefusalBody, want: CredentialAcceptedPermissionMissing},
 		{name: "401 carrying the fine-grained code still refuses", status: http.StatusUnauthorized, body: granularRefusalBody, want: CredentialRefused},
 		{name: "404 is no verdict", status: http.StatusNotFound, want: CredentialUnanswered},

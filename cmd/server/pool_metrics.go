@@ -65,5 +65,7 @@ func poolCounts(stats serverpool.Snapshot) mcpotel.PoolCounts {
 		RejectedEvictions: stats.RejectedCredentialEvictions,
 		InvalidEvictions:  stats.InvalidEvictions,
 		RebuildEvictions:  stats.RebuildEvictions,
+
+		BelowMinimumEvictions: stats.BelowMinimumEvictions,
 	}
 }

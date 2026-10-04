@@ -110,14 +110,20 @@ func RequiredScope(readOnly, safeMode bool) string {
 // unknown authority (ADR-0018, ADR-0024), admitted as a classic token whose
 // scopes are unknown is, and refused by GitLab itself on the call its grant
 // does not cover.
+//
+// The read_api minimum, the one [MinimumScope] names, is
+// [gitlabclient.MeetsMinimum], the predicate the legacy door and stdio ask
+// too, so a scope that reaches the API is the same scope at every door. Nil
+// granted scopes are the verifier's answer that the token carries none, and
+// do not meet it.
 func SatisfiesMinimum(granted []string, minimum string) bool {
-	if minimum == "" || gitlabclient.FineGrained(granted) {
+	if minimum == "" {
 		return true
 	}
-	if slices.Contains(granted, minimum) {
-		return true
+	if minimum == ScopeReadAPI {
+		return gitlabclient.MeetsMinimum(granted)
 	}
-	return minimum == ScopeReadAPI && slices.Contains(granted, ScopeAPI)
+	return gitlabclient.FineGrained(granted) || slices.Contains(granted, minimum)
 }
 
 // SupportedScopes lists the scope published as RFC 9728 scopes_supported: api

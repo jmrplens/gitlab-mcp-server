@@ -41,10 +41,11 @@ func (g *gate) checkConfig() []Finding {
 		for _, env := range d.Envs {
 			g.read.settings++
 			suffix, prefixed := strings.CutPrefix(env, g.rules.envPrefix)
-			switch {
-			case !prefixed || !slices.Contains(names, suffix):
+			if !prefixed || !slices.Contains(names, suffix) {
 				failing = append(failing, env+" is not on "+keyOf(g.rules.envNames))
-			case len(readDirectly[env]) > 0:
+				continue
+			}
+			if len(readDirectly[env]) > 0 {
 				failing = append(failing, env+" is read directly at "+strings.Join(readDirectly[env], ", "))
 			}
 		}

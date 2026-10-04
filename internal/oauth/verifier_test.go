@@ -2056,6 +2056,7 @@ func TestSatisfiesMinimum_ApiCoversReadAPI(t *testing.T) {
 		{name: "the minimum is granted outright", granted: []string{ScopeReadAPI}, minimum: ScopeReadAPI, want: true},
 		{name: "api covers a read_api minimum", granted: []string{ScopeAPI}, minimum: ScopeReadAPI, want: true},
 		{name: "read_api does not cover an api minimum", granted: []string{ScopeReadAPI}, minimum: ScopeAPI},
+		{name: "an api minimum is granted outright", granted: []string{"read_user", ScopeAPI}, minimum: ScopeAPI, want: true},
 		{name: "an unrelated scope covers nothing", granted: []string{"read_user"}, minimum: ScopeReadAPI},
 		{name: "no scopes at all", granted: nil, minimum: ScopeReadAPI},
 		// api only supersedes read_api. A minimum this deployment does not

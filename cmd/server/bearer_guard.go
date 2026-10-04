@@ -260,6 +260,15 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 				// verification slot.
 				logDoorPermissionRefusal(r.Context(), "request rejected: token already known to lack the permission to read its own user", sentence)
 				return g.permissionMissingFailure(sentence)
+			case oauth.RejectionBelowMinimum:
+				// GitLab accepted this token, and it carries neither read_api
+				// nor api: recorded by this guard's verification, or by the
+				// pool once it learned that of a credential it served.
+				// Answered from memory and uncharged, as the fresh refusal is,
+				// since a token's scopes cannot change.
+				refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to carry neither read_api nor api",
+					"token_suffix", safeTokenSuffix(token))
+				return g.insufficientScopeFailure()
 			}
 			g.recordFailure(ip, source, token)
 			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
@@ -326,24 +335,21 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 	// later — so it gets the same answer, for the same reasons: the client is
 	// told to ask for the named scope rather than to discard a working token,
 	// and neither the token nor the caller's address is penalized. Charging it
-	// would let a client holding a valid token lock its own address out, and
-	// caching it as rejected would keep refusing that token for five minutes
-	// after the user granted the missing scope.
+	// would let a client holding a valid token lock its own address out.
+	//
+	// It is remembered (issue 952), as the legacy gate remembers the same
+	// verdict: a token's scopes cannot change after it is created, since
+	// GitLab has no route that edits a personal access token's scopes and an
+	// OAuth token granted more scopes is a new token, so the memory refuses
+	// nothing that would now pass, and without it one such token sent by
+	// enough concurrent requests would hold every verification slot.
 	if errors.Is(err, oauth.ErrInsufficientScope) {
+		if g.rejected != nil {
+			g.rejected.RecordBelowMinimum(instance, token)
+		}
 		slog.Info("request rejected: gitlab says the token lacks the required scope",
 			"minimum", g.minimumScope, "token_suffix", safeTokenSuffix(token))
-		return &gateFailure{
-			status: http.StatusForbidden,
-			code:   errCodeForbidden,
-			message: "GitLab rejected this token for lacking the scope this request needs. " +
-				"Reauthorize granting " + g.advertisedScope + " for the full tool surface, or " +
-				g.minimumScope + " for a read-only one. The token itself is valid.",
-			header: newHeader(headerWWWAuthenticate, oauthChallenge(
-				g.minimumScope, g.metadataURL,
-				"error", "insufficient_scope",
-				"error_description", g.missingScopeDescription(),
-			)),
-		}
+		return g.insufficientScopeFailure()
 	}
 
 	// A fine-grained token GitLab accepted and refused the permission to read
@@ -511,6 +517,24 @@ func (g *bearerGuard) permissionMissingFailure(sentence string) *gateFailure {
 			g.minimumScope, g.metadataURL,
 			"error", "insufficient_scope",
 			"error_description", doorPermissionChallengeDescription,
+		)),
+	}
+}
+
+// insufficientScopeFailure builds the 403 shared by a token GitLab refused its
+// own user for want of a scope and one answered from the rejected-token cache,
+// with the insufficient_scope challenge naming the minimum.
+func (g *bearerGuard) insufficientScopeFailure() *gateFailure {
+	return &gateFailure{
+		status: http.StatusForbidden,
+		code:   errCodeForbidden,
+		message: "GitLab rejected this token for lacking the scope this request needs. " +
+			"Reauthorize granting " + g.advertisedScope + " for the full tool surface, or " +
+			g.minimumScope + " for a read-only one. The token itself is valid.",
+		header: newHeader(headerWWWAuthenticate, oauthChallenge(
+			g.minimumScope, g.metadataURL,
+			"error", "insufficient_scope",
+			"error_description", g.missingScopeDescription(),
 		)),
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -565,6 +566,153 @@ func TestGate_FineGrainedTokenWithoutUserRead_IsForbiddenUncharged(t *testing.T)
 	if served := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": admitted})); served.status != http.StatusOK {
 		t.Errorf("a fine-grained token that may read its user, from the same address = %d, want %d: %s",
 			served.status, http.StatusOK, truncate(served.body))
+	}
+}
+
+// minimumFakeGitLab answers each token the way GitLab 19.4 does for its scopes
+// (lib/api/api_guard.rb, lib/api/users.rb): GET /api/v4/user accepts a token
+// carrying api, read_api or read_user and refuses any other with 403
+// insufficient_scope, and the token's own description names its scopes. It
+// counts the probes each token costs and the license reads, which a tier
+// detection makes.
+type minimumFakeGitLab struct {
+	url          string
+	mu           sync.Mutex
+	userCalls    map[string]int
+	licenseCalls int
+}
+
+func startMinimumFakeGitLab(t *testing.T, scopesFor map[string][]string) *minimumFakeGitLab {
+	t.Helper()
+	g := &minimumFakeGitLab{userCalls: map[string]int{}}
+	reaches := []string{"api", "read_api", "read_user"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		g.mu.Lock()
+		g.userCalls[token]++
+		g.mu.Unlock()
+		scopes, known := scopesFor[token]
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case !known:
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+		case !slices.ContainsFunc(scopes, func(scope string) bool { return slices.Contains(reaches, scope) }):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api read_api read_user"}`))
+		default:
+			_, _ = w.Write([]byte(`{"id":1,"username":"scoped"}`))
+		}
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		scopes, known := scopesFor[r.Header.Get("PRIVATE-TOKEN")]
+		if !known {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		body, err := json.Marshal(map[string]any{"id": 1, "scopes": scopes, "active": true})
+		if err != nil {
+			t.Errorf("marshaling the scope response: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	})
+	mux.HandleFunc("/api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+		g.mu.Lock()
+		g.licenseCalls++
+		g.mu.Unlock()
+		w.WriteHeader(http.StatusForbidden)
+	})
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.4.1","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	g.url = srv.URL
+	return g
+}
+
+// probes reports how many credential probes token cost and how many license
+// reads the instance was asked for in all.
+func (g *minimumFakeGitLab) probes(token string) (user, license int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.userCalls[token], g.licenseCalls
+}
+
+// TestGate_TokenBelowTheMinimum_IsForbiddenUncharged drives the legacy door
+// with the two kinds of token GitLab accepts below the read_api minimum (issue
+// 952): one GET /api/v4/user answers, carrying read_user alone, and one it
+// refuses for want of a scope, carrying self_rotate alone, the scope a user
+// who is not an administrator may give a token besides k8s_proxy.
+//
+// Each is answered 403 with no challenge and the door's own words, however
+// often it comes back: past the failure budget of ten it is still a 403 and
+// never a 429, because the token is genuine. GitLab is probed once per token,
+// whatever the number of requests, because the verdict is remembered, and the
+// tier is never asked about either. Before, the read_user token was admitted
+// to a surface on which every call failed, and the self_rotate one was
+// answered 401, charged, and blocked the address after ten. Under
+// --ignore-scopes the answer is the same: that flag skips the scope filter and
+// the narrowing, never the minimum. A read_api token is served from the same
+// address afterwards.
+func TestGate_TokenBelowTheMinimum_IsForbiddenUncharged(t *testing.T) {
+	const (
+		readUser   = "glpat-read-user-only"
+		selfRotate = "glpat-self-rotate-only"
+		readAPI    = "glpat-read-api"
+	)
+	for _, flags := range [][]string{nil, {"--ignore-scopes"}} {
+		t.Run(strings.Join(append([]string{"flags"}, flags...), " "), func(t *testing.T) {
+			gitlab := startMinimumFakeGitLab(t, map[string][]string{
+				readUser:   {"read_user"},
+				selfRotate: {"self_rotate"},
+				readAPI:    {"read_api"},
+			})
+			srv := startServer(t, nil, append([]string{"--gitlab-url=" + gitlab.url}, flags...)...)
+
+			for _, token := range []string{readUser, selfRotate} {
+				assertGateRefusesBelowTheMinimum(t, srv, gitlab, token)
+			}
+			if _, license := gitlab.probes(""); license != 0 {
+				t.Errorf("the license was read %d times for tokens refused below the minimum, want none", license)
+			}
+
+			if served := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": readAPI})); served.status != http.StatusOK {
+				t.Errorf("a read_api token from the same address = %d, want %d: %s", served.status, http.StatusOK, truncate(served.body))
+			}
+		})
+	}
+}
+
+// assertGateRefusesBelowTheMinimum sends srv fifteen requests carrying token,
+// past the failure budget of ten, and holds each answer to the legacy door's
+// refusal of a token below the minimum, 403 with no challenge, -40300 and the
+// door's words, and the instance to having been probed once for all of them.
+func assertGateRefusesBelowTheMinimum(t *testing.T, srv *server, gitlab *minimumFakeGitLab, token string) {
+	t.Helper()
+	const attempts = 15
+	for i := range attempts {
+		got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": token}))
+		if got.status != http.StatusForbidden || got.header.Get("WWW-Authenticate") != "" {
+			t.Fatalf("%s attempt %d: status %d with challenge %q, want 403 with none: %s",
+				token, i, got.status, got.header.Get("WWW-Authenticate"), truncate(got.body))
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if body.Error.Code != -40300 ||
+			!strings.HasPrefix(body.Error.Message, "GitLab accepted this token, which carries neither the read_api nor the api scope") {
+			t.Errorf("%s attempt %d: error = %d %q, want -40300 naming the minimum", token, i, body.Error.Code, body.Error.Message)
+		}
+	}
+	if probes, _ := gitlab.probes(token); probes != 1 {
+		t.Errorf("GET /api/v4/user was asked %d times for %d requests carrying %s, want once", probes, attempts, token)
 	}
 }
 

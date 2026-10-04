@@ -541,10 +541,16 @@ const (
 	endCredentialEvicted = "credential_evicted"
 	endCredentialReset   = "credential_reset"
 	endCredentialRevoked = "credential_revoked"
-	endResourceGone      = "resource_gone"
-	endLifetimeReached   = "lifetime_reached"
-	endWatcherEvicted    = "watcher_evicted"
-	endShutdown          = "shutdown"
+	// endCredentialInsufficient is a credential GitLab accepts that carries
+	// neither read_api nor api, found so once its entry was serving (issue
+	// 952). Apart from endCredentialRevoked because GitLab refused nothing:
+	// the same token still works, it reaches too little, and no
+	// re-authentication of it changes its scopes.
+	endCredentialInsufficient = "credential_insufficient"
+	endResourceGone           = "resource_gone"
+	endLifetimeReached        = "lifetime_reached"
+	endWatcherEvicted         = "watcher_evicted"
+	endShutdown               = "shutdown"
 )
 
 // watchEndReasons is the vocabulary in the order the documentation lists it,
@@ -554,6 +560,7 @@ var watchEndReasons = []string{
 	endCredentialEvicted,
 	endCredentialReset,
 	endCredentialRevoked,
+	endCredentialInsufficient,
 	endResourceGone,
 	endLifetimeReached,
 	endWatcherEvicted,
@@ -611,6 +618,11 @@ var (
 		reason: endCredentialRevoked,
 		detail: "GitLab refused this credential; re-authenticate before subscribing again, " +
 			"because the same token will be refused again",
+	}
+	endOfCredentialInsufficient = &watchEnd{
+		reason: endCredentialInsufficient,
+		detail: "GitLab accepts this credential, which carries neither the read_api nor the api scope this server needs; " +
+			"replace the token with one that does before subscribing again, since a token's scopes cannot change",
 	}
 	endOfLifetime = &watchEnd{
 		reason: endLifetimeReached,
@@ -682,7 +694,9 @@ func watchEndForStop(reason error) *watchEnd {
 // next request rebuilds, so they share a reason rather than each getting one
 // that would tell the client the same thing in different words. A credential
 // GitLab has refused, whether at revalidation or on a call, must be replaced
-// before anything is retried.
+// before anything is retried. So must one below the admission minimum, which
+// has a reason of its own all the same, because GitLab refused nothing there
+// and telling its holder to re-authenticate the same token would not help.
 //
 // A cause this does not know produces no reason at all. That is deliberate:
 // a removal path added later without a decision here should leave the client
@@ -695,6 +709,8 @@ func watchEndForCause(cause serverpool.EvictionCause) *watchEnd {
 		return endOfCredentialReset
 	case serverpool.CauseRejectedCredential, serverpool.CauseInvalidCredential:
 		return endOfCredentialRevocation
+	case serverpool.CauseBelowMinimum:
+		return endOfCredentialInsufficient
 	case serverpool.CausePoolClosed:
 		return endOfShutdown
 	default:

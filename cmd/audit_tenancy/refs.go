@@ -32,14 +32,14 @@ func (g *gate) readFindings(d tenancy.Decision) []Finding {
 		if err != nil {
 			continue
 		}
-		body := decl.body()
-		switch {
-		case g.leafConst(s.Reads) == nil:
+		if g.leafConst(s.Reads) == nil {
 			found = append(found, Finding{
 				Rule: "G5", Subject: d.ID, Position: decl.where(g.p),
 				Message: fmt.Sprintf("%s is declared to read %s, which is not a constant of the register", keyOf(s), s.Reads),
 			})
-		case body == nil || !g.refersTo(decl, body, s.Reads):
+			continue
+		}
+		if body := decl.body(); body == nil || !g.refersTo(decl, body, s.Reads) {
 			found = append(found, Finding{
 				Rule: "G5", Subject: d.ID, Position: decl.where(g.p),
 				Message: fmt.Sprintf("%s does not refer to %s, or to a declared alias of it", keyOf(s), s.Reads),

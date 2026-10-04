@@ -345,6 +345,26 @@ func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 	}
 }
 
+// TestRejectedTokens_BelowMinimum_IsServedAsItsOwnKind verifies the fourth
+// kind a refusal is cached as: a token GitLab accepted that carries neither
+// read_api nor api. It comes back as that kind and no other, with no sentence,
+// for its own instance only, so a door serving it from here gives the
+// uncharged refusal the round trip gave rather than a rejection.
+func TestRejectedTokens_BelowMinimum_IsServedAsItsOwnKind(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com"
+	cache := NewRejectedTokens(8, time.Hour)
+	cache.RecordBelowMinimum(instance, "read-user-token")
+
+	if kind, description, known := cache.LookupRefusal(instance, "read-user-token"); kind != RejectionBelowMinimum || description != "" || !known {
+		t.Errorf("LookupRefusal() = %v, %q, %v; want RejectionBelowMinimum with no sentence", kind, description, known)
+	}
+	if _, known := cache.Lookup("https://other.example.com", "read-user-token"); known {
+		t.Error("another instance found the verdict")
+	}
+}
+
 // TestRejectedTokens_PermissionMissing_IsServedWithItsSentence verifies the
 // third kind a refusal is cached as: a token GitLab accepted and refused the
 // permission to read its own user. The door answers it again from here, so the

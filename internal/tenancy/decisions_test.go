@@ -501,8 +501,9 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // verification, F-31 did when issue 951 bounded the stateful sessions, F-20
 // did when the tool-call refusal was given its resultType under issue 961,
 // F-17 did when issue 952 stopped misreading a fine-grained token, at the
-// read-only narrowing and at both doors, and F-09 did when issue 952 recorded
-// the tier's Free fallback as INV-008's exception.
+// read-only narrowing and at both doors, F-09 did when issue 952 recorded
+// the tier's Free fallback as INV-008's exception, and F-08 did when issue 952
+// set the read_api minimum at the legacy door as well as the OAuth one.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -530,7 +531,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-09,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-08,F-09,F-17,F-19,F-20,F-29,F-30,F-31,F-33"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -595,7 +596,25 @@ const (
 	pinRetry503 = "GitLab could not verify this token right now"
 	pinBusy     = "This server is busy."
 	pinGrant    = "GitLab accepted this token and refused it the permission to read its own user."
+	pinBelow    = "GitLab accepted this token, which carries neither the read_api nor the api scope"
+	pinScope    = "GitLab rejected this token for lacking the scope"
 )
+
+// pinBelowMinimum is the 403 both doors give a credential GitLab accepted that
+// carries neither read_api nor api (issue 952), the legacy gate's without a
+// challenge and in its own words, the bearer guard's with one and in the words
+// it gives a token GitLab refused its own user for want of a scope: uncharged,
+// since the token is genuine.
+func pinBelowMinimum(challenge bool) refusalPin {
+	prefix := pinBelow
+	if challenge {
+		prefix = pinScope
+	}
+	return refusalPin{
+		methods: "http", channel: Gate, code: -40300, status: 403, challenge: challenge,
+		prefix: prefix, answer: WidenScope,
+	}
+}
 
 // pinGrantRefusal is the 403 both doors give a credential GitLab accepted and
 // refused the permission to read its own user, the bearer guard's with a
@@ -685,6 +704,7 @@ func rowPins() map[string]rowPin {
 				prefix: "Could not initialize a GitLab session for this token.", answer: RetryLater,
 			},
 			pinGrantRefusal(false),
+			pinBelowMinimum(false),
 		}},
 		"ADM-002": {Admit, Rule, ClassC, Valued, KeyVerified, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{
@@ -692,10 +712,7 @@ func rowPins() map[string]rowPin {
 				answer: Reauthorize, charged: pinCharged,
 			},
 			{methods: "http", channel: Gate, code: -40300, status: 403, challenge: true, answer: WidenScope},
-			{
-				methods: "http", channel: Gate, code: -40300, status: 403, challenge: true,
-				prefix: "GitLab rejected this token for lacking the scope", answer: WidenScope,
-			},
+			pinBelowMinimum(true),
 			{
 				methods: "http", channel: Gate, code: -50300, status: 503, retry: RetryAfterUpstreamOrFixed,
 				prefix: pinRetry503 + ";", answer: RetryLater,
@@ -725,6 +742,8 @@ func rowPins() map[string]rowPin {
 			},
 			pinGrantRefusal(false),
 			pinGrantRefusal(true),
+			pinBelowMinimum(false),
+			pinBelowMinimum(true),
 		}},
 		"ADM-007": {Admit, Rule, ClassC, Ruled, KeySession, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{
