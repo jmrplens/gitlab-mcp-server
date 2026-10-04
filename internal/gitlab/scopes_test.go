@@ -146,6 +146,46 @@ func TestDetectToken_WarnsOnlyWhenNothingAnswered(t *testing.T) {
 	}
 }
 
+// TestDescribeToken_ReadsAsDetectTokenAndLogsNoFailure verifies the read a
+// caller makes when no answer could change its verdict: what the self
+// endpoint says is read as DetectToken reads it, and a description that went
+// unanswered is nothing known and logged not at all, since the warning that
+// every tool will be registered would contradict a process about to refuse.
+func TestDescribeToken_ReadsAsDetectTokenAndLogsNoFailure(t *testing.T) {
+	var up atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		if !up.Load() {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":11,"scopes":["self_rotate"],"active":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	if got := DescribeToken(context.Background(), client.GL()); !sameFacts(got, TokenFacts{KindUnknown: true}) {
+		t.Errorf("DescribeToken() with no answer = %+v, want nothing known", got)
+	}
+	if logged.Len() != 0 {
+		t.Errorf("an unanswered description logged %s; want nothing", logged.String())
+	}
+	up.Store(true)
+	if got := DescribeToken(context.Background(), client.GL()); !slices.Equal(got.Scopes, []string{"self_rotate"}) || got.KindUnknown {
+		t.Errorf("DescribeToken() answered = %+v, want the self_rotate scope and a known kind", got)
+	}
+}
+
 // TestRedetectToken_AsksAgainAndLogsAFailureQuietly verifies the read a caller
 // repeats for a token whose kind is unknown: it reads an answer as DetectToken
 // does and logs it the same way, while a failure, which can repeat on every

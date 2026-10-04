@@ -34,6 +34,15 @@ func admitDecisions() []Decision {
 	// neither read_api nor api (issue 952), the same pair of shapes.
 	gateBelowMinimum := refuse(pkgServer, "belowMinimumFailure")
 	guardBelowMinimum := refuse(pkgServer, "bearerGuard.insufficientScopeFailure")
+	// Stdio's answer to the same verdict about its one token: every catalog
+	// method, in band.
+	stdioBelowMinimum := refuse(pkgServer, "stdioBelowMinimumRefusal")
+	stdioRefusedMethods := []string{
+		"tools/list", "tools/call",
+		"resources/list", "resources/templates/list", "resources/read", "resources/subscribe",
+		"prompts/list", "prompts/get",
+		"completion/complete", "subscriptions/listen",
+	}
 	belowMinimum := func(at Site, challenge bool, prefix string) Refusal {
 		return Refusal{
 			Methods: []string{MethodGate}, Channel: Gate, Code: CodeForbidden, Status: 403,
@@ -83,9 +92,20 @@ func admitDecisions() []Decision {
 			// answered for is admitted, unknown counting as capable (ADR-0018),
 			// and an entry built for one that is later found below the minimum
 			// ends (ADM-006 remembers it).
+			//
+			// On stdio the same minimum holds for the process's one token:
+			// asked before the tier, under --ignore-scopes too, it makes the
+			// process answer every catalog method -40300 in band, naming the
+			// minimum and the restart, while the handshake is still answered,
+			// so a client is told why rather than seeing a process that died
+			// (issue 952). A version refused for want of a scope is enough on
+			// its own, since that endpoint takes read_user, ai_features,
+			// ai_workflows, api and read_api. A token whose scopes a degraded
+			// start could not read is admitted otherwise, and the round that
+			// first reads them refuses from then on if they are below it.
 			ID: "ADM-001", Question: Admit, Kind: Rule, Class: ClassC, Disposition: Ruled,
-			Resource: "admission of a legacy credential GitLab did not refuse, at the read_api minimum",
-			Key:      KeyEntry, StdioKey: KeyNone,
+			Resource: "admission of a credential GitLab did not refuse, at the read_api minimum, in legacy HTTP and on stdio",
+			Key:      KeyEntry, StdioKey: KeyProcess,
 			Decided: []string{"ADR-0018", "issue 952"},
 			Refusals: []Refusal{
 				{
@@ -95,6 +115,10 @@ func admitDecisions() []Decision {
 				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, gateClassify),
 				permissionMissing(gatePermission, false),
 				belowMinimum(gateBelowMinimum, false, belowMinimumPrefix),
+				{
+					Methods: stdioRefusedMethods, Era: EraStdio, Channel: RPC, Code: CodeForbidden,
+					Prefix: "GitLab accepted the token this server was started with", Answer: WidenScope, At: stdioBelowMinimum,
+				},
 			},
 			Sites: []Site{
 				enforce(pkgPool, "verifyCredential"),
@@ -103,7 +127,10 @@ func admitDecisions() []Decision {
 				enforce(pkgGitLab, "PermissionRefusal"),
 				enforce(pkgGitLab, "MeetsMinimum"),
 				enforce(pkgGitLab, "BelowMinimum"),
-				resolve, gateClassify, gatePermission, gateBelowMinimum,
+				enforce(pkgServer, "prepareStdioCatalog"),
+				enforce(pkgServer, "refreshStdioAuthority"),
+				enforce(pkgServer, "readinessGate.markRefused"),
+				resolve, gateClassify, gatePermission, gateBelowMinimum, stdioBelowMinimum,
 			},
 		},
 		{

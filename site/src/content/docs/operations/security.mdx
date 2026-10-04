@@ -104,7 +104,7 @@ On startup, the server detects your token's scopes via the GitLab API and automa
 
 This prevents the AI from attempting operations that would fail with permission errors and keeps the tool list focused on what your token can actually do.
 
-To disable scope detection and register all tools regardless of token permissions:
+To skip the scope filtering and register all tools regardless of token permissions:
 
 ```bash
 GITLAB_MCP_IGNORE_SCOPES=true
@@ -117,7 +117,7 @@ Or in HTTP mode:
 ```
 
 :::note
-When scope detection is disabled, tools are still registered but API calls may fail with `403 Forbidden` if the token lacks required permissions.
+When the filtering is skipped, tools are still registered but API calls may fail with `403 Forbidden` if the token lacks required permissions. The token's scopes are still read: one carrying neither `read_api` nor `api` reaches no tool, so it is refused in both modes, a `403` over HTTP and every catalog request answered with JSON-RPC `-40300` on stdio, whatever this setting says.
 :::
 
 ### Fine-grained personal access tokens

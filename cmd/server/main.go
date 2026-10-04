@@ -633,7 +633,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_EMBEDDED_RESOURCES     Embed canonical MCP resource links in get_* results (default true)
   GITLAB_MCP_EXCLUDE_TOOLS          Comma-separated tool names, group names or canonical action IDs
                                     to exclude, on every surface (default empty)
-  GITLAB_MCP_IGNORE_SCOPES          Skip PAT scope detection: true/false (default false)
+  GITLAB_MCP_IGNORE_SCOPES          Skip the scope filter and read-only narrowing; read_api is still
+                                    the minimum (default false)
   GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
   GITLAB_MCP_RATE_LIMIT_RPS         Per-credential rate limit on every call that reaches GitLab, plus
                                     tools/list on a bucket refilled a tenth as fast and on the one the
@@ -1552,13 +1553,64 @@ func prepareStdioCatalog(
 	// never waits on it.
 	recovered := make(chan struct{})
 	gitlabVersion, err := client.Initialize(ctx)
-	if err != nil {
-		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode",
-			"url", cfg.GitLabURL, "error", err)
+	// A version refused for want of a scope is GitLab's answer to a token it
+	// found and whose scopes do not reach the endpoint, so the instance is up
+	// and only the token is short, which the detection below says in full.
+	scopeRefused := gitlabclient.VersionRefusedForScope(err)
+	switch {
+	case scopeRefused:
+		// Nothing is degraded and nothing will recover: the refusal below
+		// stands, and the client is never asked to initialize again.
+		slog.WarnContext(ctx, "gitlab refused the token the instance version for want of a scope", "url", cfg.GitLabURL)
+	case err != nil:
+		// Said once the token is known not to be refused below: a start
+		// that refuses it serves nothing, degraded or not.
 		var once sync.Once
 		client.SetOnRecovered(func() { once.Do(func() { close(recovered) }) })
 		client.EnableLazyInit()
-	} else {
+	}
+
+	// Detect what the token is before anything else is asked of GitLab: its
+	// scopes decide whether the process serves anything at all, and its kind
+	// what a fine-grained token is withheld. The token is asked about under
+	// --ignore-scopes too, which skips the scope filter and the narrowing and
+	// has nothing to say about the token's kind or the admission minimum,
+	// unless the start could not reach GitLab: then the request would spend the
+	// lazy re-initialization's first attempt, and both questions are asked
+	// once the client recovers, or on the 15-minute round, instead. A version
+	// refused for want of a scope reached it, and is what GitLab answers a
+	// token carrying self_rotate or read_repository alone, so the question is
+	// asked then too: a start that waited for a recovery that never comes
+	// would serve such a token the catalog for a round.
+	facts := gitlabclient.TokenFacts{KindUnknown: true}
+	switch {
+	case scopeRefused:
+		// Asked only to name the token's scopes in the verdict, which an
+		// unanswered description does not change, so it warns of nothing.
+		facts = gitlabclient.DescribeToken(ctx, client.GL())
+	case !cfg.IgnoreScopes || client.IsInitialized():
+		facts = gitlabclient.DetectToken(ctx, client.GL())
+	}
+	// A token GitLab accepted below the admission minimum, carrying neither
+	// read_api nor api, reaches no tool, so the process keeps answering the
+	// handshake and refuses every catalog method with what to do (issue 952,
+	// register row ADM-001) rather than exiting, which a client would read as
+	// a crash with the reason only on stderr. Neither the tier nor the user is
+	// asked for it, and nothing is registered. A version refused for want of a
+	// scope says so on its own: the endpoint takes read_user, ai_features,
+	// ai_workflows, api and read_api, so a token it refuses carries neither of
+	// the two, and the refusal stands even when the token's description went
+	// unanswered, rather than serving the catalog until a round asks again.
+	if scopeRefused || gitlabclient.BelowMinimum(facts) {
+		refuseStdioBelowMinimum(ctx, shell.gate, facts.Scopes)
+		return nil
+	}
+	if err != nil {
+		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode",
+			"url", cfg.GitLabURL, "error", err)
+	}
+
+	if err == nil {
 		if sentence, refused := client.VersionRefusal(); refused {
 			warnVersionRefused(ctx, sentence)
 		}
@@ -1599,21 +1651,11 @@ func prepareStdioCatalog(
 		serverCfg.Tier = client.DetectTier(ctx)
 	}
 
-	// Detect what the token is, for scope-based tool filtering and for what a
-	// fine-grained token is withheld, and narrow the surface the way the HTTP
-	// pool does per entry (ADR-0018): a token that cannot write is served the
+	// Narrow the surface by the scopes detected above the way the HTTP pool
+	// does per entry (ADR-0018): a token that cannot write is served the
 	// read-only catalog, which withholds every write action and says why,
 	// instead of listing actions GitLab would refuse one by one with its own
-	// 403. The token is asked about under --ignore-scopes too, which skips the
-	// filter and the narrowing and has nothing to say about the token's kind,
-	// unless the start could not reach GitLab: then the only reason to ask is
-	// the kind, an instance that did not answer cannot tell it, and the request
-	// would spend the lazy re-initialization's first attempt for nothing. The
-	// kind is then unknown, and asked once the client recovers.
-	facts := gitlabclient.TokenFacts{KindUnknown: true}
-	if !cfg.IgnoreScopes || client.IsInitialized() {
-		facts = gitlabclient.DetectToken(ctx, client.GL())
-	}
+	// 403. --ignore-scopes skips this and the scope filter.
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = facts.Scopes
 		if serverCfg.TokenScopes == nil {
@@ -1640,7 +1682,7 @@ func prepareStdioCatalog(
 	// (ADM-009's value, read here by register row AUT-008), so the two
 	// transports follow an instance upgraded under a running session alike.
 	// Stdio reads no revalidation setting, so nothing moves it or turns it off.
-	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval, recovered)
+	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
 	return nil
 }
 
@@ -1677,7 +1719,13 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // returns. A re-read that moved the token to another verdict is logged with
 // the arguments the start logs a phase A authority with, and one that kept the
 // authority is logged once, with its reason.
-func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration, recovered <-chan struct{}) {
+//
+// A token whose scopes the answer names below the admission minimum is handed
+// to onBelowMinimum, which makes the process refuse every catalog method as a
+// start that learned it would have, and the goroutine returns: a token's
+// scopes cannot change, so there is nothing more to ask. A nil onBelowMinimum
+// only returns.
+func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration, recovered <-chan struct{}, onBelowMinimum func(scopes []string)) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	logged := false
@@ -1694,6 +1742,12 @@ func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, fac
 		if facts.KindUnknown {
 			facts = redetectStdioToken(readCtx, client)
 			cancel()
+			if gitlabclient.BelowMinimum(facts) {
+				if onBelowMinimum != nil {
+					onBelowMinimum(facts.Scopes)
+				}
+				return
+			}
 			continue
 		}
 		moved, reason := client.RefreshAuthority(readCtx, facts, actiongrants.Table())

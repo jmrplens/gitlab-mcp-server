@@ -694,7 +694,7 @@ func rowPins() map[string]rowPin {
 			},
 		}},
 
-		"ADM-001": {Admit, Rule, ClassC, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
+		"ADM-001": {Admit, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{
 				methods: "http", channel: Gate, code: -40100, status: 401, challenge: true, prefix: pinRejected,
 				answer: Reauthorize, charged: pinCharged,
@@ -705,6 +705,12 @@ func rowPins() map[string]rowPin {
 			},
 			pinGrantRefusal(false),
 			pinBelowMinimum(false),
+			{
+				methods: "tools/list,tools/call,resources/list,resources/templates/list,resources/read,resources/subscribe," +
+					"prompts/list,prompts/get,completion/complete,subscriptions/listen",
+				era: EraStdio, channel: RPC, code: -40300,
+				prefix: "GitLab accepted the token this server was started with", answer: WidenScope,
+			},
 		}},
 		"ADM-002": {Admit, Rule, ClassC, Valued, KeyVerified, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{

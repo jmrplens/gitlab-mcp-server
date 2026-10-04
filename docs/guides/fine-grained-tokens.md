@@ -338,9 +338,10 @@ classic tokens".
 read-only narrowing. It does not skip reading what kind of token the server holds, and
 it does not turn off anything this guide describes: the grant is a different question
 from the scopes, and skipping it would serve a fine-grained session the whole catalog
-with no word of what its grant leaves out. The one start that reads nothing under it is
-a stdio start that could not reach GitLab, since an instance that did not answer cannot
-say what kind the token is; that session is the one
+with no word of what its grant leaves out. Nor does it skip the admission minimum, so a
+classic token carrying neither `read_api` nor `api` is refused under it too. The one
+start that reads nothing under it is a stdio start that could not reach GitLab, since an
+instance that did not answer cannot say what kind the token is; that session is the one
 [described above](#when-the-server-cannot-tell-what-kind-of-token-it-holds), exactly as
 it would be without the flag.
 

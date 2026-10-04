@@ -2773,16 +2773,21 @@ func TestInitialize_FineGrainedVersionRefusal_IsReachableWithTheVersionUnknown(t
 // only a 403 carrying GitLab's fine-grained code is a reachable instance. A
 // classic token's missing scope, a plain 403, the same code on a 401 and a
 // body past the probe's bound are failures, as they were, and none of them is
-// kept as a refusal.
+// kept as a refusal. The classic token's missing scope is the one failure
+// [VersionRefusedForScope] recognizes (issue 952), since GitLab answered it to
+// a token it found; the scope code on a 401 is not, since a 401 says GitLab
+// did not.
 func TestInitialize_OtherRefusalsOfTheVersion_StayFailures(t *testing.T) {
 	tests := []struct {
-		name   string
-		status int
-		body   string
+		name         string
+		status       int
+		body         string
+		scopeRefused bool
 	}{
-		{name: "a classic token's missing scope", status: http.StatusForbidden, body: `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`},
+		{name: "a classic token's missing scope", status: http.StatusForbidden, body: insufficientScopeBody, scopeRefused: true},
 		{name: "a plain 403", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`},
 		{name: "the fine-grained code on a 401", status: http.StatusUnauthorized, body: metadataRefusalBody},
+		{name: "the scope code on a 401", status: http.StatusUnauthorized, body: insufficientScopeBody},
 		{name: "a refusal past the probe's bound", status: http.StatusForbidden, body: `{"error":"insufficient_granular_scope","error_description":"` + strings.Repeat("x", refusalBodyBytes) + `"}`},
 	}
 	for _, tt := range tests {
@@ -2799,6 +2804,9 @@ func TestInitialize_OtherRefusalsOfTheVersion_StayFailures(t *testing.T) {
 
 			if _, err = client.Initialize(t.Context()); err == nil {
 				t.Error("Initialize() error = nil, want a failure")
+			}
+			if got := VersionRefusedForScope(err); got != tt.scopeRefused {
+				t.Errorf("VersionRefusedForScope(%v) = %v, want %v", err, got, tt.scopeRefused)
 			}
 			if client.IsInitialized() {
 				t.Error("the client is initialized after a refusal that is not the fine-grained one")

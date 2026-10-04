@@ -933,17 +933,7 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Read as far as a refusal GitLab writes can reach, since the one
-		// refusal that is not a failure is told apart only by its body, and
-		// quote no more of it than the error has always quoted.
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, refusalBodyBytes))
-		if resp.StatusCode == http.StatusForbidden {
-			if description, missing := PermissionRefusal(body); missing {
-				c.versionRefusal.Store(&description)
-				return nil, &versionRefusedError{description: description}
-			}
-		}
-		return nil, fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body[:min(len(body), versionErrorBodyBytes)]))
+		return nil, c.versionFailure(resp)
 	}
 
 	var versionInfo gitLabVersionInfo
@@ -960,9 +950,47 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	return &versionInfo, nil
 }
 
+// versionFailure is [Client.versionDirect]'s error for an answer other than a
+// 200: a *versionRefusedError for GitLab's refusal of a fine-grained
+// permission, recorded on the client, [errVersionScopeRefused] for its refusal
+// of a scope, and the status with the start of the body for anything else.
+//
+// It reads as far as a refusal GitLab writes can reach, since the refusals are
+// told apart only by their body, and quotes no more of it than the error has
+// always quoted.
+func (c *Client) versionFailure(resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, refusalBodyBytes))
+	if resp.StatusCode == http.StatusForbidden {
+		if description, missing := PermissionRefusal(body); missing {
+			c.versionRefusal.Store(&description)
+			return &versionRefusedError{description: description}
+		}
+		if errorCode(body) == scopeRefusalCode {
+			return errVersionScopeRefused
+		}
+	}
+	return fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body[:min(len(body), versionErrorBodyBytes)]))
+}
+
 // versionErrorBodyBytes is how much of an unexpected answer's body the version
 // probe's error quotes.
 const versionErrorBodyBytes = 512
+
+// errVersionScopeRefused is what [Client.versionDirect] returns when GitLab
+// refuses the version endpoint to a token it found and whose scopes do not
+// reach it: a 403 carrying insufficient_scope. GitLab answers it to a classic
+// token carrying none of read_user, ai_features, ai_workflows, api and read_api
+// (self_rotate or read_repository alone, measured on 19.4.1-ee), so the token
+// is below the admission minimum, and the instance answered, which no other
+// error of the probe says.
+var errVersionScopeRefused = errors.New("gitlab ping: GitLab accepted the token and refused it the instance version for want of a scope")
+
+// VersionRefusedForScope reports whether err is [Client.Initialize]'s failure
+// for a token whose scopes do not reach the version endpoint, which a stdio
+// start reads as an instance that answered rather than one it could not reach.
+func VersionRefusedForScope(err error) bool {
+	return errors.Is(err, errVersionScopeRefused)
+}
 
 // versionRefusedError is what [Client.versionDirect] returns when GitLab
 // accepted the credential and refused it the version endpoint for a

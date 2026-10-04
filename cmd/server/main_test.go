@@ -4625,6 +4625,216 @@ func stdioStartupGitLab(t *testing.T, userStatus int) *httptest.Server {
 	return gitlab
 }
 
+// readUserGitLab is [belowMinimumGitLab] for a token carrying read_user alone.
+func readUserGitLab(t *testing.T, users, licenses *atomic.Int64) *httptest.Server {
+	t.Helper()
+	return belowMinimumGitLab(t, "read_user", users, licenses)
+}
+
+// belowMinimumGitLab is an instance that knows the token and describes it as
+// carrying scope alone, below the admission minimum, counting the user and
+// license reads a start would make for a token it serves. It answers the
+// version as GitLab 19.4.1 does: to a read_user token, and with a 403 carrying
+// insufficient_scope to any other scope below the minimum.
+func belowMinimumGitLab(t *testing.T, scope string, users, licenses *atomic.Int64) *httptest.Server {
+	t.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			if scope != "read_user" {
+				testutil.RespondJSON(w, http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"read_user ai_features ai_workflows api read_api"}`)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"19.4.1","revision":"abc"}`)
+		case "/api/v4/personal_access_tokens/self":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"scopes":["`+scope+`"],"active":true}`)
+		case "/api/v4/user":
+			users.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case "/api/v4/license":
+			licenses.Add(1)
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	return gitlab
+}
+
+// TestPrepareStdioCatalog_ATokenBelowTheMinimum_RefusesEveryCatalogMethod
+// covers a stdio start whose token GitLab describes as carrying one scope
+// below the admission minimum (issue 952): the process keeps running and its
+// gate refuses the catalog with the in-band answer, and neither the user nor
+// the tier is asked for a token nothing will be served to. --ignore-scopes
+// changes nothing: it skips the scope filter and the narrowing, never the
+// minimum. self_rotate is the token GitLab refuses the version too, which the
+// start reads as an instance that answered, so its scopes are asked under
+// --ignore-scopes as well rather than on the first round, a quarter of an hour
+// later.
+func TestPrepareStdioCatalog_ATokenBelowTheMinimum_RefusesEveryCatalogMethod(t *testing.T) {
+	for _, tc := range []struct {
+		scope        string
+		ignoreScopes bool
+	}{
+		{scope: "read_user"},
+		{scope: "read_user", ignoreScopes: true},
+		{scope: "self_rotate"},
+		{scope: "self_rotate", ignoreScopes: true},
+	} {
+		t.Run(fmt.Sprintf("%s, ignore-scopes %v", tc.scope, tc.ignoreScopes), func(t *testing.T) {
+			ignoreScopes := tc.ignoreScopes
+			var users, licenses atomic.Int64
+			gitlab := belowMinimumGitLab(t, tc.scope, &users, &licenses)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				IgnoreScopes:   ignoreScopes,
+				DisableRetries: true,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+			identity := &deferredIdentity{}
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, identity); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			assertBelowMinimumRefusal(t, runThroughGate(t.Context(), shell.gate, "tools/list"), "tools/list")
+			if users.Load() != 0 || licenses.Load() != 0 || identity.resolved.Load() != nil {
+				t.Errorf("user read %d times, license %d times, identity %v; want neither asked for a refused token",
+					users.Load(), licenses.Load(), identity.resolved.Load())
+			}
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_AVersionRefusedForScope_RefusesWithTheTokenUndescribed
+// covers a stdio start whose version GitLab refuses for want of a scope while
+// the token's own description goes unanswered: the refusal already says the
+// token carries neither read_api nor api, since the version endpoint takes
+// both and read_user, so the process refuses the catalog at once, with or
+// without --ignore-scopes, rather than serving it until a round asks again.
+func TestPrepareStdioCatalog_AVersionRefusedForScope_RefusesWithTheTokenUndescribed(t *testing.T) {
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"read_user ai_features ai_workflows api read_api"}`)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	for _, ignoreScopes := range []bool{false, true} {
+		t.Run(fmt.Sprintf("ignore-scopes %v", ignoreScopes), func(t *testing.T) {
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				IgnoreScopes:   ignoreScopes,
+				DisableRetries: true,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+			logged := captureLogMessages(t)
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			assertBelowMinimumRefusal(t, runThroughGate(t.Context(), shell.gate, "tools/list"), "tools/list")
+			// The log says what the process does: GitLab refused the version
+			// and the token is refused, with nothing degraded to recover and
+			// no promise that every tool will be registered.
+			for _, line := range []string{
+				"gitlab refused the token the instance version for want of a scope",
+				"the token carries neither read_api nor api",
+			} {
+				if !logged(line) {
+					t.Errorf("the start did not log %q", line)
+				}
+			}
+			for _, line := range []string{"degraded mode", "failed to detect PAT scopes"} {
+				if logged(line) {
+					t.Errorf("the start logged %q for a token it refuses", line)
+				}
+			}
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_AnUnansweredVersionAndATokenBelowTheMinimum_RefusesWithoutCallingItDegraded
+// covers a start whose version probe got no answer while the token's own
+// description did, naming read_user alone: the process refuses the catalog,
+// and says nothing of a degraded start it is not making, since a start that
+// refuses serves nothing whether GitLab answered its version or not.
+func TestPrepareStdioCatalog_AnUnansweredVersionAndATokenBelowTheMinimum_RefusesWithoutCallingItDegraded(t *testing.T) {
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		case "/api/v4/personal_access_tokens/self":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"name":"t","scopes":["read_user"],"active":true}`)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		GitLabToken:    testToken,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		DisableRetries: true,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+	logged := captureLogMessages(t)
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+
+	assertBelowMinimumRefusal(t, runThroughGate(t.Context(), shell.gate, "tools/list"), "tools/list")
+	if !logged("the token carries neither read_api nor api") {
+		t.Error("the start did not log the verdict")
+	}
+	if logged("degraded mode") {
+		t.Error("the start called itself degraded while refusing every catalog method")
+	}
+}
+
+// TestRefreshStdioAuthority_AKindLearnedBelowTheMinimum_RefusesFromThen covers
+// a token a degraded start could not describe, whose description, once a
+// round reads it, names read_user alone: the round hands its scopes to
+// onBelowMinimum, which makes the process refuse as a start that learned it
+// would have, and the goroutine returns, since a token's scopes cannot change.
+// With no onBelowMinimum it only returns.
+func TestRefreshStdioAuthority_AKindLearnedBelowTheMinimum_RefusesFromThen(t *testing.T) {
+	var users, licenses atomic.Int64
+	gitlab := readUserGitLab(t, &users, &licenses)
+	client, err := gitlabclient.NewClientWithTokenRetries(gitlab.URL, testToken, false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries: %v", err)
+	}
+	for _, name := range []string{"handed to onBelowMinimum", "with nothing to hand it to"} {
+		t.Run(name, func(t *testing.T) {
+			var handed atomic.Pointer[[]string]
+			onBelowMinimum := func(scopes []string) { handed.Store(&scopes) }
+			if name == "with nothing to hand it to" {
+				onBelowMinimum = nil
+			}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				refreshStdioAuthority(t.Context(), client, gitlabclient.TokenFacts{KindUnknown: true}, time.Millisecond, nil, onBelowMinimum)
+			}()
+			awaitChan(t, done, "the round that learned the scopes returning")
+			got := handed.Load()
+			if onBelowMinimum != nil && (got == nil || !slices.Equal(*got, []string{"read_user"})) {
+				t.Errorf("onBelowMinimum was handed %v, want [read_user]", got)
+			}
+		})
+	}
+}
+
 // assertStartupIdentity checks what stdio startup published about the caller.
 func assertStartupIdentity(t *testing.T, resolved *toolutil.UserIdentity, want bool) {
 	t.Helper()

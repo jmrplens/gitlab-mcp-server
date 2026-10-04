@@ -1231,6 +1231,33 @@ func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenUnchargedAndRem
 	assertSpendsNoBudget(t, g)
 }
 
+// TestBearerGuard_InsufficientScopeWithoutACache_IsForbiddenUncharged covers a
+// guard with no rejected-token cache: the token GitLab reports as lacking the
+// scope is answered the same uncharged 403, and with nothing to remember the
+// verdict the verifier is asked on every request.
+func TestBearerGuard_InsufficientScopeWithoutACache_IsForbiddenUncharged(t *testing.T) {
+	t.Parallel()
+
+	var verifications atomic.Int32
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		verifications.Add(1)
+		return nil, oauth.ErrInsufficientScope
+	})
+	g.rejected = nil
+
+	const requests = 5
+	for i := range requests {
+		failure := g.check(guardRequest(t, "gloas-narrow"))
+		if failure == nil || failure.status != http.StatusForbidden || failure.code != errCodeForbidden {
+			t.Fatalf("request %d: failure = %+v, want the uncharged 403 about the scope", i, failure)
+		}
+	}
+	if n := verifications.Load(); n != requests {
+		t.Errorf("the verifier was asked %d times for %d requests, want every one: nothing remembers the verdict", n, requests)
+	}
+	assertSpendsNoBudget(t, g)
+}
+
 // TestBearerGuard_BelowMinimumRecordedByThePool_IsAnsweredFromMemory covers a
 // verdict the guard did not reach itself: the pool learned of a credential it
 // served that it carries neither read_api nor api and recorded it in the

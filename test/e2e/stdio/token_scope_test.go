@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -77,6 +78,95 @@ func TestTokenScope_ReadAPITokenIsServedTheReadOnlySurface(t *testing.T) {
 				t.Errorf("startup log says the token cannot write = %v, want %v\nstderr: %s", logged, tt.wantLog, s.stderrText())
 			}
 		})
+	}
+}
+
+// belowMinimumPrefix is the stable text a stdio process refuses every catalog
+// method with while its token is below the admission minimum (register row
+// ADM-001).
+const belowMinimumPrefix = "GitLab accepted the token this server was started with"
+
+// belowMinimumLogLine is what the process logs, once, when it learns that.
+const belowMinimumLogLine = "the token carries neither read_api nor api"
+
+// TestTokenScope_TokenBelowTheMinimum_RefusesEveryCatalogMethod verifies, over
+// the real binary, what issue 952 decided for stdio: a token GitLab accepted
+// that carries neither read_api nor api keeps the process up and its handshake
+// answered, and every catalog method is refused in-band with -40300 and the way
+// out. A process that exited instead would read to the client as a crash with
+// the reason on stderr alone, and one that listed tools would offer calls
+// GitLab answers with nothing. The rows with scope detection ignored hold that
+// --ignore-scopes does not exempt a token from the minimum: it skips the scope
+// filter, and the minimum is not a filter. self_rotate is the token GitLab
+// refuses the version too, as 19.4.1 does, which a start must read as an
+// instance that answered rather than one it could not reach.
+func TestTokenScope_TokenBelowTheMinimum_RefusesEveryCatalogMethod(t *testing.T) {
+	ignored := map[string]string{"GITLAB_MCP_IGNORE_SCOPES": "true"}
+	tests := []struct {
+		name  string
+		scope string
+		env   map[string]string
+	}{
+		{name: "read_user", scope: "read_user"},
+		{name: "read_user with scope detection ignored", scope: "read_user", env: ignored},
+		{name: "self_rotate", scope: "self_rotate"},
+		{name: "self_rotate with scope detection ignored", scope: "self_rotate", env: ignored},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := startFakeGitLab(t)
+			fake.scopes = []string{tt.scope}
+			fake.versionScopeRefused = tt.scope != "read_user"
+			env := baseEnv(fake.URL)
+			maps.Copy(env, tt.env)
+			assertServesNothingBelowTheMinimum(t, startSession(t, env))
+		})
+	}
+}
+
+// assertServesNothingBelowTheMinimum holds a session whose token is below the
+// admission minimum to what issue 952 decided for stdio: the handshake and
+// ping answered, every catalog method asked refused with -40300 and the
+// sentence naming the minimum, the verdict logged as such and not as an
+// instance the start could not reach, and the process still up.
+func assertServesNothingBelowTheMinimum(t *testing.T, s *session) {
+	t.Helper()
+
+	if handshake := s.call(t, legacyInitialize(1)); handshake["error"] != nil {
+		t.Fatalf("the handshake was refused: %v", handshake["error"])
+	}
+	calls := []struct{ method, params string }{
+		{method: "tools/list"},
+		{method: "tools/call", params: `{"name":"gitlab_find_action","arguments":{"query":"list issues"}}`},
+		{method: "resources/list"},
+		{method: "resources/read", params: `{"uri":"gitlab://tools"}`},
+		{method: "prompts/list"},
+	}
+	for i, call := range calls {
+		t.Run(call.method, func(t *testing.T) {
+			got := s.call(t, legacyRequest(2+i, call.method, call.params))
+			if code, refused := errorCode(got); !refused || code != tenancy.CodeForbidden {
+				t.Fatalf("%s was answered %v, want a refusal with code %d", call.method, got, tenancy.CodeForbidden)
+			}
+			message, _ := got["error"].(map[string]any)["message"].(string)
+			if !strings.HasPrefix(message, belowMinimumPrefix) {
+				t.Errorf("%s was refused with %q, want the sentence beginning %q", call.method, message, belowMinimumPrefix)
+			}
+		})
+	}
+	if pong := s.call(t, legacyRequest(20, "ping", "")); pong["error"] != nil {
+		t.Errorf("ping was refused: %v", pong["error"])
+	}
+	s.waitForStderr(t, belowMinimumLogLine, 5*time.Second)
+	// Nothing on stderr may say the opposite of the refusal: an instance it
+	// could not reach, a start that will recover, or a catalog served whole.
+	for _, contradiction := range []string{"connectivity check failed", "degraded mode", "all tools will be registered"} {
+		if strings.Contains(s.stderrText(), contradiction) {
+			t.Errorf("the start logged %q for a token it refuses:\n%s", contradiction, s.stderrText())
+		}
+	}
+	if !s.alive() {
+		t.Errorf("the process ended: %s", s.exitStatus())
 	}
 }
 
