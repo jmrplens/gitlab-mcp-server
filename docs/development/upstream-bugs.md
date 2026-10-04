@@ -584,6 +584,21 @@ contributing the missing GraphQL declarations of rows 87 to 89 is
 serving over REST what GraphQL cannot serve a fine-grained token is
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 
+Re-verified on 2026-10-04 against the trackers and the tags: every merge
+request and pull request the file links, read for anything merged, closed or
+reopened after 2026-10-02, and the tags of each dependency. One merged:
+[gitlab-org/gitlab!259375](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259375),
+the second of row 34's deploy key documentation merge requests, at 03:00 UTC on
+2026-10-04, in milestone 19.5. Rows 74, 75 and 76 each moved a step, recorded
+in their sections: row 74's merge request has no open thread left and waits
+only on a maintainer, row 76's was rebased onto the `main` its reviewer named
+the same evening it was asked for and now waits on that reviewer, and the
+`lint:prose` regression rows 75 and 76 meet has a fix in review from another
+contributor. No release moved anything: GitLab 19.4.1, client-go v3.15.0 and
+go-sdk v1.8.0 are still each project's newest release, and the Orbit knowledge
+graph's newest tag is still v0.136.0 of 2026-09-30, so every merge recorded
+here as unreleased still is.
+
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
 ### Panic unmarshalling an issue with no id
@@ -1742,7 +1757,7 @@ merge request.** A code owner asked for it on
 rather than opening it themselves, so cross-checking all eight fields against
 `doc/api/` was worth doing: two of the eight, `file_extension` and
 `is_receptive`, appeared nowhere on their page, and a third page showed
-`public_email` in none of its fourteen example responses. Nine documentation
+`public_email` in none of its fourteen example responses. Ten documentation
 merge requests have gone to `gitlab-org/gitlab` from its own
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/gitlab):
 [gitlab-org/gitlab!254507](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254507),
@@ -1752,20 +1767,23 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [gitlab-org/gitlab!254540](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254540),
 [gitlab-org/gitlab!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
 [gitlab-org/gitlab!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
-[gitlab-org/gitlab!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
-[gitlab-org/gitlab!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
-Eight are merged into `master`: `gitlab-org/gitlab!254507` on 2026-09-10,
+[gitlab-org/gitlab!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547),
+[gitlab-org/gitlab!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552) and
+[gitlab-org/gitlab!259375](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259375).
+Nine are merged into `master`: `gitlab-org/gitlab!254507` on 2026-09-10,
 `gitlab-org/gitlab!254519` on 2026-09-11, `gitlab-org/gitlab!254511` and
 `gitlab-org/gitlab!254542` on 2026-09-14 and 2026-09-15,
 `gitlab-org/gitlab!254538`, `gitlab-org/gitlab!254543` and
-`gitlab-org/gitlab!254547` together on 2026-09-22, and
-`gitlab-org/gitlab!254552` (the snippet clone URLs) on 2026-09-23. Held to the
-tags that contain each merge commit, read on 2026-09-23, on 2026-09-24 and
-again on 2026-09-27, three of them have shipped: `gitlab-org/gitlab!254507`,
-`gitlab-org/gitlab!254511` and `gitlab-org/gitlab!254519` are in `v19.4.0-ee`
-and `v19.4.1-ee`, and the other five are in no tag yet, so 19.5 is the first
-release that can carry them; once it is cut, this paragraph and the umbrella's
-documentation paragraph can say they shipped. Until the first of
+`gitlab-org/gitlab!254547` together on 2026-09-22,
+`gitlab-org/gitlab!254552` (the snippet clone URLs) on 2026-09-23, and
+`gitlab-org/gitlab!259375` (the deploy keys page's Retrieve and Update
+sections) on 2026-10-04. Held to the tags that contain each merge commit, read
+on 2026-09-23, on 2026-09-24, again on 2026-09-27 and on 2026-10-04, three of
+them have shipped: `gitlab-org/gitlab!254507`, `gitlab-org/gitlab!254511` and
+`gitlab-org/gitlab!254519` are in `v19.4.0-ee` and `v19.4.1-ee`, and the other
+six are in no tag yet, so 19.5 is the first release that can carry them; once
+it is cut, this paragraph and the umbrella's documentation paragraph can say
+they shipped. Until the first of
 those reads the paragraph said none had shipped, a claim that had not been
 checked against the tags. `gitlab-org/gitlab!254538` is the one whose merge had
 been blocked by a `pre-merge-checks` race rather than by anything in the
@@ -1845,6 +1863,16 @@ both review threads answered and waiting on the reviewer, and a
 `@gitlab-bot ready @narendran-kannan` asking for the re-review;
 `gitlab-org/gitlab!259375` has a green fork pipeline and no milestone. Neither
 needs an approval, and each waits on its reviewer.
+
+Read on 2026-10-04: @rsarangadharan approved `gitlab-org/gitlab!259375` at
+02:51 UTC that day and started the merge train that merged it at 03:00 UTC, as
+squash commit `b1d0b26b` (merge commit `5bbb1b15`), in milestone 19.5. Two of
+the scheduled `master` pipelines that ran on its merge commit failed and opened
+broken `master` incidents, which name it only as the commit they ran on: it
+changes `doc/api/deploy_keys.md` alone, one incident was closed as a job
+timeout that could not be reproduced, and the other is open with its cause
+undetermined. `gitlab-org/gitlab!254540` is where the end of 2026-10-02 left
+it, on head `cf255773` and waiting for the re-review.
 
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
@@ -6539,7 +6567,9 @@ reason would still leave a view nobody follows.
   technical review, who approved it at 17:22 UTC on 2026-10-02 without a
   comment. Read that evening it has both approvals, needs no other, has a
   green fork pipeline and no milestone, and its one open thread is the ready
-  note's; it waits on being merged.
+  note's; it waits on being merged. That thread was resolved at 00:51 UTC on
+  2026-10-03, and read on 2026-10-04 GitLab reports it mergeable, with nothing
+  left but a maintainer to merge it.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not yet. This server never points a model at the page's
@@ -8043,6 +8073,19 @@ stopped those tests hardcoding the version, so a bump no longer edits them.
   the freshly rebased branch's base and the check found the bump. It stops at
   `no merge base` on a branch whose base `main` has moved past and whose
   description carries no marker.
+
+  Read on 2026-10-04, the follow-up has had no review from a person and its
+  fork pipeline fails only `lint:prose`. The `lint:prose` regression has a fix
+  in review from another contributor:
+  [gitlab-org/orbit/knowledge-graph!2676](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2676),
+  "fix(linting): fall back to HEAD when the MR source SHA is empty", opened
+  from the community fork on 2026-09-30, makes `prose_lint.py` read an empty
+  `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` as `HEAD`, which is what the
+  `base...head` form did before `b7bce6fb`. Its own fork pipeline passes,
+  `lint:prose` included. @peterhegman handed its review to @dgruzd on
+  2026-10-02, and it has no approval. The lint runs from the branch's own tree, so once it merges, the
+  follow-up and row 76's merge request pass `lint:prose` in a fork pipeline
+  only after a rebase onto it.
 - **Merged**: yes, at 10:15 UTC on 2026-10-02, by @dgruzd, as squash commit
   `374c457c` (merge commit `edfa149d`), which closed
   [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329).
@@ -8123,7 +8166,17 @@ while rewriting `orbit.query` for issue 1031.
   [gitlab-org/orbit/knowledge-graph!2692](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2692),
   merged a minute earlier, stops the project's tests hardcoding the skill
   version, asked for one more rebase onto it, and said the change looks good
-  otherwise. It has no approval, and the next step is ours: that rebase.
+  otherwise. That rebase went up at 19:03 UTC the same day, dropping the
+  commit that had moved the four version assertions, since the server's skill
+  tests now read the version from the skill itself, so what is left is the
+  documentation commit, unchanged, with the skill one patch above `main`. The
+  note posted with it (19:33 UTC) says so, that the unit tests of
+  `orbit-server`, `orbit-cli` and `orbit-prompts` pass locally on the rebased
+  tree with no test change, and that a pipeline in the canonical project is still
+  needed for `lint:prose`. Read on 2026-10-04, its fork pipeline on that head
+  (`a75651db`) fails only `lint:prose`, nobody has answered since, it has no
+  approval, and the next step is the reviewer's. The `lint:prose` regression
+  has a fix in review from another contributor, named under row 75.
 - **Merged**: no.
 - **Blocking**: no, but a result can be silently incomplete.
 - **Workaround**: not yet. `orbit.query`'s own guidance will say that
