@@ -27,7 +27,7 @@
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-footprint check-footprint gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness bench-held bench-sessions \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -789,7 +789,7 @@ modeleval-probe:
 # and to gobco's go test alike, and a report that measured no condition (0/0)
 # is refused.
 coverage-conditions:
-	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_stats [TAGS=e2e]"; exit 2; }
+	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
 	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
@@ -909,7 +909,7 @@ MUTANT_BUDGET ?= 300
 MUTANT_BUDGET_FLOOR ?= 10
 MUTANT_DEADLINE_MAX ?= 3600
 coverage-mutants:
-	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
+	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_llms"; exit 2; }
 	@scripts/coverage-mutants.sh $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
 
 ## coverage: run tests and generate HTML coverage report
@@ -1538,15 +1538,12 @@ publish-lobehub: check-lhm-manifest
 	echo "Updating jmrplens-gitlab-mcp-server to v$$VER on LobeHub..."; \
 	npx -y @lobehub/market-cli@$(LOBEHUB_MARKET_CLI_VERSION) plugin update --dir "$(CURDIR)"
 
-## gen-readme: regenerate all managed README.md sections (token footprint + stats).
-gen-readme: gen-footprint gen-stats
-
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, fine-grained permissions per action, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
+## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
-# compile, and gen-footprint and gen-stats both rewrite README.md, so make -j
-# would interleave them. bench-resources-render is in because it redraws from
+# compile, and gen-footprint and gen-model-results both rewrite README.md, so
+# make -j would interleave them. bench-resources-render is in because it redraws from
 # the committed record and measures nothing, which is what check-bench-resources
 # then compares; bench-resources itself stays out, and so does brand-rasters,
 # which needs rsvg-convert and cwebp that only the maintainer's machine has.
@@ -1557,7 +1554,7 @@ gen-readme: gen-footprint gen-stats
 # those terms, and the measurement there is not merely slow: it is a paid run
 # against a provider.
 update-all:
-	@for target in brand gen-action-grants gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-action-grants gen-footprint gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -1570,14 +1567,6 @@ gen-footprint:
 ## check-footprint: verify the README token-claim block and footprint section, token-footprint.md and site/src/data/token-footprint.json are current.
 check-footprint:
 	go run ./cmd/audit_tokens/ -footprint -check
-
-## gen-stats: regenerate the repository statistics section in README.md.
-gen-stats:
-	go run ./cmd/gen_stats/
-
-## check-stats: verify the README repository statistics section is current.
-check-stats:
-	go run ./cmd/gen_stats/ -check
 
 ## gen-site-stats: regenerate the single-sourced site stats JSON (site/src/data/stats.json).
 gen-site-stats:

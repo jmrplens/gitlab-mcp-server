@@ -61,7 +61,7 @@ For each affected document:
 - **UPD-007**: Never introduce TBD/TODO placeholders in updates
 - **UPD-008**: Maintain consistent terminology with the rest of the documentation
 - **UPD-009**: When creating or editing Markdown pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
-- **UPD-010**: Never hand-edit generator-owned content: the README stats block, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
+- **UPD-010**: Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
 
 ### For New APIs
 

@@ -396,14 +396,14 @@ The house rule: a package touched by a change is driven to **100% statement cove
   )
   ```
 
-  Established in `cmd/godoc_tool/docgo.go` and `cmd/gen_stats/main.go`. Each seam carries a short doc comment naming the branch it exists for. Wrap a helper rather than aliasing `os.WriteFile` directly when gosec's taint analysis would otherwise re-home a finding onto a test file.
+  Established in `cmd/godoc_tool/docgo.go` and `cmd/gen_llms/main.go`. Each seam carries a short doc comment naming the branch it exists for. Wrap a helper rather than aliasing `os.WriteFile` directly when gosec's taint analysis would otherwise re-home a finding onto a test file.
 - **Tests run as root.** Permission bits make nothing fail. A read that must fail even for root uses a broken symlink (`os.Symlink` to a missing target); a write that must fail goes through a seam.
 - **`main()` is covered, not exempt.** Extract `runMain(args []string, stdout, stderr io.Writer) int`, make `main()` the one line `osExit(runMain(os.Args, os.Stdout, os.Stderr))` with `var osExit = os.Exit`, and assert every exit code and message. Replace `os.Args` in the test so the flag set parses no test flags.
 - **Never lift the number by other means.** No weakened assertions, no `//nolint`, no coverage pragmas, no branches deleted to make the figure. A provably dead branch is removed as a code change with its own justification, or made reachable by extracting it into a function a test can call directly.
 
 ## Case Completeness: Conditions and Mutants
 
-Statement coverage says a line ran. It does not say a decision was taken both ways, and it does not say a test would notice the decision changing. Measured on this repository: `cmd/gen_stats` at 100% statement coverage still had ten conditions that were only ever true or only ever false, and five mutants no test reached. Go's own coverage cannot see either, because a compound `if a && b` is one block to it. Three steps close the gap, and a changed package passes all three before the work is done.
+Statement coverage says a line ran. It does not say a decision was taken both ways, and it does not say a test would notice the decision changing. Measured on this repository: a command at 100% statement coverage (the README statistics generator, since removed) still had ten conditions that were only ever true or only ever false, and five mutants no test reached. Go's own coverage cannot see either, because a compound `if a && b` is one block to it. Three steps close the gap, and a changed package passes all three before the work is done.
 
 ### 1. Derive the cases before writing them
 
@@ -421,10 +421,9 @@ For every decision in the changed code, write the case table first, then the tes
 [gobco](https://github.com/rillig/gobco) instruments every boolean condition, `&&`, `||` and `!` operands included, and reports the ones never evaluated both ways:
 
 ```bash
-make coverage-conditions PKG=./cmd/gen_stats
-# Condition coverage: 156/166
-# main.go:177:7: condition "lines > s.LargestTestLines" was 9 times true but never false
-# main.go:355:17: condition "isE2E" was 29 times false but never true
+make coverage-conditions PKG=./cmd/<command>
+# Condition coverage: <conditions evaluated both ways>/<conditions>
+# <file>.go:<line>:<col>: condition "<expression>" was <n> times true but never false
 ```
 
 Every reported line is a missing case from the table in step 1. The target is nothing reported. A condition that genuinely cannot take the other value is dead code: remove it as a code change, or extract it so a test can reach it; do not leave it as an accepted exception. gobco does not report a function never called at all (statement coverage does) and does not instrument `select`.
@@ -434,9 +433,9 @@ Every reported line is a missing case from the table in step 1. The target is no
 A case can execute a decision and still not check it. [gremlins](https://github.com/go-gremlins/gremlins) rewrites one operator at a time (`>` to `>=`, `==` to `!=`, `&&` to `||`, `+` to `-`, `-x` to `x`, `i++` to `i--`) and reruns the tests; a mutant that survives is a decision no assertion pins:
 
 ```bash
-make coverage-mutants PKG=./cmd/gen_stats
-# Killed: 108, Lived: 0, Not covered: 12
-# Test efficacy: 100.00%   Mutator coverage: 90.00%
+make coverage-mutants PKG=./cmd/<command>
+# Killed: <k>, Lived: <l>, Not covered: <n>
+# Test efficacy: <k/(k+l)>   Mutator coverage: <(k+l)/(k+l+n)>
 ```
 
 The gate on a changed package is **Lived: 0 and Not covered: 0**. A lived mutant is fixed by strengthening the assertion that should have caught it, never by excluding the mutant. The not-covered mutants sit on the same lines gobco reports, so step 2 usually clears them. The target turns on `INVERT_LOGICAL` (`&&` to `||`, off by gremlins' default), which is the operator that proves each operand of a compound condition matters on its own; `GREMLINS_FLAGS` passes anything else, such as `-S l` to print only the lived mutants or `-E` to exclude generated files. A package behind a build tag passes it there as `--tags` (`GREMLINS_FLAGS='--tags e2e'`): the recipe runs its timed baseline under the same tags, and refuses a package with no test file under the tags it was given, unless it is an importable package measured in place and `GREMLINS_FLAGS` asks for an integration run with a `-coverpkg` that names it; a package main, or one measured through a staged copy, is refused whatever the flags say.

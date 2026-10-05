@@ -17,7 +17,7 @@ import (
 // fixtureDir is where the in-memory fixture program pretends to live. Nothing
 // is written there: its packages exist only in the loader overlay, so every
 // rule is exercised on real type-checked source without Go files landing in
-// the repository or in the package count the README reports.
+// the repository or in its package counts.
 const fixtureDir = "cmd/audit_tenancy/fixture"
 
 // The fixture's two packages: a register leaf standing in for

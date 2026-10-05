@@ -30,8 +30,8 @@ func committedRecord(ctx context.Context, cfg genRun) (orbitrecord.Document, err
 // runGit runs git in dir and returns what it wrote to standard output.
 //
 // The program is resolved to an absolute path first, which is how every other
-// command here runs a tool it did not build (cmd/gen_stats and
-// cmd/gen_model_results resolve git this way): the lookup is the one exec
+// command here runs a tool it did not build (cmd/gen_model_results resolves
+// git this way): the lookup is the one exec
 // would do, decided here rather than by whatever PATH holds when the command
 // starts. A git that ran and refused says why on standard error, which is
 // what the error carries, since "exit status 128" alone tells a reader

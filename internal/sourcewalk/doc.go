@@ -27,7 +27,7 @@
 //
 // [SkipDir] is a name rule: a dot-directory is not source this repository
 // holds to its conventions. It is Go's own rule for ./... and it is what
-// cmd/internal/testsource already applied, which is why the five commands
+// cmd/internal/testsource already applied, which is why the four commands
 // that read _test.go files through it were never affected. It is cheap, it
 // needs no syscall, and it covers today's directory, .claude, exactly.
 //

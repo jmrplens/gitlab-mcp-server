@@ -850,9 +850,8 @@ func runFootprintMode(client *gitlabclient.Client, check bool) error {
 // runFootprintCheck measures the token footprint and verifies that the README
 // managed section and the detailed reference doc already match the freshly
 // rendered content, without writing anything. It returns an error naming the
-// stale targets when either is out of date — the CI counterpart to runFootprint
-// and the gen_stats -check gate. This restores the README-token-footprint half
-// of the former gen_readme -check (the stats half lives in gen_stats -check).
+// stale targets when either is out of date: the CI counterpart to runFootprint,
+// and the README-token-footprint half of the former gen_readme -check.
 func runFootprintCheck(client *gitlabclient.Client) error {
 	rows := measureFootprintRows(client)
 

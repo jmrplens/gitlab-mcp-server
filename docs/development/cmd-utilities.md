@@ -46,7 +46,6 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_lhm_manifest`             | Generators                    | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                                                                                                                                                                                                                                                   | `make gen-lhm-manifest`                                                                                                                                                 |
 | `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                                                                                                                                                                                  | `make gen-llms`                                                                                                                                                         |
 | `gen_request_inventory`        | Generators                    | Merges the requests the unit suite records into `docs/development/request-inventory.json`                                                                                                                                                                                                                                                                 | `make gen-request-inventory`                                                                                                                                            |
-| `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                                                                                                                                                                      | `make gen-stats`                                                                                                                                                        |
 | `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                                                                                                                                                                               | `make gen-testing-docs`                                                                                                                                                 |
 | `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                                                                                                                                                                               | `make brand`, `make brand-check`                                                                                                                                        |
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                                                                                                                                                                                 | `make gen-icon-webp`                                                                                                                                                    |
@@ -1124,11 +1123,10 @@ Default mode: a Markdown report to stdout with mode comparison, per-tool costs, 
 - `make audit-tokens`
 - `make gen-footprint` — runs `-footprint` mode.
 - `make check-footprint` — runs `-footprint -check` (CI gate; non-zero on drift).
-- `make gen-readme` — umbrella that also regenerates the stats section.
 
 #### Notes
 
-The `--compare-schemas` mode replaces the former `audit_meta_schema` spike binary. The `-footprint` mode replaces the token-footprint half of the former `gen_readme` binary; the statistics half moved to `gen_stats`.
+The `--compare-schemas` mode replaces the former `audit_meta_schema` spike binary. The `-footprint` mode replaces the token-footprint half of the former `gen_readme` binary; its statistics half became a command of its own, removed with the README statistics in issue 1163.
 
 ### audit_metrics
 
@@ -1956,35 +1954,6 @@ The recording time is on the summary because this command never records. It merg
 - `make check-request-inventory`: merges the shards of the last recorded run and gates instead of writing. It runs no suite of its own, so it costs one `go run`; recording is the opt-in half. CI gets both for nothing: it sets `GITLAB_MCP_TEST_INVENTORY_DIR` on the coverage job's suite run and merges those shards.
 - `make audit-request-inventory`: the same gate, naming the silent packages.
 
-### gen_stats
-
-Regenerates the managed `README.md` repository statistics section between the `<!-- START STATS -->` / `<!-- END STATS -->` markers: file/function/line counts, code-pattern tallies, dependency and git history metrics, and "hall of fame" records (longest names, largest files).
-
-#### Usage
-
-```bash
-go run ./cmd/gen_stats/
-```
-
-#### Flags
-
-- `--check` — verify the stats section is current without writing; exits non-zero if stale.
-
-#### Output
-
-Rewrites the managed stats section of `README.md` in place.
-
-#### Make targets
-
-- `make gen-stats`
-- `make gen-readme` — convenience umbrella that also runs the token-footprint generator.
-
-> **Token footprint moved.** The README `<!-- START TOKEN FOOTPRINT -->` section and `docs/development/token-footprint.md` are now regenerated by the `-footprint` flag of `audit_tokens` (formerly the token-footprint half of `gen_readme`):
->
-> ```bash
-> go run ./cmd/audit_tokens/ -footprint
-> ```
-
 ### gen_testing_docs
 
 Regenerates the managed test-metrics block in `docs/development/testing/testing.md`: package discovery, AST test counts, naming-pattern stats, coverage tables, and low-coverage exceptions.
@@ -2378,13 +2347,13 @@ The analysis helpers shared by the auditors: the projected individual-tool descr
 
 The three questions every command that reads `_test.go` files used to answer for itself: whether a function name is a Go test entry point (`IsTestFunction`), which naming bucket it falls in (`ClassifyTestName`, with the four `Pattern*` constants), and which files a scan of the tree may look at (`WalkFiles`, with one `SkipDir` list).
 
-All three had drifted, and the drift was not theoretical. `gen_stats` required an upper-case rune after `Test` while `gen_testing_docs` required a non-lower-case one, under a comment claiming the two agreed; `audit_test_names` skipped every name starting with the `TestMain` prefix, so every test named `TestMain_Something` was counted by both generators and invisible to the auditor. Go's own rule decides for all of them, which makes the reconciliation a fix to the auditor rather than a change to either published count. The walks disagreed the same way: two skip lists and two descents that skipped nothing, so whether `testdata` is part of the corpus had two answers and no recorded reason. `SkipDir` is that answer, written down once, and `audit_test_names` applies it in its `-check-files` gate as well as its report, so the gate certifies the corpus the report describes.
+All three had drifted, and the drift was not theoretical. The README statistics generator, since removed (issue 1163), required an upper-case rune after `Test` while `gen_testing_docs` required a non-lower-case one, under a comment claiming the two agreed; `audit_test_names` skipped every name starting with the `TestMain` prefix, so every test named `TestMain_Something` was counted by both generators and invisible to the auditor. Go's own rule decides for all of them, which makes the reconciliation a fix to the auditor rather than a change to either published count. The walks disagreed the same way: two skip lists and two descents that skipped nothing, so whether `testdata` is part of the corpus had two answers and no recorded reason. `SkipDir` is that answer, written down once, and `audit_test_names` applies it in its `-check-files` gate as well as its report, so the gate certifies the corpus the report describes.
 
 A root is entered whatever it is called, so a scan pointed straight at a fixtures or dot directory scans it, and whatever it is: `filepath.WalkDir` lstats its root, so `WalkFiles` resolves a root that is a symlink to a directory before walking it and reports every path back under the name the caller gave. Without that, a tree named through a link is handed to the callback as a plain file, a report comes back empty and `-check-files` certifies it clean. Below the root nothing is resolved; a link that resolves to nothing is a read error rather than an empty corpus.
 
 `WalkFiles` stops at the first error and returns it, whether the walk raised it (an absent root, a directory the process may not read) or the visitor did, and there is deliberately no best-effort mode. Every caller is a gate or the input to one, and a gate that skipped an unreadable directory would certify a tree it never read; the files gathered before such an error are a prefix of the tree and look exactly like the whole of it. A caller that wants to continue past a failure swallows it inside its own visitor, where it can say which file it gave up on. What no caller may do is discard the returned error, because by then the walk has already stopped and a truncated report reads exactly like a complete one.
 
-What the package deliberately does **not** own is discovery. `gen_stats` keeps asking git (`git ls-files`) so `check-stats` stays a function of what is committed, and `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages; sharing the input universe would break both.
+What the package deliberately does **not** own is discovery. `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages, and each auditor keeps the walk of the tree it judges; one input universe for all of them would describe none of them.
 
 One predicate also stays where it is. `cmd/godoc_tool` asks which functions need a test-form doc comment rather than which functions the testing package runs, so it keeps `TestMain` and the lower-case `Test`-prefixed helpers that `IsTestFunction` excludes; routing it through the shared predicate would silently drop those findings from `make audit-docs`.
 
@@ -2435,7 +2404,7 @@ Two commands enumerate this module's packages from the toolchain: [`godoc_tool`]
 
 `Executable` is the reason this is a package rather than two tidy copies. Neither command may resolve `go` through `PATH`, because a lookup in a directory list the environment controls is what Sonar's `go:S4036` refuses; the function joins it out of `GOROOT` instead, appends the Windows suffix, and carries the `//nolint` comment and the `runtimeGOOS` seam that makes the Windows branch reachable from a Linux test. Written twice, that is a rule that holds until one copy is edited by somebody who did not read the other. Two more commands call `Executable` for the same reason: [`audit_binary_vulns`](#audit_binary_vulns) runs `go build` for every release target, and [`gen_third_party_notices`](#gen_third_party_notices) runs `go env` to find `GOROOT` and the module cache. The second also lists packages, with `go list -deps` and a format of its own for the packages each release binary links, whose rows carry the providing module and its replacement rather than the directory the two listers above parse.
 
-Running the command is deliberately not shared. `godoc_tool` wants one listing's stdout under a 30-second bound; `gen_testing_docs` runs `go test` and `go tool cover` through the same runner, which pins `GOTOOLCHAIN` to the `go` directive of `go.mod` and merges stderr into the output so a failure is reported with its tail — which is also why its warning rows reach `ParseRows`, and why refusing a row that is not exactly three fields matters rather than being pedantry. [`gen_stats`](#gen_stats) is not a member and cannot become one: it discovers packages through `git ls-files` so that `check-stats` stays a function of what is committed, which is a different universe rather than a different parse.
+Running the command is deliberately not shared. `godoc_tool` wants one listing's stdout under a 30-second bound; `gen_testing_docs` runs `go test` and `go tool cover` through the same runner, which pins `GOTOOLCHAIN` to the `go` directive of `go.mod` and merges stderr into the output so a failure is reported with its tail, which is also why its warning rows reach `ParseRows`, and why refusing a row that is not exactly three fields matters rather than being pedantry.
 
 ### cmd/internal/sdkroutes
 
@@ -2465,7 +2434,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-llms`                             | `gen_llms`                                                       | `llms.txt` and `llms-full.txt` are current and structurally valid                                                                                                                                                | Non-zero if either file is stale or malformed                                                                                                                       |
 | `check-lhm-manifest`                     | `gen_lhm_manifest`                                               | `lhm.plugin.json` declares the registered tools, prompts, and resources                                                                                                                                          | Non-zero if the manifest is stale                                                                                                                                   |
 | `check-footprint`                        | `audit_tokens -footprint`                                        | README token-footprint section, `docs/development/token-footprint.md` and `site/src/data/token-footprint.json` are current                                                                                       | Non-zero if any is stale                                                                                                                                            |
-| `check-stats`                            | `gen_stats`                                                      | README repository-statistics section is current                                                                                                                                                                  | Non-zero if the section is stale                                                                                                                                    |
 | `audit-discovery-check`                  | `audit_discovery_completeness`                                   | No META-001 finding meets the configured severity threshold                                                                                                                                                      | Non-zero if any finding meets `-severity` (default error)                                                                                                           |
 | `audit-doc-coverage-check`               | `audit_doc_coverage`                                             | No `docs/reference/tools/*.md` has missing/orphan/tier_mismatch findings                                                                                                                                         | Non-zero if any file has a finding                                                                                                                                  |
 | `audit-godocs-check`                     | `godoc_tool audit`                                               | No package, symbol, or test Godoc findings remain                                                                                                                                                                | Non-zero when findings are present                                                                                                                                  |

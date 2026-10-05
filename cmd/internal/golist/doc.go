@@ -35,9 +35,4 @@
 // deliberately not shared: one wants a single listing's stdout under a
 // deadline, the other runs `go test` and `go tool cover` through the same
 // runner and reports a failure with the tail of its combined output.
-//
-// cmd/gen_stats is not a member and cannot become one. It discovers packages
-// through `git ls-files`, on purpose, so that `make check-stats` is a function
-// of what is committed rather than of what is on disk; sharing a listing with
-// it would be sharing the wrong universe, not sharing a parse.
 package golist

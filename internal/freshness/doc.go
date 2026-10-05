@@ -4,7 +4,7 @@
 //
 // # Why the question exists
 //
-// Every freshness gate (the README stats, llms*.txt, the tool snapshots, the
+// Every freshness gate (llms*.txt, the tool snapshots, the
 // token footprint, the testing reference, the site data, the request
 // inventory, the manifests) holds a committed file against what the source
 // tree would generate now. In a stack of pull requests the artifacts are

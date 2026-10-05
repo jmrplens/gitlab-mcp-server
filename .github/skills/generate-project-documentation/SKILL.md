@@ -273,7 +273,7 @@ MCP Client → MCP Server → Tool Handler → GitLab Client → GitLab API → 
 7. **Consistent terminology**: Use the same names as the source code
 8. **Pagination**: Document pagination patterns once and reference from each list tool
 9. **Markdown tables**: When generated content creates or edits pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` before markdownlint
-10. **Generator-owned content is never hand-written**: the README stats block, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json` come from the `cmd/gen_*` generators (`make update-all` runs them all; ADR-0013). Write around those blocks, never inside them
+10. **Generator-owned content is never hand-written**: the README's generated blocks, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json` come from the `cmd/gen_*` generators (`make update-all` runs them all; ADR-0013). Write around those blocks, never inside them
 
 ## Quality Checklist
 
