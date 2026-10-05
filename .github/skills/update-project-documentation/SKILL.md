@@ -1,13 +1,18 @@
 ---
 name: update-project-documentation
-description: 'Update existing project documentation to maintain parity with source code changes. Analyzes code diffs, identifies documentation gaps, and surgically updates affected documents while preserving structure and style.'
+description: 'Update existing project documentation to maintain parity with source code changes: the site pages (English and Spanish together) for users, docs/development for contributors. Analyzes code diffs, identifies documentation gaps, and surgically updates affected documents while preserving structure and style.'
 ---
 
 # Update Project Documentation
 
 ## Primary Directive
 
-Update existing documentation in the `docs/` directory to reflect current source code changes. Perform a delta analysis between the implementation and documentation, then surgically update only the affected sections while preserving the overall document structure, style, and formatting.
+Update existing documentation to reflect current source code changes. Perform a delta analysis between the implementation and documentation, then surgically update only the affected sections while preserving the overall document structure, style, and formatting.
+
+The documentation lives in two places, one per audience (ADR-0025):
+
+- **User documentation** is the site only: `site/src/content/docs/` in English and its Spanish twin under `site/src/content/docs/es/`, published at `https://jmrp.io/docs/gitlab-mcp-server/`. An English page and its twin change together. Follow the `update-starlight-docs` skill for the page map, the generated pages and the site's checks.
+- **Contributor documentation** is `docs/development/`, plus `CLAUDE.md`, `AGENTS.md` and `.github/` for the guidance AI assistants read. Beside `docs/development/`, `docs/` holds only a README that points at the site.
 
 ## Execution Context
 
@@ -26,17 +31,20 @@ This skill is triggered after code changes to ensure documentation stays in sync
 
 For each code change, identify which documentation files are affected:
 
+Site pages are named by slug: `operations/http-server` is `site/src/content/docs/operations/http-server.mdx` and `site/src/content/docs/es/operations/http-server.mdx`.
+
 | Change Type | Affected Documentation |
 |-------------|----------------------|
-| New exported type/function | Its godoc comment (`make audit-godocs-check`), possibly tools/resources reference |
+| New exported type/function | Its godoc comment (`make audit-godocs-check`), possibly the tools or resources pages of the site |
 | Modified function signature | Godoc comment, tools reference, examples |
-| New MCP tool | The site's per-domain tool reference, which is generated: run `make gen-tool-reference` (a new catalog group first needs its entry in `cmd/gen_tool_reference/domains.json`) |
-| New MCP resource | `docs/reference/resources.md` |
-| New MCP prompt | `docs/reference/prompts.md` |
-| Configuration change | `docs/reference/configuration.md`, `docs/reference/env.md`, `docs/reference/cli.md`, and the `CLAUDE.md` variable and flag tables |
-| New package | `docs/concepts/architecture.md` component view; `docs/development/cmd-utilities.md` for a new `cmd/` utility |
-| Architecture change | `docs/concepts/architecture.md`, diagrams |
-| Build/deploy change | `docs/development/development.md`, `docs/guides/installation.md`, `docs/guides/remote-deployment.md` |
+| New MCP tool | The site's per-domain tool reference, which is generated: run `make gen-tool-reference` (a new catalog group first needs its entry in `cmd/gen_tool_reference/domains.json`), `make gen-site-stats` for the counts the site prints and `make gen-action-grants` for the fine-grained table, which holds one row per action |
+| New MCP resource or prompt | Site page `tools/resources-prompts`; `docs/development/architecture.md` (Resources and prompts: where each lives) |
+| Configuration change | Site pages `configuration`, `reference/environment` and `reference/cli`, the `CLAUDE.md` variable and flag tables, and the environment variable and flag tables in `.github/copilot-instructions.md` |
+| New package | The Project Structure of `docs/development/development.md`, the packages tables of `docs/development/architecture.md` and the project tree in `CLAUDE.md`; `docs/development/cmd-utilities.md` for a new `cmd/` utility |
+| Architecture change | Site page `architecture` for what a user sees (transports, surfaces, security model), diagrams included; `docs/development/architecture.md` (packages, the path a call takes, handler patterns), `docs/development/development.md` and `docs/development/tool-surfaces-and-action-core.md` for how the code is put together |
+| Error handling change | Site pages `operations/error-handling` and `operations/troubleshooting`; `docs/development/error-handling.md` for the classification and wrapping functions |
+| Capability change | Site pages under `capabilities/`; `docs/development/capabilities.md` for the progress, elicitation and completion APIs and the icons |
+| Build/deploy change | `docs/development/development.md`, and `docs/development/distribution.md` for the bundles and the channel publishers; site pages under `install/` and `operations/remote-deployment` |
 | Removed API | All referencing documents |
 
 ### Step 3: Assess Impact
@@ -60,8 +68,9 @@ For each affected document:
 - **UPD-006**: Add deprecation notices for removed APIs rather than deleting immediately
 - **UPD-007**: Never introduce TBD/TODO placeholders in updates
 - **UPD-008**: Maintain consistent terminology with the rest of the documentation
-- **UPD-009**: When creating or editing Markdown pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
-- **UPD-010**: Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/` and its `es/` twin, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
+- **UPD-009**: When creating or editing Markdown pipe tables in `README.md`, `docs/` or the site's pages, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
+- **UPD-010**: Never hand-edit generator-owned content: the README's token claim block, the managed block of `docs/development/testing/testing.md`, `model-corpus.md` and `e2e-coverage.md` beside it, the managed blocks of `docs/development/testing/model-results.md`, `docs/development/token-footprint.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/` (its `index.mdx` included) and its `es/` twin, the site's `reference/fine-grained-permissions.mdx` and its twin, the generated block of the site's `performance/resource-benchmark.mdx` with the charts under `site/public/benchmarks/`, the data files under `site/src/data/` (`stats.json`, `token-footprint.json`, `resource-benchmark.json`), the `llms*.txt` files at the repository root, and `lhm.plugin.json`'s capability arrays. Run the generator instead (`make update-all` runs every one of them except the benchmark measurement: it redraws the benchmark with `make bench-resources-render`, and only `make bench-resources` re-measures and rewrites `resource-benchmark.json`; ADR-0025 lists which command writes which path). The versions in `server.json` and the other manifests are stamped by the release, never by hand
+- **UPD-011**: A user-facing change updates the English page and its Spanish twin in the same change. `pnpm run i18n:check` (in `site/`) only proves that every page has a twin, not that the two agree
 
 ### For New APIs
 
@@ -116,7 +125,9 @@ After all updates are applied, perform a parity check:
 - [ ] No TBD/TODO placeholders in updated sections
 - [ ] Consistent terminology and style with surrounding content
 - [ ] Deprecation notices added for removed APIs
-- [ ] Markdown pipe tables in `README.md` and `docs/` were verified with `go run ./cmd/format_md_tables/ --check`
+- [ ] Every site page changed has its Spanish twin changed with it
+- [ ] Markdown pipe tables in `README.md`, `docs/` and the site were verified with `go run ./cmd/format_md_tables/ --check`
+- [ ] `make check-doc-links` and `make check-doc-tool-names` pass, and, when a site page changed, `cd site && pnpm run build && pnpm run lint`
 
 ## Output Format
 
@@ -129,7 +140,7 @@ After completing updates, provide a summary:
 | Document | Sections Changed | Change Type |
 |----------|-----------------|-------------|
 | `site/src/content/docs/reference/tools/branch.mdx` | Regenerated with `make gen-tool-reference` for `branch.new_action` | New API |
-| `docs/concepts/architecture.md` | Updated component view | Modified API |
+| `site/src/content/docs/configuration.mdx` and `es/configuration.mdx` | New variable in the settings table | Modified API |
 
 ### Parity Status
 - [x] All changes documented

@@ -66,20 +66,21 @@ gitlab-mcp-server/
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 180 packages under internal/tools/... (149 with action_specs.go)
+│   ├── tools/                   # Tool orchestration layer + 180 sub-packages (149 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
-│   │   ├── meta_tool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
+│   │   ├── meta_tool.go         # Route wrappers (wrapAction, wrapVoidAction, routeAction), local aliases of the toolutil route types, and the meta parameter-schema mode (SetMetaParamSchema); AddMetaTool/AddReadOnlyMetaTool live in toolutil/meta_tool.go
 │   │   ├── markdown.go          # markdownForResult delegator to toolutil.MarkdownForResult
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # 180 packages under internal/tools/... in total
+│   │   └── ...                  # 180 sub-packages (181 packages with the root)
 │   ├── resources/               # 45 MCP resource handlers
 │   └── prompts/                 # 37 MCP prompt handlers
 ├── test/e2e/                    # End-to-end integration tests (gitlab/ + internal/ + infra)
-├── docs/                        # Documentation (this directory)
-├── plan/                        # Implementation plans
+├── docs/                        # Contributor documentation: development/ (this directory) and a README pointing at the site (ADR-0025)
+├── site/                        # The documentation site (Astro Starlight): user pages under src/content/docs/, Spanish twins under es/
+├── plan/                        # Untracked working area: ignored by git, never committed
 ├── VERSION                      # Single source of truth for project version
 ├── Makefile                     # Build automation
 └── .env                         # Local secrets (gitignored)
@@ -130,7 +131,7 @@ graph TD
 7. **Capabilities** provide completions, progress, elicitation, and resource subscriptions
 8. **Server** runs over stdio (default) or HTTP (`--http`, or `--transport auto`, which serves HTTP only when stdin is `/dev/null`)
 
-See [Architecture Overview](https://jmrp.io/docs/gitlab-mcp-server/architecture/) for detailed diagrams and component descriptions.
+See [Internal Architecture](architecture.md) for the packages, the path a call takes and the handler patterns; the [site's Architecture page](https://jmrp.io/docs/gitlab-mcp-server/architecture/) describes it from the outside.
 
 ## Version Management
 
@@ -391,7 +392,7 @@ A hint names an action by its canonical ID, never by a tool name, and so does ev
 - `ContainsAny(err, substrs...)` — checks if `err.Error()` contains any of the given substrings
 - `ExtractGitLabMessage(err)` — extracts the specific message from `gl.ErrorResponse.Message`
 
-See [Error Handling](https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/) for the full architecture.
+See [Error Handling](error-handling.md) for the full architecture, and the [site's error handling page](https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/) for what a user reads.
 
 ## Adding a New Tool
 

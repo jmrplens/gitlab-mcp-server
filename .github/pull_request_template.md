@@ -53,16 +53,16 @@ N/A
 
 - [ ] All existing tests pass: `go test ./... -count=1`
 - [ ] New tests added for new functionality (table-driven, with `httptest` mocks)
-- [ ] Coverage on modified packages is ≥ 90% (per project policy)
+- [ ] Total coverage stays at or above the 90% CI enforces (`COVERAGE_MIN`), and the packages you touched are covered (the `increase-test-coverage` skill aims at 100% per touched package)
 - [ ] Edge cases and error scenarios covered
 - [ ] If applicable, E2E tests updated/added under `test/e2e/gitlab/`
 
 ### Documentation
 
 - [ ] Doc comments added for exported types/functions (godoc)
-- [ ] `docs/` updated if public API or behavior changed
-- [ ] `README.md` / Starlight site (`site/src/content/docs/`) updated if user-facing behavior changed
-- [ ] If introducing/removing a tool: tool reference regenerated (`make gen-tool-reference`) and tool counts updated
+- [ ] User-facing behavior changed: the site page that describes it updated in English (`site/src/content/docs/`) and Spanish (`site/src/content/docs/es/`) together
+- [ ] Contributor-facing change (a gate, a generator, a convention): `docs/development/` or `CLAUDE.md` updated
+- [ ] If introducing/removing a tool: tool reference regenerated (`make gen-tool-reference`), the site's counts refreshed (`make gen-site-stats`) and the fine-grained table regenerated (`make gen-action-grants`); generated pages are never edited by hand (`make update-all` runs every generator that needs no measurement, GitLab instance or paid run)
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 
 ### Security

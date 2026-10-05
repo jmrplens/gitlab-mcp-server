@@ -958,17 +958,18 @@ sonar:
 sonar-status:
 	@./scripts/sonar-scan.sh --no-scan
 
-## mdlint: lint Markdown files for style, consistency, and correctness.
-## Excludes plan/ directory (working drafts). Uses .markdownlint-cli2.jsonc.
+## mdlint: lint Markdown and MDX files for style, consistency, and correctness,
+## with the globs CI's Markdown job passes. Excludes plan/ (working drafts) and
+## node_modules/. Uses .markdownlint-cli2.jsonc.
 ## Docs: https://github.com/DavidAnson/markdownlint-cli2
 mdlint:
 	@echo === markdownlint ===
-	npx markdownlint-cli2 "**/*.md" "#plan"
+	npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"
 
-## mdlint-fix: auto-fix Markdown lint issues (writes files)
+## mdlint-fix: auto-fix Markdown and MDX lint issues (writes files)
 mdlint-fix:
 	@echo === markdownlint --fix ===
-	npx markdownlint-cli2 --fix "**/*.md" "#plan"
+	npx markdownlint-cli2 --fix "**/*.{md,mdx}" "#plan" "#node_modules"
 
 ## check-doc-links: verify tracked Markdown/MDX local links resolve, anchor included,
 ## and links to the documentation site resolve to a page and an anchor it has.
@@ -980,7 +981,12 @@ check-doc-links:
 check-md-tables:
 	go run ./cmd/format_md_tables/ --check
 
-## audit-docs: run the complete documentation quality gate.
+## audit-docs: run documentation checks in one pass: markdownlint over the top-level
+## Markdown files, docs/, test/e2e/ and the site pages; the pipe tables; the freshness
+## of the llms files, the LobeHub manifest, the tool reference, the testing reference
+## and the site statistics; the links; the Go doc comment audit; the surface quality
+## and dynamic alias audits; and the site's check, build and lint. Not every
+## documentation gate: check-doc-tool-names, for one, is a target and a CI step of its own.
 audit-docs:
 	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
 	go run ./cmd/format_md_tables/ --check
@@ -1038,7 +1044,7 @@ analyze:
 	run_check "[3/28] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
 	run_check "[4/28] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
 	run_check "[5/28] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/28] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/28] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
 	run_check "[7/28] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	run_check "[8/28] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
 	run_check "[9/28] supply-chain policy" go run ./cmd/audit_supply_chain; \
@@ -1080,7 +1086,7 @@ analyze-fix:
 	@echo [2/3] golangci-lint run --fix
 	-golangci-lint run --fix --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 	@echo [3/3] markdownlint --fix
-	-npx markdownlint-cli2 --fix "**/*.md" "#plan"
+	-npx markdownlint-cli2 --fix "**/*.{md,mdx}" "#plan" "#node_modules"
 	@echo === Fixes applied. Run 'make analyze' to verify. ===
 
 ## analyze-report: generate combined analysis report for LLM consumption.
@@ -1115,7 +1121,7 @@ analyze-report:
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
 	@echo "## 5. markdownlint" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-npx markdownlint-cli2 "**/*.md" "#plan" >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules" >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "Report saved to $(ANALYSIS_DIR)/report.txt"
 

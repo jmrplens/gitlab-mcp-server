@@ -387,7 +387,9 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...
 
 1. Run `make gen-tool-reference`: the site's per-domain tool reference (`site/src/content/docs/reference/tools/` and its `es/` twin) is generated from the catalog, one page per catalog group, so the new action appears on its group's page with its ID, tools, tier, annotations, description and parameters. Never edit those pages by hand
 2. A new catalog group stops that generator until `cmd/gen_tool_reference/domains.json` gives it an index category, a title, a one-line description, an overview and sample questions, in English and Spanish; an existing group's overview is updated there when the new action changes what the group is for
-3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing/testing.md` with new test counts and coverage values
+3. Run `make gen-site-stats`: the tool, meta-tool and action counts the site prints come from `site/src/data/stats.json`, never from a figure written into a page. Run `make gen-action-grants` too: the fine-grained table (`internal/tools/actiongrants/table_gen.go` and the site's `reference/fine-grained-permissions.mdx`) holds one row per action, and `make check-action-grants` fails until it is regenerated. `make update-all` runs every generator that needs no measurement, GitLab instance or paid run, these two, `make gen-tool-reference`, `make gen-llms` and `make gen-footprint` among them
+4. Hand-written site pages change only where the action changes what a user reads there, and then in English and Spanish together: the per-meta-tool action count table of `tools/meta-tools`, or the page of a capability or setting the action introduces. The `update-starlight-docs` skill maps changes to pages
+5. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing/testing.md` with new test counts and coverage values
 
 ## Step 9: Verify
 
@@ -397,7 +399,7 @@ go run ./cmd/gen_testing_docs/ --check
 npx markdownlint-cli2 docs/development/testing/testing.md
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 make check-test-subtests check-test-goroutines check-test-file-names check-e2e-static
-make check-tool-reference
+make check-tool-reference check-site-stats
 ```
 
 ## Validation Checklist
@@ -415,4 +417,4 @@ make check-tool-reference
 - [ ] An e2e scenario names the action through a typed `harness.ActionID` constant, or an exemption declares why none can, and `make check-e2e-static` passes
 - [ ] No limit on a caller (a rate, a ceiling, a refusal with `-42900` or `-32000`) is added outside the tenant policy register, and `make check-tenancy` passes
 - [ ] `go test` + `golangci-lint` pass
-- [ ] Documentation updated
+- [ ] Documentation updated: the tool reference regenerated (`make gen-tool-reference`), the site's counts refreshed (`make gen-site-stats`), and any hand-written site page the action changes edited in English and Spanish

@@ -17,7 +17,7 @@ superseded_by: ""
 
 GitLab maintains two API surfaces: REST API v4 and GraphQL API. The project currently exposes GitLab operations through 168 domain sub-packages under `internal/tools/`; most actions are REST-backed, while GraphQL is used for domains where REST is deprecated, unavailable, or significantly less efficient (ADR-0006). GitLab has begun deprecating certain REST endpoints in favor of GraphQL equivalents:
 
-- **Epics REST API**: deprecated since GitLab 17.0, removal planned for 19.0
+- **Epics REST API**: deprecated since GitLab 17.0. GitLab's own page, `doc/api/epics.md`, says it "was deprecated in GitLab 17.0 and is planned for removal in v5 of the API": the removal is tied to a version of the API, v5, and not to a GitLab release. The epic issues and epic links pages carry the same notice, and so do the epic sections of the notes and discussions pages (all read on GitLab's `master`, 2026-10-05). This record first gave the removal as GitLab 19.0, which GitLab's current documentation does not say.
 - **Security Findings REST**: deprecated in favor of GraphQL `Pipeline.securityReportFindings`
 - **Future deprecations**: GitLab's stated direction is GraphQL-first for new features
 
@@ -79,13 +79,13 @@ When migrating:
 
 Current priority queue based on known deprecation timelines:
 
-| Priority | Domain                     | Trigger                            | Timeline                                                     |
-| -------- | -------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| ✅        | Epics (6 tools)            | REST deprecated 17.0, removal 19.0 | Migrated to Work Items API via client-go `WorkItems` service |
-| ✅        | Epic Issues (4 tools)      | REST deprecated 17.0, removal 19.0 | Migrated to Work Items children/parent widgets               |
-| ✅        | Epic Notes (5 tools)       | REST deprecated 17.0, removal 19.0 | Migrated to Work Items notes widgets                         |
-| ✅        | Epic Discussions (6 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items discussions widgets                   |
-| P3       | Iterations                 | Feature gap                        | Migrate when client-go adds GraphQL wrapper                  |
+| Priority | Domain                     | Trigger                                          | Timeline                                                     |
+| -------- | -------------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| ✅        | Epics (6 tools)            | REST deprecated 17.0, removal planned for API v5 | Migrated to Work Items API via client-go `WorkItems` service |
+| ✅        | Epic Issues (4 tools)      | REST deprecated 17.0, removal planned for API v5 | Migrated to Work Items children/parent widgets               |
+| ✅        | Epic Notes (5 tools)       | REST deprecated 17.0, removal planned for API v5 | Migrated to Work Items notes widgets                         |
+| ✅        | Epic Discussions (6 tools) | REST deprecated 17.0, removal planned for API v5 | Migrated to Work Items discussions widgets                   |
+| P3       | Iterations                 | Feature gap                                      | Migrate when client-go adds GraphQL wrapper                  |
 
 ## References
 

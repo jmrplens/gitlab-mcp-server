@@ -346,8 +346,10 @@ func buildGeoActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 // buildGroupActionSpecs contributes the gitlab_group catalog group. It emits
 // the full set of group sub-domains unconditionally; the central tier filter
 // (driven by each action's Edition) decides which are visible at the instance
-// tier. The Premium/Ultimate sub-domains (epics, SAML, LDAP, group iterations,
-// wikis, credentials, security settings, etc.) carry their own Edition tags.
+// tier. The Premium/Ultimate sub-domains (epics, SAML, LDAP, wikis,
+// credentials, security settings, etc.) carry their own Edition tags. Group
+// iterations are not among them: buildIssueActionSpecs contributes them to
+// gitlab_issue.
 func buildGroupActionSpecs(client *gitlabclient.Client) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 96)
 	specs = append(specs, grouptools.ActionSpecs(client)...)

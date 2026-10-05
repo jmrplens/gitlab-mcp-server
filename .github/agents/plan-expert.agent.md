@@ -162,17 +162,18 @@ You operate in different modes depending on the type of plan requested. Always i
 
 **Analysis workflow**:
 
-1. Read the current documentation structure in `docs/`
+1. Read the current documentation structure: the user documentation is the site only (`site/src/content/docs/` in English, its Spanish twin under `es/`, the sidebar in `site/astro.config.mjs`), and the contributor documentation is `docs/development/` (ADR-0025)
 2. Compare documentation against actual code (tools, resources, prompts)
-3. Identify gaps: undocumented tools, outdated descriptions, missing examples
-4. Plan updates following Diátaxis framework (tutorials, how-to, reference, explanation)
+3. Identify gaps: undocumented tools, outdated descriptions, missing examples, a Spanish page that says less than its English twin
+4. Plan updates following Diátaxis framework (tutorials, how-to, reference, explanation), naming for each item whether a generator writes it (then the plan changes the generator's source) or a person does
 
 **Key questions to investigate**:
 
 - Is the generated per-domain tool reference current (`make check-tool-reference`), and does every catalog group, GitLab.com-only Orbit included, have its overview in `cmd/gen_tool_reference/domains.json`?
-- Does `docs/reference/configuration.md` match current environment variables?
-- Are new capabilities reflected in `docs/reference/capabilities/README.md`?
-- Do examples in `docs/guides/examples` still work?
+- Do the site pages `configuration`, `reference/environment` and `reference/cli` match the current environment variables and flags?
+- Are new capabilities reflected in the site page `capabilities/overview` and their own page under `capabilities/`?
+- Do the examples on the site pages under `examples/` still work?
+- Are the generated figures current (`make check-site-stats`, `make check-footprint`, `make check-bench-resources`), and does every page print counts from `site/src/data/stats.json` rather than writing them?
 
 ### Mode 7: Dependency Upgrade Plan
 
@@ -228,7 +229,7 @@ Before producing any plan, you MUST complete these steps:
 
 All plans MUST be saved to `/plan/` directory using naming convention: `[purpose]-[component]-[version].md`
 
-`plan/` is gitignored (local working notes, per ADR-0013), so a plan is never committed and markdownlint ignores it; anything that must outlive the working tree goes into an ADR or a GitHub issue.
+`plan/` is gitignored (local working notes, per ADR-0025), so a plan is never committed and markdownlint ignores it; anything that must outlive the working tree goes into an ADR or a GitHub issue.
 
 **Purpose prefixes**: `feature` | `refactor` | `architecture` | `test` | `bug` | `docs` | `upgrade` | `security` | `infrastructure`
 

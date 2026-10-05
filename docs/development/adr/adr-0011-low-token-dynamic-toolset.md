@@ -2,7 +2,7 @@
 title: "ADR-0011: Low-token dynamic toolset mode"
 status: "Accepted"
 date: "2026-05-07"
-authors: "jmrplens, GitHub Copilot"
+authors: "jmrplens"
 tags: ["architecture", "decision", "mcp", "meta-tools", "tokens", "tool-discovery"]
 supersedes: ""
 superseded_by: "ADR-0014 for catalog source and compatibility ownership"

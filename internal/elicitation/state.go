@@ -31,9 +31,12 @@ const stateTTL = tenancy.RequestStateTTL // register row IDN-011
 //
 // A fresh random key per process is deliberate. There is nothing to persist:
 // state older than [stateTTL] is refused anyway, so surviving a restart would
-// buy nothing and would need somewhere safe to keep a secret. In HTTP mode the
-// server pool builds one server per token and URL, so what this key protects is
-// a boundary the pool has already drawn.
+// buy nothing and would need somewhere safe to keep a secret. The key draws no
+// boundary between callers: in HTTP mode one process serves every credential in
+// its pool, and since ADR-0020 the credentials of one configuration shape share
+// one server, each request bound to its own credential, so state this process
+// signed for one caller verifies for any other. What confines it to its flow is
+// [stateTTL] and the call binding below.
 //
 // What it deliberately does not carry is a principal claim. The specification
 // asks that state be bound to "the user session or principal", and this package

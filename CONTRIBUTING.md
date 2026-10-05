@@ -21,7 +21,7 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ## Getting Started
 
 1. Clone the repository
-2. Create a `.env` file with your GitLab credentials (see [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/))
+2. To run the end-to-end suite against your own GitLab, create a `.env` at the repository root with `GITLAB_URL` and `GITLAB_TOKEN`: `make test-e2e` reads it. The server itself never loads a `.env` from its working directory (see [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for how it is configured)
 3. Run `make build` to verify the setup
 4. Run `make test` to ensure all tests pass
 
@@ -111,7 +111,7 @@ Use the package name as scope when applicable:
 feat(tools): add gitlab_wiki_page_create tool
 fix(config): handle empty GITLAB_URL gracefully
 test(branches): increase coverage to 90%
-docs(readme): update tool count after wiki tools
+docs(site): describe the wiki tools in English and Spanish
 ```
 
 ## Pull Requests
@@ -121,8 +121,8 @@ docs(readme): update tool count after wiki tools
 - [ ] Code compiles: `go build ./...`
 - [ ] All tests pass: `go test ./... -count=1`
 - [ ] Static analysis is clean: `make analyze` (run `make analyze-fix` first to apply supported Go and Markdown fixes)
-- [ ] New tools have tests with >80% coverage
-- [ ] Documentation is updated if public API changed
+- [ ] New tools have tests, and total coverage stays at or above the 90% CI enforces
+- [ ] Documentation is updated where the change shows: the site page for user-facing behavior (English and Spanish), `docs/development/` for contributor-facing changes (see [Documentation](#documentation))
 - [ ] Commit messages follow conventional commits
 
 ### PR Process
@@ -162,14 +162,15 @@ docs(readme): update tool count after wiki tools
 
 ```text
 internal/tools/
-├── register.go              # RegisterAll() — projects individual tools from the canonical catalog
-├── register_meta.go         # RegisterMetaStandaloneTools() — the standalone surfaces
-├── meta_tool.go              # Meta-tool registration infrastructure
-├── pagination.go            # Pagination type aliases
-├── errors.go                # Error helpers (bridge to toolutil)
-├── markdown.go              # Markdown formatting (bridge to toolutil)
-├── logging.go               # Tool call logging (bridge to toolutil)
-└── <domain>/                # 176 domain sub-packages
+├── action_specs.go          # CollectActionSpecs(): aggregates every domain's ActionSpecs
+├── action_catalog.go        # BuildActionCatalog(): the canonical action catalog built from them
+├── register.go              # RegisterAll(): projects individual tools from the canonical catalog
+├── meta_catalog.go          # RegisterMetaCatalog(): one meta-tool per catalog group
+├── register_meta.go         # RegisterMetaStandaloneTools(): the standalone utilities (gitlab_discover_project and the gitlab_interactive_* flows) on the meta and individual surfaces
+├── meta_tool.go             # Route wrappers and the meta parameter-schema mode
+├── markdown.go              # Delegates to the type-based Markdown registry in toolutil
+└── <domain>/                # 180 sub-packages
+    ├── doc.go               # Package comment
     ├── action_specs.go      # Canonical ActionSpecs for catalog-backed tool surfaces
     ├── <domain>.go          # Typed input/output structs + handlers
     ├── <domain>_test.go     # Table-driven unit tests
@@ -183,7 +184,7 @@ internal/tools/
 - **Unit tests** for every tool handler — use `httptest` to mock GitLab API responses
 - **Table-driven tests** with `t.Run()` subtests
 - **Test naming**: `TestToolName_Scenario_ExpectedResult`
-- **Coverage target**: >80% on tool handlers
+- **Coverage target**: CI fails when total coverage of `./cmd/...` and `./internal/...` drops below 90% (`COVERAGE_MIN` in `.github/workflows/ci.yml`); the `increase-test-coverage` skill aims at 100% for every package a change touches
 - **No external dependencies**: Unit tests must not call real GitLab APIs
 
 ### Running Tests
@@ -210,7 +211,8 @@ go test -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/...
 This project ships with **7 AI agents** and **18 skills** for GitHub Copilot and compatible assistants. Key workflows for contributors:
 
 - **Adding new tools**: Use the `create-mcp-tool` skill — it scaffolds the full tool lifecycle (struct, handler, registration, tests, docs).
-- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach the 80% coverage target.
+- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and cover every package you touch.
+- **Documenting a change**: Use the `update-project-documentation` skill, and `update-starlight-docs` for the site pages it leads to.
 - **Code quality reviews**: Use the `review-and-refactor` skill for code quality + OWASP security + MCP pattern checks.
 
 See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instruction files.
@@ -219,8 +221,9 @@ See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instr
 
 Tool definitions are snapshot-tested to detect unintentional changes. Golden files live in `internal/tools/testdata/`:
 
-- `tools_individual.json` — all individual tool definitions
-- `tools_meta.json` — all meta-tool definitions
+- `tools_individual.json`: all individual tool definitions
+- `tools_meta.json`: all meta-tool definitions
+- `tools_meta_compact.json` and `tools_meta_full.json`: the meta-tool definitions under the `compact` and `full` parameter schemas
 
 When you intentionally change a tool definition (name, description, schema, annotations), update the golden files:
 
@@ -230,15 +233,39 @@ UPDATE_TOOLSNAPS=true go test ./internal/tools/ -run TestToolSnapshots -count=1
 
 Then commit the updated golden files alongside your code changes. The CI will fail if snapshots are out of date.
 
+### Where Documentation Lives
+
+The user documentation lives only on the [documentation site](https://jmrp.io/docs/gitlab-mcp-server/). Its pages are under `site/src/content/docs/` in English, each with a Spanish twin at the same path under `site/src/content/docs/es/`, and an English page and its twin change in the same pull request: `pnpm run i18n:check` (in `site/`) fails when a page has no twin, and the translation itself is the author's job. `docs/` keeps contributor documentation only, under [`docs/development/`](docs/development/README.md), and the README is a short landing page that links the site. ADR-0025, in the [ADR index](docs/development/adr/README.md), records the decision.
+
+A site page is named by its slug: `operations/http-server` is `site/src/content/docs/operations/http-server.mdx`, published at `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`. Link it from a repository file by that URL; `make check-doc-links` resolves the URL and its anchor to the page.
+
+### What Is Generated
+
+Some documentation is written by a generator and never edited by hand. Change what the generator reads, run it, and commit the result; `make update-all` runs every command below (the benchmark through its redraw target, which measures nothing), and CI compares each committed result with what the tree generates.
+
+| Content                                                                                                                       | Command                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| The per-domain tool reference, `site/src/content/docs/reference/tools/` (its index included) and its `es/` twin               | `make gen-tool-reference` (a new catalog group first needs its overview and sample questions in `cmd/gen_tool_reference/domains.json`) |
+| The fine-grained permissions reference, `reference/fine-grained-permissions.mdx` and its twin                                 | `make gen-action-grants`                                                                                                               |
+| The counts the site prints (tools, meta-tools, actions, resources, prompts), `site/src/data/stats.json`                       | `make gen-site-stats`                                                                                                                  |
+| The token footprint: the README's token claim, `site/src/data/token-footprint.json` and `docs/development/token-footprint.md` | `make gen-footprint`                                                                                                                   |
+| The figures and charts of the `performance/resource-benchmark` page                                                           | `make bench-resources` measures; `make bench-resources-render` redraws from the committed record                                       |
+| `llms.txt` and the other `llms*.txt` files at the repository root                                                             | `make gen-llms`                                                                                                                        |
+| The managed block of `docs/development/testing/testing.md`                                                                    | `make gen-testing-docs`                                                                                                                |
+| The capability arrays of `lhm.plugin.json`                                                                                    | `make gen-lhm-manifest`                                                                                                                |
+
 ### When to Update
 
-- Adding a new tool → run `make gen-tool-reference`: the site's per-domain tool reference is generated from the catalog, and a new catalog group needs its overview and sample questions in `cmd/gen_tool_reference/domains.json`
-- Adding a new meta-tool action → update `docs/concepts/meta-tools.md`
-- Adding a new resource → update `docs/reference/resources.md`
-- Adding a new prompt → update `docs/reference/prompts.md`
-- Adding a new capability → update `docs/reference/capabilities/README.md`
-- Changing configuration → update `docs/reference/configuration.md`
-- Adding or modifying tests → update `docs/development/testing/testing.md` with new test counts and coverage values
+- Adding a new tool → run `make gen-tool-reference`, `make gen-site-stats` and `make gen-action-grants` (or `make update-all`, which runs all three); a new catalog group needs its overview and sample questions in `cmd/gen_tool_reference/domains.json` first
+- Adding a new meta-tool action → update the action count table of the site page `tools/meta-tools`
+- Adding a new resource or prompt → update the site page `tools/resources-prompts`
+- Adding a new capability → update the site page `capabilities/overview` and the capability's own page under `capabilities/`, and [`docs/development/capabilities.md`](docs/development/capabilities.md) for the API a contributor calls
+- Changing configuration → update the site pages `configuration` and `reference/environment`, `reference/cli` for a flag, the variable and flag tables in `CLAUDE.md`, and the environment variable and flag tables in `.github/copilot-instructions.md`
+- Changing how the code is put together (a new package, the path a call takes) → update [`docs/development/architecture.md`](docs/development/architecture.md); a change to error classification or wrapping → [`docs/development/error-handling.md`](docs/development/error-handling.md); a change to how a bundle or channel is built or published → [`docs/development/distribution.md`](docs/development/distribution.md)
+- Changing how the repository works (a gate, a generator, a convention) → update `docs/development/` or `CLAUDE.md`, never the site
+- Adding or modifying tests → run `make gen-testing-docs` to refresh `docs/development/testing/testing.md`
+
+Every site page in that list changes in English and Spanish together. The `update-starlight-docs` skill maps the rest of the changes to their pages and lists the site's own checks (`cd site && pnpm run build && pnpm run lint`).
 
 ### Language Policy
 
@@ -250,12 +277,13 @@ All project artifacts must be written in **English**:
 - MCP tool names, descriptions, error messages
 - Test names and assertions
 
+The one exception is the Spanish half of the user documentation: the Spanish twin of each site page under `site/src/content/docs/es/`, which translates its English page and changes with it, and the Spanish text kept beside its English source (the `es` fields of `cmd/gen_tool_reference/domains.json`, the Spanish strings of the generators that write both languages, `labelEs` in `site/scripts/gen-llms.mjs`, `site/src/content/i18n/es.json`).
+
 ## Release Process
 
-When creating a new release and uploading binaries to GitHub Releases:
+A release is cut by a tag. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds every binary with GoReleaser, signs and attests what it publishes, creates the GitHub release and publishes the other channels (container images, npm, PyPI, NuGet, Homebrew, winget, the MCP Registry). `gh workflow run release.yml --ref <branch>` rehearses the whole run without publishing anything.
 
-1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
-2. Create a GitHub release with the new tag and upload the binaries + checksum
+`make release` builds the same binaries locally as a GoReleaser snapshot and flattens `dist/` to the release asset names, which is a way to inspect them, not to publish them. The Release process section of [CLAUDE.md](CLAUDE.md#release-process) carries the details.
 
 ## Issue Reporting
 

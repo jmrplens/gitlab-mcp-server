@@ -95,8 +95,8 @@ gotestsum --version
 | `make fmt`                | Apply configured Go formatters through `golangci-lint fmt`                                    |
 | `make govulncheck`        | Scan Go dependencies and reachable calls for known CVEs                                       |
 | `make check-binary-vulns` | Build every release target and hold each binary to the vulnerability database at module grain |
-| `make mdlint`             | Lint all Markdown files, excluding `plan/`                                                    |
-| `make mdlint-fix`         | Auto-fix Markdown lint issues                                                                 |
+| `make mdlint`             | Lint all Markdown and MDX files, excluding `plan/` and `node_modules/`, with CI's globs       |
+| `make mdlint-fix`         | Auto-fix Markdown and MDX lint issues                                                         |
 
 ### Combined Targets
 

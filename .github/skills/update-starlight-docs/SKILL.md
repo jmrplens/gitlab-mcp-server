@@ -1,6 +1,6 @@
 ---
 name: update-starlight-docs
-description: "Update Astro Starlight user documentation (site/src/content/docs/) when code changes affect user-facing features. Use when: adding new tools, changing configuration, updating deployment, modifying capabilities."
+description: "Update the user documentation, which lives only in the Astro Starlight site (site/src/content/docs/, English, with its Spanish twin under es/), when code changes affect user-facing features. Use when: adding new tools, changing configuration, updating deployment, modifying capabilities."
 ---
 
 # Update Starlight Documentation
@@ -12,17 +12,33 @@ Update the Astro Starlight user documentation site to reflect code changes that 
 1. Identify what changed in the code that affects users
 2. Read the current Starlight docs structure: `site/src/content/docs/`
 3. Determine affected pages (EN and ES)
+4. Check whether a generator writes the page or the figure (table below); if one does, change its source and run it instead of editing
 
-## Documentation Architecture
+## Where Documentation Lives
 
-Two documentation systems coexist:
+The site is the only home of the user documentation, in English and Spanish. `docs/` keeps contributor material only, under `docs/development/`, and the README is a short landing page that links the site (ADR-0025).
 
-| System | Path | Audience | Format |
-|--------|------|----------|--------|
-| Developer docs | `docs/` | Contributors, AI agents | Markdown |
-| User docs | `site/src/content/docs/` | End users | MDX (Starlight) |
+| Audience | Path | Format |
+|----------|------|--------|
+| Users | `site/src/content/docs/` (English) and `site/src/content/docs/es/` (Spanish) | MDX (Starlight) |
+| Contributors and AI agents | `docs/development/`, `CLAUDE.md`, `AGENTS.md`, `.github/` | Markdown |
 
-**Rule**: Code changes that affect user-facing behavior MUST update BOTH systems.
+**Rule**: a change to user-facing behavior updates the site page that describes it, in English and in Spanish, in the same change. A contributor-only change (a gate, a generator, a convention) goes to `docs/development/` or `CLAUDE.md`, and never to the site. There is no second copy of a user page anywhere in the repository to keep in step.
+
+### Pages and data a generator writes
+
+Never edit these by hand: change the source the generator reads, then run it. `make update-all` runs every Go command in this table, the benchmark through its redraw target; the last row is the site build's own.
+
+| What | Source | Command |
+|------|--------|---------|
+| `reference/tools/<group>.mdx` and its `es/` twin, one page per catalog group, named after the group's tool name without `gitlab_` and with hyphens (`gitlab_merge_request` is `merge-request.mdx`), and the `index.mdx` beside them | the action catalog and `cmd/gen_tool_reference/domains.json` | `make gen-tool-reference` |
+| `reference/fine-grained-permissions.mdx` and its `es/` twin | the handlers and `docs/development/gitlab-api-live.json` | `make gen-action-grants` |
+| The block between `{/*START BENCHMARK*/}` and `{/*END BENCHMARK*/}` of `performance/resource-benchmark.mdx` in both languages, the charts under `site/public/benchmarks/`, and `site/src/data/resource-benchmark.json` | a measurement of the binary | `make bench-resources` measures; `make bench-resources-render` redraws from the committed record |
+| `site/src/data/stats.json`, the counts (tools, meta-tools, actions, groups, resources, prompts) the pages print as `{stats...}` | the catalog and the registered surfaces | `make gen-site-stats` |
+| `site/src/data/token-footprint.json` | a token measurement of every tier, surface and meta schema mode | `make gen-footprint` |
+| The site's own `/llms.txt` and `/es/llms.txt` | the content collection and the `SECTIONS` table of `site/scripts/gen-llms.mjs` | written by `pnpm run build`, never committed |
+
+A page that states one of the counts `stats.json` carries imports it and prints the field, rather than writing the figure.
 
 ## Steps
 
@@ -30,13 +46,20 @@ Two documentation systems coexist:
 
 | Code Change | User Doc Pages |
 |-------------|---------------|
-| New MCP tool | `tools/overview`, `tools/meta-tools` or `tools/dynamic-tools` (`tools/orbit` for GitLab.com Orbit tools) |
-| New config option | `configuration` |
+| New action or catalog group | the generated `reference/tools/` pages and `stats.json` (above); hand-written: `tools/overview`, `tools/meta-tools` (its per-meta-tool action count table) or `tools/dynamic-tools`, and `tools/orbit` for GitLab.com Orbit tools |
+| New resource or prompt | `tools/resources-prompts`; a resource kind that can be watched, `capabilities/subscriptions` too |
+| New config option | `configuration`, `reference/environment`, and `reference/cli` when it has a flag |
 | New capability | `capabilities/overview` and the capability's own page under `capabilities/`, `getting-started` |
 | Transport change | `getting-started`, `operations/http-server` |
+| Output format change | `reference/output-format` |
 | Error handling change | `operations/troubleshooting`, `operations/error-handling` |
-| Security change | `operations/security` |
-| Installation channel change | the channel page under `install/` and `install/overview` |
+| Security or authentication change | `operations/security`; `operations/oauth-app` and `operations/fine-grained-tokens` when the change is about those |
+| Telemetry change | `operations/telemetry`, `operations/privacy` |
+| Deployment change | `operations/remote-deployment` and the pages under `enterprise/` |
+| Installation channel change | the channel page under `install/` and `install/overview`; the Claude Desktop bundle, `claude-desktop` |
+| Client behavior change | `install/clients`, `compatibility` |
+
+The same changes often have a contributor half, which goes under `docs/development` and never on the site: `architecture.md` for a new package or a change to the path a call takes, `error-handling.md` for an error handling change, `capabilities.md` for a capability or icon change, and `distribution.md` for a change to how a bundle or channel is built or published. The `update-project-documentation` skill maps those.
 
 ### 2. Edit EN pages first
 
@@ -48,21 +71,27 @@ site/src/content/docs/
 ├── getting-started.mdx
 ├── configuration.mdx
 ├── architecture.mdx
+├── about.mdx, changelog.mdx, claude-desktop.mdx, comparison.mdx, compatibility.mdx, glossary.mdx, use-cases.mdx
 ├── capabilities/      # overview + one page per capability
-├── install/           # one page per distribution channel
-├── operations/        # http-server, remote-deployment, security, telemetry, troubleshooting, ...
+├── enterprise/        # overview, load-balancing, tls, mcp-gateways, operations
+├── examples/          # usage + workflow examples
+├── install/           # overview, clients, and one page per distribution channel
+├── operations/        # http-server, oauth-app, fine-grained-tokens, remote-deployment, security, privacy, telemetry, error-handling, ci-cd, troubleshooting
+├── performance/       # resource-benchmark (generated block), sizing
+├── reference/         # cli, environment, output-format, fine-grained-permissions (generated), tools/ (generated)
 ├── tools/             # overview, meta-tools, dynamic-tools, orbit, resources-prompts
-├── examples/
-└── es/                # Spanish mirror of everything above
+└── es/                # the Spanish twin of every page above, at the same path
 ```
+
+A page's slug is its path without the extension: `operations/http-server.mdx` is `operations/http-server`, published at `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`.
 
 ### 3. Edit corresponding ES pages
 
-Mirror structure under `site/src/content/docs/es/` with translated content.
+Edit the twin at the same path under `site/src/content/docs/es/`, with translated content. `pnpm run i18n:check` fails when an English page has no Spanish twin or the reverse; it cannot tell whether the two say the same thing, so translating the change is your job.
 
 ### 4. Frontmatter requirements
 
-Every `.mdx` file must have `title` and `description`; the existing pages also carry `chips`, `datePublished` and `faq`, which the site's checks read, so copy the shape of a neighbouring page:
+Every `.mdx` file must have `title` and `description`. Most pages also carry `datePublished` (the TechArticle JSON-LD in `src/components/Head.astro`) and many a `faq` list (the FAQPage JSON-LD and the `<FAQ />` component); a few carry `chips`, which `pnpm run chips:check` holds to the Spanish twin. `src/content.config.ts` declares all three. Copy the shape of a neighbouring page:
 
 ```yaml
 ---
@@ -77,7 +106,7 @@ faq:
 ---
 ```
 
-Sidebar position is not set in frontmatter: the sidebar is the explicit `sidebar` array in `site/astro.config.mjs`, where every entry names a `slug`, a `label` and its `translations.es` label.
+Sidebar position is not set in frontmatter: the sidebar is the explicit `sidebar` array in `site/astro.config.mjs`, where every entry names a `slug`, a `label` and its `translations.es` label. The one exception is the generated per-domain tool reference, which the sidebar lists with `autogenerate` over `reference/tools`, so a catalog group the generator adds needs no edit there.
 
 ### 5. Use Starlight components
 
@@ -104,28 +133,42 @@ import { Aside, Tabs, TabItem, Card, CardGrid, Steps, FileTree, LinkCard } from 
 ### 6. Build verification
 
 ```bash
-cd site && pnpm run build
+cd site
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium   # once: rehype-mermaid renders every Mermaid block with it
+pnpm run build                          # also runs starlight-links-validator over every internal link and anchor
+pnpm run lint                           # type check, contrast, chips, facts, i18n, llms, eslint, prettier, then the dist gates
 ```
 
-Must produce zero errors. Check `site/dist/` for output.
+Must produce zero errors. The build regenerates the site's `/llms.txt` first (`prebuild`), and fails when a page is missing from its `SECTIONS` table. From the repository root, also run the gates CI runs on content:
+
+```bash
+npx markdownlint-cli2 site/src/content/docs/<page>.mdx site/src/content/docs/es/<page>.mdx
+go run ./cmd/format_md_tables/ --check   # the site's tables belong to this formatter, not to prettier
+make check-doc-tool-names                # every gitlab_* name and domain.action ID a page teaches exists
+make check-doc-links                     # every relative link and jmrp.io/docs/gitlab-mcp-server URL in a tracked .md or .mdx file resolves, anchor included
+```
 
 ## Rules
 
-- Always update BOTH EN and ES pages
-- Keep ES translations accurate — do not leave English text in ES pages
-- A new page must be added to the `sidebar` array in `site/astro.config.mjs` (slug, label and `translations.es`), which keeps both locales in the same order; that array is the only reason to touch the file
+- Always update the EN and ES pages together, in the same change
+- Keep ES translations accurate: do not leave English text in ES pages
+- Never edit a generated page or data file (the table under "Where Documentation Lives"); change its source and run its generator
+- Touch `site/astro.config.mjs` for two reasons only: a page added, renamed or removed changes the `sidebar` array (slug, label and `translations.es`), and a page that moves or leaves the site gets an entry in its `redirects` map for its old URL, English and Spanish, so a bookmark or an inbound link lands where the content went
+- A page added, renamed or removed also changes the `SECTIONS` table of `site/scripts/gen-llms.mjs`, in the order the sidebar shows it
 - Use Starlight components (Aside, Tabs, etc.) instead of raw HTML
-- Link between Starlight pages with relative paths (e.g., `./configuration`)
+- Link between site pages by their published path: `/gitlab-mcp-server/<slug>/` in an English page and `/gitlab-mcp-server/es/<slug>/` in its Spanish twin, with an anchor read from the target's heading. A file outside the site links a page as `https://jmrp.io/docs/gitlab-mcp-server/<slug>/`
 - Do NOT modify `src/content.config.ts` unless adding a new content collection
-- Images go in `site/src/assets/` and are referenced with relative imports
+- Images a page imports go in `site/src/assets/`; the benchmark charts under `site/public/benchmarks/` are generated
 
 ## Validation Checklist
 
 - [ ] All affected EN pages updated
 - [ ] All affected ES pages updated with translated content
+- [ ] No generated page or data file edited by hand; the generator was run instead
 - [ ] Frontmatter (title, description, and the chips/datePublished/faq fields the neighbouring pages carry) is correct
-- [ ] New pages listed in the `sidebar` array of `site/astro.config.mjs` with their Spanish label
+- [ ] New, renamed or removed pages reflected in the `sidebar` array of `site/astro.config.mjs` (with their Spanish label), in `SECTIONS` of `site/scripts/gen-llms.mjs`, and, for a page that moved or left, in `redirects`
 - [ ] Starlight components used correctly (imports present)
-- [ ] `cd site && pnpm run build` succeeds with zero errors, and `pnpm run lint` (the site's own checks: i18n parity, links, a11y, facts) passes
-- [ ] No broken internal links between pages
-- [ ] Developer docs (`docs/`) also updated if applicable
+- [ ] `cd site && pnpm run build` succeeds with zero errors, and `pnpm run lint` passes
+- [ ] markdownlint, `go run ./cmd/format_md_tables/ --check`, `make check-doc-tool-names` and `make check-doc-links` pass
+- [ ] A contributor-facing part of the change (a gate, a generator, a convention) documented in `docs/development/` or `CLAUDE.md`, not on the site

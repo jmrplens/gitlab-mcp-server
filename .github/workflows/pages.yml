@@ -1,6 +1,7 @@
 # Documentation site — Astro Starlight → GitHub Pages
 #
-# Triggers: push to main (site changes), manual dispatch
+# Triggers: push to main (site changes, or a change to a root file the build
+# reads), manual dispatch
 
 name: Pages
 
@@ -9,6 +10,13 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      # The prebuild step (site/scripts/gen-llms.mjs) copies the six llms*.txt
+      # files cmd/gen_llms writes at the repository root into the published
+      # site, and the generated /llms.txt index states the version it reads
+      # from VERSION. A change to any of them changes what the site serves, so
+      # it redeploys the site.
+      - "llms*.txt"
+      - "VERSION"
       - "!site/node_modules/**"
   workflow_dispatch:
 
