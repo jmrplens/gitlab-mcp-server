@@ -46,6 +46,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
@@ -1775,6 +1776,105 @@ func TestPrintHelp_LinksTheDocumentationSite(t *testing.T) {
 				t.Errorf("the help does not carry %q", want)
 			}
 		})
+	}
+	requireSitePages(t, help)
+}
+
+// siteAddress matches an address of the documentation site in printed text,
+// the route after the site root captured; a sentence's closing period is not
+// part of it.
+var siteAddress = regexp.MustCompile(`https://jmrp\.io/docs/gitlab-mcp-server(/[A-Za-z0-9_./#-]*[A-Za-z0-9_/#-])?`)
+
+// requireSitePages fails for every documentation site address text names that
+// no page of site/src/content/docs answers, or whose anchor no heading of that
+// page carries. check-doc-links resolves the addresses the Markdown and MDX
+// files spell, and nothing reads the ones a Go string prints, so a renamed
+// page left the help linking to a 404 with every gate green.
+func requireSitePages(t *testing.T, text string) {
+	t.Helper()
+	matches := siteAddress.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		t.Fatal("the text names no address of the documentation site")
+	}
+	docs := filepath.Join("..", "..", "site", "src", "content", "docs")
+	for _, match := range matches {
+		t.Run(match[0], func(t *testing.T) {
+			route, anchor, _ := strings.Cut(strings.Trim(match[1], "/"), "#")
+			route = strings.TrimSuffix(route, "/")
+			base := filepath.Join(docs, filepath.FromSlash(route))
+			candidates := []string{base + ".mdx", filepath.Join(base, "index.mdx")}
+			if route == "" {
+				candidates = []string{filepath.Join(docs, "index.mdx")}
+			}
+			var page []byte
+			for _, candidate := range candidates {
+				if data, err := os.ReadFile(candidate); err == nil { //#nosec G304 -- a page path under the repository's site tree
+					page = data
+					break
+				}
+			}
+			if page == nil {
+				t.Fatalf("%s names no page under site/src/content/docs", match[0])
+			}
+			if anchor != "" && !pageHasHeading(string(page), anchor) {
+				t.Errorf("%s names no heading %q on its page", match[0], anchor)
+			}
+		})
+	}
+}
+
+// pageHasHeading reports whether a Markdown page carries a heading whose
+// Starlight anchor is anchor: github-slugger's rule, lower case with every
+// character but a letter, a digit, a hyphen or an underscore dropped and each
+// space made a hyphen.
+func pageHasHeading(page, anchor string) bool {
+	for line := range strings.SplitSeq(page, "\n") {
+		heading := strings.TrimLeft(line, "#")
+		if heading == line || !strings.HasPrefix(heading, " ") {
+			continue
+		}
+		slug := strings.Map(func(r rune) rune {
+			switch {
+			case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
+				return unicode.ToLower(r)
+			case r == ' ':
+				return '-'
+			default:
+				return -1
+			}
+		}, strings.TrimSpace(heading))
+		if slug == anchor {
+			return true
+		}
+	}
+	return false
+}
+
+// TestRequireSitePages_Addresses_ResolvedToPagesAndHeadings pins the reading
+// the help and first-run checks rely on, since the text they read is right
+// today and so shows none of it: a route resolves to its page or its folder's
+// index, the root to the home page, a closing period is left off, and an
+// anchor is held to a heading of the page.
+func TestRequireSitePages_Addresses_ResolvedToPagesAndHeadings(t *testing.T) {
+	text := "See https://jmrp.io/docs/gitlab-mcp-server/install/docker/#configure-your-client. " +
+		"Home: https://jmrp.io/docs/gitlab-mcp-server and https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/."
+	got := siteAddress.FindAllStringSubmatch(text, -1)
+	want := []string{"/install/docker/#configure-your-client", "", "/operations/telemetry/"}
+	if len(got) != len(want) {
+		t.Fatalf("siteAddress found %d addresses, want %d: %q", len(got), len(want), got)
+	}
+	for i, match := range got {
+		if match[1] != want[i] {
+			t.Errorf("address %d route = %q, want %q", i, match[1], want[i])
+		}
+	}
+	requireSitePages(t, text)
+
+	if !pageHasHeading("# Title\n\n## Configure your client\n", "configure-your-client") {
+		t.Error("a heading's Starlight anchor was not recognized")
+	}
+	if pageHasHeading("Configure your client\n#nospace\n", "configure-your-client") {
+		t.Error("a line that is not a heading was read as one")
 	}
 }
 

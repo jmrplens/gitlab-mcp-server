@@ -155,31 +155,16 @@ func seeAlsoIndex(actions map[string]*refAction) map[string]string {
 }
 
 // servedDescription is an action's description as the default dynamic
-// surface serves it: the individual tool's description, or the action's usage
-// line when it has none, with the names of its "See also" clause rewritten
-// into canonical IDs and the names nothing resolves dropped, a clause left
-// empty removed whole.
+// surface serves it, through the one definition gitlab://tools serves it by
+// ([actioncatalog.ServedDescription]): the individual tool's description with
+// the names of its "See also" clause rewritten into canonical IDs and the
+// names nothing resolves dropped, or the action's usage line as it is when it
+// has no description. The names resolve through index, built over every build
+// the reference covers, so a clause naming an action of a higher tier keeps
+// it, as the dynamic surface of an instance at that tier does.
 func servedDescription(action actioncatalog.Action, index map[string]string) string {
-	description := action.IndividualTool.Description
-	if description == "" {
-		description = action.Usage
-	}
-	rewritten := actioncatalog.SeeAlsoClause.ReplaceAllStringFunc(description, func(clause string) string {
-		var kept []string
-		for _, name := range seeAlsoNames(clause) {
-			if id, ok := index[name]; ok {
-				kept = append(kept, id)
-			}
-		}
-		if len(kept) == 0 {
-			return ""
-		}
-		return "See also: " + strings.Join(kept, ", ") + "."
+	return actioncatalog.ServedDescription(action, func(name string) (string, bool) {
+		id, ok := index[name]
+		return id, ok
 	})
-	return strings.TrimRight(rewritten, " \n")
-}
-
-// seeAlsoNames is the list of names a "See also" clause spells.
-func seeAlsoNames(clause string) []string {
-	return strings.Split(strings.TrimSuffix(strings.TrimPrefix(clause, "See also: "), "."), ", ")
 }

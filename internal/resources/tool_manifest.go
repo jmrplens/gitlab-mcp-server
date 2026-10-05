@@ -616,7 +616,7 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 			BackingTool:         action.ToolName,
 			BackingAction:       action.Name,
 			Title:               actionTitle(action),
-			Description:         actionDescription(action, resolve),
+			Description:         actioncatalog.ServedDescription(action, resolve),
 			Destructive:         action.Route.Destructive,
 			ReadOnly:            action.ReadOnly,
 			RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
@@ -683,7 +683,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 	}
 }
 
-func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap, resolve seeAlsoResolver, aliases map[string]actioncatalog.Action) {
+func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap, resolve actioncatalog.SeeAlsoResolver, aliases map[string]actioncatalog.Action) {
 	entry := ToolSurfaceEntry{
 		ID:                  metaManifestID(action.ToolName, action.Name),
 		Kind:                toolManifestKindMetaAction,
@@ -691,7 +691,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 		Action:              action.Name,
 		Domain:              action.Domain,
 		Title:               actionTitle(action),
-		Description:         actionDescription(action, resolve),
+		Description:         actioncatalog.ServedDescription(action, resolve),
 		Destructive:         action.Route.Destructive,
 		ReadOnly:            action.ReadOnly,
 		RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
@@ -945,66 +945,6 @@ func actionTitle(action actioncatalog.Action) string {
 	return ""
 }
 
-func actionDescription(action actioncatalog.Action, resolve seeAlsoResolver) string {
-	description := action.IndividualTool.Description
-	if description == "" {
-		return action.Usage
-	}
-	return rewriteSeeAlso(description, resolve)
-}
-
-// seeAlsoResolver maps a name a "See also:" clause spells, an
-// individual-surface tool name or a canonical action ID, to the identifier
-// the active surface's entries are invoked by, reporting whether the name is
-// known. A nil resolver leaves descriptions untouched (the individual
-// surface, whose namespace a domain action's clause already uses, and where
-// a canonical ID resolves as it does on every surface).
-type seeAlsoResolver func(name string) (string, bool)
-
-// rewriteSeeAlso projects the "See also:" clause of an individual-surface
-// description into the active surface's identifier namespace.
-//
-// The specs hand-write these clauses once, in individual-tool names; on the
-// dynamic and meta surfaces those names are not invocable, and the manifest
-// instructions tell the model to pass entry IDs — so emitting the
-// individual names there contradicts the same document two lines later.
-// The standalone surface tools (the guided flows and project discovery) write
-// theirs in canonical IDs instead, because their description reaches every
-// surface's tools/list and find results verbatim, which this projection never
-// sees. An ID is rewritten here like a tool name is, which only the dynamic
-// manifest does to theirs, where an ID maps to itself: the meta and individual
-// surfaces register those tools beside a catalog that does not carry them, so
-// their manifests list them as direct entries and serve the description, the
-// clause's canonical IDs included, verbatim, and gitlab://tools/{id} resolves
-// those IDs on every surface.
-//
-// A name the resolver does not know is dropped, not passed through: on this
-// instance the catalog is tier-filtered, so a Free-tier server legitimately
-// cannot resolve a reference to a Premium action — and a name that resolves
-// to nothing on the whole instance is not a reference, it is noise. Stale
-// names cannot hide behind this: the guard test checks the hand-written
-// clauses against the full unfiltered catalog, where only a genuinely wrong
-// name fails. A clause left empty is removed whole.
-func rewriteSeeAlso(description string, resolve seeAlsoResolver) string {
-	if resolve == nil {
-		return description
-	}
-	rewritten := actioncatalog.SeeAlsoClause.ReplaceAllStringFunc(description, func(clause string) string {
-		names := strings.Split(strings.TrimSuffix(strings.TrimPrefix(clause, "See also: "), "."), ", ")
-		kept := names[:0]
-		for _, name := range names {
-			if id, ok := resolve(name); ok {
-				kept = append(kept, id)
-			}
-		}
-		if len(kept) == 0 {
-			return ""
-		}
-		return "See also: " + strings.Join(kept, ", ") + "."
-	})
-	return strings.TrimRight(rewritten, " \n")
-}
-
 // aliasPrimaries maps each action that shares its individual tool with an
 // earlier catalog action to that earlier (primary) action. Sharing the
 // individual name is what makes a pair a deliberate alias: both project to
@@ -1048,7 +988,7 @@ func newSeeAlsoIndex(catalog *actioncatalog.Catalog) map[string]actioncatalog.Ac
 
 // dynamicSeeAlso resolves to canonical action IDs — the only identifier
 // gitlab_execute_action accepts.
-func dynamicSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
+func dynamicSeeAlso(index map[string]actioncatalog.Action) actioncatalog.SeeAlsoResolver {
 	return func(name string) (string, bool) {
 		action, ok := index[name]
 		if !ok {
@@ -1065,7 +1005,7 @@ func dynamicSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
 // entry for a hidden action, and rewriting a reference to an ID with no
 // entry would reintroduce exactly the non-invocable reference this
 // projection removes.
-func metaSeeAlso(index map[string]actioncatalog.Action, routes map[string]toolutil.ActionMap) seeAlsoResolver {
+func metaSeeAlso(index map[string]actioncatalog.Action, routes map[string]toolutil.ActionMap) actioncatalog.SeeAlsoResolver {
 	return func(name string) (string, bool) {
 		action, ok := index[name]
 		if !ok || !metaRouteVisible(routes, action.ToolName, action.Name) {

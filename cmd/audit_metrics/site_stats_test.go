@@ -415,16 +415,17 @@ func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
 	})
 }
 
-// TestReadme_ActionCount_MatchesTheCommittedSiteStats holds the one catalog
-// figure the README states in prose to the committed stats.json it is copied
-// from: the actions the dynamic surface reaches on GitLab.com.
+// TestReadme_Counts_MatchTheCommittedSiteStats holds every count the README
+// states in prose to the committed stats.json it is copied from: the actions
+// the dynamic surface reaches on GitLab.com in the opening line, and the
+// resources and prompts in the list of reasons.
 //
 // The README is hand-written apart from its token claim, so nothing would
-// notice this figure going stale. It is compared with the committed file
+// notice these figures going stale. They are compared with the committed file
 // rather than a fresh measurement, so a layer that leaves stats.json stale on
 // purpose leaves the README alone too, and the refresh at the top of a stack
 // fails here until the README is updated with it.
-func TestReadme_ActionCount_MatchesTheCommittedSiteStats(t *testing.T) {
+func TestReadme_Counts_MatchTheCommittedSiteStats(t *testing.T) {
 	root := repositoryRoot()
 	data, err := os.ReadFile(filepath.Join(root, "site", "src", "data", "stats.json")) //#nosec G304 -- fixed in-repo path
 	if err != nil {
@@ -439,9 +440,27 @@ func TestReadme_ActionCount_MatchesTheCommittedSiteStats(t *testing.T) {
 		t.Fatalf("read README.md: %v", err)
 	}
 
-	want := "Up to " + withThousands(stats.CatalogActions.GitLabCom) + " actions"
-	if !strings.Contains(string(readme), want) {
-		t.Errorf("README.md does not say %q; update its opening line to the committed site stats", want)
+	for _, tc := range []struct {
+		name  string
+		want  string
+		where string
+	}{
+		{
+			name:  "actions",
+			want:  "Up to " + withThousands(stats.CatalogActions.GitLabCom) + " actions",
+			where: "its opening line",
+		},
+		{
+			name:  "resources and prompts",
+			want:  withThousands(stats.Resources) + " resources and " + withThousands(stats.Prompts) + " prompts",
+			where: "the surfaces bullet of Why this server",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(string(readme), tc.want) {
+				t.Errorf("README.md does not say %q; update %s to the committed site stats", tc.want, tc.where)
+			}
+		})
 	}
 }
 

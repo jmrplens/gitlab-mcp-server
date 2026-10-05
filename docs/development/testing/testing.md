@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,736 |
-| Unit test functions                                   | 19,275 |
+| Total test functions                                  | 20,739 |
+| Unit test functions                                   | 19,278 |
 | E2E test functions                                    |  1,461 |
-| cmd test functions                                    |  4,571 |
+| cmd test functions                                    |  4,572 |
 | Test files (internal/)                                |    698 |
 | Test files (cmd/)                                     |    312 |
 | Test files (test/e2e/)                                |    407 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,218 | 63.7% |
 | `TestFunc` (no underscore)             |    913 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,605 | 31.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,608 | 31.9% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,793 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            386 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,525 |        457 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,527 |        457 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,461 |        407 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,571 |        312 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,736** |  **1,417** |                                                                                                 |
+| cmd packages            |          4,572 |        312 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,739** |  **1,417** |                                                                                                 |
 
 ### Core Packages
 
@@ -132,7 +132,7 @@
 | accessrequests          |         58 |          4 |   100.0% |         8 |
 | accesstokens            |        108 |          2 |   100.0% |        18 |
 | achievements            |         61 |          3 |   100.0% |        12 |
-| actioncatalog           |         61 |          6 |   100.0% |         0 |
+| actioncatalog           |         63 |          6 |   100.0% |         0 |
 | actioncompat            |         60 |          3 |   100.0% |         1 |
 | actiongrants            |          5 |          1 |   100.0% |         0 |
 | adminspecs              |         17 |          1 |   100.0% |        92 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,525** |    **457** |          | **1,190** |
+| **Total**               | **10,527** |    **457** |          | **1,190** |
 
 </details>
 
@@ -353,7 +353,7 @@
 | cmd/audit_test_goroutines                 |    95.7% |
 | cmd/audit_test_names                      |   100.0% |
 | cmd/audit_test_subtests                   |    99.7% |
-| cmd/audit_tokens                          |    97.9% |
+| cmd/audit_tokens                          |   100.0% |
 | cmd/bench_resources                       |   100.0% |
 | cmd/format_md_tables                      |    98.3% |
 | cmd/gen_action_catalog_manifest           |   100.0% |
@@ -367,12 +367,12 @@
 | cmd/gen_lhm_manifest                      |    99.1% |
 | cmd/gen_llms                              |   100.0% |
 | cmd/gen_model_corpus                      |    99.4% |
-| cmd/gen_model_results                     |    96.8% |
+| cmd/gen_model_results                     |   100.0% |
 | cmd/gen_orbit_record                      |   100.0% |
 | cmd/gen_request_inventory                 |   100.0% |
 | cmd/gen_testing_docs                      |   100.0% |
 | cmd/gen_third_party_notices               |   100.0% |
-| cmd/gen_tool_reference                    |      n/a |
+| cmd/gen_tool_reference                    |   100.0% |
 | cmd/godoc_tool                            |   100.0% |
 | cmd/internal/actionids                    |   100.0% |
 | cmd/internal/actionrequests               |   100.0% |
@@ -800,7 +800,7 @@ Meta-tool tests verify the action-dispatch layer that consolidates individual to
 - **Metadata audit**: `TestMetadataAudit_*` tests enforce naming conventions, annotations, and tool count invariants across the registered tool catalog
 - **Destructive metadata consistency**: `TestDestructiveMetadataConsistency` cross-checks `ActionRoute.Destructive` metadata against `toolutil.DeleteAnnotations` on individual tools — ensures meta-tool routes and individual tools agree on which actions are destructive
 - **Markdown formatting**: `markdownForResult` delegates to the type-based registry (`toolutil.MarkdownForResult`) which invokes the formatter registered by the sub-package `init()` function
-- **next_steps enrichment**: `enrichWithHints()` correctly extracts hints from Markdown and injects them into JSON `structuredContent`
+- **next_steps enrichment**: `toolutil.FinishToolResult` copies the hints the Markdown carries onto `next_steps` of an output that embeds `toolutil.HintableOutput`, and leaves a type that declares no `next_steps` as it came (`TestFinishToolResult_Hints_SetOnTheTypedOutput` in `internal/toolutil`)
 
 **Running meta-tool tests:**
 

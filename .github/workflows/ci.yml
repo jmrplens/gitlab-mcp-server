@@ -1039,6 +1039,10 @@ jobs:
       # scripts/npm_cli_js_test.py runs the npm launcher against a stand-in
       # server and holds it to passing signals on, and to stopping the server
       # when the shell npm runs it through dies, with the runner's node.
+      # scripts/check_doc_links_test.py runs the link checker,
+      # scripts/check-doc-links.mjs, in a throwaway git repository holding a
+      # stand-in site, and holds it to refusing a link to a site page, a
+      # heading or a served file that is not there, under both addresses.
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,

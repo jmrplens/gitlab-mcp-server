@@ -119,10 +119,10 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 
 | Variable                 | Default   | Purpose                                                                                          |
 | ------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (34 consolidated domain tools), `individual` (one tool per action) |
-| `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`; skips license detection                                   |
-| `GITLAB_MCP_READ_ONLY`       | `false`   | Disable all mutating tools                                                                        |
-| `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating tools return a JSON preview instead of executing                                         |
+| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (one tool per domain group: 34 on Free, up to 52 on GitLab.com Ultimate), `individual` (one tool per action) |
+| `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`, used as written. Unset, the tier is detected from the instance license, then from the plans of the namespaces the token administers, and falls back to `free` |
+| `GITLAB_MCP_READ_ONLY`       | `false`   | Remove every mutating action; reads keep working                                                  |
+| `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating actions answer with a preview card (the action and the arguments it would send) instead of executing |
 | `GITLAB_MCP_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |
 | `GITLAB_MCP_LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
 

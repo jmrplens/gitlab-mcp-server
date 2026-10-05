@@ -90,6 +90,7 @@ func TestFirstRunGuidance_NamesWhatItNeeds(t *testing.T) {
 	if strings.Contains(got, "/guides/") {
 		t.Errorf("the screen links into /guides/, a path the documentation site does not serve:\n%s", got)
 	}
+	requireSitePages(t, got)
 	// Each value in its own place: the banner names the version, and the
 	// command line to copy names the program, spelled the way it runs here.
 	if first, _, _ := strings.Cut(got, "\n"); first != "gitlab-mcp-server 2.7.5" {
