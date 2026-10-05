@@ -63,7 +63,7 @@ Compare the result against the domain mapping table in this skill. For any file 
 1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
 3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
-4. **Check the `docs/reference/tools/` page that owns the domain** IF one exists (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) → supplementary user-facing context
+4. **Check the generated tool reference page of the domain's catalog group** (`site/src/content/docs/reference/tools/<group>.mdx`, one page per group, written by `make gen-tool-reference`) → supplementary user-facing context
 
 The sub-package name must align with the client-go service name, not with our file naming.
 
@@ -331,14 +331,14 @@ The file `repositories.go` contains **Projects** CRUD operations (uses `client.G
 
 ### Reference Documentation
 
-The **client-go API library** is the source of truth for domain structure and field definitions. Our source code implements a subset of it. `docs/reference/tools` is supplementary user-facing documentation, not the canonical field map.
+The **client-go API library** is the source of truth for domain structure and field definitions. Our source code implements a subset of it. The site's per-domain tool reference (`site/src/content/docs/reference/tools/`, generated from the catalog) is supplementary user-facing documentation, not the canonical field map.
 
 Before migrating each domain:
 
 1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` for the domain's key types (e.g., `gl.Environment`, `gl.CreateEnvironmentOptions`). This defines the canonical fields, types, and API contract.
 2. **Read the source file(s)** in `internal/tools/{domain}.go` — shows our implementation: which client-go fields we expose, our Input/Output structs, and `client.GL().{Service}` calls.
 3. **Check `action_specs.go` and catalog aggregation** for runtime exposure. Files absent from the catalog are in-progress — still migrate them, but note the gap.
-4. **Read the `docs/reference/tools/` page that owns the domain IF one exists** (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) — supplementary user-facing context. If no doc exists, the combination of steps 1+2 provides everything needed.
+4. **Read the generated tool reference page of the domain's catalog group** (`site/src/content/docs/reference/tools/<group>.mdx`): supplementary user-facing context. A domain not yet in the catalog has no page, and the combination of steps 1+2 provides everything needed.
 5. **Discover new domains** by scanning `*.go` files AND running `go doc` on the client to find services we haven't wrapped yet.
 
 Never skip a domain just because it lacks documentation. The client-go types have all the information needed.

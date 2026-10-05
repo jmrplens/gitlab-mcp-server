@@ -13,7 +13,7 @@
 | `.github/copilot-instructions.md`                   | Auto-loaded by VS Code Copilot; has the language policy, env var table, E2E recipes |
 | `.github/instructions/*.md`                         | Auto-applied coding standards (go, MCP, OWASP, comments, code review)               |
 | `docs/development/tool-surfaces-and-action-core.md` | Surface ownership and catalog projection rules                                      |
-| `docs/development/adr`                                         | Architectural Decision Records (catalog-first is ADR-0004)                          |
+| `docs/development/adr`                              | Architectural Decision Records (catalog-first is ADR-0004)                          |
 
 OpenCode-specific wiring (this file's agents, skills, paths) lives in
 `opencode.json` + `.opencode/agent/`. The canonical agents and skills also
@@ -83,21 +83,22 @@ make inspector-stop
 
 ## Post-edit regeneration matrix
 
-| You edited                                          | Run                                                               |
-| --------------------------------------------------- | ----------------------------------------------------------------- |
-| Domain tool (added/renamed/changed input or output) | `go run ./cmd/audit_tokens/ -footprint`                           |
-| ActionSpec metadata (catalog routes)                | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI) |
-| Pipe tables in `README.md` or `docs/`               | `go run ./cmd/format_md_tables/` (and `--check`)                  |
-| Tests, after a test phase                           | `go run ./cmd/gen_testing_docs/` (and `--check`)                  |
-| Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
-| `server.json`                                       | `make check-server-json` (uses MCP publisher)                     |
+| You edited                                            | Run                                                                                                                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain tool (added/renamed/changed input or output)   | `go run ./cmd/audit_tokens/ -footprint`                                                                                                             |
+| ActionSpec metadata (catalog routes)                  | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI)                                                                                   |
+| Pipe tables in `README.md` or `docs/`                 | `go run ./cmd/format_md_tables/` (and `--check`)                                                                                                    |
+| Tests, after a test phase                             | `go run ./cmd/gen_testing_docs/` (and `--check`)                                                                                                    |
+| Tool surface (registered tools, resources, prompts)   | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
+| Catalog actions or groups (the site's tool reference) | `make gen-tool-reference` (and `make check-tool-reference`); a new group needs its entry in `cmd/gen_tool_reference/domains.json`                   |
+| `server.json`                                         | `make check-server-json` (uses MCP publisher)                                                                                                       |
 
 `make audit-docs` runs the combined documentation gate locally. **CI does not
 run that target**, but every `check-*` freshness gate is now wired into CI
-individually: the `generated` job runs the eight Go ones (`check-llms`,
-`check-lhm-manifest`, `check-server-json`, `check-openplugin`,
-`check-footprint`, `check-site-stats`, `check-action-catalog-manifest`,
-`check-testing-docs`) and the `analyze-md` job runs the two that need Node
+individually: the `generated` job runs the nine Go ones (`check-llms`,
+`check-tool-reference`, `check-lhm-manifest`, `check-server-json`,
+`check-openplugin`, `check-footprint`, `check-site-stats`,
+`check-action-catalog-manifest`, `check-testing-docs`) and the `analyze-md` job runs the two that need Node
 (`check-doc-links`, `check-mcpb`). Adding a new `check-*` target means adding
 it to one of those two jobs. The README statistics, since removed, and
 `check-footprint` sat stale on `main` for several releases precisely because
@@ -138,7 +139,7 @@ For a full walkthrough use the `create-mcp-tool` skill
    `gen_testing_docs`, `gen_llms`, `gen_lhm_manifest` (run `--check` on each before pushing).
 7. **Verify**: `make test-pkg PKG={domain}` and
    `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.
-8. **Document**: `docs/tools/{domain}.md` and `docs/reference/tools/README.md`.
+8. **Document**: `make gen-tool-reference` regenerates the site's per-domain tool reference from the catalog; a new catalog group needs its overview and sample questions in `cmd/gen_tool_reference/domains.json`.
 
 ## Error handling in tool handlers
 

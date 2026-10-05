@@ -62,7 +62,7 @@ N/A
 - [ ] Doc comments added for exported types/functions (godoc)
 - [ ] `docs/` updated if public API or behavior changed
 - [ ] `README.md` / Starlight site (`site/src/content/docs/`) updated if user-facing behavior changed
-- [ ] If introducing/removing a tool: `docs/tools/{domain}.md` and tool counts updated
+- [ ] If introducing/removing a tool: tool reference regenerated (`make gen-tool-reference`) and tool counts updated
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 
 ### Security

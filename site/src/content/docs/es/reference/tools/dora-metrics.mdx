@@ -1,0 +1,79 @@
+---
+title: "Métricas DORA"
+description: "Las cuatro métricas DORA de un proyecto o un grupo: frecuencia de despliegue, tiempo de entrega de cambios, tiempo de restauración del servicio y tasa de fallos de cambio."
+sidebar:
+  order: 29
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+GitLab calcula las cuatro métricas DORA a partir de los despliegues de un proyecto: frecuencia de despliegue, tiempo de entrega de cambios, tiempo de restauración del servicio y tasa de fallos de cambio. `dora_metrics.project` y `dora_metrics.group` leen una de ellas en un intervalo de fechas, por día, por mes o como una sola cifra, y opcionalmente para los tipos de entorno elegidos.
+
+## Preguntas de ejemplo
+
+- "¿Cuál es la frecuencia de despliegue del proyecto 42 este trimestre?"
+- "Muestra la tasa mensual de fallos de cambio del grupo platform"
+- "¿Cuánto tardó el proyecto 42 en restaurar el servicio en septiembre?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `dora_metrics.group`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_dora_metrics` con `action` igual al nombre de la acción, como `group`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_get_group_dora_metrics`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 2:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 2
+
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                         | Individual                        |
+| ---------------------------------------------- | --------------------------------- |
+| [`dora_metrics.group`](#dora_metricsgroup)     | `gitlab_get_group_dora_metrics`   |
+| [`dora_metrics.project`](#dora_metricsproject) | `gitlab_get_project_dora_metrics` |
+
+### `dora_metrics.group`
+
+> Get the four DORA DevOps performance metrics aggregated across a group over a date window. Returns: one time series of date/value data points for the requested metric (deployment frequency, lead time for changes, time to restore service, or change failure rate), bucketed by interval. See also: [`dora_metrics.project`](#dora_metricsproject).
+
+- **Meta-herramienta**: `gitlab_dora_metrics`, acción `group`
+- **Herramienta individual**: `gitlab_get_group_dora_metrics`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                                                                                                         | Requerido | Descripción                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `group_id`          | `string/integer`                                                                                             | sí        | Group ID or URL-encoded path                                                                                |
+| `metric`            | `string` (`deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service`, `change_failure_rate`) | sí        | DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate |
+| `end_date`          | `string`                                                                                                     | no        | End date (YYYY-MM-DD)                                                                                       |
+| `environment_tiers` | `string[]`                                                                                                   | no        | Filter by environment tiers (e.g. production, staging)                                                      |
+| `interval`          | `string` (`daily`, `monthly`, `all`)                                                                         | no        | Aggregation interval: daily, monthly, all (default: daily)                                                  |
+| `start_date`        | `string`                                                                                                     | no        | Start date (YYYY-MM-DD)                                                                                     |
+
+### `dora_metrics.project`
+
+> Get the four DORA DevOps performance metrics for a project over a date window. Returns: one time series of date/value data points for the requested metric (deployment frequency, lead time for changes, time to restore service, or change failure rate), bucketed by interval. See also: [`dora_metrics.group`](#dora_metricsgroup).
+
+- **Meta-herramienta**: `gitlab_dora_metrics`, acción `project`
+- **Herramienta individual**: `gitlab_get_project_dora_metrics`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                                                                                                         | Requerido | Descripción                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `metric`            | `string` (`deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service`, `change_failure_rate`) | sí        | DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate |
+| `project_id`        | `string/integer`                                                                                             | sí        | Project ID or URL-encoded path                                                                              |
+| `end_date`          | `string`                                                                                                     | no        | End date (YYYY-MM-DD)                                                                                       |
+| `environment_tiers` | `string[]`                                                                                                   | no        | Filter by environment tiers (e.g. production, staging)                                                      |
+| `interval`          | `string` (`daily`, `monthly`, `all`)                                                                         | no        | Aggregation interval: daily, monthly, all (default: daily)                                                  |
+| `start_date`        | `string`                                                                                                     | no        | Start date (YYYY-MM-DD)                                                                                     |

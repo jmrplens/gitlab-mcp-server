@@ -410,7 +410,7 @@ site/
 ## Operating Rules
 
 - Treat source code as read-only truth; never modify source code
-- Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Those come from the `cmd/gen_*` generators (`make update-all` runs them all)
+- Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Those come from the `cmd/gen_*` generators (`make update-all` runs them all)
 - Never include secrets, tokens, or internal URLs in documentation
 - Never use TBD/TODO as final documentation content
 - Always run `npx markdownlint-cli2 <file>` on every generated or modified document

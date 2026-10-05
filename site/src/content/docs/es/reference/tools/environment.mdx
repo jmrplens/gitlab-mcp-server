@@ -1,0 +1,486 @@
+---
+title: "Entornos y despliegues"
+description: "Entornos, entornos protegidos, periodos de congelación de despliegues y despliegues de un proyecto de GitLab."
+sidebar:
+  order: 15
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los entornos de un proyecto (crear, leer, actualizar, parar y borrar), los registros de despliegue hechos en ellos (listar, leer, crear, actualizar, borrar, los merge requests que entregó un despliegue y aprobar o rechazar un despliegue que espera en una puerta manual) y los periodos de congelación que bloquean los despliegues según un calendario. Los entornos protegidos, que limitan quién puede desplegar en un entorno, son las acciones que se sirven a partir de Premium.
+
+Parar un entorno ejecuta sus jobs de parada, y `force` se los salta; parar y borrar son destructivas.
+
+## Preguntas de ejemplo
+
+- "Lista los entornos del proyecto 42"
+- "¿Qué está desplegado ahora mismo en production?"
+- "Añade una congelación de despliegues durante las vacaciones de fin de año"
+- "Aprueba el despliegue que espera en production"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `environment.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_environment` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_environment_create`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 23:
+
+- **Free**: 18
+- **Premium**: 23
+- **Ultimate**: 23
+
+Acciones de solo lectura: 9 de 23, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                                 | Nivel   | Individual                               |
+| -------------------------------------------------------------------------------------- | ------- | ---------------------------------------- |
+| [`environment.create`](#environmentcreate)                                             | Free    | `gitlab_environment_create`              |
+| [`environment.delete`](#environmentdelete)                                             | Free    | `gitlab_environment_delete`              |
+| [`environment.deployment_approve_or_reject`](#environmentdeployment_approve_or_reject) | Free    | `gitlab_deployment_approve_or_reject`    |
+| [`environment.deployment_create`](#environmentdeployment_create)                       | Free    | `gitlab_deployment_create`               |
+| [`environment.deployment_delete`](#environmentdeployment_delete)                       | Free    | `gitlab_deployment_delete`               |
+| [`environment.deployment_get`](#environmentdeployment_get)                             | Free    | `gitlab_deployment_get`                  |
+| [`environment.deployment_list`](#environmentdeployment_list)                           | Free    | `gitlab_deployment_list`                 |
+| [`environment.deployment_merge_requests`](#environmentdeployment_merge_requests)       | Free    | `gitlab_list_deployment_merge_requests`  |
+| [`environment.deployment_update`](#environmentdeployment_update)                       | Free    | `gitlab_deployment_update`               |
+| [`environment.freeze_create`](#environmentfreeze_create)                               | Free    | `gitlab_create_freeze_period`            |
+| [`environment.freeze_delete`](#environmentfreeze_delete)                               | Free    | `gitlab_delete_freeze_period`            |
+| [`environment.freeze_get`](#environmentfreeze_get)                                     | Free    | `gitlab_get_freeze_period`               |
+| [`environment.freeze_list`](#environmentfreeze_list)                                   | Free    | `gitlab_list_freeze_periods`             |
+| [`environment.freeze_update`](#environmentfreeze_update)                               | Free    | `gitlab_update_freeze_period`            |
+| [`environment.get`](#environmentget)                                                   | Free    | `gitlab_environment_get`                 |
+| [`environment.list`](#environmentlist)                                                 | Free    | `gitlab_environment_list`                |
+| [`environment.protected_get`](#environmentprotected_get)                               | Premium | `gitlab_protected_environment_get`       |
+| [`environment.protected_list`](#environmentprotected_list)                             | Premium | `gitlab_protected_environment_list`      |
+| [`environment.protected_protect`](#environmentprotected_protect)                       | Premium | `gitlab_protected_environment_protect`   |
+| [`environment.protected_unprotect`](#environmentprotected_unprotect)                   | Premium | `gitlab_protected_environment_unprotect` |
+| [`environment.protected_update`](#environmentprotected_update)                         | Premium | `gitlab_protected_environment_update`    |
+| [`environment.stop`](#environmentstop)                                                 | Free    | `gitlab_environment_stop`                |
+| [`environment.update`](#environmentupdate)                                             | Free    | `gitlab_environment_update`              |
+
+### `environment.create`
+
+> Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `create`
+- **Herramienta individual**: `gitlab_environment_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro              | Tipo                                                                  | Requerido | Descripción                                                          |
+| ---------------------- | --------------------------------------------------------------------- | --------- | -------------------------------------------------------------------- |
+| `name`                 | `string`                                                              | sí        | Environment name (e.g. production, staging)                          |
+| `project_id`           | `string/integer`                                                      | sí        | Project ID or URL-encoded path                                       |
+| `auto_stop_setting`    | `string` (`always`, `with_action`)                                    | no        | Auto-stop behavior: always or with_action                            |
+| `cluster_agent_id`     | `integer`                                                             | no        | ID of the cluster agent to associate with this environment           |
+| `description`          | `string`                                                              | no        | Description of the environment                                       |
+| `external_url`         | `string`                                                              | no        | URL of the environment's external deployment                         |
+| `flux_resource_path`   | `string`                                                              | no        | Flux resource path used to track the environment's deployment status |
+| `kubernetes_namespace` | `string`                                                              | no        | Kubernetes namespace for the cluster agent                           |
+| `tier`                 | `string` (`production`, `staging`, `testing`, `development`, `other`) | no        | Deployment tier: production, staging, testing, development, other    |
+
+### `environment.delete`
+
+> Delete a stopped environment from a project. Returns: a success confirmation naming the deleted environment. See also: [`environment.stop`](#environmentstop), [`environment.list`](#environmentlist), [`environment.get`](#environmentget).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `delete`
+- **Herramienta individual**: `gitlab_environment_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                    |
+| ---------------- | ---------------- | --------- | ------------------------------ |
+| `environment_id` | `integer`        | sí        | Environment ID                 |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.deployment_approve_or_reject`
+
+> Approve or reject a blocked deployment awaiting protected-environment approval, optionally with a comment and an approval rule to represent. Returns: a confirmation message naming the deployment and the applied status. See also: [`environment.deployment_get`](#environmentdeployment_get), [`environment.deployment_update`](#environmentdeployment_update).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_approve_or_reject`
+- **Herramienta individual**: `gitlab_deployment_approve_or_reject`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro        | Tipo                              | Requerido | Descripción                                                                           |
+| ---------------- | --------------------------------- | --------- | ------------------------------------------------------------------------------------- |
+| `deployment_id`  | `integer`                         | sí        | Deployment ID                                                                         |
+| `project_id`     | `string/integer`                  | sí        | Project ID or URL-encoded path                                                        |
+| `status`         | `string` (`approved`, `rejected`) | sí        | Approval status: approved or rejected                                                 |
+| `comment`        | `string`                          | no        | Optional comment for the approval or rejection                                        |
+| `represented_as` | `string`                          | no        | Name of the approval rule to act as, when the user belongs to multiple approval rules |
+
+### `environment.deployment_create`
+
+> Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: [`environment.get`](#environmentget), [`environment.deployment_list`](#environmentdeployment_list), [`environment.deployment_update`](#environmentdeployment_update).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_create`
+- **Herramienta individual**: `gitlab_deployment_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo                                                  | Requerido | Descripción                                                                                                                     |
+| ------------- | ----------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `environment` | `string`                                              | sí        | Name of the environment to deploy to                                                                                            |
+| `project_id`  | `string/integer`                                      | sí        | Project ID or URL-encoded path                                                                                                  |
+| `ref`         | `string`                                              | sí        | Git branch or tag to deploy                                                                                                     |
+| `sha`         | `string`                                              | sí        | Git SHA to deploy                                                                                                               |
+| `status`      | `string` (`running`, `success`, `failed`, `canceled`) | no        | Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment       |
+| `tag`         | `boolean`                                             | no        | Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false) |
+
+### `environment.deployment_delete`
+
+> Delete a deployment record by deployment_id within a project. Returns: a confirmation that the deployment was deleted. See also: [`environment.deployment_get`](#environmentdeployment_get), [`environment.deployment_list`](#environmentdeployment_list).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_delete`
+- **Herramienta individual**: `gitlab_deployment_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `deployment_id` | `integer`        | sí        | Deployment ID                  |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.deployment_get`
+
+> Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_get`
+- **Herramienta individual**: `gitlab_deployment_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `deployment_id` | `integer`        | sí        | Deployment ID                  |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.deployment_list`
+
+> List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: [`environment.deployment_get`](#environmentdeployment_get), [`environment.list`](#environmentlist), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_list`
+- **Herramienta individual**: `gitlab_deployment_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo                                                                        | Requerido | Descripción                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`      | `string/integer`                                                            | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `environment`     | `string`                                                                    | no        | Filter by environment name                                                                                                                        |
+| `finished_after`  | `string`                                                                    | no        | Return deployments finished after this RFC3339 timestamp (GitLab 14+ only)                                                                        |
+| `finished_before` | `string`                                                                    | no        | Return deployments finished before this RFC3339 timestamp (GitLab 14+ only)                                                                       |
+| `order_by`        | `string` (`id`, `iid`, `created_at`, `updated_at`, `finished_at`, `ref`)    | no        | Order by id or iid or created_at or updated_at or finished_at or ref (default: id)                                                                |
+| `page`            | `integer`                                                                   | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`      | `string`                                                                    | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`      | `string`                                                                    | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`        | `integer`                                                                   | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`            | `string` (`asc`, `desc`)                                                    | no        | Sort order: asc or desc (default: asc)                                                                                                            |
+| `status`          | `string` (`created`, `running`, `success`, `failed`, `canceled`, `blocked`) | no        | Filter by status: created or running or success or failed or canceled                                                                             |
+| `updated_after`   | `string`                                                                    | no        | Return deployments updated after this RFC3339 timestamp (GitLab \< 14 only)                                                                       |
+| `updated_before`  | `string`                                                                    | no        | Return deployments updated before this RFC3339 timestamp (GitLab \< 14 only)                                                                      |
+
+### `environment.deployment_merge_requests`
+
+> List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset or keyset pagination. Returns: matching merge requests with full metadata (author, assignees, reviewers, labels, milestone, pipelines, time stats, timestamps) and pagination metadata. See also: [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget), [`merge_request.list`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestlist), [`environment.deployment_list`](#environmentdeployment_list).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_merge_requests`
+- **Herramienta individual**: `gitlab_list_deployment_merge_requests`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro               | Tipo                                                                                                                     | Requerido | Descripción                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deployment_id`         | `integer`                                                                                                                | sí        | Deployment ID                                                                                                                                     |
+| `project_id`            | `string/integer`                                                                                                         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `approved_by_ids`       | `integer/string[]`                                                                                                       | no        | Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)             |
+| `approved_by_usernames` | `string[]`                                                                                                               | no        | Filter by MRs approved by all listed usernames                                                                                                    |
+| `approver_ids`          | `integer/string[]`                                                                                                       | no        | Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)         |
+| `assignee_id`           | `integer`                                                                                                                | no        | Filter by assignee user ID                                                                                                                        |
+| `author_id`             | `integer`                                                                                                                | no        | Filter by author user ID                                                                                                                          |
+| `author_username`       | `string`                                                                                                                 | no        | Filter by author username                                                                                                                         |
+| `created_after`         | `string`                                                                                                                 | no        | Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)                                                                               |
+| `created_before`        | `string`                                                                                                                 | no        | Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)                                                                              |
+| `draft`                 | `boolean`                                                                                                                | no        | Filter by draft status (true=only drafts, false=only non-drafts)                                                                                  |
+| `in`                    | `string`                                                                                                                 | no        | Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description                        |
+| `labels`                | `string[]`                                                                                                               | no        | Label names to filter by                                                                                                                          |
+| `milestone`             | `string`                                                                                                                 | no        | Milestone title to filter by                                                                                                                      |
+| `my_reaction_emoji`     | `string`                                                                                                                 | no        | Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)                                                                               |
+| `non_archived`          | `boolean`                                                                                                                | no        | Return merge requests from non-archived projects only. Default is true                                                                            |
+| `not_author_username`   | `string`                                                                                                                 | no        | Exclude MRs authored by this username                                                                                                             |
+| `not_labels`            | `string[]`                                                                                                               | no        | Label names to exclude                                                                                                                            |
+| `order_by`              | `string` (`created_at`, `updated_at`, `merged_at`, `label_priority`, `priority`, `milestone_due`, `popularity`, `title`) | no        | Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)                   |
+| `page`                  | `integer`                                                                                                                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`            | `string`                                                                                                                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`            | `string`                                                                                                                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`              | `integer`                                                                                                                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `reviewer_id`           | `integer`                                                                                                                | no        | Filter by reviewer user ID                                                                                                                        |
+| `reviewer_username`     | `string`                                                                                                                 | no        | Filter by reviewer username                                                                                                                       |
+| `scope`                 | `string` (`created_by_me`, `assigned_to_me`, `reviews_for_me`, `all`)                                                    | no        | Filter by scope: created_by_me, assigned_to_me, reviews_for_me, or all                                                                            |
+| `search`                | `string`                                                                                                                 | no        | Search in title and description                                                                                                                   |
+| `sort`                  | `string` (`asc`, `desc`)                                                                                                 | no        | Sort order: asc or desc                                                                                                                           |
+| `source_branch`         | `string`                                                                                                                 | no        | Filter by source branch name                                                                                                                      |
+| `state`                 | `string` (`opened`, `closed`, `locked`, `merged`, `all`)                                                                 | no        | Filter by state: opened, closed, locked, merged, or all (default all)                                                                             |
+| `target_branch`         | `string`                                                                                                                 | no        | Filter by target branch name                                                                                                                      |
+| `updated_after`         | `string`                                                                                                                 | no        | Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)                                                                               |
+| `updated_before`        | `string`                                                                                                                 | no        | Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)                                                                              |
+| `wip`                   | `string`                                                                                                                 | no        | Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft                                                                               |
+
+### `environment.deployment_update`
+
+> Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: [`environment.deployment_get`](#environmentdeployment_get), [`environment.deployment_list`](#environmentdeployment_list), [`environment.deployment_approve_or_reject`](#environmentdeployment_approve_or_reject).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `deployment_update`
+- **Herramienta individual**: `gitlab_deployment_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo                                                  | Requerido | Descripción                                                     |
+| --------------- | ----------------------------------------------------- | --------- | --------------------------------------------------------------- |
+| `deployment_id` | `integer`                                             | sí        | Deployment ID                                                   |
+| `project_id`    | `string/integer`                                      | sí        | Project ID or URL-encoded path                                  |
+| `status`        | `string` (`running`, `success`, `failed`, `canceled`) | sí        | New deployment status: running or success or failed or canceled |
+
+### `environment.freeze_create`
+
+> Create a deploy freeze period for a project. Returns: the created freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `freeze_create`
+- **Herramienta individual**: `gitlab_create_freeze_period`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                           |
+| --------------- | ---------------- | --------- | ----------------------------------------------------- |
+| `freeze_end`    | `string`         | sí        | Cron expression for freeze end (e.g. 0 7 \* \* 1)     |
+| `freeze_start`  | `string`         | sí        | Cron expression for freeze start (e.g. 0 23 \* \* 5)  |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                        |
+| `cron_timezone` | `string`         | no        | Timezone for cron expressions (e.g. America/New_York) |
+
+### `environment.freeze_delete`
+
+> Delete a deploy freeze period. Returns: no content on success (HTTP 204).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `freeze_delete`
+- **Herramienta individual**: `gitlab_delete_freeze_period`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro          | Tipo             | Requerido | Descripción                    |
+| ------------------ | ---------------- | --------- | ------------------------------ |
+| `freeze_period_id` | `integer`        | sí        | Freeze period ID               |
+| `project_id`       | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.freeze_get`
+
+> Get a specific deploy freeze period. Returns: the freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `freeze_get`
+- **Herramienta individual**: `gitlab_get_freeze_period`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo             | Requerido | Descripción                    |
+| ------------------ | ---------------- | --------- | ------------------------------ |
+| `freeze_period_id` | `integer`        | sí        | Freeze period ID               |
+| `project_id`       | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.freeze_list`
+
+> List deploy freeze periods for a project. Returns: each freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `freeze_list`
+- **Herramienta individual**: `gitlab_list_freeze_periods`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order results by                                                                                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `environment.freeze_update`
+
+> Update an existing deploy freeze period. Returns: the updated freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `freeze_update`
+- **Herramienta individual**: `gitlab_update_freeze_period`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro          | Tipo             | Requerido | Descripción                      |
+| ------------------ | ---------------- | --------- | -------------------------------- |
+| `freeze_period_id` | `integer`        | sí        | Freeze period ID                 |
+| `project_id`       | `string/integer` | sí        | Project ID or URL-encoded path   |
+| `cron_timezone`    | `string`         | no        | Timezone for cron expressions    |
+| `freeze_end`       | `string`         | no        | Cron expression for freeze end   |
+| `freeze_start`     | `string`         | no        | Cron expression for freeze start |
+
+### `environment.get`
+
+> Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `get`
+- **Herramienta individual**: `gitlab_environment_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                    |
+| ---------------- | ---------------- | --------- | ------------------------------ |
+| `environment_id` | `integer`        | sí        | Environment ID                 |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.list`
+
+> List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `list`
+- **Herramienta individual**: `gitlab_environment_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                          | Requerido | Descripción                                                                                                                                       |
+| ------------ | --------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                              | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `name`       | `string`                                      | no        | Filter by exact environment name                                                                                                                  |
+| `order_by`   | `string`                                      | no        | Column to order results by (e.g. id, name)                                                                                                        |
+| `page`       | `integer`                                     | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                      | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                      | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                                     | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `search`     | `string`                                      | no        | Search environments by name (fuzzy)                                                                                                               |
+| `sort`       | `string` (`asc`, `desc`)                      | no        | Sort order: asc or desc                                                                                                                           |
+| `states`     | `string` (`available`, `stopping`, `stopped`) | no        | Filter by state: available, stopping, stopped                                                                                                     |
+
+### `environment.protected_get`
+
+> Get a single protected (or wildcard) environment by name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: [`environment.protected_list`](#environmentprotected_list), [`environment.protected_update`](#environmentprotected_update), [`environment.protected_unprotect`](#environmentprotected_unprotect).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `protected_get`
+- **Herramienta individual**: `gitlab_protected_environment_get`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                    |
+| ------------- | ---------------- | --------- | ------------------------------ |
+| `environment` | `string`         | sí        | Environment name               |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.protected_list`
+
+> List protected environments in a project with order_by/sort and offset or keyset pagination. Returns: protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: [`environment.protected_get`](#environmentprotected_get), [`environment.protected_protect`](#environmentprotected_protect), [`environment.list`](#environmentlist).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `protected_list`
+- **Herramienta individual**: `gitlab_protected_environment_list`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by                                                                                                       |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `environment.protected_protect`
+
+> Protect a single environment or wildcard with deploy access levels and approval rules. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: [`environment.protected_get`](#environmentprotected_get), [`environment.protected_update`](#environmentprotected_update), [`environment.protected_unprotect`](#environmentprotected_unprotect).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `protected_protect`
+- **Herramienta individual**: `gitlab_protected_environment_protect`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                 | Tipo             | Requerido | Descripción                    |
+| ------------------------- | ---------------- | --------- | ------------------------------ |
+| `deploy_access_levels`    | `object[]`       | sí        | Deploy access levels           |
+| `name`                    | `string`         | sí        | Environment name to protect    |
+| `project_id`              | `string/integer` | sí        | Project ID or URL-encoded path |
+| `approval_rules`          | `object[]`       | no        | Approval rules                 |
+| `required_approval_count` | `integer`        | no        | Required number of approvals   |
+
+### `environment.protected_unprotect`
+
+> Unprotect a single environment or wildcard, removing its deployment gates. Returns: a success confirmation naming the unprotected environment. See also: [`environment.protected_list`](#environmentprotected_list), [`environment.protected_protect`](#environmentprotected_protect).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `protected_unprotect`
+- **Herramienta individual**: `gitlab_protected_environment_unprotect`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                    |
+| ------------- | ---------------- | --------- | ------------------------------ |
+| `environment` | `string`         | sí        | Environment name to unprotect  |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `environment.protected_update`
+
+> Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: [`environment.protected_get`](#environmentprotected_get), [`environment.protected_protect`](#environmentprotected_protect), [`environment.protected_unprotect`](#environmentprotected_unprotect).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `protected_update`
+- **Herramienta individual**: `gitlab_protected_environment_update`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                 | Tipo             | Requerido | Descripción                    |
+| ------------------------- | ---------------- | --------- | ------------------------------ |
+| `environment`             | `string`         | sí        | Environment name               |
+| `project_id`              | `string/integer` | sí        | Project ID or URL-encoded path |
+| `approval_rules`          | `object[]`       | no        | Updated approval rules         |
+| `deploy_access_levels`    | `object[]`       | no        | Updated deploy access levels   |
+| `name`                    | `string`         | no        | New environment name           |
+| `required_approval_count` | `integer`        | no        | Required number of approvals   |
+
+### `environment.stop`
+
+> Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
+
+- **Meta-herramienta**: `gitlab_environment`, acción `stop`
+- **Herramienta individual**: `gitlab_environment_stop`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                           |
+| ---------------- | ---------------- | --------- | ----------------------------------------------------- |
+| `environment_id` | `integer`        | sí        | Environment ID                                        |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                        |
+| `force`          | `boolean`        | no        | Force stop even if environment has active deployments |
+
+### `environment.update`
+
+> Update an existing environment in a project. Returns: the updated environment with state, tier, external URL, cluster agent, Kubernetes namespace, Flux resource path, and auto-stop settings. See also: [`environment.get`](#environmentget), [`environment.list`](#environmentlist), [`environment.stop`](#environmentstop).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `update`
+- **Herramienta individual**: `gitlab_environment_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro              | Tipo                                                                  | Requerido | Descripción                                                          |
+| ---------------------- | --------------------------------------------------------------------- | --------- | -------------------------------------------------------------------- |
+| `environment_id`       | `integer`                                                             | sí        | Environment ID                                                       |
+| `project_id`           | `string/integer`                                                      | sí        | Project ID or URL-encoded path                                       |
+| `auto_stop_setting`    | `string` (`always`, `with_action`)                                    | no        | Auto-stop behavior: always or with_action                            |
+| `cluster_agent_id`     | `integer`                                                             | no        | ID of the cluster agent to associate with this environment           |
+| `description`          | `string`                                                              | no        | Updated description                                                  |
+| `external_url`         | `string`                                                              | no        | Updated external URL                                                 |
+| `flux_resource_path`   | `string`                                                              | no        | Flux resource path used to track the environment's deployment status |
+| `kubernetes_namespace` | `string`                                                              | no        | Kubernetes namespace for the cluster agent                           |
+| `name`                 | `string`                                                              | no        | New environment name                                                 |
+| `tier`                 | `string` (`production`, `staging`, `testing`, `development`, `other`) | no        | Updated tier: production, staging, testing, development, other       |

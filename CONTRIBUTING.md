@@ -232,7 +232,7 @@ Then commit the updated golden files alongside your code changes. The CI will fa
 
 ### When to Update
 
-- Adding a new tool → update the relevant `docs/tools/<domain>.md` and `docs/reference/tools/README.md`
+- Adding a new tool → run `make gen-tool-reference`: the site's per-domain tool reference is generated from the catalog, and a new catalog group needs its overview and sample questions in `cmd/gen_tool_reference/domains.json`
 - Adding a new meta-tool action → update `docs/concepts/meta-tools.md`
 - Adding a new resource → update `docs/reference/resources.md`
 - Adding a new prompt → update `docs/reference/prompts.md`

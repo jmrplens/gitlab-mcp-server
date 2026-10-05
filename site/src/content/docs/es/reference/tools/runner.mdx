@@ -1,0 +1,606 @@
+---
+title: "Runners"
+description: "Runners de CI/CD a nivel de instancia, de grupo y de proyecto, sus tokens de registro y de autenticación, sus jobs y gestores, y los controladores de runners."
+sidebar:
+  order: 40
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los runners: listar los que posee el usuario, todos los de la instancia (cosa de un administrador), los de un grupo o los de un proyecto; leer, actualizar (pausarlo incluido) y quitar uno; listar sus jobs y sus gestores; habilitarlo o deshabilitarlo para un proyecto; registrar uno con un token de registro, verificar un token de autenticación de runner y borrar un runner por su token; y restablecer los tokens de registro de la instancia, de un grupo o de un proyecto, o el token de autenticación de un runner.
+
+Los controladores de runners, el plano de control experimental con el que los administradores gestionan los runners, son las acciones que se sirven a partir de Ultimate: los controladores, sus ámbitos y sus tokens.
+
+## Preguntas de ejemplo
+
+- "Lista los runners disponibles para el proyecto 42"
+- "Muestra los detalles del runner 5"
+- "¿Qué jobs ha ejecutado hoy el runner 5?"
+- "Pausa el runner con la etiqueta gpu"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `runner.controller_create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_runner` con `action` igual al nombre de la acción, como `controller_create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_runner_controller_create`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 34:
+
+- **Free**: 19
+- **Premium**: 19
+- **Ultimate**: 34
+
+Acciones de solo lectura: 13 de 34, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                               | Nivel    | Individual                                       |
+| ------------------------------------------------------------------------------------ | -------- | ------------------------------------------------ |
+| [`runner.controller_create`](#runnercontroller_create)                               | Ultimate | `gitlab_runner_controller_create`                |
+| [`runner.controller_delete`](#runnercontroller_delete)                               | Ultimate | `gitlab_runner_controller_delete`                |
+| [`runner.controller_get`](#runnercontroller_get)                                     | Ultimate | `gitlab_runner_controller_get`                   |
+| [`runner.controller_list`](#runnercontroller_list)                                   | Ultimate | `gitlab_runner_controller_list`                  |
+| [`runner.controller_scope_add_instance`](#runnercontroller_scope_add_instance)       | Ultimate | `gitlab_runner_controller_scope_add_instance`    |
+| [`runner.controller_scope_add_runner`](#runnercontroller_scope_add_runner)           | Ultimate | `gitlab_runner_controller_scope_add_runner`      |
+| [`runner.controller_scope_list`](#runnercontroller_scope_list)                       | Ultimate | `gitlab_runner_controller_scope_list`            |
+| [`runner.controller_scope_remove_instance`](#runnercontroller_scope_remove_instance) | Ultimate | `gitlab_runner_controller_scope_remove_instance` |
+| [`runner.controller_scope_remove_runner`](#runnercontroller_scope_remove_runner)     | Ultimate | `gitlab_runner_controller_scope_remove_runner`   |
+| [`runner.controller_token_create`](#runnercontroller_token_create)                   | Ultimate | `gitlab_runner_controller_token_create`          |
+| [`runner.controller_token_get`](#runnercontroller_token_get)                         | Ultimate | `gitlab_runner_controller_token_get`             |
+| [`runner.controller_token_list`](#runnercontroller_token_list)                       | Ultimate | `gitlab_runner_controller_token_list`            |
+| [`runner.controller_token_revoke`](#runnercontroller_token_revoke)                   | Ultimate | `gitlab_runner_controller_token_revoke`          |
+| [`runner.controller_token_rotate`](#runnercontroller_token_rotate)                   | Ultimate | `gitlab_runner_controller_token_rotate`          |
+| [`runner.controller_update`](#runnercontroller_update)                               | Ultimate | `gitlab_runner_controller_update`                |
+| [`runner.delete_by_token`](#runnerdelete_by_token)                                   | Free     | `gitlab_runner_delete_by_token`                  |
+| [`runner.delete_registered`](#runnerdelete_registered)                               | Free     | `gitlab_runner_delete_registered`                |
+| [`runner.disable_project`](#runnerdisable_project)                                   | Free     | `gitlab_runner_disable_project`                  |
+| [`runner.enable_project`](#runnerenable_project)                                     | Free     | `gitlab_runner_enable_project`                   |
+| [`runner.get`](#runnerget)                                                           | Free     | `gitlab_runner_get`                              |
+| [`runner.jobs`](#runnerjobs)                                                         | Free     | `gitlab_runner_jobs`                             |
+| [`runner.list`](#runnerlist)                                                         | Free     | `gitlab_runner_list`                             |
+| [`runner.list_all`](#runnerlist_all)                                                 | Free     | `gitlab_runner_list_all`                         |
+| [`runner.list_group`](#runnerlist_group)                                             | Free     | `gitlab_runner_list_group`                       |
+| [`runner.list_managers`](#runnerlist_managers)                                       | Free     | `gitlab_runner_list_managers`                    |
+| [`runner.list_project`](#runnerlist_project)                                         | Free     | `gitlab_runner_list_project`                     |
+| [`runner.register`](#runnerregister)                                                 | Free     | `gitlab_runner_register`                         |
+| [`runner.remove`](#runnerremove)                                                     | Free     | `gitlab_runner_remove`                           |
+| [`runner.reset_group_reg_token`](#runnerreset_group_reg_token)                       | Free     | `gitlab_runner_reset_group_reg_token`            |
+| [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token)                 | Free     | `gitlab_runner_reset_instance_reg_token`         |
+| [`runner.reset_project_reg_token`](#runnerreset_project_reg_token)                   | Free     | `gitlab_runner_reset_project_reg_token`          |
+| [`runner.reset_token`](#runnerreset_token)                                           | Free     | `gitlab_runner_reset_token`                      |
+| [`runner.update`](#runnerupdate)                                                     | Free     | `gitlab_runner_update`                           |
+| [`runner.verify`](#runnerverify)                                                     | Free     | `gitlab_runner_verify`                           |
+
+### `runner.controller_create`
+
+> Register a new runner controller (admin-only, experimental API) with optional description and state (enabled/disabled/dry_run). Returns: the created controller with id, description, state, and timestamps. See also: [`runner.controller_get`](#runnercontroller_get), [`runner.controller_update`](#runnercontroller_update), [`runner.controller_list`](#runnercontroller_list).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_create`
+- **Herramienta individual**: `gitlab_runner_controller_create`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo                                        | Requerido | Descripción                          |
+| ------------- | ------------------------------------------- | --------- | ------------------------------------ |
+| `description` | `string`                                    | no        | Description of the runner controller |
+| `state`       | `string` (`disabled`, `enabled`, `dry_run`) | no        | State: enabled, disabled, or dry_run |
+
+### `runner.controller_delete`
+
+> Delete a runner controller by controller_id (destructive, admin-only, experimental API). Returns: a success confirmation. See also: [`runner.controller_list`](#runnercontroller_list), [`runner.controller_get`](#runnercontroller_get), [`runner.controller_update`](#runnercontroller_update).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_delete`
+- **Herramienta individual**: `gitlab_runner_controller_delete`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+
+### `runner.controller_get`
+
+> Get one runner controller by controller_id (admin-only, experimental API). Returns: the controller with id, description, state, connected flag, and created/updated timestamps. See also: [`runner.controller_list`](#runnercontroller_list), [`runner.controller_update`](#runnercontroller_update), [`runner.controller_delete`](#runnercontroller_delete).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_get`
+- **Herramienta individual**: `gitlab_runner_controller_get`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+
+### `runner.controller_list`
+
+> List registered runner controllers (admin-only, experimental API) with offset or keyset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: [`runner.controller_get`](#runnercontroller_get), [`runner.controller_create`](#runnercontroller_create), [`runner.controller_update`](#runnercontroller_update).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_list`
+- **Herramienta individual**: `gitlab_runner_controller_list`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order the result set by (e.g. id, created_at)                                                                                           |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order: asc or desc                                                                                                                           |
+
+### `runner.controller_scope_add_instance`
+
+> Grant a runner controller the instance-level scope (admin only). Returns: the created instance-level scoping with created/updated timestamps. See also: [`runner.controller_scope_remove_instance`](#runnercontroller_scope_remove_instance), [`runner.controller_scope_list`](#runnercontroller_scope_list), [`runner.controller_scope_add_runner`](#runnercontroller_scope_add_runner).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_scope_add_instance`
+- **Herramienta individual**: `gitlab_runner_controller_scope_add_instance`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+
+### `runner.controller_scope_add_runner`
+
+> Scope a runner controller to a specific instance runner by runner ID (admin only). Returns: the created runner-level scoping with the runner ID and created/updated timestamps. See also: [`runner.controller_scope_remove_runner`](#runnercontroller_scope_remove_runner), [`runner.controller_scope_list`](#runnercontroller_scope_list), [`runner.controller_scope_add_instance`](#runnercontroller_scope_add_instance).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_scope_add_runner`
+- **Herramienta individual**: `gitlab_runner_controller_scope_add_runner`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción                       |
+| --------------- | --------- | --------- | --------------------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID              |
+| `runner_id`     | `integer` | sí        | Instance-level runner ID to scope |
+
+### `runner.controller_scope_list`
+
+> List every scope assigned to a runner controller (admin only). Returns: instance-level scopings with timestamps and runner-level scopings with runner IDs and timestamps. See also: [`runner.controller_scope_add_instance`](#runnercontroller_scope_add_instance), [`runner.controller_scope_add_runner`](#runnercontroller_scope_add_runner), [`runner.controller_scope_remove_runner`](#runnercontroller_scope_remove_runner).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_scope_list`
+- **Herramienta individual**: `gitlab_runner_controller_scope_list`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+
+### `runner.controller_scope_remove_instance`
+
+> Revoke a runner controller's instance-level scope (admin only, destructive). Returns: a success confirmation naming the removed instance-level scope. See also: [`runner.controller_scope_add_instance`](#runnercontroller_scope_add_instance), [`runner.controller_scope_list`](#runnercontroller_scope_list), [`runner.controller_scope_remove_runner`](#runnercontroller_scope_remove_runner).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_scope_remove_instance`
+- **Herramienta individual**: `gitlab_runner_controller_scope_remove_instance`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+
+### `runner.controller_scope_remove_runner`
+
+> Remove a specific runner from a runner controller's scope by runner ID (admin only, destructive). Returns: a success confirmation naming the removed runner scope. See also: [`runner.controller_scope_add_runner`](#runnercontroller_scope_add_runner), [`runner.controller_scope_list`](#runnercontroller_scope_list), [`runner.controller_scope_remove_instance`](#runnercontroller_scope_remove_instance).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_scope_remove_runner`
+- **Herramienta individual**: `gitlab_runner_controller_scope_remove_runner`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción                    |
+| --------------- | --------- | --------- | ------------------------------ |
+| `controller_id` | `integer` | sí        | Runner controller ID           |
+| `runner_id`     | `integer` | sí        | Runner ID to remove from scope |
+
+### `runner.controller_token_create`
+
+> Create a runner controller token (admin-only). Returns: the new token including its one-time secret value, id, runner controller id, and description. See also: [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_rotate`](#runnercontroller_token_rotate), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_token_create`
+- **Herramienta individual**: `gitlab_runner_controller_token_create`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción              |
+| --------------- | --------- | --------- | ------------------------ |
+| `controller_id` | `integer` | sí        | Runner controller ID     |
+| `description`   | `string`  | no        | Description of the token |
+
+### `runner.controller_token_get`
+
+> Get one runner controller token by id (admin-only). Returns: the token's id, runner controller id, description, last-used time, and timestamps. See also: [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_rotate`](#runnercontroller_token_rotate), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_token_get`
+- **Herramienta individual**: `gitlab_runner_controller_token_get`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+| `token_id`      | `integer` | sí        | Token ID             |
+
+### `runner.controller_token_list`
+
+> List runner controller tokens for a controller (admin-only). Returns: each token's id, runner controller id, description, last-used time, and timestamps, with pagination metadata. See also: [`runner.controller_token_get`](#runnercontroller_token_get), [`runner.controller_token_create`](#runnercontroller_token_create), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_token_list`
+- **Herramienta individual**: `gitlab_runner_controller_token_list`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| --------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `controller_id` | `integer`                | sí        | Runner controller ID                                                                                                                              |
+| `order_by`      | `string`                 | no        | Column to order the result set by (e.g. id, created_at)                                                                                           |
+| `page`          | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`    | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`    | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`      | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`          | `string` (`asc`, `desc`) | no        | Sort order: asc or desc                                                                                                                           |
+
+### `runner.controller_token_revoke`
+
+> Revoke a runner controller token permanently (admin-only). Returns: a success confirmation that the runner controller token was deleted. See also: [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_get`](#runnercontroller_token_get), [`runner.controller_token_rotate`](#runnercontroller_token_rotate).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_token_revoke`
+- **Herramienta individual**: `gitlab_runner_controller_token_revoke`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+| `token_id`      | `integer` | sí        | Token ID             |
+
+### `runner.controller_token_rotate`
+
+> Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: [`runner.controller_token_get`](#runnercontroller_token_get), [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_token_rotate`
+- **Herramienta individual**: `gitlab_runner_controller_token_rotate`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción          |
+| --------------- | --------- | --------- | -------------------- |
+| `controller_id` | `integer` | sí        | Runner controller ID |
+| `token_id`      | `integer` | sí        | Token ID             |
+
+### `runner.controller_update`
+
+> Update a runner controller's description or state (enabled/disabled/dry_run) by controller_id (admin-only, experimental API). Returns: the updated controller with id, description, state, and timestamps. See also: [`runner.controller_get`](#runnercontroller_get), [`runner.controller_list`](#runnercontroller_list), [`runner.controller_delete`](#runnercontroller_delete).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `controller_update`
+- **Herramienta individual**: `gitlab_runner_controller_update`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo                                        | Requerido | Descripción                              |
+| --------------- | ------------------------------------------- | --------- | ---------------------------------------- |
+| `controller_id` | `integer`                                   | sí        | Runner controller ID                     |
+| `description`   | `string`                                    | no        | New description                          |
+| `state`         | `string` (`disabled`, `enabled`, `dry_run`) | no        | New state: enabled, disabled, or dry_run |
+
+### `runner.delete_by_token`
+
+> Delete a registered runner by its authentication token. Returns: a success confirmation. See also: [`runner.delete_registered`](#runnerdelete_registered), [`runner.remove`](#runnerremove).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `delete_by_token`
+- **Herramienta individual**: `gitlab_runner_delete_by_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                 |
+| --------- | -------- | --------- | --------------------------- |
+| `token`   | `string` | sí        | Runner authentication token |
+
+### `runner.delete_registered`
+
+> Delete a registered runner by its numeric runner_id. Returns: a success confirmation. See also: [`runner.delete_by_token`](#runnerdelete_by_token), [`runner.remove`](#runnerremove).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `delete_registered`
+- **Herramienta individual**: `gitlab_runner_delete_registered`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro   | Tipo      | Requerido | Descripción         |
+| ----------- | --------- | --------- | ------------------- |
+| `runner_id` | `integer` | sí        | Runner ID to delete |
+
+### `runner.disable_project`
+
+> Remove a runner assignment from a project by project_id and runner_id. Returns: a success confirmation. See also: [`runner.enable_project`](#runnerenable_project), [`runner.list_project`](#runnerlist_project).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `disable_project`
+- **Herramienta individual**: `gitlab_runner_disable_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                      |
+| ------------ | ---------------- | --------- | -------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path   |
+| `runner_id`  | `integer`        | sí        | Runner ID to remove from project |
+
+### `runner.enable_project`
+
+> Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: [`runner.disable_project`](#runnerdisable_project), [`runner.list_project`](#runnerlist_project).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `enable_project`
+- **Herramienta individual**: `gitlab_runner_enable_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `runner_id`  | `integer`        | sí        | Runner ID to assign            |
+
+### `runner.get`
+
+> Get full configuration for one runner by numeric runner_id. Returns: runner details including tags, locked, access level, maximum timeout, contact time, and associated groups/projects. See also: [`runner.list`](#runnerlist), [`runner.update`](#runnerupdate), [`runner.jobs`](#runnerjobs).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `get`
+- **Herramienta individual**: `gitlab_runner_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro   | Tipo      | Requerido | Descripción |
+| ----------- | --------- | --------- | ----------- |
+| `runner_id` | `integer` | sí        | Runner ID   |
+
+### `runner.jobs`
+
+> List jobs processed by a runner, with status/order/sort filters and pagination. Returns: jobs with id, name, status, stage, ref, and duration, plus pagination metadata. See also: [`runner.get`](#runnerget), [`job.get`](/gitlab-mcp-server/reference/tools/job/#jobget).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `jobs`
+- **Herramienta individual**: `gitlab_runner_jobs`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                                                                                                                                                    | Requerido | Descripción                                                                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `runner_id`  | `integer`                                                                                                                                                                               | sí        | Runner ID                                                                                                                                                                |
+| `order_by`   | `string`                                                                                                                                                                                | no        | Order by field: id (default)                                                                                                                                             |
+| `page`       | `integer`                                                                                                                                                                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                    |
+| `page_token` | `string`                                                                                                                                                                                | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.                        |
+| `pagination` | `string`                                                                                                                                                                                | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.                         |
+| `per_page`   | `integer`                                                                                                                                                                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                    |
+| `sort`       | `string` (`asc`, `desc`)                                                                                                                                                                | no        | Sort direction: asc, desc                                                                                                                                                |
+| `status`     | `string` (`created`, `waiting_for_resource`, `preparing`, `waiting_for_callback`, `pending`, `running`, `success`, `failed`, `canceling`, `canceled`, `skipped`, `manual`, `scheduled`) | no        | Job status filter: created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, or scheduled |
+
+### `runner.list`
+
+> List runners owned by the authenticated user, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, paused/shared/online flags, plus pagination metadata. See also: [`runner.get`](#runnerget), [`runner.list_all`](#runnerlist_all), [`runner.list_project`](#runnerlist_project).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `list`
+- **Herramienta individual**: `gitlab_runner_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                       |
+| ------------ | ---------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                                                   | no        | Field to order keyset-paginated results by, e.g. id                                                                                               |
+| `page`       | `integer`                                                  | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                   | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                   | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `paused`     | `boolean`                                                  | no        | Filter by paused state                                                                                                                            |
+| `per_page`   | `integer`                                                  | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `scope`      | `string` (`active`, `paused`, `online`, `offline`)         | no        | Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead                                                |
+| `sort`       | `string` (`asc`, `desc`)                                   | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`     | `string` (`online`, `offline`, `stale`, `never_contacted`) | no        | Runner status filter: online, offline, stale, or never_contacted.                                                                                 |
+| `tag_list`   | `string[]`                                                 | no        | List of tags to filter by                                                                                                                         |
+| `type`       | `string` (`instance_type`, `group_type`, `project_type`)   | no        | Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).        |
+
+### `runner.list_all`
+
+> List every runner on the instance (admin token required), with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: [`runner.list`](#runnerlist), [`runner.get`](#runnerget).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `list_all`
+- **Herramienta individual**: `gitlab_runner_list_all`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                                                                 | no        | Field to order keyset-paginated results by, e.g. id                                                                                               |
+| `page`       | `integer`                                                                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `paused`     | `boolean`                                                                | no        | Filter by paused state                                                                                                                            |
+| `per_page`   | `integer`                                                                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `scope`      | `string` (`specific`, `shared`, `active`, `paused`, `online`, `offline`) | no        | Deprecated runner scope filter: specific, shared, active, paused, online, or offline. Prefer type and status instead                              |
+| `sort`       | `string` (`asc`, `desc`)                                                 | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`     | `string` (`online`, `offline`, `stale`, `never_contacted`)               | no        | Runner status filter: online, offline, stale, or never_contacted.                                                                                 |
+| `tag_list`   | `string[]`                                                               | no        | List of tags to filter by                                                                                                                         |
+| `type`       | `string` (`instance_type`, `group_type`, `project_type`)                 | no        | Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).        |
+
+### `runner.list_group`
+
+> List runners available in a group (specific and shared), with type/status/tag filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: [`runner.list`](#runnerlist), [`runner.list_project`](#runnerlist_project).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `list_group`
+- **Herramienta individual**: `gitlab_runner_list_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                       |
+| ------------ | ---------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer`                                           | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `order_by`   | `string`                                                   | no        | Field to order keyset-paginated results by, e.g. id                                                                                               |
+| `page`       | `integer`                                                  | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                   | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                   | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                                                  | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)                                   | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`     | `string` (`online`, `offline`, `stale`, `never_contacted`) | no        | Runner status filter: online, offline, stale, or never_contacted.                                                                                 |
+| `tag_list`   | `string[]`                                                 | no        | List of tags to filter by                                                                                                                         |
+| `type`       | `string` (`instance_type`, `group_type`, `project_type`)   | no        | Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).        |
+
+### `runner.list_managers`
+
+> List the managers of a runner by runner_id. Returns: runner managers with system id, version, revision, platform, architecture, status, and IP. See also: [`runner.get`](#runnerget), [`runner.list`](#runnerlist).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `list_managers`
+- **Herramienta individual**: `gitlab_runner_list_managers`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro   | Tipo      | Requerido | Descripción |
+| ----------- | --------- | --------- | ----------- |
+| `runner_id` | `integer` | sí        | Runner ID   |
+
+### `runner.list_project`
+
+> List runners assigned to a project, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: [`runner.enable_project`](#runnerenable_project), [`runner.disable_project`](#runnerdisable_project), [`runner.list`](#runnerlist).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `list_project`
+- **Herramienta individual**: `gitlab_runner_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                       | Requerido | Descripción                                                                                                                                       |
+| ------------ | ---------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                                           | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                                                   | no        | Field to order keyset-paginated results by, e.g. id                                                                                               |
+| `page`       | `integer`                                                  | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                   | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                   | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `paused`     | `boolean`                                                  | no        | Filter by paused state                                                                                                                            |
+| `per_page`   | `integer`                                                  | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `scope`      | `string` (`active`, `paused`, `online`, `offline`)         | no        | Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead                                                |
+| `sort`       | `string` (`asc`, `desc`)                                   | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`     | `string` (`online`, `offline`, `stale`, `never_contacted`) | no        | Runner status filter: online, offline, stale, or never_contacted.                                                                                 |
+| `tag_list`   | `string[]`                                                 | no        | List of tags to filter by                                                                                                                         |
+| `type`       | `string` (`instance_type`, `group_type`, `project_type`)   | no        | Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).        |
+
+### `runner.register`
+
+> Register a new runner with a registration token, optional info hashmap, tags, and configuration. Returns: the created runner including its authentication token. See also: [`runner.verify`](#runnerverify), [`runner.list`](#runnerlist).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `register`
+- **Herramienta individual**: `gitlab_runner_register`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro          | Tipo       | Requerido | Descripción                                                                   |
+| ------------------ | ---------- | --------- | ----------------------------------------------------------------------------- |
+| `token`            | `string`   | sí        | Registration token                                                            |
+| `access_level`     | `string`   | no        | Access level: not_protected, ref_protected                                    |
+| `active`           | `boolean`  | no        | Deprecated: registration active state. Prefer paused instead                  |
+| `description`      | `string`   | no        | Runner description                                                            |
+| `info`             | `object`   | no        | Runner manager info hashmap (name, version, revision, platform, architecture) |
+| `locked`           | `boolean`  | no        | Lock runner to current project                                                |
+| `maintenance_note` | `string`   | no        | Maintenance note                                                              |
+| `maximum_timeout`  | `integer`  | no        | Maximum job timeout in seconds                                                |
+| `paused`           | `boolean`  | no        | Register in paused state                                                      |
+| `run_untagged`     | `boolean`  | no        | Whether to run untagged jobs                                                  |
+| `tag_list`         | `string[]` | no        | List of runner tags                                                           |
+
+### `runner.remove`
+
+> Remove (unregister) a runner by numeric runner_id. Returns: a success confirmation. See also: [`runner.disable_project`](#runnerdisable_project), [`runner.delete_registered`](#runnerdelete_registered), [`runner.get`](#runnerget).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `remove`
+- **Herramienta individual**: `gitlab_runner_remove`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro   | Tipo      | Requerido | Descripción         |
+| ----------- | --------- | --------- | ------------------- |
+| `runner_id` | `integer` | sí        | Runner ID to remove |
+
+### `runner.reset_group_reg_token`
+
+> Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `reset_group_reg_token`
+- **Herramienta individual**: `gitlab_runner_reset_group_reg_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `runner.reset_instance_reg_token`
+
+> Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: [`runner.reset_group_reg_token`](#runnerreset_group_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `reset_instance_reg_token`
+- **Herramienta individual**: `gitlab_runner_reset_instance_reg_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+Sin parámetros.
+
+### `runner.reset_project_reg_token`
+
+> Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_group_reg_token`](#runnerreset_group_reg_token).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `reset_project_reg_token`
+- **Herramienta individual**: `gitlab_runner_reset_project_reg_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `runner.reset_token`
+
+> Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.get`](#runnerget).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `reset_token`
+- **Herramienta individual**: `gitlab_runner_reset_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro   | Tipo      | Requerido | Descripción |
+| ----------- | --------- | --------- | ----------- |
+| `runner_id` | `integer` | sí        | Runner ID   |
+
+### `runner.update`
+
+> Update a runner's configuration (description, pause state, tags, locked, access level, timeout) by runner_id. Returns: the updated runner details. See also: [`runner.get`](#runnerget), [`runner.remove`](#runnerremove).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `update`
+- **Herramienta individual**: `gitlab_runner_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro          | Tipo       | Requerido | Descripción                                            |
+| ------------------ | ---------- | --------- | ------------------------------------------------------ |
+| `runner_id`        | `integer`  | sí        | Runner ID                                              |
+| `access_level`     | `string`   | no        | Access level: not_protected, ref_protected             |
+| `active`           | `boolean`  | no        | Deprecated: runner active state. Prefer paused instead |
+| `description`      | `string`   | no        | Runner description                                     |
+| `locked`           | `boolean`  | no        | Whether runner is locked to current project            |
+| `maintenance_note` | `string`   | no        | Maintenance note for the runner                        |
+| `maximum_timeout`  | `integer`  | no        | Maximum job timeout in seconds                         |
+| `paused`           | `boolean`  | no        | Pause/unpause the runner                               |
+| `run_untagged`     | `boolean`  | no        | Whether to run untagged jobs                           |
+| `tag_list`         | `string[]` | no        | List of runner tags                                    |
+
+### `runner.verify`
+
+> Verify that a runner authentication token is valid. Returns: a success confirmation when the token authenticates. See also: [`runner.register`](#runnerregister), [`runner.reset_token`](#runnerreset_token).
+
+- **Meta-herramienta**: `gitlab_runner`, acción `verify`
+- **Herramienta individual**: `gitlab_runner_verify`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                           |
+| --------- | -------- | --------- | ------------------------------------- |
+| `token`   | `string` | sí        | Runner authentication token to verify |

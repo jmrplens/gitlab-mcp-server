@@ -26,7 +26,7 @@
 	gen-api-live check-api-live check-meta-descriptions \
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
-	audit-doc-coverage audit-doc-coverage-check \
+	gen-tool-reference check-tool-reference \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-footprint check-footprint gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness bench-held bench-sessions \
 	docs-local-go \
@@ -986,6 +986,7 @@ audit-docs:
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_lhm_manifest/ --check
+	$(MAKE) check-tool-reference
 	$(MAKE) check-testing-docs
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
@@ -1176,6 +1177,21 @@ gen-llms:
 ## check-llms: validate llms.txt/llms-full.txt are current and structurally valid.
 check-llms:
 	go run ./cmd/gen_llms/ --check
+
+# ─── Tool Reference ──────────────────────────────────────────────────────────
+
+## gen-tool-reference: write the per-domain tool reference of the site, one
+## page per catalog group in English and Spanish under
+## site/src/content/docs/reference/tools/ and its es/ twin, from the action
+## catalog and the overviews in cmd/gen_tool_reference/domains.json.
+gen-tool-reference:
+	go run ./cmd/gen_tool_reference/
+
+## check-tool-reference: fail when a page of the per-domain tool reference is
+## not what the catalog generates now. Deferred on a stacked layer in CI like
+## every other committed-artifact gate.
+check-tool-reference:
+	go run ./cmd/gen_tool_reference/ -check
 
 ## gen-model-corpus: regenerate the model evaluation corpus breadth ledger.
 gen-model-corpus:
@@ -1544,7 +1560,7 @@ publish-lobehub: check-lhm-manifest
 	npx -y @lobehub/market-cli@$(LOBEHUB_MARKET_CLI_VERSION) plugin update --dir "$(CURDIR)"
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
+## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, the per-domain tool reference, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, so make -j would build them against a file still being written.
@@ -1559,7 +1575,7 @@ publish-lobehub: check-lhm-manifest
 # those terms, and the measurement there is not merely slow: it is a paid run
 # against a provider.
 update-all:
-	@for target in brand gen-action-grants gen-footprint gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-action-grants gen-footprint gen-site-stats gen-llms gen-tool-reference gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -1841,17 +1857,6 @@ audit-discovery:
 ## the human-readable report.
 audit-discovery-check:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -check
-
-## audit-doc-coverage: report per-doc-file gaps between docs/tools/*.md and the canonical action catalog (DOC-002).
-## Writes the per-file backlog to plan/docs-tools-backlog.json (gitignored) so each Phase-1 doc-writer can pick a file with full context.
-audit-doc-coverage:
-	$(call MKDIR_P,plan)
-	go run ./cmd/audit_doc_coverage/ -output plan/docs-tools-backlog.json
-
-## audit-doc-coverage-check: CI gate for DOC-002. Exits non-zero when any docs/tools/*.md has missing/orphan/tier_mismatch findings.
-## Use `make audit-doc-coverage` for the full human-readable report; use this for pre-PR gating.
-audit-doc-coverage-check:
-	go run ./cmd/audit_doc_coverage/ -check
 
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:

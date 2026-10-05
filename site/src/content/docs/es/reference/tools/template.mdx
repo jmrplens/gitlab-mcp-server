@@ -1,0 +1,248 @@
+---
+title: "Plantillas y lint de CI"
+description: "Las plantillas integradas de GitLab para YAML de CI/CD, Dockerfiles, archivos .gitignore, licencias y proyectos, y el lint de CI."
+sidebar:
+  order: 33
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Las plantillas que trae GitLab: YAML de CI/CD, Dockerfiles, archivos `.gitignore` y licencias, cada una listada y leída por nombre, y las plantillas de proyecto de un proyecto o grupo. `template.lint` valida configuración de CI/CD dada como texto y `template.lint_project` valida el `.gitlab-ci.yml` que tiene un proyecto en el repositorio, las dos sin lanzar un pipeline. Todas las acciones solo leen.
+
+## Preguntas de ejemplo
+
+- "Lista las plantillas de CI/CD"
+- "Muestra la plantilla .gitignore de Go"
+- "Valida este .gitlab-ci.yml contra el proyecto 42"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `template.ci_yml_get`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_template` con `action` igual al nombre de la acción, como `ci_yml_get`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_get_ci_yml_template`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 12 de 12, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                                             | Individual                         |
+| ------------------------------------------------------------------ | ---------------------------------- |
+| [`template.ci_yml_get`](#templateci_yml_get)                       | `gitlab_get_ci_yml_template`       |
+| [`template.ci_yml_list`](#templateci_yml_list)                     | `gitlab_list_ci_yml_templates`     |
+| [`template.dockerfile_get`](#templatedockerfile_get)               | `gitlab_get_dockerfile_template`   |
+| [`template.dockerfile_list`](#templatedockerfile_list)             | `gitlab_list_dockerfile_templates` |
+| [`template.gitignore_get`](#templategitignore_get)                 | `gitlab_get_gitignore_template`    |
+| [`template.gitignore_list`](#templategitignore_list)               | `gitlab_list_gitignore_templates`  |
+| [`template.license_get`](#templatelicense_get)                     | `gitlab_get_license_template`      |
+| [`template.license_list`](#templatelicense_list)                   | `gitlab_list_license_templates`    |
+| [`template.lint`](#templatelint)                                   | `gitlab_ci_lint`                   |
+| [`template.lint_project`](#templatelint_project)                   | `gitlab_ci_lint_project`           |
+| [`template.project_template_get`](#templateproject_template_get)   | `gitlab_get_project_template`      |
+| [`template.project_template_list`](#templateproject_template_list) | `gitlab_list_project_templates`    |
+
+### `template.ci_yml_get`
+
+> Get a single GitLab CI/CD pipeline YAML template by key. Returns: the template name and full YAML content to copy into a .gitlab-ci.yml file. See also: [`template.ci_yml_list`](#templateci_yml_list), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `ci_yml_get`
+- **Herramienta individual**: `gitlab_get_ci_yml_template`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                    |
+| --------- | -------- | --------- | ------------------------------ |
+| `key`     | `string` | sí        | Template key (e.g. Go, Python) |
+
+### `template.ci_yml_list`
+
+> List the GitLab-provided CI/CD pipeline YAML templates. Returns: available templates with key and name, plus pagination metadata. See also: [`template.ci_yml_get`](#templateci_yml_get), [`template.lint`](#templatelint), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `ci_yml_list`
+- **Herramienta individual**: `gitlab_list_ci_yml_templates`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)                                                          |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `template.dockerfile_get`
+
+> Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content ready to commit as a project's Dockerfile. See also: [`template.dockerfile_list`](#templatedockerfile_list), [`template.gitignore_get`](#templategitignore_get).
+
+- **Meta-herramienta**: `gitlab_template`, acción `dockerfile_get`
+- **Herramienta individual**: `gitlab_get_dockerfile_template`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción  |
+| --------- | -------- | --------- | ------------ |
+| `key`     | `string` | sí        | Template key |
+
+### `template.dockerfile_list`
+
+> List available Dockerfile templates with pagination and sorting. Returns: matching templates with key and name plus pagination metadata. See also: [`template.dockerfile_get`](#templatedockerfile_get), [`template.gitignore_list`](#templategitignore_list).
+
+- **Meta-herramienta**: `gitlab_template`, acción `dockerfile_list`
+- **Herramienta individual**: `gitlab_list_dockerfile_templates`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Order results by a field supported by the templates endpoint (e.g. key, name)                                                                     |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `template.gitignore_get`
+
+> Get one .gitignore template by key (e.g. Go, Python, Node). Returns: the template's name and full file content ready to copy into .gitignore. See also: [`template.gitignore_list`](#templategitignore_list), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `gitignore_get`
+- **Herramienta individual**: `gitlab_get_gitignore_template`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                          |
+| --------- | -------- | --------- | ------------------------------------ |
+| `key`     | `string` | sí        | Template key (e.g. Go, Python, Node) |
+
+### `template.gitignore_list`
+
+> List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: [`template.gitignore_get`](#templategitignore_get), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `gitignore_list`
+- **Herramienta individual**: `gitlab_list_gitignore_templates`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)                                                          |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `template.license_get`
+
+> Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: [`template.license_list`](#templatelicense_list), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `license_get`
+- **Herramienta individual**: `gitlab_get_license_template`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo     | Requerido | Descripción                                 |
+| ---------- | -------- | --------- | ------------------------------------------- |
+| `key`      | `string` | sí        | License template key (e.g. mit, apache-2.0) |
+| `fullname` | `string` | no        | Full name to replace in license             |
+| `project`  | `string` | no        | Project name to replace in license          |
+
+### `template.license_list`
+
+> List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: [`template.license_get`](#templatelicense_get), [`repository.file_create`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_create).
+
+- **Meta-herramienta**: `gitlab_template`, acción `license_list`
+- **Herramienta individual**: `gitlab_list_license_templates`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column by which to order keyset-paginated results                                                                                                 |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `popular`    | `boolean`                | no        | Filter by popular licenses                                                                                                                        |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction for keyset-paginated results (asc, desc)                                                                                           |
+
+### `template.lint`
+
+> Validate inline .gitlab-ci.yml content within a project namespace. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint_project`](#templatelint_project), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate), [`ci_catalog.list`](/gitlab-mcp-server/reference/tools/ci-catalog/#ci_cataloglist).
+
+- **Meta-herramienta**: `gitlab_template`, acción `lint`
+- **Herramienta individual**: `gitlab_ci_lint`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                        |
+| -------------- | ---------------- | --------- | -------------------------------------------------- |
+| `content`      | `string`         | sí        | CI/CD YAML content to validate                     |
+| `project_id`   | `string/integer` | sí        | Project ID or URL-encoded path (namespace context) |
+| `dry_run`      | `boolean`        | no        | Run pipeline creation simulation                   |
+| `include_jobs` | `boolean`        | no        | Include expanded job list in the response          |
+| `ref`          | `string`         | no        | Branch or tag to use for CI includes resolution    |
+
+### `template.lint_project`
+
+> Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: [`template.lint`](#templatelint), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate), [`repository.file_get`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_get).
+
+- **Meta-herramienta**: `gitlab_template`, acción `lint_project`
+- **Herramienta individual**: `gitlab_ci_lint_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                           |
+| -------------- | ---------------- | --------- | ----------------------------------------------------- |
+| `project_id`   | `string/integer` | sí        | Project ID or URL-encoded path                        |
+| `content_ref`  | `string`         | no        | Branch or tag to use for the CI configuration content |
+| `dry_run`      | `boolean`        | no        | Run pipeline creation simulation                      |
+| `dry_run_ref`  | `string`         | no        | Branch or tag to use as context for the dry run       |
+| `include_jobs` | `boolean`        | no        | Include expanded job list in the response             |
+| `ref`          | `string`         | no        | Branch or tag to use for CI includes resolution       |
+
+### `template.project_template_get`
+
+> Returns: one project template's full content by template_type and key. See also: [`template.project_template_list`](#templateproject_template_list), [`project.create`](/gitlab-mcp-server/reference/tools/project/#projectcreate).
+
+- **Meta-herramienta**: `gitlab_template`, acción `project_template_get`
+- **Herramienta individual**: `gitlab_get_project_template`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------ | --------- | -------------------------------------------------------------------------------------------------------------- |
+| `key`           | `string`                                                                                         | sí        | Template key/name                                                                                              |
+| `project_id`    | `string/integer`                                                                                 | sí        | Project ID or URL-encoded path                                                                                 |
+| `template_type` | `string` (`dockerfiles`, `gitignores`, `gitlab_ci_ymls`, `licenses`, `issues`, `merge_requests`) | sí        | Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests |
+
+### `template.project_template_list`
+
+> List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: [`template.project_template_get`](#templateproject_template_get), [`project.create`](/gitlab-mcp-server/reference/tools/project/#projectcreate).
+
+- **Meta-herramienta**: `gitlab_template`, acción `project_template_list`
+- **Herramienta individual**: `gitlab_list_project_templates`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer`                                                                                 | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `template_type` | `string` (`dockerfiles`, `gitignores`, `gitlab_ci_ymls`, `licenses`, `issues`, `merge_requests`) | sí        | Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests                                    |
+| `id`            | `integer`                                                                                        | no        | Filter to a single template by numeric id (maps to gl.ListProjectTemplatesOptions.ID)                                                             |
+| `order_by`      | `string`                                                                                         | no        | Column by which to order keyset-paginated results                                                                                                 |
+| `page`          | `integer`                                                                                        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`    | `string`                                                                                         | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`    | `string`                                                                                         | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`      | `integer`                                                                                        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`          | `string` (`asc`, `desc`)                                                                         | no        | Sort direction for keyset-paginated results (asc, desc)                                                                                           |
+| `type`          | `string`                                                                                         | no        | Optional secondary template type filter passed as the 'type' query parameter (maps to gl.ListProjectTemplatesOptions.Type)                        |

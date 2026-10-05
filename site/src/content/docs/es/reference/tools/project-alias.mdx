@@ -1,0 +1,101 @@
+---
+title: "Alias de proyecto"
+description: "Alias de proyecto, los nombres cortos que un administrador da a los proyectos para clonarlos: listarlos, leerlos, crearlos y borrarlos."
+sidebar:
+  order: 3
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un alias de proyecto es un nombre corto que un administrador da a un proyecto, por el que git clona el proyecto. Estas acciones listan los alias, leen uno, crean uno y borran uno, y son acciones de administrador.
+
+## Preguntas de ejemplo
+
+- "Lista los alias de proyecto"
+- "Crea el alias gitlab para el proyecto 42"
+- "Borra el alias legacy-api"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `project_alias.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_project_alias` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_create_project_alias`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
+
+- **Free**: 0
+- **Premium**: 4
+- **Ultimate**: 4
+
+Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
+
+Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                         | Individual                    |
+| ---------------------------------------------- | ----------------------------- |
+| [`project_alias.create`](#project_aliascreate) | `gitlab_create_project_alias` |
+| [`project_alias.delete`](#project_aliasdelete) | `gitlab_delete_project_alias` |
+| [`project_alias.get`](#project_aliasget)       | `gitlab_get_project_alias`    |
+| [`project_alias.list`](#project_aliaslist)     | `gitlab_list_project_aliases` |
+
+### `project_alias.create`
+
+> Create a project alias mapping a unique name to a numeric project_id (admin-only). Returns: the created alias with id, project_id, and name. See also: [`project_alias.list`](#project_aliaslist), [`project_alias.get`](#project_aliasget), [`project_alias.delete`](#project_aliasdelete).
+
+- **Meta-herramienta**: `gitlab_project_alias`, acción `create`
+- **Herramienta individual**: `gitlab_create_project_alias`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción                     |
+| ------------ | --------- | --------- | ------------------------------- |
+| `name`       | `string`  | sí        | The alias name to create        |
+| `project_id` | `integer` | sí        | The numeric project ID to alias |
+
+### `project_alias.delete`
+
+> Delete a project alias by its exact name (admin-only). Returns: deletion confirmation. See also: [`project_alias.list`](#project_aliaslist), [`project_alias.get`](#project_aliasget), [`project_alias.create`](#project_aliascreate).
+
+- **Meta-herramienta**: `gitlab_project_alias`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_project_alias`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción              |
+| --------- | -------- | --------- | ------------------------ |
+| `name`    | `string` | sí        | The alias name to delete |
+
+### `project_alias.get`
+
+> Get one project alias by its exact name. Returns: the alias id, project_id, and name. See also: [`project_alias.list`](#project_aliaslist), [`project_alias.create`](#project_aliascreate), [`project_alias.delete`](#project_aliasdelete).
+
+- **Meta-herramienta**: `gitlab_project_alias`, acción `get`
+- **Herramienta individual**: `gitlab_get_project_alias`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción               |
+| --------- | -------- | --------- | ------------------------- |
+| `name`    | `string` | sí        | The alias name to look up |
+
+### `project_alias.list`
+
+> List the project aliases the authenticated administrator can see. Returns: each alias with id, project_id, and name, with pagination metadata. See also: [`project_alias.get`](#project_aliasget), [`project_alias.create`](#project_aliascreate), [`project_alias.delete`](#project_aliasdelete).
+
+- **Meta-herramienta**: `gitlab_project_alias`, acción `list`
+- **Herramienta individual**: `gitlab_list_project_aliases`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
+| ---------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `page`     | `integer` | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page` | `integer` | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |

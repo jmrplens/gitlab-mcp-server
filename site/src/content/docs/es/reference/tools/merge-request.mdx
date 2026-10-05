@@ -1,0 +1,1175 @@
+---
+title: "Merge requests"
+description: "El ciclo de vida de los merge requests: crear, listar, actualizar, fusionar, rebasar y borrar, aprobaciones y reglas de aprobación, dependencias, commits de contexto, control de tiempo, emoji de reacción y eventos de recurso."
+sidebar:
+  order: 26
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+La vida de un merge request: crearlo, leerlo, listarlo (en un proyecto, en un grupo o en todas partes), actualizarlo, fusionarlo, cancelar una fusión automática, rebasarlo y borrarlo; aprobarlo y retirar la aprobación, leer su configuración de aprobación y restablecer sus aprobaciones; sus commits, commits de contexto, pipelines (listarlos o lanzar uno), participantes, revisores, issues relacionados y los issues que cierra; suscripciones, tareas pendientes, estimaciones y tiempo dedicado; los emoji de reacción en él y en sus notas; y los eventos de etiqueta, hito y estado de su historial.
+
+Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/reference/tools/mr-review/).
+
+## Preguntas de ejemplo
+
+- "Muestra los merge requests abiertos del proyecto 42"
+- "Crea un merge request de feature-login a main"
+- "Fusiona el merge request !15 cuando pase su pipeline"
+- "¿Qué merge requests esperan mi revisión?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `merge_request.approval_config`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_merge_request` con `action` igual al nombre de la acción, como `approval_config`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_mr_approval_config`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 58:
+
+- **Free**: 46
+- **Premium**: 58
+- **Ultimate**: 58
+
+Acciones de solo lectura: 28 de 58, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+
+| Acción                                                                                             | Nivel   | Individual                                   |
+| -------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------- |
+| [`merge_request.approval_config`](#merge_requestapproval_config)                                   | Free    | `gitlab_mr_approval_config`                  |
+| [`merge_request.approval_reset`](#merge_requestapproval_reset)                                     | Free    | `gitlab_mr_approval_reset`                   |
+| [`merge_request.approval_rule_create`](#merge_requestapproval_rule_create)                         | Premium | `gitlab_mr_approval_rule_create`             |
+| [`merge_request.approval_rule_delete`](#merge_requestapproval_rule_delete)                         | Premium | `gitlab_mr_approval_rule_delete`             |
+| [`merge_request.approval_rule_update`](#merge_requestapproval_rule_update)                         | Premium | `gitlab_mr_approval_rule_update`             |
+| [`merge_request.approval_rules`](#merge_requestapproval_rules)                                     | Premium | `gitlab_mr_approval_rules`                   |
+| [`merge_request.approval_settings_group_get`](#merge_requestapproval_settings_group_get)           | Premium | `gitlab_get_group_mr_approval_settings`      |
+| [`merge_request.approval_settings_group_update`](#merge_requestapproval_settings_group_update)     | Premium | `gitlab_update_group_mr_approval_settings`   |
+| [`merge_request.approval_settings_project_get`](#merge_requestapproval_settings_project_get)       | Premium | `gitlab_get_project_mr_approval_settings`    |
+| [`merge_request.approval_settings_project_update`](#merge_requestapproval_settings_project_update) | Premium | `gitlab_update_project_mr_approval_settings` |
+| [`merge_request.approval_state`](#merge_requestapproval_state)                                     | Premium | `gitlab_mr_approval_state`                   |
+| [`merge_request.approve`](#merge_requestapprove)                                                   | Free    | `gitlab_mr_approve`                          |
+| [`merge_request.cancel_auto_merge`](#merge_requestcancel_auto_merge)                               | Free    | `gitlab_mr_cancel_auto_merge`                |
+| [`merge_request.commits`](#merge_requestcommits)                                                   | Free    | `gitlab_mr_commits`                          |
+| [`merge_request.context_commits_create`](#merge_requestcontext_commits_create)                     | Free    | `gitlab_create_mr_context_commits`           |
+| [`merge_request.context_commits_delete`](#merge_requestcontext_commits_delete)                     | Free    | `gitlab_delete_mr_context_commits`           |
+| [`merge_request.context_commits_list`](#merge_requestcontext_commits_list)                         | Free    | `gitlab_list_mr_context_commits`             |
+| [`merge_request.create`](#merge_requestcreate)                                                     | Free    | `gitlab_mr_create`                           |
+| [`merge_request.create_pipeline`](#merge_requestcreate_pipeline)                                   | Free    | `gitlab_mr_create_pipeline`                  |
+| [`merge_request.create_todo`](#merge_requestcreate_todo)                                           | Free    | `gitlab_mr_create_todo`                      |
+| [`merge_request.delete`](#merge_requestdelete)                                                     | Free    | `gitlab_mr_delete`                           |
+| [`merge_request.dependencies_list`](#merge_requestdependencies_list)                               | Premium | `gitlab_mr_dependencies_list`                |
+| [`merge_request.dependency_create`](#merge_requestdependency_create)                               | Premium | `gitlab_mr_dependency_create`                |
+| [`merge_request.dependency_delete`](#merge_requestdependency_delete)                               | Premium | `gitlab_mr_dependency_delete`                |
+| [`merge_request.emoji_mr_create`](#merge_requestemoji_mr_create)                                   | Free    | `gitlab_mr_emoji_create`                     |
+| [`merge_request.emoji_mr_delete`](#merge_requestemoji_mr_delete)                                   | Free    | `gitlab_mr_emoji_delete`                     |
+| [`merge_request.emoji_mr_get`](#merge_requestemoji_mr_get)                                         | Free    | `gitlab_mr_emoji_get`                        |
+| [`merge_request.emoji_mr_list`](#merge_requestemoji_mr_list)                                       | Free    | `gitlab_mr_emoji_list`                       |
+| [`merge_request.emoji_mr_note_create`](#merge_requestemoji_mr_note_create)                         | Free    | `gitlab_mr_note_emoji_create`                |
+| [`merge_request.emoji_mr_note_delete`](#merge_requestemoji_mr_note_delete)                         | Free    | `gitlab_mr_note_emoji_delete`                |
+| [`merge_request.emoji_mr_note_get`](#merge_requestemoji_mr_note_get)                               | Free    | `gitlab_mr_note_emoji_get`                   |
+| [`merge_request.emoji_mr_note_list`](#merge_requestemoji_mr_note_list)                             | Free    | `gitlab_mr_note_emoji_list`                  |
+| [`merge_request.event_mr_label_get`](#merge_requestevent_mr_label_get)                             | Free    | `gitlab_mr_label_event_get`                  |
+| [`merge_request.event_mr_label_list`](#merge_requestevent_mr_label_list)                           | Free    | `gitlab_mr_label_event_list`                 |
+| [`merge_request.event_mr_milestone_get`](#merge_requestevent_mr_milestone_get)                     | Free    | `gitlab_mr_milestone_event_get`              |
+| [`merge_request.event_mr_milestone_list`](#merge_requestevent_mr_milestone_list)                   | Free    | `gitlab_mr_milestone_event_list`             |
+| [`merge_request.event_mr_state_get`](#merge_requestevent_mr_state_get)                             | Free    | `gitlab_mr_state_event_get`                  |
+| [`merge_request.event_mr_state_list`](#merge_requestevent_mr_state_list)                           | Free    | `gitlab_mr_state_event_list`                 |
+| [`merge_request.get`](#merge_requestget)                                                           | Free    | `gitlab_mr_get`                              |
+| [`merge_request.issues_closed`](#merge_requestissues_closed)                                       | Free    | `gitlab_mr_issues_closed`                    |
+| [`merge_request.list`](#merge_requestlist)                                                         | Free    | `gitlab_mr_list`                             |
+| [`merge_request.list_global`](#merge_requestlist_global)                                           | Free    | `gitlab_mr_list_global`                      |
+| [`merge_request.list_group`](#merge_requestlist_group)                                             | Free    | `gitlab_mr_list_group`                       |
+| [`merge_request.merge`](#merge_requestmerge)                                                       | Free    | `gitlab_mr_merge`                            |
+| [`merge_request.participants`](#merge_requestparticipants)                                         | Free    | `gitlab_mr_participants`                     |
+| [`merge_request.pipelines`](#merge_requestpipelines)                                               | Free    | `gitlab_mr_pipelines`                        |
+| [`merge_request.rebase`](#merge_requestrebase)                                                     | Free    | `gitlab_mr_rebase`                           |
+| [`merge_request.related_issues`](#merge_requestrelated_issues)                                     | Free    | `gitlab_mr_related_issues`                   |
+| [`merge_request.reviewers`](#merge_requestreviewers)                                               | Free    | `gitlab_mr_reviewers`                        |
+| [`merge_request.spent_time_add`](#merge_requestspent_time_add)                                     | Free    | `gitlab_mr_add_spent_time`                   |
+| [`merge_request.spent_time_reset`](#merge_requestspent_time_reset)                                 | Free    | `gitlab_mr_reset_spent_time`                 |
+| [`merge_request.subscribe`](#merge_requestsubscribe)                                               | Free    | `gitlab_mr_subscribe`                        |
+| [`merge_request.time_estimate_reset`](#merge_requesttime_estimate_reset)                           | Free    | `gitlab_mr_reset_time_estimate`              |
+| [`merge_request.time_estimate_set`](#merge_requesttime_estimate_set)                               | Free    | `gitlab_mr_set_time_estimate`                |
+| [`merge_request.time_stats`](#merge_requesttime_stats)                                             | Free    | `gitlab_mr_time_stats`                       |
+| [`merge_request.unapprove`](#merge_requestunapprove)                                               | Free    | `gitlab_mr_unapprove`                        |
+| [`merge_request.unsubscribe`](#merge_requestunsubscribe)                                           | Free    | `gitlab_mr_unsubscribe`                      |
+| [`merge_request.update`](#merge_requestupdate)                                                     | Free    | `gitlab_mr_update`                           |
+
+### `merge_request.approval_config`
+
+> Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: [`merge_request.approval_state`](#merge_requestapproval_state), [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approve`](#merge_requestapprove).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_config`
+- **Herramienta individual**: `gitlab_mr_approval_config`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.approval_reset`
+
+> Reset all approvals on a merge request. Returns: a success confirmation. See also: [`merge_request.approval_state`](#merge_requestapproval_state), [`merge_request.approval_config`](#merge_requestapproval_config), [`merge_request.unapprove`](#merge_requestunapprove).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_reset`
+- **Herramienta individual**: `gitlab_mr_approval_reset`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.approval_rule_create`
+
+> Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups. See also: [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approval_rule_update`](#merge_requestapproval_rule_update), [`merge_request.approval_rule_delete`](#merge_requestapproval_rule_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_rule_create`
+- **Herramienta individual**: `gitlab_mr_approval_rule_create`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                  | Tipo             | Requerido | Descripción                                    |
+| -------------------------- | ---------------- | --------- | ---------------------------------------------- |
+| `approvals_required`       | `integer`        | sí        | Number of approvals required                   |
+| `merge_request_iid`        | `integer`        | sí        | Merge request internal ID                      |
+| `name`                     | `string`         | sí        | Rule name                                      |
+| `project_id`               | `string/integer` | sí        | Project ID or URL-encoded path                 |
+| `approval_project_rule_id` | `integer`        | no        | Project-level approval rule ID to inherit from |
+| `group_ids`                | `integer[]`      | no        | Group IDs eligible to approve                  |
+| `user_ids`                 | `integer[]`      | no        | User IDs eligible to approve                   |
+
+### `merge_request.approval_rule_delete`
+
+> Delete an approval rule from a merge request. Returns: a success confirmation. See also: [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approval_rule_update`](#merge_requestapproval_rule_update), [`merge_request.approval_rule_create`](#merge_requestapproval_rule_create).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_rule_delete`
+- **Herramienta individual**: `gitlab_mr_approval_rule_delete`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `approval_rule_id`  | `integer`        | sí        | Approval rule ID               |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.approval_rule_update`
+
+> Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approval_rule_create`](#merge_requestapproval_rule_create), [`merge_request.approval_rule_delete`](#merge_requestapproval_rule_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_rule_update`
+- **Herramienta individual**: `gitlab_mr_approval_rule_update`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro            | Tipo             | Requerido | Descripción                    |
+| -------------------- | ---------------- | --------- | ------------------------------ |
+| `approval_rule_id`   | `integer`        | sí        | Approval rule ID               |
+| `merge_request_iid`  | `integer`        | sí        | Merge request internal ID      |
+| `project_id`         | `string/integer` | sí        | Project ID or URL-encoded path |
+| `approvals_required` | `integer`        | no        | Number of approvals required   |
+| `group_ids`          | `integer[]`      | no        | Group IDs eligible to approve  |
+| `name`               | `string`         | no        | Rule name                      |
+| `user_ids`           | `integer[]`      | no        | User IDs eligible to approve   |
+
+### `merge_request.approval_rules`
+
+> List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule, with pagination metadata. See also: [`merge_request.approval_rule_create`](#merge_requestapproval_rule_create), [`merge_request.approval_rule_update`](#merge_requestapproval_rule_update), [`merge_request.approval_state`](#merge_requestapproval_state).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_rules`
+- **Herramienta individual**: `gitlab_mr_approval_rules`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID                                                                                             |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.approval_settings_group_get`
+
+> Read the merge request approval settings of a group. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: [`merge_request.approval_settings_group_update`](#merge_requestapproval_settings_group_update), [`merge_request.approval_settings_project_get`](#merge_requestapproval_settings_project_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_settings_group_get`
+- **Herramienta individual**: `gitlab_get_group_mr_approval_settings`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `merge_request.approval_settings_group_update`
+
+> Update the merge request approval settings of a group. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: [`merge_request.approval_settings_group_get`](#merge_requestapproval_settings_group_get), [`merge_request.approval_settings_project_update`](#merge_requestapproval_settings_project_update).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_settings_group_update`
+- **Herramienta individual**: `gitlab_update_group_mr_approval_settings`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                                            | Tipo             | Requerido | Descripción                                          |
+| ---------------------------------------------------- | ---------------- | --------- | ---------------------------------------------------- |
+| `group_id`                                           | `string/integer` | sí        | Group ID or URL-encoded path                         |
+| `allow_author_approval`                              | `boolean`        | no        | Allow merge request authors to approve their own MRs |
+| `allow_committer_approval`                           | `boolean`        | no        | Allow committers to approve MRs they contributed to  |
+| `allow_overrides_to_approver_list_per_merge_request` | `boolean`        | no        | Allow overriding the approver list per merge request |
+| `require_reauthentication_to_approve`                | `boolean`        | no        | Require password re-entry to approve                 |
+| `retain_approvals_on_push`                           | `boolean`        | no        | Retain approvals when new commits are pushed         |
+
+### `merge_request.approval_settings_project_get`
+
+> Read the merge request approval settings of a project. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: [`merge_request.approval_settings_project_update`](#merge_requestapproval_settings_project_update), [`merge_request.approval_settings_group_get`](#merge_requestapproval_settings_group_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_settings_project_get`
+- **Herramienta individual**: `gitlab_get_project_mr_approval_settings`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.approval_settings_project_update`
+
+> Update the merge request approval settings of a project. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: [`merge_request.approval_settings_project_get`](#merge_requestapproval_settings_project_get), [`merge_request.approval_settings_group_update`](#merge_requestapproval_settings_group_update).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_settings_project_update`
+- **Herramienta individual**: `gitlab_update_project_mr_approval_settings`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                                            | Tipo             | Requerido | Descripción                                                       |
+| ---------------------------------------------------- | ---------------- | --------- | ----------------------------------------------------------------- |
+| `project_id`                                         | `string/integer` | sí        | Project ID or URL-encoded path                                    |
+| `allow_author_approval`                              | `boolean`        | no        | Allow merge request authors to approve their own MRs              |
+| `allow_committer_approval`                           | `boolean`        | no        | Allow committers to approve MRs they contributed to               |
+| `allow_overrides_to_approver_list_per_merge_request` | `boolean`        | no        | Allow overriding the approver list per merge request              |
+| `require_reauthentication_to_approve`                | `boolean`        | no        | Require password re-entry to approve                              |
+| `retain_approvals_on_push`                           | `boolean`        | no        | Retain approvals when new commits are pushed                      |
+| `selective_code_owner_removals`                      | `boolean`        | no        | Only remove Code Owner approvals for changed files (project-only) |
+
+### `merge_request.approval_state`
+
+> Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag, and approvers. See also: [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approval_config`](#merge_requestapproval_config), [`merge_request.approve`](#merge_requestapprove).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approval_state`
+- **Herramienta individual**: `gitlab_mr_approval_state`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.approve`
+
+> Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: [`merge_request.unapprove`](#merge_requestunapprove), [`merge_request.merge`](#merge_requestmerge), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `approve`
+- **Herramienta individual**: `gitlab_mr_approve`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                         |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `sha`               | `string`         | no        | Head SHA of the merge request. Approve only if HEAD matches (safety check, applies to approve only) |
+
+### `merge_request.cancel_auto_merge`
+
+> Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled. See also: [`merge_request.merge`](#merge_requestmerge), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `cancel_auto_merge`
+- **Herramienta individual**: `gitlab_mr_cancel_auto_merge`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.commits`
+
+> List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: [`merge_request.get`](#merge_requestget), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `commits`
+- **Herramienta individual**: `gitlab_mr_commits`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order results by (e.g. created_at)                                                                                                      |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `merge_request.context_commits_create`
+
+> Attach existing repository commit SHAs to a merge request as context commits. Returns: each pinned commit's full and short SHA, title and message, author and committer with their dates, parents, trailers and web URL. See also: [`merge_request.context_commits_list`](#merge_requestcontext_commits_list), [`merge_request.context_commits_delete`](#merge_requestcontext_commits_delete), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `context_commits_create`
+- **Herramienta individual**: `gitlab_create_mr_context_commits`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                           |
+| ------------------- | ---------------- | --------- | ------------------------------------- |
+| `commits`           | `string[]`       | sí        | List of commit SHAs to add as context |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID                     |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path        |
+
+### `merge_request.context_commits_delete`
+
+> Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation. The underlying repository commits are left intact. See also: [`merge_request.context_commits_list`](#merge_requestcontext_commits_list), [`merge_request.context_commits_create`](#merge_requestcontext_commits_create), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `context_commits_delete`
+- **Herramienta individual**: `gitlab_delete_mr_context_commits`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                |
+| ------------------- | ---------------- | --------- | ------------------------------------------ |
+| `commits`           | `string[]`       | sí        | List of commit SHAs to remove from context |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID                          |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path             |
+
+### `merge_request.context_commits_list`
+
+> List the context commits pinned to a merge request for review. Returns: each commit's full and short SHA, title and message, the title and description rendered to HTML, author and committer with their dates, the GitLab account the author email belongs to and the author's Gravatar image, trailers and web URL, with pagination metadata. See also: [`merge_request.get`](#merge_requestget), [`merge_request.context_commits_create`](#merge_requestcontext_commits_create), [`merge_request.context_commits_delete`](#merge_requestcontext_commits_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `context_commits_list`
+- **Herramienta individual**: `gitlab_list_mr_context_commits`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID                                                                                                     |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.create`
+
+> Open a new merge request from a source branch into a target branch. Returns: the created MR with IID, state, source/target branches, merge status, assignees, reviewers, labels, and web URL. See also: [`merge_request.get`](#merge_requestget), [`merge_request.list`](#merge_requestlist), [`merge_request.merge`](#merge_requestmerge).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `create`
+- **Herramienta individual**: `gitlab_mr_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                          | Tipo             | Requerido | Descripción                                                                                                           |
+| ---------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                       | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `source_branch`                    | `string`         | sí        | Source branch name                                                                                                    |
+| `target_branch`                    | `string`         | sí        | Target branch name. If not specified by the user use the project default branch from project.get (do NOT assume main) |
+| `title`                            | `string`         | sí        | Merge request title                                                                                                   |
+| `allow_collaboration`              | `boolean`        | no        | Allow commits from upstream members who can merge to target branch                                                    |
+| `approvals_before_merge` (Premium) | `integer`        | no        | Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)                    |
+| `assignee_id`                      | `integer`        | no        | Single user ID to assign (use assignee_ids for multiple)                                                              |
+| `assignee_ids`                     | `integer[]`      | no        | User IDs to assign                                                                                                    |
+| `description`                      | `string`         | no        | Merge request description (Markdown supported)                                                                        |
+| `labels`                           | `string[]`       | no        | Label names to apply                                                                                                  |
+| `milestone_id`                     | `integer`        | no        | Milestone ID to associate with the merge request                                                                      |
+| `remove_source_branch`             | `boolean`        | no        | Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults  |
+| `reviewer_ids`                     | `integer[]`      | no        | User IDs to add as reviewers                                                                                          |
+| `squash`                           | `boolean`        | no        | Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults           |
+| `target_project_id`                | `integer`        | no        | Target project ID (for cross-project/fork MRs)                                                                        |
+
+### `merge_request.create_pipeline`
+
+> Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: [`merge_request.pipelines`](#merge_requestpipelines), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `create_pipeline`
+- **Herramienta individual**: `gitlab_mr_create_pipeline`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.create_todo`
+
+> Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target title and URL, project name, author, body, state and created and updated times. See also: [`merge_request.get`](#merge_requestget), [`merge_request.subscribe`](#merge_requestsubscribe).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `create_todo`
+- **Herramienta individual**: `gitlab_mr_create_todo`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.delete`
+
+> Delete a merge request permanently. Returns: a success confirmation naming the MR and project. See also: [`merge_request.update`](#merge_requestupdate), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `delete`
+- **Herramienta individual**: `gitlab_mr_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                          |
+| ------------------- | ---------------- | --------- | -------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID to delete (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                       |
+
+### `merge_request.dependencies_list`
+
+> List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states, with pagination metadata. See also: [`merge_request.dependency_create`](#merge_requestdependency_create), [`merge_request.dependency_delete`](#merge_requestdependency_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `dependencies_list`
+- **Herramienta individual**: `gitlab_mr_dependencies_list`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.dependency_create`
+
+> Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR. See also: [`merge_request.dependency_delete`](#merge_requestdependency_delete), [`merge_request.dependencies_list`](#merge_requestdependencies_list).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `dependency_create`
+- **Herramienta individual**: `gitlab_mr_dependency_create`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo             | Requerido | Descripción                                                |
+| --------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid`         | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`                | `string/integer` | sí        | Project ID or URL-encoded path                             |
+| `blocking_merge_request_id` | `integer`        | no        | ID of the merge request that blocks this one               |
+
+### `merge_request.dependency_delete`
+
+> Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project. See also: [`merge_request.dependency_create`](#merge_requestdependency_create), [`merge_request.dependencies_list`](#merge_requestdependencies_list).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `dependency_delete`
+- **Herramienta individual**: `gitlab_mr_dependency_delete`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro                   | Tipo             | Requerido | Descripción                                                                                                  |
+| --------------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `merge_request_iid`         | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                   |
+| `project_id`                | `string/integer` | sí        | Project ID or URL-encoded path                                                                               |
+| `blocking_merge_request_id` | `integer`        | no        | ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id |
+
+### `merge_request.emoji_mr_create`
+
+> Add an emoji reaction to a merge request. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`merge_request.emoji_mr_list`](#merge_requestemoji_mr_list), [`merge_request.emoji_mr_delete`](#merge_requestemoji_mr_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_create`
+- **Herramienta individual**: `gitlab_mr_emoji_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `name`              | `string`         | sí        | Emoji name without colons (e.g. thumbsup)                  |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_delete`
+
+> Remove an emoji reaction from a merge request by award id. Returns: a success confirmation naming the award emoji. See also: [`merge_request.emoji_mr_list`](#merge_requestemoji_mr_list), [`merge_request.emoji_mr_get`](#merge_requestemoji_mr_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_delete`
+- **Herramienta individual**: `gitlab_mr_emoji_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `award_id`          | `integer`        | sí        | Award emoji ID                                             |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_get`
+
+> Get a single emoji reaction on a merge request by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`merge_request.emoji_mr_list`](#merge_requestemoji_mr_list), [`merge_request.emoji_mr_delete`](#merge_requestemoji_mr_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_get`
+- **Herramienta individual**: `gitlab_mr_emoji_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `award_id`          | `integer`        | sí        | Award emoji ID                                             |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_list`
+
+> List all emoji reactions on a merge request. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`merge_request.emoji_mr_get`](#merge_requestemoji_mr_get), [`merge_request.emoji_mr_create`](#merge_requestemoji_mr_create), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_list`
+- **Herramienta individual**: `gitlab_mr_emoji_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.                                                        |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort order: 'asc' or 'desc'.                                                                                                                      |
+
+### `merge_request.emoji_mr_note_create`
+
+> Add an emoji reaction to a merge request note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`merge_request.emoji_mr_note_list`](#merge_requestemoji_mr_note_list), [`merge_request.emoji_mr_note_delete`](#merge_requestemoji_mr_note_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_note_create`
+- **Herramienta individual**: `gitlab_mr_note_emoji_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `name`              | `string`         | sí        | Emoji name without colons (e.g. thumbsup)                  |
+| `note_id`           | `integer`        | sí        | Note ID                                                    |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_note_delete`
+
+> Remove an emoji reaction from a merge request note by award id. Returns: a success confirmation naming the award emoji. See also: [`merge_request.emoji_mr_note_list`](#merge_requestemoji_mr_note_list), [`merge_request.emoji_mr_note_get`](#merge_requestemoji_mr_note_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_note_delete`
+- **Herramienta individual**: `gitlab_mr_note_emoji_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `award_id`          | `integer`        | sí        | Award emoji ID                                             |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | Note ID                                                    |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_note_get`
+
+> Get a single emoji reaction on a merge request note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`merge_request.emoji_mr_note_list`](#merge_requestemoji_mr_note_list), [`merge_request.emoji_mr_note_delete`](#merge_requestemoji_mr_note_delete).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_note_get`
+- **Herramienta individual**: `gitlab_mr_note_emoji_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `award_id`          | `integer`        | sí        | Award emoji ID                                             |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | Note ID                                                    |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.emoji_mr_note_list`
+
+> List all emoji reactions on a merge request note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`merge_request.emoji_mr_note_get`](#merge_requestemoji_mr_note_get), [`merge_request.emoji_mr_note_create`](#merge_requestemoji_mr_note_create), [`mr_review.note_get`](/gitlab-mcp-server/reference/tools/mr-review/#mr_reviewnote_get).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `emoji_mr_note_list`
+- **Herramienta individual**: `gitlab_mr_note_emoji_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `note_id`           | `integer`                | sí        | Note ID                                                                                                                                           |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.                                                        |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort order: 'asc' or 'desc'.                                                                                                                      |
+
+### `merge_request.event_mr_label_get`
+
+> Get a single label event for a merge request. Returns: the event with action, the label object, and the acting user. See also: [`merge_request.event_mr_label_list`](#merge_requestevent_mr_label_list).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_label_get`
+- **Herramienta individual**: `gitlab_mr_label_event_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `label_event_id`    | `integer`        | sí        | Label event ID                 |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.event_mr_label_list`
+
+> List label events for a merge request. Returns: label events with action, the label object, the acting user, and pagination metadata. See also: [`merge_request.event_mr_label_get`](#merge_requestevent_mr_label_get), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_label_list`
+- **Herramienta individual**: `gitlab_mr_label_event_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order keyset-paginated results by (e.g. id)                                                                                             |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: asc or desc                                                                                                 |
+
+### `merge_request.event_mr_milestone_get`
+
+> Get a single milestone event for a merge request. Returns: the event with action, the milestone object, and the acting user. See also: [`merge_request.event_mr_milestone_list`](#merge_requestevent_mr_milestone_list).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_milestone_get`
+- **Herramienta individual**: `gitlab_mr_milestone_event_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro            | Tipo             | Requerido | Descripción                    |
+| -------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid`  | `integer`        | sí        | Merge request internal ID      |
+| `milestone_event_id` | `integer`        | sí        | Milestone event ID             |
+| `project_id`         | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `merge_request.event_mr_milestone_list`
+
+> List milestone events for a merge request. Returns: milestone events with action, the milestone object, the acting user, and pagination metadata. See also: [`merge_request.event_mr_milestone_get`](#merge_requestevent_mr_milestone_get), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_milestone_list`
+- **Herramienta individual**: `gitlab_mr_milestone_event_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order keyset-paginated results by (e.g. id)                                                                                             |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: asc or desc                                                                                                 |
+
+### `merge_request.event_mr_state_get`
+
+> Get a single state event for a merge request. Returns: the event with the state value and the acting user. See also: [`merge_request.event_mr_state_list`](#merge_requestevent_mr_state_list).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_state_get`
+- **Herramienta individual**: `gitlab_mr_state_event_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+| `state_event_id`    | `integer`        | sí        | State event ID                 |
+
+### `merge_request.event_mr_state_list`
+
+> List state events for a merge request. Returns: state events with the state value, the acting user, and pagination metadata. See also: [`merge_request.event_mr_state_get`](#merge_requestevent_mr_state_get), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `event_mr_state_list`
+- **Herramienta individual**: `gitlab_mr_state_event_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order keyset-paginated results by (e.g. id)                                                                                             |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: asc or desc                                                                                                 |
+
+### `merge_request.get`
+
+> Get a single merge request from a project by its IID. Returns: MR metadata, state, source/target branches, merge status, assignees, reviewers, labels, milestone, and web URL. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.update`](#merge_requestupdate), [`merge_request.merge`](#merge_requestmerge), [`merge_request.commits`](#merge_requestcommits).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `get`
+- **Herramienta individual**: `gitlab_mr_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.issues_closed`
+
+> List issues that will be closed when the merge request is merged. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.related_issues`](#merge_requestrelated_issues), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `issues_closed`
+- **Herramienta individual**: `gitlab_mr_issues_closed`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order results by (e.g. created_at)                                                                                                      |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `merge_request.list`
+
+> List merge requests in one project with filtering and pagination. Returns: matching MRs with state, branches, merge status, assignees, reviewers, labels, and pagination metadata. See also: [`merge_request.get`](#merge_requestget), [`merge_request.create`](#merge_requestcreate), [`merge_request.list_group`](#merge_requestlist_group).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `list`
+- **Herramienta individual**: `gitlab_mr_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                   | Tipo                                                     | Requerido | Descripción                                                                                                                                       |
+| --------------------------- | -------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                | `string/integer`                                         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `approved_by_ids`           | `integer/string[]`                                       | no        | Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)             |
+| `approved_by_usernames`     | `string[]`                                               | no        | Filter by MRs approved by all listed usernames                                                                                                    |
+| `approver_ids`              | `integer/string[]`                                       | no        | Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)         |
+| `assignee_id`               | `integer`                                                | no        | Filter by assignee user ID                                                                                                                        |
+| `author_id`                 | `integer`                                                | no        | Filter by author user ID                                                                                                                          |
+| `author_username`           | `string`                                                 | no        | Filter by author username                                                                                                                         |
+| `created_after`             | `string`                                                 | no        | Return MRs created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)                                                                        |
+| `created_before`            | `string`                                                 | no        | Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)                                                                       |
+| `deployed_after`            | `string`                                                 | no        | Return MRs deployed after date (ISO 8601 format)                                                                                                  |
+| `deployed_before`           | `string`                                                 | no        | Return MRs deployed before date (ISO 8601 format)                                                                                                 |
+| `draft`                     | `boolean`                                                | no        | Filter by draft status (true=only drafts, false=only non-drafts)                                                                                  |
+| `environment`               | `string`                                                 | no        | Filter by deployment environment name                                                                                                             |
+| `iids`                      | `integer[]`                                              | no        | Filter by merge request internal IDs                                                                                                              |
+| `labels`                    | `string[]`                                               | no        | Label names to filter by                                                                                                                          |
+| `milestone`                 | `string`                                                 | no        | Milestone title to filter by                                                                                                                      |
+| `my_reaction_emoji`         | `string`                                                 | no        | Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)                                                                               |
+| `non_archived`              | `boolean`                                                | no        | Return merge requests from non-archived projects only. Default is true                                                                            |
+| `not_author_username`       | `string`                                                 | no        | Exclude MRs authored by this username                                                                                                             |
+| `not_labels`                | `string[]`                                               | no        | Label names to exclude                                                                                                                            |
+| `order_by`                  | `string` (`created_at`, `updated_at`, `title`)           | no        | Order by field (created_at, updated_at, title)                                                                                                    |
+| `page`                      | `integer`                                                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`                | `string`                                                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`                | `string`                                                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`                  | `integer`                                                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `reviewer_id`               | `integer`                                                | no        | Filter by reviewer user ID                                                                                                                        |
+| `reviewer_username`         | `string`                                                 | no        | Filter by reviewer username                                                                                                                       |
+| `scope`                     | `string` (`created_by_me`, `assigned_to_me`, `all`)      | no        | Filter by scope (created_by_me, assigned_to_me, all)                                                                                              |
+| `search`                    | `string`                                                 | no        | Search in title and description                                                                                                                   |
+| `sort`                      | `string` (`asc`, `desc`)                                 | no        | Sort direction (asc, desc)                                                                                                                        |
+| `source_branch`             | `string`                                                 | no        | Filter by source branch name                                                                                                                      |
+| `state`                     | `string` (`opened`, `closed`, `locked`, `merged`, `all`) | no        | Filter by state (opened, closed, merged, all)                                                                                                     |
+| `target_branch`             | `string`                                                 | no        | Filter by target branch name                                                                                                                      |
+| `updated_after`             | `string`                                                 | no        | Return MRs updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)                                                                        |
+| `updated_before`            | `string`                                                 | no        | Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)                                                                       |
+| `view`                      | `string` (`simple`)                                      | no        | Set to 'simple' to return only basic MR fields                                                                                                    |
+| `wip`                       | `string` (`yes`, `no`)                                   | no        | Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft                                                                               |
+| `with_labels_details`       | `boolean`                                                | no        | Include full label details (color, description) in the response                                                                                   |
+| `with_merge_status_recheck` | `boolean`                                                | no        | Asynchronously recalculate each MR's merge_status before returning                                                                                |
+
+### `merge_request.list_global`
+
+> List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_group`](#merge_requestlist_group), [`search.merge_requests`](/gitlab-mcp-server/reference/tools/search/#searchmerge_requests).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `list_global`
+- **Herramienta individual**: `gitlab_mr_list_global`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                   | Tipo                                                     | Requerido | Descripción                                                                                                                                       |
+| --------------------------- | -------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `approved_by_ids`           | `integer/string[]`                                       | no        | Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)             |
+| `approved_by_usernames`     | `string[]`                                               | no        | Filter by MRs approved by all listed usernames                                                                                                    |
+| `approver_ids`              | `integer/string[]`                                       | no        | Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)         |
+| `assignee_id`               | `integer`                                                | no        | Filter by assignee user ID                                                                                                                        |
+| `author_id`                 | `integer`                                                | no        | Filter by author user ID                                                                                                                          |
+| `author_username`           | `string`                                                 | no        | Filter by author username                                                                                                                         |
+| `created_after`             | `string`                                                 | no        | Return MRs created after date (ISO 8601)                                                                                                          |
+| `created_before`            | `string`                                                 | no        | Return MRs created before date (ISO 8601)                                                                                                         |
+| `draft`                     | `boolean`                                                | no        | Filter by draft status (true=only drafts, false=only non-drafts)                                                                                  |
+| `in`                        | `string`                                                 | no        | Scope of the search filter (e.g. title, description, or title,description)                                                                        |
+| `labels`                    | `string[]`                                               | no        | Label names to filter by                                                                                                                          |
+| `milestone`                 | `string`                                                 | no        | Milestone title to filter by                                                                                                                      |
+| `my_reaction_emoji`         | `string`                                                 | no        | Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)                                                                               |
+| `non_archived`              | `boolean`                                                | no        | Return merge requests from non-archived projects only. Default is true                                                                            |
+| `not_author_username`       | `string`                                                 | no        | Exclude MRs authored by this username                                                                                                             |
+| `not_labels`                | `string[]`                                               | no        | Label names to exclude                                                                                                                            |
+| `order_by`                  | `string` (`created_at`, `updated_at`)                    | no        | Order by field (created_at, updated_at)                                                                                                           |
+| `page`                      | `integer`                                                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`                | `string`                                                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`                | `string`                                                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`                  | `integer`                                                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `reviewer_id`               | `integer`                                                | no        | Filter by reviewer user ID                                                                                                                        |
+| `reviewer_username`         | `string`                                                 | no        | Filter by reviewer username                                                                                                                       |
+| `scope`                     | `string` (`created_by_me`, `assigned_to_me`, `all`)      | no        | Filter by scope (created_by_me, assigned_to_me, all)                                                                                              |
+| `search`                    | `string`                                                 | no        | Search in title and description                                                                                                                   |
+| `sort`                      | `string` (`asc`, `desc`)                                 | no        | Sort direction (asc, desc)                                                                                                                        |
+| `source_branch`             | `string`                                                 | no        | Filter by source branch name                                                                                                                      |
+| `state`                     | `string` (`opened`, `closed`, `locked`, `merged`, `all`) | no        | Filter by state (opened, closed, merged, all)                                                                                                     |
+| `target_branch`             | `string`                                                 | no        | Filter by target branch name                                                                                                                      |
+| `updated_after`             | `string`                                                 | no        | Return MRs updated after date (ISO 8601)                                                                                                          |
+| `updated_before`            | `string`                                                 | no        | Return MRs updated before date (ISO 8601)                                                                                                         |
+| `view`                      | `string` (`simple`)                                      | no        | Set to 'simple' to return only basic MR fields                                                                                                    |
+| `wip`                       | `string` (`yes`, `no`)                                   | no        | Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft                                                                               |
+| `with_labels_details`       | `boolean`                                                | no        | Include full label details (color, description) in the response                                                                                   |
+| `with_merge_status_recheck` | `boolean`                                                | no        | Asynchronously recalculate each MR's merge_status before returning                                                                                |
+
+### `merge_request.list_group`
+
+> List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: [`merge_request.list`](#merge_requestlist), [`merge_request.list_global`](#merge_requestlist_global), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `list_group`
+- **Herramienta individual**: `gitlab_mr_list_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                   | Tipo                                                     | Requerido | Descripción                                                                                                                                       |
+| --------------------------- | -------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`                  | `string/integer`                                         | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `approved_by_ids`           | `integer/string[]`                                       | no        | Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)             |
+| `approved_by_usernames`     | `string[]`                                               | no        | Filter by MRs approved by all listed usernames                                                                                                    |
+| `approver_ids`              | `integer/string[]`                                       | no        | Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)         |
+| `assignee_id`               | `integer`                                                | no        | Filter by assignee user ID                                                                                                                        |
+| `author_id`                 | `integer`                                                | no        | Filter by author user ID                                                                                                                          |
+| `author_username`           | `string`                                                 | no        | Filter by author username                                                                                                                         |
+| `created_after`             | `string`                                                 | no        | Return MRs created after date (ISO 8601)                                                                                                          |
+| `created_before`            | `string`                                                 | no        | Return MRs created before date (ISO 8601)                                                                                                         |
+| `draft`                     | `boolean`                                                | no        | Filter by draft status (true=only drafts, false=only non-drafts)                                                                                  |
+| `in`                        | `string`                                                 | no        | Scope of the search filter (e.g. title, description, or title,description)                                                                        |
+| `labels`                    | `string[]`                                               | no        | Label names to filter by                                                                                                                          |
+| `milestone`                 | `string`                                                 | no        | Milestone title to filter by                                                                                                                      |
+| `my_reaction_emoji`         | `string`                                                 | no        | Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)                                                                               |
+| `non_archived`              | `boolean`                                                | no        | Return merge requests from non-archived projects only. Default is true                                                                            |
+| `not_author_username`       | `string`                                                 | no        | Exclude MRs authored by this username                                                                                                             |
+| `not_labels`                | `string[]`                                               | no        | Label names to exclude                                                                                                                            |
+| `order_by`                  | `string` (`created_at`, `updated_at`)                    | no        | Order by field (created_at, updated_at)                                                                                                           |
+| `page`                      | `integer`                                                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`                | `string`                                                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`                | `string`                                                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`                  | `integer`                                                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `reviewer_id`               | `integer`                                                | no        | Filter by reviewer user ID                                                                                                                        |
+| `reviewer_username`         | `string`                                                 | no        | Filter by reviewer username                                                                                                                       |
+| `scope`                     | `string` (`created_by_me`, `assigned_to_me`, `all`)      | no        | Filter by scope (created_by_me, assigned_to_me, all)                                                                                              |
+| `search`                    | `string`                                                 | no        | Search in title and description                                                                                                                   |
+| `sort`                      | `string` (`asc`, `desc`)                                 | no        | Sort direction (asc, desc)                                                                                                                        |
+| `source_branch`             | `string`                                                 | no        | Filter by source branch name                                                                                                                      |
+| `state`                     | `string` (`opened`, `closed`, `locked`, `merged`, `all`) | no        | Filter by state (opened, closed, merged, all)                                                                                                     |
+| `target_branch`             | `string`                                                 | no        | Filter by target branch name                                                                                                                      |
+| `updated_after`             | `string`                                                 | no        | Return MRs updated after date (ISO 8601)                                                                                                          |
+| `updated_before`            | `string`                                                 | no        | Return MRs updated before date (ISO 8601)                                                                                                         |
+| `view`                      | `string` (`simple`)                                      | no        | Set to 'simple' to return only basic MR fields                                                                                                    |
+| `wip`                       | `string` (`yes`, `no`)                                   | no        | Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft                                                                               |
+| `with_labels_details`       | `boolean`                                                | no        | Include full label details (color, description) in the response                                                                                   |
+| `with_merge_status_recheck` | `boolean`                                                | no        | Asynchronously recalculate each MR's merge_status before returning                                                                                |
+
+### `merge_request.merge`
+
+> Merge a merge request now, or schedule auto-merge when its pipeline succeeds. Returns: the merged MR with merge_commit_sha and updated state. See also: [`merge_request.get`](#merge_requestget), [`merge_request.pipelines`](#merge_requestpipelines), [`merge_request.cancel_auto_merge`](#merge_requestcancel_auto_merge).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `merge`
+- **Herramienta individual**: `gitlab_mr_merge`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro                      | Tipo             | Requerido | Descripción                                                                                                          |
+| ------------------------------ | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`            | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                           |
+| `project_id`                   | `string/integer` | sí        | Project ID or URL-encoded path                                                                                       |
+| `auto_merge`                   | `boolean`        | no        | Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.                           |
+| `merge_commit_message`         | `string`         | no        | Custom merge commit message                                                                                          |
+| `merge_when_pipeline_succeeds` | `boolean`        | no        | Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge                                 |
+| `sha`                          | `string`         | no        | Head SHA of the merge request. Merge only if HEAD matches (safety check)                                             |
+| `should_remove_source_branch`  | `boolean`        | no        | Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults |
+| `squash`                       | `boolean`        | no        | Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults          |
+| `squash_commit_message`        | `string`         | no        | Custom squash commit message (used when squash is enabled)                                                           |
+
+### `merge_request.participants`
+
+> List the participants of a merge request. Returns: participating users with username, name, state, locked flag and public email, with pagination metadata. See also: [`merge_request.reviewers`](#merge_requestreviewers), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `participants`
+- **Herramienta individual**: `gitlab_mr_participants`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.pipelines`
+
+> List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL, with pagination metadata. See also: [`merge_request.create_pipeline`](#merge_requestcreate_pipeline), [`merge_request.merge`](#merge_requestmerge), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `pipelines`
+- **Herramienta individual**: `gitlab_mr_pipelines`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.rebase`
+
+> Rebase a merge request's source branch onto its target. Returns: whether a rebase is now in progress (poll merge_request.get to track completion). See also: [`merge_request.get`](#merge_requestget), [`merge_request.merge`](#merge_requestmerge).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `rebase`
+- **Herramienta individual**: `gitlab_mr_rebase`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                          |
+| ------------------- | ---------------- | --------- | -------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID to rebase (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                       |
+| `skip_ci`           | `boolean`        | no        | Skip triggering CI pipeline after rebase                             |
+
+### `merge_request.related_issues`
+
+> List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: [`merge_request.issues_closed`](#merge_requestissues_closed), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `related_issues`
+- **Herramienta individual**: `gitlab_mr_related_issues`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order results by (e.g. created_at)                                                                                                      |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `merge_request.reviewers`
+
+> List the reviewers of a merge request. Returns: reviewer users with username, name, state, locked flag, public email, review state and assignment time, with pagination metadata. See also: [`merge_request.participants`](#merge_requestparticipants), [`merge_request.update`](#merge_requestupdate).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `reviewers`
+- **Herramienta individual**: `gitlab_mr_reviewers`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `page`              | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`          | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `merge_request.spent_time_add`
+
+> Add spent time to a merge request. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: [`merge_request.spent_time_reset`](#merge_requestspent_time_reset), [`merge_request.time_estimate_set`](#merge_requesttime_estimate_set), [`merge_request.time_stats`](#merge_requesttime_stats).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `spent_time_add`
+- **Herramienta individual**: `gitlab_mr_add_spent_time`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `duration`          | `string`         | sí        | Human-readable duration (e.g. 1h, 30m, 1w2d)               |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+| `summary`           | `string`         | no        | Optional summary of work done                              |
+
+### `merge_request.spent_time_reset`
+
+> Reset a merge request's spent time. Returns: the updated time tracking stats. See also: [`merge_request.spent_time_add`](#merge_requestspent_time_add), [`merge_request.time_stats`](#merge_requesttime_stats).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `spent_time_reset`
+- **Herramienta individual**: `gitlab_mr_reset_spent_time`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.subscribe`
+
+> Subscribe the caller to a merge request's notifications. Returns: the MR with the updated subscription state. See also: [`merge_request.unsubscribe`](#merge_requestunsubscribe), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `subscribe`
+- **Herramienta individual**: `gitlab_mr_subscribe`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.time_estimate_reset`
+
+> Clear a merge request's time estimate. Returns: the updated time tracking stats. See also: [`merge_request.time_estimate_set`](#merge_requesttime_estimate_set), [`merge_request.time_stats`](#merge_requesttime_stats).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `time_estimate_reset`
+- **Herramienta individual**: `gitlab_mr_reset_time_estimate`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.time_estimate_set`
+
+> Set a merge request's time estimate. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: [`merge_request.time_estimate_reset`](#merge_requesttime_estimate_reset), [`merge_request.spent_time_add`](#merge_requestspent_time_add), [`merge_request.time_stats`](#merge_requesttime_stats).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `time_estimate_set`
+- **Herramienta individual**: `gitlab_mr_set_time_estimate`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `duration`          | `string`         | sí        | Human-readable duration (e.g. 3h30m, 1w2d)                 |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `merge_request.time_stats`
+
+> Read a merge request's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: [`merge_request.time_estimate_set`](#merge_requesttime_estimate_set), [`merge_request.spent_time_add`](#merge_requestspent_time_add).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `time_stats`
+- **Herramienta individual**: `gitlab_mr_time_stats`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.unapprove`
+
+> Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: [`merge_request.approve`](#merge_requestapprove), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `unapprove`
+- **Herramienta individual**: `gitlab_mr_unapprove`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                         |
+| ------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `sha`               | `string`         | no        | Head SHA of the merge request. Approve only if HEAD matches (safety check, applies to approve only) |
+
+### `merge_request.unsubscribe`
+
+> Unsubscribe the caller from a merge request's notifications. Returns: the MR with the updated subscription state. See also: [`merge_request.subscribe`](#merge_requestsubscribe), [`merge_request.get`](#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `unsubscribe`
+- **Herramienta individual**: `gitlab_mr_unsubscribe`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo             | Requerido | Descripción                                                                                         |
+| -------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`              | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                          |
+| `project_id`                     | `string/integer` | sí        | Project ID or URL-encoded path                                                                      |
+| `include_diverged_commits_count` | `boolean`        | no        | Include the count of commits the source branch is behind the target branch (diverged_commits_count) |
+| `include_rebase_in_progress`     | `boolean`        | no        | Include whether a rebase is currently in progress (rebase_in_progress)                              |
+| `render_html`                    | `boolean`        | no        | Return the title and description rendered to HTML                                                   |
+
+### `merge_request.update`
+
+> Update an existing merge request's fields or state. Returns: the updated MR with its new field values, state, labels, assignees, and reviewers. See also: [`merge_request.get`](#merge_requestget), [`merge_request.merge`](#merge_requestmerge), [`merge_request.approve`](#merge_requestapprove).
+
+- **Meta-herramienta**: `gitlab_merge_request`, acción `update`
+- **Herramienta individual**: `gitlab_mr_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro              | Tipo                         | Requerido | Descripción                                                        |
+| ---------------------- | ---------------------------- | --------- | ------------------------------------------------------------------ |
+| `merge_request_iid`    | `integer`                    | sí        | Merge request IID (project-scoped, not 'merge_request_id')         |
+| `project_id`           | `string/integer`             | sí        | Project ID or URL-encoded path                                     |
+| `add_labels`           | `string[]`                   | no        | Label names to add without removing existing                       |
+| `allow_collaboration`  | `boolean`                    | no        | Allow commits from upstream members who can merge to target branch |
+| `assignee_id`          | `integer`                    | no        | Single user ID to assign (use assignee_ids for multiple)           |
+| `assignee_ids`         | `integer[]`                  | no        | User IDs to assign as merge request assignees                      |
+| `description`          | `string`                     | no        | New description                                                    |
+| `discussion_locked`    | `boolean`                    | no        | Lock discussions on the merge request                              |
+| `labels`               | `string[]`                   | no        | Label names to replace all labels on the merge request             |
+| `milestone_id`         | `integer`                    | no        | Milestone ID (0 to unset)                                          |
+| `remove_labels`        | `string[]`                   | no        | Label names to remove                                              |
+| `remove_source_branch` | `boolean`                    | no        | Delete source branch after merge. Only set if explicitly requested |
+| `reviewer_ids`         | `integer[]`                  | no        | User IDs to add as reviewers                                       |
+| `squash`               | `boolean`                    | no        | Squash commits on merge. Only set if explicitly requested          |
+| `state_event`          | `string` (`close`, `reopen`) | no        | State transition (close, reopen)                                   |
+| `target_branch`        | `string`                     | no        | New target branch                                                  |
+| `title`                | `string`                     | no        | New title                                                          |

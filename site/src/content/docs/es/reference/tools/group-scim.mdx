@@ -1,0 +1,101 @@
+---
+title: "Identidades SCIM de grupo"
+description: "Las identidades SCIM que aprovisiona el proveedor de identidad de un grupo: listarlas, leerlas, actualizarlas y borrarlas."
+sidebar:
+  order: 22
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Cuando el proveedor de identidad de un grupo aprovisiona usuarios por SCIM, GitLab guarda una identidad SCIM que enlaza cada usuario con el ID que le da el proveedor. Estas acciones listan las identidades SCIM de un grupo, leen una, cambian el ID al que está enlazada y la borran.
+
+## Preguntas de ejemplo
+
+- "Lista las identidades SCIM del grupo acme"
+- "¿Qué usuario de GitLab es la identidad SCIM 7f3a?"
+- "Desvincula la identidad SCIM de un empleado que se ha ido"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `group_scim.delete`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_group_scim` con `action` igual al nombre de la acción, como `delete`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_delete_group_scim_identity`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
+
+- **Free**: 0
+- **Premium**: 4
+- **Ultimate**: 4
+
+Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                   | Individual                          |
+| ---------------------------------------- | ----------------------------------- |
+| [`group_scim.delete`](#group_scimdelete) | `gitlab_delete_group_scim_identity` |
+| [`group_scim.get`](#group_scimget)       | `gitlab_get_group_scim_identity`    |
+| [`group_scim.list`](#group_scimlist)     | `gitlab_list_group_scim_identities` |
+| [`group_scim.update`](#group_scimupdate) | `gitlab_update_group_scim_identity` |
+
+### `group_scim.delete`
+
+> Delete a SCIM identity from a top-level group by its SCIM external UID. Returns: a success confirmation naming the deleted SCIM identity and group. See also: [`group_scim.get`](#group_scimget), [`group_scim.list`](#group_scimlist), [`group_scim.update`](#group_scimupdate).
+
+- **Meta-herramienta**: `gitlab_group_scim`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_group_scim_identity`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                   |
+| ---------- | ---------------- | --------- | ----------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path  |
+| `uid`      | `string`         | sí        | SCIM external UID of the user |
+
+### `group_scim.get`
+
+> Get one SCIM identity of a top-level group by its SCIM external UID. Returns: the identity's external_uid, user_id, and active status. See also: [`group_scim.list`](#group_scimlist), [`group_scim.update`](#group_scimupdate), [`group_scim.delete`](#group_scimdelete).
+
+- **Meta-herramienta**: `gitlab_group_scim`, acción `get`
+- **Herramienta individual**: `gitlab_get_group_scim_identity`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                   |
+| ---------- | ---------------- | --------- | ----------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path  |
+| `uid`      | `string`         | sí        | SCIM external UID of the user |
+
+### `group_scim.list`
+
+> List a top-level group's SCIM identities provisioned through SAML SSO SCIM. Returns: each identity with external_uid, user_id, and active status. See also: [`group_scim.get`](#group_scimget), [`group_scim.update`](#group_scimupdate), [`group_scim.delete`](#group_scimdelete).
+
+- **Meta-herramienta**: `gitlab_group_scim`, acción `list`
+- **Herramienta individual**: `gitlab_list_group_scim_identities`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `group_scim.update`
+
+> Update the extern_uid of an existing group SCIM identity. Returns: a confirmation that the SCIM identity's external UID was rewritten. See also: [`group_scim.get`](#group_scimget), [`group_scim.list`](#group_scimlist), [`group_scim.delete`](#group_scimdelete).
+
+- **Meta-herramienta**: `gitlab_group_scim`, acción `update`
+- **Herramienta individual**: `gitlab_update_group_scim_identity`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                   |
+| ------------ | ---------------- | --------- | ----------------------------- |
+| `extern_uid` | `string`         | sí        | New external UID value        |
+| `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path  |
+| `uid`        | `string`         | sí        | SCIM external UID of the user |

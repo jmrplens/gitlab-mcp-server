@@ -1,0 +1,72 @@
+---
+title: "Atestaciones de compilación"
+description: "Lista y descarga las atestaciones de compilación (procedencia SLSA) que GitLab guarda para los artefactos de un proyecto."
+sidebar:
+  order: 5
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Las atestaciones de compilación registran cómo se construyó un artefacto: GitLab las guarda por proyecto como procedencia SLSA, indexadas por el digest del artefacto que describen. `attestation.list` encuentra las atestaciones de un digest y `attestation.download` descarga una de ellas por su IID.
+
+## Preguntas de ejemplo
+
+- "¿Qué atestaciones tiene el proyecto 42 para este digest sha256?"
+- "Descarga la atestación 3 del proyecto 42"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `attestation.download`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_attestation` con `action` igual al nombre de la acción, como `download`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_download_attestation`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 2:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 2
+
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                         | Individual                    |
+| ---------------------------------------------- | ----------------------------- |
+| [`attestation.download`](#attestationdownload) | `gitlab_download_attestation` |
+| [`attestation.list`](#attestationlist)         | `gitlab_list_attestations`    |
+
+### `attestation.download`
+
+> Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: [`attestation.list`](#attestationlist), [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+
+- **Meta-herramienta**: `gitlab_attestation`, acción `download`
+- **Herramienta individual**: `gitlab_download_attestation`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                      |
+| ----------------- | ---------------- | --------- | -------------------------------- |
+| `attestation_iid` | `integer`        | sí        | Attestation IID (project-scoped) |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path   |
+
+### `attestation.list`
+
+> List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps, with pagination metadata. See also: [`attestation.download`](#attestationdownload), [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+
+- **Meta-herramienta**: `gitlab_attestation`, acción `list`
+- **Herramienta individual**: `gitlab_list_attestations`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                               |
+| ---------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                            |
+| `subject_digest` | `string`         | sí        | Hex-encoded SHA-256 digest of the attested artifact: its 64 hex characters, in either case. An OCI-style sha256: prefix is accepted and removed and the hex is lowered before the request |
+| `page`           | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                     |
+| `per_page`       | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                     |

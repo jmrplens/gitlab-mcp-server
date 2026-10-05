@@ -115,6 +115,15 @@ const REFERENCE_FILES = [
 // below is what keeps this table honest — a page added to the collection and
 // not listed here fails the build rather than silently disappearing from the
 // index.
+//
+// A section may also name a `generated` directory, whose pages a generator
+// writes and the sidebar lists with `autogenerate`: the per-domain tool
+// reference, which cmd/gen_tool_reference writes one page per catalog group.
+// Listing those here by hand would be a second copy of the catalog's group
+// list, so the section collects every page under the directory instead, in the
+// order the sidebar shows them (each page's `sidebar.order`, then its slug),
+// after the slugs it lists itself. The completeness check still holds: a
+// generated directory with no page fails, and so does a page claimed twice.
 const SECTIONS = [
 	{
 		label: "Getting started",
@@ -176,6 +185,7 @@ const SECTIONS = [
 			"reference/output-format",
 			"reference/fine-grained-permissions",
 		],
+		generated: "reference/tools",
 	},
 	{
 		label: "Operations",
@@ -242,12 +252,15 @@ function collectPages(dir) {
 }
 
 /**
- * Reads `title` and `description` out of a page's YAML frontmatter.
+ * Reads `title` and `description` out of a page's YAML frontmatter, and the
+ * `order` of its `sidebar` block when it has one.
  *
  * Deliberately not a YAML parser: only these two top-level scalars are needed,
  * and every page in the collection writes them on one line. A page that grows a
  * block scalar there would be caught by the empty-value guard rather than
- * silently producing a truncated entry.
+ * silently producing a truncated entry. The sidebar order is read only to place
+ * the pages of a generated directory, whose generator writes it as an indented
+ * `order:` line under `sidebar:`.
  */
 function readFrontmatter(file) {
 	const text = readFileSync(file, "utf8");
@@ -268,13 +281,39 @@ function readFrontmatter(file) {
 		if (!value) throw new Error(`${file}: frontmatter ${key} is empty`);
 		return value;
 	};
-	return { title: scalar("title"), description: scalar("description") };
+	const sidebar = block.match(
+		/^sidebar:[ \t]*\r?\n((?:[ \t]+.*(?:\r?\n|$))*)/m,
+	);
+	const order = sidebar?.[1].match(/^[ \t]+order:[ \t]*(-?\d+)/m);
+	return {
+		title: scalar("title"),
+		description: scalar("description"),
+		order: order ? Number(order[1]) : undefined,
+	};
 }
 
-/** "install/npm.mdx" -> "install/npm"; "index.mdx" -> "". */
+/**
+ * The slugs a section lists for one locale's pages: the ones it names, then
+ * every page of its generated directory in sidebar order.
+ */
+function sectionSlugs(section, pages) {
+	if (!section.generated) return section.slugs;
+	const dir = section.generated;
+	const rank = (slug) => pages.get(slug).order ?? Number.MAX_SAFE_INTEGER;
+	const generated = [...pages.keys()]
+		.filter((slug) => slug === dir || slug.startsWith(`${dir}/`))
+		.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+	return [...section.slugs, ...generated];
+}
+
+/**
+ * "install/npm.mdx" -> "install/npm"; "index.mdx" -> "";
+ * "reference/tools/index.mdx" -> "reference/tools", the URL the site serves a
+ * directory's index at.
+ */
 function slugOf(relPath) {
 	const withoutExt = relPath.replace(/\.mdx$/, "");
-	return withoutExt === "index" ? "" : withoutExt;
+	return withoutExt === "index" ? "" : withoutExt.replace(/\/index$/, "");
 }
 
 /** Absolute page URL on the documentation domain. */
@@ -319,8 +358,21 @@ function readVersion() {
  * exists would publish a 404 to every crawler that reads this file.
  */
 function assertSectionsCoverCollection(pagesBySlug) {
-	const listed = SECTIONS.flatMap((section) => section.slugs);
+	const listed = SECTIONS.flatMap((section) =>
+		sectionSlugs(section, pagesBySlug),
+	);
 	const problems = [];
+
+	for (const section of SECTIONS) {
+		if (
+			section.generated &&
+			sectionSlugs(section, pagesBySlug).length === section.slugs.length
+		) {
+			problems.push(
+				`the generated directory of the section table holds no page: ${section.generated}`,
+			);
+		}
+	}
 
 	const seen = new Set();
 	for (const slug of listed) {
@@ -390,7 +442,7 @@ function renderIndex({ locale, pages, version, referenceSizes }) {
 	for (const section of SECTIONS) {
 		push(`## ${es ? section.labelEs : section.label}`);
 		push();
-		for (const slug of section.slugs) {
+		for (const slug of sectionSlugs(section, pages)) {
 			const page = pages.get(slug);
 			push(`- [${page.title}](${pageURL(slug, locale)}): ${page.description}`);
 		}

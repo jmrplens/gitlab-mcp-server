@@ -1,0 +1,65 @@
+---
+title: "Hallazgos de seguridad"
+description: "Los hallazgos de seguridad que notificaron los analizadores de un pipeline, a través de la API GraphQL de GitLab."
+sidebar:
+  order: 21
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline.
+
+## Preguntas de ejemplo
+
+- "¿Qué encontró el análisis SAST en el pipeline 456?"
+- "Lista los hallazgos críticos del último pipeline"
+- "Muestra los hallazgos de detección de secretos del pipeline 123"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `security_finding.list`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_security_finding` con `action` igual al nombre de la acción, como `list`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_list_security_findings`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 1:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 1
+
+Acciones de solo lectura: 1 de 1, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                           | Individual                      |
+| ------------------------------------------------ | ------------------------------- |
+| [`security_finding.list`](#security_findinglist) | `gitlab_list_security_findings` |
+
+### `security_finding.list`
+
+> List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination. Returns: matching findings with UUID, title, severity and original severity, report type, scanner, identifiers (CVE, CWE, OWASP), location, state, who dismissed it and why, evidence with the recorded HTTP exchange, proposed remediations, report links, and linked vulnerability state. See also: [`vulnerability.list`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilitylist), [`vulnerability.pipeline_security_summary`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilitypipeline_security_summary), [`vulnerability.severity_count`](/gitlab-mcp-server/reference/tools/vulnerability/#vulnerabilityseverity_count).
+
+- **Meta-herramienta**: `gitlab_security_finding`, acción `list`
+- **Herramienta individual**: `gitlab_list_security_findings`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo                                                          | Requerido | Descripción                                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pipeline_iid` | `string`                                                      | sí        | Pipeline IID within the project                                                                                                                                                                                                                 |
+| `project_path` | `string`                                                      | sí        | Full path of the project (e.g. my-group/my-project)                                                                                                                                                                                             |
+| `after`        | `string`                                                      | no        | Cursor for forward pagination (from previous response end_cursor)                                                                                                                                                                               |
+| `before`       | `string`                                                      | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted                                                                                                         |
+| `first`        | `integer`                                                     | no        | Number of items to return (default 20, max 100)                                                                                                                                                                                                 |
+| `last`         | `integer`                                                     | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                                                                                                                        |
+| `report_type`  | `string[]`                                                    | no        | Filter by report type: SAST, DAST, DEPENDENCY_SCANNING, CONTAINER_SCANNING, SECRET_DETECTION, COVERAGE_FUZZING, API_FUZZING, CLUSTER_IMAGE_SCANNING, SARIF. SARIF needs GitLab 18.11, and an older GitLab drops it and answers with no findings |
+| `scanner`      | `string[]`                                                    | no        | Filter by scanner external IDs                                                                                                                                                                                                                  |
+| `severity`     | `string[]`                                                    | no        | Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN                                                                                                                                                                                  |
+| `sort`         | `string` (`severity_desc`, `severity_asc`)                    | no        | Sort order: severity_desc (default) or severity_asc                                                                                                                                                                                             |
+| `state`        | `string[]` (`DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`) | no        | Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED                                                                                                                                                                                       |

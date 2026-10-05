@@ -1,0 +1,457 @@
+---
+title: "Jobs"
+description: "Jobs de CI/CD: listarlos y leerlos, leer sus logs y artefactos, ejecutarlos, reintentarlos, cancelarlos y borrarlos, y gestionar el ámbito del token de job de CI/CD."
+sidebar:
+  order: 24
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los jobs de un pipeline o de un proyecto: listarlos junto con sus jobs de disparo, leer uno y su log, esperar a que termine, ejecutar un job manual, reintentar, cancelar o borrar uno; descargar el archivo de artefactos de un job, un informe o un archivo de él, o el último archivo o artefacto correcto de una referencia, conservar los artefactos de un job y borrarlos de un job o de todo un proyecto.
+
+Aquí está también el ámbito del token de job de CI/CD: qué proyectos y grupos pueden usar el token de job de este proyecto para alcanzarlo, que se lee y se cambia con las acciones `job.token_scope_*`.
+
+## Preguntas de ejemplo
+
+- "Muestra el log del job fallido del pipeline 1234"
+- "Reintenta el job 5678"
+- "Descarga los artefactos del job build en main"
+- "¿Qué proyectos pueden usar el token de job de este proyecto?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `job.artifacts`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_job` con `action` igual al nombre de la acción, como `artifacts`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_job_artifacts`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 13 de 25, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                       | Individual                                   |
+| ---------------------------------------------------------------------------- | -------------------------------------------- |
+| [`job.artifacts`](#jobartifacts)                                             | `gitlab_job_artifacts`                       |
+| [`job.cancel`](#jobcancel)                                                   | `gitlab_job_cancel`                          |
+| [`job.delete_artifacts`](#jobdelete_artifacts)                               | `gitlab_job_delete_artifacts`                |
+| [`job.delete_project_artifacts`](#jobdelete_project_artifacts)               | `gitlab_job_delete_project_artifacts`        |
+| [`job.download_artifacts`](#jobdownload_artifacts)                           | `gitlab_job_download_artifacts`              |
+| [`job.download_single_artifact`](#jobdownload_single_artifact)               | `gitlab_job_download_single_artifact`        |
+| [`job.download_single_artifact_by_ref`](#jobdownload_single_artifact_by_ref) | `gitlab_job_download_single_artifact_by_ref` |
+| [`job.erase`](#joberase)                                                     | `gitlab_job_erase`                           |
+| [`job.get`](#jobget)                                                         | `gitlab_job_get`                             |
+| [`job.keep_artifacts`](#jobkeep_artifacts)                                   | `gitlab_job_keep_artifacts`                  |
+| [`job.list`](#joblist)                                                       | `gitlab_job_list`                            |
+| [`job.list_bridges`](#joblist_bridges)                                       | `gitlab_job_list_bridges`                    |
+| [`job.list_project`](#joblist_project)                                       | `gitlab_job_list_project`                    |
+| [`job.play`](#jobplay)                                                       | `gitlab_job_play`                            |
+| [`job.retry`](#jobretry)                                                     | `gitlab_job_retry`                           |
+| [`job.token_scope_add_group`](#jobtoken_scope_add_group)                     | `gitlab_add_group_job_token_allowlist`       |
+| [`job.token_scope_add_project`](#jobtoken_scope_add_project)                 | `gitlab_add_project_job_token_allowlist`     |
+| [`job.token_scope_get`](#jobtoken_scope_get)                                 | `gitlab_get_job_token_access_settings`       |
+| [`job.token_scope_list_groups`](#jobtoken_scope_list_groups)                 | `gitlab_list_job_token_group_allowlist`      |
+| [`job.token_scope_list_inbound`](#jobtoken_scope_list_inbound)               | `gitlab_list_job_token_inbound_allowlist`    |
+| [`job.token_scope_patch`](#jobtoken_scope_patch)                             | `gitlab_patch_job_token_access_settings`     |
+| [`job.token_scope_remove_group`](#jobtoken_scope_remove_group)               | `gitlab_remove_group_job_token_allowlist`    |
+| [`job.token_scope_remove_project`](#jobtoken_scope_remove_project)           | `gitlab_remove_project_job_token_allowlist`  |
+| [`job.trace`](#jobtrace)                                                     | `gitlab_job_trace`                           |
+| [`job.wait`](#jobwait)                                                       | `gitlab_job_wait`                            |
+
+### `job.artifacts`
+
+> Download the full artifact archive for a CI job, or one report named by file_type (GitLab 19.4 or later), base64-encoded and truncated at 1MB. Returns: size, content, and truncation flag. See also: [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.keep_artifacts`](#jobkeep_artifacts), [`job.get`](#jobget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `artifacts`
+- **Herramienta individual**: `gitlab_job_artifacts`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                                                                                                                                                                                                                                                                                                                                               | Requerido | Descripción                                                                                                                                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_id`     | `integer`                                                                                                                                                                                                                                                                                                                                                                          | sí        | Job ID whose artifacts to download                                                                                                                                                                                                                        |
+| `project_id` | `string/integer`                                                                                                                                                                                                                                                                                                                                                                   | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                            |
+| `file_type`  | `string` (`archive`, `accessibility`, `api_fuzzing`, `browser_performance`, `cluster_image_scanning`, `cobertura`, `codequality`, `container_scanning`, `cyclonedx`, `dast`, `dependency_scanning`, `dotenv`, `jacoco`, `junit`, `license_scanning`, `load_performance`, `lsif`, `metrics`, `performance`, `requirements`, `requirements_v2`, `sarif`, `sast`, `secret_detection`) | no        | Which of the job's artifacts to download: archive (the default, the zip of the job's artifacts:paths) or a report type such as junit, cobertura, sast or dotenv. GitLab reads it from 19.4, and an older instance ignores it and answers with the archive |
+
+### `job.cancel`
+
+> Cancel a CI job. Set force:true to cancel jobs already in a non-cancellable state (requires GitLab v17.2+). Returns: updated job state. See also: [`job.get`](#jobget), [`job.retry`](#jobretry).
+
+- **Meta-herramienta**: `gitlab_job`, acción `cancel`
+- **Herramienta individual**: `gitlab_job_cancel`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                        |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to cancel                                                   |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                     |
+| `force`      | `boolean`        | no        | Force cancel even if the job is already in a non-cancellable state |
+
+### `job.delete_artifacts`
+
+> Delete the artifacts for one CI job (destructive). Returns: a success confirmation. See also: [`job.artifacts`](#jobartifacts), [`job.get`](#jobget), [`job.delete_project_artifacts`](#jobdelete_project_artifacts).
+
+- **Meta-herramienta**: `gitlab_job`, acción `delete_artifacts`
+- **Herramienta individual**: `gitlab_job_delete_artifacts`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                     |
+| ------------ | ---------------- | --------- | ------------------------------- |
+| `job_id`     | `integer`        | sí        | Job ID to delete artifacts from |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path  |
+
+### `job.delete_project_artifacts`
+
+> Delete every eligible artifact across a project (destructive, irreversible). Returns: a success confirmation. See also: [`job.delete_artifacts`](#jobdelete_artifacts), [`job.list_project`](#joblist_project), [`job.artifacts`](#jobartifacts).
+
+- **Meta-herramienta**: `gitlab_job`, acción `delete_project_artifacts`
+- **Herramienta individual**: `gitlab_job_delete_project_artifacts`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.download_artifacts`
+
+> Download the latest successful artifacts archive for a ref and job name. Returns: archive size, content, and truncation flag. See also: [`job.artifacts`](#jobartifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `download_artifacts`
+- **Herramienta individual**: `gitlab_job_download_artifacts`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                         |
+| ------------ | ---------------- | --------- | ----------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path      |
+| `job`        | `string`         | no        | Job name to download artifacts from |
+| `ref_name`   | `string`         | no        | Branch or tag name                  |
+
+### `job.download_single_artifact`
+
+> Download one artifact file from a job by job_id and artifact_path. Returns: file size, raw content, and truncation flag. See also: [`job.artifacts`](#jobartifacts), [`job.download_artifacts`](#jobdownload_artifacts), [`job.get`](#jobget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `download_single_artifact`
+- **Herramienta individual**: `gitlab_job_download_single_artifact`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                  |
+| --------------- | ---------------- | --------- | -------------------------------------------- |
+| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive |
+| `job_id`        | `integer`        | sí        | Job ID                                       |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path               |
+
+### `job.download_single_artifact_by_ref`
+
+> Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, raw content, and truncation flag. See also: [`job.download_artifacts`](#jobdownload_artifacts), [`job.download_single_artifact`](#jobdownload_single_artifact), [`job.get`](#jobget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `download_single_artifact_by_ref`
+- **Herramienta individual**: `gitlab_job_download_single_artifact_by_ref`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                  |
+| --------------- | ---------------- | --------- | -------------------------------------------- |
+| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive |
+| `job`           | `string`         | sí        | Job name                                     |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path               |
+| `ref_name`      | `string`         | sí        | Branch or tag name                           |
+
+### `job.erase`
+
+> Erase a finished CI job's trace log and artifacts (destructive). Returns: updated job state. See also: [`job.get`](#jobget), [`job.trace`](#jobtrace), [`job.artifacts`](#jobartifacts).
+
+- **Meta-herramienta**: `gitlab_job`, acción `erase`
+- **Herramienta individual**: `gitlab_job_erase`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to act on               |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.get`
+
+> Get one CI job. Returns: status, stage, ref, embedded commit/pipeline/project/runner/user objects, timing fields, and failure metadata. See also: [`job.trace`](#jobtrace), [`job.cancel`](#jobcancel), [`job.retry`](#jobretry).
+
+- **Meta-herramienta**: `gitlab_job`, acción `get`
+- **Herramienta individual**: `gitlab_job_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to retrieve             |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.keep_artifacts`
+
+> Keep a CI job's artifacts by clearing their expiration. Returns: updated job state. See also: [`job.artifacts`](#jobartifacts), [`job.get`](#jobget), [`job.download_artifacts`](#jobdownload_artifacts).
+
+- **Meta-herramienta**: `gitlab_job`, acción `keep_artifacts`
+- **Herramienta individual**: `gitlab_job_keep_artifacts`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to act on               |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.list`
+
+> List CI jobs for one pipeline with status filters, keyset pagination, and ordering. Returns: job summaries with status, stage, ref, and pipeline association. See also: [`job.get`](#jobget), [`job.trace`](#jobtrace), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `list`
+- **Herramienta individual**: `gitlab_job_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo                     | Requerido | Descripción                                                                                                                                                              |
+| ----------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pipeline_id`     | `integer`                | sí        | Pipeline ID to list jobs for                                                                                                                                             |
+| `project_id`      | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                                           |
+| `include_retried` | `boolean`                | no        | Include retried jobs in the response                                                                                                                                     |
+| `order_by`        | `string`                 | no        | Column to order keyset-paginated results by                                                                                                                              |
+| `page`            | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                    |
+| `page_token`      | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.                        |
+| `pagination`      | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.                         |
+| `per_page`        | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                    |
+| `scope`           | `string[]`               | no        | Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled |
+| `sort`            | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: asc or desc                                                                                                                            |
+
+### `job.list_bridges`
+
+> List CI bridge (trigger) jobs for one pipeline with keyset pagination. Returns: bridge summaries with status and downstream pipeline references. See also: [`job.list`](#joblist), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget), [`job.get`](#jobget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `list_bridges`
+- **Herramienta individual**: `gitlab_job_list_bridges`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo                     | Requerido | Descripción                                                                                                                                                              |
+| ----------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pipeline_id`     | `integer`                | sí        | Pipeline ID to list bridge jobs for                                                                                                                                      |
+| `project_id`      | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                                           |
+| `include_retried` | `boolean`                | no        | Include retried bridge jobs in the response                                                                                                                              |
+| `order_by`        | `string`                 | no        | Column to order keyset-paginated results by                                                                                                                              |
+| `page`            | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                    |
+| `page_token`      | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.                        |
+| `pagination`      | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.                         |
+| `per_page`        | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                    |
+| `scope`           | `string[]`               | no        | Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled |
+| `sort`            | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: asc or desc                                                                                                                            |
+
+### `job.list_project`
+
+> List CI jobs in one project with filters, keyset pagination, and ordering. Returns: job summaries, status, stage, ref, and pipeline associations. See also: [`job.get`](#jobget), [`job.trace`](#jobtrace), [`pipeline.get`](/gitlab-mcp-server/reference/tools/pipeline/#pipelineget).
+
+- **Meta-herramienta**: `gitlab_job`, acción `list_project`
+- **Herramienta individual**: `gitlab_job_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo                     | Requerido | Descripción                                                                                                                                                              |
+| ----------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_id`      | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                                           |
+| `include_retried` | `boolean`                | no        | Include retried jobs in the response                                                                                                                                     |
+| `order_by`        | `string`                 | no        | Column to order keyset-paginated results by                                                                                                                              |
+| `page`            | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                    |
+| `page_token`      | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.                        |
+| `pagination`      | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.                         |
+| `per_page`        | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                    |
+| `scope`           | `string[]`               | no        | Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled |
+| `sort`            | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: asc or desc                                                                                                                            |
+
+### `job.play`
+
+> Run a manual CI job with optional variable overrides. Returns: the started job state. See also: [`job.get`](#jobget), [`job.retry`](#jobretry), [`job.trace`](#jobtrace).
+
+- **Meta-herramienta**: `gitlab_job`, acción `play`
+- **Herramienta individual**: `gitlab_job_play`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                  | Tipo             | Requerido | Descripción                                                                                                                                                       |
+| -------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_id`                   | `integer`        | sí        | Job ID to run                                                                                                                                                     |
+| `project_id`               | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                    |
+| `job_inputs`               | `object`         | no        | Job input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs. |
+| `job_variables_attributes` | `object[]`       | no        | Job variables to inject into the manual job run                                                                                                                   |
+
+### `job.retry`
+
+> Retry a failed or canceled CI job. Returns: the newly created job state. See also: [`job.get`](#jobget), [`job.trace`](#jobtrace), [`job.cancel`](#jobcancel).
+
+- **Meta-herramienta**: `gitlab_job`, acción `retry`
+- **Herramienta individual**: `gitlab_job_retry`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to act on               |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.token_scope_add_group`
+
+> Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist entry with source project ID and target group ID. See also: [`job.token_scope_list_groups`](#jobtoken_scope_list_groups), [`job.token_scope_remove_group`](#jobtoken_scope_remove_group), [`job.token_scope_add_project`](#jobtoken_scope_add_project).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_add_group`
+- **Herramienta individual**: `gitlab_add_group_job_token_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                             |
+| ----------------- | ---------------- | --------- | --------------------------------------- |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path          |
+| `target_group_id` | `integer`        | sí        | ID of the group to add to the allowlist |
+
+### `job.token_scope_add_project`
+
+> Add a project to a project's CI/CD job token inbound allowlist. Returns: the new allowlist entry with source and target project IDs. See also: [`job.token_scope_list_inbound`](#jobtoken_scope_list_inbound), [`job.token_scope_remove_project`](#jobtoken_scope_remove_project), [`job.token_scope_add_group`](#jobtoken_scope_add_group).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_add_project`
+- **Herramienta individual**: `gitlab_add_project_job_token_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                               |
+| ------------------- | ---------------- | --------- | ----------------------------------------- |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path            |
+| `target_project_id` | `integer`        | sí        | ID of the project to add to the allowlist |
+
+### `job.token_scope_get`
+
+> Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist, and the deprecated outbound scope flag. See also: [`job.token_scope_patch`](#jobtoken_scope_patch), [`job.token_scope_list_inbound`](#jobtoken_scope_list_inbound), [`job.token_scope_list_groups`](#jobtoken_scope_list_groups).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_get`
+- **Herramienta individual**: `gitlab_get_job_token_access_settings`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.token_scope_list_groups`
+
+> List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name and web URL plus pagination metadata. See also: [`job.token_scope_add_group`](#jobtoken_scope_add_group), [`job.token_scope_remove_group`](#jobtoken_scope_remove_group), [`job.token_scope_get`](#jobtoken_scope_get).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_list_groups`
+- **Herramienta individual**: `gitlab_list_job_token_group_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.                                                     |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.                                                  |
+
+### `job.token_scope_list_inbound`
+
+> List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with their names, paths, description, visibility, web and clone URLs, topics, counts and namespace, plus pagination metadata. See also: [`job.token_scope_add_project`](#jobtoken_scope_add_project), [`job.token_scope_remove_project`](#jobtoken_scope_remove_project), [`job.token_scope_get`](#jobtoken_scope_get).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_list_inbound`
+- **Herramienta individual**: `gitlab_list_job_token_inbound_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.                                                     |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.                                                  |
+
+### `job.token_scope_patch`
+
+> Update a project's CI/CD job token access settings. Returns: a confirmation that the inbound scope setting was updated. See also: [`job.token_scope_get`](#jobtoken_scope_get), [`job.token_scope_add_project`](#jobtoken_scope_add_project), [`job.token_scope_add_group`](#jobtoken_scope_add_group).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_patch`
+- **Herramienta individual**: `gitlab_patch_job_token_access_settings`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                 |
+| ------------ | ---------------- | --------- | ------------------------------------------- |
+| `enabled`    | `boolean`        | sí        | Enable or disable the CI/CD job token scope |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path              |
+
+### `job.token_scope_remove_group`
+
+> Remove a group from a project's CI/CD job token allowlist. Returns: a success confirmation naming the removed group. See also: [`job.token_scope_list_groups`](#jobtoken_scope_list_groups), [`job.token_scope_add_group`](#jobtoken_scope_add_group), [`job.token_scope_remove_project`](#jobtoken_scope_remove_project).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_remove_group`
+- **Herramienta individual**: `gitlab_remove_group_job_token_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                                  |
+| ----------------- | ---------------- | --------- | -------------------------------------------- |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path               |
+| `target_group_id` | `integer`        | sí        | ID of the group to remove from the allowlist |
+
+### `job.token_scope_remove_project`
+
+> Remove a project from a project's CI/CD job token inbound allowlist. Returns: a success confirmation naming the removed project. See also: [`job.token_scope_list_inbound`](#jobtoken_scope_list_inbound), [`job.token_scope_add_project`](#jobtoken_scope_add_project), [`job.token_scope_remove_group`](#jobtoken_scope_remove_group).
+
+- **Meta-herramienta**: `gitlab_job`, acción `token_scope_remove_project`
+- **Herramienta individual**: `gitlab_remove_project_job_token_allowlist`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                    |
+| ------------------- | ---------------- | --------- | ---------------------------------------------- |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                 |
+| `target_project_id` | `integer`        | sí        | ID of the project to remove from the allowlist |
+
+### `job.trace`
+
+> Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: [`job.get`](#jobget), [`job.retry`](#jobretry), [`job.cancel`](#jobcancel).
+
+- **Meta-herramienta**: `gitlab_job`, acción `trace`
+- **Herramienta individual**: `gitlab_job_trace`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `job_id`     | `integer`        | sí        | Job ID to get trace log for    |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `job.wait`
+
+> Wait for a CI job to finish, polling until terminal state or timeout. Returns: final job snapshot, wait duration, poll count, and timed-out flag. See also: [`job.get`](#jobget), [`job.trace`](#jobtrace), [`job.retry`](#jobretry).
+
+- **Meta-herramienta**: `gitlab_job`, acción `wait`
+- **Herramienta individual**: `gitlab_job_wait`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo             | Requerido | Descripción                                                           |
+| ------------------ | ---------------- | --------- | --------------------------------------------------------------------- |
+| `job_id`           | `integer`        | sí        | Job ID to wait for                                                    |
+| `project_id`       | `string/integer` | sí        | Project ID or URL-encoded path                                        |
+| `fail_on_error`    | `boolean`        | no        | Return isError when job ends in failed/canceled status (default true) |
+| `interval_seconds` | `integer`        | no        | Polling interval in seconds (5-60, default 10)                        |
+| `timeout_seconds`  | `integer`        | no        | Maximum wait time in seconds (1-3600, default 300)                    |

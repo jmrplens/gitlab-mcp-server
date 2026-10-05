@@ -1,0 +1,584 @@
+---
+title: "Paquetes y registro de contenedores"
+description: "El registro de paquetes y el registro de contenedores: publicar y descargar paquetes genéricos, explorar y borrar paquetes, imágenes y tags, y gestionar reglas de protección."
+sidebar:
+  order: 30
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+El registro de paquetes de un proyecto o de un grupo: listar paquetes de cualquier formato y sus archivos, leerlos y borrarlos, y publicar y descargar archivos del registro de paquetes genéricos, incluido publicar un archivo y enlazarlo a una release en un solo paso, o un directorio local entero. El registro de contenedores: listar los repositorios de un proyecto o de un grupo, leerlos y borrarlos, y listar, leer y borrar sus tags, uno a uno o en bloque.
+
+Las reglas de protección limitan quién puede subir o borrar paquetes e imágenes de contenedor: reglas de protección de paquetes, de repositorios de contenedores y de tags de imagen, que aquí se listan, crean, actualizan y borran.
+
+## Preguntas de ejemplo
+
+- "Lista los paquetes del proyecto 42"
+- "Sube el binario de la release al registro de paquetes genéricos"
+- "Muestra los tags de la imagen api"
+- "Borra los tags de contenedor más antiguos que los diez últimos"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `package.delete`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_package` con `action` igual al nombre de la acción, como `delete`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_package_delete`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 12 de 30, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                 | Individual                              |
+| ---------------------------------------------------------------------- | --------------------------------------- |
+| [`package.delete`](#packagedelete)                                     | `gitlab_package_delete`                 |
+| [`package.download`](#packagedownload)                                 | `gitlab_package_download`               |
+| [`package.file_delete`](#packagefile_delete)                           | `gitlab_package_file_delete`            |
+| [`package.file_list`](#packagefile_list)                               | `gitlab_package_file_list`              |
+| [`package.get`](#packageget)                                           | `gitlab_package_get`                    |
+| [`package.group_list`](#packagegroup_list)                             | `gitlab_list_group_packages`            |
+| [`package.list`](#packagelist)                                         | `gitlab_package_list`                   |
+| [`package.protection_rule_create`](#packageprotection_rule_create)     | `gitlab_create_package_protection_rule` |
+| [`package.protection_rule_delete`](#packageprotection_rule_delete)     | `gitlab_delete_package_protection_rule` |
+| [`package.protection_rule_list`](#packageprotection_rule_list)         | `gitlab_list_package_protection_rules`  |
+| [`package.protection_rule_update`](#packageprotection_rule_update)     | `gitlab_update_package_protection_rule` |
+| [`package.publish`](#packagepublish)                                   | `gitlab_package_publish`                |
+| [`package.publish_and_link`](#packagepublish_and_link)                 | `gitlab_package_publish_and_link`       |
+| [`package.publish_directory`](#packagepublish_directory)               | `gitlab_package_publish_directory`      |
+| [`package.registry_delete`](#packageregistry_delete)                   | `gitlab_registry_delete_repository`     |
+| [`package.registry_get`](#packageregistry_get)                         | `gitlab_registry_get_repository`        |
+| [`package.registry_list_group`](#packageregistry_list_group)           | `gitlab_registry_list_group`            |
+| [`package.registry_list_project`](#packageregistry_list_project)       | `gitlab_registry_list_project`          |
+| [`package.registry_rule_create`](#packageregistry_rule_create)         | `gitlab_registry_protection_create`     |
+| [`package.registry_rule_delete`](#packageregistry_rule_delete)         | `gitlab_registry_protection_delete`     |
+| [`package.registry_rule_list`](#packageregistry_rule_list)             | `gitlab_registry_protection_list`       |
+| [`package.registry_rule_update`](#packageregistry_rule_update)         | `gitlab_registry_protection_update`     |
+| [`package.registry_tag_delete`](#packageregistry_tag_delete)           | `gitlab_registry_delete_tag`            |
+| [`package.registry_tag_delete_bulk`](#packageregistry_tag_delete_bulk) | `gitlab_registry_delete_tags_bulk`      |
+| [`package.registry_tag_get`](#packageregistry_tag_get)                 | `gitlab_registry_get_tag`               |
+| [`package.registry_tag_list`](#packageregistry_tag_list)               | `gitlab_registry_list_tags`             |
+| [`package.registry_tag_rule_create`](#packageregistry_tag_rule_create) | `gitlab_registry_tag_protection_create` |
+| [`package.registry_tag_rule_delete`](#packageregistry_tag_rule_delete) | `gitlab_registry_tag_protection_delete` |
+| [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list)     | `gitlab_registry_tag_protection_list`   |
+| [`package.registry_tag_rule_update`](#packageregistry_tag_rule_update) | `gitlab_registry_tag_protection_update` |
+
+### `package.delete`
+
+> Delete a package permanently. Returns: a success confirmation naming the deleted package and project. See also: [`package.list`](#packagelist), [`package.file_delete`](#packagefile_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `delete`
+- **Herramienta individual**: `gitlab_package_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `package_id` | `string/integer` | sí        | Package ID to delete           |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `package.download`
+
+> Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: [`package.file_list`](#packagefile_list), [`package.list`](#packagelist).
+
+- **Meta-herramienta**: `gitlab_package`, acción `download`
+- **Herramienta individual**: `gitlab_package_download`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                              |
+| ----------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file_name`       | `string`         | sí        | File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)                                                                                                                                                           |
+| `output_path`     | `string`         | sí        | Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected |
+| `package_name`    | `string`         | sí        | Package name                                                                                                                                                                                                                                                             |
+| `package_version` | `string`         | sí        | Package version                                                                                                                                                                                                                                                          |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                           |
+
+### `package.file_delete`
+
+> Delete a single file from a package permanently. Returns: a success confirmation naming the deleted file, package, and project. See also: [`package.file_list`](#packagefile_list), [`package.delete`](#packagedelete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `file_delete`
+- **Herramienta individual**: `gitlab_package_file_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                    |
+| ----------------- | ---------------- | --------- | ------------------------------ |
+| `package_file_id` | `string/integer` | sí        | Package file ID to delete      |
+| `package_id`      | `string/integer` | sí        | Package ID                     |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `package.file_list`
+
+> List the files within a single package. Returns: package files with name, size, checksums, creation time, the pipelines that built each, and pagination metadata. See also: [`package.download`](#packagedownload), [`package.file_delete`](#packagefile_delete), [`package.list`](#packagelist).
+
+- **Meta-herramienta**: `gitlab_package`, acción `file_list`
+- **Herramienta individual**: `gitlab_package_file_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                       | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package_id` | `string/integer`                           | sí        | Package ID                                                                                                                                        |
+| `project_id` | `string/integer`                           | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string` (`id`, `file_name`, `created_at`) | no        | Order package files by: id (default), file_name, or created_at                                                                                    |
+| `page`       | `integer`                                  | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                   | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                   | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                                  | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)                   | no        | Sort direction: asc or desc                                                                                                                       |
+
+### `package.get`
+
+> Get one package of a project with its other versions. Returns: the package's type, status, creator, pipeline metadata, tags, _links, and its other versions with their tags and the pipeline that built each. See also: [`package.list`](#packagelist), [`package.file_list`](#packagefile_list), [`package.delete`](#packagedelete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `get`
+- **Herramienta individual**: `gitlab_package_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                  |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------ |
+| `package_id` | `string/integer` | sí        | Package ID, as package.list or package.group_list returns it |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                               |
+
+### `package.group_list`
+
+> List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: [`package.list`](#packagelist), [`package.get`](#packageget), [`package.file_list`](#packagefile_list), [`package.delete`](#packagedelete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `group_list`
+- **Herramienta individual**: `gitlab_list_group_packages`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro             | Tipo                                                                                                             | Requerido | Descripción                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`            | `string/integer`                                                                                                 | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `exclude_subgroups`   | `boolean`                                                                                                        | no        | Exclude packages from subgroups (only return packages from the group's direct projects)                                                           |
+| `include_versionless` | `boolean`                                                                                                        | no        | Include versionless packages                                                                                                                      |
+| `order_by`            | `string` (`created_at`, `name`, `version`, `type`, `project_path`)                                               | no        | Order by group package registry field: created_at, name, version, type, or project_path.                                                          |
+| `package_name`        | `string`                                                                                                         | no        | Filter by package name                                                                                                                            |
+| `package_type`        | `string` (`composer`, `conan`, `generic`, `golang`, `helm`, `maven`, `npm`, `nuget`, `pypi`, `terraform_module`) | no        | Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.                                     |
+| `page`                | `integer`                                                                                                        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`          | `string`                                                                                                         | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`          | `string`                                                                                                         | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`            | `integer`                                                                                                        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`                | `string` (`asc`, `desc`)                                                                                         | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`              | `string` (`default`, `hidden`, `processing`, `error`, `pending_destruction`, `deprecated`)                       | no        | Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.                                                         |
+
+### `package.list`
+
+> List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: [`package.get`](#packageget), [`package.file_list`](#packagefile_list), [`package.publish`](#packagepublish), [`package.delete`](#packagedelete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `list`
+- **Herramienta individual**: `gitlab_package_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro             | Tipo                                                                                                             | Requerido | Descripción                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`          | `string/integer`                                                                                                 | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `include_versionless` | `boolean`                                                                                                        | no        | Include versionless packages                                                                                                                      |
+| `order_by`            | `string` (`created_at`, `name`, `version`, `type`)                                                               | no        | Order by package registry field: created_at, name, version, or type.                                                                              |
+| `package_name`        | `string`                                                                                                         | no        | Filter by package name                                                                                                                            |
+| `package_type`        | `string` (`composer`, `conan`, `generic`, `golang`, `helm`, `maven`, `npm`, `nuget`, `pypi`, `terraform_module`) | no        | Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.                                     |
+| `package_version`     | `string`                                                                                                         | no        | Filter by package version                                                                                                                         |
+| `page`                | `integer`                                                                                                        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`          | `string`                                                                                                         | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`          | `string`                                                                                                         | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`            | `integer`                                                                                                        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`                | `string` (`asc`, `desc`)                                                                                         | no        | Sort direction: asc or desc                                                                                                                       |
+| `status`              | `string` (`default`, `hidden`, `processing`, `error`, `pending_destruction`, `deprecated`)                       | no        | Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.                                                         |
+
+### `package.protection_rule_create`
+
+> Create a package protection rule for a project. Returns: the new rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: [`package.protection_rule_list`](#packageprotection_rule_list), [`package.protection_rule_update`](#packageprotection_rule_update), [`package.protection_rule_delete`](#packageprotection_rule_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `protection_rule_create`
+- **Herramienta individual**: `gitlab_create_package_protection_rule`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                       |
+| --------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `package_name_pattern`            | `string`         | sí        | Package name pattern with optional wildcards (e.g. @my-scope/my-pkg\*)                                                            |
+| `package_type`                    | `string`         | sí        | Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list |
+| `project_id`                      | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                    |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin)                                                                        |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)                                                                          |
+
+### `package.protection_rule_delete`
+
+> Delete a package protection rule from a project by its id (cannot be undone). Returns: a success confirmation. See also: [`package.protection_rule_list`](#packageprotection_rule_list), [`package.protection_rule_create`](#packageprotection_rule_create).
+
+- **Meta-herramienta**: `gitlab_package`, acción `protection_rule_delete`
+- **Herramienta individual**: `gitlab_delete_package_protection_rule`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `rule_id`    | `integer`        | sí        | Package protection rule ID     |
+
+### `package.protection_rule_list`
+
+> List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use package.registry_rule_list. See also: [`package.protection_rule_create`](#packageprotection_rule_create), [`package.protection_rule_update`](#packageprotection_rule_update).
+
+- **Meta-herramienta**: `gitlab_package`, acción `protection_rule_list`
+- **Herramienta individual**: `gitlab_list_package_protection_rules`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order results by (keyset pagination)                                                                                                    |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `package.protection_rule_update`
+
+> Update an existing package protection rule by its id. Returns: the updated rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: [`package.protection_rule_list`](#packageprotection_rule_list), [`package.protection_rule_create`](#packageprotection_rule_create), [`package.protection_rule_delete`](#packageprotection_rule_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `protection_rule_update`
+- **Herramienta individual**: `gitlab_update_package_protection_rule`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                       |
+| --------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                    |
+| `rule_id`                         | `integer`        | sí        | Package protection rule ID                                                                                                        |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin)                                                                        |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)                                                                          |
+| `package_name_pattern`            | `string`         | no        | Package name pattern with optional wildcards                                                                                      |
+| `package_type`                    | `string`         | no        | Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list |
+
+### `package.publish`
+
+> Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: [`package.publish_and_link`](#packagepublish_and_link), [`package.publish_directory`](#packagepublish_directory), [`package.list`](#packagelist).
+
+- **Meta-herramienta**: `gitlab_package`, acción `publish`
+- **Herramienta individual**: `gitlab_package_publish`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro         | Tipo                           | Requerido | Descripción                                                                                                                  |
+| ----------------- | ------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `file_name`       | `string`                       | sí        | Name of the file within the package. May include / to describe a directory structure (segments must not be empty or . or ..) |
+| `package_name`    | `string`                       | sí        | Package name (alphanumeric, dots, dashes, underscores)                                                                       |
+| `package_version` | `string`                       | sí        | Package version (e.g. 1.0.0)                                                                                                 |
+| `project_id`      | `string/integer`               | sí        | Project ID or URL-encoded path                                                                                               |
+| `content_base64`  | `string`                       | no        | Base64-encoded file content. Only one should be provided.                                                                    |
+| `file_path`       | `string`                       | no        | Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided.    |
+| `select`          | `string` (`package_file`)      | no        | Response detail selector. Use package_file to receive the published file metadata (id, size, checksums).                     |
+| `status`          | `string` (`default`, `hidden`) | no        | Package visibility on publish: default (publicly visible) or hidden.                                                         |
+
+### `package.publish_and_link`
+
+> Publish a file to the Generic Package Registry and link it to a release in one call. Returns: the published file metadata and the created release asset link. See also: [`package.publish`](#packagepublish), [`package.publish_directory`](#packagepublish_directory), [`release.get`](/gitlab-mcp-server/reference/tools/release/#releaseget).
+
+- **Meta-herramienta**: `gitlab_package`, acción `publish_and_link`
+- **Herramienta individual**: `gitlab_package_publish_and_link`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro         | Tipo                                              | Requerido | Descripción                                                                                                                     |
+| ----------------- | ------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `file_name`       | `string`                                          | sí        | Name of the file within the package                                                                                             |
+| `package_name`    | `string`                                          | sí        | Package name (alphanumeric, dots, dashes, underscores)                                                                          |
+| `package_version` | `string`                                          | sí        | Package version (e.g. 1.0.0)                                                                                                    |
+| `project_id`      | `string/integer`                                  | sí        | Project ID or URL-encoded path                                                                                                  |
+| `tag_name`        | `string`                                          | sí        | Tag name of the release to link the package file to                                                                             |
+| `content_base64`  | `string`                                          | no        | Base64-encoded file content. Alternative to file_path.                                                                          |
+| `file_path`       | `string`                                          | no        | Absolute path to a local file. Alternative to content_base64.                                                                   |
+| `link_name`       | `string`                                          | no        | Display name of the release link. Defaults to file_name if omitted. MUST be the exact filename. Never add descriptive suffixes. |
+| `link_type`       | `string` (`package`, `runbook`, `image`, `other`) | no        | Type of the release link: package, runbook, image, or other. Defaults to package.                                               |
+| `status`          | `string` (`default`, `hidden`)                    | no        | Package status: default or hidden                                                                                               |
+
+### `package.publish_directory`
+
+> Publish every regular file from a local directory to the Generic Package Registry. Returns: total files, total bytes, per-file results, and any per-file errors. See also: [`package.publish`](#packagepublish), [`package.publish_and_link`](#packagepublish_and_link), [`package.list`](#packagelist).
+
+- **Meta-herramienta**: `gitlab_package`, acción `publish_directory`
+- **Herramienta individual**: `gitlab_package_publish_directory`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro         | Tipo                           | Requerido | Descripción                                                                                                                                                             |
+| ----------------- | ------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `directory_path`  | `string`                       | sí        | Absolute path to a local directory whose files will be published                                                                                                        |
+| `package_name`    | `string`                       | sí        | Package name (alphanumeric, dots, dashes, underscores)                                                                                                                  |
+| `package_version` | `string`                       | sí        | Package version (e.g. 1.0.0)                                                                                                                                            |
+| `project_id`      | `string/integer`               | sí        | Project ID or URL-encoded path                                                                                                                                          |
+| `include_pattern` | `string`                       | no        | Single glob pattern to filter files within the directory (e.g. \*.txt or \*.tar.gz). If omitted, all regular files are included. Do not pass comma-separated filenames. |
+| `status`          | `string` (`default`, `hidden`) | no        | Package status: default or hidden                                                                                                                                       |
+
+### `package.registry_delete`
+
+> Delete one container registry repository (cannot be undone). Returns: a success confirmation. See also: [`package.registry_list_project`](#packageregistry_list_project), [`package.registry_get`](#packageregistry_get), [`package.registry_tag_delete`](#packageregistry_tag_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_delete`
+- **Herramienta individual**: `gitlab_registry_delete_repository`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción            |
+| --------------- | ---------------- | --------- | ---------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path     |
+| `repository_id` | `integer`        | sí        | Registry repository ID |
+
+### `package.registry_get`
+
+> Get details of one container registry repository by its id. Returns: the repository's name, path, location, status, tag count, and optional tags. See also: [`package.registry_list_project`](#packageregistry_list_project), [`package.registry_tag_list`](#packageregistry_tag_list), [`package.registry_delete`](#packageregistry_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_get`
+- **Herramienta individual**: `gitlab_registry_get_repository`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo      | Requerido | Descripción                    |
+| --------------- | --------- | --------- | ------------------------------ |
+| `repository_id` | `integer` | sí        | Registry repository ID         |
+| `tags`          | `boolean` | no        | Include tags in response       |
+| `tags_count`    | `boolean` | no        | Include tags count in response |
+
+### `package.registry_list_group`
+
+> List container registry image repositories across a group. Returns: each repository's id, name, path, location, status, tag count, and pagination metadata. See also: [`package.registry_list_project`](#packageregistry_list_project), [`package.registry_get`](#packageregistry_get).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_list_group`
+- **Herramienta individual**: `gitlab_registry_list_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer`         | sí        | Group ID or path                                                                                                                                  |
+| `order_by`   | `string`                 | no        | Column to order results by (keyset pagination)                                                                                                    |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `package.registry_list_project`
+
+> List container registry image repositories in a project. Returns: each repository's id, name, path, location, status, tag count, optional tags, and pagination metadata. See also: [`package.registry_get`](#packageregistry_get), [`package.registry_tag_list`](#packageregistry_tag_list), [`package.registry_list_group`](#packageregistry_list_group).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_list_project`
+- **Herramienta individual**: `gitlab_registry_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                 | no        | Column to order results by (keyset pagination)                                                                                                    |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+| `tags`       | `boolean`                | no        | Include tags in response                                                                                                                          |
+| `tags_count` | `boolean`                | no        | Include tags count in response                                                                                                                    |
+
+### `package.registry_rule_create`
+
+> Create a container registry protection rule for a project.
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_rule_create`
+- **Herramienta individual**: `gitlab_registry_protection_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                |
+| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                         |
+| `repository_path_pattern`         | `string`         | sí        | Repository path pattern (e.g. my-project/my-image\*)       |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin) |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)   |
+
+### `package.registry_rule_delete`
+
+> Delete a container registry repository-path protection rule (cannot be undone). Returns: a success confirmation. See also: [`package.registry_rule_list`](#packageregistry_rule_list), [`package.registry_rule_create`](#packageregistry_rule_create).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_rule_delete`
+- **Herramienta individual**: `gitlab_registry_protection_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+| `rule_id`    | `integer`        | sí        | Protection rule ID |
+
+### `package.registry_rule_list`
+
+> List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use package.registry_tag_rule_list. See also: [`package.registry_rule_create`](#packageregistry_rule_create), [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_rule_list`
+- **Herramienta individual**: `gitlab_registry_protection_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+
+### `package.registry_rule_update`
+
+> Update a container registry repository-path protection rule. Returns: the updated rule with its path pattern and minimum push/delete access levels. See also: [`package.registry_rule_list`](#packageregistry_rule_list), [`package.registry_rule_delete`](#packageregistry_rule_delete), [`package.registry_rule_create`](#packageregistry_rule_create).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_rule_update`
+- **Herramienta individual**: `gitlab_registry_protection_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                |
+| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                         |
+| `rule_id`                         | `integer`        | sí        | Protection rule ID                                         |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin) |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)   |
+| `repository_path_pattern`         | `string`         | no        | Repository path pattern                                    |
+
+### `package.registry_tag_delete`
+
+> Delete one container registry tag (cannot be undone). Returns: a success confirmation. See also: [`package.registry_tag_list`](#packageregistry_tag_list), [`package.registry_tag_delete_bulk`](#packageregistry_tag_delete_bulk), [`package.registry_tag_get`](#packageregistry_tag_get).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_delete`
+- **Herramienta individual**: `gitlab_registry_delete_tag`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción            |
+| --------------- | ---------------- | --------- | ---------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path     |
+| `repository_id` | `integer`        | sí        | Registry repository ID |
+| `tag_name`      | `string`         | sí        | Tag name to delete     |
+
+### `package.registry_tag_delete_bulk`
+
+> Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation. Deletion runs asynchronously. See also: [`package.registry_tag_list`](#packageregistry_tag_list), [`package.registry_tag_delete`](#packageregistry_tag_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_delete_bulk`
+- **Herramienta individual**: `gitlab_registry_delete_tags_bulk`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                     |
+| ------------------- | ---------------- | --------- | ------------------------------------------------------------------------------- |
+| `project_id`        | `string/integer` | sí        | Project ID or path                                                              |
+| `repository_id`     | `integer`        | sí        | Registry repository ID                                                          |
+| `keep_n`            | `integer`        | no        | Number of latest tags to keep                                                   |
+| `name_regex`        | `string`         | no        | Deprecated: regex pattern of tag names to delete. Use name_regex_delete instead |
+| `name_regex_delete` | `string`         | no        | Regex pattern of tag names to delete                                            |
+| `name_regex_keep`   | `string`         | no        | Regex pattern of tag names to keep                                              |
+| `older_than`        | `string`         | no        | Delete tags older than this (e.g. 1h, 2d, 1month)                               |
+
+### `package.registry_tag_get`
+
+> Get metadata of one container registry tag. Returns: the tag's name, path, location, revision, digest, total size, and creation time. See also: [`package.registry_tag_list`](#packageregistry_tag_list), [`package.registry_tag_delete`](#packageregistry_tag_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_get`
+- **Herramienta individual**: `gitlab_registry_get_tag`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción            |
+| --------------- | ---------------- | --------- | ---------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path     |
+| `repository_id` | `integer`        | sí        | Registry repository ID |
+| `tag_name`      | `string`         | sí        | Tag name               |
+
+### `package.registry_tag_list`
+
+> List tags in one container registry repository.
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_list`
+- **Herramienta individual**: `gitlab_registry_list_tags`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| --------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `repository_id` | `integer`                | sí        | Registry repository ID                                                                                                                            |
+| `order_by`      | `string`                 | no        | Column to order results by (keyset pagination)                                                                                                    |
+| `page`          | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`    | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`    | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`      | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`          | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `package.registry_tag_rule_create`
+
+> Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list), [`package.registry_tag_rule_update`](#packageregistry_tag_rule_update), [`package.registry_rule_create`](#packageregistry_rule_create).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_rule_create`
+- **Herramienta individual**: `gitlab_registry_tag_protection_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                               |
+| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                        |
+| `tag_name_pattern`                | `string`         | sí        | Tag name pattern as a RE2 regular expression (e.g. v.+)                                                                                   |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable   |
+
+### `package.registry_tag_rule_delete`
+
+> Delete a container registry tag protection rule (cannot be undone). Returns: a success confirmation. See also: [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list), [`package.registry_tag_rule_create`](#packageregistry_tag_rule_create).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_rule_delete`
+- **Herramienta individual**: `gitlab_registry_tag_protection_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción            |
+| ------------ | ---------------- | --------- | ---------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or path     |
+| `rule_id`    | `integer`        | sí        | Tag protection rule ID |
+
+### `package.registry_tag_rule_list`
+
+> List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use package.registry_rule_list. See also: [`package.registry_tag_rule_create`](#packageregistry_tag_rule_create), [`package.registry_tag_list`](#packageregistry_tag_list).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_rule_list`
+- **Herramienta individual**: `gitlab_registry_tag_protection_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+
+### `package.registry_tag_rule_update`
+
+> Update a container registry tag protection rule. Returns: the updated rule. See also: [`package.registry_tag_rule_list`](#packageregistry_tag_rule_list), [`package.registry_tag_rule_delete`](#packageregistry_tag_rule_delete).
+
+- **Meta-herramienta**: `gitlab_package`, acción `registry_tag_rule_update`
+- **Herramienta individual**: `gitlab_registry_tag_protection_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                         | Tipo             | Requerido | Descripción                                                             |
+| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                      |
+| `rule_id`                         | `integer`        | sí        | Tag protection rule ID                                                  |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level to delete matching tags (maintainer, owner, admin) |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level to push matching tags (maintainer, owner, admin)   |
+| `tag_name_pattern`                | `string`         | no        | Tag name pattern as a RE2 regular expression                            |

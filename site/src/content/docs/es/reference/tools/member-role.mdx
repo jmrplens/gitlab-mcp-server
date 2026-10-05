@@ -1,0 +1,169 @@
+---
+title: "Roles de miembro personalizados"
+description: "Roles de miembro personalizados a nivel de instancia y de grupo: listarlos, crearlos y borrarlos."
+sidebar:
+  order: 39
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un rol de miembro personalizado añade los permisos elegidos a uno de los niveles de acceso base de GitLab. Estas acciones listan, crean y borran roles personalizados, en la instancia (cosa de un administrador) o en un grupo de nivel superior.
+
+## Preguntas de ejemplo
+
+- "Lista los roles personalizados del grupo acme"
+- "Crea un rol basado en Developer que también pueda gestionar vulnerabilidades"
+- "Borra el rol personalizado 9, que ya no se usa"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `member_role.create_group`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_member_role` con `action` igual al nombre de la acción, como `create_group`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_create_group_member_role`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 6:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 6
+
+Acciones de solo lectura: 2 de 6, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                       | Individual                           |
+| ------------------------------------------------------------ | ------------------------------------ |
+| [`member_role.create_group`](#member_rolecreate_group)       | `gitlab_create_group_member_role`    |
+| [`member_role.create_instance`](#member_rolecreate_instance) | `gitlab_create_instance_member_role` |
+| [`member_role.delete_group`](#member_roledelete_group)       | `gitlab_delete_group_member_role`    |
+| [`member_role.delete_instance`](#member_roledelete_instance) | `gitlab_delete_instance_member_role` |
+| [`member_role.list_group`](#member_rolelist_group)           | `gitlab_list_group_member_roles`     |
+| [`member_role.list_instance`](#member_rolelist_instance)     | `gitlab_list_instance_member_roles`  |
+
+### `member_role.create_group`
+
+> Create a group-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: [`member_role.list_group`](#member_rolelist_group), [`member_role.delete_group`](#member_roledelete_group), [`member_role.create_instance`](#member_rolecreate_instance).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `create_group`
+- **Herramienta individual**: `gitlab_create_group_member_role`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                       | Tipo             | Requerido | Descripción                                                                                                                                  |
+| ------------------------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base_access_level`             | `integer`        | sí        | Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid |
+| `group_id`                      | `string/integer` | sí        | Group ID or URL-encoded path                                                                                                                 |
+| `name`                          | `string`         | sí        | Name of the custom role                                                                                                                      |
+| `admin_cicd_variables`          | `boolean`        | no        | Allow admin CI/CD variables                                                                                                                  |
+| `admin_compliance_framework`    | `boolean`        | no        | Allow admin compliance framework                                                                                                             |
+| `admin_group_member`            | `boolean`        | no        | Allow admin group members                                                                                                                    |
+| `admin_merge_request`           | `boolean`        | no        | Allow admin merge requests                                                                                                                   |
+| `admin_push_rules`              | `boolean`        | no        | Allow admin push rules                                                                                                                       |
+| `admin_terraform_state`         | `boolean`        | no        | Allow admin Terraform state                                                                                                                  |
+| `admin_vulnerability`           | `boolean`        | no        | Allow admin vulnerability                                                                                                                    |
+| `admin_web_hook`                | `boolean`        | no        | Allow admin webhooks                                                                                                                         |
+| `archive_project`               | `boolean`        | no        | Allow archive project                                                                                                                        |
+| `description`                   | `string`         | no        | Description of the custom role                                                                                                               |
+| `manage_deploy_tokens`          | `boolean`        | no        | Allow manage deploy tokens                                                                                                                   |
+| `manage_group_access_tokens`    | `boolean`        | no        | Allow manage group access tokens                                                                                                             |
+| `manage_merge_request_settings` | `boolean`        | no        | Allow manage MR settings                                                                                                                     |
+| `manage_project_access_tokens`  | `boolean`        | no        | Allow manage project access tokens                                                                                                           |
+| `manage_security_policy_link`   | `boolean`        | no        | Allow manage security policy link                                                                                                            |
+| `read_code`                     | `boolean`        | no        | Allow read code                                                                                                                              |
+| `read_dependency`               | `boolean`        | no        | Allow read dependency                                                                                                                        |
+| `read_runners`                  | `boolean`        | no        | Allow read runners                                                                                                                           |
+| `read_vulnerability`            | `boolean`        | no        | Allow read vulnerability                                                                                                                     |
+| `remove_group`                  | `boolean`        | no        | Allow remove group                                                                                                                           |
+| `remove_project`                | `boolean`        | no        | Allow remove project                                                                                                                         |
+
+### `member_role.create_instance`
+
+> Create an instance-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: [`member_role.list_instance`](#member_rolelist_instance), [`member_role.delete_instance`](#member_roledelete_instance), [`member_role.create_group`](#member_rolecreate_group).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `create_instance`
+- **Herramienta individual**: `gitlab_create_instance_member_role`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                       | Tipo      | Requerido | Descripción                                                                                                                                  |
+| ------------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base_access_level`             | `integer` | sí        | Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid |
+| `name`                          | `string`  | sí        | Name of the custom role                                                                                                                      |
+| `admin_cicd_variables`          | `boolean` | no        | Allow admin CI/CD variables                                                                                                                  |
+| `admin_compliance_framework`    | `boolean` | no        | Allow admin compliance framework                                                                                                             |
+| `admin_group_member`            | `boolean` | no        | Allow admin group members                                                                                                                    |
+| `admin_merge_request`           | `boolean` | no        | Allow admin merge requests                                                                                                                   |
+| `admin_push_rules`              | `boolean` | no        | Allow admin push rules                                                                                                                       |
+| `admin_terraform_state`         | `boolean` | no        | Allow admin Terraform state                                                                                                                  |
+| `admin_vulnerability`           | `boolean` | no        | Allow admin vulnerability                                                                                                                    |
+| `admin_web_hook`                | `boolean` | no        | Allow admin webhooks                                                                                                                         |
+| `archive_project`               | `boolean` | no        | Allow archive project                                                                                                                        |
+| `description`                   | `string`  | no        | Description of the custom role                                                                                                               |
+| `manage_deploy_tokens`          | `boolean` | no        | Allow manage deploy tokens                                                                                                                   |
+| `manage_group_access_tokens`    | `boolean` | no        | Allow manage group access tokens                                                                                                             |
+| `manage_merge_request_settings` | `boolean` | no        | Allow manage MR settings                                                                                                                     |
+| `manage_project_access_tokens`  | `boolean` | no        | Allow manage project access tokens                                                                                                           |
+| `manage_security_policy_link`   | `boolean` | no        | Allow manage security policy link                                                                                                            |
+| `read_code`                     | `boolean` | no        | Allow read code                                                                                                                              |
+| `read_dependency`               | `boolean` | no        | Allow read dependency                                                                                                                        |
+| `read_runners`                  | `boolean` | no        | Allow read runners                                                                                                                           |
+| `read_vulnerability`            | `boolean` | no        | Allow read vulnerability                                                                                                                     |
+| `remove_group`                  | `boolean` | no        | Allow remove group                                                                                                                           |
+| `remove_project`                | `boolean` | no        | Allow remove project                                                                                                                         |
+
+### `member_role.delete_group`
+
+> Delete a group-level custom member role. Returns: a success confirmation naming the deleted role and group. See also: [`member_role.list_group`](#member_rolelist_group), [`member_role.create_group`](#member_rolecreate_group).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `delete_group`
+- **Herramienta individual**: `gitlab_delete_group_member_role`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                  |
+| ---------------- | ---------------- | --------- | ---------------------------- |
+| `group_id`       | `string/integer` | sí        | Group ID or URL-encoded path |
+| `member_role_id` | `integer`        | sí        | Member role ID to delete     |
+
+### `member_role.delete_instance`
+
+> Delete an instance-level custom member role. Returns: a success confirmation naming the deleted role. See also: [`member_role.list_instance`](#member_rolelist_instance), [`member_role.create_instance`](#member_rolecreate_instance).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `delete_instance`
+- **Herramienta individual**: `gitlab_delete_instance_member_role`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción              |
+| ---------------- | --------- | --------- | ------------------------ |
+| `member_role_id` | `integer` | sí        | Member role ID to delete |
+
+### `member_role.list_group`
+
+> List group-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: [`member_role.list_instance`](#member_rolelist_instance), [`member_role.create_group`](#member_rolecreate_group), [`member_role.delete_group`](#member_roledelete_group).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `list_group`
+- **Herramienta individual**: `gitlab_list_group_member_roles`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `member_role.list_instance`
+
+> List instance-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: [`member_role.create_instance`](#member_rolecreate_instance), [`member_role.delete_instance`](#member_roledelete_instance), [`member_role.list_group`](#member_rolelist_group).
+
+- **Meta-herramienta**: `gitlab_member_role`, acción `list_instance`
+- **Herramienta individual**: `gitlab_list_instance_member_roles`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.

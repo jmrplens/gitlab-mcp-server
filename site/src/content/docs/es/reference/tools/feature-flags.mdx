@@ -1,0 +1,210 @@
+---
+title: "Feature flags"
+description: "Los feature flags de un proyecto y las listas de usuarios a las que apuntan sus estrategias."
+sidebar:
+  order: 17
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Feature flags que lee la aplicación de un proyecto para activar una función de forma gradual: cada flag tiene estrategias (todos los usuarios, un porcentaje de usuarios o de despliegue, unos IDs de usuario o una lista de usuarios), limitadas a entornos. Estas acciones gestionan los flags y las listas de usuarios a las que puede apuntar una estrategia. Desactivar un flag conserva su historial; borrarlo no. Los feature flags propios de GitLab en la instancia son acciones de administración (consulta [Administración](/gitlab-mcp-server/reference/tools/admin/)).
+
+## Preguntas de ejemplo
+
+- "Lista los feature flags del proyecto 42"
+- "Despliega new-checkout al 25 por ciento de los usuarios en production"
+- "Crea una lista de usuarios para los probadores de la beta"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `feature_flags.feature_flag_create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_feature_flags` con `action` igual al nombre de la acción, como `feature_flag_create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_feature_flag_create`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 4 de 10, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                   | Individual                   |
+| ------------------------------------------------------------------------ | ---------------------------- |
+| [`feature_flags.feature_flag_create`](#feature_flagsfeature_flag_create) | `gitlab_feature_flag_create` |
+| [`feature_flags.feature_flag_delete`](#feature_flagsfeature_flag_delete) | `gitlab_feature_flag_delete` |
+| [`feature_flags.feature_flag_get`](#feature_flagsfeature_flag_get)       | `gitlab_feature_flag_get`    |
+| [`feature_flags.feature_flag_list`](#feature_flagsfeature_flag_list)     | `gitlab_feature_flag_list`   |
+| [`feature_flags.feature_flag_update`](#feature_flagsfeature_flag_update) | `gitlab_feature_flag_update` |
+| [`feature_flags.ff_user_list_create`](#feature_flagsff_user_list_create) | `gitlab_ff_user_list_create` |
+| [`feature_flags.ff_user_list_delete`](#feature_flagsff_user_list_delete) | `gitlab_ff_user_list_delete` |
+| [`feature_flags.ff_user_list_get`](#feature_flagsff_user_list_get)       | `gitlab_ff_user_list_get`    |
+| [`feature_flags.ff_user_list_list`](#feature_flagsff_user_list_list)     | `gitlab_ff_user_list_list`   |
+| [`feature_flags.ff_user_list_update`](#feature_flagsff_user_list_update) | `gitlab_ff_user_list_update` |
+
+### `feature_flags.feature_flag_create`
+
+> Create a feature flag with optional activation strategies and scopes. Returns: the created flag with active state, version, scopes, and strategies. See also: [`feature_flags.feature_flag_get`](#feature_flagsfeature_flag_get), [`feature_flags.feature_flag_update`](#feature_flagsfeature_flag_update).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_create`
+- **Herramienta individual**: `gitlab_feature_flag_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                               |
+| ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------- |
+| `name`        | `string`         | sí        | Feature flag name                                                                                         |
+| `project_id`  | `string/integer` | sí        | Project ID or path                                                                                        |
+| `active`      | `boolean`        | no        | Whether the flag is active                                                                                |
+| `description` | `string`         | no        | Feature flag description                                                                                  |
+| `strategies`  | `object[]`       | no        | Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes |
+| `version`     | `string`         | no        | Version of the feature flag (new_version_flag)                                                            |
+
+### `feature_flags.feature_flag_delete`
+
+> Delete a feature flag permanently. Returns: a success confirmation naming the flag. See also: [`feature_flags.feature_flag_get`](#feature_flagsfeature_flag_get), [`feature_flags.feature_flag_list`](#feature_flagsfeature_flag_list).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_delete`
+- **Herramienta individual**: `gitlab_feature_flag_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `name`       | `string`         | sí        | Feature flag name  |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+
+### `feature_flags.feature_flag_get`
+
+> Get a single feature flag by name. Returns: the flag with active state, version, environment scopes, and activation strategies. See also: [`feature_flags.feature_flag_list`](#feature_flagsfeature_flag_list), [`feature_flags.feature_flag_update`](#feature_flagsfeature_flag_update), [`feature_flags.feature_flag_delete`](#feature_flagsfeature_flag_delete).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_get`
+- **Herramienta individual**: `gitlab_feature_flag_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `name`       | `string`         | sí        | Feature flag name  |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+
+### `feature_flags.feature_flag_list`
+
+> List feature flags in a project with optional scope filter, ordering, and pagination. Returns: matching feature flags with active state, version, scopes, strategies, and pagination metadata. See also: [`feature_flags.feature_flag_get`](#feature_flagsfeature_flag_get), [`feature_flags.feature_flag_create`](#feature_flagsfeature_flag_create).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_list`
+- **Herramienta individual**: `gitlab_feature_flag_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                             | Requerido | Descripción                                                                                                                                       |
+| ------------ | -------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                 | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                         | no        | Column to order results by (e.g. name, created_at, updated_at)                                                                                    |
+| `page`       | `integer`                        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                         | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                         | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `scope`      | `string` (`enabled`, `disabled`) | no        | Filter by scope (enabled or disabled)                                                                                                             |
+| `sort`       | `string` (`asc`, `desc`)         | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `feature_flags.feature_flag_update`
+
+> Update a feature flag's name, description, active state, or strategies. Returns: the updated flag with active state, version, scopes, and strategies. See also: [`feature_flags.feature_flag_get`](#feature_flagsfeature_flag_get), [`feature_flags.feature_flag_delete`](#feature_flagsfeature_flag_delete).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_update`
+- **Herramienta individual**: `gitlab_feature_flag_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                                                   |
+| ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | `string`         | sí        | Current feature flag name                                                                                                                                                                     |
+| `project_id`  | `string/integer` | sí        | Project ID or path                                                                                                                                                                            |
+| `active`      | `boolean`        | no        | Whether the flag is active                                                                                                                                                                    |
+| `description` | `string`         | no        | Feature flag description                                                                                                                                                                      |
+| `new_name`    | `string`         | no        | New feature flag name                                                                                                                                                                         |
+| `strategies`  | `object[]`       | no        | Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy |
+
+### `feature_flags.ff_user_list_create`
+
+> Create a feature flag user list in a project. Returns: the created list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: [`feature_flags.ff_user_list_list`](#feature_flagsff_user_list_list), [`feature_flags.ff_user_list_get`](#feature_flagsff_user_list_get), [`feature_flags.ff_user_list_update`](#feature_flagsff_user_list_update).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_create`
+- **Herramienta individual**: `gitlab_ff_user_list_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                               |
+| ------------ | ---------------- | --------- | ----------------------------------------- |
+| `name`       | `string`         | sí        | User list name                            |
+| `project_id` | `string/integer` | sí        | Project ID or path                        |
+| `user_xids`  | `string`         | sí        | Comma-separated list of user external IDs |
+
+### `feature_flags.ff_user_list_delete`
+
+> Delete a feature flag user list by its user_list_iid. Returns: a success confirmation naming the deleted list. See also: [`feature_flags.ff_user_list_get`](#feature_flagsff_user_list_get), [`feature_flags.ff_user_list_list`](#feature_flagsff_user_list_list).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_delete`
+- **Herramienta individual**: `gitlab_ff_user_list_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
+| --------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                                           |
+| `user_list_iid` | `integer`        | sí        | Feature flag user list internal ID returned by list or create. Do not use the user list name |
+
+### `feature_flags.ff_user_list_get`
+
+> Get a single feature flag user list by its user_list_iid. Returns: the list's id, iid, project_id, name, user_xids, created_at, and updated_at. See also: [`feature_flags.ff_user_list_list`](#feature_flagsff_user_list_list), [`feature_flags.ff_user_list_update`](#feature_flagsff_user_list_update), [`feature_flags.ff_user_list_delete`](#feature_flagsff_user_list_delete).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_get`
+- **Herramienta individual**: `gitlab_ff_user_list_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
+| --------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                                           |
+| `user_list_iid` | `integer`        | sí        | Feature flag user list internal ID returned by list or create. Do not use the user list name |
+
+### `feature_flags.ff_user_list_list`
+
+> List feature flag user lists for a project with search, ordering, and offset or keyset pagination. Returns: each list's id, iid, project_id, name, user_xids, created_at, updated_at, plus pagination metadata. See also: [`feature_flags.ff_user_list_get`](#feature_flagsff_user_list_get), [`feature_flags.ff_user_list_create`](#feature_flagsff_user_list_create).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_list`
+- **Herramienta individual**: `gitlab_ff_user_list_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                 | no        | Order results by field (e.g. created_at, updated_at, name)                                                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `search`     | `string`                 | no        | Search by name                                                                                                                                    |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `feature_flags.ff_user_list_update`
+
+> Update a feature flag user list's name or user_xids by its user_list_iid. Returns: the updated list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: [`feature_flags.ff_user_list_get`](#feature_flagsff_user_list_get), [`feature_flags.ff_user_list_list`](#feature_flagsff_user_list_list), [`feature_flags.ff_user_list_delete`](#feature_flagsff_user_list_delete).
+
+- **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_update`
+- **Herramienta individual**: `gitlab_ff_user_list_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
+| --------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                                           |
+| `user_list_iid` | `integer`        | sí        | Feature flag user list internal ID returned by list or create. Do not use the user list name |
+| `name`          | `string`         | no        | New user list name                                                                           |
+| `user_xids`     | `string`         | no        | Comma-separated list of user external IDs                                                    |

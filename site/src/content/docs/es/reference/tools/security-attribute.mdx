@@ -1,0 +1,127 @@
+---
+title: "Atributos de seguridad"
+description: "Atributos de seguridad que clasifican grupos y proyectos de GitLab dentro de una categoría de seguridad, a través de la API GraphQL de GitLab."
+sidebar:
+  order: 6
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un atributo de seguridad es una etiqueta de una [categoría de seguridad](/gitlab-mcp-server/reference/tools/security-category/) que clasifica un grupo o un proyecto, por ejemplo por su impacto en el negocio. Estas acciones crean, actualizan y borran atributos, los aplican y los quitan en un proyecto, y los añaden, quitan o sustituyen en varios grupos y proyectos a la vez. Son metadatos de clasificación, aparte de los resultados de los analizadores que están en [Vulnerabilidades](/gitlab-mcp-server/reference/tools/vulnerability/).
+
+## Preguntas de ejemplo
+
+- "Crea un atributo de seguridad llamado High en la categoría 7"
+- "Aplica el atributo de seguridad 9 al proyecto 42"
+- "Sustituye los atributos de seguridad de estos proyectos"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `security_attribute.bulk_update`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_security_attribute` con `action` igual al nombre de la acción, como `bulk_update`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_bulk_update_security_attributes`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 5:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 5
+
+Acciones de solo lectura: 0 de 5, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                   | Individual                                  |
+| ------------------------------------------------------------------------ | ------------------------------------------- |
+| [`security_attribute.bulk_update`](#security_attributebulk_update)       | `gitlab_bulk_update_security_attributes`    |
+| [`security_attribute.create`](#security_attributecreate)                 | `gitlab_create_security_attribute`          |
+| [`security_attribute.delete`](#security_attributedelete)                 | `gitlab_delete_security_attribute`          |
+| [`security_attribute.project_update`](#security_attributeproject_update) | `gitlab_update_project_security_attributes` |
+| [`security_attribute.update`](#security_attributeupdate)                 | `gitlab_update_security_attribute`          |
+
+### `security_attribute.bulk_update`
+
+> Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: [`security_attribute.create`](#security_attributecreate), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes`](https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes)
+
+- **Meta-herramienta**: `gitlab_security_attribute`, acción `bulk_update`
+- **Herramienta individual**: `gitlab_bulk_update_security_attributes`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo        | Requerido | Descripción                               |
+| --------------- | ----------- | --------- | ----------------------------------------- |
+| `attribute_ids` | `integer[]` | sí        | Security attribute IDs to apply           |
+| `mode`          | `string`    | sí        | Bulk update mode: ADD, REMOVE, or REPLACE |
+| `group_ids`     | `integer[]` | no        | Numeric group IDs to update               |
+| `project_ids`   | `integer[]` | no        | Numeric project IDs to update             |
+
+Además necesita al menos uno de estos: `group_ids`; `project_ids`.
+
+### `security_attribute.create`
+
+> Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: [`security_category.create`](/gitlab-mcp-server/reference/tools/security-category/#security_categorycreate), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate)
+
+- **Meta-herramienta**: `gitlab_security_attribute`, acción `create`
+- **Herramienta individual**: `gitlab_create_security_attribute`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro      | Tipo       | Requerido | Descripción                   |
+| -------------- | ---------- | --------- | ----------------------------- |
+| `attributes`   | `object[]` | sí        | Security attributes to create |
+| `category_id`  | `integer`  | sí        | Numeric security category ID  |
+| `namespace_id` | `integer`  | sí        | Numeric namespace ID          |
+
+### `security_attribute.delete`
+
+> Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: [`security_category.create`](/gitlab-mcp-server/reference/tools/security-category/#security_categorycreate), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy)
+
+- **Meta-herramienta**: `gitlab_security_attribute`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_security_attribute`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro      | Tipo      | Requerido | Descripción                   |
+| -------------- | --------- | --------- | ----------------------------- |
+| `attribute_id` | `integer` | sí        | Numeric security attribute ID |
+
+### `security_attribute.project_update`
+
+> Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: [`security_attribute.create`](#security_attributecreate), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate)
+
+- **Meta-herramienta**: `gitlab_security_attribute`, acción `project_update`
+- **Herramienta individual**: `gitlab_update_project_security_attributes`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro              | Tipo        | Requerido | Descripción                      |
+| ---------------------- | ----------- | --------- | -------------------------------- |
+| `project_id`           | `integer`   | sí        | Numeric project ID               |
+| `add_attribute_ids`    | `integer[]` | no        | Security attribute IDs to add    |
+| `remove_attribute_ids` | `integer[]` | no        | Security attribute IDs to remove |
+
+Además necesita al menos uno de estos: `add_attribute_ids`; `remove_attribute_ids`.
+
+### `security_attribute.update`
+
+> Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: [`security_category.create`](/gitlab-mcp-server/reference/tools/security-category/#security_categorycreate), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate)
+
+- **Meta-herramienta**: `gitlab_security_attribute`, acción `update`
+- **Herramienta individual**: `gitlab_update_security_attribute`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro      | Tipo      | Requerido | Descripción                                                |
+| -------------- | --------- | --------- | ---------------------------------------------------------- |
+| `attribute_id` | `integer` | sí        | Numeric security attribute ID                              |
+| `color`        | `string`  | no        | New security attribute color as a hex code (e.g. \#FF0000) |
+| `description`  | `string`  | no        | New security attribute description                         |
+| `name`         | `string`  | no        | New security attribute name                                |
+
+Además necesita al menos uno de estos: `name`; `description`; `color`.

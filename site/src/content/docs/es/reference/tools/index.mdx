@@ -1,0 +1,89 @@
+---
+title: "Herramientas por dominio"
+description: "Cada acción de GitLab MCP Server por dominio: su ID canónico, su meta-herramienta y su herramienta individual, su nivel, sus anotaciones y sus parámetros."
+sidebar:
+  order: 0
+  label: "Descripción general"
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Una página por grupo del catálogo, cada una con todas las acciones del grupo: su ID canónico, las herramientas que la alcanzan en cada superficie, el nivel que la sirve, sus anotaciones y sus parámetros. Las páginas se generan a partir del catálogo que construye el servidor, así que lo que dicen de una acción es lo que sirve el servidor; solo la descripción general y las preguntas de ejemplo de cada página están escritas a mano.
+
+En GitLab.com con Ultimate el catálogo tiene 1098 acciones; una instancia autogestionada sirve 1092 con Ultimate, 1026 con Premium y 872 con Free.
+
+## Proyectos, grupos y usuarios
+
+- [Alias de proyecto](/gitlab-mcp-server/reference/tools/project-alias/): Alias de proyecto, los nombres cortos que un administrador da a los proyectos para clonarlos: listarlos, leerlos, crearlos y borrarlos.
+- [Descubrimiento de proyectos](/gitlab-mcp-server/reference/tools/discover-project/): Resuelve una URL de remoto de git al proyecto de GitLab que hay detrás y a su ID de proyecto.
+- [Grupos](/gitlab-mcp-server/reference/tools/group/): Grupos de GitLab: su ciclo de vida, subgrupos, miembros, compartición, etiquetas, hitos, tableros, insignias, webhooks, épicas, wikis, cuentas de servicio y más.
+- [Identidades SCIM de grupo](/gitlab-mcp-server/reference/tools/group-scim/): Las identidades SCIM que aprovisiona el proveedor de identidad de un grupo: listarlas, leerlas, actualizarlas y borrarlas.
+- [Proyectos](/gitlab-mcp-server/reference/tools/project/): Proyectos de GitLab: su ciclo de vida, miembros, compartición, webhooks, etiquetas, hitos, tableros, insignias, mirrors, Pages, integraciones, subidas, importación y exportación, cuentas de servicio y más.
+- [Roles de miembro personalizados](/gitlab-mcp-server/reference/tools/member-role/): Roles de miembro personalizados a nivel de instancia y de grupo: listarlos, crearlos y borrarlos.
+- [Tokens de acceso y credenciales](/gitlab-mcp-server/reference/tools/access/): Tokens de acceso de proyecto, de grupo y personales, tokens y claves de despliegue, solicitudes de acceso e invitaciones.
+- [Usuarios](/gitlab-mcp-server/reference/tools/user/): Usuarios de GitLab: las cuentas y su estado, claves SSH y GPG, correos, tokens de acceso personales y de suplantación, estado, tareas pendientes, eventos, ajustes de notificación, espacios de nombres y avatares.
+- [Usuarios empresariales](/gitlab-mcp-server/reference/tools/enterprise-user/): Los usuarios empresariales de un grupo de nivel superior: listarlos y leerlos, desactivar su autenticación en dos pasos y borrarlos.
+
+## Código y repositorios
+
+- [Archivos y commits del repositorio](/gitlab-mcp-server/reference/tools/repository/): El contenido del repositorio: el árbol de archivos, archivos, blame e historial, commits, diffs, cherry-picks y reverts, comparaciones, archivos comprimidos, changelogs, submódulos y renderizado de Markdown.
+- [Búsqueda](/gitlab-mcp-server/reference/tools/search/): Busca en GitLab, en toda la instancia, en un grupo o en un proyecto, código, merge requests, issues, commits, hitos, notas, proyectos, snippets, usuarios y páginas wiki.
+- [Ramas](/gitlab-mcp-server/reference/tools/branch/): Ramas de Git en un proyecto de GitLab: crearlas, listarlas, leerlas y borrarlas, protegerlas y leer las reglas de rama que agrega GitLab.
+- [Snippets](/gitlab-mcp-server/reference/tools/snippet/): Snippets personales y de proyecto, su contenido, discusiones, notas y emoji de reacción.
+- [Tags](/gitlab-mcp-server/reference/tools/tag/): Tags de Git en un proyecto de GitLab: crearlos, listarlos, leerlos y borrarlos, leer sus firmas y protegerlos.
+- [Wikis de proyecto](/gitlab-mcp-server/reference/tools/wiki/): Las páginas de la wiki de un proyecto y los archivos adjuntos a ella.
+
+## Merge requests
+
+- [Comprobaciones de estado externas](/gitlab-mcp-server/reference/tools/external-status-check/): Comprobaciones de estado externas de un proyecto y el estado que cada una notifica en un merge request.
+- [Merge requests](/gitlab-mcp-server/reference/tools/merge-request/): El ciclo de vida de los merge requests: crear, listar, actualizar, fusionar, rebasar y borrar, aprobaciones y reglas de aprobación, dependencias, commits de contexto, control de tiempo, emoji de reacción y eventos de recurso.
+- [Merge trains](/gitlab-mcp-server/reference/tools/merge-train/): Los merge trains, la cola de GitLab de merge requests que se fusionan en orden: listarlos y añadir un merge request a uno.
+- [Revisión de merge requests](/gitlab-mcp-server/reference/tools/mr-review/): Revisar un merge request: sus cambios y versiones del diff, notas, discusiones en hilo y en línea, y notas en borrador publicadas como una sola revisión.
+
+## Planificación y colaboración
+
+- [Emoji personalizados](/gitlab-mcp-server/reference/tools/custom-emoji/): Los emoji personalizados que define un grupo para sus proyectos: listarlos, añadirlos y borrarlos a través de la API GraphQL de GitLab.
+- [Issues y work items](/gitlab-mcp-server/reference/tools/issue/): Issues y work items de GitLab: su ciclo de vida, notas, discusiones, enlaces, control de tiempo, emoji de reacción, eventos de recurso, estadísticas y vistas guardadas.
+- [Logros](/gitlab-mcp-server/reference/tools/achievement/): Los logros que define un espacio de nombres y las concesiones que se hacen de ellos, a través de la API GraphQL de GitLab.
+
+## CI/CD y entrega
+
+- [Catálogo de CI/CD](/gitlab-mcp-server/reference/tools/ci-catalog/): Busca e inspecciona los componentes reutilizables publicados en el catálogo de CI/CD de GitLab.
+- [Entornos y despliegues](/gitlab-mcp-server/reference/tools/environment/): Entornos, entornos protegidos, periodos de congelación de despliegues y despliegues de un proyecto de GitLab.
+- [Feature flags](/gitlab-mcp-server/reference/tools/feature-flags/): Los feature flags de un proyecto y las listas de usuarios a las que apuntan sus estrategias.
+- [Jobs](/gitlab-mcp-server/reference/tools/job/): Jobs de CI/CD: listarlos y leerlos, leer sus logs y artefactos, ejecutarlos, reintentarlos, cancelarlos y borrarlos, y gestionar el ámbito del token de job de CI/CD.
+- [Paquetes y registro de contenedores](/gitlab-mcp-server/reference/tools/package/): El registro de paquetes y el registro de contenedores: publicar y descargar paquetes genéricos, explorar y borrar paquetes, imágenes y tags, y gestionar reglas de protección.
+- [Pipelines](/gitlab-mcp-server/reference/tools/pipeline/): Pipelines de CI/CD: lanzarlos, leerlos, reintentarlos, cancelarlos y borrarlos, leer sus variables e informes de pruebas, y gestionar programaciones, tokens de disparo y grupos de recursos.
+- [Plantillas y lint de CI](/gitlab-mcp-server/reference/tools/template/): Las plantillas integradas de GitLab para YAML de CI/CD, Dockerfiles, archivos .gitignore, licencias y proyectos, y el lint de CI.
+- [Registro de modelos](/gitlab-mcp-server/reference/tools/model-registry/): Descarga los archivos de una versión de modelo del registro de modelos de GitLab de un proyecto.
+- [Releases](/gitlab-mcp-server/reference/tools/release/): Las releases de un proyecto de GitLab y los enlaces de recursos adjuntos a ellas.
+- [Runners](/gitlab-mcp-server/reference/tools/runner/): Runners de CI/CD a nivel de instancia, de grupo y de proyecto, sus tokens de registro y de autenticación, sus jobs y gestores, y los controladores de runners.
+- [Variables de CI/CD](/gitlab-mcp-server/reference/tools/ci-variable/): Variables de CI/CD a nivel de proyecto, de grupo y de instancia: listarlas, leerlas, crearlas, actualizarlas y borrarlas.
+
+## Seguridad y cumplimiento
+
+- [Ajustes de política de cumplimiento](/gitlab-mcp-server/reference/tools/compliance-policy/): Lee y actualiza los ajustes de política de cumplimiento de la instancia, el espacio de nombres que gestiona de forma centralizada las políticas de seguridad.
+- [Atestaciones de compilación](/gitlab-mcp-server/reference/tools/attestation/): Lista y descarga las atestaciones de compilación (procedencia SLSA) que GitLab guarda para los artefactos de un proyecto.
+- [Atributos de seguridad](/gitlab-mcp-server/reference/tools/security-attribute/): Atributos de seguridad que clasifican grupos y proyectos de GitLab dentro de una categoría de seguridad, a través de la API GraphQL de GitLab.
+- [Categorías de seguridad](/gitlab-mcp-server/reference/tools/security-category/): Categorías de seguridad, que agrupan los atributos de seguridad de un espacio de nombres, a través de la API GraphQL de GitLab.
+- [Dependencias y SBOM](/gitlab-mcp-server/reference/tools/dependency/): Lista las dependencias de un proyecto y crea y descarga exportaciones SBOM CycloneDX de un pipeline.
+- [Eventos de auditoría](/gitlab-mcp-server/reference/tools/audit-event/): Lista y lee los eventos de auditoría de GitLab a nivel de instancia, de grupo y de proyecto.
+- [Hallazgos de seguridad](/gitlab-mcp-server/reference/tools/security-finding/): Los hallazgos de seguridad que notificaron los analizadores de un pipeline, a través de la API GraphQL de GitLab.
+- [Perfiles de análisis de seguridad](/gitlab-mcp-server/reference/tools/security-scan-profile/): Asocia y desasocia perfiles de análisis de seguridad en proyectos y grupos, y lee qué perfiles ejecuta un proyecto, a través de la API GraphQL de GitLab.
+- [Vulnerabilidades](/gitlab-mcp-server/reference/tools/vulnerability/): Lista, lee y clasifica las vulnerabilidades de un proyecto, cuéntalas por gravedad y resume los informes de seguridad de un pipeline, a través de la API GraphQL de GitLab.
+
+## Métricas y grafo de conocimiento
+
+- [Grafo de conocimiento Orbit](/gitlab-mcp-server/reference/tools/orbit/): Consultas de solo lectura contra Orbit, el grafo de conocimiento experimental de GitLab.com.
+- [Métricas DORA](/gitlab-mcp-server/reference/tools/dora-metrics/): Las cuatro métricas DORA de un proyecto o un grupo: frecuencia de despliegue, tiempo de entrega de cambios, tiempo de restauración del servicio y tasa de fallos de cambio.
+
+## Administración de la instancia
+
+- [Administración](/gitlab-mcp-server/reference/tools/admin/): Administración de la instancia en GitLab MCP Server: ajustes, licencia, system hooks, Sidekiq, importaciones, aplicaciones OAuth, estados de Terraform, agentes de clúster y más.
+- [Movimientos de almacenamiento](/gitlab-mcp-server/reference/tools/storage-move/): Mueve los repositorios de proyectos, grupos y snippets entre shards de almacenamiento y sigue los movimientos.
+- [Sitios Geo](/gitlab-mcp-server/reference/tools/geo/): Sitios de replicación de GitLab Geo: crearlos, leerlos, editarlos, borrarlos y repararlos, y leer su estado de replicación.
+
+## Este servidor
+
+- [Diagnóstico del servidor](/gitlab-mcp-server/reference/tools/server/): Diagnóstico del propio GitLab MCP Server: si GitLab responde, las versiones del servidor y de GitLab y a quién pertenece el token.
+- [Flujos de creación guiados](/gitlab-mcp-server/reference/tools/interactive/): Flujos guiados que crean un issue, un merge request, un proyecto o una release preguntando al usuario paso a paso.

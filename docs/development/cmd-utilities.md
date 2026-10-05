@@ -13,7 +13,6 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_1to1`                   | SDK/API parity audits         | Consolidated SDK↔API parity audit (struct/action/metadata gap streams, plus the `sdk` service and raw-GraphQL gate, and `paths` for the request a handler builds: the endpoint, the shapes GitLab sends and whether a list says where it ends, and `grants` for what a fine-grained token needs for each action)                                          | `make audit-1to1`, `make audit-1to1-grants`                                                                                                                             |
 | `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                                                                                                                                                                             | `make audit-catalog-first`                                                                                                                                              |
 | `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                                                                                                                                                                                | `make audit-discovery`                                                                                                                                                  |
-| `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                                                                                                                                                                         | `make audit-doc-coverage`                                                                                                                                               |
 | `audit_action_ids`             | Catalog & metadata audits     | Every canonical action ID the server publishes to a model, in a cross-link, a hint, a usage line or a description, or quoted back in a substring the e2e suite asserts a served text carries, is one the catalog has, and the served prose names no tool                                                                                                  | `make audit-action-ids`, `make check-action-ids`                                                                                                                        |
 | `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name and every `domain.action` ID the documentation mentions is one the server serves                                                                                                                                                                                                                                               | `make check-doc-tool-names`                                                                                                                                             |
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                                                                                                                                                                                  | `make audit-dynamic-aliases`                                                                                                                                            |
@@ -47,6 +46,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_llms`                     | Generators                    | Generates `llms.txt` and `llms-full.txt`                                                                                                                                                                                                                                                                                                                  | `make gen-llms`                                                                                                                                                         |
 | `gen_request_inventory`        | Generators                    | Merges the requests the unit suite records into `docs/development/request-inventory.json`                                                                                                                                                                                                                                                                 | `make gen-request-inventory`                                                                                                                                            |
 | `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                                                                                                                                                                               | `make gen-testing-docs`                                                                                                                                                 |
+| `gen_tool_reference`           | Generators                    | Writes the site's per-domain tool reference, one page per catalog group in English and Spanish, from the action catalog and the hand-written overviews of `domains.json`                                                                                                                                                                                  | `make gen-tool-reference`, `make check-tool-reference`                                                                                                                  |
 | `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                                                                                                                                                                               | `make brand`, `make brand-check`                                                                                                                                        |
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                                                                                                                                                                                 | `make gen-icon-webp`                                                                                                                                                    |
 | `gen_third_party_notices`      | Generators                    | Writes `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the release binaries link, read from their build information, the packages each links and the module cache                                                                                                                                                             | Release time: GoReleaser's `sboms`, the Dockerfile, `make mcpb`                                                                                                         |
@@ -331,42 +331,9 @@ A JSON report with `packages[]`, `clusters[]`, per-finding `severity`, `cluster`
 
 This is a CI gate binary. The cluster-aware severity model is intentional layered design; the flat R-META baseline lives in `audit_1to1 -scope=metadata`.
 
-### audit_doc_coverage
-
-Reports per-doc-file gaps between `docs/reference/tools/*.md` and the canonical action catalog (DOC-002): missing or orphan tools, tier-badge mismatches, and count drift.
-
-#### Usage
-
-```bash
-# Write the backlog to the default path
-go run ./cmd/audit_doc_coverage/
-
-# CI gate
-go run ./cmd/audit_doc_coverage/ -check
-```
-
-#### Flags
-
-| Flag           | Type     | Default                          | Description                                                         |
-| -------------- | -------- | -------------------------------- | ------------------------------------------------------------------- |
-| `-check`       | `bool`   | `false`                          | Exit non-zero if any file has missing/orphan/tier_mismatch findings |
-| `-docs-root`   | `string` | `docs/tools`                     | Directory of per-domain docs (relative to repo root)                |
-| `-gaps-only`   | `bool`   | `false`                          | Only include files that have at least one finding                   |
-| `-output`      | `string` | `plan/docs-tools-backlog.json`   | Path to write the JSON report (relative to repo root)               |
-| `-readme-path` | `string` | `docs/reference/tools/README.md` | Path to the Domains-table README (relative to repo root)            |
-
-#### Output
-
-A JSON backlog with per-file findings.
-
-#### Make targets
-
-- `make audit-doc-coverage`
-- `make audit-doc-coverage-check` — CI gate.
-
 ### audit_doc_tool_names
 
-Checks every name the documentation teaches a reader to call against what the server really serves: the `gitlab_*` tool names against the names it registers, and the `domain.action` IDs against the catalog it builds. `audit_doc_coverage` asks which actions are documented rather than whether the documented ones exist, so a page can name a tool no surface has ever registered and still audit clean; that is how a verb-first spelling of the issue list survived in guides while the individual surface projects `gitlab_issue_list`, and every copy-pasted example answered `unknown tool`. The name set is built in memory from the same registration paths the server uses, across the individual, meta and dynamic surfaces at the Ultimate tier, so it needs no network and cannot drift from the catalog.
+Checks every name the documentation teaches a reader to call against what the server really serves: the `gitlab_*` tool names against the names it registers, and the `domain.action` IDs against the catalog it builds. Asking which actions are documented says nothing about whether the documented ones exist, so a page can name a tool no surface has ever registered and still read as complete; that is how a verb-first spelling of the issue list survived in guides while the individual surface projects `gitlab_issue_list`, and every copy-pasted example answered `unknown tool`. The name set is built in memory from the same registration paths the server uses, across the individual, meta and dynamic surfaces at the Ultimate tier, so it needs no network and cannot drift from the catalog.
 
 **The ID rule exists because the tool rule alone left the other half of every such sentence unjudged.** A page teaching a call names the tool on the individual surface and the canonical ID on the dynamic one, and the tool regex cannot see an ID at all: it matches `gitlab_[a-z0-9_]+` and an ID carries no such prefix. Eight IDs across five pages were wrong that way, among them a whole `pipeline_schedule.` family the CI/CD page asserted in both languages while the catalog spells it `pipeline.schedule_*`; each of those pages paired the wrong ID with the right tool name, so this command was green over all of them. What counts as an ID is `cmd/internal/actionids`, shared with `audit_action_ids`, so a spelling cannot be a cross-link in the code and prose in the docs.
 
@@ -2031,6 +1998,41 @@ Rewrites the managed sections of `docs/development/testing/testing.md`.
   The check runs in `make audit-docs` and in the CI `Test` job, beside the
   other generated-artifact gates.
 
+### gen_tool_reference
+
+Writes the per-domain tool reference of the documentation site: one page per catalog group, in English under `site/src/content/docs/reference/tools/` and in Spanish under its `es/` twin, plus an index page for each that lists the groups by category. The two directories are the generator's: a page there that a run did not write is removed, or under `-check` reported, so a group the catalog drops does not leave its page behind.
+
+Everything a page says about an action is read from the catalog the default dynamic surface serves (`dynamiccatalog.Build`), built six times: for a self-managed instance and for GitLab.com, at Free, Premium and Ultimate. An action's tier is the lowest build that serves it, and it is GitLab.com only when no self-managed build does; a parameter missing from an action's lower-tier builds carries the tier it appears at. Each action names its canonical ID, its meta-tool (the group's, with the action's name, or for a standalone group the action's own tool), its individual tool, its annotations, the description the dynamic surface serves (its "See also" clause rewritten into canonical IDs the way `gitlab://tools` rewrites it there, each linked to where that action is described) and its parameters from the input schema. The meta-tool and individual tool names are held to the meta and individual surfaces as `cmd/internal/mcpsurface` lists them, so a page cannot name a tool no surface registers. The token scope a group needs comes from `tools.MetaToolScopes`.
+
+What the catalog cannot say is hand-written in `cmd/gen_tool_reference/domains.json`, embedded in the binary: each group's category on the index, its title, a one-line description, an overview and sample questions, in English and Spanish. The file has to describe exactly the groups the catalog builds, so a group the catalog gains stops generation until it has an entry, and an entry for a group that no longer exists does too. The served descriptions are quoted rather than translated, and the Spanish pages say so.
+
+Every table is built to measure the same in both languages, because the site decides per locale whether a table stacks on a narrow screen and `facts:check` fails when the two disagree: a translated header has the length of its English twin, and a translated cell is never longer than its header. The tests hold that by comparing the column measures of every table in the two languages.
+
+#### Usage
+
+```bash
+# Write the pages
+go run ./cmd/gen_tool_reference/
+
+# CI gate
+go run ./cmd/gen_tool_reference/ -check
+```
+
+#### Flags
+
+| Flag     | Type   | Default | Description                                                                            |
+| -------- | ------ | ------- | -------------------------------------------------------------------------------------- |
+| `-check` | `bool` | `false` | Report the pages that differ from what the catalog generates now, without writing them |
+
+#### Output
+
+Rewrites the pages under `site/src/content/docs/reference/tools/` and `site/src/content/docs/es/reference/tools/`.
+
+#### Make targets
+
+- `make gen-tool-reference`, also run by `make update-all`.
+- `make check-tool-reference`: CI gate in the generated-artifacts job, deferred on a stacked layer like every committed-artifact gate, and a step of `make audit-docs`.
+
 ### gen_brand
 
 Emits every vector brand asset from one parametric geometry, so the mark cannot drift between its surfaces. The mark is the "fan-out": a source node projecting three branch arcs, each ending in a node, which reads as a git graph and as the project's architecture (one canonical action catalog projected to three tool surfaces). The geometry lives in the command as constants; every emitter renders the same arcs at its own scale, so editing a curve edits every asset in the same run.
@@ -2449,16 +2451,16 @@ What it does not do is fold a raw request's path, tell an unconditional request 
 
 ## CI gate targets
 
-The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.
+The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, tool-reference, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.
 
 | Make target                              | Utility                                                          | What it gates                                                                                                                                                                                                    | Exit behavior                                                                                                                                                       |
 | ---------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `check-action-catalog-manifest`          | `gen_action_catalog_manifest`                                    | Generated ActionSpec manifest is current                                                                                                                                                                         | Non-zero if the manifest is stale                                                                                                                                   |
 | `check-llms`                             | `gen_llms`                                                       | `llms.txt` and `llms-full.txt` are current and structurally valid                                                                                                                                                | Non-zero if either file is stale or malformed                                                                                                                       |
+| `check-tool-reference`                   | `gen_tool_reference`                                             | Every page of the site's per-domain tool reference is what the catalog and `domains.json` generate, and no page there is one they do not                                                                         | Non-zero if a page is stale, missing or not generated, or the data file and the catalog name different groups                                                       |
 | `check-lhm-manifest`                     | `gen_lhm_manifest`                                               | `lhm.plugin.json` declares the registered tools, prompts, and resources                                                                                                                                          | Non-zero if the manifest is stale                                                                                                                                   |
 | `check-footprint`                        | `audit_tokens -footprint`                                        | README token claim, `docs/development/token-footprint.md` and `site/src/data/token-footprint.json` are current                                                                                                   | Non-zero if any is stale                                                                                                                                            |
 | `audit-discovery-check`                  | `audit_discovery_completeness`                                   | No META-001 finding meets the configured severity threshold                                                                                                                                                      | Non-zero if any finding meets `-severity` (default error)                                                                                                           |
-| `audit-doc-coverage-check`               | `audit_doc_coverage`                                             | No `docs/reference/tools/*.md` has missing/orphan/tier_mismatch findings                                                                                                                                         | Non-zero if any file has a finding                                                                                                                                  |
 | `audit-godocs-check`                     | `godoc_tool audit`                                               | No package, symbol, or test Godoc findings remain                                                                                                                                                                | Non-zero when findings are present                                                                                                                                  |
 | `audit-dynamic-aliases`                  | `audit_dynamic_aliases`                                          | No error-severity alias governance finding (collisions, ambiguity)                                                                                                                                               | Non-zero (`1`) if any error-severity finding exists                                                                                                                 |
 | `audit-docs` → `format_md_tables -check` | `format_md_tables`                                               | All Markdown pipe tables are normalized                                                                                                                                                                          | Non-zero if any table needs formatting                                                                                                                              |

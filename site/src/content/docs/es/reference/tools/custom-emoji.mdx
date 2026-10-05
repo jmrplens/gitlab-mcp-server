@@ -1,0 +1,85 @@
+---
+title: "Emoji personalizados"
+description: "Los emoji personalizados que define un grupo para sus proyectos: listarlos, añadirlos y borrarlos a través de la API GraphQL de GitLab."
+sidebar:
+  order: 14
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/reference/tools/issue/), [merge requests](/gitlab-mcp-server/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`.
+
+## Preguntas de ejemplo
+
+- "Lista los emoji personalizados del grupo platform"
+- "Añade un emoji party_parrot al grupo platform"
+- "Borra el emoji personalizado obsoleto"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `custom_emoji.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_custom_emoji` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_create_custom_emoji`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                       | Individual                   |
+| -------------------------------------------- | ---------------------------- |
+| [`custom_emoji.create`](#custom_emojicreate) | `gitlab_create_custom_emoji` |
+| [`custom_emoji.delete`](#custom_emojidelete) | `gitlab_delete_custom_emoji` |
+| [`custom_emoji.list`](#custom_emojilist)     | `gitlab_list_custom_emoji`   |
+
+### `custom_emoji.create`
+
+> Create group-level custom emoji using GraphQL-backed routes.
+
+- **Meta-herramienta**: `gitlab_custom_emoji`, acción `create`
+- **Herramienta individual**: `gitlab_create_custom_emoji`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo     | Requerido | Descripción                                              |
+| ------------ | -------- | --------- | -------------------------------------------------------- |
+| `group_path` | `string` | sí        | required,Group full path (e.g. my-group)                 |
+| `name`       | `string` | sí        | required,Emoji name without colons (e.g. party_parrot)   |
+| `url`        | `string` | sí        | required,URL to the emoji image (PNG or GIF recommended) |
+
+### `custom_emoji.delete`
+
+> Delete group-level custom emoji using GraphQL-backed routes.
+
+- **Meta-herramienta**: `gitlab_custom_emoji`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_custom_emoji`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                                                   |
+| --------- | -------- | --------- | ------------------------------------------------------------- |
+| `id`      | `string` | sí        | required,Custom emoji GID (e.g. `gid://gitlab/CustomEmoji/1`) |
+
+### `custom_emoji.list`
+
+> List group-level custom emoji using GraphQL-backed routes.
+
+- **Meta-herramienta**: `gitlab_custom_emoji`, acción `list`
+- **Herramienta individual**: `gitlab_list_custom_emoji`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción                                                                                                                             |
+| ------------ | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_path` | `string`  | sí        | required,Group full path (e.g. my-group)                                                                                                |
+| `after`      | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
+| `before`     | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
+| `first`      | `integer` | no        | Number of items to return (default 20, max 100)                                                                                         |
+| `last`       | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |

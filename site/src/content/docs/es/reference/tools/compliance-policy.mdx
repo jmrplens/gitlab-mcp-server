@@ -1,0 +1,66 @@
+---
+title: "Ajustes de política de cumplimiento"
+description: "Lee y actualiza los ajustes de política de cumplimiento de la instancia, el espacio de nombres que gestiona de forma centralizada las políticas de seguridad."
+sidebar:
+  order: 2
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un ajuste de administrador de la instancia: el espacio de nombres que gestiona de forma centralizada las políticas de seguridad, guardado como `csp_namespace_id`. `compliance_policy.get` lo lee y `compliance_policy.update` lo cambia.
+
+## Preguntas de ejemplo
+
+- "¿Qué espacio de nombres gestiona las políticas de seguridad de la instancia?"
+- "Fija el espacio de nombres de políticas de seguridad en el grupo 12"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `compliance_policy.get`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_compliance_policy` con `action` igual al nombre de la acción, como `get`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_get_compliance_policy_settings`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 2:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 2
+
+Acciones de solo lectura: 1 de 2, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                                 | Individual                                 |
+| ------------------------------------------------------ | ------------------------------------------ |
+| [`compliance_policy.get`](#compliance_policyget)       | `gitlab_get_compliance_policy_settings`    |
+| [`compliance_policy.update`](#compliance_policyupdate) | `gitlab_update_compliance_policy_settings` |
+
+### `compliance_policy.get`
+
+> Get the instance compliance policy settings. Returns: the centralized compliance security policy (CSP) namespace ID, or unset when no namespace hosts the compliance policy project. See also: [`compliance_policy.update`](#compliance_policyupdate), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+
+- **Meta-herramienta**: `gitlab_compliance_policy`, acción `get`
+- **Herramienta individual**: `gitlab_get_compliance_policy_settings`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `compliance_policy.update`
+
+> Update the instance compliance policy settings. Returns: the compliance policy settings with the newly bound centralized compliance security policy (CSP) namespace ID. See also: [`compliance_policy.get`](#compliance_policyget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+
+- **Meta-herramienta**: `gitlab_compliance_policy`, acción `update`
+- **Herramienta individual**: `gitlab_update_compliance_policy_settings`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro          | Tipo      | Requerido | Descripción                                             |
+| ------------------ | --------- | --------- | ------------------------------------------------------- |
+| `csp_namespace_id` | `integer` | no        | Namespace ID for the compliance security policy project |

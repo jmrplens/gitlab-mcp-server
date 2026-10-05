@@ -1,0 +1,93 @@
+---
+title: "Perfiles de análisis de seguridad"
+description: "Asocia y desasocia perfiles de análisis de seguridad en proyectos y grupos, y lee qué perfiles ejecuta un proyecto, a través de la API GraphQL de GitLab."
+sidebar:
+  order: 31
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un perfil de análisis de seguridad agrupa una configuración de análisis, como la detección de secretos o el análisis de dependencias, que se aplica a los proyectos y grupos a los que está asociado. `security_scan_profile.attach` recibe el nombre de uno de los perfiles predeterminados de GitLab, o el ID numérico de un perfil guardado, y lo asocia; `security_scan_profile.detach` recibe el ID del perfil guardado; `security_scan_profile.list_project_statuses` informa del estado de cada perfil en un proyecto.
+
+Los perfiles de análisis necesitan GitLab 18.7 o posterior, y cada perfil predeterminado tiene su propia versión mínima, que nombra el rechazo de una asociación. Todos los destinos tienen que pertenecer a un espacio de nombres de grupo, y todos al mismo espacio de nombres raíz.
+
+## Preguntas de ejemplo
+
+- "Asocia el perfil de análisis de dependencias al proyecto 42"
+- "¿Qué perfiles de análisis están activos en el proyecto 42?"
+- "Desasocia el perfil de análisis de estos grupos"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `security_scan_profile.attach`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_security_scan_profile` con `action` igual al nombre de la acción, como `attach`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_attach_security_scan_profile`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 3:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 3
+
+Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                                       | Individual                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [`security_scan_profile.attach`](#security_scan_profileattach)                               | `gitlab_attach_security_scan_profile`       |
+| [`security_scan_profile.detach`](#security_scan_profiledetach)                               | `gitlab_detach_security_scan_profile`       |
+| [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses) | `gitlab_list_project_scan_profile_statuses` |
+
+### `security_scan_profile.attach`
+
+> Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: [`security_scan_profile.detach`](#security_scan_profiledetach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach)
+
+- **Meta-herramienta**: `gitlab_security_scan_profile`, acción `attach`
+- **Herramienta individual**: `gitlab_attach_security_scan_profile`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------- | ----------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `security_scan_profile_id` | `string`    | sí        | Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4. container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name |
+| `group_ids`                | `integer[]` | no        | Numeric IDs of the groups to attach the profile to                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `project_ids`              | `integer[]` | no        | Numeric IDs of the projects to attach the profile to                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+Además necesita al menos uno de estos: `project_ids`; `group_ids`.
+
+### `security_scan_profile.detach`
+
+> Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.list_project_statuses`](#security_scan_profilelist_project_statuses), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach`](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach)
+
+- **Meta-herramienta**: `gitlab_security_scan_profile`, acción `detach`
+- **Herramienta individual**: `gitlab_detach_security_scan_profile`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                              |
+| -------------------------- | ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `security_scan_profile_id` | `string`    | sí        | Persisted scan profile identifier: the profile's numeric database ID (obtained from security_scan_profile.list_project_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, ...) is not accepted by detach |
+| `group_ids`                | `integer[]` | no        | Numeric IDs of the groups to detach the profile from                                                                                                                                                                                     |
+| `project_ids`              | `integer[]` | no        | Numeric IDs of the projects to detach the profile from                                                                                                                                                                                   |
+
+Además necesita al menos uno de estos: `project_ids`; `group_ids`.
+
+### `security_scan_profile.list_project_statuses`
+
+> List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: [`security_scan_profile.attach`](#security_scan_profileattach), [`security_scan_profile.detach`](#security_scan_profiledetach), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses`](https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses)
+
+- **Meta-herramienta**: `gitlab_security_scan_profile`, acción `list_project_statuses`
+- **Herramienta individual**: `gitlab_list_project_scan_profile_statuses`
+- **Nivel**: Ultimate
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo     | Requerido | Descripción                                                                                                         |
+| ------------------- | -------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| `project_full_path` | `string` | sí        | Full project path (namespace/project). Numeric project IDs are not accepted by the GraphQL project(fullPath:) field |

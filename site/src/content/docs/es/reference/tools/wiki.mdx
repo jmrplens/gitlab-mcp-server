@@ -1,0 +1,137 @@
+---
+title: "Wikis de proyecto"
+description: "Las páginas de la wiki de un proyecto y los archivos adjuntos a ella."
+sidebar:
+  order: 49
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+La wiki de un proyecto: listar sus páginas, leer una, crear, actualizar y borrar una, y subir un archivo adjunto que una página puede referenciar. Las wikis de grupo son acciones de [Grupos](/gitlab-mcp-server/reference/tools/group/), que se sirven a partir de Premium.
+
+## Preguntas de ejemplo
+
+- "Lista las páginas de la wiki del proyecto 42"
+- "Muestra la página Home de la wiki"
+- "Crea una página de la wiki con la lista de comprobación de la release"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `wiki.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_wiki` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_wiki_create`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 2 de 6, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                             | Individual                      |
+| -------------------------------------------------- | ------------------------------- |
+| [`wiki.create`](#wikicreate)                       | `gitlab_wiki_create`            |
+| [`wiki.delete`](#wikidelete)                       | `gitlab_wiki_delete`            |
+| [`wiki.get`](#wikiget)                             | `gitlab_wiki_get`               |
+| [`wiki.list`](#wikilist)                           | `gitlab_wiki_list`              |
+| [`wiki.update`](#wikiupdate)                       | `gitlab_wiki_update`            |
+| [`wiki.upload_attachment`](#wikiupload_attachment) | `gitlab_wiki_upload_attachment` |
+
+### `wiki.create`
+
+> Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. See also: [`wiki.get`](#wikiget), [`wiki.update`](#wikiupdate), [`wiki.list`](#wikilist).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `create`
+- **Herramienta individual**: `gitlab_wiki_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo                                             | Requerido | Descripción                                                 |
+| ------------ | ------------------------------------------------ | --------- | ----------------------------------------------------------- |
+| `content`    | `string`                                         | sí        | Content of the wiki page (Markdown, RDoc, AsciiDoc, or Org) |
+| `project_id` | `string/integer`                                 | sí        | Project ID or URL-encoded path                              |
+| `title`      | `string`                                         | sí        | Title of the wiki page                                      |
+| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown (default), rdoc, asciidoc, or org  |
+
+### `wiki.delete`
+
+> Delete a wiki page permanently. Returns: a success confirmation for the removed page. See also: [`wiki.get`](#wikiget), [`wiki.list`](#wikilist).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `delete`
+- **Herramienta individual**: `gitlab_wiki_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                 |
+| ------------ | ---------------- | --------- | ------------------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path              |
+| `slug`       | `string`         | sí        | URL-encoded slug of the wiki page to delete |
+
+### `wiki.get`
+
+> Get a single wiki page by slug. Returns: the page title, slug, format, content, and encoding. See also: [`wiki.list`](#wikilist), [`wiki.update`](#wikiupdate), [`wiki.delete`](#wikidelete).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `get`
+- **Herramienta individual**: `gitlab_wiki_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                           |
+| ------------- | ---------------- | --------- | ----------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                        |
+| `slug`        | `string`         | sí        | URL-encoded slug of the wiki page (e.g. 'my-page')    |
+| `render_html` | `boolean`        | no        | Return HTML-rendered content instead of raw format    |
+| `version`     | `string`         | no        | Wiki page version SHA to retrieve a specific revision |
+
+### `wiki.list`
+
+> List a project's wiki pages. Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. See also: [`wiki.get`](#wikiget), [`wiki.create`](#wikicreate).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `list`
+- **Herramienta individual**: `gitlab_wiki_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                          |
+| -------------- | ---------------- | --------- | ------------------------------------ |
+| `project_id`   | `string/integer` | sí        | Project ID or URL-encoded path       |
+| `with_content` | `boolean`        | no        | Include page content in the response |
+
+### `wiki.update`
+
+> Update an existing wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. See also: [`wiki.get`](#wikiget), [`wiki.delete`](#wikidelete), [`wiki.list`](#wikilist).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `update`
+- **Herramienta individual**: `gitlab_wiki_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo                                             | Requerido | Descripción                                      |
+| ------------ | ------------------------------------------------ | --------- | ------------------------------------------------ |
+| `project_id` | `string/integer`                                 | sí        | Project ID or URL-encoded path                   |
+| `slug`       | `string`                                         | sí        | URL-encoded slug of the wiki page to update      |
+| `content`    | `string`                                         | no        | New content for the wiki page                    |
+| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org |
+| `title`      | `string`                                         | no        | New title for the wiki page                      |
+
+### `wiki.upload_attachment`
+
+> Upload an attachment to the project wiki repository. Returns: the attachment file name, file path, branch, URL, and ready-to-paste Markdown link. See also: [`wiki.get`](#wikiget), [`wiki.update`](#wikiupdate).
+
+- **Meta-herramienta**: `gitlab_wiki`, acción `upload_attachment`
+- **Herramienta individual**: `gitlab_wiki_upload_attachment`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                               |
+| ---------------- | ---------------- | --------- | ------------------------------------------------------------------------- |
+| `filename`       | `string`         | sí        | Name of the file to upload (e.g. diagram.png)                             |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                            |
+| `branch`         | `string`         | no        | Branch to upload the attachment to                                        |
+| `content_base64` | `string`         | no        | Base64-encoded file content. Provide either content_base64 or file_path   |
+| `file_path`      | `string`         | no        | Absolute path to a local file. Provide either file_path or content_base64 |

@@ -1,0 +1,866 @@
+---
+title: "Tokens de acceso y credenciales"
+description: "Tokens de acceso de proyecto, de grupo y personales, tokens y claves de despliegue, solicitudes de acceso e invitaciones."
+sidebar:
+  order: 44
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Las credenciales que dan acceso a un proyecto o a un grupo a alguien o a algo: tokens de acceso de proyecto, de grupo y personales (listar, leer, rotar y revocar, y crear para proyectos y grupos), tokens de despliegue, claves de despliegue, las solicitudes de acceso que presentan los usuarios para unirse y las invitaciones que se les envían. Rotar un token lo sustituye en una llamada, así que la configuración de CI/CD que lo guarda sigue funcionando; revocar o borrar una credencial es destructivo.
+
+Crear un token de acceso personal es una acción de usuario y no una de estas (consulta [Usuarios](/gitlab-mcp-server/reference/tools/user/)), igual que las claves SSH y los tokens de suplantación. Los miembros de proyectos y grupos se gestionan en las páginas de [Proyectos](/gitlab-mcp-server/reference/tools/project/) y [Grupos](/gitlab-mcp-server/reference/tools/group/), y el ámbito del token de job de CI/CD en [Jobs](/gitlab-mcp-server/reference/tools/job/).
+
+## Preguntas de ejemplo
+
+- "Lista los tokens de acceso del proyecto 42"
+- "Rota el token de proyecto deploy-bot antes de que caduque"
+- "Crea un token de despliegue de solo lectura para my-group/my-app"
+- "Aprueba las solicitudes de acceso pendientes del grupo platform"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `access.approve_group`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_access` con `action` igual al nombre de la acción, como `approve_group`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_access_request_approve_group`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 19 de 48, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+
+| Acción                                                                       | Individual                                 |
+| ---------------------------------------------------------------------------- | ------------------------------------------ |
+| [`access.approve_group`](#accessapprove_group)                               | `gitlab_access_request_approve_group`      |
+| [`access.approve_project`](#accessapprove_project)                           | `gitlab_access_request_approve_project`    |
+| [`access.deny_group`](#accessdeny_group)                                     | `gitlab_access_request_deny_group`         |
+| [`access.deny_project`](#accessdeny_project)                                 | `gitlab_access_request_deny_project`       |
+| [`access.deploy_key_add`](#accessdeploy_key_add)                             | `gitlab_deploy_key_add`                    |
+| [`access.deploy_key_add_instance`](#accessdeploy_key_add_instance)           | `gitlab_deploy_key_add_instance`           |
+| [`access.deploy_key_delete`](#accessdeploy_key_delete)                       | `gitlab_deploy_key_delete`                 |
+| [`access.deploy_key_enable`](#accessdeploy_key_enable)                       | `gitlab_deploy_key_enable`                 |
+| [`access.deploy_key_get`](#accessdeploy_key_get)                             | `gitlab_deploy_key_get`                    |
+| [`access.deploy_key_list_all`](#accessdeploy_key_list_all)                   | `gitlab_deploy_key_list_all`               |
+| [`access.deploy_key_list_project`](#accessdeploy_key_list_project)           | `gitlab_deploy_key_list_project`           |
+| [`access.deploy_key_list_user_project`](#accessdeploy_key_list_user_project) | `gitlab_deploy_key_list_user_project`      |
+| [`access.deploy_key_update`](#accessdeploy_key_update)                       | `gitlab_deploy_key_update`                 |
+| [`access.deploy_token_create_group`](#accessdeploy_token_create_group)       | `gitlab_deploy_token_create_group`         |
+| [`access.deploy_token_create_project`](#accessdeploy_token_create_project)   | `gitlab_deploy_token_create_project`       |
+| [`access.deploy_token_delete_group`](#accessdeploy_token_delete_group)       | `gitlab_deploy_token_delete_group`         |
+| [`access.deploy_token_delete_project`](#accessdeploy_token_delete_project)   | `gitlab_deploy_token_delete_project`       |
+| [`access.deploy_token_get_group`](#accessdeploy_token_get_group)             | `gitlab_deploy_token_get_group`            |
+| [`access.deploy_token_get_project`](#accessdeploy_token_get_project)         | `gitlab_deploy_token_get_project`          |
+| [`access.deploy_token_list_all`](#accessdeploy_token_list_all)               | `gitlab_deploy_token_list_all`             |
+| [`access.deploy_token_list_group`](#accessdeploy_token_list_group)           | `gitlab_deploy_token_list_group`           |
+| [`access.deploy_token_list_project`](#accessdeploy_token_list_project)       | `gitlab_deploy_token_list_project`         |
+| [`access.invite_group`](#accessinvite_group)                                 | `gitlab_group_invite`                      |
+| [`access.invite_list_group`](#accessinvite_list_group)                       | `gitlab_group_invite_list_pending`         |
+| [`access.invite_list_project`](#accessinvite_list_project)                   | `gitlab_project_invite_list_pending`       |
+| [`access.invite_project`](#accessinvite_project)                             | `gitlab_project_invite`                    |
+| [`access.request_group`](#accessrequest_group)                               | `gitlab_access_request_request_group`      |
+| [`access.request_list_group`](#accessrequest_list_group)                     | `gitlab_access_request_list_group`         |
+| [`access.request_list_project`](#accessrequest_list_project)                 | `gitlab_access_request_list_project`       |
+| [`access.request_project`](#accessrequest_project)                           | `gitlab_access_request_request_project`    |
+| [`access.token_group_create`](#accesstoken_group_create)                     | `gitlab_group_access_token_create`         |
+| [`access.token_group_get`](#accesstoken_group_get)                           | `gitlab_group_access_token_get`            |
+| [`access.token_group_list`](#accesstoken_group_list)                         | `gitlab_group_access_token_list`           |
+| [`access.token_group_revoke`](#accesstoken_group_revoke)                     | `gitlab_group_access_token_revoke`         |
+| [`access.token_group_rotate`](#accesstoken_group_rotate)                     | `gitlab_group_access_token_rotate`         |
+| [`access.token_group_rotate_self`](#accesstoken_group_rotate_self)           | `gitlab_group_access_token_rotate_self`    |
+| [`access.token_personal_get`](#accesstoken_personal_get)                     | `gitlab_personal_access_token_get`         |
+| [`access.token_personal_list`](#accesstoken_personal_list)                   | `gitlab_personal_access_token_list`        |
+| [`access.token_personal_revoke`](#accesstoken_personal_revoke)               | `gitlab_personal_access_token_revoke`      |
+| [`access.token_personal_revoke_self`](#accesstoken_personal_revoke_self)     | `gitlab_personal_access_token_revoke_self` |
+| [`access.token_personal_rotate`](#accesstoken_personal_rotate)               | `gitlab_personal_access_token_rotate`      |
+| [`access.token_personal_rotate_self`](#accesstoken_personal_rotate_self)     | `gitlab_personal_access_token_rotate_self` |
+| [`access.token_project_create`](#accesstoken_project_create)                 | `gitlab_project_access_token_create`       |
+| [`access.token_project_get`](#accesstoken_project_get)                       | `gitlab_project_access_token_get`          |
+| [`access.token_project_list`](#accesstoken_project_list)                     | `gitlab_project_access_token_list`         |
+| [`access.token_project_revoke`](#accesstoken_project_revoke)                 | `gitlab_project_access_token_revoke`       |
+| [`access.token_project_rotate`](#accesstoken_project_rotate)                 | `gitlab_project_access_token_rotate`       |
+| [`access.token_project_rotate_self`](#accesstoken_project_rotate_self)       | `gitlab_project_access_token_rotate_self`  |
+
+### `access.approve_group`
+
+> Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: [`access.request_list_group`](#accessrequest_list_group), [`access.deny_group`](#accessdeny_group), [`group.members`](/gitlab-mcp-server/reference/tools/group/#groupmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `approve_group`
+- **Herramienta individual**: `gitlab_access_request_approve_group`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                                                                                                                                                          |
+| -------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `group_id`     | `string/integer` | sí        | Group ID or path                                                                                                                                                                     |
+| `user_id`      | `integer`        | sí        | User ID of the access requester                                                                                                                                                      |
+| `access_level` | `integer`        | no        | Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30 |
+
+### `access.approve_project`
+
+> Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: [`access.request_list_project`](#accessrequest_list_project), [`access.deny_project`](#accessdeny_project), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `approve_project`
+- **Herramienta individual**: `gitlab_access_request_approve_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                                                                                                                                                          |
+| -------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_id`   | `string/integer` | sí        | Project ID or path                                                                                                                                                                   |
+| `user_id`      | `integer`        | sí        | User ID of the access requester                                                                                                                                                      |
+| `access_level` | `integer`        | no        | Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30 |
+
+### `access.deny_group`
+
+> Deny a pending group access request, removing it without granting membership. Returns: a success status and confirmation message. See also: [`access.request_list_group`](#accessrequest_list_group), [`access.approve_group`](#accessapprove_group), [`group.members`](/gitlab-mcp-server/reference/tools/group/#groupmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deny_group`
+- **Herramienta individual**: `gitlab_access_request_deny_group`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                     |
+| ---------- | ---------------- | --------- | ------------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or path                |
+| `user_id`  | `integer`        | sí        | User ID of the access requester |
+
+### `access.deny_project`
+
+> Deny a pending project access request, removing it without granting membership. Returns: a success status and confirmation message. See also: [`access.request_list_project`](#accessrequest_list_project), [`access.approve_project`](#accessapprove_project), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deny_project`
+- **Herramienta individual**: `gitlab_access_request_deny_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                     |
+| ------------ | ---------------- | --------- | ------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or path              |
+| `user_id`    | `integer`        | sí        | User ID of the access requester |
+
+### `access.deploy_key_add`
+
+> Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_enable`](#accessdeploy_key_enable).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_add`
+- **Herramienta individual**: `gitlab_deploy_key_add`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                             |
+| ------------ | ---------------- | --------- | --------------------------------------- |
+| `key`        | `string`         | sí        | Public SSH key content                  |
+| `project_id` | `string/integer` | sí        | Project ID or path                      |
+| `title`      | `string`         | sí        | Deploy key title                        |
+| `can_push`   | `boolean`        | no        | Whether the key can push to the project |
+| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                |
+
+### `access.deploy_key_add_instance`
+
+> Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: [`access.deploy_key_list_all`](#accessdeploy_key_list_all), [`access.deploy_key_enable`](#accessdeploy_key_enable).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_add_instance`
+- **Herramienta individual**: `gitlab_deploy_key_add_instance`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo     | Requerido | Descripción              |
+| ------------ | -------- | --------- | ------------------------ |
+| `key`        | `string` | sí        | Public SSH key content   |
+| `title`      | `string` | sí        | Deploy key title         |
+| `expires_at` | `string` | no        | Expiry date (YYYY-MM-DD) |
+
+### `access.deploy_key_delete`
+
+> Delete a deploy key from a project (removes it from all projects where it is enabled). Returns: a success confirmation. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_list_project`](#accessdeploy_key_list_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_delete`
+- **Herramienta individual**: `gitlab_deploy_key_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                 |
+| --------------- | ---------------- | --------- | --------------------------------------------------------------------------- |
+| `deploy_key_id` | `integer`        | sí        | Deploy key ID returned by deploy key operations. Do not use deploy_token_id |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                          |
+
+### `access.deploy_key_enable`
+
+> Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: [`access.deploy_key_list_all`](#accessdeploy_key_list_all), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_get`](#accessdeploy_key_get).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_enable`
+- **Herramienta individual**: `gitlab_deploy_key_enable`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                         |
+| --------------- | ---------------- | --------- | --------------------------------------------------- |
+| `deploy_key_id` | `integer`        | sí        | Deploy key ID to enable. Do not use deploy_token_id |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                  |
+
+### `access.deploy_key_get`
+
+> Get a single project deploy key by id. Returns: the deploy key with title, key, fingerprint, fingerprint_sha256, can_push, created_at, and expires_at. See also: [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_update`](#accessdeploy_key_update), [`access.deploy_key_delete`](#accessdeploy_key_delete).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_get`
+- **Herramienta individual**: `gitlab_deploy_key_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                 |
+| --------------- | ---------------- | --------- | --------------------------------------------------------------------------- |
+| `deploy_key_id` | `integer`        | sí        | Deploy key ID returned by deploy key operations. Do not use deploy_token_id |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                          |
+
+### `access.deploy_key_list_all`
+
+> List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of access.deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: [`access.deploy_key_add_instance`](#accessdeploy_key_add_instance), [`access.deploy_key_enable`](#accessdeploy_key_enable), [`access.deploy_key_list_project`](#accessdeploy_key_list_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_list_all`
+- **Herramienta individual**: `gitlab_deploy_key_list_all`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. id, title, created_at)                                                                                           |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `public`     | `boolean`                | no        | Filter by public keys                                                                                                                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `access.deploy_key_list_project`
+
+> List a project's SSH deploy keys with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_add`](#accessdeploy_key_add), [`access.deploy_key_enable`](#accessdeploy_key_enable).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_list_project`
+- **Herramienta individual**: `gitlab_deploy_key_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. id, title, created_at)                                                                                           |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `access.deploy_key_list_user_project`
+
+> List the deploy keys across a user's projects (admin only) with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_get`](#accessdeploy_key_get), [`user.get`](/gitlab-mcp-server/reference/tools/user/#userget).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_list_user_project`
+- **Herramienta individual**: `gitlab_deploy_key_list_user_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`    | `string/integer`         | sí        | User ID or username                                                                                                                               |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. id, title, created_at)                                                                                           |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `access.deploy_key_update`
+
+> Update a project deploy key's title or push permission. Returns: the updated deploy key. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_delete`](#accessdeploy_key_delete).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_key_update`
+- **Herramienta individual**: `gitlab_deploy_key_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                 |
+| --------------- | ---------------- | --------- | --------------------------------------------------------------------------- |
+| `deploy_key_id` | `integer`        | sí        | Deploy key ID returned by deploy key operations. Do not use deploy_token_id |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                          |
+| `can_push`      | `boolean`        | no        | Whether the key can push to the project                                     |
+| `title`         | `string`         | no        | New deploy key title                                                        |
+
+### `access.deploy_token_create_group`
+
+> Create a deploy token for a group. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: [`access.deploy_token_list_group`](#accessdeploy_token_list_group), [`access.deploy_token_get_group`](#accessdeploy_token_get_group), [`access.deploy_token_delete_group`](#accessdeploy_token_delete_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_create_group`
+- **Herramienta individual**: `gitlab_deploy_token_create_group`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                     |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path                                                                                    |
+| `name`       | `string`         | sí        | Deploy token name                                                                                               |
+| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
+| `scopes`     | `string[]`       | no        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
+| `username`   | `string`         | no        | Username for the deploy token                                                                                   |
+
+### `access.deploy_token_create_project`
+
+> Create a deploy token for a project. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: [`access.deploy_token_list_project`](#accessdeploy_token_list_project), [`access.deploy_token_get_project`](#accessdeploy_token_get_project), [`access.deploy_token_delete_project`](#accessdeploy_token_delete_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_create_project`
+- **Herramienta individual**: `gitlab_deploy_token_create_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                     |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `name`       | `string`         | sí        | Deploy token name                                                                                               |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                  |
+| `expires_at` | `string`         | no        | Expiry date (YYYY-MM-DD)                                                                                        |
+| `scopes`     | `string[]`       | no        | Array of scopes (read_repository, read_registry, write_registry, read_package_registry, write_package_registry) |
+| `username`   | `string`         | no        | Username for the deploy token                                                                                   |
+
+### `access.deploy_token_delete_group`
+
+> Permanently delete a group deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: [`access.deploy_token_list_group`](#accessdeploy_token_list_group), [`access.deploy_token_get_group`](#accessdeploy_token_get_group), [`access.deploy_token_create_group`](#accessdeploy_token_create_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_delete_group`
+- **Herramienta individual**: `gitlab_deploy_token_delete_group`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                  |
+| ----------------- | ---------------- | --------- | ---------------------------- |
+| `deploy_token_id` | `integer`        | sí        | Deploy token ID              |
+| `group_id`        | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `access.deploy_token_delete_project`
+
+> Permanently delete a project deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: [`access.deploy_token_list_project`](#accessdeploy_token_list_project), [`access.deploy_token_get_project`](#accessdeploy_token_get_project), [`access.deploy_token_create_project`](#accessdeploy_token_create_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_delete_project`
+- **Herramienta individual**: `gitlab_deploy_token_delete_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                    |
+| ----------------- | ---------------- | --------- | ------------------------------ |
+| `deploy_token_id` | `integer`        | sí        | Deploy token ID                |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `access.deploy_token_get_group`
+
+> Get a single group deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: [`access.deploy_token_list_group`](#accessdeploy_token_list_group), [`access.deploy_token_create_group`](#accessdeploy_token_create_group), [`access.deploy_token_delete_group`](#accessdeploy_token_delete_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_get_group`
+- **Herramienta individual**: `gitlab_deploy_token_get_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                  |
+| ----------------- | ---------------- | --------- | ---------------------------- |
+| `deploy_token_id` | `integer`        | sí        | Deploy token ID              |
+| `group_id`        | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `access.deploy_token_get_project`
+
+> Get a single project deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: [`access.deploy_token_list_project`](#accessdeploy_token_list_project), [`access.deploy_token_create_project`](#accessdeploy_token_create_project), [`access.deploy_token_delete_project`](#accessdeploy_token_delete_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_get_project`
+- **Herramienta individual**: `gitlab_deploy_token_get_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                    |
+| ----------------- | ---------------- | --------- | ------------------------------ |
+| `deploy_token_id` | `integer`        | sí        | Deploy token ID                |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `access.deploy_token_list_all`
+
+> List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of access.deploy_token_list_project or access.deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: [`access.deploy_token_list_project`](#accessdeploy_token_list_project), [`access.deploy_token_list_group`](#accessdeploy_token_list_group), [`access.deploy_token_create_project`](#accessdeploy_token_create_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_list_all`
+- **Herramienta individual**: `gitlab_deploy_token_list_all`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `access.deploy_token_list_group`
+
+> List deploy tokens owned by a group. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: [`access.deploy_token_get_group`](#accessdeploy_token_get_group), [`access.deploy_token_create_group`](#accessdeploy_token_create_group), [`access.deploy_token_delete_group`](#accessdeploy_token_delete_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_list_group`
+- **Herramienta individual**: `gitlab_deploy_token_list_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer`         | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `order_by`   | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+
+### `access.deploy_token_list_project`
+
+> List deploy tokens owned by a project. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: [`access.deploy_token_get_project`](#accessdeploy_token_get_project), [`access.deploy_token_create_project`](#accessdeploy_token_create_project), [`access.deploy_token_delete_project`](#accessdeploy_token_delete_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `deploy_token_list_project`
+- **Herramienta individual**: `gitlab_deploy_token_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+
+### `access.invite_group`
+
+> Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: [`access.invite_list_group`](#accessinvite_list_group), [`group.group_member_add`](/gitlab-mcp-server/reference/tools/group/#groupgroup_member_add), [`access.request_group`](#accessrequest_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `invite_group`
+- **Herramienta individual**: `gitlab_group_invite`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo             | Requerido | Descripción                                                                                                                                                                       |
+| --------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`              | `integer`        | sí        | Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
+| `group_id`                  | `string/integer` | sí        | Group ID or URL-encoded path                                                                                                                                                      |
+| `email`                     | `string`         | no        | Email address to invite (either email or user_id required)                                                                                                                        |
+| `expires_at`                | `string`         | no        | Expiration date for the invitation (YYYY-MM-DD)                                                                                                                                   |
+| `id`                        | `string/integer` | no        | Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)                                                                |
+| `invite_source`             | `string`         | no        | Source of the invitation that starts the member creation process                                                                                                                  |
+| `member_role_id` (Ultimate) | `integer`        | no        | Custom role to assign the new member (Ultimate only)                                                                                                                              |
+| `user_id`                   | `integer`        | no        | User ID to invite (either email or user_id required)                                                                                                                              |
+
+### `access.invite_list_group`
+
+> List a group's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: [`access.invite_group`](#accessinvite_group), [`group.members`](/gitlab-mcp-server/reference/tools/group/#groupmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `invite_list_group`
+- **Herramienta individual**: `gitlab_group_invite_list_pending`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer`         | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by                                                                                                       |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `query`      | `string`                 | no        | Filter invitations by email or name                                                                                                               |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset-paginated results: 'asc' or 'desc'                                                                                          |
+
+### `access.invite_list_project`
+
+> List a project's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: [`access.invite_project`](#accessinvite_project), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `invite_list_project`
+- **Herramienta individual**: `gitlab_project_invite_list_pending`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by                                                                                                       |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `query`      | `string`                 | no        | Filter invitations by email or name                                                                                                               |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset-paginated results: 'asc' or 'desc'                                                                                          |
+
+### `access.invite_project`
+
+> Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: [`access.invite_list_project`](#accessinvite_list_project), [`project.member_add`](/gitlab-mcp-server/reference/tools/project/#projectmember_add), [`access.request_project`](#accessrequest_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `invite_project`
+- **Herramienta individual**: `gitlab_project_invite`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo             | Requerido | Descripción                                                                                                                                                                       |
+| --------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access_level`              | `integer`        | sí        | Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner) |
+| `project_id`                | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                    |
+| `email`                     | `string`         | no        | Email address to invite (either email or user_id required)                                                                                                                        |
+| `expires_at`                | `string`         | no        | Expiration date for the invitation (YYYY-MM-DD)                                                                                                                                   |
+| `id`                        | `string/integer` | no        | Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)                                                            |
+| `invite_source`             | `string`         | no        | Source of the invitation that starts the member creation process                                                                                                                  |
+| `member_role_id` (Ultimate) | `integer`        | no        | Custom role to assign the new member (Ultimate only)                                                                                                                              |
+| `user_id`                   | `integer`        | no        | User ID to invite (either email or user_id required)                                                                                                                              |
+
+### `access.request_group`
+
+> Request access to a group as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: [`access.request_list_group`](#accessrequest_list_group), [`access.approve_group`](#accessapprove_group), [`access.deny_group`](#accessdeny_group).
+
+- **Meta-herramienta**: `gitlab_access`, acción `request_group`
+- **Herramienta individual**: `gitlab_access_request_request_group`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción      |
+| ---------- | ---------------- | --------- | ---------------- |
+| `group_id` | `string/integer` | sí        | Group ID or path |
+
+### `access.request_list_group`
+
+> List pending access requests for a group. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: [`access.approve_group`](#accessapprove_group), [`access.deny_group`](#accessdeny_group), [`group.members`](/gitlab-mcp-server/reference/tools/group/#groupmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `request_list_group`
+- **Herramienta individual**: `gitlab_access_request_list_group`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer`         | sí        | Group ID or path                                                                                                                                  |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset-paginated result sets (e.g. id)                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order: asc or desc                                                                                                                           |
+
+### `access.request_list_project`
+
+> List pending access requests for a project. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: [`access.approve_project`](#accessapprove_project), [`access.deny_project`](#accessdeny_project), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+
+- **Meta-herramienta**: `gitlab_access`, acción `request_list_project`
+- **Herramienta individual**: `gitlab_access_request_list_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset-paginated result sets (e.g. id)                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order: asc or desc                                                                                                                           |
+
+### `access.request_project`
+
+> Request access to a project as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: [`access.request_list_project`](#accessrequest_list_project), [`access.approve_project`](#accessapprove_project), [`access.deny_project`](#accessdeny_project).
+
+- **Meta-herramienta**: `gitlab_access`, acción `request_project`
+- **Herramienta individual**: `gitlab_access_request_request_project`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+
+### `access.token_group_create`
+
+> Use for GitLab group access tokens: this action creates a group-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_create`
+- **Herramienta individual**: `gitlab_group_access_token_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                                                                                                                                                                                                      |
+| -------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`     | `string/integer` | sí        | Group ID or URL-encoded path                                                                                                                                                                                                     |
+| `name`         | `string`         | sí        | Token name                                                                                                                                                                                                                       |
+| `scopes`       | `string[]`       | sí        | Token scopes: api, read_api, read_repository, write_repository, etc.                                                                                                                                                             |
+| `access_level` | `integer`        | no        | Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens |
+| `description`  | `string`         | no        | Token description                                                                                                                                                                                                                |
+| `expires_at`   | `string`         | no        | Expiry date in YYYY-MM-DD format                                                                                                                                                                                                 |
+
+### `access.token_group_get`
+
+> Use for GitLab group access tokens: this action gets a group-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_get`
+- **Herramienta individual**: `gitlab_group_access_token_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+| `token_id` | `integer`        | sí        | Access token ID              |
+
+### `access.token_group_list`
+
+> Use for GitLab group access tokens: this action lists group-scoped API tokens.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_list`
+- **Herramienta individual**: `gitlab_group_access_token_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo                                                                                                                                | Requerido | Descripción                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`         | `string/integer`                                                                                                                    | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `created_after`    | `string`                                                                                                                            | no        | Return tokens created on or after this date (YYYY-MM-DD)                                                                                          |
+| `created_before`   | `string`                                                                                                                            | no        | Return tokens created on or before this date (YYYY-MM-DD)                                                                                         |
+| `expires_after`    | `string`                                                                                                                            | no        | Return tokens that expire on or after this date (YYYY-MM-DD)                                                                                      |
+| `expires_before`   | `string`                                                                                                                            | no        | Return tokens that expire on or before this date (YYYY-MM-DD)                                                                                     |
+| `last_used_after`  | `string`                                                                                                                            | no        | Return tokens last used on or after this date (YYYY-MM-DD)                                                                                        |
+| `last_used_before` | `string`                                                                                                                            | no        | Return tokens last used on or before this date (YYYY-MM-DD)                                                                                       |
+| `order_by`         | `string`                                                                                                                            | no        | Column to order results by (e.g. created_at, expires_at, last_used_at)                                                                            |
+| `page`             | `integer`                                                                                                                           | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`       | `string`                                                                                                                            | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`       | `string`                                                                                                                            | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`         | `integer`                                                                                                                           | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `revoked`          | `boolean`                                                                                                                           | no        | Filter by revoked status: true to return only revoked tokens, false for non-revoked                                                               |
+| `search`           | `string`                                                                                                                            | no        | Filter tokens by name (partial match)                                                                                                             |
+| `sort`             | `string` (`created_asc`, `created_desc`, `expires_asc`, `expires_desc`, `last_used_asc`, `last_used_desc`, `name_asc`, `name_desc`) | no        | Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc                              |
+| `state`            | `string` (`active`, `inactive`)                                                                                                     | no        | Token state filter: active, inactive                                                                                                              |
+
+### `access.token_group_revoke`
+
+> Use for GitLab group access tokens: this action revokes a group-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_revoke`
+- **Herramienta individual**: `gitlab_group_access_token_revoke`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+| `token_id` | `integer`        | sí        | Access token ID to revoke    |
+
+### `access.token_group_rotate`
+
+> Use for GitLab group access tokens: this action rotates a group-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_rotate`
+- **Herramienta individual**: `gitlab_group_access_token_rotate`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                          |
+| ------------ | ---------------- | --------- | ------------------------------------ |
+| `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path         |
+| `token_id`   | `integer`        | sí        | Access token ID                      |
+| `expires_at` | `string`         | no        | New expiry date in YYYY-MM-DD format |
+
+### `access.token_group_rotate_self`
+
+> Use for GitLab group access tokens: this action rotates the group-scoped token that authenticates this request itself, with no token_id parameter.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_group_rotate_self`
+- **Herramienta individual**: `gitlab_group_access_token_rotate_self`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                          |
+| ------------ | ---------------- | --------- | ------------------------------------ |
+| `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path         |
+| `expires_at` | `string`         | no        | New expiry date in YYYY-MM-DD format |
+
+### `access.token_personal_get`
+
+> Use for GitLab personal access tokens: this action gets a personal-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_get`
+- **Herramienta individual**: `gitlab_personal_access_token_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción                                         |
+| ---------- | --------- | --------- | --------------------------------------------------- |
+| `token_id` | `integer` | no        | Access token ID (required, use 0 for current token) |
+
+### `access.token_personal_list`
+
+> Use for GitLab personal access tokens: this action lists personal-scoped API tokens.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_list`
+- **Herramienta individual**: `gitlab_personal_access_token_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo                                                                                                                                | Requerido | Descripción                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `created_after`    | `string`                                                                                                                            | no        | Return tokens created on or after this date (YYYY-MM-DD)                                                                                          |
+| `created_before`   | `string`                                                                                                                            | no        | Return tokens created on or before this date (YYYY-MM-DD)                                                                                         |
+| `expires_after`    | `string`                                                                                                                            | no        | Return tokens that expire on or after this date (YYYY-MM-DD)                                                                                      |
+| `expires_before`   | `string`                                                                                                                            | no        | Return tokens that expire on or before this date (YYYY-MM-DD)                                                                                     |
+| `last_used_after`  | `string`                                                                                                                            | no        | Return tokens last used on or after this date (YYYY-MM-DD)                                                                                        |
+| `last_used_before` | `string`                                                                                                                            | no        | Return tokens last used on or before this date (YYYY-MM-DD)                                                                                       |
+| `order_by`         | `string`                                                                                                                            | no        | Column to order results by (e.g. created_at, expires_at, last_used_at)                                                                            |
+| `page`             | `integer`                                                                                                                           | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`       | `string`                                                                                                                            | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`       | `string`                                                                                                                            | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`         | `integer`                                                                                                                           | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `revoked`          | `boolean`                                                                                                                           | no        | Filter by revoked status: true to return only revoked tokens, false for non-revoked                                                               |
+| `search`           | `string`                                                                                                                            | no        | Search by token name                                                                                                                              |
+| `sort`             | `string` (`created_asc`, `created_desc`, `expires_asc`, `expires_desc`, `last_used_asc`, `last_used_desc`, `name_asc`, `name_desc`) | no        | Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc                              |
+| `state`            | `string` (`active`, `inactive`)                                                                                                     | no        | Token state filter: active, inactive                                                                                                              |
+| `user_id`          | `integer`                                                                                                                           | no        | Filter by user ID (admin only)                                                                                                                    |
+
+### `access.token_personal_revoke`
+
+> Use for GitLab personal access tokens: this action revokes a personal-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_revoke`
+- **Herramienta individual**: `gitlab_personal_access_token_revoke`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción               |
+| ---------- | --------- | --------- | ------------------------- |
+| `token_id` | `integer` | sí        | Access token ID to revoke |
+
+### `access.token_personal_revoke_self`
+
+> Use for GitLab personal access tokens: this action revokes the personal-scoped token that authenticates this request itself, with no token_id parameter.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_revoke_self`
+- **Herramienta individual**: `gitlab_personal_access_token_revoke_self`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+Sin parámetros.
+
+### `access.token_personal_rotate`
+
+> Use for GitLab personal access tokens: this action rotates a personal-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_rotate`
+- **Herramienta individual**: `gitlab_personal_access_token_rotate`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción                          |
+| ------------ | --------- | --------- | ------------------------------------ |
+| `token_id`   | `integer` | sí        | Access token ID                      |
+| `expires_at` | `string`  | no        | New expiry date in YYYY-MM-DD format |
+
+### `access.token_personal_rotate_self`
+
+> Use for GitLab personal access tokens: this action rotates the personal-scoped token that authenticates this request itself, with no token_id parameter.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_personal_rotate_self`
+- **Herramienta individual**: `gitlab_personal_access_token_rotate_self`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo     | Requerido | Descripción                          |
+| ------------ | -------- | --------- | ------------------------------------ |
+| `expires_at` | `string` | no        | New expiry date in YYYY-MM-DD format |
+
+### `access.token_project_create`
+
+> Use for GitLab project access tokens: this action creates a project-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_create`
+- **Herramienta individual**: `gitlab_project_access_token_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro      | Tipo             | Requerido | Descripción                                                                                                                                                                                                                          |
+| -------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`         | `string`         | sí        | Token name                                                                                                                                                                                                                           |
+| `project_id`   | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                       |
+| `scopes`       | `string[]`       | sí        | Token scopes: api, read_api, read_repository, write_repository, etc.                                                                                                                                                                 |
+| `access_level` | `integer`        | no        | Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens |
+| `description`  | `string`         | no        | Token description                                                                                                                                                                                                                    |
+| `expires_at`   | `string`         | no        | Expiry date in YYYY-MM-DD format                                                                                                                                                                                                     |
+
+### `access.token_project_get`
+
+> Use for GitLab project access tokens: this action gets a project-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_get`
+- **Herramienta individual**: `gitlab_project_access_token_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `token_id`   | `integer`        | sí        | Access token ID                |
+
+### `access.token_project_list`
+
+> Use for GitLab project access tokens: this action lists project-scoped API tokens.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_list`
+- **Herramienta individual**: `gitlab_project_access_token_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                                                                                                | Requerido | Descripción                                                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                                                                                                                    | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                                                                                                                            | no        | Column to order results by (e.g. created_at, expires_at, last_used_at)                                                                            |
+| `page`       | `integer`                                                                                                                           | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                                                                                            | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                                                                                            | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                                                                                                                           | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`created_asc`, `created_desc`, `expires_asc`, `expires_desc`, `last_used_asc`, `last_used_desc`, `name_asc`, `name_desc`) | no        | Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc                              |
+| `state`      | `string` (`active`, `inactive`)                                                                                                     | no        | Token state filter: active, inactive                                                                                                              |
+
+### `access.token_project_revoke`
+
+> Use for GitLab project access tokens: this action revokes a project-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_revoke`
+- **Herramienta individual**: `gitlab_project_access_token_revoke`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `token_id`   | `integer`        | sí        | Access token ID to revoke      |
+
+### `access.token_project_rotate`
+
+> Use for GitLab project access tokens: this action rotates a project-scoped API token.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_rotate`
+- **Herramienta individual**: `gitlab_project_access_token_rotate`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                          |
+| ------------ | ---------------- | --------- | ------------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path       |
+| `token_id`   | `integer`        | sí        | Access token ID                      |
+| `expires_at` | `string`         | no        | New expiry date in YYYY-MM-DD format |
+
+### `access.token_project_rotate_self`
+
+> Use for GitLab project access tokens: this action rotates the project-scoped token that authenticates this request itself, with no token_id parameter.
+
+- **Meta-herramienta**: `gitlab_access`, acción `token_project_rotate_self`
+- **Herramienta individual**: `gitlab_project_access_token_rotate_self`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                          |
+| ------------ | ---------------- | --------- | ------------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path       |
+| `expires_at` | `string`         | no        | New expiry date in YYYY-MM-DD format |
