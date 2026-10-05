@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -180,6 +182,37 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 				t.Errorf("resource_documentation = %q, want %q", metadata.ResourceDocumentation, tt.want)
 			}
 		})
+	}
+}
+
+// TestDefaultResourceDocumentation_IsTheSitesOAuthApplicationPage holds the
+// default resource_documentation to the page it is documented as, the
+// documentation site's OAuth application page, and to that page existing.
+//
+// The URL is published in the metadata every OAuth client fetches and some
+// show it on a consent screen, so a dead one is the worst place for a 404; it
+// pointed for years at a path the site never served. The site's pages are the
+// MDX files under site/src/content/docs, served at their path with a trailing
+// slash, so the page this names has to be one of them.
+func TestDefaultResourceDocumentation_IsTheSitesOAuthApplicationPage(t *testing.T) {
+	t.Parallel()
+
+	const site = "https://jmrp.io/docs/gitlab-mcp-server/"
+	slug, onSite := strings.CutPrefix(DefaultResourceDocumentation, site)
+	if !onSite {
+		t.Fatalf("DefaultResourceDocumentation = %q, want a page of %s", DefaultResourceDocumentation, site)
+	}
+	if slug != "operations/oauth-app/" {
+		t.Errorf("DefaultResourceDocumentation names %q, want the OAuth application page operations/oauth-app/", slug)
+	}
+
+	page := filepath.Join("..", "..", "site", "src", "content", "docs", filepath.FromSlash(strings.TrimSuffix(slug, "/"))+".mdx")
+	content, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("%s names no page of the site: %v", DefaultResourceDocumentation, err)
+	}
+	if !strings.Contains(string(content), "\ntitle: OAuth application\n") {
+		t.Errorf("%s is not the OAuth application page", page)
 	}
 }
 

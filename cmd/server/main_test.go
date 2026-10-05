@@ -36,6 +36,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"slices"
@@ -1674,6 +1675,14 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
+		// The upload limit is written as a size with a suffix, which the
+		// entry used to describe as bytes alone, and its two bounds are held
+		// to the constants config enforces.
+		{entry: "-upload-max-file-size s", want: "a byte count, or one with a KB, MB or GB suffix"},
+		{entry: "-upload-max-file-size s", want: fmt.Sprintf("(default %dGB, at most %dGB)", config.DefaultMaxFileSize>>30, config.MaxFileSize>>30)},
+		{entry: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", want: "a byte count, or one with a KB, MB or GB suffix"},
+		{entry: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", want: fmt.Sprintf("(default %dGB, at most %dGB)", config.DefaultMaxFileSize>>30, config.MaxFileSize>>30)},
+		{entry: "-resource-documentation string", want: "(default: this project's OAuth application page)"},
 	} {
 		t.Run(tc.entry+" "+tc.want, func(t *testing.T) {
 			got := helpEntry(help, tc.entry)
@@ -1690,6 +1699,114 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 	}
 	if want := fmt.Sprintf("GitLab instance URL (default: %s;", config.DefaultGitLabURL); !strings.Contains(help, want) {
 		t.Errorf("the GITLAB_URL entry does not carry %q", want)
+	}
+}
+
+// TestPrintHelp_RetiredNames_SayWhatStartupDoesWithThem holds the paragraph
+// opening the environment block to what this version does with a retired
+// spelling. It used to say the unprefixed spelling still worked and would be
+// removed in 3.1.0, which stopped being true in 3.1.0 itself: nothing reads
+// one now, and the three that withhold part of what the server serves refuse
+// the start. The names it calls refusals are the ones [config.RetiredEnvUses]
+// refuses on, read by setting every retired spelling, so a fourth protection
+// added there fails here until the help names it.
+//
+// Not parallel: it sets environment variables.
+func TestPrintHelp_RetiredNames_SayWhatStartupDoesWithThem(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	_, rest, found := strings.Cut(help, "ENVIRONMENT VARIABLES (stdio mode)\n")
+	if !found {
+		t.Fatal("the help has no stdio environment block")
+	}
+	paragraph, _, _ := strings.Cut(rest, "\n\n")
+	paragraph = strings.Join(strings.Fields(paragraph), " ")
+
+	for _, stale := range []string{"still works", "still work", "is removed in"} {
+		t.Run("not "+stale, func(t *testing.T) {
+			if strings.Contains(paragraph, stale) {
+				t.Errorf("the paragraph says %q of names 3.1.0 removed: %s", stale, paragraph)
+			}
+		})
+	}
+	if !strings.Contains(paragraph, "removed in 3.1.0 and are no longer read") {
+		t.Errorf("the paragraph does not say the old spellings are no longer read: %s", paragraph)
+	}
+
+	for _, name := range config.PrefixedEnvNames() {
+		t.Setenv(config.RetiredEnvName(name), "1")
+	}
+	refuse, _ := config.RetiredEnvUses()
+	if len(refuse) == 0 {
+		t.Fatal("config.RetiredEnvUses() refuses on no retired name, so there is nothing to hold the help to")
+	}
+	for _, line := range refuse {
+		retired, _, _ := strings.Cut(line, " ")
+		t.Run(retired, func(t *testing.T) {
+			if !regexp.MustCompile(`\b` + regexp.QuoteMeta(retired) + `\b`).MatchString(paragraph) {
+				t.Errorf("startup refuses on %s, but the paragraph never names it: %s", retired, paragraph)
+			}
+		})
+	}
+}
+
+// TestPrintHelp_LinksTheDocumentationSite verifies that the help sends a reader
+// to the documentation site rather than to a path in the repository. The help
+// is read where the binary runs, which is seldom a checkout, so the telemetry
+// guide's path in the repository, which it used to name, was nothing a reader
+// could open, and the pages under docs/ that held the user documentation have
+// moved to the site.
+func TestPrintHelp_LinksTheDocumentationSite(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	if found := regexp.MustCompile(`docs/(guides|reference|concepts)/|getting-started\.md`).FindString(help); found != "" {
+		t.Errorf("the help names %q, a path in the repository rather than a page of the site", found)
+	}
+	for _, want := range []string{
+		"See\n  https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/.",
+		"Every other client: https://jmrp.io/docs/gitlab-mcp-server/install/clients/",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(help, want) {
+				t.Errorf("the help does not carry %q", want)
+			}
+		})
+	}
+}
+
+// TestPrintHelp_OpenCodeExample_UsesOpenCodesOwnKeys pins the OpenCode example
+// to the configuration OpenCode reads: servers under mcp in opencode.json,
+// each with a type, the command as an array and its variables under
+// environment. The example used to write an mcpServers block, which OpenCode
+// ignores, so a reader who copied it configured nothing.
+func TestPrintHelp_OpenCodeExample_UsesOpenCodesOwnKeys(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	_, rest, found := strings.Cut(help, "OpenCode (opencode.json):\n")
+	if !found {
+		t.Fatal("the help has no OpenCode example headed by its file name")
+	}
+	example, _, _ := strings.Cut(rest, "\n\n")
+	if strings.Contains(example, "mcpServers") {
+		t.Errorf("the OpenCode example uses mcpServers, which OpenCode does not read:\n%s", example)
+	}
+	for _, want := range []string{
+		`"mcp": {`,
+		`"type": "local"`,
+		`"command": ["/usr/local/bin/gitlab-mcp-server"]`,
+		`"environment": {`,
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(example, want) {
+				t.Errorf("the OpenCode example lacks %s:\n%s", want, example)
+			}
+		})
 	}
 }
 

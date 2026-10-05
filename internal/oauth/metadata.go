@@ -12,16 +12,23 @@ import (
 // DefaultResourceDocumentation is the RFC 9728 resource_documentation value a
 // deployment publishes when the operator names no page of their own.
 //
+// It is the documentation site's OAuth application page, which is the page the
+// field exists to point at: RFC 9728 defines no field for a client identifier,
+// so a resource server can tell a client which OAuth application to use only
+// through a page that says so, and this one says how to create that
+// application on GitLab, which scope to check and which redirect URIs each
+// client sends. An operator who has created one names their own page, carrying
+// its Application ID, through --resource-documentation.
+//
 // It must be a page that actually resolves, which is not a given: this pointed
-// at .../guides/oauth-app-setup/ for as long as the field has existed, and that
-// path has never been served. The documentation site has a flat structure with
-// no guides/ segment, and the OAuth application walkthrough lives only in the
-// repository, so the closest page that exists is the HTTP server one, whose
-// OAuth section links onward to the guide. A 404 is worse here than anywhere
+// at .../guides/oauth-app-setup/ for as long as the field had existed, a path
+// the site has never served, and then at the HTTP server page while the
+// walkthrough lived only in the repository. A 404 is worse here than anywhere
 // else it could appear: this URL is published in the protected-resource
 // metadata every OAuth client fetches, and some of them show it on the consent
-// screen a person is being asked to trust.
-const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/"
+// screen a person is being asked to trust. The test beside it holds the URL to
+// a page of the site.
+const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/operations/oauth-app/"
 
 // ResourceLinks carries the RFC 9728 URL fields an operator can point at their
 // own pages.
@@ -31,10 +38,9 @@ const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/ope
 // because three positional strings on one constructor would be easy to pass in
 // the wrong order.
 //
-// Documentation defaults to this project's HTTP server mode page when empty
-// (the OAuth setup guide's path is not served on the documentation site),
-// since a client that finds no guidance at all is worse off than one sent to
-// generic instructions. Policy and TermsOfService have no such default: they describe a
+// Documentation defaults to this project's OAuth application page when empty
+// ([DefaultResourceDocumentation]), since a client that finds no guidance at
+// all is worse off than one sent to generic instructions. Policy and TermsOfService have no such default: they describe a
 // specific deployment's undertakings, and this project cannot make them on an
 // operator's behalf.
 type ResourceLinks struct {
