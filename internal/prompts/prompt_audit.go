@@ -245,18 +245,8 @@ type memberGroups struct {
 func classifyMembers(members []*gl.ProjectMember) memberGroups {
 	var g memberGroups
 	for _, m := range members {
-		switch {
-		case m.AccessLevel >= 50:
-			g.owners = append(g.owners, m)
-		case m.AccessLevel >= 40:
-			g.maintainers = append(g.maintainers, m)
-		case m.AccessLevel >= 30:
-			g.developers = append(g.developers, m)
-		case m.AccessLevel >= 20:
-			g.reporters = append(g.reporters, m)
-		default:
-			g.guests = append(g.guests, m)
-		}
+		role := g.byAccessLevel(m.AccessLevel)
+		*role = append(*role, m)
 		if m.State == "blocked" {
 			g.blocked = append(g.blocked, m)
 		} else if m.State != "active" {
@@ -264,6 +254,29 @@ func classifyMembers(members []*gl.ProjectMember) memberGroups {
 		}
 	}
 	return g
+}
+
+// byAccessLevel returns the role list a member of the given access level is
+// filed under: owner from 50, maintainer from 40, developer from 30, reporter
+// from 20, and guest below that.
+//
+// It is a chain of early returns rather than a tagless switch because gremlins
+// maps a case expression to no coverage block and reports its mutants as not
+// covered, so it could not say whether a test holds these thresholds.
+func (g *memberGroups) byAccessLevel(level gl.AccessLevelValue) *[]*gl.ProjectMember {
+	if level >= 50 {
+		return &g.owners
+	}
+	if level >= 40 {
+		return &g.maintainers
+	}
+	if level >= 30 {
+		return &g.developers
+	}
+	if level >= 20 {
+		return &g.reporters
+	}
+	return &g.guests
 }
 
 // writeSharedGroups writes the shared groups section to the builder.
@@ -657,7 +670,12 @@ type scorecardData struct {
 
 // unreadSection is what a scorecard row and a section heading say instead of a
 // verdict when the call behind them failed.
-const unreadSection = toolutil.EmojiQuestion + " could not be read"
+//
+// It is one literal, U+2753 being [toolutil.EmojiQuestion], rather than that
+// constant joined to the words: a constant expression has no statement a test
+// can cover, and a mutation tool reports its operator as not covered.
+// TestUnreadSection_OpensWithTheQuestionEmoji holds the two to each other.
+const unreadSection = "❓ could not be read"
 
 // logUnreadAuditSections records, once per failed call, why a section of the
 // full audit carries no verdict. The message says so; the cause belongs in the
@@ -919,20 +937,23 @@ func formatAuditDate(t *time.Time) string {
 }
 
 // formatBytes converts bytes to a human-readable string.
+//
+// It is a chain of early returns rather than a tagless switch for the reason
+// [memberGroups.byAccessLevel] gives.
 func formatBytes(bytes int64) string {
 	const (
 		kb = 1024
 		mb = kb * 1024
 		gb = mb * 1024
 	)
-	switch {
-	case bytes >= gb:
+	if bytes >= gb {
 		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
-	case bytes >= mb:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
-	case bytes >= kb:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
-	default:
-		return fmt.Sprintf("%d B", bytes)
 	}
+	if bytes >= mb {
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	}
+	if bytes >= kb {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	}
+	return fmt.Sprintf("%d B", bytes)
 }

@@ -1,10 +1,11 @@
 package prompts
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -199,9 +200,13 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 		return promptResult(b.String()), nil
 	}
 
-	// Sort labels by total usage (open+closed issues + open MRs) descending
-	sort.Slice(labels, func(i, j int) bool {
-		return labelUsage(labels[i]) > labelUsage(labels[j])
+	// Sort labels by total usage (open+closed issues + open MRs) descending.
+	// The sort is stable and compares through cmp.Compare: labels that tie
+	// keep the order GitLab listed them in, where an unstable sort on a strict
+	// `>` left that order to the algorithm, so a `>=` in its place changed
+	// nothing any test could pin.
+	slices.SortStableFunc(labels, func(x, y *gl.Label) int {
+		return cmp.Compare(labelUsage(y), labelUsage(x))
 	})
 
 	b.WriteString("| Label | Open Issues | Closed Issues | Open MRs | Total |\n")
