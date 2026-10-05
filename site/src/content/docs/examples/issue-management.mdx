@@ -65,6 +65,17 @@ issue.list → project_id: "my-group/backend",
 
 Returns: issue titles, authors, labels, milestones, assignees, and creation dates.
 
+### Create an issue
+
+**Prompt**: "Open a P1 bug in the backend project: the login page times out"
+
+```text
+issue.create → project_id: "my-group/backend",
+  title: "Fix login timeout", labels: ["bug", "P1"]
+```
+
+When the request leaves out the project or the labels, the assistant may ask for them before it creates the issue. With `GITLAB_MCP_TOOL_SURFACE=individual` the call is `gitlab_issue_create`.
+
 ### Assign and label
 
 **Prompt**: "Assign issue #123 to johndoe and add labels 'priority::high' and 'team::backend'"
@@ -84,6 +95,8 @@ issue.list → project_id: "my-group/backend",
 ```
 
 Returns: issues without assignees that need attention before the sprint starts.
+
+Two MCP prompts answer the wider questions: `my_issues` lists every issue assigned to you across projects, with overdue detection, and `stale_items_report` (`project_id`, optional `stale_days`, 14 by default) finds the issues and merge requests nobody has updated for that many days.
 
 ### Close resolved issues
 

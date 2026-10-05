@@ -371,7 +371,7 @@ Un servidor único que es dueño de su nombre de host no tiene ninguno de los do
 :::note[Se requiere un client ID pre-registrado]
 GitLab restringe los clientes OAuth registrados dinámicamente al scope `mcp`, que no concede acceso REST ni GraphQL — aquí fallarían todas las acciones. Crea una Aplicación OAuth de GitLab con el scope `api` (`read_api` si el despliegue usa `--read-only` o `--safe-mode`, o para un cliente que solo deba leer) y configura su Application ID en cada cliente.
 
-El despliegue anuncia ese único scope en `scopes_supported`, y un cliente como Claude Code se lo pide a GitLab. GitLab rechaza una petición de autorización que nombra un scope que la aplicación no tiene con `invalid_scope` ("The requested scope is invalid, unknown, or malformed"), y una aplicación existente se puede editar sin que cambie su Application ID. Un cliente que quiera una credencial de solo lectura en un despliegue que puede escribir fija `read_api` (`oauth.scopes` en Claude Code, `scopes` en VS Code) con una aplicación que lo tenga; el token se admite y recibe la superficie de solo lectura.
+El despliegue anuncia ese único scope en `scopes_supported`, y un cliente como Claude Code se lo pide a GitLab. GitLab rechaza una petición de autorización que nombra un scope que la aplicación no tiene con `invalid_scope` ("The requested scope is invalid, unknown, or malformed"), y una aplicación existente se puede editar sin que cambie su Application ID. Un cliente que quiera una credencial de solo lectura en un despliegue que puede escribir fija `read_api` (`oauth.scopes` en Claude Code, `auth.scopes` en Cursor, `oauth.oauthScopes` en Kiro) con una aplicación que lo tenga; el token se admite y recibe la superficie de solo lectura.
 :::
 
 **Configuración del cliente en modo OAuth:**
@@ -386,16 +386,14 @@ El despliegue anuncia ese único scope en `scopes_supported`, y un cliente como 
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "oauth": {
-        "clientId": "TU_APPLICATION_ID_DE_GITLAB",
-        "scopes": ["api"]
+        "clientId": "TU_APPLICATION_ID_DE_GITLAB"
       }
     }
   }
 }
 ```
 
-- **`clientId`**: El Application ID de tu Aplicación OAuth de GitLab (ver [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/))
-- **`scopes`**: Debe incluir `api` para funcionalidad completa de herramientas
+- **`clientId`**: El Application ID de tu Aplicación OAuth de GitLab (ver [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/)), la única clave del bloque `oauth` de VS Code que necesita esta entrada
 
 VS Code maneja el descubrimiento OAuth y la autorización automáticamente.
 
@@ -653,7 +651,7 @@ Una respuesta SSE que se queda en silencio emite un **keep-alive** cada 25 segun
 Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. El keep-alive de 25 segundos mantiene abierto un stream inactivo frente a un `proxy_read_timeout` de nginx por defecto; si tu edge es más estricto, súbelo en lugar de confiar en el latido.
 :::
 
-## Rate limiting
+## Limitación de tasa
 
 El modo HTTP incluye un **rate limiter por credencial con token bucket** que regula todas las llamadas que llegan a GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` y `prompts/get` comparten un mismo bucket. En modo HTTP está **activado por defecto** (`--rate-limit-rps=10`; pon `0` para desactivarlo) porque un despliegue HTTP es compartido: cada llamada que reenvía se carga a su propia dirección de salida, así que el volumen de un cliente en bucle recae sobre todos los demás inquilinos. Stdio lo deja apagado, al no tener con quién compartir. El bucket pertenece a la entrada del pool, indexada por `(token + URL de GitLab)`, y no al servidor MCP, que comparten las credenciales de la misma configuración: dos inquilinos en un mismo servidor se limitan por separado, y los dos clientes de un mismo inquilino se limitan juntos.
 
@@ -754,18 +752,25 @@ Añadir a `.vscode/mcp.json`:
 </TabItem>
 <TabItem label="OpenCode">
 
+OpenCode guarda los servidores bajo `mcp` en `opencode.json`, y uno remoto lleva `"type": "remote"`:
+
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "gitlab": {
+      "type": "remote",
       "url": "https://mcp.example.com/mcp",
+      "enabled": true,
       "headers": {
-        "PRIVATE-TOKEN": "glpat-tu-token"
-      }
+        "PRIVATE-TOKEN": "{env:GITLAB_TOKEN}"
+      },
+      "oauth": false
     }
   }
 }
 ```
+
+`"oauth": false` evita que OpenCode responda a un `401` con un flujo OAuth propio; [Configuración de clientes](/gitlab-mcp-server/es/install/clients/#opencode) tiene el resto.
 
 </TabItem>
 <TabItem label="curl (Pruebas)">

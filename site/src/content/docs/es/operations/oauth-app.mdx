@@ -106,7 +106,7 @@ El servidor admite un token que lleve `read_api` o `api`, porque `api` cubre `re
 | Solo `read_api`     | `invalid_scope`           | Autorizado          | `invalid_scope`         |
 | Los dos             | Autorizado                | Autorizado          | Autorizado              |
 
-Por eso el despliegue nunca anuncia los dos: un cliente que lee `scopes_supported` pide todos los scopes que hay en él. Un cliente que quiera una credencial de solo lectura en un despliegue que puede escribir nombra `read_api` él mismo en lugar de tomar el scope anunciado (`oauth.scopes` en Claude Code, `scopes` en VS Code), con una aplicación que tenga `read_api` marcado; el token se admite y recibe la superficie de solo lectura. Los scopes de una aplicación se pueden editar sin recrearla, y su Application ID no cambia.
+Por eso el despliegue nunca anuncia los dos: un cliente que lee `scopes_supported` pide todos los scopes que hay en él. Un cliente que quiera una credencial de solo lectura en un despliegue que puede escribir nombra `read_api` él mismo en lugar de tomar el scope anunciado (`oauth.scopes` en Claude Code, `auth.scopes` en Cursor, `oauth.oauthScopes` en Kiro), con una aplicación que tenga `read_api` marcado; el token se admite y recibe la superficie de solo lectura. Los scopes de una aplicación se pueden editar sin recrearla, y su Application ID no cambia.
 
 ## Paso 2: registrar las URI de redirección
 
@@ -122,6 +122,7 @@ Cada cliente envía su propio callback, y GitLab lo compara con la lista de la a
 | Claude Desktop, claude.ai  | `https://claude.ai/api/mcp/auth_callback`          | Compartido por las superficies alojadas de Claude                                                                                                                                                                  |
 | OpenAI Codex CLI           | `http://127.0.0.1/callback`                        | Un literal IP de loopback, así que el puerto que elija Codex no cuenta; si fijas `mcp_oauth_callback_url`, registra esa URL en su lugar. Solo con `--oauth-client-id`: la vía del token Bearer no necesita ninguna |
 | Gemini CLI                 | El `oauth.redirectUri` fijado en su configuración  | Registra exactamente lo que fijes                                                                                                                                                                                  |
+| Kiro                       | El `oauth.redirectUri` fijado en su configuración  | Registra exactamente lo que fijes; si no lo defines, Kiro escucha en un puerto `localhost` aleatorio con el que ninguna entrada puede coincidir                                                                    |
 | LM Studio                  | `http://127.0.0.1:33389/mcp-oauth-callback`        | Un literal IP de loopback, tal como lo documenta LM Studio                                                                                                                                                         |
 
 :::caution[`localhost` no es `127.0.0.1`]
@@ -214,8 +215,7 @@ Configura cada cliente con el **Application ID** del Paso 1 y con el valor de `-
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "oauth": {
-        "clientId": "TU_APPLICATION_ID_DE_GITLAB",
-        "scopes": ["api"]
+        "clientId": "TU_APPLICATION_ID_DE_GITLAB"
       }
     }
   }
@@ -244,14 +244,15 @@ Configura siempre el client ID. Sin él, estos clientes recurren al registro din
 | ------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | OpenAI Codex CLI          | Sí                  | `codex mcp add <name> --url <URL> --oauth-client-id <APP_ID>`, o sin OAuth con `bearer_token_env_var` en `~/.codex/config.toml`        |
 | Gemini CLI                | Sí                  | `mcpServers.<name>.oauth`: `clientId` más un `redirectUri` fijado                                                                      |
+| Kiro                      | Sí                  | `mcpServers.<name>.oauth`: `clientId` más un `redirectUri` fijado, en `.kiro/settings/mcp.json`                                        |
 | LM Studio                 | Sí                  | Un bloque `auth` con `CLIENT_ID` en su `mcp.json`                                                                                      |
 | mcp-remote (proxy stdio)  | Sí                  | `--static-oauth-client-info`                                                                                                           |
 | MCP Inspector             | Sí                  | Credenciales de cliente estáticas en su configuración de autenticación                                                                 |
-| GitLab Duo Agent Platform | Solo cabecera       | `"headers": { "Authorization": "Bearer glpat-..." }` en el `mcp.json` compartido                                                       |
+| GitLab Duo Agent Platform | **No**              | Documenta una entrada HTTP solo con `type` y `url`, sin cabecera: ejecuta el servidor por stdio, o llega a HTTP con mcp-remote         |
 | Zed                       | **No**              | Solo admite CIMD y DCR, y ninguno de los dos produce un token de GitLab con scope `api`: envía un token de acceso personal como Bearer |
-| JetBrains AI Assistant    | **No**              | No ejecuta ningún flujo OAuth: envía un token de acceso personal como Bearer                                                           |
+| JetBrains AI Assistant    | **No**              | No ejecuta ningún flujo OAuth y documenta una entrada remota como una `url` sola: llega al servidor con mcp-remote y un token personal |
 
-Todos los clientes de las filas "No" siguen funcionando. El modo OAuth acepta un token de acceso personal enviado como `Authorization: Bearer <glpat-...>` y lo verifica contra GitLab igual que un token de acceso OAuth, salvo que el despliegue [admita solo su propia aplicación](#admitir-solo-tu-propia-aplicación). La cabecera `PRIVATE-TOKEN` se rechaza en modo OAuth.
+Todos los clientes de las filas "No" siguen funcionando. El modo OAuth acepta un token de acceso personal enviado como `Authorization: Bearer <glpat-...>` y lo verifica contra GitLab igual que un token de acceso OAuth, salvo que el despliegue [admita solo su propia aplicación](#admitir-solo-tu-propia-aplicación); GitLab Duo y JetBrains lo envían a través de mcp-remote ([Configuración de clientes](/gitlab-mcp-server/es/install/clients/#mcp-remote-un-puente-stdio)). La cabecera `PRIVATE-TOKEN` se rechaza en modo OAuth.
 
 ## Registro dinámico de clientes y el scope `mcp`
 

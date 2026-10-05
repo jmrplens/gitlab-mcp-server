@@ -115,6 +115,17 @@ Each card names the catalog domains it uses. On the default dynamic surface the 
 4. _"Assign issue #234 to @alice"_ — distributes work
 5. _"Generate a milestone progress report for v3.0"_ — creates status overview
 
+### Dashboard workflow
+
+These steps run MCP prompts, which a client offers as slash commands or in a prompt picker:
+
+1. `my_pending_reviews`: the open merge requests waiting for your review, across projects
+2. `daily_standup` for project my-app: your last 24 hours, as done, planned and blockers
+3. `reviewer_workload` for the platform group: how many open reviews each member holds
+4. `stale_items_report` for project my-app: merge requests and issues nobody has updated for 14 days
+
+[Usage Examples](/gitlab-mcp-server/examples/usage/#dashboards-and-reports) lists the arguments of these and the other dashboard prompts.
+
 <FAQ />
 
 ## Source reference

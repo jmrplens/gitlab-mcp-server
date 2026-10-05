@@ -33,7 +33,8 @@ El endpoint funciona en modo OAuth, lo que te da dos formas de entrar:
 
 - **Iniciar sesión con OAuth, sin cabecera alguna.** Un cliente que hable el
   flujo OAuth (VS Code, Claude Code, Cursor) envía su primera petición sin
-  credencial, recibe un `401` con un desafío RFC 9728 que apunta a
+  credencial, recibe un `401` cuyo desafío `WWW-Authenticate: Bearer`
+  (RFC 6750) nombra el documento de metadatos RFC 9728 en
   `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`,
   descubre ahí `https://gitlab.com` como servidor de autorización y abre el
   navegador para que autorices. A partir de entonces el cliente conserva su
@@ -156,8 +157,8 @@ está fijada a `https://gitlab.com`.
 
 El archivo que lee cada cliente aparece en las
 <a href="/gitlab-mcp-server/es/getting-started/#configuración-manual">pestañas por cliente del Inicio rápido</a>;
-las formas HTTP para VS Code, OpenCode y `curl` están en
-<a href="/gitlab-mcp-server/es/operations/http-server/#configuración-del-cliente">Modo servidor HTTP</a>.
+la entrada HTTP de cada cliente, con un token o con OAuth, está en
+[Configuración de clientes](/gitlab-mcp-server/es/install/clients/).
 
 ## Actualizar y desinstalar
 

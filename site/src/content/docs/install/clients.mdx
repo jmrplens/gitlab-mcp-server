@@ -1,0 +1,884 @@
+---
+title: Client configuration
+description: The entry each MCP client needs for GitLab MCP Server, from VS Code, Claude Code, Claude Desktop and Cursor to Codex, Gemini CLI and GitLab Duo, over stdio or over HTTP with a token or with OAuth.
+datePublished: "2026-10-05"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Every MCP client starts or reaches the same server. What differs from one client to the next is the file it reads, the key it keeps servers under, and which of the server's three ways to connect it can use. This page has the entry for each client in each way it supports. Install the server first ([Choose a path](/gitlab-mcp-server/install/overview/)); the [Quick Start](/gitlab-mcp-server/getting-started/) takes one client through from token to first prompt.
+
+## Three ways to connect
+
+| Mode              | How the client reaches the server                                                                                                                  | Where the token lives                                                                                                     | Best for                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Stdio             | It starts `gitlab-mcp-server` as a child process and speaks JSON-RPC over its standard input and output                                            | `GITLAB_TOKEN` in the entry's environment, in `~/.gitlab-mcp-server.env`, or in the file `GITLAB_MCP_ENV_FILE` names      | One person on one machine                 |
+| HTTP with a token | It sends every request to a server started with `--http`, in the default `legacy` authentication mode                                              | A `PRIVATE-TOKEN` or `Authorization: Bearer` header on every request                                                      | A shared server, clients without OAuth    |
+| HTTP with OAuth   | It sends every request to a server started with `--auth-mode=oauth`, finds GitLab through the RFC 9728 metadata and signs the user in in a browser | The access token the client obtains from GitLab, sent as `Authorization: Bearer`; a personal access token there works too | A shared server where nobody copies a key |
+
+Before you pick an entry:
+
+- **Stdio needs nothing else running.** `GITLAB_URL` defaults to `https://gitlab.com`; add it beside the token only for a self-managed instance. The server reads `~/.gitlab-mcp-server.env` for any value its environment does not carry, one `KEY=value` per line, so an entry with no `env` block works once that file holds the token. Most entries below show the block with a placeholder; where a client can prompt for the token or expand an environment variable, its entry does that instead of writing the token into the file.
+- **An HTTP entry needs a server running in HTTP mode**, started as in [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/). The examples use `https://mcp.example.com/mcp`. The server answers MCP at `/`, at `/mcp` and under the path of `--public-url`, but in OAuth mode a client must be configured with exactly the `--public-url` value, because it discards metadata whose `resource` differs from the URL it used ([OAuth mode](/gitlab-mcp-server/operations/http-server/#oauth-mode)).
+- **`GITLAB-URL` is needed when the deployment publishes several instances, or none (`--allow-any-gitlab-url`)**, and then on every request; a deployment that publishes one ignores the header. See [Publishing more than one instance](/gitlab-mcp-server/operations/http-server/#publishing-more-than-one-instance).
+- **Docker can be the stdio command.** `docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest` replaces the binary's path in a stdio entry whose `env` block carries `GITLAB_TOKEN`: each `-e` with no value forwards that variable from the environment the client starts `docker` with. A container never reads the host's `~/.gitlab-mcp-server.env`, so an entry that leaves the token in that file (Claude Code's stdio entry, JetBrains, GitLab Duo) needs `GITLAB_TOKEN` added to its `env` block, or exported where the client starts, before it can run the image. Keep `-i` and pass no transport flag: the image reads its transport from standard input, and without `-i` it gets `/dev/null` and starts an HTTP listener while the client waits. Do not publish port 8080 in that mode ([Docker](/gitlab-mcp-server/install/docker/)).
+- **A token never goes on a command line.** No registration command on this page names one. It lives in the entry's environment block, an input prompt, an environment variable the client expands, or the server's own file.
+
+## Which client supports what
+
+| Client                                                       | Stdio               | HTTP with a token     | HTTP with OAuth       | Client documentation                                                                                                         |
+| ------------------------------------------------------------ | ------------------- | --------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [VS Code (GitHub Copilot)](#vs-code-github-copilot)          | Yes                 | Yes                   | Yes                   | [MCP configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration)                                  |
+| [Claude Code](#claude-code)                                  | Yes                 | Yes                   | Yes                   | [MCP](https://code.claude.com/docs/en/mcp)                                                                                   |
+| [Claude Desktop and claude.ai](#claude-desktop-and-claudeai) | Claude Desktop only | Public HTTPS URL only | Public HTTPS URL only | [Custom connectors](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp) |
+| [Cursor](#cursor)                                            | Yes                 | Yes                   | Yes                   | [MCP](https://cursor.com/docs/context/mcp)                                                                                   |
+| [Windsurf (Devin Desktop)](#windsurf-devin-desktop)          | Yes                 | Yes                   | Not verified          | [MCP](https://docs.devin.ai/desktop/cascade/mcp)                                                                             |
+| [JetBrains IDEs](#jetbrains-ides)                            | Yes                 | Through mcp-remote    | No                    | [MCP](https://www.jetbrains.com/help/ai-assistant/mcp.html)                                                                  |
+| [Zed](#zed)                                                  | Yes                 | Yes                   | No                    | [MCP](https://zed.dev/docs/ai/mcp)                                                                                           |
+| [Kiro](#kiro)                                                | Yes                 | Yes                   | Yes                   | [MCP configuration](https://kiro.dev/docs/mcp/configuration/)                                                                |
+| [Cline](#cline)                                              | Yes                 | Yes                   | No                    | [Configuring MCP servers](https://docs.cline.bot/mcp/configuring-mcp-servers)                                                |
+| [Continue](#continue)                                        | Yes                 | Yes                   | No                    | [MCP](https://docs.continue.dev/customize/deep-dives/mcp)                                                                    |
+| [OpenCode](#opencode)                                        | Yes                 | Yes                   | Not verified          | [MCP servers](https://opencode.ai/docs/mcp-servers/)                                                                         |
+| [OpenAI Codex](#openai-codex)                                | Yes                 | Yes                   | Yes                   | [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)                                                                 |
+| [Gemini CLI](#gemini-cli)                                    | Yes                 | Yes                   | Yes                   | [MCP servers](https://geminicli.com/docs/tools/mcp-server/)                                                                  |
+| [LM Studio](#lm-studio)                                      | Yes                 | Yes                   | Yes                   | [Remote MCP and OAuth](https://lmstudio.ai/docs/integrations/mcp-remote)                                                     |
+| [GitLab Duo Agent Platform](#gitlab-duo-agent-platform)      | Yes                 | Through mcp-remote    | No                    | [GitLab MCP clients](https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_clients/)                            |
+| [mcp-remote](#mcp-remote-a-stdio-bridge)                     | Started over stdio  | Yes                   | Yes                   | [README](https://github.com/geelen/mcp-remote)                                                                               |
+
+"No" in the OAuth column means the client documents no way to give it the Application ID of a GitLab OAuth application you registered. Some of those clients run no OAuth flow at all; the others fall back to dynamic client registration, which GitLab answers with a token carrying only its `mcp` scope, and this server refuses that token because it reaches none of the API it calls ([Dynamic client registration and the `mcp` scope](/gitlab-mcp-server/operations/oauth-app/#dynamic-client-registration-and-the-mcp-scope)). "Not verified" means the client takes an Application ID but does not document the callback it sends, which GitLab must have registered exactly. Those clients still work over HTTP: OAuth mode accepts a personal access token sent as `Authorization: Bearer`, unless the deployment [admits only its own application](/gitlab-mcp-server/operations/oauth-app/#admitting-only-your-own-application), and legacy mode accepts `PRIVATE-TOKEN` as well. The client facts on this page were checked against each client's documentation on 2026-10-05.
+
+Every OAuth entry needs the GitLab OAuth application of [OAuth application](/gitlab-mcp-server/operations/oauth-app/): its Application ID goes in the client, and the callback the client sends goes in the application's redirect URIs, listed per client in [Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris). The client asks GitLab for the scope the deployment advertises, `api`, or `read_api` on a deployment started with `--read-only` or `--safe-mode`, and the application must have that scope checked ([Which scope to check](/gitlab-mcp-server/operations/oauth-app/#which-scope-to-check)).
+
+## The hosted endpoint
+
+The public instance at `https://mcp.jmrp.io/gitlab` takes the same entries as a deployment of your own, with two differences: the URL is fixed, and its GitLab OAuth application already exists, so you point the client at that application's ID instead of creating one. The [server card](https://mcp.jmrp.io/servers/gitlab/) publishes the ID next to a copy-paste entry for Claude Code, Cursor and VS Code. For Claude Code the OAuth entry is:
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id CLIENT_ID_FROM_THE_SERVER_CARD \
+  --callback-port 8090 \
+  https://mcp.jmrp.io/gitlab
+```
+
+Every OAuth entry below works the same way with that URL and the card's ID in place of yours, and Claude Desktop adds it as a custom connector with the card's ID as its OAuth client. Without OAuth, send a GitLab.com personal access token as `Authorization: Bearer`; the endpoint runs in OAuth mode, so `PRIVATE-TOKEN` is refused there, and `GITLAB-URL` is ignored because the instance is fixed to `https://gitlab.com`. A `read_api` token, or a client pinned to the `read_api` scope, is admitted and served the read-only tool surface. The endpoint's properties and caveats are on [Hosted endpoint](/gitlab-mcp-server/install/hosted/).
+
+## VS Code (GitHub Copilot)
+
+VS Code reads `.vscode/mcp.json` in the workspace, or the `mcp.json` of your user profile, and keeps servers under `servers` rather than `mcpServers`. An `inputs` entry with `"password": true` prompts for the token and keeps it out of the file.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title=".vscode/mcp.json"
+{
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "${input:gitlab-token}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "gitlab-token",
+      "description": "GitLab Personal Access Token",
+      "password": true
+    }
+  ]
+}
+```
+
+The same entry with the Docker image as the command; each `-e` with no value forwards that variable from the entry's `env` block into the container:
+
+```json title=".vscode/mcp.json"
+{
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITLAB_TOKEN",
+        "-e",
+        "GITLAB_MCP_SKIP_TLS_VERIFY",
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest"
+      ],
+      "env": {
+        "GITLAB_TOKEN": "${input:gitlab-token}",
+        "GITLAB_MCP_SKIP_TLS_VERIFY": "false"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "gitlab-token",
+      "description": "GitLab Personal Access Token",
+      "password": true
+    }
+  ]
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title=".vscode/mcp.json"
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "${input:gitlab-token}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "gitlab-token",
+      "description": "GitLab Personal Access Token",
+      "password": true
+    }
+  ]
+}
+```
+
+Against a deployment in OAuth mode, send `"Authorization": "Bearer ${input:gitlab-token}"` instead: OAuth mode reads only the Bearer header.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+VS Code takes the Application ID in an `oauth` block beside `url`; the entry is in [Step 4: configure the clients](/gitlab-mcp-server/operations/oauth-app/#step-4-configure-the-clients). VS Code finds GitLab through `/.well-known/oauth-protected-resource`, opens the browser, and stores the token itself. Register `http://127.0.0.1:33418`, plus `https://vscode.dev/redirect` for remote development ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). Without the `oauth` block VS Code falls back to dynamic client registration and gets a token this server refuses.
+
+</TabItem>
+</Tabs>
+
+## Claude Code
+
+Claude Code keeps a server for the current project in `~/.claude.json` by default; `--scope project` writes it to `.mcp.json` in the project root instead, and `--scope user` makes it available in every project.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```bash
+# Prompts for the token without echoing it, so it stays out of shell history
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
+chmod 600 ~/.gitlab-mcp-server.env
+
+claude mcp add gitlab \
+  --transport stdio \
+  -- /path/to/gitlab-mcp-server
+```
+
+Add `GITLAB_URL=https://gitlab.example.com` to the same file for a self-managed instance, or write the whole file in an editor. Neither command names the token, so it stays out of `argv`, out of shell history and out of Claude Code's own configuration file.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+Claude Code expands `${VAR}` in the `url` and `headers` of a `.mcp.json` entry, so the file names the variable and never the token:
+
+```json title=".mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "${GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Export `GITLAB_TOKEN` in the shell you start `claude` from. Against a deployment in OAuth mode use `"Authorization": "Bearer ${GITLAB_TOKEN}"`. `claude mcp add --header` would put the token itself on the command line, which is why it is not shown.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+The `claude mcp add` command with `--client-id` and `--callback-port 8090` is in [Step 4: configure the clients](/gitlab-mcp-server/operations/oauth-app/#step-4-configure-the-clients). The port must match the redirect URI registered on the application, `http://localhost:8090/callback`: GitLab matches a `localhost` callback exactly, port and path included ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). Without `--client-id`, Claude Code falls back to dynamic client registration and gets a token this server refuses.
+
+When `oauth.scopes` is not set, Claude Code asks GitLab for the scope the server names in its `401` challenge or its RFC 9728 metadata. To take a read-only credential from a deployment that can write, pin `read_api` in `oauth.scopes`, a space-separated string that `claude mcp add` has no flag for; the application must have `read_api` checked, and the token is admitted and served the read-only tool surface:
+
+```bash
+claude mcp add-json gitlab '{"type":"http","url":"https://mcp.example.com/mcp","oauth":{"clientId":"YOUR_GITLAB_APPLICATION_ID","callbackPort":8090,"scopes":"read_api"}}'
+```
+
+The same object goes under `mcpServers` in `.mcp.json` for a project-scoped entry.
+
+</TabItem>
+</Tabs>
+
+## Claude Desktop and claude.ai
+
+:::tip[Easiest path]
+The [.mcpb desktop extension](/gitlab-mcp-server/claude-desktop/) installs Claude Desktop's stdio entry in one click, with no JSON editing, and encrypts the token with a key from the operating system's credential store where one exists.
+:::
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/.config/Claude/claude_desktop_config.json` (the Linux beta):
+
+```json title="claude_desktop_config.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+`claude_desktop_config.json` starts local servers only. A remote server is added as a **custom connector**, available in Claude Desktop and on claude.ai, which Claude reaches from Anthropic's cloud rather than from your computer, so the URL must be `https` and reachable from the public internet; a loopback or private address cannot work.
+
+1. Open **Customize** > **Connectors**, select **+ Add**, then **Add custom connector**.
+2. Enter a name and the server URL, and select **Continue**.
+3. Under **Authentication**, choose **No sign in**.
+4. Under **Request headers**, add `Authorization` with the value `Bearer glpat-...` for a deployment in OAuth mode, or `PRIVATE-TOKEN` with the token for one in legacy mode. Claude keeps the header and sends it on every request.
+5. Select **Add**.
+
+For a deployment only your own network reaches, use the stdio entry with [mcp-remote](#mcp-remote-a-stdio-bridge) as its command instead.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+The same custom connector, signing in through GitLab:
+
+1. Open **Customize** > **Connectors**, select **+ Add**, then **Add custom connector**.
+2. Enter a name and the server URL, which must be the deployment's `--public-url` exactly, and select **Continue**.
+3. Under **Authentication**, choose to sign in.
+4. Under **OAuth client**, choose **Use your own OAuth client** and enter the Application ID. The other two choices do not yield a token this server can use: registering automatically is dynamic client registration, and Claude's published identity is not an application GitLab knows.
+5. Select **Add**.
+
+Register `https://claude.ai/api/mcp/auth_callback` on the application ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). As with a token, the server must be reachable over public `https`.
+
+</TabItem>
+</Tabs>
+
+## Cursor
+
+Cursor reads `.cursor/mcp.json` in the project root, or `~/.cursor/mcp.json` for every project. It expands `${env:NAME}` in `command`, `args`, `env`, `url` and `headers`; VS Code's `${input:...}` prompts are not part of its syntax.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "${env:GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Export `GITLAB_TOKEN` in the environment Cursor starts from. To keep the token in `~/.gitlab-mcp-server.env` instead, leave the `env` block out: the server reads that file only for variables its environment does not carry, and a variable the entry sets, even to an empty value, is carried.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "${env:GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Against a deployment in OAuth mode, send `"Authorization": "Bearer ${env:GITLAB_TOKEN}"` instead.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+Cursor takes the Application ID under `auth`, with an upper-case `CLIENT_ID`, rather than in VS Code's `oauth.clientId`:
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "auth": {
+        "CLIENT_ID": "YOUR_GITLAB_APPLICATION_ID",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Name the scope the deployment advertises in `scopes`, `read_api` for a read-only credential. Register `http://localhost:8787/callback` for the desktop application ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). An `oauth` block in VS Code's spelling is not a key Cursor reads, so an entry written that way has no client ID and falls back to dynamic client registration, whose `mcp`-scoped token this server refuses with `403`.
+
+</TabItem>
+</Tabs>
+
+## Windsurf (Devin Desktop)
+
+Windsurf was renamed Devin Desktop in June 2026. The file below is the one Windsurf, and Devin Desktop's Cascade agent, read MCP servers from ([Cascade's MCP page](https://docs.devin.ai/desktop/cascade/mcp)). Devin Desktop 3.9.19 removed Cascade, and the agent it kept, Devin Local, reads MCP servers from the Devin CLI's files instead: `~/.config/devin/mcp_config.json` (`%APPDATA%\devin\mcp_config.json` on Windows) for every project, or `.devin/mcp_config.json` in one ([Devin's MCP configuration](https://docs.devin.ai/cli/extensibility/mcp/configuration)). Those keep servers under `mcpServers` too, with the same stdio entry, but a remote server takes `url` rather than `serverUrl`. The Cascade file expands `${env:VAR_NAME}` in `command`, `args`, `env`, `serverUrl`, `url` and `headers`, which keeps the token out of it; an unset variable expands to an empty string.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="~/.codeium/windsurf/mcp_config.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "${env:GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Export `GITLAB_TOKEN` in the environment Devin Desktop starts from, or leave the `env` block out and keep the token in `~/.gitlab-mcp-server.env`.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+A remote server takes `serverUrl` rather than `url`:
+
+```json title="~/.codeium/windsurf/mcp_config.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "serverUrl": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "${env:GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Cascade's documentation names no setting for an OAuth client ID. Devin Local takes a pre-registered one in a remote entry's `oauthClientId`, but its documentation does not say which callback it sends, and GitLab must have that callback registered exactly. Until you have checked which one your version sends, against a deployment in OAuth mode send a personal access token as `"Authorization": "Bearer ${env:GITLAB_TOKEN}"`.
+
+## JetBrains IDEs
+
+The AI Assistant of IntelliJ IDEA, GoLand, PyCharm and the other JetBrains IDEs adds a server from **Settings** > **Tools** > **AI Assistant** > **Model Context Protocol (MCP)**:
+
+1. Select **Add**, then the **STDIO** transport.
+2. Paste the JSON configuration below.
+3. Choose the server level: the current project, or every project.
+4. Select **OK**, then **Apply**.
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "args": []
+    }
+  }
+}
+```
+
+JetBrains documents the entry as a `command` and its `args`, so put the token in `~/.gitlab-mcp-server.env`, with `GITLAB_URL` beside it for a self-managed instance. The server reads that file on its own.
+
+JetBrains also connects to a remote server over streamable HTTP or SSE, but documents that entry as a `url` alone, with no header and no OAuth flow, and this server needs a credential on every request. To reach an HTTP deployment, add [mcp-remote](#mcp-remote-a-stdio-bridge) as an STDIO server, which carries the token for it.
+
+## Zed
+
+Zed keeps servers under `context_servers` in its `settings.json`.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="settings.json"
+{
+  "context_servers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "args": [],
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title="settings.json"
+{
+  "context_servers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+`Authorization: Bearer` works in both authentication modes. Keep the header: a remote server with no `Authorization` header makes Zed start the standard MCP OAuth flow, and Zed has no setting for a pre-registered client, so against GitLab that flow ends in a token this server refuses.
+
+</TabItem>
+</Tabs>
+
+## Kiro
+
+Kiro reads `.kiro/settings/mcp.json` in the workspace, or `~/.kiro/settings/mcp.json` for every workspace. It expands `${VARIABLE_NAME}`, but only for variables you have approved.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title=".kiro/settings/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "args": [],
+      "env": {
+        "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+The Kiro IDE asks you to approve `GITLAB_TOKEN` the first time it expands it; the Kiro CLI reads it from the shell you start it from.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title=".kiro/settings/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "${GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Against a deployment in OAuth mode, send `"Authorization": "Bearer ${GITLAB_TOKEN}"` instead.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+Kiro takes the Application ID in an `oauth` block beside `url`:
+
+```json title=".kiro/settings/mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "oauth": {
+        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+        "redirectUri": "http://localhost:7778/oauth/callback",
+        "oauthScopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Pin `redirectUri` and register exactly that URI on the application. Left unset, Kiro listens on a random `localhost` port with the path `/oauth/callback`, and GitLab matches a `localhost` callback port and path included, so no registered entry could match it ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). Name the scope the deployment advertises in `oauthScopes`, `read_api` for a read-only credential.
+
+</TabItem>
+</Tabs>
+
+## Cline
+
+In the Cline panel, select the **MCP Servers** icon, open the **Configure** tab and select **Configure MCP Servers**; that opens the settings file. In VS Code the file is:
+
+- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="cline_mcp_settings.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+A remote server names its transport as `streamableHttp`:
+
+```json title="cline_mcp_settings.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "streamableHttp",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Continue
+
+Continue reads `~/.continue/config.yaml`, and a workspace can add servers as YAML files in `.continue/mcpServers/`. Reload the Continue window after editing.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```yaml title="~/.continue/config.yaml"
+mcpServers:
+  - name: gitlab
+    command: /path/to/gitlab-mcp-server
+    env:
+      GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```yaml title="~/.continue/config.yaml"
+mcpServers:
+  - name: gitlab
+    type: streamable-http
+    url: https://mcp.example.com/mcp
+    requestOptions:
+      headers:
+        PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}
+```
+
+`${{ secrets.GITLAB_TOKEN }}` is a secret Continue resolves itself, so the file never holds the token.
+
+</TabItem>
+</Tabs>
+
+## OpenCode
+
+OpenCode reads `opencode.json` in the project root, or `~/.config/opencode/opencode.json` for every project. Its servers sit under `mcp` rather than `mcpServers`, each with a `type` of `local` or `remote`, and it expands `{env:NAME}` in a value.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+The command is an array, and the environment block is called `environment`:
+
+```json title="opencode.json"
+{
+  "mcp": {
+    "gitlab": {
+      "type": "local",
+      "command": ["/path/to/gitlab-mcp-server"],
+      "enabled": true,
+      "environment": {
+        "GITLAB_TOKEN": "{env:GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title="opencode.json"
+{
+  "mcp": {
+    "gitlab": {
+      "type": "remote",
+      "url": "https://mcp.example.com/mcp",
+      "enabled": true,
+      "headers": {
+        "PRIVATE-TOKEN": "{env:GITLAB_TOKEN}"
+      },
+      "oauth": false
+    }
+  }
+}
+```
+
+`"oauth": false` stops OpenCode from answering a `401` by starting its own OAuth flow, which would register itself dynamically. Against a deployment in OAuth mode, send `"Authorization": "Bearer {env:GITLAB_TOKEN}"` instead.
+
+</TabItem>
+</Tabs>
+
+OpenCode's `oauth` block also takes a `clientId`, but its documentation does not say which callback it sends, and GitLab must have that callback registered exactly. Until you have checked which one your version sends, use a token.
+
+## OpenAI Codex
+
+Codex reads `~/.codex/config.toml`. `default_tools_approval_mode = "approve"` pre-approves the server's tools: without it, Codex asks before every tool that is not read-only (on the default surface, `gitlab_execute_action`), and a non-interactive `codex exec` run cancels those calls.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.gitlab]
+command = "/path/to/gitlab-mcp-server"
+args = ["--transport", "stdio"]
+startup_timeout_sec = 60
+default_tools_approval_mode = "approve"
+
+[mcp_servers.gitlab.env]
+GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+Codex gives a server 10 seconds to start unless `startup_timeout_sec` says otherwise. The server answers the handshake at once but holds `tools/list` until its catalog is built, which comes after its first requests to GitLab, so a slow instance can need longer. Add `GITLAB_URL` to the `env` table for a self-managed instance.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.gitlab]
+url = "https://mcp.example.com/mcp"
+bearer_token_env_var = "GITLAB_TOKEN"
+default_tools_approval_mode = "approve"
+```
+
+`bearer_token_env_var` names the environment variable Codex reads the token from and sends as `Authorization: Bearer`, which both authentication modes accept. No redirect URI is involved.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.gitlab]
+url = "https://mcp.example.com/mcp"
+default_tools_approval_mode = "approve"
+
+[mcp_servers.gitlab.oauth]
+client_id = "YOUR_GITLAB_APPLICATION_ID"
+```
+
+`codex mcp add gitlab --url https://mcp.example.com/mcp --oauth-client-id YOUR_GITLAB_APPLICATION_ID` writes the same entry, and `codex mcp login gitlab` signs in. Codex asks for the scopes the server advertises in `scopes_supported`. Register `http://127.0.0.1/callback`, or the `mcp_oauth_callback_url` you set ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). Without `client_id`, Codex falls back to dynamic client registration and gets a token this server refuses.
+
+</TabItem>
+</Tabs>
+
+What else to know about Codex:
+
+- The server recognizes a Codex session from the client name it reports and rounds the fractional `priority` of content annotations to `0` or `1`, which the Codex builds bundled with ChatGPT.app require. Everything else is delivered unchanged, and `GITLAB_MCP_CLIENT_COMPAT=off` turns the rewrite off ([Per-client compatibility profiles](/gitlab-mcp-server/compatibility/#per-client-compatibility-profiles)). Over HTTP, a Codex speaking protocol 2025-11-25 or earlier is recognized only by a server started with `--stateless=false`: the default stateless transport keeps no `initialize` for the calls after it, so those calls get the fractional priority.
+- When a result carries `structuredContent`, Codex hands its model only that JSON and drops the Markdown content blocks ([openai/codex#10334](https://github.com/openai/codex/issues/10334)).
+- Keep `GITLAB_MCP_META_PARAM_SCHEMA` at its `opaque` default: Codex trims tool schemas larger than about 5 KB.
+- In its default protocol mode Codex reads only the first page of `tools/list`. The server lists up to 2000 tools per page, more than its largest catalog, so every tool surface arrives in one page.
+
+## Gemini CLI
+
+Gemini CLI reads `~/.gemini/settings.json`, or `.gemini/settings.json` in a project. It expands `$VAR` and `${VAR}` in the values of `env`.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="~/.gemini/settings.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "$GITLAB_TOKEN"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+`httpUrl` is the streamable HTTP endpoint; `url` would be read as an SSE endpoint:
+
+```json title="~/.gemini/settings.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "httpUrl": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+Against a deployment in OAuth mode, send `"Authorization": "Bearer glpat-your-token"` instead. `gemini mcp add -H` would put the header on the command line, so write the file.
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+```json title="~/.gemini/settings.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "httpUrl": "https://mcp.example.com/mcp",
+      "oauth": {
+        "enabled": true,
+        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+        "redirectUri": "http://localhost:7777/oauth/callback",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Pin `redirectUri` and register exactly that URI on the application. Left unset, Gemini CLI listens on a random `localhost` port, and GitLab matches a `localhost` callback port and path included, so no registered entry could match it ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)).
+
+</TabItem>
+</Tabs>
+
+## LM Studio
+
+LM Studio follows Cursor's `mcp.json` notation ([MCP in LM Studio](https://lmstudio.ai/docs/app/mcp)). Open it from the **Program** tab of the right-hand sidebar with **Install** > **Edit mcp.json**. The one-click button on the [Quick Start](/gitlab-mcp-server/getting-started/#one-click-buttons) writes the Docker form of the stdio entry.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+```json title="mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="HTTP with OAuth">
+
+```json title="mcp.json"
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "https://mcp.example.com/mcp",
+      "auth": {
+        "CLIENT_ID": "YOUR_GITLAB_APPLICATION_ID"
+      }
+    }
+  }
+}
+```
+
+Register `http://127.0.0.1:33389/mcp-oauth-callback`, the callback LM Studio documents for an OAuth application of your own, on the application ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)).
+
+</TabItem>
+</Tabs>
+
+## GitLab Duo Agent Platform
+
+GitLab Duo Agentic Chat and the Software Development Flow are MCP clients too, in VS Code and VSCodium through the GitLab extension, in the JetBrains IDEs through the GitLab Duo plugin, and in the GitLab Duo CLI, all through the GitLab Language Server ([GitLab MCP clients](https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_clients/)). Duo has GitLab tools of its own; this server adds its whole action catalog beside them.
+
+First allow it: in the top-level group where GitLab Duo is configured, select **Allow external MCP tools** in the group's GitLab Duo settings. Then add the server to `.gitlab/duo/mcp.json` in the workspace, or to `~/.gitlab/duo/mcp.json` (`%APPDATA%\GitLab\duo\mcp.json` on Windows) for every workspace, and restart the IDE or the CLI.
+
+<Tabs syncKey="mode">
+<TabItem label="Stdio">
+
+```json title="~/.gitlab/duo/mcp.json"
+{
+  "mcpServers": {
+    "gitlab-extended": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "args": []
+    }
+  }
+}
+```
+
+Give the command an absolute path, and put the token in `~/.gitlab-mcp-server.env`, which the server reads on its own. Duo asks before each tool call; an `approvedTools` list in the entry, or `true`, pre-approves tools.
+
+</TabItem>
+<TabItem label="HTTP with a token">
+
+GitLab documents an HTTP entry as `type`, `url` and `approvedTools` alone: no header, and no setting for a pre-registered OAuth client. To reach an HTTP deployment, add [mcp-remote](#mcp-remote-a-stdio-bridge) as a stdio entry (`"type": "stdio"` with `npx` as its `command`), which carries the token for it.
+
+</TabItem>
+</Tabs>
+
+## mcp-remote (a stdio bridge)
+
+[mcp-remote](https://github.com/geelen/mcp-remote) is a small Node.js program that a client starts as a stdio server and that forwards everything to a remote one. It is the way to reach an HTTP deployment from a client that connects only over stdio, or only without a header, such as Claude Desktop's configuration file, a JetBrains IDE or GitLab Duo. mcp-remote expands `${NAME}` in its arguments from its own environment, so the token sits in the entry's `env` block and never on the command line:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.example.com/mcp",
+        "--header",
+        "Authorization:${GITLAB_AUTH}"
+      ],
+      "env": {
+        "GITLAB_AUTH": "Bearer glpat-xxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+Write the header with no space after the colon and keep the space inside the variable: some clients do not escape a space inside `args` when they start `npx`. For a deployment in legacy mode, `"PRIVATE-TOKEN:${GITLAB_TOKEN}"` with the bare token in `GITLAB_TOKEN` works the same way. For OAuth, `--static-oauth-client-info '{"client_id":"YOUR_GITLAB_APPLICATION_ID"}'` gives mcp-remote the Application ID; register the callback it listens on, which its README describes, exactly.
+
+## Further reading
+
+- [OAuth application](/gitlab-mcp-server/operations/oauth-app/): creating the GitLab application, its redirect URIs and its scopes.
+- [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/): starting the server for HTTP clients, both authentication modes, and the `GITLAB-URL` header.
+- [Configuration](/gitlab-mcp-server/configuration/): every environment variable and flag, and the order they are read in.
+- [Compatibility](/gitlab-mcp-server/compatibility/): the client compatibility profile and tool-count limits.
+- [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728), the specification behind `--auth-mode=oauth`, and the [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).

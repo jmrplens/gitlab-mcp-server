@@ -16,9 +16,10 @@ once the server is up.
 
 ## What you get
 
-Seven packages, published together at every release, each with a SLSA
-build provenance attestation made before it was pushed (from the first
-release after 3.1.0):
+Seven packages, published together at every release under NuGet.org's
+trusted publishing, so the release workflow holds no stored NuGet
+credential, each with a SLSA build provenance attestation made before it was
+pushed (from the first release after 3.1.0):
 
 - **`gitlab-mcp-server`** is the pointer package. It declares the
   `gitlab-mcp-server` command and names, for each runtime identifier, the
@@ -223,8 +224,10 @@ already in the cache and no network, both `dnx gitlab-mcp-server@3.1.0` and
 `Resource temporarily unavailable (api.nuget.org:443)`, while the command
 `dotnet tool install -g` had placed starts. A machine that is offline at
 times, or a host that cannot reach NuGet.org at all, is served by
-`dotnet tool install` (with `--source <dir>` pointing at downloaded
-packages where the feed is out of reach).
+`dotnet tool install`, globally with `-g` or into a directory of your
+choosing with `--tool-path <dir>` (and `--source <dir>` pointing at
+downloaded packages where the feed is out of reach); give the client the
+command it placed.
 
 Nothing was installed, so there is nothing to uninstall beyond the entry in
 your client's configuration (and the cached packages under `~/.nuget`, if

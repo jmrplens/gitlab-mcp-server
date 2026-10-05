@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-Cada release publica un binario autocontenido por plataforma: Linux, macOS y Windows, en amd64 y arm64, compilado con `CGO_ENABLED=0` como ejecutable independiente de la posición y con la versión y el commit grabados dentro. Sin runtime, sin bibliotecas compartidas, sin contenedor; en Linux el binario necesita aun así el cargador dinámico de glibc, así que en sistemas con musl como Alpine usa la imagen Docker. Esta página cubre los dos scripts de instalación, la descarga manual, cómo comprobar lo que has descargado, dónde guardar el archivo y cómo reemplazarlo más adelante.
+Cada release publica un binario autocontenido por plataforma: Linux, macOS y Windows, en amd64 y arm64, compilado por GoReleaser con `CGO_ENABLED=0` y `-trimpath` como ejecutable independiente de la posición y con la versión y el commit grabados dentro. Sin runtime, sin bibliotecas compartidas, sin contenedor; en Linux el binario necesita aun así el cargador dinámico de glibc, así que en sistemas con musl como Alpine usa la imagen Docker. Esta página cubre los dos scripts de instalación, la descarga manual, cómo comprobar lo que has descargado, dónde guardar el archivo y cómo reemplazarlo más adelante.
 
 ## Script de instalación
 
@@ -19,20 +19,24 @@ Los dos scripts hacen las mismas cuatro cosas: detectar la plataforma, descargar
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 ```
 
-El script necesita `curl` o `wget`, además de `sha256sum` o `shasum`. Traduce `x86_64` a `amd64` y `aarch64` a `arm64`, rechaza cualquier otro sistema o arquitectura, e instala el archivo con modo `0755` como `$HOME/.local/bin/gitlab-mcp-server`. Si ya hay un binario en esa ruta lo elimina primero, de modo que volver a ejecutarlo sobre un servidor en marcha no falla con "Text file busy". Si `$HOME/.local/bin` no está en tu PATH, el script lo avisa e imprime la línea `export PATH=...` que debes añadir.
+El script necesita `curl` o `wget`, además de `sha256sum` o `shasum`. Traduce `x86_64` a `amd64` y `aarch64` a `arm64`, rechaza cualquier otro sistema o arquitectura (en Windows te remite al instalador de PowerShell), e instala el archivo con modo `0755` como `$HOME/.local/bin/gitlab-mcp-server`. Si ya hay un binario en esa ruta lo elimina primero, de modo que volver a ejecutarlo sobre un servidor en marcha no falla con "Text file busy". Si `$HOME/.local/bin` no está en tu PATH, el script lo avisa e imprime la línea `export PATH=...` que debes añadir.
 
-| Variable            | Por defecto                  | Efecto                                                                        |
-| ------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| `INSTALL_DIR`       | `$HOME/.local/bin`           | Directorio de destino                                                         |
-| `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v2.7.5`                       |
-| `REPO`              | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                  |
-| `REQUIRE_SIGNATURE` | sin definir                  | `1` aborta salvo que se verifique una firma o una atestación                  |
-| `ALLOW_UNVERIFIED`  | sin definir                  | `1` omite la verificación del checksum, para sistemas sin herramienta SHA-256 |
+Antes de descargar nada resuelve `latest` a la etiqueta que nombra en ese momento, así que la comprobación de firma de más abajo queda fijada a la versión que se instala. El `wget` de BusyBox, el que trae Alpine, no puede seguir esa redirección; el script lo avisa y acepta en su lugar cualquier etiqueta de release del repositorio.
 
-Las variables van delante de `sh`, que es el proceso que ejecuta el script:
+| Variable            | Por defecto                  | Efecto                                                                                                                             |
+| ------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `INSTALL_DIR`       | `$HOME/.local/bin`           | Directorio de destino                                                                                                              |
+| `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v3.1.0`                                                                            |
+| `REPO`              | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                                                                       |
+| `REQUIRE_SIGNATURE` | sin definir                  | `1` aborta salvo que se verifique una firma o una atestación                                                                       |
+| `ALLOW_UNVERIFIED`  | sin definir                  | `1` omite toda verificación, checksum y firma por igual, bajo tu responsabilidad (la salida en un sistema sin herramienta SHA-256) |
+| `FETCH_ATTEMPTS`    | `3`                          | Intentos por descarga antes de rendirse                                                                                            |
+| `FETCH_RETRY_DELAY` | `2`                          | Segundos entre esos intentos                                                                                                       |
+
+Definir a la vez `REQUIRE_SIGNATURE=1` y `ALLOW_UNVERIFIED=1` se rechaza en lugar de resolverse en un sentido u otro: piden cosas opuestas. Las variables van delante de `sh`, que es el proceso que ejecuta el script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v2.7.5 INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v3.1.0 INSTALL_DIR=/usr/local/bin sh
 ```
 
 </TabItem>
@@ -42,12 +46,12 @@ curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scr
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
-El script lee la arquitectura real de la máquina (primero `PROCESSOR_ARCHITEW6432`, de modo que un PowerShell de 32 bits en un Windows de 64 bits sigue eligiendo la compilación correcta), descarga `gitlab-mcp-server-windows-amd64.exe` o `gitlab-mcp-server-windows-arm64.exe`, lo verifica con `Get-FileHash` y lo instala como `%LOCALAPPDATA%\Programs\gitlab-mcp-server\gitlab-mcp-server.exe`. Después añade esa carpeta a tu PATH de **usuario** si aún no está. No se publica ninguna compilación x86 de 32 bits, así que el script se detiene en esa arquitectura.
+El script lee la arquitectura real de la máquina (primero `PROCESSOR_ARCHITEW6432`, de modo que un PowerShell de 32 bits en un Windows de 64 bits sigue eligiendo la compilación correcta), descarga `gitlab-mcp-server-windows-amd64.exe` o `gitlab-mcp-server-windows-arm64.exe`, lo verifica contra `checksums.txt` con `Get-FileHash` y su firma con las mismas reglas que el script de shell (más abajo), y lo instala como `%LOCALAPPDATA%\Programs\gitlab-mcp-server\gitlab-mcp-server.exe`. Después añade esa carpeta a tu PATH de **usuario** si aún no está. No se publica ninguna compilación x86 de 32 bits, así que el script se detiene en esa arquitectura.
 
-Existen las mismas opciones como variables de entorno (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`) y, si guardas el script y lo ejecutas como archivo, como parámetros (`-Version`, `-InstallDir`, `-Repo`). Al encadenarlo con `iex`, define primero las variables:
+Existen las mismas opciones como variables de entorno (`VERSION`, `INSTALL_DIR`, `REPO`, `REQUIRE_SIGNATURE`, `ALLOW_UNVERIFIED`, `FETCH_ATTEMPTS`, `FETCH_RETRY_DELAY`, con los mismos valores por defecto y el mismo rechazo de la pareja contradictoria) y, si guardas el script y lo ejecutas como archivo, las tres primeras como parámetros (`-Version`, `-InstallDir`, `-Repo`). Al encadenarlo con `iex`, define primero las variables:
 
 ```powershell
-$env:VERSION = 'v2.7.5'
+$env:VERSION = 'v3.1.0'
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 ```
 
@@ -58,22 +62,40 @@ Un cambio en el PATH solo llega a los procesos nuevos. Cierra y vuelve a abrir P
 </TabItem>
 </Tabs>
 
+### Qué decide la comprobación de firma
+
+Cada descarga se intenta hasta `FETCH_ATTEMPTS` veces, con `FETCH_RETRY_DELAY` segundos entre intentos, cuando no obtiene una respuesta utilizable. Un `404` o un `410` no se reintenta: el servidor ya ha dicho que el archivo no está.
+
+Con `cosign` instalado, los scripts verifican `checksums.txt.sigstore.json` contra el workflow de release en la etiqueta que se instala. A la CLI `gh` se le pregunta siempre que eso no haya verificado nada, no solo cuando falta `cosign`, porque la atestación de procedencia de compilación vive en el almacén propio de GitHub y sigue siendo comprobable cuando el bundle es el archivo que ha desaparecido. Como `gh` tiene que preguntar a GitHub, los scripts comprueban antes que puede hacerlo (`gh auth status`): un `gh` que no llega a GitHub no ha emitido ningún veredicto y solo avisa, mientras que un `gh` que llegó a GitHub y rechazó el binario aborta.
+
+| Resultado                                                                                                         | Efecto                              |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `cosign` o `gh` verifican                                                                                         | La instalación sigue                |
+| `cosign` rechaza `checksums.txt`                                                                                  | **Aborta**                          |
+| `gh` llega a GitHub y no encuentra ninguna atestación válida                                                      | **Aborta**                          |
+| `cosign` está instalado, la release no sirve `checksums.txt.sigstore.json` (un `404`) y nada más se ha verificado | **Aborta**                          |
+| El bundle de la firma no se pudo descargar en absoluto, tras los reintentos                                       | Aviso; `REQUIRE_SIGNATURE=1` aborta |
+| `gh` está instalado pero no llega a GitHub                                                                        | Aviso; `REQUIRE_SIGNATURE=1` aborta |
+| No están instalados ni `cosign` ni `gh`                                                                           | Aviso; `REQUIRE_SIGNATURE=1` aborta |
+
+La cuarta fila es la razón por la que en una máquina con `cosign` no se puede colar nada borrando un solo archivo del release: todas las releases desde que empezó la firma publican el bundle, así que su ausencia no es una release antigua, sino el único archivo que quien reemplazó a la vez el binario y `checksums.txt` tendría que eliminar también. Una descarga que nunca volvió es un hecho distinto y se notifica como tal: no dice nada de si la release está firmada, así que avisa en lugar de afirmar que no lo está.
+
 ## Descarga manual
 
 La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) incluye estos archivos:
 
-| Plataforma            | Archivo                                                                                                                                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                                                                                                                                          |
-| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                                                                                                                                          |
-| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                                                                                                                           |
-| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                                                                                                                                         |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                         |
-| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                    |
-| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                    |
-| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, y un SBOM SPDX por binario, `<archivo>.sbom.json`                                                                  |
-| Licencias             | `THIRD_PARTY_NOTICES`, a partir de la primera release posterior a 3.1.0                                                                                                                                  |
-| Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo), y `gitlab-mcp-server.mcpb` para los tres; consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
+| Plataforma            | Archivo                                                                                                                                                                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                                                                                                                                                                                                                    |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                                                                                                                                                                                                                    |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                                                                                                                                                                                                     |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                                                                                                                                                                                                                   |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                                                                                                   |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                                                                                              |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                                                                                              |
+| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, y un SBOM SPDX por binario, `<archivo>.sbom.json`                                                                                                                                            |
+| Licencias             | `THIRD_PARTY_NOTICES`, a partir de la primera release posterior a 3.1.0                                                                                                                                                                                                            |
+| Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo, a partir de la primera release posterior a 3.1.0), y `gitlab-mcp-server.mcpb` para los tres (en todas las releases); consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 `gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop para macOS porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
 
@@ -84,7 +106,7 @@ Dos formas de URL cubren todos los archivos: `releases/latest/download/<archivo>
 curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64
 
 # Una versión fijada
-curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.7.5/gitlab-mcp-server-linux-amd64
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.1.0/gitlab-mcp-server-linux-amd64
 ```
 
 ### Hacerlo ejecutable (Linux/macOS)
@@ -110,7 +132,7 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
    ```bash
    cosign verify-blob \
      --bundle checksums.txt.sigstore.json \
-     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v2.7.5" \
+     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v3.1.0" \
      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
      checksums.txt
    ```
@@ -138,12 +160,14 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
 Si cualquiera de los dos pasos falla, no ejecutes el archivo. El recorrido completo, incluida la instalación de Cosign, está en [Verificación de la integridad del release](/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release).
 
 :::note[Atestaciones de procedencia y SBOM]
-El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella; para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
+El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio, y `--source-ref refs/tags/v<versión>` la ata además a una release concreta. Los scripts de instalación piden lo mismo: una atestación del workflow de release en la etiqueta que están instalando. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella (3.0.0 y 3.1.0 traen ambos); para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.
 :::
 
 :::note[Avisos de terceros]
-A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, generados a partir de los propios binarios del release y listados en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE`, y la fórmula de Homebrew instala ambos en su prefijo. winget y los instaladores de una línea entregan solo el binario: para ellos los avisos son el asset del release que lo acompaña, y `LICENSE` es el archivo de la raíz de la etiqueta del release.
+A partir de la primera release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`: los textos de licencia, aviso y patente de la biblioteca estándar de Go y de todos los módulos que enlazan los binarios, que sus licencias piden que acompañen al binario y que los SBOM nombran sin incluir. Se genera a partir de los propios binarios del release, leyendo la lista de módulos que registra cada binario y los paquetes que enlaza cada uno, así que también se reproduce una licencia guardada en el directorio propio de un paquete dentro de un módulo, y figura en `checksums.txt`, así que los comandos de arriba también lo verifican. Los paquetes de npm, PyPI y NuGet y las extensiones de Claude Desktop llevan el mismo archivo junto a `LICENSE` (en una wheel, bajo `.dist-info/licenses/`), la fórmula de Homebrew instala ambos en el prefijo de la fórmula (`$(brew --prefix gitlab-mcp-server)`), y la imagen de contenedor lleva el suyo, generado a partir del binario de la imagen. winget y los instaladores de una línea entregan solo el binario: para ellos los avisos son el asset del release que lo acompaña, y `LICENSE` es el archivo de la raíz de la etiqueta del release.
 :::
+
+Las releases se publican solo cuando todos sus archivos están adjuntos y atestados, y los paquetes de npm, PyPI y NuGet y la fórmula de Homebrew se construyen a partir de esos archivos publicados después de comprobar su firma; [Cómo llega una release a cada canal](/gitlab-mcp-server/es/install/overview/#cómo-llega-una-release-a-cada-canal) recoge el orden.
 
 ## Dónde colocarlo
 
@@ -158,7 +182,7 @@ Los clientes que arrancan desde el escritorio en lugar de desde una shell no sie
 gitlab-mcp-server --version
 ```
 
-imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)` para la release actual. Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
+imprime `gitlab-mcp-server 3.1.0 (commit: <commit>)` para la release actual, la 3.1.0 (2026-09-30). Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
 
 ## Configura tu cliente
 
@@ -180,7 +204,9 @@ La entrada stdio mínima es la ruta al binario y el token. Añade `GITLAB_URL` a
 Con Claude Code el registro en sí es un comando que no nombra ningún token, `claude mcp add gitlab -- gitlab-mcp-server`, porque el servidor lee `~/.gitlab-mcp-server.env` para lo que no tenga ya en su entorno:
 
 ```bash
-echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
+chmod 600 ~/.gitlab-mcp-server.env
 claude mcp add gitlab -- gitlab-mcp-server
 ```
 
@@ -188,7 +214,7 @@ Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para GitLab auto
 
 ## Actualizar y desinstalar
 
-El binario nunca se actualiza a sí mismo. Para actualizar, vuelve a ejecutar el script de instalación, que reemplaza el archivo in situ tras verificar el checksum nuevo, o descarga el archivo más nuevo y sobrescribe el antiguo. `VERSION=v2.7.5` (o `$env:VERSION` en Windows) fija una release concreta cuando necesitas quedarte en ella.
+El binario nunca se actualiza a sí mismo. Para actualizar, vuelve a ejecutar el script de instalación, que reemplaza el archivo in situ tras verificar el checksum nuevo, o descarga el archivo más nuevo y sobrescribe el antiguo. `VERSION=v3.1.0` (o `$env:VERSION` en Windows) fija una release concreta cuando necesitas quedarte en ella.
 
 Para desinstalar, borra el archivo: `rm ~/.local/bin/gitlab-mcp-server` (o donde lo hayas colocado) en Linux y macOS; en Windows, borra `%LOCALAPPDATA%\Programs\gitlab-mcp-server` y quita esa carpeta de tu PATH de usuario, que el script añadió y nunca elimina. Después quita la entrada `gitlab` de la configuración de tu cliente.
 

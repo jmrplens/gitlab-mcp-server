@@ -35,7 +35,10 @@ it the `gitlab-mcp-server` command directly. The wheel also ships a tiny
 `gitlab_mcp_server` Python package with two jobs: a
 `jmrplens-gitlab-mcp-server` console script that hands over to the binary,
 which is what lets `uvx` resolve the tool by its distribution name, and
-`python -m gitlab_mcp_server` for programmatic lookup.
+`python -m gitlab_mcp_server` for programmatic lookup. From the first
+release after 3.1.0 each wheel also carries the repository's `LICENSE` and
+`THIRD_PARTY_NOTICES` under `.dist-info/licenses/`. As of 2026-10-05 PyPI
+holds 2.7.5, 3.0.0 and 3.1.0.
 
 Two commands therefore appear after an install:
 
@@ -108,7 +111,7 @@ Check the install:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 2.7.5 (commit: ...)
+# gitlab-mcp-server 3.1.0 (commit: ...)
 ```
 
 With `uvx` no command lands on your PATH; `uvx jmrplens-gitlab-mcp-server --version`
@@ -154,7 +157,7 @@ self-managed instance. A client that does not inherit your shell's PATH may
 need the full path to the command; `which gitlab-mcp-server` (or
 `where gitlab-mcp-server` on Windows) prints it. To pin a release rather
 than follow the newest one with `uvx`, name it in the argument:
-`"jmrplens-gitlab-mcp-server@2.7.5"`.
+`"jmrplens-gitlab-mcp-server@3.1.0"`.
 
 Per-client file locations and shapes (VS Code uses `servers` with
 `"type": "stdio"`, Zed uses `context_servers`) are in the
@@ -183,7 +186,9 @@ gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import
 
 On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the
 first form. For a pinned `uvx`, name the same version in `--from`
-(`jmrplens-gitlab-mcp-server==<version>`). The wheels also carry PyPI's own
+(`jmrplens-gitlab-mcp-server==<version>`). The `pip`, `uv tool install` and
+`uvx` locations were checked on 3.1.0 against the release's signed
+`checksums.txt`. The wheels also carry PyPI's own
 publish attestation (PEP 740), shown on each file's page on PyPI. The
 release signature and the other channels are covered in
 [release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).

@@ -17,9 +17,11 @@ el paquete de tu sistema operativo y arquitectura, y no se ejecuta código
 
 ## Qué obtienes
 
-Siete paquetes, publicados juntos en cada release, cada uno con una
-atestación de procedencia de compilación SLSA hecha antes de subirlo (desde
-la primera release posterior a la 3.1.0):
+Siete paquetes, publicados juntos en cada release mediante la publicación de
+confianza (trusted publishing) de NuGet.org, así que el workflow de release
+no guarda ninguna credencial de NuGet, cada uno con una atestación de
+procedencia de compilación SLSA hecha antes de subirlo (desde la primera
+release posterior a la 3.1.0):
 
 - **`gitlab-mcp-server`** es el paquete puntero. Declara el comando
   `gitlab-mcp-server` y nombra, para cada identificador de runtime, el
@@ -234,8 +236,10 @@ con la 3.1.0 ya en la caché y sin red, tanto
 `Resource temporarily unavailable (api.nuget.org:443)`, mientras que el
 comando que dejó `dotnet tool install -g` arranca. A una máquina que a veces
 está sin conexión, o a un host que no llega a NuGet.org en absoluto, le
-sirve `dotnet tool install` (con `--source <directorio>` apuntando a los
-paquetes descargados donde el feed no está al alcance).
+sirve `dotnet tool install`, global con `-g` o en el directorio que elijas
+con `--tool-path <directorio>` (y `--source <directorio>` apuntando a los
+paquetes descargados donde el feed no está al alcance); da al cliente el
+comando que dejó instalado.
 
 No se instaló nada, así que no hay nada que desinstalar más allá de la
 entrada en la configuración de tu cliente (y los paquetes en caché bajo

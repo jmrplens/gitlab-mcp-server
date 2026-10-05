@@ -98,6 +98,8 @@ Antes de comenzar, asegúrate de tener:
 2. **Un Personal Access Token (PAT)** con el scope `api`
 3. **Un cliente de IA compatible con MCP** — VS Code + Copilot, Claude Desktop, Cursor o Claude Code
 
+¿Lo vas a ejecutar sin interfaz, en un pipeline sin cliente interactivo? Consulta [Uso en CI/CD](/gitlab-mcp-server/es/operations/ci-cd/).
+
 ### Crear un personal access token
 
 1. En GitLab, selecciona tu avatar y luego **Edit profile** > **Access** > **Personal access tokens**
@@ -105,7 +107,7 @@ Antes de comenzar, asegúrate de tener:
 3. Copia el token — lo necesitarás para la configuración
 
 :::tip
-Para configuraciones de solo lectura, usa un token con el scope `read_api`: el servidor detecta el scope al arrancar y sirve solo las acciones de lectura, tanto en stdio como en modo HTTP. `GITLAB_MCP_READ_ONLY=true` hace lo mismo con un token que podría escribir.
+Para configuraciones de solo lectura, usa un token con el scope `read_api`: el servidor detecta el scope al arrancar y sirve solo las acciones de lectura, tanto en stdio como en modo HTTP. Si aun así se le pide ejecutar una acción de escritura, `gitlab_execute_action` responde que la acción existe y que el scope del token no la cubre, en lugar de decir que no la conoce. `GITLAB_MCP_READ_ONLY=true` sirve la misma superficie de solo lectura a un token que podría escribir, y `gitlab_execute_action` responde entonces que es el despliegue, y no el token, quien retiene la acción.
 :::
 
 ## Instalación rápida
@@ -129,7 +131,10 @@ Registran un servidor basado en **Docker** (descarga la imagen en la primera eje
 Para **Claude Desktop**, descarga en su lugar la
 [extensión de escritorio .mcpb](/gitlab-mcp-server/es/claude-desktop/): una
 instalación nativa en un clic (macOS universal, Windows, y Linux x64 y arm64) sin Docker.
-En Linux, instálala desde **Extensions > Install Extension...** en Claude Desktop.
+Se publica un paquete por sistema operativo a partir de la primera release posterior a 3.1.0;
+todas las releases publican el universal `gitlab-mcp-server.mcpb`, que lleva los tres y es el
+que debes descargar mientras la última release sea la 3.1.0. En Linux, instálala desde
+**Extensions > Install Extension...** en Claude Desktop.
 
 Todos los botones ejecutan la imagen del contenedor; la página [Docker](/gitlab-mcp-server/es/install/docker/) cubre sus etiquetas, el modo HTTP y cómo actualizarla.
 
@@ -138,7 +143,8 @@ Todos los botones ejecutan la imagen del contenedor; la página [Docker](/gitlab
 Docker (sin instalar nada — descarga la imagen en la primera ejecución):
 
 ```bash
-export GITLAB_TOKEN=glpat-xxxx
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs GITLAB_TOKEN && export GITLAB_TOKEN && echo
 claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
@@ -148,7 +154,8 @@ El comando de registro nunca lleva el token. `-e GITLAB_TOKEN` sin valor reenví
 Cualquier otro canal se registra igual en cuanto `gitlab-mcp-server` está en tu PATH, y ahí el token va en un archivo que el servidor lee:
 
 ```bash
-echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
+chmod 600 ~/.gitlab-mcp-server.env
 claude mcp add gitlab -- gitlab-mcp-server
 ```
 
@@ -248,7 +255,9 @@ Instala el binario en tu PATH y lo registra. Las actualizaciones vienen de lo qu
 # Linux/macOS (script; comprueba el SHA-256 contra checksums.txt antes de instalar)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 
-echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
+chmod 600 ~/.gitlab-mcp-server.env
 claude mcp add gitlab -- gitlab-mcp-server
 ```
 
@@ -290,13 +299,13 @@ Hay una instancia pública en **`https://mcp.jmrp.io/gitlab`** — nada que inst
 }
 ```
 
-El endpoint funciona en modo OAuth, así que la credencial viaja en `Authorization: Bearer` — un token de acceso personal de GitLab sirve ahí, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un cliente que hable el flujo OAuth no necesita cabecera alguna: el `401` lleva un desafío RFC 9728 que sigue para autorizar en el navegador. `PRIVATE-TOKEN` es la cabecera del modo legacy y aquí no se acepta; la instancia está fijada a `https://gitlab.com`, así que `GITLAB-URL` se ignora. Un token `read_api` se acepta y recibe una superficie de herramientas de solo lectura.
+El endpoint funciona en modo OAuth, así que la credencial viaja en `Authorization: Bearer`: un token de acceso personal de GitLab sirve ahí, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un cliente que hable el flujo OAuth no necesita cabecera alguna: el `401` lleva un desafío `WWW-Authenticate: Bearer` (RFC 6750) que nombra el documento de metadatos RFC 9728, y lo sigue para autorizar en el navegador. `PRIVATE-TOKEN` es la cabecera del modo legacy y aquí no se acepta; la instancia está fijada a `https://gitlab.com`, así que `GITLAB-URL` se ignora. Un token `read_api` se acepta y recibe una superficie de herramientas de solo lectura.
 
 Hay dos páginas que lo ponen aún más fácil. La [ficha del servidor](https://mcp.jmrp.io/es/servers/gitlab/) enumera el catálogo completo sin credencial alguna y trae configuración lista para copiar para Claude Code, Cursor y VS Code — incluido el client ID de OAuth que esos clientes necesitan. El [inspector del navegador](https://mcp.jmrp.io/es/inspector/?server=gitlab) llama a ese mismo endpoint en modo solo lectura desde una pestaña: inicias sesión con OAuth, eliges una herramienta y lees el JSON-RPC en crudo que devuelve — sin instalar nada.
 
 Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a diario sigue siendo **en local** (cualquier opción de arriba), por un motivo concreto: tu token y todas tus peticiones pasan por la máquina de otra persona. Ejecutarlo en local mantiene ambos en tu ordenador — la única opción sensata para una instancia autogestionada privada.
 
-El endpoint es **streamable HTTP sin estado** sobre la superficie `dynamic` por defecto: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con el desafío RFC 6750 que sigue un cliente OAuth — un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. Es uno de los servidores listados en [mcp.jmrp.io](https://mcp.jmrp.io/), un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
+El endpoint es **streamable HTTP sin estado** sobre la superficie `dynamic` por defecto: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con ese mismo desafío, que sigue un cliente OAuth, así que un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. Es uno de los servidores listados en [mcp.jmrp.io](https://mcp.jmrp.io/), un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
 
 Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin SLA, sin canal de soporte y sin garantía de que siga igual la semana que viene. No añade cuota propia — cada llamada se descuenta de los límites de la propia GitLab.com, con tu token. Y avanza por sí solo, normalmente a la última release, así que lo que sirve nunca es una versión fijada.
 
@@ -310,16 +319,16 @@ Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin
 
 ¿Prefieres colocar el binario tú mismo? Descarga el último binario para tu plataforma desde la página de [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
-| Plataforma            | Binario                                                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                                                                                   |
-| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                                                                                   |
-| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                                                                    |
-| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                                                                                  |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                  |
-| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                             |
-| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                             |
-| Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb`; consulta [Extensión para Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
+| Plataforma            | Binario                                                                                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                                                                                                                                                                                                    |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                                                                                                                                                                                                    |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                                                                                                                                                                                     |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                                                                                                                                                                                                   |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                                                                                   |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                                                                              |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                                                                              |
+| Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` a partir de la primera release posterior a 3.1.0, y `gitlab-mcp-server.mcpb` para los tres en todas las releases; consulta [Extensión para Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 ### Hacerlo ejecutable (Linux/macOS)
 
@@ -381,7 +390,7 @@ Instala el plugin y después edita el `mcp.json` local del plugin instalado (hab
 
 `GITLAB_URL` usa `https://gitlab.com` por defecto; añádela solo para instancias GitLab autogestionadas.
 
-Si prefieres configurar manualmente, elige tu cliente de IA:
+Si prefieres configurar manualmente, elige tu cliente de IA. [Configuración de clientes](/gitlab-mcp-server/es/install/clients/) tiene la entrada de cada cliente, por stdio y por HTTP con un token o con OAuth.
 
 <Tabs>
 <TabItem label="VS Code / Copilot">
@@ -478,7 +487,8 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 Escribe el token donde el servidor lo lee y añade después el servidor usando la CLI:
 
 ```bash
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
 chmod 600 ~/.gitlab-mcp-server.env
 
 claude mcp add gitlab \
@@ -486,7 +496,7 @@ claude mcp add gitlab \
   -- /ruta/a/gitlab-mcp-server
 ```
 
-Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para una instancia autogestionada. Nada nombra el token en la línea de comandos, así que queda fuera de `argv` y fuera del propio archivo de configuración de Claude Code.
+Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para una instancia autogestionada, o escribe el archivo entero con un editor. Nada nombra el token en la línea de comandos, así que queda fuera de `argv`, fuera del historial de la shell y fuera del propio archivo de configuración de Claude Code.
 
 </TabItem>
 <TabItem label="Windsurf">
@@ -509,12 +519,23 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 </TabItem>
 <TabItem label="JetBrains">
 
-1. Abre **Settings → Tools → AI Assistant → MCP Servers**
-2. Haz clic en **+ Add** y selecciona **stdio**
-3. Establece el comando a `/ruta/a/gitlab-mcp-server`
-4. Añade `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
-5. Añade `GITLAB_URL` solo para instancias autogestionadas
-6. Haz clic en **OK** y reinicia el IDE
+1. Abre **Settings** > **Tools** > **AI Assistant** > **Model Context Protocol (MCP)**
+2. Selecciona **Add** y después el transporte **STDIO**
+3. Pega la configuración JSON de abajo
+4. Elige el nivel del servidor (el proyecto actual o todos los proyectos) y selecciona **OK** y después **Apply**
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/ruta/a/gitlab-mcp-server",
+      "args": []
+    }
+  }
+}
+```
+
+JetBrains documenta la entrada como un `command` y sus `args`, sin bloque de entorno, así que pon el token en `~/.gitlab-mcp-server.env` (como en la pestaña de Claude Code), con `GITLAB_URL` al lado para una instancia autogestionada. El servidor lee ese archivo por su cuenta.
 
 </TabItem>
 <TabItem label="Zed">
@@ -538,7 +559,7 @@ Edita tu `settings.json` de Zed y añade:
 </TabItem>
 <TabItem label="Kiro">
 
-Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
+Crea o edita `.kiro/settings/mcp.json` en tu espacio de trabajo, o `~/.kiro/settings/mcp.json` para todos los espacios de trabajo:
 
 ```json
 {
@@ -557,7 +578,7 @@ Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
 </TabItem>
 <TabItem label="Cline">
 
-Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **Edit Global MCP**, o edita el archivo de configuración directamente:
+En el panel de Cline, selecciona el icono **MCP Servers**, abre la pestaña **Configure** y selecciona **Configure MCP Servers**, o edita el archivo de configuración directamente:
 
 - **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
 - **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
@@ -618,20 +639,22 @@ Para despliegues en equipo, puedes ejecutar el servidor en modo HTTP donde cada 
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
-Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para más detalles.
+Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab en cada petición, en una cabecera `PRIVATE-TOKEN` en el modo de autenticación por defecto (legacy); la entrada de cada cliente está en [Configuración de clientes](/gitlab-mcp-server/es/install/clients/). Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para más detalles.
 
 ### Modo OAuth (recomendado para producción)
 
 Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuarios autorizan a través del navegador — no se requiere copiar ni distribuir tokens:
 
 ```bash
-./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com
+./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
 ```
 
-Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/) para crear la Aplicación OAuth de GitLab requerida.
+Configura cada cliente con ese valor exacto de `--public-url` como URL del servidor: un cliente descarta los metadatos RFC 9728 cuando su `resource` difiere de la URL que usó.
+
+Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. El servidor verifica cada token Bearer contra `GET /api/v4/user` de la instancia y lee sus scopes, y después guarda la identidad en caché durante `--oauth-cache-ttl` (15 minutos por defecto); consulta <a href="/gitlab-mcp-server/es/operations/http-server/#caché-de-tokens">Caché de tokens</a>. Consulta [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
-Los clientes deben configurarse con el `clientId` de una Aplicación OAuth de GitLab que tenga marcado el scope que pide el despliegue: `api` en uno que puede escribir, `read_api` en uno que usa `--read-only` o `--safe-mode`. GitLab rechaza la autorización con `invalid_scope` si a la aplicación le falta el scope que pide el cliente. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
+Los clientes deben configurarse con el `clientId` de una Aplicación OAuth de GitLab que tenga marcado el scope que pide el despliegue: `api` en uno que puede escribir, `read_api` en uno que usa `--read-only` o `--safe-mode`. GitLab rechaza la autorización con `invalid_scope` si a la aplicación le falta el scope que pide el cliente. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Configuración de clientes](/gitlab-mcp-server/es/install/clients/) para ejemplos por cliente.
 :::
 
 ## GitLab autoalojado
@@ -701,13 +724,38 @@ Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles
 
 ## Verificar la configuración
 
-Una vez configurado, abre tu cliente de IA y pregunta:
+Tu cliente MCP arranca el servidor por su cuenta cuando se conecta, así que no hay nada que lanzar antes; un cliente que liste sus servidores MCP muestra ahí `gitlab` en cuanto está en marcha. Una vez configurado, abre tu cliente de IA y pregunta:
 
 ```text
 ¿Quién soy en GitLab?
 ```
 
-El servidor debería devolver tu perfil de usuario de GitLab, confirmando que la conexión funciona. También puedes probar:
+El servidor debería devolver tu perfil de usuario de GitLab, confirmando que la conexión funciona. Después pide tus proyectos:
+
+```text
+Lista mis proyectos de GitLab
+```
+
+En la superficie dinámica por defecto el asistente localiza la acción `project.list` con `gitlab_find_action` y la ejecuta con `gitlab_execute_action`; con `GITLAB_MCP_TOOL_SURFACE=meta` llama a `gitlab_project` con la acción `list`, y con `GITLAB_MCP_TOOL_SURFACE=individual` llama a `gitlab_project_list`. La respuesta trae una tabla Markdown como esta, junto al JSON estructurado que lee el asistente:
+
+```text
+## Projects (2)
+
+| ID | Name | Path | Visibility | ⭐ |
+| --- | --- | --- | --- | --- |
+| 12 | [my-app](https://gitlab.example.com/user/my-app) | user/my-app | private | 3 |
+| 15 | [api-service](https://gitlab.example.com/user/api-service) | user/api-service | internal | 1 |
+```
+
+También puedes probar:
+
+```text
+Muéstrame las ramas del proyecto my-app
+```
+
+```text
+Muéstrame el contenido de README.md en el proyecto my-app
+```
 
 ```text
 Lista mis merge requests asignadas
@@ -717,7 +765,7 @@ Lista mis merge requests asignadas
 Muestra los pipelines recientes en my-project
 ```
 
-¡Si ves resultados, todo está listo!
+No necesitas conocer IDs de proyecto, endpoints ni JSON: el asistente los resuelve. ¡Si ves resultados, todo está listo! Hay más prompts, por tarea, en [Ejemplos de uso](/gitlab-mcp-server/es/examples/usage/).
 
 :::caution
 Si obtienes errores de conexión, comprueba:
@@ -745,7 +793,7 @@ Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab
 }
 ```
 
-Establece `GITLAB_MCP_TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `GITLAB_MCP_TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies.
+Establece `GITLAB_MCP_TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** en Free/CE (40 en Premium autogestionado y 41 en GitLab.com Premium, {stats.meta.self_managed_enterprise} en Ultimate autogestionado, {stats.meta.gitlab_com} en GitLab.com Ultimate con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `GITLAB_MCP_TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies. `GITLAB_MCP_TOOL_SURFACE=individual` registra en cambio una herramienta por operación: {stats.tools.free} en Free/CE, {stats.tools.premium} en Premium, {stats.tools.ultimate_self_managed} en Ultimate autogestionado y {stats.tools.gitlab_com} en GitLab.com Ultimate con Orbit.
 
 Esto es transparente para ti: tu cliente de IA se encarga del enrutamiento. Solo pregunta de forma natural, _"crea un issue para el bug del login"_, y en la superficie dinámica predeterminada el asistente localiza `issue.create` y la ejecuta; con `GITLAB_MCP_TOOL_SURFACE=meta` elige la meta-herramienta `gitlab_issue` y la acción `create`.
 
@@ -764,6 +812,8 @@ Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mante
 - [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
 - [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
+- [Ejemplos de uso](/gitlab-mcp-server/es/examples/usage/): prompts reales para issues, merge requests, pipelines y más
+- [Solución de problemas](/gitlab-mcp-server/es/operations/troubleshooting/): problemas habituales y cómo resolverlos
 
 <FAQ />
 

@@ -190,7 +190,7 @@ El modo individual registra **una herramienta MCP por operación de GitLab**: **
 
 ### ¿Cómo funciona el modo meta-herramientas?
 
-El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas base**, **{stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Enterprise/Premium** cuando Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
+El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas base**, **{stats.meta.self_managed_enterprise} en Ultimate autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Ultimate** cuando Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
 
 ```json
 {

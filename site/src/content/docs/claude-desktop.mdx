@@ -6,33 +6,52 @@ datePublished: "2026-07-08"
 
 import { Steps } from "@astrojs/starlight/components";
 
-GitLab MCP Server ships as a one-click **desktop extension** (`.mcpb`) for
-Claude Desktop on macOS, Windows and Linux, one bundle per operating system.
-No Docker, Node.js or Python is required.
+GitLab MCP Server ships as a one-click
+[desktop extension](https://www.anthropic.com/engineering/desktop-extensions)
+(an MCPB bundle, `.mcpb`) for Claude Desktop on macOS, Windows and Linux, one
+bundle per operating system. No Docker, Node.js or Python is required.
 
-| Your system                     | Bundle                                                                                                                                    | Download    | Carries                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------- |
-| macOS (Apple Silicon and Intel) | [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb)   | about 30 MB | the universal binary                                        |
-| Windows (x64)                   | [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) | about 15 MB | the x64 executable                                          |
-| Linux (x64 and arm64)           | [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb)     | about 31 MB | both Linux binaries and a launcher that picks the right one |
+| Your system                     | Bundle                                                                                                                                    | Download    | On disk      | Carries                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------ | ----------------------------------------------------------- |
+| macOS (Apple Silicon and Intel) | [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb)   | about 30 MB | about 115 MB | the universal binary (arm64 and amd64)                      |
+| Windows (x64)                   | [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) | about 15 MB | about 59 MB  | the x64 executable                                          |
+| Linux (x64 and arm64)           | [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb)     | about 31 MB | about 125 MB | both Linux binaries and a launcher that picks the right one |
 
-Each bundle declares only its own system, so Claude Desktop refuses one opened
-on another system with a message. All three install as the same extension.
+The per-OS bundles are published from the first release after 3.1.0. Until a
+newer release is out, the links above do not resolve: download the
+[universal bundle](#the-universal-bundle) instead, which every release
+publishes. The sizes on disk are the binaries each bundle carries, as built
+for 3.1.0.
 
-:::note[The universal bundle]
+Each bundle declares only its own system in its manifest, so Claude Desktop
+refuses one opened on another system with a message instead of installing a
+server that cannot start there. All three install as the same extension,
+`gitlab-mcp-server`, and each carries the `LICENSE` it is distributed under
+and `THIRD_PARTY_NOTICES`, the license and notice texts of every module the
+server links. The manifest is version 0.4 with `server.type: binary`, and asks
+for Claude Desktop 0.10.0 or newer. The Windows bundle carries the x64
+executable only, so a Windows arm64 machine runs that one too.
+
+## The universal bundle
+
 [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
-carries all three systems' servers in one file, about 77 MB to download. Every
-release still publishes it so that links to it keep working, and it installs
-as the same extension, but the bundle for your system is a fraction of the
-download. Releases up to 3.1.0 publish only this one.
-:::
+carries all three systems' servers in one file, about 77 MB to download and
+299 MB on disk. Every release publishes it under that name so that links to it
+keep working, and it installs as the same extension, but the bundle for your
+system is the same server in a fifth to two fifths of the download. Releases
+up to 3.1.0 publish only this one, and it carries neither `LICENSE` nor
+`THIRD_PARTY_NOTICES`. From the first release that builds the per-OS bundles,
+the MCP Registry entry (`server.json`) declares those three and not this one: a
+registry entry has no platform field, so a client could not tell it from the
+three that each serve one system.
 
 ## Install
 
 <Steps>
 
 1. Download the bundle for your system from the table above, or from the
-   [latest release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
+   [latest release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest);
+   on 3.1.0, that is the universal `gitlab-mcp-server.mcpb`.
 
 2. Open the file with Claude Desktop. On macOS and Windows, double-click it,
    or drag it onto the Claude Desktop Settings window. On Linux, use
@@ -46,10 +65,12 @@ download. Releases up to 3.1.0 publish only this one.
 
 :::note[Linux]
 The Linux entry runs on Claude Desktop's Linux beta (Ubuntu 22.04 or newer,
-Debian 12 or newer) on x86_64 and arm64. A launcher in the bundle picks the
-binary for your machine and hands over to it, so the server Claude Desktop
-starts and stops is the real binary. On any other machine type it refuses
-with a message in Claude Desktop's MCP log.
+Debian 12 or newer, both glibc systems, which the Linux binaries need) on
+x86_64 and arm64. A launcher in the bundle picks the binary for your machine
+and hands over to it, so the server Claude Desktop starts and stops is the
+real binary. On any other machine type it refuses with a message in Claude
+Desktop's MCP log. [How the Linux entry starts](#how-the-linux-entry-starts)
+has the details.
 :::
 
 ## Settings
@@ -57,13 +78,16 @@ with a message in Claude Desktop's MCP log.
 | Setting                      | Required | Default              | Environment variable         |
 | ---------------------------- | -------- | -------------------- | ---------------------------- |
 | GitLab URL                   | Yes      | `https://gitlab.com` | `GITLAB_URL`                 |
-| GitLab Personal Access Token | Yes      | —                    | `GITLAB_TOKEN`               |
+| GitLab Personal Access Token | Yes      | none                 | `GITLAB_TOKEN`               |
 | Tool surface                 | No       | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE`    |
 | GitLab tier                  | No       | auto-detect          | `GITLAB_MCP_TIER`            |
 | Read-only mode               | No       | off                  | `GITLAB_MCP_READ_ONLY`       |
 | Safe mode                    | No       | off                  | `GITLAB_MCP_SAFE_MODE`       |
 | Skip TLS verification        | No       | off                  | `GITLAB_MCP_SKIP_TLS_VERIFY` |
 | Log level                    | No       | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
+
+The log level decides how much the server writes to Claude Desktop's MCP log
+files; set `debug` when reporting an issue.
 
 :::tip[Token storage]
 Claude Desktop encrypts the Personal Access Token before saving it, with a key
@@ -76,19 +100,22 @@ protection. Create the token with the `api` scope in GitLab under your avatar,
 
 The default `dynamic` tool surface registers just two find/execute tools, so
 the server never crowds Claude's context window. Switch to `meta`
-(34 meta-tools) or `individual` (one tool per action) in the
-extension settings — see [Tool surfaces](/gitlab-mcp-server/tools/overview/).
+(34 meta-tools on Free/CE) or `individual` (one tool per action) in the
+extension settings; see [Tool surfaces](/gitlab-mcp-server/tools/overview/).
 
-## Updates
+## Updates and uninstall
 
 Updates arrive as new extension versions published with each release. The
 server does not update itself and never replaces its own binary, so the
 version you installed is the version that runs until Claude Desktop installs
 a newer extension.
 
+To remove it, uninstall the extension from Claude Desktop's extension
+settings; that step belongs to Claude Desktop.
+
 ## Verify
 
-Ask Claude something like _"What GitLab user am I authenticated as?"_ — it
+Ask Claude something like _"What GitLab user am I authenticated as?"_: it
 should call `gitlab_find_action` and then `gitlab_execute_action` with the
 `user.current` action and return your username.
 
@@ -97,10 +124,127 @@ Set your instance URL in the **GitLab URL** setting. If it uses a self-signed
 certificate, enable **Skip TLS verification**.
 :::
 
+### Verify the bundle you downloaded
+
+The bundles are built outside GoReleaser, so they are not listed in
+`checksums.txt`. In every release after v2.7.5 the release workflow attests
+each of them on its own instead, the universal one included, which lets you
+confirm the file came from this repository's release run:
+
+```bash
+gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+```
+
+Use the name of the bundle you downloaded. `--signer-workflow` holds the
+attestation to the release workflow, since `-R` alone accepts one minted by
+any workflow of the repository; `--source-ref refs/tags/v<version>` holds it
+to one release as well. The SHA-256 of each bundle the MCP Registry entry
+declares is also the `fileSha256` that release's `server.json` records. The
+v2.7.5 bundle has no attestation: compare its SHA-256 with
+`c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe`.
+
+The release binaries are covered by `checksums.txt`, its keyless Cosign
+signature and their own provenance attestation; see
+[release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+
+## How the Linux entry starts
+
+A manifest chooses its command by operating system only, so the `linux`
+entry cannot name a binary per architecture. It runs
+`/bin/sh ${__dirname}/server/linux/launch.sh` instead, and the launcher
+(`mcpb/linux/launch.sh`, POSIX `sh`):
+
+- picks `gitlab-mcp-server-linux-amd64` for `x86_64` or `amd64` and
+  `gitlab-mcp-server-linux-arm64` for `aarch64` or `arm64` from `uname -m`,
+  and refuses any other machine type with a message on stderr;
+- finds the binary next to itself, never through the working directory, and
+  quotes every path, since the extension directory sits under
+  `Claude Extensions/` in Claude Desktop's data directory (`~/.config/Claude`
+  by default) and so contains a space;
+- sets the owner execute bit if the binary lacks it;
+- runs it with `exec`, so the process Claude Desktop spawned becomes the server
+  and the stop signals Claude Desktop sends to that process reach it;
+- writes nothing to stdout, which carries the server's JSON-RPC.
+
+Because `/bin/sh` reads the launcher, the launcher itself needs no execute
+bit. Claude Desktop extracts every file with mode 0600 and restores 0700 only
+on entries whose recorded mode has the owner execute bit, which is why the
+build records 0755 on the binaries; the launcher's own `chmod` covers an
+archive that lost those bits.
+
+## Build the bundles yourself
+
+```bash
+make mcpb          # the three per-OS bundles and the universal one, in dist/
+make check-mcpb    # validates mcpb/manifest.json and the three manifests derived from it with the official MCPB CLI
+```
+
+`make mcpb` needs macOS, for `lipo`, plus `zip`, `unzip` and `jq`. It
+cross-compiles the darwin arm64 and amd64 binaries and merges them with
+`lipo`, cross-compiles the Windows amd64 binary and the Linux amd64 and arm64
+binaries, writes their `THIRD_PARTY_NOTICES` with
+`cmd/gen_third_party_notices`, and packs the four bundles with
+`scripts/build-mcpb.sh`. Every bundle uses the same layout and carries the
+entries its system needs, in this order:
+
+```text
+manifest.json                                 every bundle
+icon.png                                      every bundle
+LICENSE                                       every bundle
+THIRD_PARTY_NOTICES                           every bundle
+server/gitlab-mcp-server                      macOS universal binary: darwin, universal
+server/gitlab-mcp-server.exe                  Windows amd64: windows, universal
+server/linux/launch.sh                        Linux launcher: linux, universal
+server/linux/gitlab-mcp-server-linux-amd64    linux, universal
+server/linux/gitlab-mcp-server-linux-arm64    linux, universal
+```
+
+The universal bundle packs `mcpb/manifest.json` as it is: its base command is
+the macOS universal binary, with overrides for `win32` and `linux`. A per-OS
+bundle packs the manifest `mcpb/platform.jq` derives from it, which lists only
+that platform in `compatibility.platforms`, makes that platform's command the
+base command, carries no override, and names that command's path as the
+server's `entry_point`. Nothing else differs, the extension name above all, so
+any of the four installs over any other.
+
+After packing, the script reads each archive back and deletes the whole set
+unless each carries exactly its list, the launcher and the Unix binaries are
+recorded as Unix files with mode 0755, and each packed manifest agrees with
+its archive: every path its command, its arguments and each platform override
+name is present, every override is keyed `darwin`, `win32` or `linux` and
+listed in `compatibility.platforms`, that list names exactly the platforms the
+archive carries a server for, and no override declares `env`. That last rule
+exists because Claude Desktop applies an override's `env` in place of the base
+one rather than merging the two, so an override carrying one would start the
+server without `GITLAB_TOKEN`.
+
+The script also prints each bundle's download and unpacked size, and fails on
+Claude Desktop's own limits, read from its extension runtime (2.7032.0): an
+entry over 512 MiB, more than 2048 MiB unpacked, an archive that unpacks to
+more than 50 times its own size, or more than 100,000 entries. It warns,
+without failing, when a per-OS bundle passes 50 MiB to download or 256 MiB
+unpacked: directories that score MCP servers stop reading a bundle past those
+sizes and then report its provenance, licence and maintenance as unverified,
+which is what happened to the single bundle 3.1.0 shipped.
+
+A `.mcpb` is a plain zip with `manifest.json` at its root, and the script
+builds it with `zip` and fixed entry timestamps: the same inputs give the same
+bytes, which matters because `server.json` records each declared bundle's
+SHA-256. In a release, the workflow builds the four bundles from the
+GoReleaser binaries, attaches and attests each one, and
+`scripts/update-server-json-sha.sh` declares the three per-OS bundles in
+`server.json`, one entry each, refusing a set that does not serve `darwin`,
+`win32` and `linux` exactly once. `scripts/mcpb_launch_sh_test.py`,
+`scripts/mcpb_manifest_test.py` and `scripts/build_mcpb_sh_test.py` test the
+launcher, the manifest derivation and the build script's checks in CI.
+
 ## Privacy
 
 The server runs entirely on your machine and sends no telemetry: the
 optional OpenTelemetry export is off by default and the extension exposes no
 setting that turns it on, so data flows only between Claude Desktop and the
 GitLab instance you configure. See the
-[Privacy Policy](/gitlab-mcp-server/operations/privacy/).
+[Privacy Policy](/gitlab-mcp-server/operations/privacy/). The manifest's
+`privacy_policies` names the same policy, as the repository's `PRIVACY.md`,
+and the [GitLab Privacy Statement](https://about.gitlab.com/privacy/).
