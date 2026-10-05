@@ -51,7 +51,7 @@ func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, kn
 // them, which the reading of client-go does not keep (it lists them in the
 // order they are declared): every query before every mutation, each kind in
 // the order it came. A client-go method that posts both looks up what the
-// write needs first; at v3.14.0 those are WorkItems.UpdateWorkItem and
+// write needs first; at v3.15.0 those are WorkItems.UpdateWorkItem and
 // DeleteWorkItem, each of which reads the item's global ID with
 // getWorkItemIDQuery and then writes. The order decides which refusal a caller
 // meets: a fine-grained token that cannot pass the lookup stops the action

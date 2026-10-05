@@ -95,6 +95,7 @@ type AddInput struct {
 	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
 	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
 	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
+	CustomWebhookTemplate  string `json:"custom_webhook_template,omitempty" jsonschema:"Custom payload template (JSON) sent instead of the default webhook body"`
 	TagPushEvents          *bool  `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
 	MergeRequestsEvents    *bool  `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
 	RepositoryUpdateEvents *bool  `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
@@ -118,6 +119,7 @@ type EditInput struct {
 	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
 	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
 	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
+	CustomWebhookTemplate  string `json:"custom_webhook_template,omitempty" jsonschema:"Updated custom payload template (JSON) sent instead of the default webhook body"`
 	TagPushEvents          *bool  `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
 	MergeRequestsEvents    *bool  `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
 	RepositoryUpdateEvents *bool  `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
@@ -161,9 +163,8 @@ type DeleteURLVariableInput struct {
 
 // Helpers.
 
-// toItem converts the GitLab API response to the tool output format, filling
-// from the decoded hook and from what the capture read beside it.
-func toItem(h *gl.Hook, extra toolutil.SystemHookExtra) HookItem {
+// toItem converts the GitLab API response to the tool output format.
+func toItem(h *gl.Hook) HookItem {
 	createdAt := ""
 	if h.CreatedAt != nil {
 		createdAt = h.CreatedAt.Format(time.RFC3339)
@@ -175,18 +176,18 @@ func toItem(h *gl.Hook, extra toolutil.SystemHookExtra) HookItem {
 		Description:            h.Description,
 		CreatedAt:              createdAt,
 		PushEvents:             h.PushEvents,
-		PushEventsBranchFilter: extra.PushEventsBranchFilter,
-		BranchFilterStrategy:   extra.BranchFilterStrategy,
+		PushEventsBranchFilter: h.PushEventsBranchFilter,
+		BranchFilterStrategy:   h.BranchFilterStrategy,
 		TagPushEvents:          h.TagPushEvents,
 		MergeRequestsEvents:    h.MergeRequestsEvents,
 		RepositoryUpdateEvents: h.RepositoryUpdateEvents,
 		EnableSSLVerification:  h.EnableSSLVerification,
 		URLVariables:           hookURLVariablesToOutput(h.URLVariables),
-		CustomHeaders:          hookCustomHeadersToOutput(extra.CustomHeaders),
-		CustomWebhookTemplate:  extra.CustomWebhookTemplate,
-		AlertStatus:            extra.AlertStatus,
-		DisabledUntil:          toolutil.FormatTimePtr(extra.DisabledUntil),
-		OrganizationID:         extra.OrganizationID,
+		CustomHeaders:          hookCustomHeadersToOutput(h.CustomHeaders),
+		CustomWebhookTemplate:  h.CustomWebhookTemplate,
+		AlertStatus:            h.AlertStatus,
+		DisabledUntil:          toolutil.FormatTimePtr(h.DisabledUntil),
+		OrganizationID:         h.OrganizationID,
 		TokenPresent:           h.TokenPresent,
 		SigningTokenPresent:    h.SigningTokenPresent,
 	}
@@ -203,7 +204,9 @@ func hookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVariable 
 	return out
 }
 
-func hookCustomHeadersToOutput(headers []toolutil.HookHeaderOutput) []HookCustomHeader {
+// hookCustomHeadersToOutput keeps each header's name and drops its value,
+// which GitLab masks on the way out and which is secret-bearing.
+func hookCustomHeadersToOutput(headers []gl.HookCustomHeader) []HookCustomHeader {
 	if len(headers) == 0 {
 		return nil
 	}
@@ -223,6 +226,7 @@ type hookOptions struct {
 	PushEvents             *bool
 	PushEventsBranchFilter string
 	BranchFilterStrategy   string
+	CustomWebhookTemplate  string
 	TagPushEvents          *bool
 	MergeRequestsEvents    *bool
 	RepositoryUpdateEvents *bool
@@ -243,6 +247,7 @@ func hookOptionsFromEdit(input EditInput) hookOptions {
 		PushEvents:             input.PushEvents,
 		PushEventsBranchFilter: input.PushEventsBranchFilter,
 		BranchFilterStrategy:   input.BranchFilterStrategy,
+		CustomWebhookTemplate:  input.CustomWebhookTemplate,
 		TagPushEvents:          input.TagPushEvents,
 		MergeRequestsEvents:    input.MergeRequestsEvents,
 		RepositoryUpdateEvents: input.RepositoryUpdateEvents,
@@ -275,6 +280,9 @@ func applyHookOptions(input hookOptions, opts *gl.AddHookOptions) {
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
 	}
+	if input.CustomWebhookTemplate != "" {
+		opts.CustomWebhookTemplate = new(input.CustomWebhookTemplate)
+	}
 	if input.TagPushEvents != nil {
 		opts.TagPushEvents = input.TagPushEvents
 	}
@@ -306,19 +314,14 @@ func hookEditOptions(input EditInput) *gl.EditHookOptions {
 
 // List retrieves one page of the instance's system hooks.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	hooks, resp, err := client.GL().SystemHooks.ListHooks(gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("system_hook_list", err, http.StatusForbidden,
 			"requires administrator access; system hooks are instance-wide and only available on self-managed instances")
 	}
-	extras, err := toolutil.CapturedSystemHooks(captured, len(hooks))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("system_hook_list", err)
-	}
 	items := make([]HookItem, 0, len(hooks))
-	for i, h := range hooks {
-		items = append(items, toItem(h, extras[i]))
+	for _, h := range hooks {
+		items = append(items, toItem(h))
 	}
 	return ListOutput{Hooks: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -328,17 +331,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.ID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("system_hook_get", "id")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	hook, _, err := client.GL().SystemHooks.GetHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("system_hook_get", err, http.StatusNotFound,
 			"verify hook_id with admin.system_hook_list; admin-only on self-managed instances")
 	}
-	extra, err := toolutil.CapturedSystemHook(captured)
-	if err != nil {
-		return GetOutput{}, toolutil.WrapErr("system_hook_get", err)
-	}
-	return GetOutput{Hook: toItem(hook, extra)}, nil
+	return GetOutput{Hook: toItem(hook)}, nil
 }
 
 // Add creates a new system hook.
@@ -348,17 +346,12 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	}
 	opts := hookAddOptions(input)
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	hook, _, err := client.GL().SystemHooks.AddHook(opts, gl.WithContext(ctx))
 	if err != nil {
 		return AddOutput{}, toolutil.WrapErrWithStatusHint("system_hook_add", err, http.StatusBadRequest,
 			"requires administrator; url must be HTTP(S) and reachable from the instance; token is shared secret for X-Gitlab-Token header; enable specific event flags (push_events, tag_push_events, merge_requests_events, etc.)")
 	}
-	extra, err := toolutil.CapturedSystemHook(captured)
-	if err != nil {
-		return AddOutput{}, toolutil.WrapErr("system_hook_add", err)
-	}
-	return AddOutput{Hook: toItem(hook, extra)}, nil
+	return AddOutput{Hook: toItem(hook)}, nil
 }
 
 // Edit updates an existing system hook.
@@ -368,17 +361,12 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ed
 	}
 	opts := hookEditOptions(input)
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	hook, _, err := client.GL().SystemHooks.EditHook(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return EditOutput{}, toolutil.WrapErrWithStatusHint("system_hook_edit", err, http.StatusNotFound,
 			"verify hook_id with admin.system_hook_list; admin-only on self-managed instances; unset fields keep current values")
 	}
-	extra, err := toolutil.CapturedSystemHook(captured)
-	if err != nil {
-		return EditOutput{}, toolutil.WrapErr("system_hook_edit", err)
-	}
-	return EditOutput{Hook: toItem(hook, extra)}, nil
+	return EditOutput{Hook: toItem(hook)}, nil
 }
 
 // Test triggers a test event for a system hook.

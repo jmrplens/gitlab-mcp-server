@@ -718,43 +718,6 @@ func CapturedServiceAccounts(capture *gitlabclient.ResponseCapture, decoded int)
 	return capturedList[ServiceAccountExtra](capture, decoded, "service accounts")
 }
 
-// HookHeaderOutput is one custom header a webhook sends with every delivery.
-// Only the name is read: GitLab masks the value on the way out, and a header
-// value is secret-bearing.
-type HookHeaderOutput struct {
-	Key string `json:"key"`
-}
-
-// SystemHookExtra is what GitLab's hook entity sends beside the event flags:
-// which branches a push triggers on and how that filter is read, whether the
-// hook has been disabled after failing and until when, the template its
-// payload is rendered from, the custom headers configured on it, and the
-// organization a system hook belongs to.
-//
-// All of them are exposed unconditionally except the headers, which a caller
-// can ask to be left out, and the organization, which only a system hook has.
-type SystemHookExtra struct {
-	PushEventsBranchFilter string             `json:"push_events_branch_filter"`
-	BranchFilterStrategy   string             `json:"branch_filter_strategy"`
-	AlertStatus            string             `json:"alert_status"`
-	DisabledUntil          *time.Time         `json:"disabled_until"`
-	CustomWebhookTemplate  string             `json:"custom_webhook_template"`
-	CustomHeaders          []HookHeaderOutput `json:"custom_headers"`
-	OrganizationID         int64              `json:"organization_id"`
-}
-
-// CapturedSystemHook reads them off the captured answer to a request for one
-// hook.
-func CapturedSystemHook(capture *gitlabclient.ResponseCapture) (SystemHookExtra, error) {
-	return capturedOne[SystemHookExtra](capture)
-}
-
-// CapturedSystemHooks reads the same off a list answer, one extra per hook in
-// order, the count held to what the SDK decoded.
-func CapturedSystemHooks(capture *gitlabclient.ResponseCapture, decoded int) ([]SystemHookExtra, error) {
-	return capturedList[SystemHookExtra](capture, decoded, "system hooks")
-}
-
 // DeployKeyProjectOutput is one project a deploy key reaches, rendered as the
 // project identity entity: the naming and the creation date, without the
 // settings a full project carries.
@@ -883,11 +846,11 @@ type PackageVersionOutput struct {
 
 // PackageExtra is what GitLab's package entity sends on a package that
 // client-go's Package does not carry, on every route that renders one.
-// client-go v3.14.0 models the package's creator, its Conan recipe name and its
-// other versions with their tags; what it leaves out is on the pipelines: the
-// one that last built the package, and the one that built each of its other
-// versions, which only a request for one package is sent. Each of them is
-// short the keys [PackagePipelineExtra] names.
+// Since v3.14.0 client-go models the package's creator, its Conan recipe name
+// and its other versions with their tags; what it leaves out is on the
+// pipelines: the one that last built the package, and the one that built each
+// of its other versions, which only a request for one package is sent. Each of
+// them is short the keys [PackagePipelineExtra] names.
 //
 // The entity's pipelines key is not read. lib/api/entities/package.rb renders
 // it as the constant EMPTY_PIPELINES whatever the package, which is how GitLab

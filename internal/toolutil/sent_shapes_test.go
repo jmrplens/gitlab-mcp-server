@@ -424,19 +424,6 @@ func tailReaderCases() []capturedReaderCase {
 			},
 		},
 		{
-			name: "system hook",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSystemHook(c) },
-			body: `{"id":1,"push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",` +
-				`"alert_status":"executable","disabled_until":"2026-02-03T04:05:06Z",` +
-				`"custom_webhook_template":"{}","custom_headers":[{"key":"X-Env"}],"organization_id":7}`,
-			want: func(v any) bool {
-				e, _ := v.(SystemHookExtra)
-				return e.PushEventsBranchFilter == "release/*" && e.BranchFilterStrategy == "wildcard" &&
-					e.AlertStatus == "executable" && e.DisabledUntil != nil && e.CustomWebhookTemplate == "{}" &&
-					len(e.CustomHeaders) == 1 && e.CustomHeaders[0].Key == "X-Env" && e.OrganizationID == 7
-			},
-		},
-		{
 			name: "deploy key",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedDeployKey(c) },
 			body: `{"id":1,` +
@@ -675,10 +662,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"service accounts", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedServiceAccounts(c, n)
-			return len(x), e
-		}},
-		{"system hooks", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedSystemHooks(c, n)
 			return len(x), e
 		}},
 		{"deploy keys", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

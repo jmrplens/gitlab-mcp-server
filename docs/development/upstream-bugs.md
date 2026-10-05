@@ -217,7 +217,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for 13 at the v3.14.0 pin; `systemhooks` keeps its own until the pin reaches v3.15.0 |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, the gaps held back in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | **14 of 14; all released, v3.1.0 to v3.15.0** | No | Retired for all 14, the last, `systemhooks`, at the v3.15.0 pin |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
@@ -599,6 +599,16 @@ go-sdk v1.8.0 are still each project's newest release, and the Orbit knowledge
 graph's newest tag is still v0.136.0 of 2026-09-30, so every merge recorded
 here as unreleased still is.
 
+On 2026-10-05 the client-go pin moved from v3.14.0 to v3.15.0 by hand, a week
+before the Dependabot cooldown for a Go minor would have proposed it, which
+retires the last of row 34's workarounds: `systemhooks` reads the seven `Hook`
+fields off client-go's struct and its capture is gone, as row 34's section
+records. Between the two tags only `system_hooks.go`, its test and the
+changelog differ, which is
+[gitlab-org/api/client-go!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
+and nothing else, so no struct, method or route another row names changed, and
+every other `client-go` row reads as it did at v3.14.0.
+
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
 ### Panic unmarshalling an issue with no id
@@ -610,7 +620,7 @@ here as unreleased still is.
 - **Blocking**: it was. The panic took the process down rather than failing one
   call.
 - **Workaround**: retired. The local guard went with the move to v2.62.0, and
-  every v3 tag carries the fix as well; the pin is now `client-go/v3` v3.14.0.
+  every v3 tag carries the fix as well; the pin is now `client-go/v3` v3.15.0.
 
 Kept here as the record: this is what the round trip looks like when it works.
 
@@ -1594,10 +1604,9 @@ of change whose test is one assertion on the built URL.
   zero. It is only sent to a caller allowed `:update_subscription_limit`, who
   is reading the namespace to set those limits rather than to enforce one.
 - **Blocking**: no.
-- **Workaround**: retired for thirteen of the fourteen: twelve at the
-  **v3.12.0** pin and the thirteenth, `packages`, at **v3.14.0**; the
-  fourteenth, `systemhooks`, retires when the pin reaches **v3.15.0**, as the
-  end of this bullet says.
+- **Workaround**: retired for all fourteen: twelve at the **v3.12.0** pin,
+  the thirteenth, `packages`, at **v3.14.0**, and the fourteenth,
+  `systemhooks`, at **v3.15.0**, as the end of this bullet says.
   Each field was read from the captured response beside the SDK's decode,
   through the readers in `internal/toolutil/sent_shapes.go`; the pin was
   deliberately not moved once per merge, since these landed in quick
@@ -1642,12 +1651,21 @@ of change whose test is one assertion on the built URL.
   so client-go's `Pipelines` decodes an empty list or none and this server
   publishes no such key.
 
-  `systemhooks` keeps its workaround whole: it still reads the seven `Hook`
-  fields of `gitlab-org/api/client-go!3048` off the capture, checked against
-  the v3.14.0 source rather than against the tracker, and the struct it pins
-  does not carry them. The merge request is merged and released in v3.15.0
-  (2026-09-28), so the capture retires when the pin moves there, which the
-  Dependabot cooldown for a Go minor holds until 2026-10-12.
+  `systemhooks` followed when the pin moved to **v3.15.0** on 2026-10-05,
+  checked against that release's `system_hooks.go` in the module cache: the
+  list, get, add and edit handlers read the seven `Hook` fields of
+  `gitlab-org/api/client-go!3048` (`organization_id`, `alert_status`,
+  `disabled_until`, `push_events_branch_filter`, `branch_filter_strategy`,
+  `custom_webhook_template` and `custom_headers`) off the struct, and the
+  capture, its shape and its two readers are gone. The published hook is the
+  one the capture produced, field for field, and a custom header still
+  publishes its name alone. The same merge request added
+  `custom_webhook_template` to both option structs, which GitLab accepts on
+  `POST /hooks` and `PUT /hooks/:hook_id` (the live record declares it on
+  both routes), so `admin.system_hook_add` and `admin.system_hook_edit` now
+  offer it too. At the v3.14.0 pin the system hook was the one webhook of the
+  three whose template this server could read and not set, since client-go's
+  project and group hook options already carried it.
   `projectserviceaccounts` keeps its read of `public_email` too, since
   `gitlab-org/api/client-go!3047` added the pair to `GroupServiceAccount` and
   `ProjectServiceAccount` was outside it.
@@ -5535,7 +5553,7 @@ markdown. We keep emitting both.
   is the one the merge request is for. Once a release carries it, a step
   reading `plan` from `GET /metadata` answers that caller, which needs
   client-go's `Metadata` struct (`version`, `revision`, `kas` and `enterprise`
-  at the v3.14.0 pin) to gain the field, or a captured-response read under
+  at the v3.15.0 pin) to gain the field, or a captured-response read under
   [ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)
   until it does.
 
