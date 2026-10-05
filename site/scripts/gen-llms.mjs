@@ -175,6 +175,7 @@ const SECTIONS = [
 			"operations/privacy",
 			"operations/telemetry",
 			"operations/http-server",
+			"operations/oauth-app",
 			"operations/remote-deployment",
 			"operations/error-handling",
 			"operations/ci-cd",

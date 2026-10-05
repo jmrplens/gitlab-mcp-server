@@ -61,11 +61,17 @@ The full detail, including what each mode exports, is in
   [GitLab Privacy Statement](https://about.gitlab.com/privacy/) (for
   GitLab.com) or by your organization's own policies (for self-managed
   instances).
-Your GitLab instance is the only destination, with one opt-in exception you
-control: telemetry, when you enable it, exports operation data to the collector
-you configure, described in its own section above. Beyond that the server
-contacts nothing else: there is no update check, no registry ping and no
-default that reaches any other host.
+
+Your GitLab instance is the destination. The one exception is opt-in and yours
+to control: telemetry, when you enable it, exports operation data to the
+collector you configure, described in its own section above. Beyond that the
+server contacts nothing on its own: there is no update check, no registry ping
+and no default that reaches any other host. A download can still end where your
+instance sends it: when GitLab keeps job artifacts, job traces or packages in
+object storage or behind a CDN, it answers the download with a redirect there,
+and the server follows it, up to 10 hops, removing its credential headers once a
+hop leaves your instance's host and its subdomains or drops from https to http,
+since such a presigned address carries its own authorization.
 
 This used to be untrue in one narrow way worth recording rather than quietly
 dropping. The server carried a self-update feature that was **on by default**

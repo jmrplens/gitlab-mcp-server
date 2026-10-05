@@ -72,12 +72,19 @@ El detalle completo, incluido lo que exporta cada modo, está en
   (en GitLab.com) o por las políticas de tu organización (en instancias
   self-managed).
 
-La instancia de GitLab que configures es el único destino, con una excepción
-opcional que controlas tú: la telemetría, cuando la activas, exporta datos de
+La instancia de GitLab que configures es el destino. La única excepción es
+opcional y la controlas tú: la telemetría, cuando la activas, exporta datos de
 operaciones al colector que configures, descrito en su propia sección más
-arriba. Más allá de eso el servidor no contacta con nada más: no hay
-comprobación de actualizaciones, ni ping a ningún registro, ni ningún valor por
-defecto que alcance otro host.
+arriba. Más allá de eso el servidor no contacta por su cuenta con nada más: no
+hay comprobación de actualizaciones, ni ping a ningún registro, ni ningún valor
+por defecto que alcance otro host. Una descarga sí puede acabar donde la envíe
+tu instancia: cuando GitLab guarda los artefactos y las trazas de los jobs o los
+paquetes en un almacenamiento de objetos o detrás de una CDN, responde a la
+descarga con una redirección hacia allí, y el servidor la sigue, hasta 10
+saltos, y quita sus cabeceras de credenciales en cuanto un salto sale del host
+de tu instancia y sus subdominios o pasa de https a http, porque esa dirección
+prefirmada lleva su propia autorización
+([conexiones salientes](/gitlab-mcp-server/es/operations/security/#conexiones-salientes)).
 
 La comprobación de actualizaciones es lo que cambió, y esta página sería
 engañosa si se limitara a dejar de mencionarlo. Las versiones hasta la v2.7.5 incluidas llevaban una

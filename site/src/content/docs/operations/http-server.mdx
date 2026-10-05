@@ -15,16 +15,17 @@ faq:
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
+import stats from "../../../data/stats.json";
 
 :::tip[At a glance]
 
 - **HTTP mode serves many clients from one process**, while stdio spawns a separate process per client.
 - **Every request carries its own GitLab token.** Each credential gets its own entry in a bounded LRU pool keyed by a hash of token + GitLab URL, and every request runs under the GitLab client its entry carries, so clients never share state.
-- **Size for concurrent load, not for the number of tokens.** The process idles at 35 to 38 MiB holding no catalog, and builds one per configuration it is asked to serve, shared by every credential of that configuration. A pooled credential adds a GitLab client and a little bookkeeping, measured at 30 to 53 KiB; what grows with the number of people using it at once is the requests they have in flight, at 0.81 to 4.27 MiB each. `--max-http-clients` bounds the first of those, so it is not a memory setting.
+- **Size for concurrent load, not for the number of tokens.** The process idles at 35 to 38 MiB holding no catalog, and builds one per configuration it is asked to serve, shared by every credential of that configuration. A pooled credential adds a GitLab client and a little bookkeeping, measured at 30 to 53 KiB; what grows with the number of people using it at once is the requests they have in flight, at 0.81 to 4.27 MiB per additional calling credential. `--max-http-clients` bounds the first of those, so it is not a memory setting.
 
 :::
 
-By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns its own server process. **HTTP mode** is an alternative where a single server process serves multiple clients over the network, each authenticating with their own GitLab token.
+By default, GitLab MCP Server runs in **stdio mode**: each AI client (VS Code, Cursor, Copilot CLI, OpenCode) spawns its own server process and talks to it over stdin and stdout, so each user runs a separate binary. **HTTP mode** is an alternative where a single server process serves multiple clients over the network, each authenticating with their own GitLab token.
 
 ## When to use HTTP mode
 
@@ -59,27 +60,30 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | Flag                            | Default        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--http`                        | _(off)_        | Enable HTTP transport mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `--transport`                   | _(empty)_      | `stdio`, `http` or `auto`. Empty defers to `--http`; given both, `--transport` wins and says so at startup. `auto` reads file descriptor 0 and serves HTTP only when stdin is the null device (a container started without `-i`), and stdio for the pipe an MCP client connects                                                                                                                                                                                                                                 |
+| `--env-file`                    | _(empty)_      | Dotenv file to load besides `~/.gitlab-mcp-server.env`; the same setting as `GITLAB_MCP_ENV_FILE`, and wins over it                                                                                                                                                                                                                                                                                                                                                                                             |
 | `--http-addr`                   | `:8080`        | Listen address: `host:port`, or a filesystem path to bind a unix socket instead. The socket is host-local, so a same-host proxy or client connects through it and the TCP hop between them disappears rather than being encrypted; remote clients still reach the server through that proxy                                                                                                                                                                                                                     |
 | `--http-socket-mode`            | `0660`         | Octal permission mode for a unix socket named by `--http-addr`; the default lets owner and group connect and nobody else                                                                                                                                                                                                                                                                                                                                                                                        |
 | `--tls-cert` / `--tls-key`      | _(empty)_      | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                                                                                                                                                                                                                                                                                      |
 | `--gitlab-url`                  | _(required)_   | GitLab instance URL, unless `--allow-any-gitlab-url` is passed. **Repeatable** (or comma-separated) to publish several instances: all are listed in the RFC 9728 `authorization_servers` field, and `GITLAB-URL` is then required to select among them                                                                                                                                                                                                                                                          |
-| `--allow-any-gitlab-url`        | `false`        | Start with no instance published, letting `GITLAB-URL` name any host. For a single-user local deployment; it is refused unless `--http-addr` binds a loopback address or a unix socket, and warns at startup even there                                                                                                                                                                                                                                                                                         |
+| `--allow-any-gitlab-url`        | `false`        | Start with no instance published, letting `GITLAB-URL` name any host. For a single-user local deployment; it is refused unless `--http-addr` binds a loopback address or a unix socket, and warns at startup even there. A header naming a private address needs `--allow-private-instances` too; see [Outbound destinations](#outbound-destinations)                                                                                                                                                           |
+| `--allow-private-instances`     | `false`        | Permit a destination this deployment's operator did not choose (a `GITLAB-URL` header under `--allow-any-gitlab-url`, or a redirect hop that left the configured instance) to be a private, loopback, CGNAT, link-local, unique-local or unspecified address. Cloud metadata addresses stay refused whatever it says, and an address `--gitlab-url` named is never checked. Sets `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES`; see [Outbound destinations](#outbound-destinations)                                      |
 | `--skip-tls-verify`             | `false`        | Skip TLS certificate verification when calling GitLab (outbound; unrelated to `--tls-cert`). OAuth mode refuses it for a non-loopback instance, since bearer tokens are forwarded there on every call                                                                                                                                                                                                                                                                                                           |
 | `--tool-surface`                | `dynamic`      | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                                                                                                                                                                                                                                                                                |
 | `--capability-surface`          | `full`         | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `--meta-param-schema`           | `opaque`       | Meta-tool input schema mode: `opaque`, `compact`, or `full`; applies to meta-tool schemas only                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `--tier`                        | _(detected)_   | Force the licensing tier (`free`, `ce`, `premium`, `ultimate`); omit to detect it per token+URL entry from the instance license, then from the namespace plans, falling back to `free`                                                                                                                                                                                                                                                                                                                          |
 | `--read-only`                   | `false`        | Read-only mode: removes mutating operations per action; reads keep working                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `--safe-mode`                   | `false`        | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `--safe-mode`                   | `false`        | Intercept mutating operations per action and return a preview card, naming the action and echoing its arguments, instead of executing them; reads keep working                                                                                                                                                                                                                                                                                                                                                  |
 | `--embedded-resources`          | `true`         | Embed canonical MCP resource URIs in get\_\* tool results                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `--exclude-tools`               | _(empty)_      | Comma-separated tool names, group names or canonical action IDs to exclude, on every surface                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `--ignore-scopes`               | `false`        | Skip the scope filter and the read-only narrowing and register all tools allowed by the configured catalog. A token carrying neither `read_api` nor `api` is still refused                                                                                                                                                                                                                                                                                                                                      |
+| `--ignore-scopes`               | `false`        | Skip the scope filter and the read-only narrowing and register all tools allowed by the configured catalog. The token's scopes are still read, so one carrying neither `read_api` nor `api` is still refused, and a fine-grained token's grant still decides what it is shown                                                                                                                                                                                                                                   |
 | `--max-http-clients`            | `100`          | Maximum unique token+URL entries in the server pool; bounds pooled entries, not the sessions or requests they hold, which the process bounds by its descriptor limit (192 held calls and 96 stateful sessions at once under a hard limit of 1024), not configurable (upper bound: 10000)                                                                                                                                                                                                                        |
 | `--session-timeout`             | `30m`          | Idle MCP session timeout; applies to `--stateless=false` only, since under the default stateless transport each POST's session ends with its response. A session a client never deletes holds one of the process's session slots until it expires, and with `0` until the pool evicts its credential, which startup warns about (upper bound: 24h)                                                                                                                                                              |
 | `--http-idle-timeout`           | `0` (disabled) | HTTP server idle connection timeout. `0` (default) disables idle closure, so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner                                                                                                                                                                                                                                                                                                                          |
 | `--auth-mode`                   | `legacy`       | Authentication mode: `legacy` or `oauth` (RFC 9728)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `--public-url`                  | _(empty)_      | Externally reachable https origin of this deployment. **Required with `--auth-mode=oauth`**: it is the RFC 9728 protected-resource identifier, and the metadata URL is derived from it; see [Where the metadata lives](#where-the-metadata-lives-host-root-or-sub-path)                                                                                                                                                                                                                                         |
-| `--resource-documentation`      | _(empty)_      | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's HTTP server mode page                                                                                                                                                                                                                                                                                           |
+| `--resource-documentation`      | _(empty)_      | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's HTTP server mode page, `https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/`                                                                                                                                                                                                                         |
 | `--resource-policy-uri`         | _(empty)_      | https URL published as RFC 9728 `resource_policy_uri`; empty omits the field                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `--resource-tos-uri`            | _(empty)_      | https URL published as RFC 9728 `resource_tos_uri`; empty omits the field                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `--oauth-cache-ttl`             | `15m`          | OAuth token identity cache TTL (range: 1m–2h)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -106,8 +110,9 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--telemetry-identity`          | `none`         | What telemetry records about the caller: `none`, `pseudonymous` or `full`                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `--telemetry-identity-rotation` | _(empty)_      | How long a generated pseudonymisation key lives, e.g. `24h`; empty keeps it for the life of the process. Ignored when `GITLAB_MCP_TELEMETRY_IDENTITY_KEY` is set                                                                                                                                                                                                                                                                                                                                                |
 | `--telemetry-tool-name`         | `auto`         | Whether `gen_ai.tool.name` is a metric dimension: `auto` (on for `dynamic` and `meta`, off for `individual`), `on` or `off`                                                                                                                                                                                                                                                                                                                                                                                     |
+| `--probe`                       | `false`        | Ask the running instance's `/health` and exit `0` when it answers `200`; the image's `HEALTHCHECK`. Reads the listener off that instance's own flags, or probes the URL, `unix:<path>` or `host:port` given after the flag                                                                                                                                                                                                                                                                                      |
 
-The flags shared with stdio mode (`--transport`, `--env-file`, `--probe`, `--shutdown`, `--tool-search`, `--version`) are documented in the [CLI reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/cli.md) rather than repeated here.
+The general flags (`--version`, `--shutdown`, `--tool-search`, `-h`/`--help`) behave the same in both transports and are listed with the other [general flags](/gitlab-mcp-server/configuration/#http-mode-flags); `-h` and `--help` print the same curated help, with flags, environment variables and examples.
 
 :::note
 What `GITLAB-URL` means depends on how many instances the deployment publishes. **None**: only possible with `--allow-any-gitlab-url`, and then the client chooses, with a request naming no instance refused rather than sent to `https://gitlab.com`. **One**: it is authoritative, the header is ignored and logged in `ignored_options`. **Several**: the header is **required** and selects among the published instances. A request that sends none is refused with `400`, because answering it would put the caller's token on the wire to an instance they never named; the refusal names the published instances in OAuth mode and tells you to ask the operator in legacy mode, so that no non-empty token can enumerate them. A value outside the list is **refused** too — `403` in OAuth mode, `400` in legacy — never silently answered with someone else's instance. In OAuth mode every published instance must be `https`, because the bearer token is forwarded to whichever one the request selected.
@@ -123,15 +128,27 @@ What `GITLAB-URL` means depends on how many instances the deployment publishes. 
 
 `--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest, while `minimal` keeps the `gitlab://tools` manifest and omits prompts, workflow guides, and optional GitLab data resources. Dynamic schema discovery still works with `minimal` because find returns schemas inline.
 
-`--meta-param-schema` affects visible domain meta-tool schemas only. Keep `opaque` unless a client needs `compact` or `full` in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`.
+`--meta-param-schema` affects visible domain meta-tool schemas only. Keep `opaque` unless a client needs `compact` or `full` in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`. The audit's figures put the meta-tool schemas at about 8.7 times the size of `opaque` with `compact`, and about 18.3 times with `full`.
 
 ### Configuration precedence
 
 HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, `--trusted-proxy-header` and `--trusted-proxies` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
 
-If a client sends config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values. Deprecated `META-TOOLS` headers are also identified in `deprecated_options`.
+If a client sends a header spelled after a server setting, such as `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT` or `GITLAB-SAFE-MODE`, the server ignores it and logs the setting's name in `ignored_options` without logging its value, on a `WARN` line that carries the last four characters of the token and nothing else of it. A header no setting is spelled after is ignored without a word.
 
-Server settings resolve in three layers, highest first: a CLI flag passed explicitly, then the matching environment variable, then the built-in default. All three are process-side; no client can reach any of them, so one user can never change behaviour for themselves or for anyone else.
+Server settings resolve in three layers, highest first: a CLI flag passed explicitly, then the matching environment variable, then the built-in default. Passing a flag whose value happens to equal the default still counts as choosing it, so a stray environment variable cannot displace a deliberate command line. All three layers are process-side; no client can reach any of them, so one user can never change behaviour for themselves or for anyone else.
+
+| Configuration area                                  | Source of truth (an explicitly passed flag wins over its environment variable)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Can a client override it?                                                | When a client sends a matching header                                                                                                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitLab token                                        | The `PRIVATE-TOKEN` or `Authorization: Bearer` request header                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Yes: it is the per-user identity boundary                                | Used to find or create the credential's pool entry                                                                                                                              |
+| GitLab URL                                          | `--gitlab-url` or `GITLAB_URL`; the `GITLAB-URL` header selects among several published instances, or names any host only under `--allow-any-gitlab-url`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Only among published instances, or freely under `--allow-any-gitlab-url` | With exactly one instance published, ignored and logged in `ignored_options`; with several, a value outside the list is refused                                                 |
+| Tool catalog and behaviour                          | `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--tier`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` and `--skip-tls-verify`, each falling back to `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES` and `GITLAB_MCP_SKIP_TLS_VERIFY`                                                                                                                                                                                                                       | No                                                                       | Ignored; a header spelled after one of these settings (`TOOL-SURFACE`, `READ-ONLY`, `SAFE-MODE`, `TIER` and the like) is logged in `ignored_options` under the setting's name   |
+| Rate limits, authentication budgets and pool policy | `--rate-limit-rps`, `--rate-limit-burst`, `--auth-failure-limit`, `--auth-failure-window`, `--auth-distinct-token-limit`, `--auth-distinct-token-window`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--pool-idle-timeout`, `--action-timeout` and `--drain-delay`, each falling back to `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_AUTH_FAILURE_LIMIT`, `GITLAB_MCP_AUTH_FAILURE_WINDOW`, `GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT`, `GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW`, `GITLAB_MCP_MAX_HTTP_CLIENTS`, `GITLAB_MCP_SESSION_TIMEOUT`, `GITLAB_MCP_SESSION_REVALIDATE_INTERVAL`, `GITLAB_MCP_POOL_IDLE_TIMEOUT`, `GITLAB_MCP_ACTION_TIMEOUT` and `GITLAB_MCP_DRAIN_DELAY` | No                                                                       | Ignored; the `RATE-LIMIT-RPS`, `RATE-LIMIT-BURST`, `MAX-HTTP-CLIENTS`, `SESSION-TIMEOUT`, `POOL-IDLE-TIMEOUT` and `REVALIDATE-INTERVAL` headers are logged in `ignored_options` |
+| Authentication mode and OAuth                       | `--auth-mode`, `--public-url`, `--trusted-origins`, `--oauth-cache-ttl` and `--oauth-client-uid`, each falling back to `GITLAB_MCP_AUTH_MODE`, `GITLAB_MCP_PUBLIC_URL`, `GITLAB_MCP_TRUSTED_ORIGINS`, `GITLAB_MCP_OAUTH_CACHE_TTL` and `GITLAB_MCP_OAUTH_CLIENT_UID`                                                                                                                                                                                                                                                                                                                                                                                                                                                              | No                                                                       | Ignored; the `AUTH-MODE` and `OAUTH-CACHE-TTL` headers are logged in `ignored_options`                                                                                          |
+| Logging                                             | `--log-level` or `GITLAB_MCP_LOG_LEVEL`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | No                                                                       | Ignored; the `LOG-LEVEL` header is logged in `ignored_options`                                                                                                                  |
+| Listener and transport                              | `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`, `--http-idle-timeout`, `--stateless`, `--json-response`, `--max-request-body-bytes`, `--trusted-proxies`, `--trusted-proxy-header`, `--allow-any-gitlab-url` and the three `--resource-*` flags; these have no environment counterpart                                                                                                                                                                                                                                                                                                                                                                                                                            | No                                                                       | Ignored; the `HTTP-IDLE-TIMEOUT`, `STATELESS`, `JSON-RESPONSE`, `MAX-REQUEST-BODY-BYTES` and `TRUSTED-PROXY-HEADER` headers are logged in `ignored_options`                     |
+
+Options that decide the size of the MCP schemas, such as `--meta-param-schema`, are fixed when the server for a configuration is built. Options that decide throttling, such as `--rate-limit-rps` and `--rate-limit-burst`, are copied into each pooled credential entry; no client can raise, disable or replace those limits through a request header or an MCP parameter.
 
 ## Authentication
 
@@ -145,6 +162,60 @@ GITLAB-URL: https://gitlab.example.com
 
 If the deployment pins exactly one instance, this header is ignored and logged. If it publishes several, the header picks one of them and any other value is refused. If it pins none and the header is omitted, the request is refused with `400` rather than resolved to `https://gitlab.com`.
 
+### Publishing more than one instance
+
+`--gitlab-url` may be given more than once, or once with a comma-separated list. `GITLAB-URL` then becomes a choice **among the published instances**, and a required one: choosing for the caller would send their token to an instance they never named.
+
+```bash
+gitlab-mcp-server --http --auth-mode=oauth \
+  --public-url=https://mcp.example.com/mcp \
+  --gitlab-url=https://gitlab.com \
+  --gitlab-url=https://gitlab.internal.example.com
+```
+
+| Instances published             | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                                                                                                                                                                                                      |
+| ------------------------------- | ---------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (`--allow-any-gitlab-url`) | **refused**: `400`     | (none is published)                | honored; a header that spells a private address is **refused** with `400` unless `--allow-private-instances` is passed, and one that spells a cloud metadata address always is ([Outbound destinations](#outbound-destinations)) |
+| one                             | that instance          | ignored                            | ignored                                                                                                                                                                                                                          |
+| several                         | **refused**: `400`     | honored                            | **refused**: `403` in OAuth mode, `400` in legacy                                                                                                                                                                                |
+
+A request that names no instance is refused rather than resolved to a default, in both the none and the several rows. Publishing nothing means the caller chooses, so there is nothing to fall back to; publishing several means the operator deliberately declined to choose, so falling back to the first would put the caller's token on the wire to an instance they never named. Only the one-instance row has an unambiguous answer, and it is the instance the operator pinned.
+
+The two statuses for a header naming an unpublished instance differ because the layers that refuse it differ. OAuth mode refuses in its bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while it resolves the request options, which is a malformed request (`400`). Either way the instance is never contacted. The refusal for a **missing** header is `400` in both modes, and only its message differs, as the note under [CLI flags](#cli-flags) describes.
+
+### Outbound destinations
+
+Choosing the instance is one half of the question; the other half is which addresses this server will open a connection to at all. That is decided at the dialer, after DNS resolution, so it covers the first request and every redirect hop alike ([ADR-0022](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0022-operator-named-destinations-are-exempt.md)).
+
+**An address the operator named is never checked.** `--gitlab-url` and `GITLAB_URL` are the operator's own configuration, so a GitLab on `localhost`, on `10.x`, on `192.168.x` or behind a VPN on `100.64.0.0/10` works with nothing set and no list to maintain.
+
+Two kinds of destination are **not** the operator's choice, and those are checked:
+
+- an instance a caller named in the `GITLAB-URL` header under `--allow-any-gitlab-url`;
+- a redirect hop that left the configured instance's own host, which is how GitLab answers artifact, trace and package downloads when object storage is configured.
+
+For those two, a private, loopback, CGNAT, link-local, unique-local or unspecified address is refused unless `--allow-private-instances` (or `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES=true`) is passed. One case is allowed without the flag: a redirect to a private address when the instance the operator configured **itself** resolves to a private address, which is the ordinary self-managed GitLab with its object store on the same network. An instance a caller named never qualifies; it needs `--allow-private-instances`.
+
+**The cloud metadata addresses are refused on every hop this server dials, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
+
+**Behind an outbound proxy** (`HTTP_PROXY` or `HTTPS_PROXY`), the connection this server opens is to the proxy, which is your own configuration, so it is checked against the metadata addresses alone and may sit on `localhost` or on a private network. The destination behind it is checked only where its URL spells it as an address, and is then refused before anything is sent, exactly as it would be without a proxy; a host name is resolved by the proxy, so what it can reach is the proxy's own egress policy. Hosts this server should connect to directly belong in `NO_PROXY`, and only a direct connection is checked after DNS resolution.
+
+For a local deployment against a GitLab on the same machine, the hatch is therefore two flags:
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --allow-any-gitlab-url \
+  --allow-private-instances=true
+```
+
+A refused destination is answered with `400` from the gate when the `GITLAB-URL` header spells a literal address, and as a tool error naming the flag when the refusal happens at the dialer. Nothing is sent to the address in either case.
+
+### Why the allow-list matters
+
+In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified and cached per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
+
+An instance is matched after canonicalization, so `https://GitLab.com`, `https://gitlab.com:443` and `https://gitlab.com/` all name the same published instance (RFC 3986 section 6.2.2: scheme and host are case-insensitive, and a default port is equivalent to none).
+
 ### Private-token header (recommended)
 
 ```http
@@ -157,27 +228,125 @@ PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-If both headers are present, `PRIVATE-TOKEN` takes precedence. Requests without a valid token are rejected.
+If both headers are present in legacy mode, `PRIVATE-TOKEN` wins. In OAuth mode only the Bearer token is read: the credential the server verified is the one it acts as, so a `PRIVATE-TOKEN` sent alongside it is ignored rather than silently taking over. Requests without a valid token are rejected.
 
-The token has to carry `read_api`, or `api` to write as well, the minimum OAuth mode asks for too. A token GitLab accepts below it, one carrying `read_user` alone or only scopes outside the API such as `read_repository` or `self_rotate`, is answered `403` with JSON-RPC code `-40300` and a message that names the two scopes. It is not charged to the address's failure budget, since GitLab accepted it, and it is remembered for five minutes, so sending it again changes nothing: a token's scopes cannot be changed after it is created, and the way out is a new token. `--ignore-scopes` does not lift the minimum.
+The token has to carry `read_api`, or `api` to write as well, the minimum OAuth mode asks for too. A token GitLab accepts below it, one carrying `read_user` alone or only scopes outside the API such as `read_repository` or `self_rotate`, is answered `403` with JSON-RPC code `-40300` and a message that names the two scopes. It is not charged to the address's failure budget, since GitLab accepted it, and it is remembered, for five minutes or, in OAuth mode when the verifier's introspection read its scopes, for as long as its identity stays cached (up to `--oauth-cache-ttl`), so sending it again changes nothing: a token's scopes cannot be changed after it is created, and the way out is a new token. `--ignore-scopes` does not lift the minimum.
+
+### Missing token
+
+A request with no token is answered `401 Unauthorized`, with a challenge and a JSON-RPC error body naming both accepted headers. The body echoes the `id` of the request it refuses, and carries no `id` at all when the request had none:
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="gitlab-mcp-server"
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":1,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. This server uses static token authentication; no OAuth authorization server is configured."}}
+```
+
+In legacy mode the challenge deliberately omits the `resource_metadata` parameter. Clients discover an OAuth authorization server through it, and legacy mode has none, so advertising one would start a discovery flow that cannot complete. In OAuth mode the challenge carries `scope` and `resource_metadata`, and the message asks for an OAuth access token; see [the 401 challenge](/gitlab-mcp-server/operations/oauth-app/#the-401-challenge). Either way a missing token counts against the address's failure budget and never against its distinct-credential budget, since there is no credential to count.
+
+In legacy mode the rejection is also logged at `INFO`, at most once a minute for the same message, with `also_since_last_report` counting the ones held back, since a caller can produce this line at will:
+
+```json
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+```
+
+### Rejection status codes
+
+Every request that cannot be served is classified before it reaches the MCP handler, so the status distinguishes the cause:
+
+| Condition                                                                                                                                                           | Status | JSON-RPC code | Notable headers                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------- | ---------------------------------------------------------------------------------------- |
+| No credential: no `PRIVATE-TOKEN` and no `Authorization: Bearer` (in OAuth mode, no Bearer token)                                                                   | `401`  | `-40100`      | `WWW-Authenticate`                                                                       |
+| GitLab answered `401`, or a `403` other than the two below, to the credential                                                                                       | `401`  | `-40100`      | `WWW-Authenticate`, in OAuth mode with `error="invalid_token"`                           |
+| OAuth mode with `--oauth-client-uid`: the token was not issued to an admitted application                                                                           | `401`  | `-40100`      | `WWW-Authenticate` with `error="invalid_token"` and `error_uri`                          |
+| GitLab accepted a fine-grained token and refused it User: Read (`insufficient_granular_scope`); not charged                                                         | `403`  | `-40300`      | none in legacy mode; in OAuth mode, `WWW-Authenticate` with `error="insufficient_scope"` |
+| GitLab accepted a token carrying neither `read_api` nor `api`; not charged                                                                                          | `403`  | `-40300`      | none in legacy mode; in OAuth mode, `WWW-Authenticate` with `error="insufficient_scope"` |
+| OAuth mode: `GITLAB-URL` names an instance the deployment does not publish                                                                                          | `403`  | `-40300`      | none                                                                                     |
+| The `Host` header names a host the deployment did not declare ([Behind a reverse proxy](#behind-a-reverse-proxy))                                                   | `403`  | `-40300`      | none                                                                                     |
+| A browser's `Origin` names an origin the deployment does not trust                                                                                                  | `403`  | `-40300`      | none                                                                                     |
+| Legacy mode: `GITLAB-URL` names an instance the deployment does not publish                                                                                         | `400`  | `-32600`      | none                                                                                     |
+| `GITLAB-URL` is missing where it is required, is not a parseable URL, or spells a refused address                                                                   | `400`  | `-32600`      | none                                                                                     |
+| `MCP-Protocol-Version` names a revision this deployment does not negotiate ([Protocol revisions](#protocol-revisions-this-server-negotiates))                       | `400`  | `-32022`      | none; `data.supported` lists the revisions                                               |
+| An `Mcp-Session-Id` this deployment did not open for the presented credential                                                                                       | `404`  | `-32600`      | none                                                                                     |
+| The address is blocked by an authentication budget ([Authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets))                       | `429`  | `-42900`      | `Retry-After`, the longest block holding the request                                     |
+| The pool could not build an entry for the token, for instance because no credential probe slot came free within five seconds                                        | `503`  | `-50300`      | none                                                                                     |
+| OAuth mode: GitLab is unreachable or throttling, no verification slot came free within five seconds, or the introspection `--oauth-client-uid` needs did not answer | `503`  | `-50300`      | `Retry-After`                                                                            |
+| Every held-call slot is taken (protocol 2026-07-28 or later, or an `initialize` with `--stateless=false`)                                                           | `503`  | `-50300`      | `Retry-After: 30`, and the connection is closed                                          |
+| `--stateless=false`: every session slot is taken on `initialize`                                                                                                    | `503`  | `-50300`      | `Retry-After: 30`, and the connection is closed                                          |
+
+The `429` row is about the credential, not only about the address. A request carrying a credential this deployment is **already serving** is answered normally while its address is blocked: in legacy mode that means a credential the pool holds an entry for, in OAuth mode one the verified-identity cache holds and the pool still holds an entry for. Recognizing either is a map read that reaches no GitLab, so the budget still bounds what it exists to bound, and one client behind a shared address (a NAT, a campus, a carrier, or a proxy running without `--trusted-proxy-header`) relaying invented tokens does not cut off the neighbours who authenticated before it started. Every credential the deployment does not already hold stays refused for the rest of the block. The identity cache and the pool are both bounded, so in OAuth mode a credential whose identity was dropped from a full cache, or whose pool entry was evicted, loses the exemption until it is verified again.
+
+Every rejection in this table carries `Content-Type: application/json` and a JSON-RPC error response. That matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognized JSON-RPC error to conclude the server is of the initialization era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
+
+The server's own codes mirror their HTTP status multiplied by `-100` (`-40100`, `-40300`, `-42900`, `-50300`), which puts them outside the range JSON-RPC reserves (`-32768` to `-32000`), as the MCP specification requires for codes it does not define. The two inside that range are not the server's own: `-32600` is JSON-RPC's Invalid Request, and `-32022` is the code the MCP specification gives an unsupported protocol version.
+
+### Credential verification
+
+A token is verified against the instance when its pool entry is first built, in both auth modes, and the requests after that are served from the pool without asking GitLab first. The probe is `GET /api/v4/user`, run under one of the pool's 16 credential probe slots (a build waits up to five seconds for one), bounded at five seconds and never retried. Only an explicit `401` or `403` rejects the token, two `403`s aside, each of which says GitLab accepted it (below). The credential is checked again by the periodic revalidation (`--revalidate-interval`), by the one-hour credential-age ceiling, and when GitLab answers `401` to a call made with it, as [Refused calls](#refused-calls) describes.
+
+Every other outcome (a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint) means no verdict was obtained, and the entry is admitted: failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service.
+
+Verifying is what stops an unauthenticated caller from obtaining a working session with any non-empty string, and stops a stream of invented tokens from churning the pool. Token _format_ is deliberately not checked: GitLab lets self-managed administrators change the `glpat-` prefix, so a prefix rule would reject legitimate self-hosted tokens while still admitting any well-shaped fake. Legacy mode keeps no memory of a token GitLab refused, since the failure budgets bound those; OAuth mode remembers such a refusal for five minutes and answers the same token from memory.
+
+**The admission minimum.** A token is admitted only when it carries `read_api` or `api`, since every tool this server serves reads the API with one of them. GitLab says a token falls short in one of two ways, and the door reads both: the probe answers `403` with the code `insufficient_scope`, which is how GitLab refuses a token carrying none of `api`, `read_api` and `read_user` (one with only `read_repository`, a registry scope, `self_rotate` or `k8s_proxy`, for instance), or the probe accepts the token and its own description, `GET /api/v4/personal_access_tokens/self`, names `read_user` or another scope below the minimum and neither of the two. Either is answered `403`, JSON-RPC `-40300`:
+
+- **Legacy mode** sends no challenge, and the body opens with `GitLab accepted this token, which carries neither the read_api nor the api scope this server needs at least.` It goes on to say that a token's scopes cannot be changed after it is created, so the way out is a new token with `read_api`, or `api` to write as well.
+- **OAuth mode** sends an `insufficient_scope` challenge naming `read_api`, and its words follow how the guard learned it. A token whose scopes the verifier's introspection read is told what it carries (`This token carries the read_user scope, and read_api is the least this server can work with.`), and the same token sent again is answered from the verified-identity cache. A token GitLab's own `GET /api/v4/user` refused for want of a scope, and one the gate behind the guard found below the minimum after no introspection had described it, get a body opening with `GitLab rejected this token for lacking the scope this request needs.`
+
+None of them is charged to the address's failure budget or its distinct-credential budget, since GitLab accepted the token. The legacy refusal and those two OAuth ones are remembered for the token and its instance for five minutes, so the same token sent again is answered from memory. The token's description is read before the tier, so a refused token costs no tier request. A token whose scopes could not be read, because the description got no answer, is admitted, since unknown scopes count as capable; if a revalidation later learns they are below the minimum, the entry ends as [Refused calls](#refused-calls) describes.
+
+In OAuth mode the bearer guard also verifies every token its identity cache does not hold, before the request reaches the pool; see [Verification concurrency](#verification-concurrency). Under `--auth-mode=oauth` there is no `GET` or `DELETE` exemption either: the guard exempts only a CORS preflight, so an unauthenticated `GET` or `DELETE` is answered `401` with the challenge, and the `405` of the stateless transport appears once the request carries a credential the instance accepts.
+
+#### Refused calls
+
+The first call GitLab refuses with `401` is where a revoked token is noticed, rather than at the next revalidation. Not every `401` means that, though: GitLab answers some missing permissions with `401` rather than `403`, approving a merge request you opened where author approval is prevented among them ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403)), and it answers a token it no longer finds with the same bytes. So the pool entry is treated by what the `401` says:
+
+- **A `401` that names the token** ends the entry at once: a REST body carrying the RFC 6750 code `invalid_token`, which GitLab writes for an expired, revoked or impersonation-disabled token, or any `401` from the GraphQL endpoint. GraphQL answers a missing permission with a `200` or a `403` and never with a `401`, so its `401` is always about the token, one carrying neither `api` nor `read_api` among them, which reaches an entry only when the door could not read its scopes.
+- **A `401` that names nothing** is confirmed with the same `GET /api/v4/user` probe first, at most once every 30 seconds per credential. If GitLab refuses the probe, the token is gone and the entry ends as above. If GitLab accepts it, the refusal was a permission, and the entry is kept with its subscriptions, its sessions and its rate-limit bucket. If the probe gets no answer, or all 16 probe slots are busy with admissions or other entries' confirmations, nothing changes, and the next refusal after the 30-second window, or the next revalidation, asks again.
+
+An entry that ends this way closes its subscribers' streams with `credential_revoked` and is counted as `rejected_credential`, so both always mean GitLab refused the credential and never that it refused a permission. A confirmation or a revalidation that finds the credential below the admission minimum instead ends the entry too: its streams close with `credential_insufficient`, it is counted as `below_minimum`, and the verdict is remembered as the door's own is. A token deleted within 30 seconds of a confirmation GitLab accepted is caught by the next refusal after the window, or by the next revalidation. A client whose only activity is a subscription meets the refusal on its watcher's own read instead, and that watch ends with `resource_gone` and status `401`.
+
+:::tip[Tool errors after connecting]
+A client that connected and later sees every tool call fail usually holds a token that has since expired or been revoked. Check its expiry date and that it still carries `api`, or `read_api` for a read-only surface; a fine-grained token's answers name the permission it lacks.
+:::
+
+### Fine-grained personal access tokens
+
+A fine-grained personal access token carries a grant of named permissions rather than scopes, fixed when it is created, and GitLab judges every request against it after the token authenticates. Both auth modes admit one; [Fine-grained Tokens](/gitlab-mcp-server/operations/fine-grained-tokens/) covers what to grant it and how to read what it is told.
+
+- **The door.** The credential probe, `GET /api/v4/user`, needs User: Read. A token without it is answered `403`, JSON-RPC `-40300`, with a body that opens with `GitLab accepted this token and refused it the permission to read its own user.`, says why the door needs that permission and the two ways out (a fine-grained token that grants User: Read, or a classic token with `read_api` or `api`), and then quotes GitLab's own sentence, filtered to printable ASCII and cut at 512 bytes, since under `--allow-any-gitlab-url` the instance, and so the sentence, are the caller's. In OAuth mode the challenge carries `error="insufficient_scope"` and a description of this server's own, never GitLab's sentence. The refusal is **not** charged to the address's failure budget or its distinct-credential budget, since GitLab accepted the token, and the verdict is remembered for the token and its instance for five minutes, so the same token sent again is answered from memory rather than holding a probe or verification slot per request. Nothing edits a grant after its token is created, so the one verdict that can change inside those five minutes is GitLab's "not yet supported", for a user whose feature flag an administrator turns on. A flood of distinct fine-grained tokens, each a genuine credential of a real account, stays bounded in concurrency alone, by the 16 probe slots in legacy mode and the 16 verification slots in OAuth mode. The operator's log line names how many permissions GitLab's sentence listed and at most three of them, never the sentence or the token.
+- **OAuth mode.** A fine-grained token sent as a Bearer token meets the `read_api` minimum the door asks for: its one scope, `granular`, names no authority, so it is read as unknown authority rather than refused for lacking `read_api`. A deployment that pins its OAuth applications with `--oauth-client-uid` admits no personal access token at all, so it answers a fine-grained one with its recipient refusal instead, uncharged and remembered the same way.
+- **The pool entry.** An entry built for a fine-grained token reads two things besides what every entry reads: the token's own grant (`GET /api/v4/personal_access_tokens/:id`, which needs Personal Access Token: Read) and the instance version (`GET /api/v4/version`, which needs Metadata: Read). Both are read once the tier is detected, under one of the pool's 16 credential probe slots, and a build that finds none free within the probe wait is answered `503`. A classic token pays neither request. Every accepted revalidation reads both again without taking a slot, inside the ten seconds the sweep gives each entry, and replaces what the entry is served only when the reads answered, so an instance upgraded under a running pool moves the entry to its new release's verdict while a failed read keeps what the entry had. The grant is read under a ceiling of its own, 1 MiB and 1000 scopes; a larger grant is not evaluated. Nothing of the grant enters the shape a server is built for, so one server serves a classic token and any number of fine-grained ones, and narrows each fine-grained session's `tools/list`, the results of `gitlab_find_action` on the default dynamic surface, and `gitlab://tools` per request.
+- **`--ignore-scopes`** skips the scope filter and the read-only narrowing, and still asks the token what kind it is, since reading a grant is not scope filtering, and what scopes it carries, since the admission minimum is not either.
 
 ### OAuth mode
 
 OAuth mode (`--auth-mode=oauth`) enables RFC 9728–compliant OAuth 2.1 authentication. Instead of managing tokens manually, MCP clients discover the authorization server automatically and handle the OAuth flow:
 
 ```bash
-gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
 ```
+
+The clients of this deployment are configured with `https://mcp.example.com/mcp`, the same string as `--public-url`, and it publishes its metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/mcp`. Creating the GitLab OAuth application, its redirect URIs and each client's configuration are covered in [OAuth application](/gitlab-mcp-server/operations/oauth-app/).
 
 **How it works:**
 
-1. The server exposes `/.well-known/oauth-protected-resource` with metadata pointing to your GitLab instance as the authorization server
+1. The server exposes `/.well-known/oauth-protected-resource`, followed by the path of `--public-url`, with metadata pointing to your GitLab instance as the authorization server
 2. MCP clients (VS Code, Claude Code) discover this endpoint and initiate the OAuth 2.1 PKCE flow
 3. Users authorize in the browser — no token copying required
 4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes). The cache holds at most 10,000 identities and, when full, drops an expired one or else the one used least recently, and at most 16 new tokens are verified at once across the process: a new token that finds no slot free within five seconds is answered `503` with `Retry-After`, without being judged or charged. Neither bound is configurable, and a token already cached never waits for a slot, though it shares the listener with the requests waiting for one (see [the price of that ceiling](/gitlab-mcp-server/operations/security/#oauth-mode))
+5. An invalid or expired token is answered `401` with `error="invalid_token"` in the challenge, charged to the address's authentication budgets, and remembered for five minutes, so the same token sent again is refused from memory
 
 :::caution[--public-url is required]
 `--public-url` declares the externally reachable origin and **is the RFC 9728 resource identifier**; the server refuses to start in OAuth mode without a valid one. The metadata URL is derived from it by inserting the well-known segment between host and path, so `--public-url=https://mcp.example.com/gitlab` publishes metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` — a path at the **root of the host**, which a reverse proxy must route without rewriting.
+:::
+
+:::caution[--public-url must be the URL clients use, byte for byte]
+`--public-url` is published verbatim as the RFC 9728 `resource`, and section 3.3 of that RFC tells a client to **discard** metadata whose `resource` is not identical to the URL it used. A deployment started with `--public-url=https://mcp.example.com` whose clients point at `https://mcp.example.com/mcp` therefore fails discovery: the challenge and the metadata both name the origin, the client wanted the `/mcp` URL, and it must throw the document away.
+
+The server answers MCP on several paths as a convenience (the root, `/mcp`, and the `--public-url` path prefix), but only one of them can be the published identifier. Pick the URL you hand to clients and pass exactly that: clients at `https://mcp.example.com/mcp` need `--public-url=https://mcp.example.com/mcp`, which publishes the metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/mcp`.
 :::
 
 ### Where the metadata lives: host root or sub-path
@@ -225,7 +394,7 @@ The deployment advertises that one scope in `scopes_supported`, and a client suc
 }
 ```
 
-- **`clientId`**: The Application ID from your GitLab OAuth Application (see [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md))
+- **`clientId`**: The Application ID from your GitLab OAuth Application (see [OAuth application](/gitlab-mcp-server/operations/oauth-app/))
 - **`scopes`**: Must include `api` for full tool functionality
 
 VS Code handles OAuth discovery and authorization automatically.
@@ -242,7 +411,7 @@ claude mcp add gitlab \
   --transport http \
   --client-id YOUR_GITLAB_APPLICATION_ID \
   --callback-port 8090 \
-  http://your-server:8080/mcp
+  https://mcp.example.com/mcp
 ```
 
 Claude Code discovers the OAuth metadata and opens the browser for authorization.
@@ -251,20 +420,90 @@ Claude Code discovers the OAuth metadata and opens the browser for authorization
 </Tabs>
 
 :::tip
-OAuth mode requires a GitLab OAuth Application. See the [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) guide for setup instructions.
+OAuth mode requires a GitLab OAuth Application. See [OAuth application](/gitlab-mcp-server/operations/oauth-app/) for setup instructions.
 :::
 
 :::note
 OAuth mode is **Bearer-only**: the `PRIVATE-TOKEN` header is rejected with `401`, because what the `WWW-Authenticate` challenge advertises is exactly what the server accepts. Clients without OAuth support are not locked out — a personal access token sent as `Authorization: Bearer <glpat-...>` is verified and works the same way an OAuth access token does.
 :::
 
+### How OAuth verification works
+
+A guard of the server's own runs in front of the go-sdk's `auth.RequireBearerToken` middleware, which stays in the chain because only it can publish the token information the streamable handler reads. The guard answers what it can classify by itself (a missing token, a blocked address, an unpublished instance, a refusal it remembers, a scope below the minimum) with a JSON-RPC body and the RFC 6750 error code a client needs, and lets everything else through. The SDK middleware's own verification is then a cache hit on the identity the guard has just stored, so a new token costs one verification either way.
+
+```mermaid
+sequenceDiagram
+    participant Client as MCP client
+    participant Guard as Bearer guard
+    participant Cache as Identity cache
+    participant GL as GitLab API
+    participant SDK as RequireBearerToken
+    participant MCP as MCP handler
+
+    Client->>Guard: POST /mcp, Authorization: Bearer token
+    Guard->>Cache: Look up the digest of instance and token
+    alt Identity cached and not expired
+        Cache-->>Guard: Identity
+    else Not cached
+        Guard->>GL: GET /api/v4/user, then the token's own scopes
+        GL-->>Guard: 200, the user and the scopes
+        Guard->>Cache: Store the identity
+    end
+    Guard->>SDK: Request
+    SDK->>Cache: Look up (a hit)
+    SDK->>MCP: Authenticated request
+    MCP-->>Client: MCP response
+```
+
+### Protected resource metadata
+
+In OAuth mode the server publishes the RFC 9728 protected-resource document at the URL derived from `--public-url`, for clients that implement OAuth discovery. A deployment that owns its hostname serves the path-less form, and one under a path prefix serves it with that path appended:
+
+```bash
+# --public-url=https://mcp.example.com
+curl http://localhost:8080/.well-known/oauth-protected-resource
+
+# --public-url=https://mcp.example.com/gitlab
+curl http://localhost:8080/.well-known/oauth-protected-resource/gitlab
+```
+
+The document carries `resource`, `authorization_servers`, `bearer_methods_supported` (`["header"]`), `scopes_supported`, `resource_name` (`GitLab MCP Server`) and `resource_documentation`; [OAuth application](/gitlab-mcp-server/operations/oauth-app/#step-3-start-the-server-and-check-the-metadata) shows one in full. `scopes_supported` lists `api` on a deployment that can write and `read_api` under `--read-only` or `--safe-mode`, one scope and never both: a client asks GitLab for every scope listed, and GitLab refuses a request naming a scope the OAuth application does not have. A `read_api` token is still admitted by a deployment that can write and served its read-only surface; the client that wants one names the scope itself. `resource_documentation` is whatever `--resource-documentation` names, and this page when that flag is empty; `--resource-policy-uri` and `--resource-tos-uri` add `resource_policy_uri` and `resource_tos_uri`, which are omitted when unset.
+
+### Token caching
+
+The events a cached identity goes through, from first verification to revocation, are in [the server's identity cache](/gitlab-mcp-server/operations/oauth-app/#the-servers-identity-cache). Beside them:
+
+- **Key and content.** The key is a SHA-256 digest of the instance and the token, and the cached identity holds the user's id, the username, the scopes and an expiry, and no token material.
+- **Lifetime.** `--oauth-cache-ttl`, 15 minutes by default, from 1 minute to 2 hours, shortened by the token's own expiry when GitLab reports one. An expired identity is dropped on its next lookup, and a background sweep at a quarter of the TTL, never more often than every 30 seconds, removes the ones nobody looks up again.
+- **Capacity.** At most 10,000 identities, the largest pool `--max-http-clients` allows. An identity retains about 700 bytes measured through the verifier, so the bound holds the cache to about 7 MB. It is not configurable. When a newly verified token finds the cache full, an expired identity is dropped to make room if there is one, and otherwise the identity used least recently; every request reads its token's entry, and a read counts as a use.
+- **What pushes a live identity out**: 10,000 other distinct credentials used since its own last request, read or newly verified alike, at least one of them newly verified. On a deployment serving far fewer credentials than that, only a caller verifying thousands of credentials of its own gets there, and the verification ceiling below stretches that out: at 16 verifications at a time against an instance answering in 50 ms, 10,000 new verifications take about a minute and a half. On a deployment already serving close to 10,000 credentials, every new verification pushes out whichever identity was used least recently, however regularly its client comes back.
+- **What a dropped identity costs**: its token is verified against GitLab again the next time it is presented, waiting for a verification slot like any new token, and while its address is blocked by an authentication budget it loses the exemption, which needs the cached identity as well as a live pool entry, so it is refused `429` until the block ends.
+
+### Verification concurrency
+
+A token the cache does not hold costs up to three requests to GitLab before the request reaches the pool: `GET /api/v4/user`, then `GET /api/v4/personal_access_tokens/self` and `GET /oauth/token/info` to read its scopes. The server runs at most **16 of these verifications at once** across the whole process, whoever sends them, so a flood of invented tokens from many addresses cannot have more than 16 of its requests in flight to GitLab at a time. The ceiling counts work, not callers, and is not configurable: an operator who could raise it could undo what it bounds.
+
+- It bounds concurrency, not rate. A slot sends its requests one after another as fast as the instance answers, so the rate is the slots divided by the round trip: at 50 ms, about 320 requests a second, or about 100 new tokens verified a second at three requests each. That is well above what GitLab.com allows unauthenticated traffic from one address (a token GitLab refuses counts as unauthenticated), so on GitLab.com this ceiling does not keep the deployment's address under GitLab's own throttle; it keeps the load the deployment relays proportional to how fast the instance answers rather than to how many tokens arrive at once.
+- A token the cache holds never waits for a slot: it is answered before a slot is asked for.
+- A new token waits up to five seconds for a slot. When none frees, it is refused with `503`, JSON-RPC `-50300` and `Retry-After: 30`, with the message `GitLab could not verify this token right now. Retry shortly. The token itself has not been rejected.`, the same words as a verification whose answer from GitLab could not be read. The refusal is not cached and is charged to no authentication budget, since nothing was learned about the token.
+- The operator tells the causes apart in the log: `token verification refused: every verification slot stayed busy` (`WARN`) for a full set of slots, `token verification abandoned: the request ended before it was verified` (`INFO`) for a client that disconnected while it waited, and `token verification failed` (`ERROR`) for an answer that could not be read. The first two are written at most once a minute each and name no token and no address.
+- A caller that presents a new token to an instance it knows to be healthy, and is refused after the five-second wait, can infer that other callers are verifying. That one bit is the accepted cost of any bound kept for the whole process, as for the process-wide stream and watcher ceilings; no count and no identity goes with it.
+- These slots are separate from the pool's own 16 credential probe slots, so neither kind of work can occupy the other's.
+
+The price of the ceiling, for new credentials presented during a flood and for the descriptors and memory the waiting flood holds, is set out under [OAuth mode in Security](/gitlab-mcp-server/operations/security/#oauth-mode). What the measurement behind it found, with `make bench-fairness BOUND=oauth-verification` against a stand-in GitLab that answers each verification request in 100 ms, the phase opening after the flood has settled into its queue:
+
+- With a flood of 400 invented tokens a second, 42 and 40 of 120 new credentials were served in two runs, after 5.5 s rather than 0.5 s, and the rest were refused; every request on a cached credential was served in both arms, at a median of 14 ms with the ceiling and 13 to 15 ms without it.
+- The instance received about 160 requests a second, sixteen slots over the round trip, with at most 20 at once, against about 420 a second with up to 56 without the ceiling. A flood of 1,000 a second left that rate where it was, about 160 a second against 1,020. In counts, 5,640 and 5,600 requests reached it over the 35 seconds from the phase's first request to the answer of its last waiter, against 12,600 and 30,600 over 30 seconds without the ceiling.
+- The share of new credentials served tracks the slots' share of what arrives (a few points under it, which a queue model puts down to the driver's evenly spaced flood and to new credentials on fixed ticks rather than to the ceiling), so it moves with the round trip: about 67% at 50 ms, where the slots finish four requests in five, 14% at 200 ms, and 14% at 100 ms under the larger flood.
+- The flood waits in the server instead: every waiting request holds its connection for up to the five seconds, and the resident set peaked at about 275 MiB against 177 MiB without the ceiling, and 437 MiB against 188 MiB under the larger flood. Nothing but the arrival rate bounds how many requests wait, the rate times the wait: about 2,000 at 400 a second, each of them a connection and so a file descriptor, which is one more reason to give the server a generous descriptor limit.
+
 ## Stateless mode
 
 Stateless is the **default** transport model, following the sessionless design introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (MCP protocol `2026-07-28`):
 
 - The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
-- GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`), with no credential required — there is nothing they can address, so gating them would replace the specified answer with a `401`. Under `--stateless=false` they are authenticated and ownership-checked like a POST instead, because there a GET opens a session's SSE stream and a DELETE terminates the session. `/health` and `/.well-known/*` endpoints are unaffected.
-- Synchronous server-initiated requests are unavailable. Clients on protocol `2026-07-28` keep full elicitation through multi-round-trip requests (MRTR), which travel inside the tool result; only legacy-protocol clients fall back to non-interactive alternatives (e.g. the `confirm` parameter for destructive actions).
+- GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`) once the request is authenticated. In legacy mode they are answered without a credential: there is nothing they can address, so gating them would replace the specified answer with a `401`. In OAuth mode a request without a credential is answered `401` first, because the bearer guard in front exempts only a CORS preflight. Under `--stateless=false` they are authenticated and ownership-checked like a POST in both modes, because there a GET opens a session's SSE stream and a DELETE terminates the session. `/health` and `/.well-known/*` endpoints are unaffected.
+- Synchronous server-initiated requests are unavailable, because no client channel outlives the request. Clients on protocol `2026-07-28` keep full elicitation through multi-round-trip requests (MRTR), which travel inside the tool result; only legacy-protocol clients fall back to non-interactive alternatives (e.g. the `confirm` parameter for destructive actions). See [Elicitation](/gitlab-mcp-server/capabilities/elicitation/).
 - `--session-timeout` has no effect: no session outlives its request.
 - The per-token-and-URL credential pool still applies, so repeated requests reuse a cached pool entry.
 
@@ -275,7 +514,13 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
   --json-response
 ```
 
-In stateless mode the legacy `resources/subscribe` request is refused with an explanatory error — each POST gets its own session that closes with the response, so a subscription it accepted could never be notified; clients on protocol 2026-07-28 keep [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) through `subscriptions/listen`, which holds the request open.
+From a checkout, `make validate-http-stateless` smoke-validates the stateless transport against the compiled binary and `make validate-http-stateless-docker` against the Docker image, both through `scripts/validate-http-stateless.sh`.
+
+In stateless mode the legacy `resources/subscribe` request is refused with an explanatory error, because each POST gets its own session that closes with the response, so a subscription it accepted could never be notified; clients on protocol 2026-07-28 keep [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) through `subscriptions/listen`, which holds the request open, while a client that subscribes the legacy way needs `--stateless=false`.
+
+### Protocol revisions this server negotiates
+
+Stateless mode accepts `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`. `--stateless=false` accepts the same set **minus** `2026-07-28`: the SDK's streamable transport serves that revision only when the transport is stateless, because SEP-2575 has no session concept to fall back on. Either way, an `MCP-Protocol-Version` header naming anything else is answered `400` with a JSON-RPC `-32022` error whose `data.supported` lists what this deployment can negotiate and whose `data.requested` repeats what was asked, so a client gets one retry that works rather than a bare `400` it has to interpret. A request carrying no such header is not refused for it.
 
 ### Legacy stateful mode
 
@@ -283,7 +528,7 @@ In stateless mode the legacy `resources/subscribe` request is refused with an ex
 
 ### Cache hints
 
-Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) hints. Almost everything is `private`, because catalogs and resource content are filtered by the caller's token scopes and licensing tier and must never be served from a shared cache. The prompt catalog is the exception: its prompts are compiled into the binary and no tier, token or surface setting alters one, so marking it private would cost every client a round trip for a body that could have been shared.
+Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) hints. Almost everything is `private`, because catalogs and resource content are filtered by the caller's token scopes and licensing tier and must never be served from a shared cache. The prompt catalog is the exception: its {stats.prompts} prompts are compiled into the binary and no tier, token or surface setting alters one, so marking it private would cost every client a round trip for a body that could have been shared.
 
 The freshness window depends on how the licensing tier was resolved. A detected tier can change under a running server, so the tool catalog gets a shorter window; `--tier` or `GITLAB_MCP_TIER` pins it and lifts that to an hour.
 
@@ -296,9 +541,18 @@ The freshness window depends on how the licensing tier was resolved. A detected 
 | `resources/read` of a workflow guide         | `private`    | `3600000` (1 hour)     | `3600000` (1 hour)   |
 | `resources/read` of live GitLab data         | `private`    | `0` (always fresh)     | `0` (always fresh)   |
 
+The `gitlab://tools` manifest shares the tool catalog's window rather than the static one because it describes that catalog: caching it for an hour while `tools/list` refreshed every five minutes would let a client hold two disagreeing views of the same thing.
+
 ### Request cancellation
 
 Client aborts are always propagated into handler contexts, so an abandoned POST cancels its in-flight GitLab API calls, client-go's retries included. That holds on every protocol version and in both stateless and stateful mode: a POST is the whole lifetime of the calls it carries, since no event store is configured and a response whose POST has ended has nowhere left to be written. The SDK's own propagation covers protocol `2026-07-28` only, and an older client has no `notifications/cancelled` to send, so the server binds each call to the POST that carried it instead.
+
+A client can also cancel an in-flight call by sending `notifications/cancelled` with the request id. Four things are worth knowing, because none of them is obvious from the protocol text alone:
+
+- **The cancellation reaches GitLab.** The upstream request is aborted rather than left running to completion, so cancelling a slow search stops paying for it.
+- **A response may still arrive for a cancelled request.** The specification says a server should not send one, and this server cannot prevent it: the SDK's JSON-RPC layer writes the response for an incoming call whose context was cancelled, deliberately, and no application hook runs in between. A client that cancels should be prepared to discard a late response rather than treat it as a protocol violation ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-cancelled-incoming-call-is-still-answered)).
+- **The reason is not logged, because it does not arrive.** The specification asks implementations to log cancellation reasons; the SDK reads the request id from `notifications/cancelled` and discards the `reason` field before any application code sees it ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-cancellation-reason-is-discarded-before-any-handler-sees-it)). What is logged for a tool call is that it was cancelled and how long it ran (`tool call canceled`, with its `duration`, at `INFO`): cancellation is the protocol working, so it does not belong in an error dashboard.
+- **Disconnecting stops the work too**, as above. `notifications/cancelled` remains the way to stop a call while keeping the connection, which is the one thing dropping the POST cannot do.
 
 ### Gateway routing annotation
 
@@ -312,7 +566,7 @@ MCP session lifecycle (the `Mcp-Session-Id` handshake, idle expiry via `--sessio
 
 ### Credential pool architecture
 
-The core of HTTP mode is a **bounded LRU pool** of per-credential entries, keyed by the SHA-256 hash of each client's token **and** GitLab URL. An entry holds what the credential decides: its GitLab client, its rate-limit bucket, its resource watchers and its sessions. The MCP server and its registered tool catalog are built once per **configuration** and shared by every credential whose configuration matches, because nothing a server holds depends on the credential; the credential travels with each request instead.
+The core of HTTP mode is a **bounded LRU pool** of per-credential entries, keyed by the SHA-256 hash of each client's token **and** GitLab URL. An entry holds what the credential decides: its GitLab client, the configuration resolved for it, the user it belongs to, its rate-limit bucket, its resource watchers, its listen-stream ceiling, its sessions and an opaque owner token. The MCP server and its registered tool catalog are built once per **configuration shape** and shared by every credential whose configuration matches, because nothing a server holds depends on the credential: the tool catalog and its schemas, the surface projected from it, the resource and prompt registrations, the handshake. The credential travels with each request instead ([ADR-0020](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0020-one-server-per-configuration-shape.md)).
 
 ```mermaid
 graph TD
@@ -323,13 +577,13 @@ graph TD
 
         HANDLER --> POOL[Credential Pool]
 
-        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>GitLab Client + credential state"]
-        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>GitLab Client + credential state"]
-        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>GitLab Client + credential state"]
+        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>client, config, watchers, owner"]
+        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>client, config, watchers, owner"]
+        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>client, config, watchers, owner"]
 
-        ENTRY1 --> SHARED["MCP Server<br/>one per configuration"]
-        ENTRY2 --> SHARED
-        ENTRY3 --> SHARED
+        ENTRY1 --> SHAPE1["Shape: dynamic, ultimate, read-write<br/>one MCP server"]
+        ENTRY2 --> SHAPE1
+        ENTRY3 --> SHAPE2["Shape: dynamic, free, read-only<br/>one MCP server"]
     end
 
     ENTRY1 --> GL1["GitLab API<br/>as user A @ gitlab.com"]
@@ -341,23 +595,43 @@ graph TD
 
 - Clients with the **same token and same GitLab URL** share the same pool entry
 - Clients with **different tokens** or **different GitLab URLs** get completely isolated entries: no credential can observe another's data, its watch state, or the existence of its traffic
-- The MCP server is shared per configuration, and every request runs under the GitLab client of its own entry. A request that cannot be attributed to a credential is refused rather than served from a default
+- The MCP server is shared per configuration, and every request runs under the GitLab client of its own entry, resolved from the request context. A server's registered handlers hold a credential-less client that refuses every call, so a request that cannot be attributed to an entry fails rather than borrowing one
+- Each entry detects its token's scopes and its licensing tier on its own, so one process can serve Free, Premium and Ultimate instances side by side. The tier is detected from the instance license (`GET /license`), then from the plans of the namespaces the token administers (`GET /namespaces`), falling back to `free`; `--tier` pins it and turns detection off
+- The shape a server is built for covers the tool surface, the capability surface, the meta parameter-schema mode, the tier and whether it was pinned, GitLab.com versus self-managed, read-only (including the narrowing a `read_api` token causes), safe mode, the excluded tools, the token scopes and statelessness. The instance URL is deliberately not part of it, since the client is per entry regardless
+- Session ownership and resource-updated notifications are per entry, not per server: a session may only be driven by the credential that opened it, and a notification reaches only the sessions of the credential whose watcher produced it
 - Pool lookups use **only SHA-256 hashes** of token+URL; the entry's GitLab client keeps the credential it authenticates with for as long as the entry lives, since it cannot call GitLab without it, and nothing is written to disk
 - When the pool reaches `--max-http-clients`, the least recently used entry that is not serving a subscription is evicted, and only when every entry is serving one does the oldest of those go
 
+Nothing one client does crosses into another's entry by construction: there is no shared client to borrow and no default credential to fall back to.
+
+### Session key isolation
+
+The pool key is `SHA-256(token + "\x00" + gitlabURL)`, never the raw values. That means:
+
+- No lookup structure holds a raw token: the pool map, the rejected-token cache and, in OAuth mode, the identity cache are keyed by digest, so a scan of those structures yields no credential
+- The entry's GitLab client necessarily holds the credential it authenticates with, for as long as the entry lives, which is bounded by `--pool-idle-timeout`, the one-hour credential age limit and LRU eviction. Nothing is written to disk
+- The same token against different GitLab instances produces different pool entries
+- Log lines show only the last four characters of a token (`...a1b2`)
+
 ### Session lifecycle
 
-1. **First request**: Token and GitLab URL are extracted, combined and hashed, and a pool entry with its own GitLab client is created. The MCP server is built too if this is the first credential of its configuration; every later one finds it ready
-2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
-3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains). A request still carrying its ID is answered `404`, and a client that follows the 2025-11-25 transport then starts a new session; the Go SDK client (v1.8.0) does not, so its application has to reconnect
-4. **Pool eviction**: When capacity is reached, the oldest evictable entry is removed entirely, and its client is told rather than left silent: its watchers stop, its open `subscriptions/listen` requests are completed with a result naming the ending (`credential_evicted` for capacity, `credential_revoked` for a token GitLab refused, and [six more](/gitlab-mcp-server/capabilities/subscriptions/#why-a-subscription-ended)), and under `--stateless=false` the sessions that no stream ended are terminated, after which a client that follows the 2025-11-25 transport re-initializes on its next request (the Go SDK client, v1.8.0, does not, and its application has to reconnect)
+1. **First request**: Token and GitLab URL are extracted, combined and hashed, and a pool entry with its own GitLab client is created. The MCP server is built too if this is the first credential of its configuration; every later one finds it ready. In order:
+   1. The authentication gate reads the token and resolves the instance from the published list and the `GITLAB-URL` header
+   2. The pool hashes the token and the URL and looks the pair up
+   3. For a new pair it creates a GitLab client, verifies the credential, detects the tier and the scopes, and asks for the server of the resulting configuration shape. The first credential of a shape builds that server and registers every tool, resource and prompt behind a readiness gate, so a request arriving meanwhile waits for the catalog rather than being answered from an empty one; every later credential of the shape finds it built
+   4. The gate stamps the entry onto the request, and the streamable HTTP handler is handed the shape's server
+   5. Inside that server, the first middleware to run binds the request to the entry: its GitLab client, its rate-limit bucket, its watchers and its listen-stream ceiling
+   6. Under `--stateless=false`, the SDK opens an MCP session and returns an `Mcp-Session-Id`, and the session is recorded as belonging to that entry
+2. **Subsequent requests**: The existing entry is found and promoted in the LRU list, and the same shape server is handed the request, bound to the same entry
+3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains). A request still carrying its ID is answered `404`, and a client that follows the 2025-11-25 transport then sends `initialize` without one, which opens a new session on the shape's server, bound to the same entry. The Go SDK client (v1.8.0) does not start one: it fails its connection with `ErrSessionMissing` once its standalone stream reconnects or, with that stream disabled, keeps the dead session and is refused on every call, so its application has to reconnect ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-go-sdk-client-starts-no-new-session-after-a-404))
+4. **Pool eviction**: When capacity is reached, the oldest evictable entry and its GitLab client are removed from the pool; the shape server stays, since every credential of that configuration shares it, and a new entry is created for the arriving pair. If the evicted client reconnects, a fresh entry is created for it too. The evicted client is told rather than left silent: its watchers stop, its open `subscriptions/listen` requests are completed with a result naming the ending (`credential_evicted` for capacity, `credential_revoked` for a token GitLab refused, and [six more](/gitlab-mcp-server/capabilities/subscriptions/#why-a-subscription-ended)), and under `--stateless=false` the sessions that no stream ended are terminated, after which a client that follows the 2025-11-25 transport re-initializes on its next request (the Go SDK client, v1.8.0, does not, and its application has to reconnect)
 5. **A call GitLab refuses with `401`**: a `401` that names the token (the `invalid_token` code, or any `401` from GraphQL) removes the entry at once, ending its streams with `credential_revoked`. A plain `401` is not enough on its own, because GitLab also answers some missing permissions that way, such as approving a merge request you opened: the server first asks `GET /api/v4/user`, at most once every 30 seconds per credential, and keeps the entry, its subscriptions and its sessions when GitLab still accepts the token
 
 #### The lever, and what it costs
 
 `--max-http-clients` decides how often any of that happens. Set it above the simultaneous client population and an arriving credential evicts nobody; frequent eviction means the number is below the population.
 
-An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one resource watcher, and both are bounded across the process: 512 open streams and 512 concurrent watchers, neither configurable. At most 1024 entries can be busy at once, so a pool of 1025 or more cannot be made entirely busy and the fallback that takes a subscriber's entry never fires. That costs about 50 MiB of tenancy at the measured 50 KiB per entry, against an upper bound of 10000 for the flag.
+An entry is busy while its credential holds an open `subscriptions/listen` stream or at least one resource watcher, and both are bounded across the process: 512 open streams and 512 concurrent watchers, neither configurable. At most 1024 entries can be busy at once, so a pool of 1025 or more cannot be made entirely busy and the fallback that takes a subscriber's entry never fires. That holds at rest: a listen refused by the process-wide stream ceiling still holds its credential's slot for the length of the refused request, so the busy count can briefly exceed 1024 by the number of refusals in flight. It costs about 50 MiB of tenancy at the measured 50 KiB per entry, against an upper bound of 10000 for the flag.
 
 The default stateless transport needs less: a session-era `resources/subscribe` is refused there unless it arrived through a listen, so a watcher cannot exist without a stream and 513 entries already make the fallback unreachable.
 
@@ -423,13 +697,24 @@ Because the limiter scopes by token+URL, a client that rotates tokens frequently
 
 The rate limit bounds how often a credential calls, not how many of its calls are still running. A `tools/call` holds its `POST` for as long as the call runs, up to an hour for a pipeline wait and for as long as GitLab keeps it waiting otherwise, and each held call costs the process two file descriptors, six goroutines and about 190 KiB of memory. Measured without a bound, 4000 held calls took 8010 descriptors and 873 MiB, and a process whose hard descriptor limit was 1024 held about five hundred and then stopped accepting connections, `/health` among them.
 
-So the process holds at most **as many calls at once, across every credential, as its descriptor limit leaves room for**, and no flag moves the figure. It reads the limit at startup, leaves an eighth of it spare, reserves one descriptor for each of the 512 listen streams and gives each held call two: 192 under a hard limit of 1024, 1536 under 4096, 229120 under the 524288 a systemd service gets by default. The hard limit is the one that counts, because the Go runtime raises the soft limit to it before the server starts; Windows, which has no such limit to read, gets the figure for 1024. The startup line announces it as `held_requests_per_process`.
+So the process holds at most **as many calls at once, across every credential, as its descriptor limit leaves room for**, and no flag moves the figure. It reads the limit once at startup, leaves an eighth of it spare for the idle process, `/health` and the connections being refused, reserves one descriptor for each of the 512 listen streams, and divides the rest by the two descriptors a held call costs (the caller's connection and the one to GitLab):
 
-- **What counts**: every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `prompts/get`, `completion/complete`), while it runs. Each call of a JSON-RPC batch counts on its own. A `subscriptions/listen` does not, on any revision, since the listen ceilings already count it; neither does a notification, nor a client's answer to a request of the server's own, such as an elicitation, so a full ceiling never keeps that answer from the call waiting on it. Under `--stateless=false` each session the process keeps holds one slot for its standalone stream, the `GET` a stateful client holds open, from the `POST` that opens the session until the session ends, so the `GET` itself takes none.
-- **Refusal**: every refusal says `This server is busy. Retry later.` and costs its credential no rate-limit token. On protocol 2026-07-28 or later the call, and on any revision a `POST` that would open a stateful session with no slot left for its stream, is refused before the MCP handler reads it, with `503`, JSON-RPC `-50300`, `Retry-After: 30` and the connection closed; on an older revision it is refused the way the rate limit refuses the same method, a `tools/call` as a result flagged with `isError`. The log line `request refused: too many requests held across the process` names `scope` `process` and `limit_held_requests`.
+| Hard descriptor limit                           | Calls held at once |
+| ----------------------------------------------- | -----------------: |
+| 1024 (`docker run --ulimit nofile=1024:1024`)   |                192 |
+| 4096                                            |               1536 |
+| 524288 (a systemd service's default hard limit) |             229120 |
+| 1048576 (the containers measured below)         |             458496 |
+| none to read (Windows)                          | 192, sized as 1024 |
+
+The limit that counts is the **hard** one: the Go runtime raises the soft limit to the hard limit before the server starts, so a host whose `ulimit -n` prints 1024 still gives the process its hard limit, usually 524288 or more. The startup line announces the figure as `held_requests_per_process`, and no flag moves it: the lever is the descriptor limit itself, which raises the ceiling and the resource it protects together.
+
+- **What counts**: every call that reaches GitLab (`tools/call`, `resources/read`, `resources/subscribe`, `prompts/get`, `completion/complete`), from the moment it is dispatched until it returns. Each call of a JSON-RPC batch counts on its own, so a batch cannot carry more calls than there are slots. A `subscriptions/listen` does not, on any revision, since the listen ceilings (64 per credential by default, 512 per process) already count it; neither does a notification, nor a client's answer to a request of the server's own, such as an elicitation, so a full ceiling never keeps that answer from the call waiting on it. Methods that answer from memory (`initialize`, `ping`, the listings) are not counted. Under `--stateless=false` each session the process keeps holds one slot for its standalone stream, the `GET` a stateful client holds open, from the `POST` that opens the session until the session ends, so the `GET` itself takes none.
+- **Refusal**: every refusal says `This server is busy. Retry later.` and costs its credential no rate-limit token. On protocol 2026-07-28 or later the call, and on any revision a `POST` that would open a stateful session with no slot left for its stream, is refused before the MCP handler reads it, with `503`, JSON-RPC `-50300`, `Retry-After: 30` and the connection closed; on an older revision it is refused where it is dispatched, the way the rate limit refuses the same method: a `tools/call` as a result flagged with `isError`, a `completion/complete` as an empty completion, anything else as a JSON-RPC error `-42900`. The refusal says nothing about which bound refused, and it is charged to no authentication budget either. The log line `request refused: too many requests held across the process` names `scope` `process` and `limit_held_requests`.
+- **Why it is not configurable, and why no per-credential ceiling stands beside it**: a credential is a key a caller can mint, so a per-credential number would multiply with every token a caller mints, and a number an operator could raise could be raised past what the process can hold, which is what the bound exists to prevent. Issue 951 decided both.
 - **Measured**: under a hard limit of 1024, with 4000 calls offered at once from one credential or from a hundred, the process held 192 in 394 descriptors, refused the rest and answered `/health` in a millisecond; with a limit of 1048576 it held all 4000.
-- **What it costs you**: it promises no caller a share, and one credential can fill it. No per-credential ceiling stands beside it, by decision (issue 951): a credential is a key a caller can mint, so such a number would multiply with every token a caller mints. Where the limit is small, one credential that fills it, or a fleet of clients waiting on pipelines, has the next call from anybody refused until a held call ends; raise the hard descriptor limit or run more replicas behind a balancer. Where the limit is large, memory runs out first, at about 190 KiB a held call. The server keeps no memory cap of its own, also by decision: the memory limit the process runs under is what bounds it, so set one: a memory limit on the container, or `MemoryMax` on the systemd unit, since a unit without a `MemoryMax` of its own is bounded by the slices above it where one of them sets one, and otherwise only by the host; `systemctl show -p EffectiveMemoryMax <unit>` reports the tightest of those limits on systemd 256 and later, and prints nothing on earlier versions. `GOMEMLIMIT` makes the Go runtime collect harder as the heap nears it but refuses nothing, so it does not replace that limit.
-- **What it does not bound**: idle connections a client keeps open between requests. `--http-idle-timeout` closes those.
+- **What it costs you**: it promises no caller a share, and one credential can fill it. No per-credential ceiling stands beside it, by decision (issue 951): a credential is a key a caller can mint, so such a number would multiply with every token a caller mints. Where the limit is small, one credential that fills it, or a fleet of clients waiting on pipelines, has the next call from anybody refused until a held call ends: at the default rate, a burst of 40 and then ten calls a second, one credential fills 192 slots in about fifteen seconds. Raise the hard descriptor limit or run more replicas behind a balancer, each with its own ceiling. Where the limit is large, memory runs out first, at about 190 KiB a held call. The server keeps no memory cap of its own, also by decision: the memory limit the process runs under is what bounds it, so set one: a memory limit on the container, or `MemoryMax` on the systemd unit, since a unit without a `MemoryMax` of its own is bounded by the slices above it where one of them sets one, and otherwise only by the host; `systemctl show -p EffectiveMemoryMax <unit>` reports the tightest of those limits on systemd 256 and later, and prints nothing on earlier versions. `GOMEMLIMIT` makes the Go runtime collect harder as the heap nears it but refuses nothing, so it does not replace that limit.
+- **What it does not bound**: idle connections a client keeps open between requests. A client that keeps connections open holds a descriptor for each of them whatever this counts, and `--http-idle-timeout` is what closes those; its default, `0`, keeps them for ever. The gate's refusal closes its own connection for that reason.
 
 ## Stateful sessions kept at once
 
@@ -437,13 +722,15 @@ Under `--stateless=false` the server keeps every session a client opens until th
 
 So the process keeps at most **half as many sessions as it may hold calls**: 96 under a hard limit of 1024, 114560 under 524288. Each session takes a held-call slot for its standalone stream when it opens and keeps it until it ends, so the sessions take at most half of the held-call slots, a call on an open session is still served when every session slot is taken, and a session the process keeps is never refused its stream, which a client refused it would not ask for again. The startup line of a deployment that keeps sessions announces the figure as `stateful_sessions_per_process`, and no flag moves it. The default stateless transport keeps no session, so nothing is counted there.
 
-- **What counts**: every `POST` without an `Mcp-Session-Id` on a revision before 2026-07-28, which is what opens a session. The session keeps its slots until it ends, however it ends; a `POST` whose session did not survive it gives them back as it returns. A `POST` on 2026-07-28 or later takes none: the stateful transport answers it with the revisions it serves, so the client falls back.
+- **What counts**: every `POST` without an `Mcp-Session-Id` on a revision before 2026-07-28, which is what opens a session. The slots are taken from the moment the gate admits the credential. The session keeps them until it ends, however it ends (a `DELETE`, `--session-timeout`, the credential's eviction); a `POST` whose session did not survive it, one that was not an `initialize` or whose `initialize` was refused, gives them back as it returns. A `POST` on 2026-07-28 or later takes none: the stateful transport answers it, `server/discover` included, with the revisions it serves, so the client falls back, and keeps no session for it.
 - **Refusal**: before the session exists, in the held-call ceiling's words: `503`, JSON-RPC `-50300`, `Retry-After: 30`, the connection closed and `This server is busy. Retry later.`, costing no rate-limit token. The log line `request refused: too many stateful sessions across the process` names `scope` `process` and `limit_stateful_sessions`; an `initialize` refused for want of a held-call slot for its stream logs the held-call ceiling's line instead.
 - **Measured**: under a hard limit of 1024, with 4000 sessions offered with their streams, from one credential or from a hundred, the process kept 96 in 112 and 183 descriptors, refused the rest and kept answering `/health`; with the limit inherited it kept all 4000.
 - **What it bounds**: descriptors, and memory only where the limit is small. The 114560 sessions a hard limit of 524288 allows would take about ten to twelve GiB idle, so on such a host the memory limit the process runs under (a container's, or a systemd unit's `MemoryMax`) bounds them first. No fixed cap stands beside the derived figure, by decision (issue 951): that memory limit already bounds that memory, and a fixed cap no flag moves would be sized for one host.
-- **What it costs you**: filling it costs a caller nothing, since `initialize` spends no rate-limit token and an idle session holds no connection. One credential can open every session, and a session nobody deletes then holds its slot for `--session-timeout`, half an hour by default and a day at most, while every other tenant's `initialize` is refused; with `--session-timeout=0` it holds it until the pool evicts its credential, and startup warns about that. No per-credential ceiling stands beside it and `initialize` stays unmetered, by decision (issue 951), for the held-call ceiling's reason: a per-credential number, or a price in the opener's own rate, would multiply with every token a caller mints. Have clients delete their sessions, shorten `--session-timeout`, raise the hard descriptor limit, or move clients to the stateless transport.
+- **What it costs you**: filling it costs a caller nothing, since `initialize` spends no rate-limit token and an idle session holds no connection. One credential can open every session, and a session nobody deletes then holds its slot for `--session-timeout`, half an hour by default and a day at most, while every other tenant's `initialize` is refused; before this ceiling an idle session refused nobody. With `--session-timeout=0` it holds its slot until the pool evicts its credential, after `--pool-idle-timeout` without a request (never with `0`) or to make room at `--max-http-clients`, and startup warns about that combination. A client that deletes its session when it is done, as the specification asks, gives its slots back at once. No per-credential ceiling stands beside it and `initialize` stays unmetered, by decision (issue 951), for the held-call ceiling's reason: a per-credential number, or a price in the opener's own rate, would multiply with every token a caller mints. Have clients delete their sessions, shorten `--session-timeout`, raise the hard descriptor limit, or move clients to the stateless transport.
 
 ## Client configuration
+
+In legacy mode a client sends its token in a header on every request. The examples below use `PRIVATE-TOKEN`; the stdio configuration of each client is under [Client configuration](/gitlab-mcp-server/configuration/#client-configuration), and the OAuth configuration under [Step 4 of the OAuth application](/gitlab-mcp-server/operations/oauth-app/#step-4-configure-the-clients).
 
 <Tabs>
 <TabItem label="VS Code / Copilot">
@@ -486,12 +773,85 @@ Add to `.vscode/mcp.json`:
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 </TabItem>
 </Tabs>
+
+## Behind a reverse proxy
+
+**`--public-url` is what makes a proxied deployment's host acceptable.** A proxy forwards the client's `Host` and connects to the server over loopback, and that is also the shape of a DNS-rebinding attack: a page resolves a name the attacker controls to the loopback address, and the browser then reaches the local server with that name in `Host`. So a `Host` naming a host nobody declared is refused with `403` and JSON-RPC `-40300`, on `/health` and every other path as well as on `/mcp`, and `--public-url=https://mcp.example.com/mcp` is the declaration:
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --public-url=https://mcp.example.com/mcp
+```
+
+Three more things count as declared, and the second of them can stand in for the flag:
+
+| Shape                                                                                                | Why it is served                                                           |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `Host` naming the loopback family (`localhost`, `127.0.0.1`, `::1`), or the host `--http-addr` binds | The names the listener answers to anyway                                   |
+| A request from an address in `--trusted-proxies`                                                     | The operator has vouched for that hop, so the host it forwards is believed |
+| A request carrying no `Host` at all                                                                  | What a balancer health check sends, and not a shape a browser can produce  |
+
+The trusted-proxy row admits a host on its own: a hop listed in `--trusted-proxies` may forward whatever host it heard, with no `--public-url` at all, which is how one deployment fronts several names without naming each. The list is the bound, since the same request from an address nobody listed is still refused. `--public-url` stays required for two other things: OAuth mode demands it as the RFC 9728 resource identifier, and it is what declares a host for a request that does not come from a listed peer.
+
+When `--http-addr` binds a single host, a `Host` outside the declared set is refused whatever address the request arrived on. A listener bound to `0.0.0.0` or `::` and reached on a routable address is not a local server, so the rebinding rule does not apply to it; reached over loopback, the same listener applies it. Configurations for nginx, Caddy, Traefik, Apache and Cloudflare Tunnel are in [Remote Deployment](/gitlab-mcp-server/operations/remote-deployment/#behind-a-reverse-proxy).
+
+## Listening on a unix socket, or on TLS
+
+Behind a reverse proxy on the same machine, the hop between proxy and server is usually described as "just loopback". Under Docker it is not: the path runs, for example, `nginx → 127.0.0.1:8821 (docker-proxy) → 172.19.0.2:8080`, and that second leg crosses a bridge network. There are two ways to make it unreadable, and the cheaper one removes it rather than encrypting it.
+
+### Unix socket (preferred where the proxy shares the machine)
+
+Give `--http-addr` a filesystem path instead of `host:port`:
+
+```bash
+gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock --gitlab-url=https://gitlab.com
+```
+
+```nginx
+upstream gitlab_mcp {
+    server unix:/run/gitlab-mcp/server.sock;
+}
+
+location /mcp {
+    proxy_pass http://gitlab_mcp;
+    # An SSE stream must not be held: buffering turns a live stream into one
+    # delivery at the end, which is what X-Accel-Buffering: no asks nginx to
+    # stop doing. Set it here too so the intent survives a configuration that
+    # ignores the header.
+    proxy_buffering off;
+    # A subscriptions/listen stream, and a standalone GET, are silent between
+    # notifications. The server's 25-second keep-alive holds them open across
+    # the 60-second default; raise the timeout if you expect quiet periods
+    # longer than your clients tolerate reconnecting through.
+    proxy_read_timeout 1h;
+    proxy_http_version 1.1;
+}
+```
+
+No bridge, no docker-proxy, no certificate to issue or rotate. A value is read as a path when it contains a path separator, so `:8080` and `127.0.0.1:8080` still bind TCP, and a bare `mcp.sock` is treated as a **host name**: it is indistinguishable from one, and guessing would silently bind something other than what you wrote.
+
+The socket is created `0660`, so the proxy reaches it by sharing a group with the server; `--http-socket-mode` changes that (octal, e.g. `--http-socket-mode=0600`). A socket left behind by a process that did not shut down cleanly is removed on startup, but only after a connect proves nothing is listening: a live socket is refused rather than stolen, and a path that is not a socket is never deleted. What a socket costs at scale is in [The unix socket, and what it costs at scale](/gitlab-mcp-server/enterprise/tls/#the-unix-socket-and-what-it-costs-at-scale).
+
+### TLS on the listener
+
+For a proxy that does **not** share the machine:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+```
+
+Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake. Rotating it needs no restart: the certificate is served through a callback that checks both files on each handshake and re-reads them when either has changed, and a half-written or unreadable pair keeps the previous certificate in service and logs the reason once ([Certificate rotation without downtime](/gitlab-mcp-server/enterprise/tls/#certificate-rotation-without-downtime)). There is no reload signal and none is needed; `SIGHUP` is not handled and terminates the process.
+
+TLS 1.2 is the floor and no maximum is set, so a current client negotiates TLS 1.3 and 1.2 is reached only by one that cannot go higher. The floor is 1.2 rather than 1.3 deliberately: this flag exists for a reverse proxy on another machine, and a proxy's upstream TLS client is not always 1.3-capable. A private CA and `proxy_ssl_verify on` on the proxy side complete the picture; where the proxy is local, the socket above is less machinery for the same guarantee.
 
 ## Docker deployment
 
@@ -652,15 +1012,57 @@ Three things follow from this.
 
 **Memory tracks concurrent work, not the number of tokens.** The pool holds one entry per distinct token and GitLab URL, but an entry is a GitLab client and its bookkeeping, not a catalog: the MCP server and its registered surface are built once per configuration and shared by every credential whose configuration matches. The benchmark's concurrency series measures the tenancy at every step out to a thousand credentials and puts it at 50.6 KiB each on `dynamic`, 52.6 on `meta` and 29.8 on `individual`, so a thousand admitted credentials hold under 120 MiB of live heap on any surface. The point scenarios say the same thing from the other end, admitting 64 credentials one at a time: 0.15, 0.09 and -0.53 MiB per extra credential, which is nothing above the noise of a resident-set reading. What grows is the requests in flight.
 
-**`--max-http-clients` is not a memory setting.** At about 50 KiB per entry, its default of 100 bounds five mebibytes; sizing an instance against it is wrong in both directions, since it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. What it does bound is how many live GitLab clients and watchers the process holds, and `--pool-idle-timeout` (default `1h`) decides how long an unused one is kept. `--session-timeout` is a different thing again, despite sounding like it: it bounds an idle MCP session, it applies to `--stateless=false` only (under the default stateless transport a session ends with the response to its own POST), and ending a session does not release the pooled entry behind it.
+**`--max-http-clients` is not a memory setting.** At about 50 KiB per entry, its default of 100 bounds five mebibytes; sizing an instance against it is wrong in both directions, since it neither reserves that memory nor limits what the callers behind those credentials allocate while their requests are served. What it does bound is how many live GitLab clients and watchers the process holds, and `--pool-idle-timeout` (default `1h`) decides how long an unused one is kept, unless it is serving a subscription, in which case it is not idle by that measure. `--session-timeout` is a different thing again, despite sounding like it: it bounds an idle MCP session, it applies to `--stateless=false` only (under the default stateless transport a session ends with the response to its own POST), and ending a session does not release the pooled entry behind it.
 
 **The tool surface changes responses more than memory.** All three build the same canonical action catalog, and since the server is shared per configuration the surface says almost nothing about what one more credential costs: 51, 53 and 30 KiB on `dynamic`, `meta` and `individual`, across surfaces whose registered tool counts differ by a factor of five hundred. Under load the surfaces do separate, and by tool count still not at all: `meta` is the cheapest per calling credential at 0.81 MiB against 1.92 and 4.27, because what is left once the catalog is shared is what a surface allocates while it answers a call. What the surface really decides is the size of a `tools/list`: 12 KB, 599 KB and 3.2 MB for `dynamic`, `meta` and `individual`. Pick the surface for token cost and response time, and pick the instance size for concurrency.
 
 Absolute figures vary by platform and Go runtime version — treat these as a starting point, and run `make bench-resources` to measure your own.
 
+## Shared configuration
+
+These settings are **server-wide**: they apply to every client, whatever its token or GitLab URL.
+
+| Setting                     | Source                                                        | Description                                                                                                                                                                                                           |
+| --------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixed GitLab URL            | `--gitlab-url`                                                | The authoritative instance for every client when exactly one is set. Required unless `--allow-any-gitlab-url` is passed, and under that flag `GITLAB-URL` selects per request while a request omitting it is refused  |
+| TLS verification            | `--skip-tls-verify`                                           | Applied to every GitLab client connection                                                                                                                                                                             |
+| Tool and capability surface | `--tool-surface`, `--capability-surface`                      | The same tool catalog and resource and prompt exposure for every client (`dynamic`, `meta` or `individual`; `full` or `minimal`); what a token's scopes and its instance's tier allow is still decided per credential |
+| Upload limits               | `--upload-max-file-size` or `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | Largest file an upload or file-read tool accepts, `2GB` by default                                                                                                                                                    |
+
+The **GitLab token** always varies per client. The **GitLab URL** varies per client only when several instances are published, or none under `--allow-any-gitlab-url`. Each distinct `(token, URL)` pair gets a pool entry of its own.
+
+## Comparison with stdio mode
+
+| Aspect                    | Stdio mode                             | HTTP mode                                                              |
+| ------------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Configuration source      | Environment variables and dotenv files | CLI flags, with the environment as fallback                            |
+| Token required at startup | Yes (`GITLAB_TOKEN`)                   | No: one per request                                                    |
+| Clients per process       | 1                                      | Many (pool entries bounded by `--max-http-clients`)                    |
+| Process lifecycle         | Started and stopped by the AI client   | Long-running service                                                   |
+| Memory per client         | 106 to 277 MiB, a whole process        | 30 to 53 KiB per pooled credential, plus the requests it has in flight |
+| Client isolation          | Process                                | Pool entry                                                             |
+| Network                   | None (stdio pipes)                     | TCP, or a unix socket                                                  |
+| Session management        | The SDK                                | The SDK and the credential pool                                        |
+
+## Server logs
+
+The server logs to stderr in JSON. Durations are `slog`'s rendering of a Go `time.Duration`, an integer count of nanoseconds rather than a string, and the startup line carries `version`, `commit`, `build` and `config_digest` as well, left out here for width:
+
+```json
+{"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"held_requests_per_process":229120,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"detected","scopes_detected":true,"token_suffix":"...c3d4"}
+{"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
+{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+```
+
+Under `--stateless=false` the startup line also carries `stateful_sessions_per_process`. The two eviction lines are separate messages rather than one message at two levels, so an operator can filter for exactly one of them. The `WARN` is the busy fallback of [Session lifecycle](#session-lifecycle): the pool held nothing quiet to take, so an entry serving a subscription went and that client's watch ended. It is a signal rather than an error, and `max_size` on the line is the number to raise. The same event is counted as `size_pressure_busy` on `gitlab_mcp.credential_pool.evictions` for a deployment running [telemetry](/gitlab-mcp-server/operations/telemetry/).
+
 ## Health check
 
-`GET /health` needs no credentials and answers `200` with a JSON body:
+`GET /health` needs no credentials. It answers `200` with a JSON body while the process is serving, and `503` with the same body once shutdown has been requested:
 
 ```bash
 curl -s http://localhost:8080/health
@@ -678,22 +1080,47 @@ curl -s http://localhost:8080/health
 }
 ```
 
-`started_at` is the process start instant (RFC 3339, UTC) and `uptime_seconds` is whole seconds since then. Both are reported because they do different jobs: `started_at` is byte-identical across probes, so a monitor can cache it and spot a restart by noticing it moved, while `uptime_seconds` is the value you read at a glance.
+| Field            | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`         | `ok` while the process is serving, `draining` once shutdown was requested; the HTTP status carries the same verdict, `200` or `503`                                                                                                                                                                                                                                                                                                                                                                      |
+| `version`        | The build version as the toolchain stamped it: a plain number on a release, a Go pseudo-version on a build from a working tree                                                                                                                                                                                                                                                                                                                                                                           |
+| `commit`         | The build commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `build`          | The one label to display: the release the build is closest to plus the short commit it was built from, with `.dirty` when the tree had uncommitted changes. A release binary and a build from `main` report the same shape, where `version` alone gives one a plain number and the other a Go pseudo-version                                                                                                                                                                                             |
+| `config_digest`  | Twelve hex characters over the settings that decide what a client sees: tool surface, capability surface, meta parameter schema, tier and whether it was pinned or is detected per credential, scope detection, read-only, safe mode and the excluded tools. Instances that must serve the same catalog must report the same digest. It is a fingerprint for comparison, not a secret: the settings it covers are few and public, so whoever can read it can also work out which combination produced it |
+| `started_at`     | The process start instant, RFC 3339 in UTC                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `uptime_seconds` | Whole seconds since `started_at`, truncated, so never a second that has not fully elapsed                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-`build` is the one label to display: the release the build is closest to plus the short commit it was built from, with `.dirty` when the tree had uncommitted changes, so a release binary and a build from `main` report the same shape where `version` alone gives one a plain number and the other a Go pseudo-version. `config_digest` is twelve hex characters over the settings that decide what a client sees (tool surface, capability surface, meta parameter schema, tier and whether it was pinned or is detected per credential, scope detection, read-only, safe mode and the excluded tools): every instance behind one balancer must report the same one, or one of them serves a different catalog and nothing else detects that. It is a fingerprint for comparison, not a secret: the settings it covers are few and public, so whoever can read it can also work out which combination produced it.
+Liveness is reported both ways on purpose. `started_at` is the stable fact: it is byte-identical across probes, so a monitor can cache it and detect a restart by noticing it moved, which is why Prometheus exposes `process_start_time_seconds` rather than an uptime counter. `uptime_seconds` is the derived convenience value, in the unit the [IETF health check draft](https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06) uses for it (`"observedUnit": "s"`).
+
+`config_digest` exists for fleets. Two instances behind one balancer that report different digests serve different catalogs to whichever clients reach them, and nothing else detects that: compare the digests in the same loop that proves the balancer's affinity, and treat a mismatch as a misconfigured node. A build from a different version with the same settings reports the same digest, so a rolling upgrade does not trip the comparison.
 
 Once shutdown has been requested the same endpoint answers `503` with `"status": "draining"` and `Cache-Control: no-store`. By default the listener closes right after, so set `--drain-delay` (`GITLAB_MCP_DRAIN_DELAY`) to at least one probe interval when a balancer polls `/health`: the listener then stays open that long answering `503`, the balancer removes the instance, and only then do the in-flight requests get their drain.
 
-`/health` reports only that the process is up — it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
+**No pool state, on purpose.** The endpoint publishes no entry count, no eviction counter and no configuration beyond the digest, and that is what lets it need no credential. Pool occupancy is precisely the reconnaissance a caller probing for the busy-entry fallback would want: one sample says how full the pool is, and two say how fast it is churning. The counters go to the logs and to [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) instead, both of which the operator controls.
+
+What that withholds is occupancy from callers in general, not the fact of a caller's own eviction. A client whose `subscriptions/listen` ends with `credential_evicted` holds an open stream, which is what made its entry busy, so it can infer that the pool had nothing quiet to take at that instant. That inference is accepted: it is about the eviction that just happened to it, and the alternative is to stop telling an evicted client why its subscription ended.
+
+`/health` reports only that the process is up: it performs no GitLab round trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
 ```
 
-A successful response returns a JSON-RPC result with the list of available tools.
+A successful response returns a JSON-RPC result with the list of available tools. To check the status code alone:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" \
+  -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+# Expected: 200
+```
 
 ### Server card
 
@@ -716,11 +1143,11 @@ curl -s http://localhost:8080/.well-known/mcp/server-card.json
 
 Every one of these paths is mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it: with `--public-url=https://mcp.example.com/gitlab` the SEP-2127 card answers at `/server-card`, `/gitlab/server-card`, `/mcp/server-card` and `/gitlab/mcp/server-card`, and the SEP-1649 document and the health check at `/gitlab/.well-known/mcp/server-card.json` and `/gitlab/health` beside their root paths. A `--public-url` whose path is exactly `/mcp` names the endpoint rather than a prefix, so nothing is mounted under it: the card answers at `/mcp/server-card` because the endpoint answers at `/mcp`, while `/health` and `/.well-known/mcp/server-card.json` stay at the root only, and a proxy that publishes nothing but `/mcp` has to route those two to the server's root paths if it exposes them. A path that only ends in `/mcp`, such as `/gitlab/mcp`, is a prefix like any other. Before 3.1.0 both paths answered the enumerating document and differed only in `Content-Type`, which left the older shape at the location SEP-2127 reserves, and the card was at `/server-card` alone, so an endpoint published as `https://mcp.example.com/mcp` answered `404` at the card URL a client derives from it.
 
-The enumerating document is the sanctioned way to tell something holding no credential what the server can do: a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
+The enumerating document is the sanctioned way to tell something holding no credential what the server can do: a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request; see [ADR-0018](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0018-authorization-admits-per-action-gating.md).
 
 ### Caching the cards
 
-Both cards and the RFC 9728 document at `/.well-known/oauth-protected-resource/<path of --public-url>` answer the same bytes until the process restarts, and all three say so twice: `Cache-Control: public, max-age=3600` is how long a client may reuse a copy without asking, and the `ETag` is what it sends back afterwards to ask whether that copy is still current. The cards are built once at startup; the RFC 9728 document is serialized per request from a value fixed at startup, and its tag is computed from the bytes that request produced.
+Both cards and the RFC 9728 document at `/.well-known/oauth-protected-resource[/<path of --public-url>]` answer the same bytes until the process restarts, and all three say so twice: `Cache-Control: public, max-age=3600` is how long a client may reuse a copy without asking, and the `ETag` is what it sends back afterwards to ask whether that copy is still current. The SEP-2127 card is rendered once at startup, when its routes are mounted, and the SEP-1649 document once per process, in the background, when its first request arrives; the RFC 9728 document is serialized per request from a value fixed at startup, and its tag is computed from the bytes that request produced rather than from a copy made for the purpose. That costs a hash of a few hundred bytes on a route a client reaches once per discovery, and it buys a validator that cannot describe a body nobody sent.
 
 ```bash
 curl -sI -H 'If-None-Match: "<the etag>"' \

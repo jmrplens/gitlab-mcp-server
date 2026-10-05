@@ -780,6 +780,11 @@ export default defineConfig({
 							translations: { es: "Servidor HTTP" },
 						},
 						{
+							slug: "operations/oauth-app",
+							label: "OAuth Application",
+							translations: { es: "Aplicación OAuth" },
+						},
+						{
 							slug: "operations/remote-deployment",
 							label: "Remote Deployment",
 							translations: { es: "Despliegue remoto" },
