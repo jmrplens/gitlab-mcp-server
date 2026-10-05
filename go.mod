@@ -9,7 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-isatty v0.0.24
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/shirou/gopsutil/v4 v4.26.8
+	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/vektah/gqlparser/v2 v2.5.58
 	gitlab.com/gitlab-org/api/client-go/v3 v3.15.0
