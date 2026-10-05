@@ -2,14 +2,19 @@
 package prompts
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 const (
@@ -570,6 +575,92 @@ func TestMyActivitySummary_APeriodWithNoEvents_HasNoChart(t *testing.T) {
 	}
 	if strings.Contains(text, "## Daily Activity") {
 		t.Errorf("there were no events, yet a chart section was written:\n%s", text)
+	}
+}
+
+// promptHandlerFunc is the signature every prompt handler of this package
+// shares, so a case table can name the handler it drives.
+type promptHandlerFunc func(context.Context, *gitlabclient.Client, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error)
+
+// assertGlobalListScope drives one prompt handler against a GitLab that
+// answers route, one of the global lists (GET /merge_requests or GET /issues),
+// and fails unless every request to it asked for scope=all and the handler
+// made wantCalls of them.
+//
+// Those two routes read a missing scope as created_by_me, so a prompt that
+// filters them by a user without one sees that user's items only among what
+// the caller created (issue 1164). A mock answers whatever it is asked, which
+// is why the prompts rendered the same text with and without the scope and no
+// test noticed: the request is the only place the defect shows. The call count
+// is held as well, so a list the handler stopped reading cannot pass by never
+// reaching the assertion.
+//
+// The caller resolves to user 1 and the username "alice" to user 42, and both
+// event routes answer empty, so one handler serves a prompt read for the
+// caller and one read for somebody else.
+func assertGlobalListScope(t *testing.T, handle promptHandlerFunc, args map[string]string, route string, wantCalls int64) {
+	t.Helper()
+	var calls atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, aliceLookupJSON)
+	})
+	mux.HandleFunc("GET /api/v4/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/users/42/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		testutil.AssertQueryParam(t, r, "scope", "all")
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	if _, err := handle(t.Context(), client, testPromptRequest(args)); err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if got := calls.Load(); got != wantCalls {
+		t.Errorf("%s was requested %d time(s), want %d", route, got, wantCalls)
+	}
+}
+
+// TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll verifies that
+// every global merge request and issue list a cross-project prompt reads asks
+// GitLab for everybody's items, for the caller and for another user alike.
+//
+// Each of these lists is filtered by the user the prompt is about: the merge
+// requests they author, are assigned or review, the issues assigned to them.
+// Without scope=all GitLab applies that filter to the caller's own merge
+// requests and issues only, so the pending reviews were the ones the caller
+// had opened and was reviewing, almost always none, and every list about
+// another user was that user's work intersected with the caller's.
+func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T) {
+	alice := map[string]string{argUsername: "alice"}
+	tests := []struct {
+		name      string
+		handle    promptHandlerFunc
+		args      map[string]string
+		route     string
+		wantCalls int64
+	}{
+		{name: "my_open_mrs for the caller", handle: handleMyOpenMRs, route: routeGetMergeRequests, wantCalls: 2},
+		{name: "my_open_mrs for another user", handle: handleMyOpenMRs, args: alice, route: routeGetMergeRequests, wantCalls: 2},
+		{name: "my_pending_reviews for the caller", handle: handleMyPendingReviews, route: routeGetMergeRequests, wantCalls: 1},
+		{name: "my_pending_reviews for another user", handle: handleMyPendingReviews, args: alice, route: routeGetMergeRequests, wantCalls: 1},
+		{name: "my_issues for the caller", handle: handleMyIssues, route: routeGetIssues, wantCalls: 1},
+		{name: "my_issues for another user", handle: handleMyIssues, args: alice, route: routeGetIssues, wantCalls: 1},
+		{name: "my_activity_summary for the caller", handle: handleMyActivitySummary, route: routeGetMergeRequests, wantCalls: 2},
+		{name: "my_activity_summary for another user", handle: handleMyActivitySummary, args: alice, route: routeGetMergeRequests, wantCalls: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertGlobalListScope(t, tt.handle, tt.args, tt.route, tt.wantCalls)
+		})
 	}
 }
 

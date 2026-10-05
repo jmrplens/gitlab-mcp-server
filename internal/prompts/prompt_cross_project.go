@@ -43,6 +43,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		&gl.ListMergeRequestsOptions{
 			AuthorID: new(userID),
 			State:    new("opened"),
+			Scope:    new(scopeAll),
 			PerPage:  maxListItems,
 		}, gl.WithContext(ctx),
 	)
@@ -55,6 +56,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		&gl.ListMergeRequestsOptions{
 			AssigneeID: gl.AssigneeID(userID),
 			State:      new("opened"),
+			Scope:      new(scopeAll),
 			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
@@ -139,6 +141,7 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 		&gl.ListMergeRequestsOptions{
 			ReviewerID: gl.ReviewerID(userID),
 			State:      new("opened"),
+			Scope:      new(scopeAll),
 			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
@@ -197,6 +200,7 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 		&gl.ListIssuesOptions{
 			AssigneeID: gl.AssigneeID(userID),
 			State:      new(state),
+			Scope:      new(scopeAll),
 			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
@@ -275,6 +279,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 			AuthorID:     new(userID),
 			State:        new("merged"),
 			CreatedAfter: &since,
+			Scope:        new(scopeAll),
 			PerPage:      maxListItems,
 		}, gl.WithContext(ctx),
 	)
@@ -287,6 +292,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 		&gl.ListMergeRequestsOptions{
 			ReviewerID:   gl.ReviewerID(userID),
 			UpdatedAfter: new(since),
+			Scope:        new(scopeAll),
 			PerPage:      maxListItems,
 		}, gl.WithContext(ctx),
 	)

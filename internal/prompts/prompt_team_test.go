@@ -411,6 +411,19 @@ func TestUserActivityReport_MultiDayChart_RendersDailyChart(t *testing.T) {
 	}
 }
 
+// TestUserActivityReport_GlobalListFilteredByUser_SendsScopeAll verifies that
+// both merge request lists of the report, the user's merged ones and the ones
+// they review, ask GitLab for everybody's merge requests.
+//
+// The report is about another user by design, since its username is required,
+// and GET /merge_requests without a scope answers with what the caller created
+// only. Each list was therefore the reported user's work intersected with the
+// caller's, which for a manager reading a team member's report is almost
+// always empty (issue 1164).
+func TestUserActivityReport_GlobalListFilteredByUser_SendsScopeAll(t *testing.T) {
+	assertGlobalListScope(t, handleUserActivityReport, map[string]string{argUsername: "alice"}, routeGetMergeRequests, 2)
+}
+
 // TestTeamOverview_MembersAPIError_ReturnsError verifies that team_overview returns an
 // error when the group members API fails.
 func TestTeamOverview_MembersAPIError_ReturnsError(t *testing.T) {

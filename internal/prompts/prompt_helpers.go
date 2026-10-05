@@ -87,6 +87,21 @@ const (
 	maxListItems = 100
 )
 
+// scopeAll is the scope every read of GitLab's global merge request and issue
+// lists sends (GET /merge_requests and GET /issues, the lists that are not a
+// project's or a group's).
+//
+// Those two routes answer with scope=created_by_me when no scope is sent, so a
+// list filtered by an author, an assignee or a reviewer is that filter applied
+// only to what the caller created. A prompt asking for the merge requests a
+// user is reviewing read the ones the caller had opened and was reviewing,
+// almost always none, and a report on another user read that user's work only
+// where the caller had authored it (issue 1164). The filter is what names the
+// user here, so the scope has to name everybody. The project and group lists
+// declare no default and answer with every visible item already, which is why
+// their calls carry no scope.
+const scopeAll = "all"
+
 // groupIDArg returns a required prompt argument for the GitLab group ID.
 func groupIDArg() *mcp.PromptArgument {
 	return &mcp.PromptArgument{
@@ -202,7 +217,7 @@ func extractIssueProjectPath(issue *gl.Issue) string {
 // (e.g. "https://gitlab.example.com/group/project/-/merge_requests/42" → "group/project").
 //
 // There is no early return for a URL that is empty or carries no "/-/": the
-// `dashIdx > 0` below decides exactly that and returns exactly the same empty
+// cut on "/-/" below decides exactly that and returns exactly the same empty
 // string, so the guard that used to stand here could be inverted, negated or
 // deleted without changing one answer. A check no test can observe is a check
 // a reader has to verify by hand for no benefit.
@@ -214,8 +229,11 @@ func projectPathFromWebURL(webURL string) string {
 	if slashIdx := strings.Index(path, "/"); slashIdx > 0 {
 		path = path[slashIdx+1:]
 	}
-	if dashIdx := strings.Index(path, "/-/"); dashIdx > 0 {
-		return path[:dashIdx]
+	// A cut rather than an index compared with zero: a "/-/" at the very start
+	// leaves an empty project path whether the index is read as `> 0` or as
+	// `>= 0`, so the comparison had a boundary no input could tell apart.
+	if project, _, found := strings.Cut(path, "/-/"); found {
+		return project
 	}
 	return ""
 }
@@ -293,21 +311,35 @@ func mermaidQuoted(s string) string {
 	var out strings.Builder
 	out.WriteByte('"')
 	for _, r := range s {
-		switch {
-		case r == '#':
-			out.WriteString("#35;")
-		case r == '"':
-			out.WriteString("#quot;")
-		case r == '\n' || r == '\r' || r == '\t':
-			out.WriteByte(' ')
-		case unicode.IsControl(r):
-			// Dropped: a control byte renders as nothing and can move a cursor.
-		default:
-			out.WriteRune(r)
-		}
+		writeMermaidRune(&out, r)
 	}
 	out.WriteByte('"')
 	return out.String()
+}
+
+// writeMermaidRune writes one rune of a value [mermaidQuoted] is quoting.
+//
+// It is a chain of early returns rather than a tagless switch because gremlins
+// maps a case expression to no coverage block and reports its mutants as not
+// covered, so it could not say whether a test holds these comparisons.
+func writeMermaidRune(out *strings.Builder, r rune) {
+	if r == '#' {
+		out.WriteString("#35;")
+		return
+	}
+	if r == '"' {
+		out.WriteString("#quot;")
+		return
+	}
+	if r == '\n' || r == '\r' || r == '\t' {
+		out.WriteByte(' ')
+		return
+	}
+	if unicode.IsControl(r) {
+		// Dropped: a control byte renders as nothing and can move a cursor.
+		return
+	}
+	out.WriteRune(r)
 }
 
 // truncateRunes cuts s to at most limit bytes, on a rune boundary.
@@ -318,14 +350,17 @@ func mermaidQuoted(s string) string {
 // Markdown, and the client renders a replacement glyph or drops the line. Every
 // description this package shortens is prose somebody typed, so the character
 // at the cut is as likely to be an accent or an emoji as an ASCII letter.
+//
+// A limit of zero or less gives the empty string. That used to be a guard of
+// its own, `limit <= 0`, whose boundary no input could test: at zero the walk
+// below already cuts to nothing, so `< 0` answered the same. Clamping the cut
+// at zero is what keeps a negative limit from slicing out of range, and leaves
+// no comparison whose boundary means nothing.
 func truncateRunes(s string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
 	if len(s) <= limit {
 		return s
 	}
-	cut := limit
+	cut := max(limit, 0)
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
@@ -335,16 +370,19 @@ func truncateRunes(s string, limit int) string {
 // endBlock leaves the builder ending in exactly one blank line, adding only
 // what is missing. It is the rule [toolutil.Card] applies before each of its
 // own block writes, in the one place this package needs it.
+//
+// It is a chain of early returns rather than a tagless switch for the reason
+// [writeMermaidRune] gives.
 func endBlock(b *strings.Builder) {
 	s := b.String()
-	switch {
-	case s == "", strings.HasSuffix(s, "\n\n"):
+	if s == "" || strings.HasSuffix(s, "\n\n") {
 		return
-	case strings.HasSuffix(s, "\n"):
-		b.WriteString("\n")
-	default:
-		b.WriteString("\n\n")
 	}
+	if strings.HasSuffix(s, "\n") {
+		b.WriteString("\n")
+		return
+	}
+	b.WriteString("\n\n")
 }
 
 // writeClosingRule writes the thematic break that separates a prompt's body
@@ -429,20 +467,24 @@ func issueAge(issue *gl.Issue) string {
 }
 
 // formatAge converts a duration to a compact human-readable string.
+//
+// It is a chain of early returns rather than a tagless switch for the reason
+// [writeMermaidRune] gives.
 func formatAge(d time.Duration) string {
 	days := int(d.Hours() / 24)
-	switch {
-	case days < 1:
+	if days < 1 {
 		return "<1d"
-	case days < 7:
-		return fmt.Sprintf("%dd", days)
-	case days < 30:
-		return fmt.Sprintf("%dw", days/7)
-	case days < 365:
-		return fmt.Sprintf("%dmo", days/30)
-	default:
-		return fmt.Sprintf("%dy", days/365)
 	}
+	if days < 7 {
+		return fmt.Sprintf("%dd", days)
+	}
+	if days < 30 {
+		return fmt.Sprintf("%dw", days/7)
+	}
+	if days < 365 {
+		return fmt.Sprintf("%dmo", days/30)
+	}
+	return fmt.Sprintf("%dy", days/365)
 }
 
 // mrStatus returns a compact status string for a merge request.
@@ -492,6 +534,9 @@ func mergeDuration(mr *gl.BasicMergeRequest) time.Duration {
 }
 
 // formatDuration converts a duration to a human-readable string (e.g. "2d 5h", "3h 20m").
+//
+// It is a chain of early returns rather than a tagless switch for the reason
+// [writeMermaidRune] gives.
 func formatDuration(d time.Duration) string {
 	if d <= 0 {
 		return "-"
@@ -500,14 +545,13 @@ func formatDuration(d time.Duration) string {
 	days := hours / 24
 	remainingHours := hours % 24
 
-	switch {
-	case days > 0:
+	if days > 0 {
 		return fmt.Sprintf("%dd %dh", days, remainingHours)
-	case hours > 0:
-		return fmt.Sprintf("%dh %dm", hours, int(d.Minutes())%60)
-	default:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, int(d.Minutes())%60)
+	}
+	return fmt.Sprintf("%dm", int(d.Minutes()))
 }
 
 // avgDuration computes the average of a slice of durations.

@@ -87,9 +87,9 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	b.WriteString(mdSummaryHeader)
 	b.WriteString("| Metric | Value |\n|--------|-------|\n")
 	fmt.Fprintf(&b, "| MRs merged | %d |\n", len(mrs))
-	if days > 0 {
-		fmt.Fprintf(&b, "| Merge rate | %.1f MRs/week |\n", float64(len(mrs))/float64(days)*7)
-	}
+	// No guard on days: parseDays never returns less than one, so the
+	// `days > 0` that stood here was never false and the division is safe.
+	fmt.Fprintf(&b, "| Merge rate | %.1f MRs/week |\n", float64(len(mrs))/float64(days)*7)
 	if len(durations) > 0 {
 		fmt.Fprintf(&b, "| Average time-to-merge | %s |\n", formatDuration(avgDuration(durations)))
 		fmt.Fprintf(&b, "| Median time-to-merge | %s |\n", formatDuration(medianDuration(durations)))

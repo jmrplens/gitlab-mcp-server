@@ -169,6 +169,15 @@
       "package": "internal/prompts",
       "kind": "rest",
       "method": "GET",
+      "path": "/events",
+      "query": [
+        "after"
+      ]
+    },
+    {
+      "package": "internal/prompts",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/:group_id/issues",
       "query": [
         "per_page",
@@ -217,6 +226,34 @@
       "identifiers": {
         ":group_id": 1
       }
+    },
+    {
+      "package": "internal/prompts",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/issues",
+      "query": [
+        "assignee_id",
+        "per_page",
+        "scope",
+        "state"
+      ]
+    },
+    {
+      "package": "internal/prompts",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/merge_requests",
+      "query": [
+        "assignee_id",
+        "author_id",
+        "created_after",
+        "per_page",
+        "reviewer_id",
+        "scope",
+        "state",
+        "updated_after"
+      ]
     },
     {
       "package": "internal/prompts",
@@ -458,10 +495,28 @@
       "package": "internal/prompts",
       "kind": "rest",
       "method": "GET",
+      "path": "/user"
+    },
+    {
+      "package": "internal/prompts",
+      "kind": "rest",
+      "method": "GET",
       "path": "/users",
       "query": [
         "username"
       ]
+    },
+    {
+      "package": "internal/prompts",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/:user_id/events",
+      "query": [
+        "after"
+      ],
+      "identifiers": {
+        ":user_id": 1
+      }
     },
     {
       "package": "internal/resources",

@@ -232,16 +232,17 @@ func hasLinkedWork(commit *gl.Commit) bool {
 	return linkedWorkPattern.MatchString(commit.Title) || linkedWorkPattern.MatchString(commit.Message)
 }
 
+// commitBody returns what a commit message says below its subject line, and
+// the empty string for a message that is only a subject or only whitespace.
+//
+// It cuts at the first line break rather than splitting into lines and
+// counting them. The count was a `len(lines) <= 1` whose boundary no message
+// could test, since joining the lines after the only one gives the same empty
+// body the guard returned, and the empty-message guard before it was decided
+// again by the cut, which finds no break in an empty string.
 func commitBody(commit *gl.Commit) string {
-	message := strings.TrimSpace(commit.Message)
-	if message == "" {
-		return ""
-	}
-	lines := strings.Split(message, "\n")
-	if len(lines) <= 1 {
-		return ""
-	}
-	return strings.TrimSpace(strings.Join(lines[1:], "\n"))
+	_, body, _ := strings.Cut(strings.TrimSpace(commit.Message), "\n")
+	return strings.TrimSpace(body)
 }
 
 func firstLine(text string) string {

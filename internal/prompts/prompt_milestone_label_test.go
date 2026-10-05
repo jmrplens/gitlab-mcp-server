@@ -811,6 +811,53 @@ func TestLabelDistribution_TheOrderTheTotalsAndTheChart(t *testing.T) {
 	})
 }
 
+// TestLabelDistribution_LabelsThatTie_KeepTheOrderGitLabSent pins the order
+// of labels whose usage is equal.
+//
+// The table is sorted by usage, and the sort is stable, so a tie keeps the
+// order GitLab listed the labels in rather than whichever order the sorting
+// algorithm leaves. The fixture interleaves three usage tiers across sixty
+// labels, long enough to be partitioned rather than insertion-sorted, which is
+// where an unstable sort moves equal elements, and names them in an order no
+// other key would produce.
+func TestLabelDistribution_LabelsThatTie_KeepTheOrderGitLabSent(t *testing.T) {
+	const count, tiers = 60, 3
+	var labels []*gl.Label
+	byTier := make([][]string, tiers)
+	for i := range count {
+		name := fmt.Sprintf("label-%02d", (i*7)%61)
+		tier := i % tiers
+		byTier[tier] = append(byTier[tier], name)
+		labels = append(labels, &gl.Label{Name: name, OpenIssuesCount: int64(tier + 1)})
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
+		data, err := json.Marshal(labels)
+		if err != nil {
+			t.Errorf("marshaling the label fixture: %v", err)
+			respondNotFound(w)
+			return
+		}
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
+
+	for tier, names := range byTier {
+		t.Run(fmt.Sprintf("usage %d", tier+1), func(t *testing.T) {
+			last := -1
+			// sequential: each label is held to come after the one GitLab listed before it.
+			for _, name := range names {
+				at := strings.Index(text, "| "+name+" |")
+				if at <= last {
+					t.Fatalf("%s is not after the label of the same usage GitLab listed before it:\n%s", name, text)
+				}
+				last = at
+			}
+		})
+	}
+}
+
 // TestLabelDistribution_TheChart_StopsAtEightSlices pins the cap on the pie.
 //
 // The cap is a `< 8` nothing ever reached, so it could be read as `<= 8` and a

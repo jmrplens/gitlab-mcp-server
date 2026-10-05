@@ -820,6 +820,19 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
+// TestUnreadSection_OpensWithTheQuestionEmoji holds the words an audit writes
+// in place of a verdict to the emoji every other unknown in the server opens
+// with.
+//
+// The constant is spelled as one literal so that no constant expression is
+// left for a mutation tool to report as not covered, and that is what leaves
+// the emoji free to drift from toolutil.EmojiQuestion without this test.
+func TestUnreadSection_OpensWithTheQuestionEmoji(t *testing.T) {
+	if want := toolutil.EmojiQuestion + " could not be read"; unreadSection != want {
+		t.Errorf("unreadSection = %q, want %q", unreadSection, want)
+	}
+}
+
 // TestWriteFullWebhooksSection_URLWithCredentials_RendersOriginOnly verifies
 // that a webhook row names the host it posts to and nothing else: no userinfo,
 // no path, no query.

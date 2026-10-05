@@ -814,16 +814,20 @@ func writeBranchesSection(ctx context.Context, b *strings.Builder, client *gitla
 }
 
 // countBranchStats returns the number of merged and stale (>30 days) branches.
+//
+// A branch is stale when its last commit is older than thirty days, which is
+// read as a commit date before a cutoff rather than as an age compared with
+// 30. The age was a fraction of a day measured against the running clock, so
+// no fixture could land on exactly thirty and its `> 30` could not be told
+// from `>= 30`; Before draws the same line with no boundary left to guess.
 func countBranchStats(branches []*gl.Branch) (merged, stale int) {
+	cutoff := time.Now().Add(-30 * 24 * time.Hour)
 	for _, br := range branches {
 		if br.Merged {
 			merged++
 		}
-		if br.Commit != nil && br.Commit.CommittedDate != nil {
-			age := time.Since(*br.Commit.CommittedDate).Hours() / 24
-			if age > 30 {
-				stale++
-			}
+		if br.Commit != nil && br.Commit.CommittedDate != nil && br.Commit.CommittedDate.Before(cutoff) {
+			stale++
 		}
 	}
 	return merged, stale
