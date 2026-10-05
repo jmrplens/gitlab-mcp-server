@@ -131,8 +131,9 @@ func checkRecord(cfg genRun, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "%s re-record with `%s` (GITLAB_COM_TOKEN set)\n", prefix, regenerate)
 		return 1
 	}
-	fmt.Fprintf(out, "%s %d calls recorded from %s, Orbit %s, namespace %s, on %s\n",
-		prefix, len(doc.Calls), doc.Source.Instance, doc.Source.OrbitVersion, doc.Source.Namespace, doc.Source.RetrievedAt)
+	fmt.Fprintf(out, "%s %d calls recorded from %s, Orbit %s, query DSL %s %s, namespace %s, on %s\n",
+		prefix, len(doc.Calls), doc.Source.Instance, doc.Source.OrbitVersion, doc.Source.DSLSchema, doc.Source.DSLVersion,
+		doc.Source.Namespace, doc.Source.RetrievedAt)
 	return 0
 }
 
@@ -171,7 +172,8 @@ func record(cfg genRun, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, prefix, writeErr)
 		return 1
 	}
-	fmt.Fprintf(out, "%s wrote %s: %d calls, Orbit %s\n", prefix, orbitrecord.Path(cfg.dir), len(doc.Calls), doc.Source.OrbitVersion)
+	fmt.Fprintf(out, "%s wrote %s: %d calls, Orbit %s, query DSL %s %s\n",
+		prefix, orbitrecord.Path(cfg.dir), len(doc.Calls), doc.Source.OrbitVersion, doc.Source.DSLSchema, doc.Source.DSLVersion)
 	committed, committedErr := committedRecord(ctx, cfg)
 	if committedErr != nil {
 		fmt.Fprintf(out, "%s no record committed at HEAD could be read (%v), so there is nothing to compare this one with\n", prefix, committedErr)
@@ -179,12 +181,12 @@ func record(cfg genRun, out, errOut io.Writer) int {
 	}
 	changes := orbitrecord.Diff(committed, doc)
 	if len(changes) == 0 {
-		fmt.Fprintln(out, prefix, "the key tree is the one committed at HEAD")
+		fmt.Fprintln(out, prefix, "the key tree and the query DSL are the ones committed at HEAD")
 		return 0
 	}
 	for _, change := range changes {
 		fmt.Fprintln(errOut, prefix, change)
 	}
-	fmt.Fprintf(errOut, "%s the key tree differs from the one committed at HEAD in %d places: read them, run make audit-1to1-paths, and commit the record, since every recording fails until it is\n", prefix, len(changes))
+	fmt.Fprintf(errOut, "%s the key tree or the query DSL differs from the record committed at HEAD in %d places: read them, run make audit-1to1-paths, and commit the record, since every recording fails until it is\n", prefix, len(changes))
 	return 1
 }

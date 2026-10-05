@@ -46,6 +46,31 @@ func TestFixtureQuery_IsTheTraversalOfTheFixtureProject(t *testing.T) {
 	}
 }
 
+// TestDSLStamp_ReadsTheIDAndVersionOrNothing verifies what the record names
+// the query DSL by: the $id and the version of the JSON Schema orbit.dsl
+// answers with, and nothing at all for a body that is not that document, so
+// the record's own check refuses it rather than recording half a stamp.
+func TestDSLStamp_ReadsTheIDAndVersionOrNothing(t *testing.T) {
+	cases := []struct {
+		name        string
+		content     string
+		wantSchema  string
+		wantVersion string
+	}{
+		{name: "the DSL GitLab.com serves", content: `{"$id":"graph_query/v12","$defs":{},"version":"12.1.10"}`, wantSchema: "graph_query/v12", wantVersion: "12.1.10"},
+		{name: "a document naming neither", content: `{"$defs":{}}`},
+		{name: "a body that is not JSON", content: "query := node+"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schema, version := dslStamp(tc.content)
+			if schema != tc.wantSchema || version != tc.wantVersion {
+				t.Errorf("dslStamp() = %q, %q, want %q, %q", schema, version, tc.wantSchema, tc.wantVersion)
+			}
+		})
+	}
+}
+
 // TestRecordCalls_WithoutAProxyOrAClient_Fails verifies the two things a
 // recording needs before it asks anything, a listener and a client, each
 // failing the recording with the step named.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -161,9 +162,28 @@ func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) 
 		if status, isStatus := output.(orbit.StatusOutput); isStatus && spec.id.Variant == "raw" {
 			doc.Source.OrbitVersion = status.Version
 		}
+		if dsl, isDSL := output.(orbit.DSLOutput); isDSL && spec.id.Variant == "raw" {
+			doc.Source.DSLSchema, doc.Source.DSLVersion = dslStamp(dsl.Content)
+		}
 		doc.Calls = append(doc.Calls, call)
 	}
 	return orbitrecord.Canonical(doc), nil
+}
+
+// dslStamp reads the $id and the version out of the JSON Schema document
+// orbit.dsl answers with raw, which is what the record names the query DSL
+// by. A document that does not decode, or that names neither, leaves both
+// empty, and [orbitrecord.Problems] then refuses the record rather than
+// writing one that cannot report the DSL changing.
+func dslStamp(content string) (schema, version string) {
+	var stamp struct {
+		ID      string `json:"$id"`
+		Version string `json:"version"`
+	}
+	if json.Unmarshal([]byte(content), &stamp) != nil {
+		return "", ""
+	}
+	return stamp.ID, stamp.Version
 }
 
 // makeCall invokes one handler and reads the one exchange it made.

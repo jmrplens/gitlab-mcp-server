@@ -29,6 +29,10 @@ type fakeAnswer struct {
 	body        string
 }
 
+// fakeDSLSchema is the $id the fake DSL answers with, the one GitLab.com
+// serves for version 12 of the query language.
+const fakeDSLSchema = "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12"
+
 // orbitAnswers are the answers of a healthy GitLab.com, keyed by route and
 // response format, shaped like the ones recorded on 2026-09-27 and carrying
 // keys a verbatim path must keep out of the record ($defs, a JSON Schema's
@@ -44,7 +48,7 @@ func orbitAnswers() map[string]fakeAnswer {
 		"GET /orbit/schema raw":       ok(`{"schema_version":"1","domains":[{"name":"core","description":"d","node_names":["User"]}],"nodes":[{"name":"User","domain":"core"}],"edges":[{"name":"AUTHORED","description":"d","variants":[{"source_type":"User","target_type":"Issue"}]}]}`),
 		"GET /orbit/schema llm":       ok(`{"formatted_text":"nodes: User"}`),
 		"GET /orbit/tools ":           ok(`[{"name":"invoke_command","description":"d","parameters":{"type":"object","properties":{"$ref":{}}}}]`),
-		"GET /orbit/schema/dsl raw":   ok(`{"$defs":{},"version":"12.1.8"}`),
+		"GET /orbit/schema/dsl raw":   ok(`{"$id":"` + fakeDSLSchema + `","$defs":{},"version":"12.1.8"}`),
 		"GET /orbit/schema/dsl llm":   ok(`"query := node+"`),
 		"POST /orbit/query raw":       ok(`{"result":{"format_version":"5.0.3","nodes":[{"id":"1","full_path":"plens1/kg-fixtures"}],"edges":[]},"query_type":"traversal","row_count":1}`),
 		"POST /orbit/query llm":       {status: 200, contentType: "text/plain; charset=utf-8", body: "@header\nquery_type:traversal\n"},
@@ -195,7 +199,7 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 	if status != 0 {
 		t.Fatalf("record status = %d, stderr:\n%s", status, errOut)
 	}
-	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 12 calls, Orbit 0.130.0") || !strings.Contains(out, "nothing to compare this one with") {
+	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 12 calls, Orbit 0.130.0, query DSL "+fakeDSLSchema+" 12.1.8") || !strings.Contains(out, "nothing to compare this one with") {
 		t.Errorf("stdout = %q", out)
 	}
 	if asked := fake.snapshot(); len(asked) != 12 || !strings.HasPrefix(asked[0], "https://gitlab.com GET /orbit/status raw") {
@@ -211,18 +215,19 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.Source != (orbitrecord.Source{Instance: orbitrecord.Instance, OrbitVersion: "0.130.0", Namespace: "plens1", RetrievedAt: "2026-09-27"}) {
-		t.Errorf("source = %+v", doc.Source)
+	want := orbitrecord.Source{Instance: orbitrecord.Instance, OrbitVersion: "0.130.0", DSLSchema: fakeDSLSchema, DSLVersion: "12.1.8", Namespace: "plens1", RetrievedAt: "2026-09-27"}
+	if doc.Source != want {
+		t.Errorf("source = %+v, want %+v", doc.Source, want)
 	}
 	checkStatus, checkOut, checkErr := runCapture(genRun{dir: dir, check: true, now: func() time.Time { return recordedOn }})
-	if checkStatus != 0 || !strings.Contains(checkOut, "12 calls recorded from https://gitlab.com, Orbit 0.130.0, namespace plens1, on 2026-09-27") {
+	if checkStatus != 0 || !strings.Contains(checkOut, "12 calls recorded from https://gitlab.com, Orbit 0.130.0, query DSL "+fakeDSLSchema+" 12.1.8, namespace plens1, on 2026-09-27") {
 		t.Errorf("check = %d, %q, %q", checkStatus, checkOut, checkErr)
 	}
 
 	head.commit(t, dir)
 	cfg.client = &http.Client{Transport: &fakeGitLab{answers: orbitAnswers()}}
 	again, againOut, againErr := runCapture(cfg)
-	if again != 0 || !strings.Contains(againOut, "the key tree is the one committed at HEAD") {
+	if again != 0 || !strings.Contains(againOut, "the key tree and the query DSL are the ones committed at HEAD") {
 		t.Errorf("second record = %d, %q, %q", again, againOut, againErr)
 	}
 }
@@ -311,6 +316,7 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 	changed := orbitAnswers()
 	changed["GET /orbit/graph_status llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"formatted_text":"indexed","region":"eu"}`}
 	changed["GET /orbit/schema llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"text":"nodes"}`}
+	changed["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"$id":"` + fakeDSLSchema + `","$defs":{},"version":"12.1.10"}`}
 	rerun := func() (int, string) {
 		cfg := testRun(dir, &fakeGitLab{answers: changed})
 		cfg.git = head.git
@@ -328,7 +334,8 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 				"+ orbit.graph_status (llm): region string",
 				"+ orbit.schema (llm): text string",
 				"- orbit.schema (llm): formatted_text string",
-				"the key tree differs from the one committed at HEAD in 3 places",
+				"~ query DSL: " + fakeDSLSchema + " 12.1.8 -> " + fakeDSLSchema + " 12.1.10: read orbit.query's guidance against it",
+				"the key tree or the query DSL differs from the record committed at HEAD in 4 places",
 			} {
 				if !strings.Contains(errOut, line) {
 					t.Errorf("stderr lacks %q:\n%s", line, errOut)
@@ -360,6 +367,8 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 	noRows["POST /orbit/query raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"result":{"format_version":"5.0.3","nodes":[],"edges":[]},"query_type":"traversal","row_count":0}`}
 	unindexed := orbitAnswers()
 	unindexed["GET /orbit/graph_status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"projects":{"indexed":0,"total_known":2},"domains":[],"indexing":{"state":"pending"}}`}
+	unstamped := orbitAnswers()
+	unstamped["GET /orbit/schema/dsl raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"$defs":{},"version":"12.1.8"}`}
 	cases := []struct {
 		name  string
 		token string
@@ -371,6 +380,7 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 		{name: "a query that finds no row", token: "glpat-test", fake: &fakeGitLab{answers: noRows}, want: "orbit.query (raw) found no row for the fixture project: the fixture namespace is not indexed"},
 		{name: "a namespace with no indexed project", token: "glpat-test", fake: &fakeGitLab{answers: unindexed}, want: "orbit.graph_status (raw) counts no indexed project"},
 		{name: "a record the check refuses", token: "glpat-test", fake: &fakeGitLab{answers: versionless}, want: "names no Orbit version"},
+		{name: "a DSL naming no $id", token: "glpat-test", fake: &fakeGitLab{answers: unstamped}, want: "names no query DSL schema and version"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
