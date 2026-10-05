@@ -23,8 +23,9 @@
 # every changed file has to be prose. The "any file is a doc" form was true of
 # 42 of those 43 pull requests, because everything here ships with its
 # documentation; the only informative version of this label is the one that
-# says no code moved. site/src/content is the published bilingual mirror of
-# docs/ and belongs on the same side of that line.
+# says no code moved. site/src/content is the user documentation itself, in
+# English and Spanish, and docs/ keeps the contributor pages under
+# docs/development; both are prose and belong on the same side of that line.
 documentation:
   - changed-files:
       - any-glob-to-all-files:

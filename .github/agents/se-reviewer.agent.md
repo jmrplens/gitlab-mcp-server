@@ -287,7 +287,7 @@ Solution: Read replicas + caching + connection pooling
 
 ### Security Review Report
 
-Save to `dist/code-review/[date]-[component]-review.md` (`dist/` is gitignored) or post it in the pull request discussion. ADR-0013 keeps one-off review evidence out of `docs/`, which holds only durable reference material:
+Save to `dist/code-review/[date]-[component]-review.md` (`dist/` is gitignored) or post it in the pull request discussion. One-off review evidence stays out of `docs/`, which holds only durable contributor material under `docs/development/` (the user documentation is the site; ADR-0025):
 
 ```markdown
 # Code Review: [Component]

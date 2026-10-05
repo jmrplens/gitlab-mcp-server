@@ -34,9 +34,9 @@ When helping with Go MCP development:
 6. **Idiomatic Go**: Follow Go conventions and community standards
 7. **SDK Patterns**: Use direct SDK registration only in the shared projection layers or standalone surfaces; ordinary GitLab API actions use catalog-backed `ActionSpecs`
 8. **Response Formats**: Support both JSON (structured) and Markdown (human-readable)
-9. **Pagination**: Implement proper pagination with has_more, total_count metadata
+9. **Pagination**: Implement proper pagination with the shared `toolutil.PaginationOutput` metadata (`has_more`, `total_items`, `next_page`)
 10. **Testing**: Write focused `httptest`-based tests with the repository's `internal/testutil` helpers
-11. **Documentation**: Recommend clear descriptions and README documentation
+11. **Documentation**: Recommend clear descriptions, the regenerated tool reference (`make gen-tool-reference`), and the site page a user-facing change needs, in English and Spanish (the `update-starlight-docs` skill)
 12. **Performance**: Consider concurrency and resource management
 13. **Configuration**: Use environment variables for secrets and config
 14. **Graceful Shutdown**: Handle signals for clean shutdowns

@@ -63,7 +63,7 @@ Compare the result against the domain mapping table in this skill. For any file 
 1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
 3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
-4. **Check the generated tool reference page of the domain's catalog group** (`site/src/content/docs/reference/tools/<group>.mdx`, one page per group, written by `make gen-tool-reference`) → supplementary user-facing context
+4. **Check the generated tool reference page of the domain's catalog group** (`site/src/content/docs/reference/tools/<group>.mdx`, one page per group, written by `make gen-tool-reference`; `<group>` is the group's tool name without `gitlab_` and with hyphens, so `gitlab_merge_request` is `merge-request.mdx`) → supplementary user-facing context. Never edit it by hand: if the migration changes what the catalog serves (a tool name, an action ID, a description, a tier or a schema), regenerate it
 
 The sub-package name must align with the client-go service name, not with our file naming.
 
@@ -275,7 +275,7 @@ When modularizing `internal/tools/`, use this mapping to understand which files 
 
 ### Service-to-SubPackage Mapping
 
-The project uses `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (see `go.mod`). Each `client.GL().{Service}` call tells you which API domain a handler belongs to. The table records the original monolith-to-sub-package mapping; the migration is complete and `internal/tools/` now holds 177 packages, so treat it as the pattern, not the inventory:
+The project uses `gitlab.com/gitlab-org/api/client-go/v3` at the version `go.mod` pins (v3.14.0 when this was written). Each `client.GL().{Service}` call tells you which API domain a handler belongs to. The table records the original monolith-to-sub-package mapping; the migration is complete and `internal/tools/` now holds the root package and 180 sub-packages, so treat it as the pattern, not the inventory:
 
 | Sub-Package | client-go Services Used | Source Files |
 |---|---|---|

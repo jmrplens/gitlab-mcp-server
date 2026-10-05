@@ -138,14 +138,14 @@ Label each document with its quadrant in a comment or front matter to maintain c
 
 ### Phase 5: Validate
 
-1. **Normalize README.md/docs tables** when generated or modified documentation contains Markdown pipe tables:
+1. **Normalize README.md, docs and site tables** when generated or modified documentation contains Markdown pipe tables:
 
   ```bash
   go run ./cmd/format_md_tables/
   go run ./cmd/format_md_tables/ --check
   ```
 
-  The formatter scans `README.md` and `docs/`, skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown.
+  The formatter scans `README.md`, `docs/` and the site's pages under `site/src/content/docs/` (`.md` and `.mdx`), skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown. The site's prettier configuration leaves those pages to it.
 
 1. **Run markdownlint-cli2** on every generated or modified `.md` file:
 
@@ -259,6 +259,8 @@ result, err := package.Function(ctx, input)
 ````
 
 ### MCP Tool Reference
+
+The site's per-domain tool reference is generated from the action catalog by `make gen-tool-reference`, so never hand-write a reference page for a catalog action: change the action's `ActionSpec` or `cmd/gen_tool_reference/domains.json` and regenerate. Use this outline only to describe a tool inside a hand-written page, such as an example or a how-to:
 
 ````markdown
 # [Tool Name]
@@ -378,45 +380,54 @@ result, err := package.Function(ctx, input)
 - Ensure proper nesting and indentation in nested lists
 - No trailing whitespace or multiple consecutive blank lines
 
-## Astro Starlight User Documentation
+## Where Documentation Lives
 
-This project includes a user-facing documentation site built with [Astro Starlight](https://starlight.astro.build/) in the `site/` directory. When documentation changes are made to developer docs in `docs/`, evaluate whether corresponding updates are needed in the Starlight user docs.
+The documentation has one home per audience (ADR-0025):
 
-### When to Update Starlight Docs
+- **User documentation** lives only in the [Astro Starlight](https://starlight.astro.build/) site, published at `https://jmrp.io/docs/gitlab-mcp-server/`: English pages under `site/src/content/docs/` and their Spanish twins at the same paths under `site/src/content/docs/es/`. Installation, configuration, operations, the tool reference, the capabilities and the examples are all site pages, and there is no copy of any of them under `docs/`.
+- **Contributor documentation** lives in `docs/development/`: the development guide, the ADRs, the testing reference, the command utilities and the other pages about changing the code. `CLAUDE.md`, `AGENTS.md` and `.github/` carry the guidance AI assistants read.
+- The README is a short landing page that links the site, and `docs/` holds nothing beside `docs/development/` but a README pointing at the site.
+
+Decide the audience before writing: a page a user reads goes to the site, a page about how the repository works goes to `docs/development/`, and nothing is written twice.
+
+### When the Site Changes
 
 - New features, tools, or configuration options added
 - Breaking changes or deprecations
 - Getting started workflow changes
 - Security-relevant changes users should know about
 
-### Starlight Structure
+### Site Structure
 
 ```text
 site/
-├── astro.config.mjs    # Navigation sidebar (explicit slugs with es translations), i18n config
+├── astro.config.mjs    # Navigation sidebar (explicit slugs with es translations), redirects for moved pages, i18n config
+├── scripts/gen-llms.mjs # The site's own /llms.txt, built from the SECTIONS table that lists every page
 ├── src/content/docs/
-│   ├── *.mdx, */       # English docs: the Starlight `root` locale lives at this level
-│   └── es/             # Spanish translations, mirroring the English tree
+│   ├── *.mdx, */       # English pages: the Starlight `root` locale lives at this level
+│   └── es/             # The Spanish twin of every English page, at the same path
+└── src/data/           # stats.json, token-footprint.json, resource-benchmark.json: generated, imported by pages; home.ts, the landing data, is hand-written
 ```
 
 ### Key Rules
 
-- English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth — write English first, then translate to Spanish
+- English (the root of `src/content/docs/`, not an `en/` folder) is the source of truth: write English first, then translate to Spanish in the same change. `pnpm run i18n:check` only proves that every page has a twin, not that the twin says the same thing
 - Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
 - Every `.mdx` file needs frontmatter with `title` and `description`
-- After changes, verify the build: `cd site && pnpm build`
-- Follow the `update-starlight-docs` skill for the full workflow
+- Link a site page from another as `/gitlab-mcp-server/<slug>/` (`/gitlab-mcp-server/es/<slug>/` from a Spanish page), and from a file outside the site as `https://jmrp.io/docs/gitlab-mcp-server/<slug>/`
+- After changes, verify the build and the site's checks: `cd site && pnpm run build && pnpm run lint`
+- Follow the `update-starlight-docs` skill for the full workflow: the page map, the generated pages, the sidebar and redirects
 
 ## Operating Rules
 
 - Treat source code as read-only truth; never modify source code
-- Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Those come from the `cmd/gen_*` generators (`make update-all` runs them all)
+- Never hand-edit generator-owned content: the README's token claim block, the managed block of `docs/development/testing/testing.md`, `docs/development/token-footprint.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/` (its `index.mdx` included), its `reference/fine-grained-permissions.mdx`, the generated block of its `performance/resource-benchmark.mdx` with the charts under `site/public/benchmarks/`, `site/src/data/stats.json`, `token-footprint.json` and `resource-benchmark.json` (the landing data `site/src/data/home.ts` beside them is hand-written), the `llms*.txt` files at the repository root, and `lhm.plugin.json`'s capability arrays. Those come from generators under `cmd/` (`make update-all` runs every one of them except the benchmark measurement: it redraws the benchmark with `make bench-resources-render`, and only `make bench-resources` re-measures and rewrites `resource-benchmark.json`; ADR-0025 lists which command writes which path), and the versions in `server.json` and the other manifests are stamped by the release
 - Never include secrets, tokens, or internal URLs in documentation
 - Never use TBD/TODO as final documentation content
 - Always run `npx markdownlint-cli2 <file>` on every generated or modified document
 - Always verify Mermaid diagrams render correctly
 - Always use Context7 and web fetch for external references before writing
 - Always include a References section with verified URLs in every document
-- When updating developer docs, evaluate if Starlight user docs also need updates
+- Never create user documentation outside the site: `docs/guides/`, `docs/reference/`, `docs/concepts/` and `docs/getting-started.md` were copies of site pages that drifted from them, and were retired
 - Output the requested deliverable only; no unnecessary preamble
-- All documentation must be written in English per project language policy
+- All documentation must be written in English per project language policy, except the Spanish twin of each site page

@@ -47,7 +47,7 @@ Record:
 2. List all non-test handler files in the source package to find everything that exists
 3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
-5. If the domain's catalog group has a generated tool reference page (`site/src/content/docs/reference/tools/<group>.mdx`, written by `make gen-tool-reference`), read it for supplementary user-facing context, but do NOT skip the move if there is none
+5. If the domain's catalog group has a generated tool reference page (`site/src/content/docs/reference/tools/<group>.mdx`, written by `make gen-tool-reference`; `<group>` is the group's tool name without `gitlab_` and with hyphens, so `gitlab_merge_request` is `merge-request.mdx`), read it for supplementary user-facing context, but do NOT skip the move if there is none. A move never edits that page: it changes only if the move changes what the catalog serves (a tool name, an action ID, a description, a tier or a schema), and then `make gen-tool-reference` rewrites it
 
 ### Step 2: Analyze Dependencies
 

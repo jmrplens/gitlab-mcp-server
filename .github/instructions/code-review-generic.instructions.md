@@ -227,7 +227,8 @@ When performing a code review, check documentation:
 
 - **API Documentation**: Public APIs must be documented (purpose, parameters, returns)
 - **Complex Logic**: Non-obvious logic should have explanatory comments
-- **README Updates**: Update README when adding features or changing setup
+- **User Documentation**: A change users notice updates the site page that describes it, in English (`site/src/content/docs/`) and Spanish (`site/src/content/docs/es/`) together; the README is a short landing page that links the site, and `docs/` holds contributor material only (`docs/development/`)
+- **Generated Content**: A page or figure a generator writes (the per-domain tool reference, the fine-grained permissions page, `site/src/data/*.json`, `llms*.txt`) is regenerated, never edited by hand
 - **Breaking Changes**: Document any breaking changes clearly
 - **Examples**: Provide usage examples for complex features
 
@@ -381,7 +382,8 @@ When performing a code review, systematically verify:
 
 - [ ] Public APIs are documented
 - [ ] Complex logic has explanatory comments
-- [ ] README is updated if needed
+- [ ] The site page for a user-facing change is updated in English and Spanish
+- [ ] Generated documentation is regenerated rather than edited
 - [ ] Breaking changes are documented
 
 ## Project-Specific Customizations

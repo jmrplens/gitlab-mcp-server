@@ -16,7 +16,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ```text
 gitlab-mcp-server/
-├── cmd/                    # server + 45 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
+├── cmd/                    # server + 44 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
 │   ├── server/             # MCP server entry point (+ --shutdown, --probe flags)
 │   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk|paths|grants; -validate-docs); grants is R-GRANT, the fine-grained table held to the live GitLab record
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
@@ -69,11 +69,11 @@ gitlab-mcp-server/
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schema (SDL embedded as text + provenance) and Validate()
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema
-│   ├── tools/              # Tool orchestration layer + 180 internal/tools packages
+│   ├── tools/              # Tool orchestration layer + 180 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
-│   │   ├── register_meta.go # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
+│   │   ├── register_meta.go # RegisterMetaStandaloneTools(): the standalone utilities (gitlab_discover_project, the gitlab_interactive_* flows) on the meta and individual surfaces; the catalog groups are registered by RegisterMetaCatalog (meta_catalog.go)
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
 │   │   ├── toolvisibility/ # Apply(): the post-registration pass over the tools outside the catalog, shared by cmd/server and the evaluator
@@ -82,18 +82,19 @@ gitlab-mcp-server/
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 180 internal/tools packages total
+│   │   └── ...             # 180 sub-packages (181 packages with the root)
 │   ├── resources/          # MCP resource implementations
 │   ├── prompts/            # MCP prompt implementations
 │   ├── completions/        # Argument completion handler
 │   ├── progress/           # MCP progress notifications
 │   └── elicitation/        # MCP elicitation capability
-├── docs/                   # Documentation (Diátaxis: guides/, reference/, concepts/, development/)
-│   ├── guides/             # installation, ide-configuration.md, oauth-app-setup.md, fine-grained-tokens.md, http-server-mode, remote-deployment, telemetry
-│   ├── reference/          # cli, configuration, env, output format, tools/ (per domain), resources, prompts, capabilities/
-│   ├── concepts/           # architecture, dynamic tools, meta-tools, error handling, GraphQL, security
-│   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities
-├── plan/                   # Implementation plans
+├── docs/                   # Contributor documentation only: development/ and a README pointing users at the site (ADR-0025)
+│   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities, tool surfaces, and the internal architecture, error handling, capability APIs and distribution pages (architecture.md, error-handling.md, capabilities.md, distribution.md)
+├── site/                   # The user documentation: an Astro Starlight site, published at https://jmrp.io/docs/gitlab-mcp-server/
+│   ├── src/content/docs/   # One .mdx page per slug, its Spanish twin under es/; reference/tools/ (make gen-tool-reference) and reference/fine-grained-permissions.mdx (make gen-action-grants) are generated
+│   ├── src/data/           # Generated figures the pages read: stats.json (audit_metrics), token-footprint.json (audit_tokens), resource-benchmark.json (bench_resources); home.ts, the landing data, is hand-written
+│   └── scripts/            # The site's own checks (i18n:check, facts:check, chips:check and llms:check among them) and its llms.txt generator
+├── plan/                   # Untracked working area: ignored by git, never committed
 ├── .github/                # Copilot agents, skills, instructions
 ├── .gitignore
 ├── go.mod
@@ -146,7 +147,7 @@ gitlab-mcp-server/
 - Unit tests for every tool handler
 - Use `httptest` for mocking GitLab API responses in unit tests
 - Test naming: `TestToolName_Scenario_ExpectedResult`
-- Aim for >80% coverage on tool handlers
+- CI fails below 90% total coverage (`COVERAGE_MIN` in `.github/workflows/ci.yml`); aim for 100% on the packages you touch
 - **After completing a test-focused phase or milestone, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 ### Verification After Changes
@@ -158,17 +159,22 @@ After implementing changes, run targeted analysis on the **changed files/package
 go test ./internal/tools/{domain}/ -count=1
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 
-# Markdown files — run on specific changed .md files
+# Markdown files: run on the specific changed .md and .mdx files
 npx markdownlint-cli2 path/to/changed.md
 
-# README.md/docs tables — normalize pipe tables, or verify with --check
+# README.md, docs/ and site tables: normalize pipe tables, or verify with --check
 go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ --check
+
+# Site pages: every English page needs its Spanish twin, and these checks hold the pair
+(cd site && pnpm run i18n:check && pnpm run facts:check && pnpm run chips:check && pnpm run llms:check)
+(cd site && pnpm run analyze)   # the whole site gate: build, then lint, which reads what the build wrote
 ```
 
 - 3 analysis gates available: `golangci-lint` (v2; includes Go linters and formatters such as `goimports`, `gofumpt`, `gci`, `govet`, `modernize`, `gosec`, and `staticcheck`), `govulncheck`, and `markdownlint-cli2`
 - Configuration: `.golangci.yml` (Go linters/formatters), `.markdownlint-cli2.jsonc` (Markdown rules)
-- Markdown table formatting: when creating or editing pipe tables in `README.md` or `docs/`, use `go run ./cmd/format_md_tables/` to normalize column padding and alignment markers, then verify with `go run ./cmd/format_md_tables/ --check`
+- Markdown table formatting: when creating or editing pipe tables in `README.md`, `docs/` or `site/src/content/docs/`, use `go run ./cmd/format_md_tables/` to normalize column padding and alignment markers, then verify with `go run ./cmd/format_md_tables/ --check`
+- Documentation: user documentation lives only on the site (`site/src/content/docs/`), and an English page changes together with its Spanish twin under `es/`; `pnpm run i18n:check` fails on a page without its twin, and keeping the two in step is the author's job. `docs/development` is for contributors (ADR-0025)
 - Formatting: always run `make analyze-fix` before committing to apply configured Go formatters (`goimports`, `gofumpt`, `gci`) and Markdown fixes
 - Full project: `make analyze` (all analysis gates), `make analyze-fix` (auto-fix), `make analyze-report` (LLM report)
 - See `docs/development/static-analysis.md` for full documentation
@@ -259,7 +265,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
 | `GITLAB_MCP_META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.7x), or `full` (~18.3x). Independent of `GITLAB_MCP_TOOL_SURFACE`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
 | `GITLAB_MCP_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
-| `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
+| `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a preview card naming the action and echoing its arguments (`toolutil.FormatSafeModePreviewMarkdown`) | `false` (default)  |
 | `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license`, then from the plans of the namespaces the token administers (`GET /namespaces`), falling back to `free`. Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `MODELEVAL_MODELS`       | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs to ask; `fake:perfect` replays the corpus key with no provider call | —                  |
 | `MODELEVAL_SPEND`        | `test/e2e/modeleval`: consent to call a real provider (`yes`, `true`, `1`) | `no` (default)     |
@@ -299,20 +305,21 @@ Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, 
 
 ## Language Policy
 
-> **All project artifacts must be written in English without exception.**
+> **All project artifacts must be written in English.** The Spanish half of the user documentation site is the one exception.
 
 | Artifact                                     | Language |
 | -------------------------------------------- | -------- |
 | Source code (all `.go` files)                | English  |
 | Comments and doc comments                    | English  |
 | Commit messages                              | English  |
-| Documentation (`README`, `docs/`, `plan/`)   | English  |
+| Documentation (`README`, `docs/development`, the site's English pages, `plan/`) | English  |
+| The site's Spanish twin pages (`site/src/content/docs/es/`) and the Spanish text beside their English sources (an `es` field, a `labelEs`, `site/src/content/i18n/es.json`) | Spanish |
 | MCP tool names, descriptions, error messages | English  |
 | Test names and assertions                    | English  |
 | ADRs, specs, instructions                    | English  |
 | Git branch names                             | English  |
 
-Conversations with the developer may be in any language, but **every file committed to this repository must be in English**.
+Conversations with the developer may be in any language, but **every file committed to this repository must be in English**, with the one exception the table names: the Spanish half of the user documentation, which translates the English page it sits beside and changes with it.
 
 - **Tests with HTTP mocks or goroutines**: never `t.Fatal` inside handler
   literals or `go` statements — follow

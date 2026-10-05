@@ -26,6 +26,9 @@ body:
     attributes:
       label: Current State
       description: What's wrong, missing, or outdated in the current documentation?
+        Name the page by its URL (for example
+        https://jmrp.io/docs/gitlab-mcp-server/configuration/) or by its path
+        in the repository.
     validations:
       required: true
 
@@ -40,11 +43,13 @@ body:
     attributes:
       label: Affected Documents
       options:
-        - label: "`docs/` (developer documentation)"
+        - label: "User documentation site, English or Spanish
+            (`site/src/content/docs/`, the Spanish twin under `es/`)"
+        - label: "A generated page of the site (the tool reference by domain,
+            fine-grained permissions, the benchmark figures)"
+        - label: "`docs/development/` (contributor documentation)"
         - label: "`README.md`"
         - label: "`CONTRIBUTING.md`"
-        - label: "User docs site — Astro Starlight (`site/src/content/docs/en/` or
-            `/es/`)"
 
   - type: textarea
     id: context
