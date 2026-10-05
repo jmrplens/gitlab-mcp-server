@@ -1658,6 +1658,128 @@ func TestWrapErrWithMessage_DoesNotReflectAJSONBodyGitLabDidNotCompose(t *testin
 	}
 }
 
+// orbitRelationshipRefusal is the message GitLab.com answered on 2026-10-05
+// (Orbit 0.137.0) to an Orbit query naming the relationship type IN_PROJEKT:
+// every type the ontology holds, which is the longest refusal GitLab is known
+// to write for a mistake a caller can correct and the one maxGitLabMessageLen
+// is sized by.
+const orbitRelationshipRefusal = `allowlist rejected: "IN_PROJEKT" is not an allowed value. Valid values: ` +
+	`APPROVED, ASSIGNED, AUTHORED, AUTO_CANCELED_BY, BUILT_BY, CALLS, CHILD_OF, CLOSED, CLOSES, CONFIRMED_BY, ` +
+	`CONTAINS, CREATED_FOR_MR, CREATOR, DECLARES_DEPENDENCY, DEFINES, DEPLOYED_BY, DEPLOYED_TO, DETECTED_BY, ` +
+	`DISMISSED_BY, EXTENDS, FIXES, HAS_DIFF, HAS_FILE, HAS_FINDING, HAS_HEAD_PIPELINE, HAS_IDENTIFIER, HAS_JOB, ` +
+	`HAS_LABEL, HAS_LATEST_DIFF, HAS_NOTE, HAS_PACKAGE_FILE, HAS_STAGE, HAS_VULNERABILITY, IMPORTS, ` +
+	`IN_ENVIRONMENT, IN_GROUP, IN_MILESTONE, IN_PIPELINE, IN_PROJECT, LAST_EDITED_BY, MEMBER_OF, MENTIONS, ` +
+	`MERGED, MERGED_AT_COMMIT, OCCURRENCE_OF, ON_BRANCH, OWNER, RAN_BY, RELATED_TO, REOPENED, RESOLVED_BY, ` +
+	`REVIEWER, RUNS_ON, SCANS, SOURCE_PROJECT, TRIGGERED, TRIGGERED_BY_PIPELINE, TRIGGERS_PIPELINE, ` +
+	`UPDATED_BY, * at /relationships/0/type`
+
+// TestWrapErrWithMessage_WorkhorseQueryRefusal_ReflectedOnlyForACorrectableCode
+// verifies the one body outside GitLab's API error shape that is reflected:
+// Workhorse's refusal of an Orbit query, {"code", "message"}, for the two
+// codes that describe a fault in the query (issue 1031).
+//
+// Before it was recognized, the "code" key read as the evidence that something
+// other than GitLab composed the body, so a model sent a query the DSL refused
+// was told only "bad request: check your input parameters" and had nothing to
+// correct it by. The match is on the whole shape and on the code's value: a
+// code describing the service, a third key, or a value of the wrong type
+// leaves the body to the rule every other body is judged by, which withholds
+// it, while GitLab's own two-key body is still reflected beside it. The first
+// case is the longest refusal GitLab.com is known to answer, held whole, which
+// is what the cap was raised for.
+func TestWrapErrWithMessage_WorkhorseQueryRefusal_ReflectedOnlyForACorrectableCode(t *testing.T) {
+	encode := func(t *testing.T, body map[string]any) string {
+		t.Helper()
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatalf("json.Marshal(%v) error = %v", body, err)
+		}
+		return string(encoded)
+	}
+	tests := []struct {
+		name     string
+		body     map[string]any
+		wantSeen []string
+		wantGone []string
+	}{
+		{
+			name: "a compile error listing every relationship type is reflected whole",
+			body: map[string]any{"code": "compile_error", "message": orbitRelationshipRefusal},
+			wantSeen: []string{
+				"({code: compile_error}, {message: " + orbitRelationshipRefusal + "})",
+				"400 {code: compile_error}, {message: " + orbitRelationshipRefusal + "}",
+			},
+		},
+		{
+			name:     "a validation error is reflected",
+			body:     map[string]any{"code": "validation_error", "message": "Invalid query type"},
+			wantSeen: []string{"({code: validation_error}, {message: Invalid query type})"},
+		},
+		{
+			name:     "a code describing the service is withheld",
+			body:     map[string]any{"code": "execution_error", "message": "clickhouse-07.internal refused the connection"},
+			wantGone: []string{"clickhouse-07.internal", "execution_error"},
+		},
+		{
+			name:     "a third key is withheld",
+			body:     map[string]any{"code": "compile_error", "message": "schema violation", "upstream": "gkg-web-02.internal"},
+			wantGone: []string{"gkg-web-02.internal", "schema violation"},
+		},
+		{
+			name:     "a code that is not a string is withheld",
+			body:     map[string]any{"code": 400, "message": "schema violation"},
+			wantGone: []string{"schema violation"},
+		},
+		{
+			name:     "a message that is not a string is withheld",
+			body:     map[string]any{"code": "compile_error", "message": map[string]any{"detail": "schema violation"}},
+			wantGone: []string{"schema violation", "compile_error"},
+		},
+		{
+			name:     "two keys without a code are judged as any other body",
+			body:     map[string]any{"message": "schema violation", "upstream": "gkg-web-02.internal"},
+			wantGone: []string{"gkg-web-02.internal", "schema violation"},
+		},
+		{
+			name:     "GitLab's own two-key body is still reflected",
+			body:     map[string]any{"error": "invalid_request", "message": "query is invalid"},
+			wantSeen: []string{"{error: invalid_request}, {message: query is invalid}"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := encode(t, tt.body)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = io.WriteString(w, body)
+			}))
+			defer server.Close()
+
+			client, newErr := gl.NewClient("token", gl.WithBaseURL(server.URL), gl.WithoutRetries())
+			if newErr != nil {
+				t.Fatalf("gl.NewClient() error = %v", newErr)
+			}
+			_, _, callErr := client.Projects.GetProject(1, nil)
+			if callErr == nil {
+				t.Fatal("GetProject() error = nil, want the 400 client-go builds from the body")
+			}
+
+			got := WrapErrWithMessage("orbit_query", callErr).Error()
+			for _, want := range tt.wantSeen {
+				if !strings.Contains(got, want) {
+					t.Errorf("wrapped error = %q, want it to carry %q", got, want)
+				}
+			}
+			for _, unwanted := range tt.wantGone {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("wrapped error = %q, must not carry %q", got, unwanted)
+				}
+			}
+		})
+	}
+}
+
 // TestWrapErr_KeepsTheErrorChainAndTheDiagnosis verifies that refusing to
 // reflect the body costs nothing a caller depends on: the operation name, the
 // semantic classification, the request line and the status code all survive,

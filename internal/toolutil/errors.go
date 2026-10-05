@@ -785,6 +785,16 @@ const unparsedBodyPrefix = "failed to parse unknown error format:"
 // beside it.
 var gitLabErrorBodyKeys = map[string]bool{"message": true, "error": true, "error_description": true}
 
+// workhorseQueryRefusalCodes are the codes Workhorse writes beside a message
+// when it refuses an Orbit query for a fault in the query itself: the query
+// did not compile against the DSL or the ontology, or a value in it was not
+// one the route takes (gkgErrorToHTTPStatus in
+// workhorse/internal/orbit/sendquery.go answers both with 400). The other
+// codes it writes, execution_error, internal_error, timeout and
+// quota_exhausted, describe the service rather than the query, and their
+// messages are not reflected.
+var workhorseQueryRefusalCodes = map[string]bool{"compile_error": true, "validation_error": true}
+
 // gitLabAuthoredMessage returns the response message when the body it was
 // parsed from is GitLab's own error shape, and the empty string otherwise.
 //
@@ -797,6 +807,10 @@ var gitLabErrorBodyKeys = map[string]bool{"message": true, "error": true, "error
 // evidence that something else composed the body; the status and the
 // classification still describe what happened.
 //
+// The one other shape GitLab writes that is reflected is Workhorse's refusal
+// of an Orbit query, [isWorkhorseQueryRefusal]: it is the only account of what
+// was wrong with the query, and a model that is not told cannot correct it.
+//
 // A response with no body at all is trusted, because client-go fills Message
 // and Body together: an ErrorResponse carrying a message and no body was
 // composed by something other than CheckResponse.
@@ -807,6 +821,9 @@ func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(glErr.Body, &body); err != nil {
 		return ""
+	}
+	if isWorkhorseQueryRefusal(body) {
+		return glErr.Message
 	}
 	named := false
 	for key := range body {
@@ -821,6 +838,29 @@ func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
 		return ""
 	}
 	return glErr.Message
+}
+
+// isWorkhorseQueryRefusal reports whether body is Workhorse's refusal of an
+// Orbit query a caller can correct: queryErrorResponse in
+// workhorse/internal/orbit/sendquery.go, which is exactly a string code and a
+// string message when its reason is empty, as it is for every code
+// [workhorseQueryRefusalCodes] holds. GitLab.com answers
+// {"code":"compile_error","message":"schema violation: ..."} to a query the
+// DSL refuses, and client-go renders it as "{code: compile_error}, {message:
+// schema violation: ...}", which is what a caller is shown.
+//
+// The match is on the whole shape and on the code's value, so a body that
+// carries anything else, or a code describing the service rather than the
+// query, is judged by the rule every other body is.
+func isWorkhorseQueryRefusal(body map[string]json.RawMessage) bool {
+	if len(body) != 2 {
+		return false
+	}
+	var code, message string
+	if json.Unmarshal(body["code"], &code) != nil || json.Unmarshal(body["message"], &message) != nil {
+		return false
+	}
+	return workhorseQueryRefusalCodes[code]
 }
 
 // ExtractGitLabMessage extracts the specific error message from the GitLab
