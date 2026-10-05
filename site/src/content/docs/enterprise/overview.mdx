@@ -4,7 +4,7 @@ description: "Serve hundreds of people from one GitLab MCP Server deployment: wh
 datePublished: "2026-09-06"
 faq:
   - q: "Do I still need token affinity across instances?"
-    a: "For ordinary calls it is an optimisation rather than a requirement: an instance a caller moves to already has the catalog built, so the move costs a credential probe, a licensing lookup and a client. Affinity still keeps one rate-limit bucket and one identity probe per caller instead of one per instance. It is mandatory for two things: legacy stateful sessions, which live in the process that minted the session id, and resource subscriptions, whose watchers are held by one process."
+    a: "For ordinary calls it is an optimisation rather than a requirement: an instance a caller moves to already has the catalog built, so the move costs a credential probe, a licensing lookup and a client. Affinity still keeps one rate-limit bucket and one identity probe per caller instead of one per instance. It is mandatory for three things: legacy stateful sessions, which live in the process that minted the session id; resource subscriptions, whose watchers are held by one process; and the rounds of a multi-round-trip elicitation (a guided creation flow, or a confirmation before a destructive change), whose state is signed with a key only the asking process holds."
   - q: "What is the one setting people forget behind a proxy?"
     a: "`--trusted-proxy-header` together with `--trusted-proxies`. Without them every caller's authentication failures are charged to the balancer's address, and ten bad tokens a minute from anywhere in the population block that address for a minute: every credential the deployment does not already hold is answered `429` until the window ends, whoever sends it, while callers it is already serving stay served. Each flag is refused without the other."
   - q: "Why does HAProxy mark every instance DOWN?"
@@ -29,7 +29,7 @@ familiar.
 - **Sizing is two questions, not one.** Holding a credential is nearly free;
   serving calls is where an instance runs out.
 - **Affinity is an optimisation for ordinary calls and a requirement for
-  stateful sessions and subscriptions.**
+  stateful sessions, subscriptions and multi-round-trip elicitation.**
 - **Certificate rotation needs no restart.** Write the new pair over the same
   paths; the next handshake presents it.
 - **Behind any proxy, set `--trusted-proxy-header` and `--trusted-proxies`.**

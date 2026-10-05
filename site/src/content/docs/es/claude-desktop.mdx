@@ -247,14 +247,11 @@ paquete que publicó la 3.1.0.
 Un `.mcpb` es un zip normal con `manifest.json` en la raíz, y el script lo
 construye con `zip` y marcas de tiempo fijas en las entradas: las mismas
 entradas producen los mismos bytes, lo que importa porque `server.json`
-registra el SHA-256 de cada paquete declarado. En una release, el workflow
-construye los cuatro paquetes a partir de los binarios de GoReleaser, adjunta
-y atesta cada uno, y `scripts/update-server-json-sha.sh` declara los tres
-paquetes por sistema operativo en `server.json`, una entrada cada uno, y
-rechaza un conjunto que no sirva a `darwin`, `win32` y `linux` exactamente una
-vez. `scripts/mcpb_launch_sh_test.py`, `scripts/mcpb_manifest_test.py` y
-`scripts/build_mcpb_sh_test.py` prueban en CI el lanzador, la derivación del
-manifiesto y las comprobaciones del script de construcción.
+registra el SHA-256 de cada paquete declarado. Una release construye los
+cuatro paquetes a partir de sus propios binarios, adjunta y atesta cada uno, y
+declara los tres paquetes por sistema operativo en `server.json`, una entrada
+cada uno, para que un cliente que elige desde el registro reciba el paquete de
+su sistema.
 
 ## Privacidad
 

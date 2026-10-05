@@ -231,13 +231,10 @@ which is what happened to the single bundle 3.1.0 shipped.
 A `.mcpb` is a plain zip with `manifest.json` at its root, and the script
 builds it with `zip` and fixed entry timestamps: the same inputs give the same
 bytes, which matters because `server.json` records each declared bundle's
-SHA-256. In a release, the workflow builds the four bundles from the
-GoReleaser binaries, attaches and attests each one, and
-`scripts/update-server-json-sha.sh` declares the three per-OS bundles in
-`server.json`, one entry each, refusing a set that does not serve `darwin`,
-`win32` and `linux` exactly once. `scripts/mcpb_launch_sh_test.py`,
-`scripts/mcpb_manifest_test.py` and `scripts/build_mcpb_sh_test.py` test the
-launcher, the manifest derivation and the build script's checks in CI.
+SHA-256. A release builds the four bundles from its own binaries, attaches and
+attests each one, and declares the three per-OS bundles in `server.json`, one
+entry each, so a client choosing from the registry gets the bundle for its
+system.
 
 ## Privacy
 

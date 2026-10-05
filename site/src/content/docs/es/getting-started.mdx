@@ -58,7 +58,7 @@ head:
             "@type": "HowToStep",
             "position": 4,
             "name": "Verificar la configuración",
-            "text": "Abre tu cliente de IA y pregunta \"¿Quién soy en GitLab?\". El servidor devuelve tu perfil de usuario de GitLab, confirmando que la conexión funciona. Si obtienes errores de conexión, comprueba que GITLAB_URL es correcta y accesible, que el token tiene el scope api, y que los certificados autofirmados se gestionan con GITLAB_MCP_SKIP_TLS_VERIFY=true.",
+            "text": "Abre tu cliente de IA y pregunta \"¿Quién soy en GitLab?\". El servidor devuelve tu perfil de usuario de GitLab, confirmando que la conexión funciona. Si obtienes errores de conexión, comprueba que GITLAB_URL es correcta y accesible, que el token tiene el scope api (o read_api, solo para acciones de lectura), y que los certificados autofirmados se gestionan con GITLAB_MCP_SKIP_TLS_VERIFY=true.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#verificar-la-configuración"
           }
         ]
@@ -71,7 +71,7 @@ faq:
   - q: "¿Qué modo de herramientas usa GitLab MCP Server por defecto?"
     a: "Por defecto, GitLab MCP Server funciona en **modo dinámico**, que expone solo dos herramientas — `gitlab_find_action` y `gitlab_execute_action` — para mantener pequeño el contexto del cliente de IA sin dejar de alcanzar cualquier operación de GitLab. Establece `GITLAB_MCP_TOOL_SURFACE=meta` para meta-herramientas consolidadas por dominio, o `GITLAB_MCP_TOOL_SURFACE=individual` para una herramienta por operación."
   - q: "¿Por qué mi cliente de IA no se conecta?"
-    a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api` en modo solo lectura) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_MCP_SKIP_TLS_VERIFY=true`."
+    a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api`, al que solo se le sirven las acciones de lectura) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_MCP_SKIP_TLS_VERIFY=true`."
 ---
 
 import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
@@ -771,7 +771,7 @@ No necesitas conocer IDs de proyecto, endpoints ni JSON: el asistente los resuel
 Si obtienes errores de conexión, comprueba:
 
 - Que `GITLAB_URL` es correcta y accesible desde tu máquina
-- Que el token tiene el scope `api`
+- Que el token tiene el scope `api`, o `read_api` solo para acciones de lectura
 - Para certificados autofirmados, establece `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 
 :::
@@ -808,6 +808,7 @@ Combina el modo dinámico con `GITLAB_MCP_CAPABILITY_SURFACE=minimal` para mante
 ## Próximos pasos
 
 - [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
+- [Variables de entorno](/gitlab-mcp-server/es/reference/environment/) y [línea de comandos](/gitlab-mcp-server/es/reference/cli/): cada ajuste, con su valor por defecto, sus límites y el flag o la variable que lo fija
 - [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — Cómo la superficie find/execute predeterminada descubre y ejecuta cualquier operación
 - [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente

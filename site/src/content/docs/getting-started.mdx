@@ -58,7 +58,7 @@ head:
             "@type": "HowToStep",
             "position": 4,
             "name": "Verify the setup",
-            "text": "Open your AI client and ask \"Who am I on GitLab?\". The server returns your GitLab user profile, confirming the connection works. If you get connection errors, check that GITLAB_URL is correct and reachable, that the token carries the api scope, and that self-signed certificates are handled with GITLAB_MCP_SKIP_TLS_VERIFY=true.",
+            "text": "Open your AI client and ask \"Who am I on GitLab?\". The server returns your GitLab user profile, confirming the connection works. If you get connection errors, check that GITLAB_URL is correct and reachable, that the token carries the api scope (or read_api, for read actions only), and that self-signed certificates are handled with GITLAB_MCP_SKIP_TLS_VERIFY=true.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#verify-the-setup"
           }
         ]
@@ -71,7 +71,7 @@ faq:
   - q: "Which tool mode does GitLab MCP Server use by default?"
     a: "By default GitLab MCP Server runs in dynamic mode, which exposes only two tools — gitlab_find_action and gitlab_execute_action — to keep the AI client's context small while still reaching every GitLab operation. Set GITLAB_MCP_TOOL_SURFACE=meta for consolidated domain-level meta-tools, or GITLAB_MCP_TOOL_SURFACE=individual for one tool per operation."
   - q: "Why does my AI client fail to connect to GitLab MCP Server?"
-    a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_MCP_SKIP_TLS_VERIFY=true."
+    a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api, which is served the read actions only) and has not expired, and that self-signed certificates are handled by setting GITLAB_MCP_SKIP_TLS_VERIFY=true."
 ---
 
 import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
@@ -769,7 +769,7 @@ You do not need to know project IDs, endpoints or JSON: the assistant works them
 If you get connection errors, check:
 
 - The `GITLAB_URL` is correct and reachable from your machine
-- The token has the `api` scope
+- The token has the `api` scope, or `read_api` for read actions only
 - For self-signed certificates, set `GITLAB_MCP_SKIP_TLS_VERIFY=true`
 
 :::
@@ -806,6 +806,7 @@ Pair dynamic mode with `GITLAB_MCP_CAPABILITY_SURFACE=minimal` to keep only the 
 ## Next steps
 
 - [Configuration](/gitlab-mcp-server/configuration/) — Fine-tune environment variables and optional features
+- [Environment variables](/gitlab-mcp-server/reference/environment/) and [command line](/gitlab-mcp-server/reference/cli/): every setting, with its default, its bounds and the flag or variable that sets it
 - [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) — How the default find/execute surface discovers and runs every operation
 - [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — The consolidated domain dispatchers behind `GITLAB_MCP_TOOL_SURFACE=meta`
 - [Architecture](/gitlab-mcp-server/architecture/) — Understand how the server works under the hood

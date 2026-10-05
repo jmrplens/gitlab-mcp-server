@@ -25,7 +25,7 @@ proyecto, y no hay ninguna dirección de la que tengas que darte de baja.
 
 Lo que se registra describe **operaciones**, nunca su contenido: la acción
 invocada, el resultado, la duración. No el proyecto que nombraste, ni el cuerpo
-de la incidencia, ni tu consulta de búsqueda, ni tu token.
+del issue, ni tu consulta de búsqueda, ni tu token.
 </Aside>
 
 ## Cómo activarlo
@@ -220,7 +220,7 @@ describe después de la tabla.
 `gitlab_mcp.action` es el que conviene entender. En la superficie dinámica, que
 es la de por defecto, cada llamada nombra las mismas dos herramientas, así que
 `gen_ai.tool.name` vale `gitlab_execute_action` tanto si el servidor listó
-incidencias como si borró una rama. El atributo de acción es lo único que las
+issues como si borró una rama. El atributo de acción es lo único que las
 distingue.
 
 El span hijo de una llamada a GitLab registra `http.request.method`, el host y
@@ -457,7 +457,7 @@ Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
 
 - **Argumentos y resultados de las herramientas.** Las convenciones definen
   atributos `Opt-In` para ambos; este servidor los declina, porque llevan rutas
-  de proyecto, cuerpos de incidencia y consultas de búsqueda.
+  de proyecto, cuerpos de issues y consultas de búsqueda.
 - **El contenido de los recursos.** El URI que nombró el recurso sigue la
   política de identidad: un digest con clave por proceso por defecto, y el URI
   literal solo bajo `full`, que ya exporta el nombre real de quien llama.

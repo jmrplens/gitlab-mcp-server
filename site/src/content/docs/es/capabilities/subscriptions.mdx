@@ -4,22 +4,33 @@ description: Suscripciones a recursos MCP que entregan notificaciones de cambio 
 datePublished: "2026-08-25"
 faq:
   - q: "¿Qué son las suscripciones a recursos MCP?"
-    a: "Un cliente pide al servidor vigilar un recurso con `resources/subscribe`, y el servidor envía `notifications/resources/updated` cuando su contenido cambia. GitLab MCP Server lo atiende mediante **sondeo**: un vigilante relee la URI suscrita a través del mismo handler que usa `resources/read` y notifica solo cuando el contenido cambió de verdad. GitLab no ofrece ningún canal push que un servidor local pueda consumir, así que el sondeo con límites explícitos es la implementación honesta."
+    a: "Un cliente pide al servidor vigilar un recurso, con `resources/subscribe` en el protocolo `2025-11-25` y anteriores o con `subscriptions/listen` desde `2026-07-28`, y el servidor envía `notifications/resources/updated` cuando su contenido cambia. GitLab MCP Server lo atiende mediante **sondeo**: un vigilante relee la URI suscrita a través del mismo handler que usa `resources/read` y notifica solo cuando el contenido cambió de verdad. GitLab no ofrece ningún canal push que un servidor local pueda consumir, así que el sondeo con límites explícitos es la implementación honesta."
   - q: "¿A qué recursos se puede suscribir?"
     a: "26 tipos de recurso, objetos únicos más tres listas de un solo padre: un proyecto o grupo; un pipeline, su lista de jobs, el último pipeline, un job concreto; un merge request con sus discusiones y notas; un issue; un deployment, environment o feature flag; una release, tag o rama; un milestone o label (de proyecto o grupo); un board; una deploy key; un snippet; una página wiki; y un archivo del repositorio. **Las colecciones se rechazan** — suscribirse a una lista de issues notificaría cambios que el suscriptor nunca pidió."
   - q: "¿Con qué rapidez llegan las notificaciones?"
-    a: "La latencia es la cadencia de sondeo: **5 segundos** mientras el recurso está activo (un pipeline en ejecución, un merge request abierto), **15 segundos** por defecto, **60 segundos** una vez asentado y **10 minutos** tras degradarse la concesión por 30 minutos de inactividad de la sesión. Cualquier petición en la sesión restaura la velocidad completa. El `_meta` de cada notificación informa del estado del vigilante y su cadencia actual."
+    a: "La latencia es la cadencia de sondeo: **5 segundos** mientras el recurso está activo (un pipeline en ejecución, un merge request abierto), **15 segundos** para un recurso sin estado que leer, **60 segundos** una vez asentado y **10 minutos** después de que un vigilante se ralentice por 30 minutos sin peticiones en su sesión. Cualquier petición en la sesión restaura la velocidad completa, y un `subscriptions/listen` abierto mantiene sus propios vigilantes a velocidad completa mientras siga abierto. El `_meta` de cada notificación informa del estado del vigilante y su cadencia actual."
   - q: "¿Cuánto cuesta vigilar contra mi límite de peticiones de GitLab?"
-    a: "Los vigilantes usan el token del propio suscriptor, con un tope de **10 vigilantes por credencial**. El peor caso — los diez al suelo de 5 segundos — son 120 peticiones por minuto, el 6% del límite por usuario de GitLab.com. Diez vigilantes degradados cuestan una petición por minuto. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial."
+    a: "Los vigilantes sondean con el token del propio suscriptor, con un tope de **10 vigilantes por credencial**. Los diez al mínimo de 5 segundos hacen 120 peticiones por minuto, que es todo el presupuesto de una instancia autogestionada cuyo administrador activó el límite de peticiones a la API autenticada de GitLab con su valor por defecto de 7200 peticiones por hora. A la base de 15 segundos esos mismos diez hacen 40 por minuto, y diez vigilantes ralentizados hacen una. Un 429 de GitLab pausa todos los vigilantes de esa credencial con retroceso exponencial."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
 
-Las suscripciones a recursos permiten a un cliente decir **«avísame cuando esto cambie»** en lugar de releer un recurso por intuición. El cliente envía `resources/subscribe` para una URI como `gitlab://project/42/pipelines/latest`, y GitLab MCP Server envía `notifications/resources/updated` cada vez que el contenido de ese recurso cambia.
+Las suscripciones a recursos permiten a un cliente decir **«avísame cuando esto cambie»** en lugar de releer un recurso por intuición. El cliente se suscribe a una URI como `gitlab://project/42/pipelines/latest`, y GitLab MCP Server envía `notifications/resources/updated` cada vez que el contenido de ese recurso cambia.
 
 El servidor atiende las suscripciones mediante **sondeo**: un vigilante relee la URI suscrita a través del mismo handler al que despacha `resources/read`, compara un SHA-256 del contenido y notifica solo ante un cambio real. «El contenido cambió» significa por tanto exactamente «lo que tú leerías cambió» — nunca una suposición. La decisión y sus límites están registrados en [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
 
 Las suscripciones se anuncian con `GITLAB_MCP_CAPABILITY_SURFACE=full` (el valor por defecto). La superficie `minimal` no registra los recursos de datos de GitLab a los que aplica una suscripción, así que tampoco anuncia la capacidad.
+
+## ¿Qué método usa un cliente?
+
+| Protocolo del cliente     | Cómo se suscribe un cliente                                               | Qué recibe                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `2025-11-25` y anteriores | `resources/subscribe` y `resources/unsubscribe`                           | `notifications/resources/updated`                                                                        |
+| `2026-07-28`              | `subscriptions/listen`, con las URI en `resourceSubscriptions` (SEP-2575) | La misma notificación, más un resultado en la petición abierta cuando el servidor termina la suscripción |
+
+El servidor atiende ambos. Cuál envía un cliente depende de la versión del protocolo que negoció su sesión, y cuáles puede atender un despliegue depende de su transporte ([Notas de transporte](#notas-de-transporte)).
+
+En `2026-07-28` la suscripción **es** la petición de listen: el cliente la deja abierta, y termina cuando el cliente la cancela o el servidor la responde. Un mismo listen puede llevar varias URI, y además suscripciones a cambios de lista. El servidor solo lo responde cuando todas las URI que lleva se han detenido, y nunca mientras lleve también una suscripción a cambios de lista, para que el resto de lo que un cliente agrupó en una petición no se pierda con un solo recurso.
 
 ## ¿Qué se puede vigilar?
 
@@ -34,28 +45,134 @@ Las suscripciones se anuncian con `GITLAB_MCP_CAPABILITY_SURFACE=full` (el valor
 | Contenido       | Página wiki, archivo del repositorio, snippet (de proyecto o personal)                       |
 | Contenedores    | Proyecto, grupo, deploy key                                                                  |
 
-**Las colecciones están excluidas deliberadamente.** Suscribirse a `gitlab://project/42/issues` se dispararía con cada cambio de cualquier issue del proyecto y costaría una página completa por sondeo — una suscripción a una colección se rechaza. La lista completa legible por máquina viaja en el manifiesto `gitlab://tools` bajo `subscriptions.subscribable_uri_templates`.
+**Las colecciones están excluidas deliberadamente.** Suscribirse a `gitlab://project/42/issues` se dispararía con cada cambio de cualquier issue del proyecto, la mayoría nada que el suscriptor pidiera, y costaría una página completa por sondeo, así que una suscripción a una colección de primer nivel se rechaza.
+
+### ¿Por qué se admiten tres listas?
+
+La lista de jobs de un pipeline y las discusiones y notas de un merge request son listas, y se pueden suscribir a propósito: cada una está acotada por un único objeto padre cuyo ciclo de vida el suscriptor ya sigue, así que «¿ha cambiado esto?» es exactamente la pregunta que responde vigilar ese padre.
+
+Un vigilante sobre una de ellas solo ve la primera página, 100 elementos, que abarca cualquier pipeline o merge request corriente; un cambio más allá no genera ninguna notificación. Cada lectura de una lista dice lo completa que está bajo la clave `io.github.jmrplens/pageInfo` de su `_meta` (`returned`, `total` cuando GitLab lo envía, y `complete`), para que un suscriptor sepa cuándo lo que vigila es parcial.
+
+### ¿Dónde se publica la lista?
+
+En cuatro sitios, todos construidos a partir de la lista blanca que la aplica, así que ninguno puede desviarse de los demás:
+
+1. La **descripción** de cada plantilla de recurso suscribible termina con la frase `Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.`, añadida al registrarla y nunca escrita a mano. Son dos frases y no una con punto y coma porque la superficie servida no lleva ninguno de los caracteres que rechazan los validadores estrictos de los gateways.
+2. Esas mismas plantillas llevan la **clave `_meta`** `io.github.jmrplens/subscribable: true`, para un cliente genérico que filtra sin conocer el manifiesto de este servidor. MCP no tiene un campo de suscribible por recurso, solo la capacidad `resources.subscribe` de todo el servidor.
+3. El **manifiesto `gitlab://tools`** enumera todas las plantillas bajo `subscriptions.subscribable_uri_templates`.
+4. En modo HTTP, la **ficha del servidor enumerativa** en `/.well-known/mcp/server-card.json` lleva un bloque `subscriptions` de primer nivel, junto a un objeto `capabilities` que refleja el handshake, para que un directorio pueda conocerlo todo sin conectarse. La ficha en `/server-card` es otro documento y no declara capacidades ([Ficha del servidor](/gitlab-mcp-server/es/operations/http-server/#ficha-del-servidor)).
+
+El bloque de la ficha dice, por método, si este despliegue lo atiende:
+
+```json
+"subscriptions": {
+  "supported": true,
+  "methods": {
+    "subscriptions/listen": {
+      "available": true,
+      "requires": "stateless sessions (--stateless, the default)",
+      "since_protocol": "2026-07-28"
+    },
+    "resources/subscribe": {
+      "available": false,
+      "requires": "stateful sessions (--stateless=false)"
+    }
+  },
+  "subscribable_uri_templates": ["gitlab://group/{group_id}", "..."],
+  "notification": "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+  "end_reasons": [
+    "credential_evicted",
+    "credential_reset",
+    "credential_revoked",
+    "credential_insufficient",
+    "resource_gone",
+    "lifetime_reached",
+    "watcher_evicted",
+    "shutdown"
+  ],
+  "end_reason_meta_key": "io.github.jmrplens/watch-end"
+}
+```
+
+Ese es un despliegue sin estado. Con `--stateless=false` los dos valores de `available` se intercambian, y en la superficie de capacidades `minimal` el bloque no aparece.
+
+### ¿Qué cuesta una suscripción rechazada?
+
+Una suscripción rechazada no arranca ningún vigilante. Una rechazada por su tipo, como una colección de primer nivel, no cuesta ninguna llamada a GitLab; una rechazada porque el recurso no se pudo leer ha gastado esa única lectura. En `2026-07-28` el rechazo es el error JSON-RPC que responde al propio `subscriptions/listen`, enviado antes de cualquier confirmación, así que un cliente que lee la respuesta del listen lo ve. El cliente del SDK de Go (v1.8.0) nunca lo ve, porque envía el listen sin esperar su respuesta ([entrada aguas arriba](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal)); el rechazo surte efecto igualmente.
+
+## ¿Cómo se detecta un cambio?
+
+Un vigilante relee el recurso a través del mismo handler que usa `resources/read` y compara un SHA-256 de lo que devuelve. La primera lectura ocurre de forma síncrona al aceptar la suscripción, antes de decirle al cliente que está suscrito, así que a un suscriptor nunca se le notifica un cambio anterior a su suscripción.
+
+Esa primera lectura es también la **comprobación de autorización**: se hace con el propio token del suscriptor, así que una URI que el token no puede leer se rechaza de entrada en lugar de aceptarse y no dispararse nunca en silencio. Un vigilante es por URI y por credencial, así que una segunda sesión que vigila la misma URI con el mismo token se une al vigilante existente, espera a esa misma primera lectura y no cuesta nada más. La comprobación tiene también su otra cara: un token que pierde el acceso se sigue usando hasta que el siguiente sondeo responde 401, 403 o 404, lo que es como mucho un intervalo, y hasta diez minutos para un vigilante ralentizado; esa respuesta es lo que detiene al vigilante.
 
 ## ¿Con qué rapidez, y a qué coste?
 
 La cadencia de sondeo se adapta al recurso:
 
-| Estado del recurso  | Intervalo  | Ejemplo                                          |
-| ------------------- | ---------- | ------------------------------------------------ |
-| Trabajo en curso    | 5s (suelo) | un pipeline `running`, un merge request `opened` |
-| Asentado            | 60s        | un pipeline `success`, un issue `closed`         |
-| Sin campo de ciclo  | 15s        | una página wiki, un archivo, un label            |
-| Concesión degradada | 10min      | 30 minutos sin ninguna petición en la sesión     |
+| Estado del recurso  | Intervalo   | Ejemplo                                          |
+| ------------------- | ----------- | ------------------------------------------------ |
+| Trabajo en curso    | 5s (mínimo) | un pipeline `running`, un merge request `opened` |
+| Asentado            | 60s         | un pipeline `success`, un issue `closed`         |
+| Sin campo de ciclo  | 15s         | una página wiki, un archivo, un label            |
+| Concesión degradada | 10min       | 30 minutos sin ninguna petición en la sesión     |
 
-Los vigilantes usan el token de GitLab del propio suscriptor, con un tope de **10 vigilantes por credencial** (una entrada del pool por token+URL en modo HTTP) y de **512 por proceso**. El peor caso — diez vigilantes al suelo de 5s — son 120 peticiones/minuto; diez degradados cuestan una. Un 429 de GitLab pausa todos los vigilantes con retroceso exponencial (30s doblando hasta 5 minutos). El techo del proceso rechaza en lugar de parar el vigilante de nadie, y rechaza antes de que una credencial en su propio tope gaste un vigilante degradado para hacer sitio, así que un rechazo nunca te cuesta una suscripción que ya tenías.
+Trabajo en curso significa un pipeline o job en `created`, `waiting_for_resource`, `preparing`, `pending` o `running` (una lista de jobs está activa mientras lo esté cualquiera de sus jobs), o un merge request o issue en `opened` o `locked`. Cualquier otro estado cuenta como asentado, `manual` y `scheduled` incluidos: ambos esperan algo ajeno a CI, una persona o un reloj, así que sondearlos al mínimo gastaría presupuesto en un recurso que no puede cambiar hasta que eso ocurra. Las wikis, los archivos, las ramas, las etiquetas, los tableros y los demás tipos no tienen estado que leer, así que se sondean a la base de 15 segundos.
 
-El tope por proceso existe porque acuñar una credencial es una llamada a la API, así que un número por credencial se multiplica por cuantas tenga quien llama. Rechaza en lugar de hacer sitio: detener el vigilante de una credencial para arrancar el de otra es un intercambio que este servidor no hace. Ninguno de los dos topes es configurable, y ambos rechazos dicen cuál se alcanzó.
+Nada se retira por estar terminado. GitLab no tiene estado terminal: un pipeline reintentado reutiliza su ID y vuelve a ejecutarse, un issue cerrado se reabre, un merge request fusionado aún puede editarse, así que un vigilante que se detuviera en `success` quedaría ciego ante un cambio real que su suscriptor pidió conocer.
 
-Nada se retira por estar «terminado»: GitLab no tiene estado terminal — un pipeline reintentado reutiliza su ID y vuelve a ejecutarse, un issue cerrado se reabre — así que un vigilante solo termina cuando el cliente se desuscribe, su sesión se desconecta, el recurso devuelve 401/403/404, se alcanza el tope de vida de 24 horas, es desalojado para hacer sitio en el tope de vigilantes, o el pool suelta la entrada de la credencial por presión de `--max-http-clients`. Este último caso prefiere una entrada que no esté atendiendo una suscripción y se lleva una ocupada solo cuando todas las entradas del pool lo están; cuando ocurre, los vigilantes se detienen, las peticiones `subscriptions/listen` abiertas se completan y basta con reconectar, porque la credencial no tiene nada malo.
+La latencia está acotada por la cadencia por diseño. Los canales de eventos que GitLab ofrece hoy y que se pueden consultar sin aceptar conexiones entrantes (la Events API, las suscripciones GraphQL sobre ActionCable y las peticiones condicionales) se probaron en vivo uno a uno y se descartaron, como recoge [ADR-0017](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0017-pull-safe-event-sources-surveyed.md).
+
+### ¿Cuáles son los límites?
+
+| Límite                    | Valor                         | Por qué                                                                                                                                                |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vigilantes por credencial | 10                            | Un vigilante sondea con el propio token del suscriptor, así que este es el techo del sondeo de una credencial                                          |
+| Vigilantes por proceso    | 512                           | Crear una credencial es una llamada a la API, así que un número por credencial se multiplica por cuantas tenga quien llama; solo este acota el proceso |
+| Intervalo mínimo          | 5s                            | Diez vigilantes al mínimo ya hacen 120 peticiones por minuto                                                                                           |
+| Pausa por límite de tasa  | 30s, doblando hasta 5 minutos | GitLab aplica sus límites por usuario, así que un 429 pausa todos los vigilantes de esa credencial                                                     |
+
+Una credencial es una entrada del pool, un par de token y URL de GitLab, en modo HTTP. En stdio el proceso atiende a una sola credencial, así que sus diez vigilantes son el límite y el techo del proceso nunca llega a aplicarse.
+
+**La aritmética de peticiones.** Diez vigilantes hacen 120 peticiones por minuto al mínimo, 40 a la base de 15 segundos, 10 una vez asentados y una una vez ralentizados. En todo un proceso, 512 vigilantes son unas 102 peticiones por segundo al mínimo y unas 34 a la base. En una instancia autogestionada, el límite de peticiones a la API autenticada de GitLab es por defecto de 7200 peticiones por hora y usuario, es decir 120 por minuto, y está desactivado hasta que un administrador lo activa ([documentación de GitLab](https://docs.gitlab.com/administration/settings/user_and_ip_rate_limits/)). Diez vigilantes al mínimo lo gastarían entero mientras ese mismo usuario hace llamadas a herramientas, y por eso el mínimo no es más bajo. GitLab.com publica sus límites por plan en su [página de límites de peticiones](https://docs.gitlab.com/user/gitlab_com/rate_limits/).
+
+**En el tope por credencial, el vigilante ralentizado desde hace más tiempo cede su sitio.** Una suscripción nueva desaloja el vigilante de esa credencial que lleva más tiempo ralentizado en lugar de rechazarse: un suscriptor que espera ahora gana el hueco a uno al que su propia inactividad ya ralentizó, y el listen del vigilante desalojado recibe como respuesta `watcher_evicted`. Si ninguno de los diez está ralentizado, la suscripción nueva se rechaza.
+
+**El techo del proceso solo rechaza.** Hacer sitio ahí supondría detener el vigilante de otra credencial para arrancar este, y nada de la suscripción que llega la hace valer más que la que ya está en marcha. Rechaza **antes** de desalojar nada, así que una credencial en su propio tope conserva su vigilante ralentizado cuando el proceso está lleno y se le dice que se alcanzó el techo de todo el servidor: un rechazo nunca te cuesta una suscripción que ya tenías.
+
+Ninguno de los dos techos es configurable, y ambos rechazos dicen cuál se alcanzó: el del proceso dice `server-wide` con todas las letras, y el de la credencial lleva su propio recuento y su límite, para que un operador que lea el error sepa si mirar al que llama o al despliegue. La palanca que sí tiene un operador es `--max-http-clients`, que decide cuántas credenciales atiende el pool a la vez ([La palanca y lo que cuesta](/gitlab-mcp-server/es/operations/http-server/#la-palanca-y-lo-que-cuesta)).
+
+Conviene saber lo que cuesta el techo del proceso antes de toparse con él. Cincuenta y una credenciales en su tope ocupan 510 de los 512 huecos, y los conservan mientras vivan sus vigilantes, hasta 24 horas cada uno, mientras cualquier otra suscripción se rechaza. Se acepta a propósito: la alternativa es un sondeo sin límite desde un solo proceso, y un reparto por credencial no acotaría nada, porque acuñar una credencial es una llamada a la API. Un despliegue saturado lo dice en su propio log, con una línea WARN por rechazo.
 
 ## Ciclo de vida y renovación
 
-Un vigilante sin renovar no muere en silencio — se ralentiza. Tras 30 minutos sin tráfico en la sesión suscriptora, el vigilante baja a un sondeo de 10 minutos; cualquier llamada a herramienta o lectura de recurso en esa sesión restaura la velocidad completa automáticamente. Cada notificación lleva el estado del vigilante en `_meta` bajo `io.github.jmrplens/watch`:
+Un vigilante sin renovar no muere en silencio: se ralentiza. Tras 30 minutos sin ninguna petición en la sesión suscriptora, baja a un sondeo de 10 minutos, y cualquier petición en esa sesión restaura la velocidad completa. Un vigilante termina, o se ralentiza, por estos motivos y no por otros:
+
+| Evento                                                | Efecto                                       | ¿Se le dice al cliente?                                                                                                                                            |
+| ----------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| El cliente se desuscribe o cancela su listen          | Se detiene cuando se va el último suscriptor | Lo pidió él                                                                                                                                                        |
+| La sesión se desconecta                               | Se detiene                                   | Ya no está                                                                                                                                                         |
+| 30 minutos sin peticiones en la sesión                | **Se ralentiza a un sondeo de 10 minutos**   | `_meta` en la siguiente notificación                                                                                                                               |
+| Cualquier petición en la sesión                       | Restaura la velocidad completa               | No hay nada que decir                                                                                                                                              |
+| El recurso responde 401, 403 o 404                    | Se detiene                                   | El listen se responde con `resource_gone`                                                                                                                          |
+| 24 horas, renovaciones incluidas                      | Se detiene                                   | El listen se responde con `lifetime_reached`                                                                                                                       |
+| Desalojado para hacer sitio en el tope por credencial | Se detiene                                   | El listen se responde con `watcher_evicted`                                                                                                                        |
+| El pool suelta la entrada de esta credencial          | Se detiene                                   | El listen se responde con `credential_evicted`, `credential_reset`, `credential_revoked` o `credential_insufficient`; con `--stateless=false` la sesión se termina |
+| El servidor se apaga                                  | Se detiene                                   | El listen se responde con `shutdown` (HTTP)                                                                                                                        |
+
+Un `resources/subscribe` heredado no recibe ninguna de esas respuestas, porque no mantiene ninguna petición abierta; consulta [Por qué terminó una suscripción](#por-qué-terminó-una-suscripción).
+
+**El plazo de renovación ralentiza un vigilante; no lo termina.** MCP no define plazos de renovación, ni caducidad, ni mensaje de caducidad, y su única notificación significa «esto cambió, vuelve a leerlo». Un vigilante que se retirara en un plazo se quedaría callado de una forma que ningún cliente podría distinguir de «aún no ha pasado nada», así que ralentizarse es lo único que un servidor puede afirmar con honestidad.
+
+**Qué lo renueva.** Cualquier petición que llegue al servidor en la sesión: una llamada a herramienta, una lectura de recurso, un prompt, un autocompletado, un listado. Un `ping` y el handshake de `initialize` no, deliberadamente, porque un ping demuestra que un socket está abierto y no que alguien espere al otro lado; las notificaciones tampoco. Desde `2026-07-28` un cliente puede responder a `tools/list`, `prompts/list` o a un `resources/read` repetido desde su propia caché, y entonces aquí no llega nada que renueve nada, lo cual es correcto: un cliente que se sirve de su caché no es prueba de que nadie esté esperando.
+
+**Un `subscriptions/listen` abierto renueva sus propios vigilantes**, cada diez minutos mientras siga abierto. En el transporte sin estado predeterminado la sesión de un listen no ve más petición que el propio listen, así que nada más lo renovaría, y un listen abierto es mejor prueba de un suscriptor que espera que el tráfico. Por eso el plazo de renovación gobierna el `resources/subscribe` heredado, y el tope de 24 horas se aplica a todo vigilante.
+
+**Un vigilante también puede terminar porque el pool soltó su credencial.** En modo HTTP los vigilantes pertenecen a una entrada del pool, y `--max-http-clients` acota cuántas entradas mantiene un proceso. La presión de tamaño prefiere una entrada que no esté atendiendo una suscripción, y se lleva una que sí solo cuando todas las entradas del pool atienden alguna; entonces los vigilantes de la credencial se detienen, sus peticiones `subscriptions/listen` abiertas se responden, y con `--stateless=false` se terminan las sesiones que ningún listen terminó. La credencial no tiene nada malo: reconecta y vuelve a suscribirte.
+
+### ¿Qué lleva una notificación?
+
+Cada notificación lleva en `_meta`, bajo `io.github.jmrplens/watch`, el estado del vigilante que la produjo. MCP no registra ninguna clave para la vida de una suscripción, así que esta lleva el espacio de nombres de este proyecto:
 
 ```json
 {
@@ -73,6 +190,15 @@ Un vigilante sin renovar no muere en silencio — se ralentiza. Tras 30 minutos 
   }
 }
 ```
+
+| Campo               | Significado                                                                                         |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `state`             | `active` a velocidad completa, `slow` una vez ralentizado                                           |
+| `renewBy`           | Cuándo vence el plazo de renovación y el vigilante se ralentiza (en uno ralentizado, cuándo venció) |
+| `pollIntervalMs`    | La cadencia a la que sondea ahora el vigilante, en milisegundos                                     |
+| `renewedByActivity` | Siempre `true`: cualquier petición en la sesión aplaza de nuevo `renewBy`                           |
+
+Ningún cliente está obligado a leer nada de esto, y ninguno conocido hoy lo hace. Está ahí porque un suscriptor no tiene otra forma de saber que su vigilante se ralentizó, y todo lo que dice es cierto lo mire alguien o no.
 
 ## Por qué terminó una suscripción
 
@@ -105,29 +231,43 @@ En el protocolo 2026-07-28 una suscripción es una petición `subscriptions/list
 | `watcher_evicted`         | Un vigilante tuyo, degradado, se detuvo en el tope de vigilantes       | Vuelve a suscribirte y mantén la sesión activa                         |
 | `shutdown`                | El servidor se está deteniendo                                         | Reconecta; tras un balanceador te atenderá otra instancia              |
 
-`detail` es una frase de consejo, para que un cliente que no reconozca la palabra del motivo pueda actuar igualmente. El campo `status` aparece solo en `resource_gone`, y se retransmite sin interpretarlo: GitLab responde 404 a un recurso que quizá no puedas ver, así que un 404 aquí no significa «borrado». El vocabulario es cerrado y se publica en `subscriptions.end_reasons` de la tarjeta del servidor, que solo se sirve en modo HTTP: en stdio no hay endpoint del que leerla, y los cuatro motivos que allí pueden darse (`resource_gone`, `lifetime_reached`, `watcher_evicted` y `shutdown`) se documentan en esta página. Trata un valor desconocido como «un final que este cliente no conoce», nunca como «cualquier final».
+`detail` es una frase de consejo, para que un cliente que no reconozca la palabra del motivo pueda actuar igualmente. El campo `status` aparece solo en `resource_gone`, y solo cuando la lectura fallida trajo un estado HTTP; se retransmite sin interpretarlo. GitLab responde 404 a un recurso que quizá no puedas ver, precisamente para que no se distinga de uno que no existe, así que un 404 aquí no significa «borrado». Un 401 tampoco significa que el token esté muerto: GitLab responde con 401 a algunos permisos que faltan. Solo `credential_revoked` dice que GitLab rechazó la propia credencial, y en modo HTTP se envía únicamente cuando GitLab lo ha dicho o la sonda de credenciales lo ha confirmado ([Llamadas rechazadas](/gitlab-mcp-server/es/operations/http-server/#llamadas-rechazadas)).
 
-Un final que causas **tú** no lleva motivo, precisamente porque lo causaste tú. Tampoco lo lleva un `resources/subscribe` de la era de sesiones con `--stateless=false`: no mantiene ninguna petición abierta, así que no hay nada que responder, y terminar la sesión es el único final que el protocolo le ofrece. Usa `subscriptions/listen` si quieres el motivo.
+El vocabulario es cerrado y se publica como `subscriptions.end_reasons` en la ficha del servidor enumerativa en `/.well-known/mcp/server-card.json`, que solo se sirve en modo HTTP (la ficha en `/server-card` no lleva capacidades). En stdio no hay endpoint del que leerla, y allí pueden llegar a un cliente tres de los motivos: `resource_gone`, `lifetime_reached` y `watcher_evicted`. Un proceso stdio que se detiene no responde nada a un listen abierto, como recoge [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md). Trata un valor desconocido como «un final que este cliente no conoce», nunca como «cualquier final».
+
+El servidor no envía `notifications/cancelled` para un listen que termina, aunque `2026-07-28` lo pide: el SDK de Go no ofrece forma de enviarlo para una petición que hizo el cliente ([entrada aguas arriba](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#application-code-cannot-send-notificationscancelled-for-a-listen-stream)). Lo que le dice a un cliente que el stream ha terminado es el resultado del listen.
+
+Un final que causas **tú** no lleva motivo, precisamente porque lo causaste tú, y el resultado quizá ni siquiera te llegue. Tampoco lo lleva un `resources/subscribe` de la era de sesiones con `--stateless=false`: no mantiene ninguna petición abierta, así que no hay nada que responder, y terminar la sesión es el único final que el protocolo le ofrece. Un cliente así ve terminar su stream SSE independiente y recibe su siguiente petición respondida como una sesión nueva. La capacidad `logging` sería el único sitio que queda para llevar una frase de aviso, y este servidor no la declara a propósito, porque SEP-2577 la dejó obsoleta. Usa `subscriptions/listen` si quieres el motivo.
 
 ## Notas de transporte
 
-- **stdio**: funciona tal cual en ambas generaciones del protocolo.
-- **HTTP, modo stateless (el predeterminado)**: la petición legada `resources/subscribe` se rechaza con un error explicativo — cada POST stateless recibe su propia sesión que se cierra con la respuesta, así que una suscripción aceptada nunca podría notificarse. Los clientes con protocolo 2026-07-28 no se ven afectados: `subscriptions/listen` mantiene la petición abierta, y eso el modo stateless sí lo soporta. Los suscriptores legados necesitan `--stateless=false`.
-- **Particularidades de clientes**: VS Code se suscribe a cada recurso que lee y encamina las actualizaciones a su pipeline de cambios de archivo; Cursor envía `resources/subscribe` incluso a servidores que anuncian `subscribe: false`; el cliente del SDK de Go (v1.8.0) dispara `subscriptions/listen` sin esperar la respuesta, así que nunca ve un rechazo, que cualquier otro cliente lee como el error JSON-RPC que responde al listen, ni el resultado que termina una suscripción.
+- **stdio**: funcionan ambos métodos, en ambas generaciones del protocolo.
+- **HTTP, modo sin estado (el predeterminado)**: solo funciona `subscriptions/listen`. El `resources/subscribe` heredado se rechaza con un error explicativo, porque cada POST sin estado recibe su propia sesión, que se cierra con la respuesta, así que una suscripción aceptada nunca podría notificarse. `subscriptions/listen` mantiene su petición abierta, y eso el modo sin estado sí lo admite.
+- **HTTP, `--stateless=false`**: solo funciona `resources/subscribe`. El despliegue no ofrece el protocolo `2026-07-28`, así que una petición que lo nombra recibe un `400` con las revisiones que sí negocia ([Revisiones del protocolo que negocia este servidor](/gitlab-mcp-server/es/operations/http-server/#revisiones-del-protocolo-que-negocia-este-servidor)), y la ficha del servidor marca `subscriptions/listen` como no disponible.
+
+### ¿Cómo se comportan los clientes?
+
+| Cliente                        | Protocolo               | Notas                                                                                                                                                                                                          |
+| ------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code                        | `2025-11-25`            | Se suscribe a cada recurso que lee y encamina las actualizaciones a su pipeline de cambios de archivo, no al chat                                                                                              |
+| Cursor                         | `2025-11-25` o anterior | Envía `resources/subscribe` incluso a servidores que anuncian `subscribe: false`                                                                                                                               |
+| Cliente del SDK de Go (v1.8.0) | `2026-07-28`            | Envía `subscriptions/listen` sin esperar la respuesta, así que nunca ve un rechazo ni el resultado que termina una suscripción, y un segundo `Subscribe` a una URI rechazada no envía nada hasta `Unsubscribe` |
+| Tu propia integración          | cualquiera              | El `_meta` descrito arriba está ahí para ti; sin él, la notificación sola basta                                                                                                                                |
 
 ## Códigos de error
 
-Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado — nunca el `code: 0` accidental con el que se serializaría un error plano:
+Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado, nunca el `code: 0` accidental con el que se serializaría un error plano:
 
-| Rechazo                                                                                    | Código                                                                                |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| URI deliberadamente no suscribible                                                         | `-32602` (parámetros inválidos)                                                       |
-| Recurso ilegible en la lectura de autorización (401/403/404)                               | `-32602` — el mismo código con el que el SDK responde un `resources/read` desconocido |
-| Límite de peticiones, cupo de watchers sin ningún watch desalojable, o servidor apagándose | `-32000` (servidor ocupado — transitorio, reintente más tarde)                        |
-| Vigilantes por proceso en 512                                                              | `-32000`, con `server-wide` en el mensaje                                             |
-| Fallo transitorio de GitLab en la primera lectura                                          | `-32603` (error interno)                                                              |
-| `resources/subscribe` en HTTP sin estado                                                   | `-32600` — use `subscriptions/listen` en su lugar                                     |
+| Rechazo                                                                                                      | Código                                                                               | ¿Reintentar más tarde?                            |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| URI deliberadamente no suscribible                                                                           | `-32602` (parámetros inválidos)                                                      | No: elige una URI suscribible                     |
+| Recurso ilegible en la lectura de autorización (401/403/404)                                                 | `-32602`, el mismo código con el que el SDK responde un `resources/read` desconocido | Solo si el recurso aparece o se concede el acceso |
+| GitLab limitó la primera lectura por tasa, cupo de vigilantes sin ninguno desalojable, o servidor apagándose | `-32000` (servidor ocupado)                                                          | Sí: la condición es transitoria                   |
+| El límite de tasa propio de este servidor, antes de consultar a ningún vigilante                             | `-42900`                                                                             | Sí: tras una breve espera                         |
+| Vigilantes por proceso en 512                                                                                | `-32000`, con `server-wide` en el mensaje                                            | Sí: la condición es transitoria                   |
+| Fallo transitorio de GitLab en la primera lectura                                                            | `-32603` (error interno)                                                             | Sí                                                |
+| `resources/subscribe` en HTTP sin estado                                                                     | `-32600` (petición no válida para este estado de sesión)                             | No: usa `subscriptions/listen`                    |
 
-En el protocolo 2026-07-28 un `subscriptions/listen` rechazado lleva los mismos códigos, como el error JSON-RPC que responde al propio listen, enviado antes de cualquier confirmación; la última fila nunca se le aplica, porque HTTP sin estado sí sirve un listen. Un listen tiene además rechazos propios: los topes de streams de listen abiertos, `GITLAB_MCP_MAX_LISTEN_STREAMS` por credencial (64 por defecto) y 512 por proceso, cada uno respondido con `-32000`. El límite de peticiones por credencial de este propio servidor (`--rate-limit-rps` en modo HTTP, `GITLAB_MCP_RATE_LIMIT_RPS` en stdio), que no es el límite de GitLab al que se refiere la tabla, rechaza ambos métodos antes aún, con `-42900`. El cliente del SDK de Go (v1.8.0) no ve ninguno de ellos en un listen, y un segundo `Subscribe` suyo a una URI rechazada no envía nada hasta `Unsubscribe`.
+El mensaje junto al código lleva el detalle del fallo de GitLab tal cual; solo el código dice si un reintento puede salir bien. En el protocolo 2026-07-28 un `subscriptions/listen` rechazado lleva los mismos códigos, como el error JSON-RPC que responde al propio listen, enviado antes de cualquier confirmación; la última fila nunca se le aplica, porque HTTP sin estado sí sirve un listen. Un listen tiene además rechazos propios: los topes de streams de listen abiertos, `GITLAB_MCP_MAX_LISTEN_STREAMS` por credencial (64 por defecto) y 512 por proceso, cada uno respondido con `-32000` y transitorio. El límite de peticiones por credencial de este propio servidor (`--rate-limit-rps` en modo HTTP, `GITLAB_MCP_RATE_LIMIT_RPS` en stdio), que no es el de GitLab, rechaza ambos métodos antes aún, con el `-42900` de la tabla, antes de consultar a ningún vigilante. El cliente del SDK de Go (v1.8.0) no ve ninguno de ellos en un listen, y un segundo `Subscribe` suyo a una URI rechazada no envía nada hasta `Unsubscribe`.
 
 <FAQ />

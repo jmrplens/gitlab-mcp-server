@@ -217,13 +217,15 @@ Esto es útil para flujos de trabajo dry-run, entornos de formación y depuraci�
 
 Una acción cuyo efecto no se puede deshacer llamando a su opuesta se clasifica como destructiva, una vez por acción en el catálogo, y las tres superficies leen ese único bit (`destructiveHint`). Borrar algo es el caso evidente pero no el único: una acción que entrega algo a alguien de fuera de la instancia también entra. `project.mirror_add` es la que merece nombrarse, porque no parece destructiva: crear un mirror de push no borra nada, y le da al host nombrado en su `url` una copia continua de todo el repositorio. Un modelo que obedeciera a la descripción de un issue que pide un «mirror de respaldo» podría, si no, enviar el repositorio fuera con una sola llamada, así que esa llamada necesita confirmación como cualquier otra destructiva.
 
-Una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
+En las superficies meta e individual, una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
 
 1. `GITLAB_MCP_YOLO_MODE` tiene un valor verdadero (`1`, `true` o `yes`) o, si no está definida, lo tiene `AUTOPILOT`: para pipelines desatendidos.
 2. La llamada lleva `"confirm": true`.
-3. El cliente admite elicitation y el usuario aprueba la pregunta.
+3. El cliente admite elicitación y el usuario aprueba la pregunta.
 
-Si no, falla cerrada y nada llega a GitLab. Un cliente que no puede preguntar recibe un error que le pide repetir la llamada con `confirm: true` solo después de que el usuario lo apruebe de forma explícita. Un usuario que se niega obtiene una respuesta que le dice al modelo que no lo reintente y que pregunte qué quiere en su lugar; una pregunta cerrada sin respuesta se informa como que no cambió nada, y se puede volver a hacer.
+Si no, se rechaza por defecto (fail-closed) y nada llega a GitLab. Un cliente que no puede preguntar recibe un error que le pide repetir la llamada con `confirm: true` solo después de que el usuario lo apruebe de forma explícita. Un usuario que se niega obtiene una respuesta que le dice al modelo que no lo reintente y que pregunte qué quiere en su lugar; una pregunta cerrada sin respuesta se informa como que no cambió nada, y se puede volver a hacer.
+
+La superficie dinámica por defecto no pregunta nada ni lee ninguno de los dos ajustes: `gitlab_execute_action` rechaza una acción clasificada como destructiva salvo que la llamada lleve `confirm: true` en el nivel superior, así que `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` no omiten nada ahí (el [issue 1166](https://github.com/jmrplens/gitlab-mcp-server/issues/1166) sigue esa diferencia). Las dos protecciones de [Cuando deciden los argumentos](#cuando-deciden-los-argumentos) siguen el orden anterior en todas las superficies, la dinámica incluida. [Gestión de errores](/gitlab-mcp-server/es/operations/error-handling/#acciones-destructivas-y-confirmación) cita lo que dice cada rechazo.
 
 ### Cuando deciden los argumentos
 
@@ -255,7 +257,7 @@ Los resultados de las herramientas llevan texto que escribieron otras personas: 
 | Un enlace                                         | `MdTitleLink`         | Se escapan las dos mitades, así que ninguna puede cerrar el enlace, y una dirección que no es `http` ni `https` se muestra como código en lugar de enlazarse                          |
 | Un bloque de código (un archivo, un log, un diff) | `MarkdownFencedBlock` | La valla es más larga que cualquier racha de comillas invertidas del cuerpo, así que nada dentro puede cerrar el bloque                                                               |
 
-Los cuatro primeros también eliminan los caracteres de control. Un bloque de código es el único sitio donde escapar no es la respuesta, porque un archivo o un log tiene que mostrarse tal cual; la contención la da la valla. `make check-md-escaping` comprueba con el sistema de tipos cada formateador y hace fallar la compilación cuando un valor que viene de GitLab llega a uno de esos sitios sin pasar por su función.
+Los cuatro primeros también eliminan los caracteres de control. Un bloque de código es el único sitio donde escapar no es la respuesta, porque un archivo o un log tiene que mostrarse tal cual; la contención la da la valla. Una comprobación de la propia compilación del proyecto lee cada formateador y la hace fallar cuando un valor que viene de GitLab llega a uno de esos sitios sin pasar por su función, así que ninguna versión publicada puede llevar uno así.
 
 Se consideraron marcadores de frontera alrededor de ese texto, como etiquetas `<user_content>`, y no se adoptaron. Los resultados de herramientas ya llegan como elementos `content` estructurados y separados, aparte de los prompts del sistema y del usuario y entre sí, y con la estructura contenida un marcador añadiría tokens sin añadir ninguna frontera. Nada de esto impide que un modelo siga una instrucción escrita en prosa normal; para eso están la confirmación de las acciones destructivas, el modo de solo lectura y un token con pocos permisos.
 

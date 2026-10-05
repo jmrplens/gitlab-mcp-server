@@ -1,211 +1,322 @@
 ---
 title: Error Handling
-description: How GitLab MCP Server classifies API errors by HTTP status, extracts rich diagnostics, and returns actionable hints to AI assistants.
+description: How GitLab MCP Server reports a failed call to an AI assistant, what an error result contains, how GitLab's answers are classified and which hints the server adds, and how argument errors, destructive-action confirmations and retries behave.
 datePublished: "2026-04-21"
 faq:
+  - q: "What does a failed tool call return?"
+    a: "A tool result with `isError: true`, one text block holding the error message, and no `structuredContent`. The message names the operation that failed and the server's classification of the failure, then GitLab's own message in parentheses when it gave one, then `Suggestion:` and a next step when the handler knows one, and it ends with the request GitLab refused (`METHOD URL: status`). The get actions of 22 domains answer a 404 with a short not-found card instead."
   - q: "How does the server classify GitLab API errors?"
-    a: "GitLab MCP Server classifies every API error by **HTTP status code** into an actionable message. A 401 signals an invalid or expired `GITLAB_TOKEN` or, on the endpoints that answer a missing permission with 401, a permission refusal, and a 401 GitLab marks as a rejected token (the `invalid_token` code, or any 401 from GraphQL) is reported as that. 403 signals missing permissions, 404 a missing resource or lack of access, 422 a validation failure, and 429 a rate limit. Network-level failures (connection refused, DNS failure, timeout, and TLS handshake errors) are classified separately. The classification drives both the wrapped error message and whether the failure is treated as retryable."
-  - q: "Which error wrapping function is used for which operation?"
-    a: "Read-only operations (`list`, `get`, `search`) use `WrapErr`. Mutating operations (`create`, `update`, `delete`) use `WrapErrWithMessage`, which includes the specific detail extracted from the GitLab response. When a corrective action is known, `WrapErrWithHint` appends a suggestion, and `WrapErrWithStatusHint` scopes that hint to a single HTTP status code. A `get` operation returning 404 uses `NotFoundResult` instead of returning an error."
-  - q: "Why does a 404 not appear as an error?"
-    a: "For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied through a shared formatter in each of 22 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name."
+    a: "By the answer GitLab gave. Each HTTP status has a fixed sentence: 400 bad request, 403 access denied with its three possible causes, 404 not found, 405 not allowed, 409 conflict, 422 validation failed, 429 rate limited, and 500, 502 and 503 for an instance in trouble. A 401 names both of its causes, an unusable token and a missing permission, unless GitLab said the token itself was refused (the `invalid_token` code, or any 401 from GraphQL). A refusal of a fine-grained token's grant is described in GitLab's own terms. A request that got no answer is classified by what happened to it: canceled, past its deadline, refused by this server's destination check, or a network failure (connection refused, DNS, timeout, TLS)."
+  - q: "Why does a 404 sometimes not look like an error?"
+    a: "The get actions of 22 domains answer GitLab's 404 with an informational result: a card saying the object does not exist or is not accessible with your current permissions, followed by next steps such as the list action to call. It still carries `isError: true`, and the server logs it at INFO as a completed call rather than at ERROR as a failure. Every other 404 is an ordinary error whose classification says the resource does not exist, you lack access, or the feature needs a higher GitLab tier."
   - q: "Should the AI assistant retry a failed operation?"
-    a: "It depends on whether the error is **transient** or **permanent**. Transient errors — 429, 5xx, timeouts, and connection refused — are safe to retry after a delay. Permanent errors — 4xx except 429 — indicate a problem with the request itself, so retrying produces the same result. For permanent errors, fix the input parameters or configuration instead of retrying."
+    a: "Not as a reflex. The server does not sort errors into transient and permanent, and it never retries a tool call. The GitLab client underneath re-sends a failed request at most twice before the error reaches the tool: after a 429, after a 5xx for a request that is safe to repeat (never a POST), and after a connection that failed before anything was sent. A 429 or a 5xx that reaches the assistant has therefore usually been retried already, so wait before trying again. Any other 4xx describes the request, so fix the arguments, the token or the role the message names instead."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
 
-GitLab MCP Server provides structured error handling that classifies errors, extracts actionable details from GitLab API responses, and suggests corrective actions to the AI assistant.
+GitLab MCP Server reports a failed call in words an AI assistant can act on: what failed, why, and, where the fix is known, what to do next. This page describes what a caller receives, how GitLab's answers are classified, and the answers the server gives on its own: not-found results, argument errors and confirmations of destructive actions.
+
+## What a caller receives
+
+A tool call that fails comes back as a tool result with `isError: true`, carrying one text block and no `structuredContent`. The text is the error message itself, not a card with fields. Successful results are described in [Output Format](/gitlab-mcp-server/reference/output-format/).
+
+A message about a GitLab request is built from up to five parts, always in this order:
+
+```text
+<operation>: <classification> (<GitLab's message>). Suggestion: <hint>: <cause>
+```
+
+| Part             | What it is                                                                                                                                               | When it appears                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Operation        | The handler's own label for the call, such as `issueList`, `fileCreate` or `create security attributes`. It names what failed, and is not a tool to call | Always                                                                         |
+| Classification   | The server's reading of the failure, from the [tables below](#error-classification)                                                                      | Always                                                                         |
+| GitLab's message | GitLab's own words, as the GitLab client renders the body: `{message: ...}`, or one `{key: value}` per key                                               | When GitLab gave a message that says more than the status                      |
+| Suggestion       | The handler's next step, naming any action by its canonical ID                                                                                           | When the handler knows the fix for this answer                                 |
+| Cause            | The request GitLab refused, as `METHOD https://host/api/v4/path: status` followed by GitLab's message, or what happened to a request that got no answer  | Always, except when the server could not attribute the request to a credential |
+
+A `404` carries no request line: its cause is `404 Not Found` over REST and `failed to execute GraphQL query: 404 Not Found` over GraphQL, because the GitLab client answers every `404` with one shared error that records the status and nothing about the request.
+
+Creating a file that already exists, for example, is answered:
+
+```text
+fileCreate: bad request: check your input parameters ({message: A file with this name already exists}). Suggestion: the file may already exist. Use repository.file_update to modify an existing file, or verify the branch name: POST https://gitlab.example.com/api/v4/projects/42/repository/files/README.md: 400 {message: A file with this name already exists}
+```
+
+The answers the server gives on its own, before anything reaches GitLab (an unknown action or parameter, a destructive action without confirmation, an action withheld from the session), are a sentence of prose instead, quoted below where each is described.
 
 ## Error classification
 
-Every error from the GitLab API is classified by HTTP status code into an actionable message:
+### GitLab's answers
 
-| Status Code | Classification               | Message                                                                      |
-| ----------- | ---------------------------- | ---------------------------------------------------------------------------- |
-| 400         | Bad request                  | Check your input parameters                                                  |
-| 401         | Authentication or permission | Invalid or expired `GITLAB_TOKEN`, or a permission refusal answered with 401 |
-| 403         | Permissions                  | Your token lacks the required permissions                                    |
-| 404         | Not found                    | Missing, inaccessible, or above your GitLab tier                             |
-| 405         | Not allowed                  | The action does not apply to the resource's current state                    |
-| 409         | Conflict                     | The resource already exists or there is a state conflict                     |
-| 422         | Validation                   | GitLab rejected the request due to invalid data                              |
-| 429         | Rate limit                   | Too many requests, wait before retrying                                      |
-| 500         | Server error                 | GitLab internal server error                                                 |
-| 502         | Bad gateway                  | GitLab is temporarily unavailable                                            |
-| 503         | Maintenance                  | GitLab is under maintenance or overloaded                                    |
+Every answer GitLab gives with an error status, over REST or GraphQL, is classified by its status:
 
-Network-level errors are also classified:
+| Status                 | Classification                                                                                                                                                                                                                                                                           | What to do                                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400                    | `bad request: check your input parameters`                                                                                                                                                                                                                                               | Correct the arguments; GitLab's message, when there is one, names the field it rejected                                                                                     |
+| 401                    | `unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal` | Try the token on another call; see [why a 401 names two causes](#why-a-401-names-two-causes)                                                                                |
+| 401, the token refused | `authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it`                                                                                                                       | Create a new token with `api`, or `read_api` for a read-only surface                                                                                                        |
+| 403                    | `access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings`                                  | Check the token's scopes, your role on the project or group, and the instance's settings. A fine-grained token's refusal is [described apart](#fine-grained-token-refusals) |
+| 404                    | `not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct`                                                                                                                                         | Check the ID or path, that you can see the object, and the instance's tier                                                                                                  |
+| 405                    | `method not allowed: the action cannot be performed on this resource in its current state`                                                                                                                                                                                               | Check the object's state: closed, merged, archived or protected                                                                                                             |
+| 409                    | `conflict: the resource already exists or there is a state conflict`                                                                                                                                                                                                                     | Read the existing object before creating it again                                                                                                                           |
+| 422                    | `validation failed: GitLab rejected the request due to invalid data`                                                                                                                                                                                                                     | Read GitLab's message for the value it rejected                                                                                                                             |
+| 429                    | `rate limited: too many requests, please wait before retrying`                                                                                                                                                                                                                           | Wait; the request has already been [retried](#retries)                                                                                                                      |
+| 500                    | `GitLab internal server error: the server encountered an unexpected condition`                                                                                                                                                                                                           | Try again later, or ask the instance's administrator                                                                                                                        |
+| 502                    | `GitLab is temporarily unavailable (bad gateway): try again shortly`                                                                                                                                                                                                                     | Wait and try again                                                                                                                                                          |
+| 503                    | `GitLab is under maintenance or overloaded (service unavailable): try again shortly`                                                                                                                                                                                                     | Wait and try again                                                                                                                                                          |
+| Any other              | `GitLab returned HTTP <status>`                                                                                                                                                                                                                                                          | Read GitLab's message and the cause                                                                                                                                         |
 
-| Error Type         | Message                                      |
-| ------------------ | -------------------------------------------- |
-| Connection refused | GitLab server is unreachable                 |
-| DNS failure        | GitLab server hostname could not be resolved |
-| Timeout            | Request to GitLab timed out                  |
-| TLS/SSL            | TLS/SSL handshake failed                     |
+An error GitLab reports inside a `200` answer has no status to classify; see [GraphQL errors](#graphql-errors).
 
-## Error wrapping functions
+### Requests GitLab did not answer
 
-The server uses five error handling helpers, chosen based on the operation type:
+These are checked before GitLab's answer is looked for, in the order of the table, so a call the client canceled is reported as canceled even when the failure underneath looks like a broken connection:
+
+| Situation                                                                                                                           | Classification                                                                                                         | What to do                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The client canceled the call, or abandoned the HTTP request carrying it                                                             | `the request was canceled by the client`                                                                               | Nothing is wrong; send the call again if it is still wanted                                                                                                          |
+| The call ran past a deadline, such as the action deadline (`GITLAB_MCP_ACTION_TIMEOUT`, 65 minutes by default)                      | `the request exceeded its deadline and was canceled`                                                                   | Narrow the call (a smaller page, a shorter wait), or raise the deadline                                                                                              |
+| HTTP mode could not tell which credential the request belongs to                                                                    | `this request could not be attributed to a credential and was not sent to GitLab; retry, and report it if it persists` | Retry, and report it if it persists. The message carries no cause and no hint, since nothing reached GitLab                                                          |
+| The server refused to connect to the address ([outbound connections](/gitlab-mcp-server/operations/security/#outbound-connections)) | `this server refused to connect to that address, so the request never left the process`                                | The suggestion names `--allow-private-instances` for a GitLab or an object store on your own private network; cloud metadata addresses stay refused whatever it says |
+| Connection refused                                                                                                                  | `GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running`                | Check `GITLAB_URL` and that the instance is up                                                                                                                       |
+| DNS failure                                                                                                                         | `GitLab server hostname could not be resolved (DNS error). Check GITLAB_URL`                                           | Check the host name in `GITLAB_URL` and the machine's DNS                                                                                                            |
+| Timeout                                                                                                                             | `Request to GitLab timed out. The server may be overloaded or unreachable`                                             | Try again later, and check the network path to the instance                                                                                                          |
+| TLS handshake                                                                                                                       | `TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true`                     | Prefer trusting the instance's CA ([TLS](/gitlab-mcp-server/enterprise/tls/)); skipping verification is for development only                                         |
+| Any other network error                                                                                                             | `network error reaching GitLab (Get)`, naming the HTTP method of the request that failed (`Get`, `Post`)               | Check proxies and the network path to the instance                                                                                                                   |
+| Anything else                                                                                                                       | `unexpected error`                                                                                                     | Read the cause after it                                                                                                                                              |
+
+### Why a 401 names two causes
+
+GitLab answers `401` for two different things. Its API guard answers it for a credential it cannot use, and a family of REST routes answers it for a **valid** credential that lacks a permission: merging, cancelling auto-merge, approving and resetting approvals, adding to a merge train, push mirrors (GitLab's remote mirrors API), access token reads, lists and rotation, external status checks, security settings, group SAML links, removing an award emoji, updating a group and linking a fork ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403)). Approving a merge request you opened, on an instance that prevents approval by the author, is the common one.
+
+The status cannot tell the two apart, so the plain `401` sentence names both and ends with the test that separates them: if the same token works for other calls, the `401` is a permission refusal. It opens with "unauthorized" rather than "authentication failed", because for a permission refusal authentication succeeded.
+
+The server says the token itself was refused only when GitLab said so, in one of two ways:
+
+- **A REST body carrying the RFC 6750 code `invalid_token`.** GitLab's API guard writes it for an expired, revoked or impersonation-disabled token, and nothing else in the REST API writes it.
+- **Any `401` from the GraphQL endpoint.** That endpoint answers `401` only from its authentication checks, with `{"errors":[{"message":"Invalid token"}]}`, and refuses a field the caller may not see with a `200`, so its `401` cannot be a permission refusal. One of those checks is the scope: it authenticates a token only when the token carries `api` or `read_api`, and answers one carrying neither with that same body, where REST answers the same token `403 insufficient_scope`. That is why the sentence names the scope.
+
+The opposite verdict cannot be read off an answer: a token GitLab has no record of at all is answered with the same bytes as a permission refusal, so a REST `401` without the code keeps the sentence that names both causes. In HTTP mode the same rule decides what a `401` does to the caller's pooled credential; see [Refused calls](/gitlab-mcp-server/operations/http-server/#refused-calls).
+
+### Fine-grained token refusals
+
+A fine-grained personal access token carries a grant of named permissions, fixed when it is created, and GitLab judges every call against it after the token authenticates. Its refusal is not the ordinary `403`, none of whose three causes is what is missing, so the server reads it first and describes it in GitLab's terms. The evidence is GitLab's own:
+
+- **Over REST**, a `403` whose body carries the code `insufficient_granular_scope`, with GitLab's sentence as its `error_description`. The code is the evidence, so a sentence the server cannot read is still described as a fine-grained refusal.
+- **Over GraphQL**, a mutation outside the grant is answered `200`, with the mutation's field `null` and GitLab's sentence as one `errors[]` entry. Each entry is read whole, including where the GitLab client's achievement and scan profile services join several into one error with semicolons.
+- **GitLab's generic GraphQL refusal**, `The resource that you are attempting to access does not exist or you don't have permission to perform this action`, which a mutation declaring no fine-grained permission answers, is left as it is: GitLab answers every token with those words wherever a permission is missing.
+
+| GitLab's sentence                                                                                                                               | What the classification says                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Access denied: This operation requires a fine-grained personal access token with the following project permissions: [Merge Request: Approve].` | `access denied: this call needs the fine-grained project permission [Merge Request: Approve], which the token was not granted`, then that a grant cannot be changed, so the way out is a new fine-grained token that grants it or a classic token where the group does not refuse one, and that a classic token refused this way is under a group that requires fine-grained tokens |
+| `Access denied: This operation doesn't support fine-grained personal access tokens.`                                                            | `access denied: GitLab declares no fine-grained permission for this operation, so no fine-grained personal access tokens can call it on this instance`, then the classic token way out                                                                                                                                                                                              |
+| `Access denied: Fine-grained personal access tokens are not yet supported.`                                                                     | `access denied: fine-grained personal access tokens are not enabled for this token's user on this instance (GitLab's granular_personal_access_tokens feature flag), so GitLab refuses every call the token makes`, then a classic token or the instance's administrator                                                                                                             |
+| `404 Not Found`, as a GraphQL `errors[]` entry                                                                                                  | `not found: GitLab could not find what this call names, or the token may not see it`, then that a fine-grained token sees only the projects and groups its grant covers                                                                                                                                                                                                             |
+
+The description reaches the caller whichever way the error travelled, in front of the cause and never twice. No role, licence or owner hint follows it ([corrective hints](#corrective-hints)). [Fine-grained Tokens](/gitlab-mcp-server/operations/fine-grained-tokens/#gitlabs-own-refusals) covers what to grant, and the refusals the server itself gives such a token.
+
+## How a message is composed
+
+An error message takes one of four forms, and the handler picks one by what it knows about the failure. The get actions of 22 domains answer a `404` with a result rather than an error ([below](#not-found-answers)).
 
 <Tabs>
-  <TabItem label="WrapErr">
-    **Read-only operations** — Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
+  <TabItem label="Classification only">
+    `<operation>: <classification>: <cause>`, for a failure no detail of the handler's improves. Here an nginx error page answered for GitLab; the page is not quoted, so the cause ends at the status:
 
     ```text
-    list_issues: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
+    list project service accounts: GitLab is temporarily unavailable (bad gateway): try again shortly: GET https://gitlab.example.com/api/v4/projects/42/service_accounts: 502
     ```
 
   </TabItem>
-  <TabItem label="WrapErrWithMessage">
-    **Mutating operations** — Used for `create`, `update`, and `delete` operations. Includes the specific error detail extracted from the GitLab API response:
+  <TabItem label="With GitLab's message">
+    `<operation>: <classification> (<GitLab's message>): <cause>`, for most writes. The parentheses appear only when GitLab's message says more than the status: a bare `{message: 403 Forbidden}` adds nothing and is left out. An issue list refused for an expired token:
 
     ```text
-    fileCreate: bad request — A file with this name already exists: POST .../files: 400
+    issueList: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it ({error: invalid_token}, {error_description: Token is expired. You can either do re-authorization or token refresh.}): GET https://gitlab.example.com/api/v4/projects/42/issues: 401 {error: invalid_token}, {error_description: Token is expired. You can either do re-authorization or token refresh.}
     ```
-
-    The server extracts the detailed error message from GitLab's API response, handling nested formats like `{message: {base: [text]}}`, and truncates at 300 characters.
 
   </TabItem>
-  <TabItem label="WrapErrWithHint">
-    **Known corrective actions** — Used when the corrective action for a specific error is known. Appends an actionable suggestion:
+  <TabItem label="With a suggestion">
+    `<operation>: <classification> (<GitLab's message>). Suggestion: <hint>: <cause>`, when the handler knows the next step for this answer:
 
     ```text
-    branchProtect: conflict — Protected branch rule already exists.
-    Suggestion: use branch.get_protected to view current rules
+    fileCreate: bad request: check your input parameters ({message: A file with this name already exists}). Suggestion: the file may already exist. Use repository.file_update to modify an existing file, or verify the branch name: POST https://gitlab.example.com/api/v4/projects/42/repository/files/README.md: 400 {message: A file with this name already exists}
     ```
 
-    A hint names the action by its canonical ID (`branch.get_protected`), which every tool surface resolves, rather than by a tool name, which only one of them registers.
+  </TabItem>
+  <TabItem label="Suggestion for one status">
+    The suggestion form for one status, and the form with GitLab's message for every other. Protecting a branch without the role for it:
+
+    ```text
+    branchProtect: access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings. Suggestion: protecting branches requires Maintainer or Owner role: POST https://gitlab.example.com/api/v4/projects/42/protected_branches: 403 {message: 403 Forbidden}
+    ```
 
   </TabItem>
 </Tabs>
 
-### Decision tree
+## Not-found answers
 
-| Scenario                                    | Function                |
-| ------------------------------------------- | ----------------------- |
-| Read-only operation (list, get, search)     | `WrapErr`               |
-| Mutating operation (create, update, delete) | `WrapErrWithMessage`    |
-| Specific error with known fix               | `WrapErrWithHint`       |
-| Status-specific hint (single code)          | `WrapErrWithStatusHint` |
-| Get operation returning 404                 | `NotFoundResult`        |
+The get actions of 22 domains answer GitLab's `404` with an informational result instead of an error: award emoji, badges, branches, dependency firewall, deployments, environments, files, groups, group service accounts, labels, merge requests, milestones, Orbit, packages, pipelines, projects, project service accounts, releases, snippets, tags, users and wikis. A domain answers this way for every get variant it has: project and group badges alike, and each award emoji target.
 
-```mermaid
-flowchart TD
-    A[Error Occurred] --> B{Operation type?}
-    B -->|list / get / search| C{Is HTTP 404<br/>on GET?}
-    C -->|Yes| D[NotFoundResult]
-    C -->|No| E[WrapErr]
-    B -->|create / update / delete| F{Known fix<br/>for this error?}
-    F -->|Yes| G{Specific HTTP<br/>status code?}
-    G -->|Yes| H[WrapErrWithStatusHint]
-    G -->|No| I[WrapErrWithHint]
-    F -->|No| J[WrapErrWithMessage]
-
-    style D fill:#3b82f6,color:#fff
-    style E fill:#6b7280,color:#fff
-    style H fill:#f59e0b,color:#000
-    style I fill:#f59e0b,color:#000
-    style J fill:#ef4444,color:#fff
-```
-
-### NotFoundResult — Informational 404 responses
-
-For `get` handlers, 404 errors are treated as informational rather than failures. Instead of returning an opaque Go error (logged at ERROR level), the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints:
+`branch.get` for a branch that does not exist answers:
 
 ```markdown
 ## ❓ Branch Not Found
 
-Branch `feature/old` was not found in the project.
+The branch **"feature/old" in project 42** does not exist or is not accessible with your current permissions.
 
+---
 💡 **Next steps:**
-
 - Use action 'branch.list' to list the project's branches
-- Check branch name spelling and case sensitivity
+- Verify the branch name is spelled correctly (case-sensitive)
 ```
 
-This pattern is applied through a shared formatter in each of 22 domains, so every get handler of a domain answers the same way. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
+- The result still carries `isError: true`, since the call could not do what was asked, and no `structuredContent`.
+- The server logs it at INFO as a completed call marked `is_error: true`, not at ERROR as a failure.
+- The identifier is written as the caller wrote it, with the documented parameter aliases resolved and a number printed whole, and escaped so it cannot add a link or a tag to the card.
+- In a fine-grained session, a not-found answer of an action that reads GitLab over GraphQL also carries a note that not found may mean the token cannot see the object ([what an empty answer can mean](/gitlab-mcp-server/operations/fine-grained-tokens/#what-an-empty-answer-can-mean)).
+
+Every other action answers a `404` with an ordinary error: the `not found` classification, usually followed by a suggestion naming the action to check with.
 
 ## Corrective hints
 
-Where the fix for an error is known, the handler attaches it at the call site: `WrapErrWithStatusHint` appends the hint only when the response carries one HTTP status (a `422` validation failure, a `404`, a `409`), falling back to `WrapErrWithMessage` for every other status, and `WrapErrWithHint` always appends it, which is what a GraphQL error reported inside a `200` response needs, since it carries no status code. A GraphQL refusal answered with an error status carries one, and `WrapErrWithStatusHint` reads it there as it does over REST. The suggestion travels in the error text as `Suggestion: ...`, so the AI assistant can correct its request without additional API calls.
+Where the fix for an error is known, the handler attaches it. Some hints follow only one HTTP status (a `422` validation failure, a `404`, a `409`), and any other status gets GitLab's message with no suggestion; others follow every answer, which is what a GraphQL error reported inside a `200` response needs, since it carries no status code. A GraphQL refusal answered with an error status carries one, and a hint bound to a status reads it there as it does over REST. The suggestion travels in the error text as `Suggestion: ...`, so the AI assistant can correct its request without additional API calls. A hint names an action by its canonical ID (`branch.list`), which every tool surface resolves, rather than by a tool name, which only one of them registers.
 
-## Error response format
+A hint is left out where it cannot be right:
 
-When a handler answers with an error result rather than a Go error, the response is a Markdown block with structured diagnostic fields:
+- **A request that could not be attributed to a credential** carries no hint: a hint advises about GitLab's state, and GitLab was never asked.
+- **A destination this server refused** gets one suggestion whatever the handler wrote: the `--allow-private-instances` flag, the one thing that changes that outcome.
+- **A refusal of a fine-grained token's grant** drops the handler's hint, since a hint written for GitLab's ordinary refusal names a role, a licence, an owner or an administrator, and none of them is what is missing.
+- **A hint naming a role, a licence or an owner** follows only an answer that can be a permission refusal: a REST `401` or `403` whose body carries no RFC 6750 error code and does not refuse the account itself (blocked, deactivated, pending approval, an internal user, the Terms of Service not accepted, the primary email unconfirmed, the password expired). It never follows the verdict that GitLab refused the token, which it would contradict.
 
-```markdown
-## ❌ Error: branch/list
+### Permission hints on a 401
 
-**Message**: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal
-**HTTP Status**: 401 Unauthorized
-**Details**: GET https://gitlab.example.com/api/v4/projects/42/repository/branches: 401 {message: 401 Unauthorized}
+Every action whose GitLab route refuses a permission with `401` carries a suggestion naming the permission: the route family listed [above](#why-a-401-names-two-causes). Two kinds of action differ. The four group SAML link actions (`group.saml_link_add`, `group.saml_link_delete`, `group.saml_link_get`, `group.saml_link_list`) add their hint to every error, a rejected token included. The self-rotations (`access.token_personal_rotate_self`, `access.token_project_rotate_self`, `access.token_group_rotate_self`) add a hint about the calling token to every `401`, which agrees with the verdict that the token was refused rather than contradicting it.
+
+### Routes whose 401 and 403 mean different things
+
+Some routes answer one cause with `401` and another with `403`, and their handlers read the status to tell them apart, so the hint follows the cause:
+
+| Actions                                                                                                                              | A `401` means                                                                | A `403` means                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `external_status_check.list_project_mr_checks`, `external_status_check.set_project_mr_status`, `external_status_check.retry_project` | The project's namespace lacks the Ultimate licence                           | Your role on the merge request falls short                                                                                                                                      |
+| `project.create_fork_relation`                                                                                                       | The namespace of `project_id` is not one `forked_from_id` may be forked into | You lack the Owner role on `project_id`, the right to create forks in its top-level namespace (Maintainer or Owner when that is a group), or the right to fork `forked_from_id` |
+| `project.security_settings_get`, `project.security_settings_update`, `group.security_settings_update`                                | Your role falls short                                                        | The instance's licence lacks the feature (secret push protection needs Ultimate); on a project update, also an archived project or a setting the instance enforces              |
+| `merge_train.add`                                                                                                                    | You may not merge the merge request into its target branch                   | The read check every merge train route runs first                                                                                                                               |
+
+## GraphQL errors
+
+The domains that read GitLab over GraphQL report a failure in one of three ways:
+
+- **A refusal with an error status** is classified by its status like any REST answer, and a `401` from GraphQL always names the token. The GitLab client appends `(GraphQL errors: <message>, <message>)` to the cause, listing every `errors[].message` of the body. The server keeps that list on one line, caps it at 300 characters as a whole, and drops it when the body has a top-level key other than `data`, `errors` and `extensions`, since GitLab did not compose such a body. A `404` arrives as `failed to execute GraphQL query: 404 Not Found`, without the list.
+- **An error inside a `200` answer** has no status. A handler that reads the top-level `errors[]` reports `<operation> GraphQL errors: <message>; <message>`, and one that reads a mutation's own `errors` field reports `<operation> mutation errors: <message>; <message>`. Where a handler wraps such an error, the classification in front reads `unexpected error`, because there is no status to classify; GitLab's words after it are the part to read:
+
+  ```text
+  create security attributes: unexpected error. Suggestion: verify namespace_id and category_id; requires permission on a Premium or Ultimate namespace: securityAttributeCreate mutation errors: <GitLab's message>
+  ```
+
+- **A refused mutation** answers with its payload `null` and GitLab's reason among the top-level `errors[]`. Mutation handlers read the payload beside those entries, so a refusal is reported with GitLab's reason rather than as a change that happened.
+
+## Argument errors
+
+Arguments are checked before anything is sent to GitLab, in up to three places, and each words its refusal its own way:
+
+1. **The tool's input schema.** Arguments the schema refuses (a wrong type, a value outside an enum, a property the schema does not declare where it is closed) are refused before the server's handler runs, with a message that starts `validating "arguments":`. An individual tool's schema is closed, a meta tool's is closed under `GITLAB_MCP_META_PARAM_SCHEMA=full`, and so is the envelope of `gitlab_execute_action`, which is why an action's parameter written beside `action` rather than inside `params` is refused this way.
+2. **The surface's own check.** On the dynamic surface: `gitlab_execute_action/<action>: invalid params.`, followed by `Unknown params: ...`, a `Did you mean ...?` suggestion, `Missing required params: ...` and the `Valid params: ...` (see [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/)). On the meta surface: `gitlab_issue/get: missing required params: issue_iid. Put action-specific fields under params.`, `'params' is required for this action. Required params: ...`, or, for an action the tool does not have, `gitlab_issue: unknown action "x". Valid actions: ...`.
+3. **The action's own decoding.** Every key must be a parameter of the action, and any other is refused rather than dropped: `invalid params for this action: json: unknown field "foo"`, which the meta surface opens with the tool and action (`gitlab_issue/get: ...`). The reserved `confirm` key is taken out first. Where the schema is open, a few documented aliases are translated to their canonical names before this check (`mr_iid` to `merge_request_iid`, `commit_id` to `commit_sha`), and a number sent as a string is converted; a closed schema refuses an alias in the first step.
+
+A required value that arrives empty or zero is refused with a message naming the exact parameter, aimed at the names models confuse (`milestone_id` for `milestone_iid`, `branch` for `branch_name`, `iid` for `merge_request_iid`):
+
+```text
+milestoneGet: milestone_iid is required (must be > 0). Ensure you use the exact parameter name 'milestone_iid' as documented in the tool description
+branchCreate: branch_name is required (must be non-empty). Ensure you use the exact parameter name 'branch_name' as documented in the tool description
 ```
 
-The structured response includes:
+A handler that checks a value against a fixed set names the values it accepts, such as `invalid status "approve", must be one of: approved, rejected`.
 
-| Field           | Description                                                    |
-| --------------- | -------------------------------------------------------------- |
-| **Heading**     | The domain and action that failed                              |
-| **Message**     | The classified error message                                   |
-| **HTTP Status** | GitLab's status code and its reason phrase, when there was one |
-| **Details**     | The request line and the message GitLab returned, when present |
+## Destructive actions and confirmation
 
-## Transient vs permanent errors
+An action the catalog classifies as destructive asks for confirmation before it runs; [Security](/gitlab-mcp-server/operations/security/#destructive-actions) explains which actions those are and why. Three things are decided first: an action a fine-grained session may not run is refused, read-only mode has removed every write, and safe mode previews a write instead of running it, so it asks nothing.
 
-:::danger[Do not retry permanent errors]
-4xx errors (except 429) indicate a problem with the request itself — retrying will produce the same result. Fix the input parameters or configuration instead.
-:::
+On the meta and individual surfaces a destructive call proceeds on the first of these that holds:
 
-The server classifies errors as **transient** (retryable) or **permanent**:
+1. `GITLAB_MCP_YOLO_MODE` is truthy (`1`, `true` or `yes`), or, when it is unset, `AUTOPILOT` is.
+2. The call carries `"confirm": true` (inside `params` on the meta surface).
+3. The client supports elicitation and the user approves the prompt, `Confirm gitlab_branch/delete? This action may be irreversible.` On protocol 2026-07-28 the question travels as an input request the client answers by sending the call again ([Elicitation](/gitlab-mcp-server/capabilities/elicitation/)).
 
-| Type      | Status Codes                           | Behavior                                      |
-| --------- | -------------------------------------- | --------------------------------------------- |
-| Transient | 429, 5xx, timeouts, connection refused | Safe to retry after a delay                   |
-| Permanent | 4xx (except 429)                       | Do not retry — fix the input or configuration |
+Otherwise it **fails closed** and nothing reaches GitLab: `Confirm gitlab_branch/delete? This action may be irreversible. The connected client cannot prompt for confirmation. Re-send with confirm=true only after the user explicitly approves this operation.`
+
+When the user is asked, every answer but an approval returns an error result, since the action produced nothing:
+
+| Answer                      | Result                                                                                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declined                    | `The user declined this operation. Do not retry it; ask what they would like instead.`                                                             |
+| Dismissed without an answer | `The confirmation was dismissed without an answer. Nothing was changed; you may ask again if the user still wants this.`                           |
+| Answered without confirming | `Operation canceled by user.`                                                                                                                      |
+| The exchange failed         | `Confirmation failed: <reason>. The action was not executed. Re-send with "confirm": true only after the user explicitly approves this operation.` |
+
+A confirmation state the server did not issue is a protocol fault rather than an answer, and is refused as a JSON-RPC invalid-params error.
+
+**The dynamic surface asks nothing.** `gitlab_execute_action` refuses a destructive action sent without a top-level `confirm: true` before it dispatches anything: `gitlab_execute_action: action "branch.delete" is destructive. Re-send with confirm=true only after the user explicitly approves this operation.` It does not read `GITLAB_MCP_YOLO_MODE` or `AUTOPILOT`, so on the default surface the confirmation is always the caller's `confirm: true`.
+
+## What an error leaves out
+
+Error text is built to let a model correct its request without carrying anything it should not:
+
+- **GitLab's message is bounded.** It is flattened onto one line, with control characters removed, and cut at 300 characters, in the parentheses and in the cause alike. GitLab's messages often quote input somebody else chose, a branch name or a title, and with its line breaks intact such a quote could add structure to the text a model reads.
+- **A body GitLab did not compose is dropped, not quoted**: one that is not JSON (a proxy's error page, a captive portal), and a JSON object with a top-level key GitLab's error body never has (anything but `message`, `error` and `error_description`). Such pages carry internal host names and request identifiers. The status and the classification still say what happened.
+- **The request line is the only part of the request repeated.** The cause names the method, scheme, host and path, so what the call put in the path (a project path, an IID, a file path) appears there. The query string, the request body, the headers and the token never do, and neither does GitLab's request ID.
+- **A handler's own validation message may quote the value it refused**, an enumerated value or a ref name, so the caller sees what it sent.
+
+The `tool call failed` line the server logs carries the same bounded text.
+
+## Retries
+
+The server does not sort errors into transient and permanent, and it never retries a tool call. The one retry is the GitLab client's own: client-go, through go-retryablehttp, re-sends a failed request at most twice before the error reaches the handler, under the policy this server sets:
+
+| Failure                                                                                                                                                         | Re-sent                                                                                                                          | Wait before each re-send                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `429 Too Many Requests`                                                                                                                                         | For every method                                                                                                                 | About 0.7 seconds, then 1.4, or until GitLab's `RateLimit-Reset` when that is later, never more than 5 seconds |
+| A `5xx` other than `501`, or an answer with no status                                                                                                           | Only for a method that is safe to repeat (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`): never a `POST`, so never a GraphQL request | About 0.7 seconds, then 1.4                                                                                    |
+| A connection that failed before the request was sent: refused, a failed dial, a temporary DNS failure (not a name that does not exist), a TLS handshake timeout | For every method                                                                                                                 | About 0.7 seconds, then 1.4                                                                                    |
+| Anything else, including a call that was canceled or ran past its deadline                                                                                      | No                                                                                                                               | No wait: the error is reported at once                                                                         |
+
+Each wait adds up to 0.3 seconds of jitter, and a `RateLimit-Reset` further out than 5 seconds is waited for only 5 seconds, so the `429` is re-sent before the window reopens and is usually what reaches the assistant. What that means for the assistant reading the error:
+
+- A `429`, or a `5xx` on a read, that reaches it has already been sent three times, so wait before trying again rather than at once.
+- A write answered with a `5xx` was not re-sent, because GitLab may have acted on it before failing to answer. Read the object before writing again, or the retry can create a duplicate.
+- Any other `4xx` describes the request, and sending it again gets the same answer: fix the arguments, the token or the role the message names.
+
+In HTTP mode the server's own rate limit refuses a call before it reaches GitLab, with an error result of its own; see [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/#rate-limiting).
 
 ## Example error scenarios
 
-### Invalid token
-
-```text
-❌ list_projects: authentication failed: GitLab rejected the token (GITLAB_TOKEN) itself as invalid, expired, revoked or without the api or read_api scope, so renew or replace it
-💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
-```
-
-GitLab says so explicitly for an expired, revoked or impersonation-disabled token, and for any 401 from its GraphQL endpoint, a token without the `api` or `read_api` scope included. Those are the cases where the message names the token alone.
-
 ### Permission refused with 401
 
-GitLab answers some permission refusals with 401 rather than 403: approving a merge request you opened on an instance that prevents approval by the author, or merging without push access to the target branch. The status alone cannot say which cause applies, so the message names both, and the handler's suggestion names the permission:
+GitLab answers some permission refusals with `401` rather than `403`: approving a merge request you opened on an instance that prevents approval by the author, or merging without push access to the target branch. The status alone cannot say which cause applies, so the classification names both, and the handler's suggestion names the permission:
 
 ```text
-❌ mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions
+mrApprove: unauthorized: either the token (GITLAB_TOKEN) is invalid or expired, or it is valid and lacks a permission this action needs, since some GitLab endpoints answer a missing permission with 401 rather than 403. If the token works for other calls, treat this as a permission refusal. Suggestion: you may be the MR author (self-approval not allowed) or lack sufficient permissions: POST https://gitlab.example.com/api/v4/projects/42/merge_requests/7/approve: 401 {message: 401 Unauthorized}
 ```
 
-Every action whose GitLab route refuses a permission this way carries a suggestion naming it: merging and cancelling auto-merge, approving and resetting approvals, adding to a merge train, push mirrors, access token reads, lists and rotation, external status checks, security settings, removing an award emoji, updating a group and linking a fork. The suggestion is left out when GitLab says the token itself was refused, or that it will not serve the account at all (blocked, deactivated, pending approval, the Terms of Service not accepted and the like), since the message has already said so and a missing permission cannot be the reason.
+GitLab's `{message: 401 Unauthorized}` only repeats the status, so it is not repeated in parentheses.
 
 ### Permission denied
 
+A `403` the handler has no hint for carries the three possible causes, and GitLab's `{message: 403 Forbidden}` in the cause:
+
 ```text
-❌ create_issue: access denied — your token lacks the required permissions
-Detail: 403 Forbidden
-💡 Ensure the token has api scope and you have Developer+ access to the project
+issueCreate: access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings: POST https://gitlab.example.com/api/v4/projects/42/issues: 403 {message: 403 Forbidden}
 ```
 
-### Resource conflict
+### Not found, outside the 22 domains
+
+`issue.get` is not one of the actions that answer with a not-found card, so its `404` is an error, with a suggestion and the request-less cause every `404` has:
 
 ```text
-❌ branchProtect: conflict — Protected branch rule already exists
-💡 Use branch.get_protected to view current rules, or branch.update_protected to modify them
-```
-
-### Validation error
-
-```text
-❌ create_issue: validation failed — title is too long (maximum is 255 characters)
-💡 Shorten the title to 255 characters or less
+issueGet: not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct. Suggestion: verify project_id and issue_iid; use issue.list to see existing issues in the project: 404 Not Found
 ```
 
 <FAQ />

@@ -44,7 +44,7 @@ head:
             "@type": "ListItem",
             "position": 3,
             "name": "Code review",
-            "description": "Merge request review surface — approvals, discussions, draft notes and diffs: gitlab_mr_review.",
+            "description": "Merge request review surface (notes, discussions, draft notes and diffs): gitlab_mr_review.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#code-review"
           },
           {
@@ -79,7 +79,7 @@ head:
             "@type": "ListItem",
             "position": 8,
             "name": "Discovery & utilities",
-            "description": "Feature flags, model registry, CI/CD catalog, custom emoji and repository storage moves, plus the standalone project-resolution and interactive creation tools: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_storage_move, gitlab_discover_project, gitlab_interactive_*.",
+            "description": "Feature flags, model registry, CI/CD catalog, custom emoji, achievements and repository storage moves, plus the server diagnostics and the standalone project-resolution and interactive creation tools: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_achievement, gitlab_storage_move, gitlab_server, gitlab_discover_project, gitlab_interactive_*.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#discovery--utilities"
           }
         ]
@@ -128,15 +128,15 @@ head:
       }
 faq:
   - q: "What is the difference between meta-tool mode and dynamic mode?"
-    a: "Both meta-tool and dynamic mode reduce token cost compared with individual mode, but they package operations differently. **Meta-tool mode** exposes a fixed list of {{meta.base}} domain-level tools, each routing on an `action` parameter — useful when a client works best with a stable, browsable tool list. **Dynamic mode** exposes only two tools and resolves operations on demand through search, giving the smallest possible tool list. Both share the same handlers and safety behavior."
+    a: "Both meta-tool and dynamic mode reduce token cost compared with individual mode, but they package operations differently. **Meta-tool mode** exposes a fixed list of tools ({{meta.base}} on Free/CE, up to {{meta.gitlab_com}} on GitLab.com Ultimate), most of them domain-level tools routing on an `action` parameter, useful when a client works best with a stable, browsable tool list. **Dynamic mode** exposes only two tools and resolves operations on demand through search, giving the smallest possible tool list. Both share the same handlers and safety rules, apart from how a destructive call is confirmed."
   - q: "Do all modes support the same GitLab operations?"
-    a: "Yes. Dynamic, meta-tool, and individual modes are all projected from one canonical action catalog, so they cover the same GitLab REST and GraphQL operations. They differ only in packaging, not capability. Read-only filtering, safe-mode previews, destructive-action confirmations, token-scope filtering, and result formatting behave identically regardless of the mode you choose."
+    a: "Yes. Dynamic, meta-tool, and individual modes are all projected from one canonical action catalog, so they cover the same GitLab REST and GraphQL operations. They differ in packaging, not capability. Read-only filtering, safe mode, the destructive classification, token-scope filtering, and result formatting are shared by every mode. How a destructive call is confirmed is the one difference: the default dynamic surface needs `confirm: true` on every one and ignores `GITLAB_MCP_YOLO_MODE`."
   - q: "How many tools does each mode expose?"
-    a: "Individual mode exposes {{tools.free}} tools on CE, {{tools.ultimate_self_managed}} on self-managed Enterprise/Premium, and {{tools.gitlab_com}} on GitLab.com when Orbit is available. Meta-tool mode exposes {{meta.base}} base domain tools (more with the Enterprise catalog). Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available."
+    a: "Individual mode exposes {{tools.free}} tools on Free/CE, {{tools.premium}} on self-managed Premium, {{tools.ultimate_self_managed}} on self-managed Ultimate and {{tools.gitlab_com}} on GitLab.com Ultimate, where Orbit is available. Meta-tool mode exposes {{meta.base}} tools on Free/CE, 40 on self-managed Premium, {{meta.self_managed_enterprise}} on self-managed Ultimate and {{meta.gitlab_com}} on GitLab.com Ultimate. Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available."
   - q: "Do Enterprise tools require a paid GitLab license?"
-    a: "Yes. Enterprise meta-tools — such as merge trains, DORA metrics, vulnerabilities, and compliance policies — require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls return permission errors because the features are not licensed."
+    a: "Yes. Enterprise meta-tools, such as merge trains, DORA metrics, vulnerabilities, and compliance policies, require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls fail: Community Edition does not serve those endpoints and answers 404, and an unlicensed Enterprise Edition refuses them."
   - q: "What are the three tool modes in GitLab MCP Server?"
-    a: "GitLab MCP Server offers three tool modes that expose the same GitLab API surface with different packaging. Dynamic mode (the default) exposes two public tools that search and execute a canonical action catalog. Meta-tool mode groups related operations into domain-level tools that route on an action parameter. Individual mode registers one MCP tool per GitLab operation. All three modes share identical handlers, schemas, and safety behavior."
+    a: "GitLab MCP Server offers three tool modes that expose the same GitLab API surface with different packaging. Dynamic mode (the default) exposes two public tools that search and execute a canonical action catalog. Meta-tool mode groups related operations into domain-level tools that route on an action parameter. Individual mode registers one MCP tool per GitLab operation. All three modes share identical handlers, typed schemas, and safety rules, apart from how a destructive call is confirmed."
   - q: "Which tool mode is the most token-efficient?"
     a: "Dynamic mode is the most token-efficient because it exposes only two public tools regardless of how many GitLab operations exist. The assistant first calls gitlab_find_action to retrieve an action and its schema, then calls gitlab_execute_action. This keeps the tool list small in the model's context window while still reaching every GitLab operation through the shared action catalog."
 ---
@@ -148,17 +148,17 @@ import FAQ from "../../../components/FAQ.astro";
 
 GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. It offers **three tool modes**: dynamic, meta-tool, and individual. All three reach the same GitLab API surface. They differ only in packaging, so the choice trades context cost against tool-list granularity — never capability.
 
-Every mode is projected from one **canonical action catalog**. That gives all three identical handlers, typed schemas, and safety behavior. Only the presentation changes. Dynamic mode searches and executes canonical `domain.action` IDs. Meta-tool mode groups actions by domain. Individual mode registers one tool per operation.
+Every mode is projected from one **canonical action catalog**. That gives all three identical handlers, typed schemas, and safety rules, apart from how a destructive call is confirmed. Otherwise only the presentation changes. Dynamic mode searches and executes canonical `domain.action` IDs. Meta-tool mode groups actions by domain. Individual mode registers one tool per operation.
 
 ## Which tool mode should I use?
 
 **Dynamic mode is the default, and the right choice for most assistants.** It keeps two tools in the model's context and still reaches every GitLab operation. Choose meta-tool mode when your client works better with a fixed, domain-level tool list. Choose individual mode only when a client needs every operation enumerated up front.
 
-| Mode                    | Public tools exposed                                       | Best for                                      | Relative token cost |
-| ----------------------- | ---------------------------------------------------------- | --------------------------------------------- | ------------------- |
-| **Dynamic** _(default)_ | 2 — `gitlab_find_action`, `gitlab_execute_action`          | Most assistants; lowest context overhead      | Lowest              |
-| **Meta-tool**           | {stats.meta.base} base domain tools (more with Enterprise) | A fixed, discoverable, domain-level tool list | Medium              |
-| **Individual**          | {stats.tools.free}–{stats.tools.gitlab_com} tools          | Clients that need every operation pre-listed  | Highest             |
+| Mode                    | Public tools exposed                                                                                                     | Best for                                      | Relative token cost |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------------- |
+| **Dynamic** _(default)_ | 2: `gitlab_find_action`, `gitlab_execute_action`                                                                         | Most assistants; lowest context overhead      | Lowest              |
+| **Meta-tool**           | {stats.meta.base} on Free/CE, 40 on self-managed Premium, up to {stats.meta.gitlab_com} on Ultimate                      | A fixed, discoverable, domain-level tool list | Medium              |
+| **Individual**          | {stats.tools.free} on Free/CE, {stats.tools.premium} on self-managed Premium, up to {stats.tools.gitlab_com} on Ultimate | Clients that need every operation pre-listed  | Highest             |
 
 Set the mode with the `GITLAB_MCP_TOOL_SURFACE` environment variable (`dynamic`, `meta`, or `individual`). Dynamic mode is used when `GITLAB_MCP_TOOL_SURFACE` is unset.
 
@@ -166,7 +166,7 @@ Set the mode with the `GITLAB_MCP_TOOL_SURFACE` environment variable (`dynamic`,
 
 ### How does individual mode work?
 
-Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.free} tools** for CE, **{stats.tools.ultimate_self_managed} tools** for self-managed Enterprise/Premium, or **{stats.tools.gitlab_com} tools** on GitLab.com Enterprise/Premium when Orbit is available. This gives an AI assistant maximum granularity — every operation is a distinct, individually described tool — at the cost of significant context tokens spent listing and disambiguating tools during discovery.
+Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.free} tools** on Free/CE, **{stats.tools.premium} tools** on self-managed Premium, **{stats.tools.ultimate_self_managed} tools** on self-managed Ultimate, or **{stats.tools.gitlab_com} tools** on GitLab.com Ultimate, where Orbit is available. This gives an AI assistant maximum granularity (every operation is a distinct, individually described tool) at the cost of significant context tokens spent listing and disambiguating tools during discovery.
 
 <Facts>
 	<Fact kind="exposes">
@@ -188,7 +188,7 @@ Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.
 
 ### How does meta-tool mode work?
 
-Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Ultimate**, or **{stats.meta.gitlab_com} on GitLab.com Ultimate** when Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
+Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} meta-tools on Free/CE**, **40 on self-managed Premium**, **{stats.meta.self_managed_enterprise} on self-managed Ultimate**, or **{stats.meta.gitlab_com} on GitLab.com Ultimate**, where Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
 
 ```json
 {
@@ -213,14 +213,17 @@ Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations 
 	</Fact>
 	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=meta`. Per-action call shapes stay discoverable through `gitlab://tools` and `gitlab://tools/{id}` whatever `GITLAB_MCP_META_PARAM_SCHEMA` is set to.</Fact>
 	<Fact kind="tier">
-		Premium/Ultimate add dedicated enterprise meta-tools and inject
-		enterprise-only routes into `gitlab_project`, `gitlab_group` and
-		`gitlab_issue`.
+		Premium/Ultimate add dedicated enterprise meta-tools and give seven
+		base dispatchers more actions: `gitlab_project`, `gitlab_group`,
+		`gitlab_issue`, `gitlab_merge_request`, `gitlab_environment`,
+		`gitlab_storage_move` and `gitlab_runner`.
 	</Fact>
 	<Fact kind="notCovered">
-		per-operation tool descriptions in the client's tool list: a dispatcher
-		summarises its domain, so an assistant that needs an exact schema reads
-		it from the catalog resources rather than from `tools/list`.
+		each action's exact parameter schema in `tools/list` under the default
+		`opaque` mode: a dispatcher's description carries a line of guidance per
+		action, and an assistant reads the exact schema from the catalog
+		resources (`gitlab://tools/{id}`) unless `GITLAB_MCP_META_PARAM_SCHEMA`
+		is `compact` or `full`.
 	</Fact>
 </Facts>
 
@@ -234,7 +237,7 @@ flowchart LR
 	B --> C[Existing GitLab handler]
 ```
 
-Because all three modes share the canonical action catalog, **safety behavior stays consistent across every surface**: read-only filtering, safe-mode previews, token-scope filtering, destructive-action confirmations, schemas, and result formatting are identical.
+Because all three modes share the canonical action catalog, **the safety rules come from one place**: read-only filtering, safe mode, token-scope filtering, the destructive classification, schemas, and result formatting are the same on every surface. How a destructive call is confirmed differs: the dynamic surface needs `confirm: true` on every one and ignores `GITLAB_MCP_YOLO_MODE`, as [Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions) explains.
 
 <Facts>
 	<Fact kind="exposes">
@@ -265,25 +268,27 @@ All tools follow a consistent naming pattern:
 
 ## Base meta-tools ({stats.meta.base})
 
+The {stats.meta.base} tools a Free/CE instance serves are 28 domain dispatchers, the `gitlab_server` diagnostics tool and five tools that take their arguments directly. Premium and Ultimate add actions to seven of these dispatchers; the number of actions each one has on each tier is in [Meta-tools](/gitlab-mcp-server/tools/meta-tools/#how-many-actions-does-each-meta-tool-have).
+
 ### Project management
 
-| Meta-tool        | Description                                                                                                                          | Key Actions                                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `gitlab_project` | Project CRUD, configuration, hooks, labels, milestones, members, badges, boards, integrations, Pages, and uploads                    | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload         |
-| `gitlab_issue`   | Issue lifecycle, notes, discussions, links, work items (including work item types), time tracking, award emoji, and resource events  | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*                       |
-| `gitlab_group`   | Group CRUD, subgroups, members, badges, hooks, labels, milestones, transfer, and descendant projects                                 | list, get, create, update, delete, group_label\_\*, group_milestone\_\*, group_member\_\*, badge\_\*                 |
-| `gitlab_user`    | User information, status, SSH keys, GPG keys, emails, activity, preferences, to-do items, and instance service accounts (Enterprise) | get, current, list, ssh_keys, add_ssh_key, gpg_keys, emails, get_status, set_status, todo\_\*, list_service_accounts |
-| `gitlab_wiki`    | Wiki page management and attachments                                                                                                 | list, get, create, update, delete, upload_attachment                                                                 |
+| Meta-tool        | Description                                                                                                                                                                                                                                       | Key Actions                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_project` | Projects with their settings, forks, stars, members, labels, milestones, boards, badges, webhooks, integrations, uploads, export and import, push mirrors, Pages and service accounts; approval rules, pull mirroring and push rules from Premium | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload         |
+| `gitlab_issue`   | Issue lifecycle with notes, discussions, links, work items (including work item types) and saved views, statistics, time tracking, award emoji and resource events; iterations from Premium                                                       | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*                       |
+| `gitlab_group`   | Groups and subgroups with their members, labels, milestones, boards, badges, uploads, export and import, sharing, transfer, descendant projects and service accounts; epics, wikis, webhooks, protected branches, LDAP and SAML from Premium      | list, get, create, update, delete, group_label\_\*, group_milestone\_\*, group_member\_\*, badge\_\*                 |
+| `gitlab_user`    | Users and the current user: status, SSH and GPG keys, emails, activity, memberships, notification settings, namespaces, to-do items, impersonation and personal access tokens, user administration, and instance service accounts                 | get, current, list, ssh_keys, add_ssh_key, gpg_keys, emails, get_status, set_status, todo\_\*, list_service_accounts |
+| `gitlab_wiki`    | Project wiki pages and attachments (group wikis are actions on `gitlab_group`)                                                                                                                                                                    | list, get, create, update, delete, upload_attachment                                                                 |
 
 ### Code & repository
 
-| Meta-tool              | Description                                                                                                                                         | Key Actions                                                                                                                |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `gitlab_branch`        | Branch management and protection rules (including branch rule queries via GraphQL)                                                                  | list, get, create, delete, protect, unprotect, rule_list                                                                   |
-| `gitlab_tag`           | Tag management and protection rules with GPG signature verification                                                                                 | list, get, create, delete, protect, unprotect, get_signature                                                               |
-| `gitlab_release`       | Release management and release asset links                                                                                                          | list, get, create, update, delete, link\_\*                                                                                |
-| `gitlab_repository`    | Repository tree, files, commits, diffs, blame, compare (including cross-project), cherry-pick, revert, contributors, archives, changelogs, markdown | tree, compare, blob, archive, changelog\_\*, file\_\*, commit\_\*, commit_discussion\_\*, list_submodules, markdown_render |
-| `gitlab_merge_request` | MR lifecycle, approvals, approval rules, time tracking, subscriptions, context commits, award emoji, and resource events                            | list, get, create, update, merge, rebase, approve, approval\_\*, time\_\*, emoji_mr\_\*, event_mr\_\*                      |
+| Meta-tool              | Description                                                                                                                                                                                                                       | Key Actions                                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_branch`        | Branch management and protection rules (including branch rule queries via GraphQL)                                                                                                                                                | list, get, create, delete, protect, unprotect, rule_list                                                                   |
+| `gitlab_tag`           | Tag management, protection rules, and X.509 tag signatures (`get_signature`)                                                                                                                                                      | list, get, create, delete, protect, unprotect, get_signature                                                               |
+| `gitlab_release`       | Release management and release asset links                                                                                                                                                                                        | list, get, create, update, delete, link\_\*                                                                                |
+| `gitlab_repository`    | Repository tree, files and their history, commits with their discussions, statuses and signatures, diffs, blame, compare (including cross-project), cherry-pick, revert, contributors, submodules, archives, changelogs, markdown | tree, compare, blob, archive, changelog\_\*, file\_\*, commit\_\*, commit_discussion\_\*, list_submodules, markdown_render |
+| `gitlab_merge_request` | MR lifecycle, approvals, pipelines, time tracking, subscriptions, context commits, award emoji and resource events; approval rules, approval settings and dependencies from Premium                                               | list, get, create, update, merge, rebase, approve, approval\_\*, time\_\*, emoji_mr\_\*, event_mr\_\*                      |
 
 ### Code review
 
@@ -293,13 +298,13 @@ All tools follow a consistent naming pattern:
 
 ### CI/CD
 
-| Meta-tool            | Description                                                                                                  | Key Actions                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `gitlab_pipeline`    | Pipeline management, resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules | list, get, create, cancel, retry, delete, wait, schedule\_\*, trigger\_\*      |
-| `gitlab_job`         | CI job management, artifacts, logs, and the CI job token scope (force cancel supported)                      | list, get, play, cancel, retry, erase, trace, artifacts, wait, token_scope\_\* |
-| `gitlab_runner`      | CI/CD runner management, runner controllers, controller scopes, and controller tokens                        | list, get, update, remove, jobs, controller\_\*, register, verify              |
-| `gitlab_ci_variable` | CI/CD variables at instance, group, and project scope                                                        | list, get, create, update, delete (at each scope level)                        |
-| `gitlab_environment` | Environment management, protected environments, deployment freeze periods, and deployment records            | list, get, create, update, delete, stop, deployment\_\*, freeze\_\*            |
+| Meta-tool            | Description                                                                                                                                          | Key Actions                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `gitlab_pipeline`    | Pipeline management, resource groups, test reports, trigger tokens, and pipeline schedules                                                           | list, get, create, cancel, retry, delete, wait, schedule\_\*, trigger\_\*      |
+| `gitlab_job`         | CI job management, artifacts, logs, pipeline bridges, and the CI job token scope (force cancel supported)                                            | list, get, play, cancel, retry, erase, trace, artifacts, wait, token_scope\_\* |
+| `gitlab_runner`      | CI/CD runners, their registration and authentication tokens, runner managers and jobs; runner controllers with their scopes and tokens from Ultimate | list, get, update, remove, jobs, controller\_\*, register, verify              |
+| `gitlab_ci_variable` | CI/CD variables at instance, group, and project scope                                                                                                | list, get, create, update, delete (at each scope level)                        |
+| `gitlab_environment` | Environments, deployment records with their approvals and merge requests, and deploy freeze periods; protected environments from Premium             | list, get, create, update, delete, stop, deployment\_\*, freeze\_\*            |
 
 ### Search & analysis
 
@@ -309,10 +314,10 @@ All tools follow a consistent naming pattern:
 
 ### Access & credentials
 
-| Meta-tool       | Description                                                                                         | Key Actions                                                                                          |
-| --------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `gitlab_access` | Deploy keys, deploy tokens, project, group and personal access tokens, access requests, and invites | deploy_key\_\*, deploy_token\_\*, token_project\_\*, token_group\_\*, token_personal\_\*, invite\_\* |
-| `gitlab_admin`  | Instance administration: Sidekiq, settings, license, broadcast messages, system hooks, and more     | sidekiq\_\*, settings\_\*, license\_\*, broadcast_message\_\*, system_hook\_\*, feature\_\*          |
+| Meta-tool       | Description                                                                                                                                                                                                                                                                                                                                                       | Key Actions                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `gitlab_access` | Deploy keys, deploy tokens, project, group and personal access tokens with their rotation, access requests, and invites                                                                                                                                                                                                                                           | deploy_key\_\*, deploy_token\_\*, token_project\_\*, token_group\_\*, token_personal\_\*, invite\_\* |
+| `gitlab_admin`  | Instance administration: settings, appearance, license, broadcast messages, instance feature flags, system hooks, Sidekiq metrics, plan limits, topics, OAuth applications, custom attributes, usage data, imports, error tracking, alert metric images, secure files, Terraform states, cluster agents and the dependency proxy. Needs a token with `admin_mode` | sidekiq\_\*, settings\_\*, license\_\*, broadcast_message\_\*, system_hook\_\*, feature\_\*          |
 
 ### Packages & content
 
@@ -324,13 +329,14 @@ All tools follow a consistent naming pattern:
 
 ### Discovery & utilities
 
-| Meta-tool               | Description                                                         | Key Actions                         |
-| ----------------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| `gitlab_feature_flags`  | Feature flag and feature flag user list management                  | feature_flag\_\*, ff_user_list\_\*  |
-| `gitlab_model_registry` | ML model package file download from GitLab Model Registry           | download                            |
-| `gitlab_ci_catalog`     | CI/CD Catalog resource discovery (reusable components, templates)   | list, get                           |
-| `gitlab_custom_emoji`   | Group-level custom emoji management via GraphQL                     | list, create, delete                |
-| `gitlab_storage_move`   | Repository storage moves for projects, snippets, and groups (admin) | retrieve\_\*, get\_\*, schedule\_\* |
+| Meta-tool               | Description                                                                                                                                                | Key Actions                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `gitlab_feature_flags`  | Feature flag and feature flag user list management                                                                                                         | feature_flag\_\*, ff_user_list\_\*                                 |
+| `gitlab_model_registry` | ML model package file download from GitLab Model Registry                                                                                                  | download                                                           |
+| `gitlab_ci_catalog`     | CI/CD Catalog resource discovery (reusable components, templates)                                                                                          | list, get                                                          |
+| `gitlab_custom_emoji`   | Group-level custom emoji management via GraphQL                                                                                                            | list, create, delete                                               |
+| `gitlab_achievement`    | Achievements a group or project namespace defines and the awards made from them, via GraphQL                                                               | list, create, update, delete, award, revoke, recipients, user_list |
+| `gitlab_storage_move`   | Repository storage moves of projects and snippets on every tier (12 actions); group storage moves add 6 more from Premium. Needs a token with `admin_mode` | retrieve\_\*, get\_\*, schedule\_\*                                |
 
 Five more tools are registered alongside the dispatchers. They take their parameters directly, with no `action` envelope, and keep the same names in individual mode:
 
@@ -343,23 +349,25 @@ Five more tools are registered alongside the dispatchers. They take their parame
 | `gitlab_interactive_release_create` | Guided release creation through MCP elicitation                   |
 
 :::note
-A `gitlab_server` dispatcher is registered alongside these and is not counted in the {stats.meta.base} figure above. It is read-only, with two actions: `status` and `health_check`. Individual mode registers `gitlab_server_status`; dynamic mode reaches both through the canonical action catalog. There is no self-update action to call, because the binary belongs to whichever channel installed it.
+A `gitlab_server` dispatcher is registered alongside these on every tier, and it is counted in the {stats.meta.base} figure above and in the Premium and Ultimate figures. It is read-only, with two actions: `status` and `health_check`. Individual mode registers `gitlab_server_status`; dynamic mode reaches both through the canonical action catalog. There is no self-update action to call, because the binary belongs to whichever channel installed it.
 :::
 
 ## Enterprise-only tools
 
-When the resolved tier is Premium or Ultimate, the server registers up to {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features. Six arrive with Premium:
+When the resolved tier is Premium or Ultimate, the server registers up to {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features. Six arrive with Premium, for 40 meta-tools (the action count of each is in parentheses):
 
-`gitlab_audit_event`, `gitlab_enterprise_user`, `gitlab_geo`, `gitlab_group_scim`, `gitlab_merge_train`, `gitlab_project_alias`
+`gitlab_audit_event` (6), `gitlab_enterprise_user` (4, needs `admin_mode`), `gitlab_geo` (8, needs `admin_mode`), `gitlab_group_scim` (4), `gitlab_merge_train` (4), `gitlab_project_alias` (4, needs `admin_mode`)
 
-Eleven more arrive with Ultimate:
+Eleven more arrive with Ultimate, for {stats.meta.self_managed_enterprise} on a self-managed instance:
 
-`gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_dependency`, `gitlab_dora_metrics`, `gitlab_external_status_check`, `gitlab_member_role`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile`, `gitlab_vulnerability`
+`gitlab_attestation` (2), `gitlab_compliance_policy` (2), `gitlab_dependency` (4), `gitlab_dora_metrics` (2), `gitlab_external_status_check` (8), `gitlab_member_role` (6), `gitlab_security_attribute` (5), `gitlab_security_category` (3), `gitlab_security_finding` (1), `gitlab_security_scan_profile` (3), `gitlab_vulnerability` (8)
 
-On GitLab.com with a Premium or Ultimate tier, the catalog also registers `gitlab_orbit` with six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
+On GitLab.com with a Premium or Ultimate tier, the catalog also registers `gitlab_orbit` with six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. That makes {stats.meta.gitlab_com} meta-tools on GitLab.com Ultimate.
+
+A group that needs `admin_mode` is left out for a token without that scope ([Scope-based tool filtering](/gitlab-mcp-server/operations/security/#scope-based-tool-filtering)). What the two tiers add to the base dispatchers is listed under [Enterprise mode](/gitlab-mcp-server/tools/meta-tools/#enterprise-mode).
 
 :::note
-Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.
+Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools, but their API calls fail: Community Edition does not serve those endpoints and answers 404, and an unlicensed Enterprise Edition refuses them.
 :::
 
 <FAQ />
@@ -367,9 +375,11 @@ Enterprise tools require a GitLab Premium or Ultimate license on your instance. 
 ## Further reading
 
 - [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — detailed meta-tool architecture and usage
-- [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) — low-token search/describe/execute mode
+- [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/): the low-token find and execute mode
 - [Orbit](/gitlab-mcp-server/tools/orbit/) — GitLab.com Premium/Ultimate Knowledge Graph tools
 - [Resources & Prompts](/gitlab-mcp-server/tools/resources-prompts/) — read-only context and prompt templates
+- [Output format](/gitlab-mcp-server/reference/output-format/): what a tool result carries, in Markdown and in JSON
+- [Command line](/gitlab-mcp-server/reference/cli/) and [environment variables](/gitlab-mcp-server/reference/environment/): every setting that picks a surface, a tier or a filter
 
 ## External references
 

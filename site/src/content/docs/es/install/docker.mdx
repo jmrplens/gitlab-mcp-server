@@ -116,7 +116,7 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-En modo HTTP la configuración viene de flags y no de variables (`--tool-surface`, `--tier`, `--read-only`, `--safe-mode`, `--skip-tls-verify`, etcétera), que es lo que el [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) del repositorio pasa en su línea `command`. El modo OAuth, el rate limiting, TLS en el propio listener, el dimensionado y la configuración de cliente para este transporte están en la página del [Servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
+En modo HTTP la configuración viene de flags y no de variables (`--tool-surface`, `--tier`, `--read-only`, `--safe-mode`, `--skip-tls-verify`, etcétera), que es lo que el [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) del repositorio pasa en su línea `command`. El modo OAuth, la limitación de tasa, TLS en el propio listener, el dimensionado y la configuración de cliente para este transporte están en la página del [Servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 ## Etiquetas y registros
 

@@ -8,13 +8,13 @@ faq:
   - q: "¿Cuál es la diferencia entre gitlab_find_action y gitlab_execute_action?"
     a: "`gitlab_find_action` y `gitlab_execute_action` son las dos herramientas públicas del modo dinámico, y tienen funciones distintas. `gitlab_find_action` busca en el catálogo canónico de acciones y devuelve acciones candidatas ordenadas con su `input_schema` exacto, meta-herramienta base, indicador destructivo, parámetros requeridos, pistas de uso y ejemplos —el asistente la usa para elegir el mejor ID `domain.action` y construir los parámetros. `gitlab_execute_action` ejecuta entonces esa acción tras validar el ID de acción y los parámetros, devolviendo la respuesta real del handler base como Markdown y JSON estructurado. El ritmo recomendado es encontrar y luego ejecutar: descubrir primero el esquema y después despachar el ID canónico de la acción."
   - q: "¿Por qué el modo dinámico muestra solo dos herramientas?"
-    a: "Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada; GitLab MCP Server puede exponer hasta {{tools.gitlab_com}} operaciones individuales en GitLab.com Enterprise/Premium con Orbit. El modo dinámico expone ese catálogo completo mediante `gitlab_find_action` y `gitlab_execute_action`, así que el `tools/list` inicial se mantiene mínimo y el presupuesto de contexto del modelo queda libre para la conversación. El compromiso es una llamada de descubrimiento por tarea: el asistente debe encontrar una acción antes de ejecutarla."
+    a: "Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada; GitLab MCP Server puede exponer hasta {{tools.gitlab_com}} operaciones individuales en GitLab.com Ultimate con Orbit. El modo dinámico expone ese catálogo completo mediante `gitlab_find_action` y `gitlab_execute_action`, así que el `tools/list` inicial se mantiene mínimo y el presupuesto de contexto del modelo queda libre para la conversación. El compromiso es una llamada de descubrimiento por tarea: el asistente debe encontrar una acción antes de ejecutarla."
   - q: "¿Las acciones destructivas siguen protegidas en el modo dinámico?"
-    a: "Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `GITLAB_MCP_YOLO_MODE` o `AUTOPILOT`. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_MCP_READ_ONLY=true` o `GITLAB_MCP_SAFE_MODE=true`."
+    a: "Sí. El modo dinámico comparte el catálogo canónico de acciones con las meta-herramientas, así que una acción se clasifica como destructiva igual en ambos. `gitlab_execute_action` rechaza toda acción destructiva salvo que la llamada lleve `confirm: true`, y en esta superficie `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` no se saltan ese paso. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_MCP_READ_ONLY=true` o `GITLAB_MCP_SAFE_MODE=true`."
   - q: "¿Cómo hago que el modo dinámico use aún menos contexto de inicio?"
     a: "Para minimizar el contexto de inicio, combina el modo dinámico con la superficie mínima de capacidades añadiendo `GITLAB_MCP_CAPABILITY_SURFACE=minimal` (o `--capability-surface=minimal` en modo HTTP). Minimal mantiene los recursos de manifiesto de herramientas `gitlab://tools` y `gitlab://tools/{id}` y omite recursos opcionales, prompts y guías de flujo. El modo dinámico conserva el descubrimiento completo de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. Deja `GITLAB_MCP_META_PARAM_SCHEMA` en su valor predeterminado `opaque`, ya que solo afecta a los schemas de las meta-herramientas y no tiene efecto en despliegues dinámicos."
   - q: "¿Cómo ordena los resultados gitlab_find_action?"
-    a: "gitlab_find_action es más que una búsqueda de subcadenas. Normaliza la consulta, elimina palabras frecuentes, expande sinónimos como mr a merge request y show a get, y luego puntúa primero los IDs canónicos exactos, seguidos de alias, etiquetas, nombres de dominio y acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios. La recuperación fuzzy de errores tipográficos se ejecuta solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza, permitiendo hasta dos ediciones para términos de al menos tres caracteres. Find devuelve hasta 20 resultados (máximo 50) y considera un resultado de alta confianza cuando puntúa al menos 80 y supera al siguiente por al menos 15 puntos."
+    a: "gitlab_find_action es más que una búsqueda de subcadenas. Normaliza la consulta, elimina palabras frecuentes, expande sinónimos como mr a merge request y show a get, y luego puntúa primero los IDs canónicos exactos, seguidos de alias, etiquetas, nombres de dominio y acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios. La recuperación fuzzy de errores tipográficos se ejecuta solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza, permitiendo hasta dos ediciones para términos de al menos tres caracteres. Find devuelve hasta 20 resultados (máximo 50) y considera un resultado de alta confianza cuando puntúa al menos 80 y supera al siguiente resultado devuelto por al menos 15 puntos (con `limit: 1` solo se aplica el mínimo de 80)."
 ---
 
 import stats from "../../../../data/stats.json";
@@ -24,8 +24,8 @@ import footprint from "../../../../data/token-footprint.json";
 :::tip[De un vistazo]
 
 - **Dos herramientas visibles, cobertura completa.** `gitlab_find_action` localiza una acción y devuelve su esquema exacto; `gitlab_execute_action` la ejecuta.
-- **{footprint.individual.ultimate.reduction_factor_vs_dynamic}× menos contexto de arranque** que registrar cada herramienta por separado: {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} tokens de esquema frente a {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")}.
-- **Mismo catálogo, mismas salvaguardas.** La confirmación de acciones destructivas, el filtrado de solo lectura, las previsualizaciones de safe mode y el formato de resultados se comportan igual que en las demás superficies.
+- **{footprint.individual.ultimate.reduction_factor_vs_dynamic}× menos esquema de herramientas** que registrar cada herramienta por separado: {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} tokens de esquema frente a {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")}.
+- **Mismo catálogo, mismas salvaguardas.** El filtrado de solo lectura, las previsualizaciones de safe mode y el formato de resultados se comportan igual que en las demás superficies, y toda acción destructiva necesita un `confirm: true` explícito.
 
 :::
 
@@ -40,9 +40,17 @@ El modo dinámico de find/execute es la superficie predeterminada. Las meta-herr
 
 ## ¿Por qué existe el modo dinámico?
 
-El modo dinámico existe para mantener pequeño el contexto de herramientas del modelo sin dejar de alcanzar cualquier operación de GitLab. Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada: GitLab MCP Server puede exponer hasta {stats.tools.gitlab_com} operaciones individuales en GitLab.com Enterprise/Premium con Orbit, y el catálogo opcional de meta-herramientas anuncia entre {stats.meta.base} y {stats.meta.gitlab_com} herramientas de dominio.
+El modo dinámico existe para mantener pequeño el contexto de herramientas del modelo sin dejar de alcanzar cualquier operación de GitLab. Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada: GitLab MCP Server puede exponer hasta {stats.tools.gitlab_com.toLocaleString("es-ES")} operaciones individuales en GitLab.com Ultimate con Orbit, y el catálogo opcional de meta-herramientas anuncia entre {stats.meta.base} y {stats.meta.gitlab_com} herramientas.
 
-El modo dinámico expone ese catálogo mediante dos herramientas de búsqueda y ejecución. El modelo descubre solo lo que necesita para la tarea actual.
+El modo dinámico expone ese catálogo mediante dos herramientas de búsqueda y ejecución. El modelo descubre solo lo que necesita para la tarea actual. Lo que cada superficie lista en `tools/list` depende del tier con el que se sirve la instancia:
+
+| Superficie          |            Free/CE |                         Premium (autoalojado) |                                      Ultimate (autoalojado) |                    GitLab.com Ultimate con Orbit |
+| ------------------- | -----------------: | --------------------------------------------: | ----------------------------------------------------------: | -----------------------------------------------: |
+| `dynamic` (predet.) |    {stats.dynamic} |                               {stats.dynamic} |                                             {stats.dynamic} |                                  {stats.dynamic} |
+| `meta`              |  {stats.meta.base} |                                            40 |                        {stats.meta.self_managed_enterprise} |                          {stats.meta.gitlab_com} |
+| `individual`        | {stats.tools.free} | {stats.tools.premium.toLocaleString("es-ES")} | {stats.tools.ultimate_self_managed.toLocaleString("es-ES")} | {stats.tools.gitlab_com.toLocaleString("es-ES")} |
+
+Las dos herramientas dinámicas alcanzan el mismo catálogo al que despachan las meta-herramientas: el modo dinámico cambia cómo se descubre una acción, no lo que hace.
 
 ```mermaid
 flowchart LR
@@ -53,7 +61,7 @@ flowchart LR
 ```
 
 Esto suele añadir una llamada de descubrimiento por tarea, pero mantiene muy pequeño el contexto inicial de herramientas MCP.
-El catálogo se comparte con las meta-herramientas, así que el modo dinámico reutiliza los mismos schemas, protecciones de acciones destructivas, filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token y formato de resultados.
+El catálogo se comparte con las meta-herramientas, así que el modo dinámico reutiliza los mismos schemas, la clasificación de acciones destructivas, el filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token y formato de resultados.
 
 ## ¿Cuánto contexto de arranque ahorra el modo dinámico?
 
@@ -73,11 +81,11 @@ Lo que un cliente carga al arrancar son esos schemas de herramienta más los rec
 | `dynamic` / `full` (predet.)                                                | {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} |    {footprint.shared.full.toLocaleString("es-ES")} |    {footprint.dynamic.total_tokens.full.toLocaleString("es-ES")} |
 | `dynamic` / `minimal`                                                       | {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} | {footprint.shared.minimal.toLocaleString("es-ES")} | {footprint.dynamic.total_tokens.minimal.toLocaleString("es-ES")} |
 
-**Metodología.** Los recuentos usan el tokenizador <code>{footprint.tokenizer}</code> (la codificación de GPT-4 / GPT-3.5) mediante [tiktoken-go](https://github.com/tiktoken-go/tokenizer), medidos sobre el árbol de código de la v{stats.version} con el catálogo construido en memoria y sin llamadas de red. «Tokens de schema» cubre solo las definiciones de herramienta visibles —schemas de entrada, anotaciones y descripciones—, que es lo que un modelo paga en cada `tools/list`. El campo `icons` queda excluido: contiene data URIs SVG en base64 para las interfaces de los clientes, y ninguno los coloca en el contexto de un modelo. Los recursos y prompts MCP añaden otros {footprint.shared.full.toLocaleString("es-ES")} tokens con `GITLAB_MCP_CAPABILITY_SURFACE=full`, o {footprint.shared.minimal.toLocaleString("es-ES")} con `minimal`, por igual en todas las superficies. Estas cifras se regeneran con `make gen-footprint`; la matriz completa de tier × superficie × modo de schema está en [la referencia de huella de tokens](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md).
+**Metodología.** Los recuentos usan el tokenizador <code>{footprint.tokenizer}</code> (la codificación de GPT-4 / GPT-3.5) mediante [tiktoken-go](https://github.com/tiktoken-go/tokenizer), medidos sobre el árbol de código de la v{stats.version} con el catálogo construido en memoria y sin llamadas de red. «Tokens de schema» cubre cada definición de herramienta visible entera tal como la sirve `tools/list` (nombre, título, descripción, schemas de entrada y de salida, anotaciones), sin los iconos, que es lo que un modelo paga en cada `tools/list`. El campo `icons` queda excluido: contiene data URIs SVG en base64 para las interfaces de los clientes, y ninguno los coloca en el contexto de un modelo. Los recursos y prompts MCP añaden otros {footprint.shared.full.toLocaleString("es-ES")} tokens con `GITLAB_MCP_CAPABILITY_SURFACE=full`, o {footprint.shared.minimal.toLocaleString("es-ES")} con `minimal`, por igual en todas las superficies. Estas cifras se regeneran con `make gen-footprint`; la matriz completa de tier × superficie × modo de schema está en [la referencia de huella de tokens](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md).
 
 ## ¿Cómo activo el modo dinámico?
 
-Activa el modo dinámico estableciendo `GITLAB_MCP_TOOL_SURFACE=dynamic` (stdio) o `--tool-surface=dynamic` (HTTP). El modo dinámico también es la superficie que se usa cuando `GITLAB_MCP_TOOL_SURFACE` no está definido, así que la mayoría de los despliegues lo obtienen por defecto.
+Activa el modo dinámico estableciendo `GITLAB_MCP_TOOL_SURFACE=dynamic` (stdio) o `--tool-surface=dynamic` (HTTP). El modo dinámico también es la superficie que se usa cuando `GITLAB_MCP_TOOL_SURFACE` no está definido, así que la mayoría de los despliegues lo obtienen por defecto. `GITLAB_MCP_TOOL_SURFACE` es el único selector: el interruptor `META_TOOLS` al que sustituyó se eliminó en la 3.0.0.
 
 ### Clientes stdio
 
@@ -115,7 +123,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`GITLAB_MCP_CAPABILITY_SURFACE=minimal` mantiene los recursos de manifiesto de herramientas (`gitlab://tools` y `gitlab://tools/{id}`), y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `GITLAB_MCP_META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
+`GITLAB_MCP_CAPABILITY_SURFACE=minimal` mantiene los recursos de manifiesto de herramientas (`gitlab://tools` y `gitlab://tools/{id}`), y omite recursos opcionales, prompts y guías de flujo. El modo dinámico conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos en la propia respuesta. `GITLAB_MCP_META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
 ## ¿Cómo debe usar el modelo el modo dinámico?
 
@@ -139,7 +147,7 @@ sequenceDiagram
     AI-->>User: Respuesta formateada
 ```
 
-Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `content`, datos JSON en `structuredContent` e `isError` en el envoltorio del resultado cuando el servidor devuelve una guía de reparación. `gitlab_execute_action` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, las confirmaciones destructivas y el formato de resultados siguen siendo coherentes.
+Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `content`, datos JSON en `structuredContent` e `isError` en el envoltorio del resultado cuando el servidor devuelve una guía de reparación. `gitlab_execute_action` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, la clasificación destructiva y el formato de resultados siguen siendo coherentes.
 
 ## ¿Qué devuelve cada llamada?
 
@@ -150,34 +158,144 @@ Cada llamada devuelve una carga distinta: `gitlab_find_action` devuelve acciones
 | `gitlab_find_action`    | IDs de acción canónicos ordenados con `input_schema` exacto, meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso, ejemplos, explicaciones opcionales y puntuación | Elegir el mejor candidato `domain.action` y construir `params` desde el schema                    |
 | `gitlab_execute_action` | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                                                                              | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
 
+Lo que devuelve una acción ejecutada, tanto el Markdown como el JSON, se describe campo a campo en [Formato de salida](/gitlab-mcp-server/es/reference/output-format/).
+
+### Qué devuelve find
+
+`gitlab_find_action` recibe una `query`, un `limit` opcional y un `explain` opcional. `limit` vale 20 por defecto y tiene un máximo de 50. Decide cuántas acciones ordenadas se devuelven, no qué parte del catálogo se busca: cada búsqueda puntúa todo el catálogo que alcanza la sesión. La comprobación de confianza, en cambio, solo lee lo que se devuelve: `low_confidence` compara la mejor puntuación con el siguiente resultado devuelto, así que con `limit: 1` solo se aplica el mínimo de puntuación, y la recuperación difusa que desencadena un primer resultado de baja confianza puede ejecutarse o no según `limit`.
+
+Su `structuredContent` lleva la `query` buscada, el `count` de resultados devueltos y los `results`, del mejor al peor. Recortado por espacio, un resultado tiene este aspecto:
+
+```json
+{
+  "query": "merge request list open authored by me project",
+  "count": 1,
+  "results": [
+    {
+      "id": "merge_request.list",
+      "tool": "gitlab_merge_request",
+      "domain": "merge_request",
+      "action": "list",
+      "schema_uri": "gitlab://tools/merge_request.list",
+      "destructive": false,
+      "required_params": ["project_id"],
+      "input_schema": {
+        "type": "object",
+        "required": ["project_id"],
+        "properties": {
+          "project_id": { "type": ["string", "integer"] },
+          "state": { "type": "string" },
+          "scope": { "type": "string" }
+        }
+      },
+      "example": {
+        "tool": "gitlab_execute_action",
+        "arguments": {
+          "action": "merge_request.list",
+          "params": { "project_id": "group/project" }
+        }
+      },
+      "score": 275
+    }
+  ]
+}
+```
+
+| Campo                                            | Qué contiene                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                             | El ID canónico de la acción que se pasa a `gitlab_execute_action`                                                                                                                                                                                                                                                                     |
+| `tool`, `domain`, `action`                       | La meta-herramienta base, el dominio del catálogo y el nombre de la acción dentro de él                                                                                                                                                                                                                                               |
+| `schema_uri`                                     | El recurso `gitlab://tools/{id}` que sirve el mismo schema                                                                                                                                                                                                                                                                            |
+| `destructive`                                    | Si la acción necesita `confirm: true`                                                                                                                                                                                                                                                                                                 |
+| `required_params`                                | Los nombres de los parámetros obligatorios, que van dentro de `params`. Cuando el schema ofrece alternativas (`anyOf` u `oneOf`), los nombres que exige cada alternativa se juntan en esta misma lista, así que puede nombrar más de lo que una llamada necesita ([#1175](https://github.com/jmrplens/gitlab-mcp-server/issues/1175)) |
+| `input_schema`                                   | El JSON Schema exacto de `params`; `confirm` queda fuera, porque va en el nivel superior de la llamada a execute                                                                                                                                                                                                                      |
+| `output_schema`                                  | Un JSON Schema aproximado del resultado, cuando se conoce                                                                                                                                                                                                                                                                             |
+| `example`                                        | Una llamada a `gitlab_execute_action` lista para usar: su `tool` y sus `arguments`, con un valor de ejemplo para cada nombre de `required_params` y `confirm: true` si es destructiva. Cuando se juntaron alternativas, el ejemplo las rellena todas y puede no cumplir el schema con el que llega                                    |
+| `score`                                          | La puntuación de relevancia léxica                                                                                                                                                                                                                                                                                                    |
+| `usage`, `parameter_guidance`, `related_actions` | Una nota que distingue acciones que se suelen confundir, guía para enlazar parámetros que se suelen confundir y acciones cercanas seleccionadas, cuando existen                                                                                                                                                                       |
+| `low_confidence`, `ambiguous_with`               | Se marcan en el primer resultado cuando queda por debajo del umbral de confianza, y en los resultados que comparten un alias ambiguo usado en la consulta                                                                                                                                                                             |
+| `explanation`                                    | Las razones de la puntuación, solo con `explain: true`                                                                                                                                                                                                                                                                                |
+
+En `content`, la misma respuesta es una tarjeta Markdown con el encabezado `GitLab Catalog: N matching actions` que repite la consulta y lista los resultados en una tabla con las columnas `Action ID`, `Score`, `Destructive` y `Required Params`. Se añade una columna `Guidance` cuando algún resultado lleva una nota de uso, guía de parámetros o el indicador destructivo, y una columna `Why` cuando `explain` está activado. La tarjeta termina con los siguientes pasos: ejecutar ya la fila elegida, un aviso cuando el primer resultado es de baja confianza o el alias era ambiguo, y la forma de una llamada a execute. Una consulta sin coincidencias no lleva tabla: la tarjeta sugiere en su lugar seis términos de búsqueda, primero los tokens cercanos del catálogo y después áreas comunes (project, issue, merge request, pipeline, branch, user) hasta completar los seis, y esas sugerencias solo aparecen en el Markdown.
+
+El manifiesto agregado [`gitlab://tools`](/gitlab-mcp-server/es/tools/resources-prompts/#plantilla-de-recurso-de-manifiesto-de-herramientas-1) tipa los requisitos y mantiene separadas las alternativas, mientras que los `required_params` de find se quedan en nombres sin más y juntan las alternativas. Los `required_params` de cada entrada del manifiesto son una lista de pares de nombre y tipo como `{"name": "merge_request_iid", "type": "integer"}` y solo recogen lo que necesita toda llamada; un parámetro que admite varios tipos los une en el orden del schema, como `"string|integer"` para un ID de proyecto; y `required_params_any_of` lista los grupos alternativos, de los que una llamada debe cumplir al menos uno. `security_attribute.update` muestra la diferencia: find da como obligatorios `attribute_id`, `name`, `description` y `color`, mientras que el manifiesto exige `attribute_id` y pone cada uno de los otros tres en un grupo propio, así que una llamada solo necesita uno de ellos. Una entrada sin `type` significa que el schema no declara un único tipo simple para ese parámetro, como el `value` de `admin.feature_set`, que admite un booleano, una cadena o un entero: léelo como cualquier tipo y consulta `gitlab://tools/{id}` para ver el schema completo.
+
+### Qué acepta execute
+
+`gitlab_execute_action` recibe el ID canónico en `action`, un objeto `params` y, para una acción destructiva, un `confirm` en el nivel superior. `params` es obligatorio: envía `params: {}` para una acción sin parámetros.
+
+Antes de despachar, execute corrige los descuidos más habituales de un modelo:
+
+- Resuelve un alias no ambiguo a su acción canónica. Un alias que comparten varias acciones se rechaza con los IDs canónicos entre los que elegir.
+- Renombra los alias comunes de parámetros a los nombres que usa el schema de la acción elegida, como `mr_iid` a `merge_request_iid`, `key_id` a `deploy_key_id` y `search` a `query`, y solo cuando el schema admite el nombre canónico y no el alias.
+- Aplica unas pocas conversiones limitadas a una acción. `issue.close` e `issue.reopen` ejecutan `issue.update` con el `state_event` correspondiente. `pipeline.schedule_create` y `pipeline.schedule_update` toman un `name` como la `description` de la programación. Un único `file_name` con su `content` enviado a `snippet.project_create` se convierte en una entrada de `files`. Los nombres de nivel de acceso como `developer` se convierten en los niveles numéricos de GitLab en acciones como `project.member_add` y `branch.protect`. Un `name` enviado a `feature_flags.ff_user_list_list`, que lista todas las listas de usuarios de un proyecto, se descarta.
+- Mueve un `confirm: true` del nivel superior a los parámetros de la acción, donde lo lee el handler base.
+
+Después comprueba `params` contra el schema de la acción. Un parámetro desconocido, incluido uno sensible no soportado como `masked` o `protected` en una variable de una programación de pipeline, se rechaza antes de despachar en lugar de eliminarse en silencio. El error permite reparar la llamada: nombra los parámetros desconocidos, con un `Did you mean ...?` cuando hay un nombre válido parecido, los parámetros obligatorios que faltan y todos los parámetros que admite la acción.
+
+```text
+gitlab_execute_action/<action>: invalid params. Unknown params: ... Did you mean ...? Missing required params: ... Valid params: ...
+```
+
+Una llamada que supera esta comprobación y aun así lleva un valor que la acción no admite recibe la respuesta del handler base, con el mismo error de validación que devuelve en la superficie meta.
+
+### Cuando una acción está retenida para la sesión
+
+Una acción que el catálogo contiene pero que esta sesión no puede ejecutar nunca se responde como desconocida, porque un modelo al que se le dice «unknown action» concluye que el servidor carece de esa capacidad. Execute nombra la causa:
+
+- **Los scopes de la credencial.** A un token `read_api` solo se le sirven las lecturas, y los grupos de administración necesitan `admin_mode`. Una llamada a una acción que los scopes retienen recibe el mensaje siguiente. La salida que nombra es el scope `api`; para una acción de administración, el scope que le falta a la credencial es `admin_mode`.
+
+  ```text
+  gitlab_execute_action: action "issue.create" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.
+  ```
+
+- **El operador.** Una escritura que el modo de solo lectura eliminó (`GITLAB_MCP_READ_ONLY=true` o `--read-only`) recibe:
+
+  ```text
+  gitlab_execute_action: action "issue.create" exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.
+  ```
+
+- **Un token de grano fino.** Execute responde justo después de resolver la acción, antes de comprobar los parámetros o pedir confirmación, con el permiso que declara GitLab o el motivo por el que ningún token de grano fino alcanza la acción. [Leer una respuesta retenida](/gitlab-mcp-server/es/operations/fine-grained-tokens/#leer-una-respuesta-retenida) cita ambos textos.
+
+Una acción eliminada por nombre con `GITLAB_MCP_EXCLUDE_TOOLS` (`--exclude-tools`) nunca se notifica así: el operador pidió que no existiera, así que execute la responde como desconocida. Lo mismo ocurre con una acción por encima del tier de la instancia, que ni siquiera está en el catálogo.
+
+Find sigue la misma división. Un recorte por scopes o por solo lectura elimina las acciones del catálogo en el que busca find. Una sesión de grano fino busca en todo el catálogo y deja fuera de sus resultados las acciones que su concesión no lista antes de aplicar `limit`, así que la siguiente mejor coincidencia ocupa su lugar, mientras que execute las sigue resolviendo: rechaza con el motivo una acción que la concesión no deja pasar, y entrega el resto a GitLab, que puede servir alguna sobre un proyecto o grupo público. Un enlace de `related_actions` a una acción retenida se conserva, porque seguirlo explica el recorte; un enlace a una acción por encima del tier o excluida por nombre se descarta.
+
 ## ¿Cómo encuentra acciones la búsqueda?
 
 `gitlab_find_action` es más que una búsqueda de subcadenas. Indexa IDs canónicos, palabras del ID separadas, nombres de meta-herramientas base, dominios, nombres de acción, alias, etiquetas, parámetros requeridos, parámetros opcionales, nombres de propiedades del schema, valores enum, descripciones compactas del schema y metadatos internos de backend.
 
-El pipeline de ranking:
+El proceso de ordenación:
 
 1. Normaliza la consulta en minúsculas y separa espacios, puntos, guiones bajos y guiones.
 2. Elimina palabras frecuentes como `the`, `to`, `with` y `please`.
 3. Expande sinónimos como `mr` → merge request, `secret` → variable/token de CI, `show` → get y `remove` → delete. Palabras de backend como `github pr` o `jira ticket` se normalizan a conceptos GitLab de merge request o issue sin exponer IDs de acción no GitLab.
 4. Puntúa primero IDs canónicos exactos, después alias, etiquetas, nombres de dominio/acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios.
-5. Ejecuta recuperación fuzzy de errores tipográficos solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza.
-6. Busca prompts largos en ventanas de tres a seis términos para que prompts de varios pasos puedan sacar varias acciones relevantes.
+5. Ejecuta recuperación aproximada de errores tipográficos solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza.
+6. Vuelve a buscar una consulta de cinco o más términos en ventanas solapadas de tres a seis términos, así que un prompt con varias intenciones como `discover project from remote url merge request list current user open authored` saca tanto los candidatos de descubrimiento de proyecto como los de listado de merge requests.
 
-La recuperación fuzzy está limitada a propósito: permite hasta dos errores de edición en tokens de al menos tres caracteres y suprime coincidencias tipográficas débiles para acciones destructivas. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
+La recuperación aproximada está limitada a propósito: usa una distancia de Levenshtein acotada que permite hasta dos errores de edición en tokens de al menos tres caracteres, y suprime coincidencias tipográficas débiles para acciones destructivas. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
 
-Find acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `tag.get` junto a `release.get`.
+Un alias que comparten varias acciones se notifica con sus alternativas canónicas: cada resultado con el que coincide las lleva en `ambiguous_with`, y execute rechaza el alias hasta que quien llama nombra un único ID canónico `domain.action`.
+
+Find acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `release.get` junto a `tag.get`.
 
 Algunos límites útiles están fijados dentro del servidor en vez de configurarse por entorno:
 
-| Comportamiento                | Valor actual                                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Resultados devueltos por find | Por defecto 20 y máximo 50                                                                                               |
-| Resultado de alta confianza   | Puntuación mínima 80 y al menos 15 puntos de margen sobre el siguiente resultado                                         |
-| Manejo de prompts largos      | Busca ventanas solapadas de tres a seis términos para que un prompt pueda sacar varias acciones                          |
-| Recuperación fuzzy de typos   | Máximo dos ediciones y solo para términos de al menos tres caracteres                                                    |
-| Sugerencias sin coincidencias | Hasta seis tokens cercanos del catálogo, luego áreas comunes como project, issue, merge request, pipeline, branch y user |
+| Comportamiento                                                | Valor actual                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Longitud de la consulta                                       | Como máximo 256 caracteres, publicado como el `maxLength` del parámetro `query`. Una consulta más larga se rechaza, nunca se trunca                                                                                                                        |
+| Resultados devueltos por find                                 | Por defecto 20 y máximo 50                                                                                                                                                                                                                                 |
+| Resultado de alta confianza                                   | Puntuación mínima 80 y al menos 15 puntos de margen sobre el siguiente resultado devuelto; con `limit: 1`, solo el mínimo                                                                                                                                  |
+| Términos obligatorios de la consulta                          | Una consulta de uno o dos términos significativos debe coincidir con todos; una más larga puede dejar uno sin coincidir, y una de cuatro o más puede dejar dos cuando coincide con una etiqueta de varias palabras                                         |
+| Manejo de prompts largos                                      | Una consulta de cinco o más términos también se busca en ventanas solapadas de tres a seis términos, para que un prompt pueda sacar varias acciones                                                                                                        |
+| Recuperación aproximada de errores tipográficos               | Máximo dos ediciones y solo para términos de al menos tres caracteres                                                                                                                                                                                      |
+| Protección de acciones destructivas en la búsqueda aproximada | Una coincidencia tipográfica con una acción destructiva solo se conserva cuando la consulta lleva un verbo destructivo exacto (`delete`, `destroy`, `remove`, `revoke`, `purge`) y un término que nombra el dominio, la acción o una etiqueta de la acción |
+| Sugerencias sin coincidencias                                 | Seis sugerencias: primero los tokens cercanos del catálogo, después áreas comunes como project, issue, merge request, pipeline, branch y user hasta completar las seis                                                                                     |
 
-Estos números son constantes internas de ajuste. No son variables de entorno. Existen para mantener el descubrimiento predecible sin perder recuperación ante redacciones y errores tipográficos comunes de los modelos.
+Estos números son constantes internas de ajuste. No son variables de entorno. Existen para mantener el descubrimiento predecible sin perder recuperación ante redacciones y errores tipográficos comunes de los modelos, y el tope de la consulta mantiene acotado el coste de una búsqueda.
+
+Find solo ofrece acciones que esta instancia del servidor puede enrutar. El catálogo se construye para el tier con el que se sirve la instancia, y los grupos que solo sirve GitLab.com, como Orbit, solo se añaden en GitLab.com. Después se recorta con las acciones que el operador excluyó, los scopes del token y el modo de solo lectura. Safe mode no elimina nada: conserva todas las acciones y convierte cada escritura en una previsualización.
 
 :::tip[Usa IDs canónicos]
 Los alias ayudan en la búsqueda y pueden resolverse si no son ambiguos, pero los IDs canónicos `domain.action` son el contrato estable de ejecución. Ejecuta el ID de acción devuelto por find.
@@ -218,19 +336,23 @@ El asistente debe ejecutar el ID de acción canónico devuelto por find. Los ali
 
 ## ¿Cómo se recupera el modo dinámico de los errores?
 
-El modo dinámico está diseñado para poder repararse. Si una llamada devuelve `isError: true`, el asistente debe tratar el mensaje como feedback y repetir el paso correcto en lugar de rendirse. Cada fallo se asigna a una acción de recuperación específica.
+El modo dinámico está diseñado para poder repararse. Si una llamada devuelve `isError: true`, el asistente debe tratar el mensaje como una indicación y repetir el paso correcto en lugar de rendirse. Cada fallo se asigna a una acción de recuperación específica.
 
-| Fallo                                  | Recuperación                                                                                   |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| La consulta de find está vacía         | Reintentar find con dominio, recurso, verbo y filtros útiles                                   |
-| El ID de acción es desconocido         | Buscar de nuevo o usar los IDs canónicos sugeridos por el mensaje de error                     |
-| Alias ambiguo                          | Elegir uno de los IDs `domain.action` listados por find                                        |
-| Los parámetros son rechazados          | Encontrar la acción y reconstruir `params` desde `input_schema`                                |
-| Una acción destructiva queda bloqueada | Pedir aprobación explícita al usuario antes de reintentar con `confirm: true` a nivel superior |
+| Fallo                                     | Respuesta del servidor                                                                                                 | Recuperación                                                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| La consulta de find está vacía            | Resultado de error con términos de consulta de ejemplo                                                                 | Reintentar find con dominio, recurso, verbo y filtros útiles                                          |
+| La consulta de find supera 256 caracteres | Resultado de error con la longitud de la consulta y el límite                                                          | Buscar una sola cosa cada vez y volver a llamar a find para la siguiente                              |
+| El ID de acción es desconocido            | Resultado de error, a menudo con IDs canónicos en un `Did you mean ...?`                                               | Buscar de nuevo o usar uno de los IDs canónicos sugeridos                                             |
+| Acción retenida para esta sesión          | Resultado de error: `action "..." exists but ...` y la causa                                                           | No informar de que falta la capacidad; decir al usuario la salida que nombra el resultado             |
+| Alias ambiguo                             | Resultado de error con los IDs canónicos que puede significar el alias                                                 | Elegir uno de los IDs `domain.action` listados por find                                               |
+| Los parámetros son rechazados             | Resultado de error con los parámetros desconocidos, los que faltan y los válidos, o el error de validación del handler | Encontrar la acción y reconstruir `params` desde `input_schema`                                       |
+| Una acción destructiva queda bloqueada    | Resultado de error que dice que la acción es destructiva y necesita `confirm=true`                                     | Pedir aprobación explícita al usuario y reintentar con `confirm: true` a nivel superior solo si la da |
 
 ## ¿Las acciones destructivas siguen protegidas?
 
-Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `GITLAB_MCP_YOLO_MODE` o `AUTOPILOT`.
+Sí. El modo dinámico comparte con las meta-herramientas la clasificación destructiva del catálogo canónico, y `gitlab_execute_action` la aplica en cada llamada: una acción clasificada como destructiva se rechaza salvo que la llamada lleve `confirm: true`. Execute nunca pregunta al cliente mediante elicitación y no lee `GITLAB_MCP_YOLO_MODE` ni `AUTOPILOT`, así que ninguno de los dos se salta este paso en la superficie predeterminada.
+
+El modo de solo lectura y safe mode actúan antes de ese paso. En modo de solo lectura una escritura no está en el catálogo, y execute la responde como [retenida](#cuando-una-acción-está-retenida-para-la-sesión). En safe mode una escritura devuelve una previsualización de lo que haría, sin pedir confirmación y sin cambiar nada.
 
 ```json
 {
@@ -259,32 +381,43 @@ Sin confirmación, el servidor devuelve un resultado de error en lugar de elimin
 }
 ```
 
-La ejecución dinámica valida los parámetros antes de despachar. Los campos desconocidos, incluidos campos sensibles no soportados como `masked` o `protected` en variables de pipeline schedules, se rechazan con guía de reparación en lugar de eliminarse silenciosamente.
+Los parámetros se comprueban antes que la confirmación, como describe [Qué acepta execute](#qué-acepta-execute), así que una llamada destructiva con un parámetro incorrecto se rechaza primero por el parámetro, lleve o no `confirm: true`.
 
-Para despliegues más seguros, usa `GITLAB_MCP_READ_ONLY=true` para eliminar acciones mutantes o `GITLAB_MCP_SAFE_MODE=true` para previsualizar mutaciones sin aplicarlas.
+Para despliegues más seguros:
+
+- Establece `GITLAB_MCP_READ_ONLY=true` para eliminar del catálogo las acciones mutantes.
+- Establece `GITLAB_MCP_SAFE_MODE=true` para devolver previsualizaciones de las acciones mutantes en lugar de ejecutarlas.
+- Mantén `GITLAB_MCP_YOLO_MODE=false` y `AUTOPILOT=false` salvo que el despliegue sea de plena confianza. En esta superficie siguen decidiendo dos confirmaciones que dependen de los argumentos y no de la acción: un `issue.work_item_update` que vacía los asignados o los contactos CRM de un work item, y un `project.pull_mirror_configure` que haría que un pull mirror sobrescribiera las ramas divergentes. Con `GITLAB_MCP_YOLO_MODE` verdadera, o sin definir y `AUTOPILOT` verdadera, esas llamadas siguen adelante sin preguntar (una `GITLAB_MCP_YOLO_MODE` definida decide sola, así que `GITLAB_MCP_YOLO_MODE=false` anula un `AUTOPILOT=true` heredado); si no, el servidor pregunta mediante elicitación o, cuando no puede preguntar al cliente, rechaza la llamada hasta que se reenvíe con `confirm: true`.
 
 ## Dinámico vs meta-herramientas
 
-El modo dinámico y las meta-herramientas comparten un catálogo y un modelo de seguridad; solo se diferencian en cómo se presentan las operaciones al modelo. El modo dinámico muestra dos herramientas de descubrimiento y ejecución y resuelve las acciones bajo demanda, mientras que las meta-herramientas muestran una lista fija de despachadores de dominio.
+El modo dinámico y las meta-herramientas comparten un catálogo, una clasificación destructiva y el mismo tratamiento del modo de solo lectura y de safe mode; se diferencian en cómo se presentan las operaciones al modelo y en cómo se confirma una acción destructiva. El modo dinámico muestra dos herramientas de descubrimiento y ejecución y resuelve las acciones bajo demanda, mientras que las meta-herramientas muestran una lista fija de despachadores de dominio.
 
-| Pregunta                    | Meta-herramientas                                                   | Conjunto dinámico                                         |
-| --------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
-| Qué aparece en `tools/list` | {stats.meta.base} a {stats.meta.gitlab_com} herramientas de dominio | 2 herramientas públicas de descubrimiento y ejecución     |
-| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción                      | Encuentra una acción con schema y luego la ejecuta        |
-| Dónde están los schemas     | Schema de herramienta o `gitlab://tools/{id}`                       | `gitlab_find_action` o `gitlab://tools/{id}`              |
-| Mejor uso actual            | Modo explícito de compatibilidad                                    | Descubrimiento de acciones predeterminado de bajo consumo |
-| Vuelta atrás                | Usa `GITLAB_MCP_TOOL_SURFACE=meta`                                  | Ruta predeterminada                                       |
+| Pregunta                                | Meta-herramientas                                                                                                                                    | Conjunto dinámico                                                                            |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Qué aparece en `tools/list`             | {stats.meta.base} a {stats.meta.gitlab_com} herramientas                                                                                             | 2 herramientas públicas de descubrimiento y ejecución                                        |
+| Cómo elige el modelo                    | Escoge una herramienta de dominio y una acción                                                                                                       | Encuentra una acción con schema y luego la ejecuta                                           |
+| Dónde están los schemas                 | El enum `action` del schema de la herramienta, `gitlab://tools/{id}`, o el schema de cada acción con `GITLAB_MCP_META_PARAM_SCHEMA=compact` o `full` | `gitlab_find_action` los devuelve inline, o `gitlab://tools/{id}`                            |
+| Confirmación destructiva                | `confirm: true` en `params` o un aviso de elicitación; `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` se la saltan                                             | `confirm: true` a nivel superior en cada llamada destructiva; ninguno de los dos se la salta |
+| Con la superficie mínima de capacidades | Mantiene `gitlab://tools` y omite los prompts y los recursos de datos opcionales                                                                     | Mantiene el descubrimiento de schemas mediante find                                          |
+| Fallo típico                            | Una elección equivocada de dominio o de acción                                                                                                       | Saltarse find, o un ID de acción equivocado                                                  |
+| Mejor uso actual                        | Modo explícito de compatibilidad                                                                                                                     | Descubrimiento de acciones predeterminado de bajo consumo                                    |
+| Vuelta atrás                            | Usa `GITLAB_MCP_TOOL_SURFACE=meta`                                                                                                                   | Ruta predeterminada                                                                          |
 
 ## Solución de problemas
 
-| Síntoma                                           | Qué hacer                                                                                                                                                                                                 |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Solo ves dos herramientas                         | Es lo esperado en modo dinámico. Pide al asistente que encuentre acciones antes de ejecutar                                                                                                               |
-| La búsqueda devuelve resultados demasiado amplios | Incluye dominio, recurso, acción y filtros, por ejemplo `merge request list open authored by me`                                                                                                          |
-| Execute rechaza una acción                        | Busca de nuevo y usa el ID canónico `domain.action` del resultado                                                                                                                                         |
-| Execute rechaza parámetros                        | Encuentra la acción y reintenta con los nombres y tipos exactos                                                                                                                                           |
-| Recursos y prompts siguen consumiendo contexto    | Añade `GITLAB_MCP_CAPABILITY_SURFACE=minimal` o `--capability-surface=minimal`                                                                                                                            |
-| Los metadatos de descubrimiento parecen escasos   | Ejecuta `go run ./cmd/audit_discovery_completeness/` para confirmar que cada acción tiene alias, uso, guía de parámetros y acciones relacionadas; rellena huecos con el estándar de oro link-create-batch |
+| Síntoma                                                      | Qué hacer                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solo ves dos herramientas                                    | Es lo esperado en modo dinámico. Pide al asistente que encuentre acciones antes de ejecutar                                                                                                                                                                                                                                                                                     |
+| La búsqueda devuelve resultados demasiado amplios            | Incluye dominio, recurso, acción y filtros, por ejemplo `merge request list open authored by me`                                                                                                                                                                                                                                                                                |
+| Execute dice que la acción es desconocida                    | Busca de nuevo y ejecuta el ID canónico `domain.action` del resultado. Una acción por encima del tier de la instancia, o una que el operador eliminó con `--exclude-tools`, también se responde como desconocida, porque no existe para este despliegue                                                                                                                         |
+| Execute dice que la acción existe pero no está disponible    | La credencial o el despliegue la retienen: sigue la salida que nombra la respuesta, que es otro scope, el operador o una concesión de grano fino que la cubra                                                                                                                                                                                                                   |
+| Find nunca devuelve una acción que esperas                   | Con un token de grano fino, find deja fuera lo que la concesión no alcanza: lee `gitlab://tools/{id}` de esa acción, cuyo bloque `withheld` explica el motivo. Si no, ejecútala por su ID canónico, y una acción retenida responde con su causa                                                                                                                                 |
+| Execute rechaza parámetros                                   | Encuentra la acción y reintenta con los nombres y tipos exactos que dan el error e `input_schema`                                                                                                                                                                                                                                                                               |
+| Una acción destructiva devuelve un error                     | Sin `confirm: true` se rechaza: añade `confirm: true` a nivel superior solo después de que el usuario apruebe la operación. Una respuesta de que existe pero no está disponible significa que el modo de solo lectura o los scopes del token la eliminaron                                                                                                                      |
+| Una escritura devuelve una previsualización y no cambia nada | Safe mode está activo (`GITLAB_MCP_SAFE_MODE=true`); el operador decide si las escrituras se ejecutan                                                                                                                                                                                                                                                                           |
+| Recursos y prompts siguen consumiendo contexto               | Añade `GITLAB_MCP_CAPABILITY_SURFACE=minimal` o `--capability-surface=minimal`                                                                                                                                                                                                                                                                                                  |
+| Find pone primero la acción equivocada                       | Nombra el recurso y el verbo, llama a find con `explain: true` para ver por qué puntuó cada resultado y lee la nota `usage` de cada uno. Cuando el primer resultado está marcado como `low_confidence`, elige la fila que buscas en vez de la primera. Una formulación que sigue fallando merece [notificarse como issue](https://github.com/jmrplens/gitlab-mcp-server/issues) |
 
 <FAQ />
 

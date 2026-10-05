@@ -3,38 +3,38 @@ title: Capacidades MCP
 description: Las cuatro capacidades MCP de GitLab MCP Server — progreso, elicitación, autocompletado y suscripciones a recursos — más metadatos de iconos en herramientas, recursos y prompts.
 datePublished: "2026-04-21"
 faq:
-  - q: "¿Qué capacidades MCP implementa GitLab MCP Server?"
-    a: "GitLab MCP Server implementa **cuatro capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— más **metadatos de iconos** en cada herramienta, recurso y prompt. El progreso envía actualizaciones en tiempo real durante operaciones de larga duración, la elicitación permite al servidor pedir información al usuario mediante formularios estructurados, el autocompletado completa valores de argumentos como nombres de proyectos, ramas, usuarios y etiquetas, y las suscripciones a recursos entregan notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo. Los iconos son metadatos de presentación, no una capacidad de protocolo negociada. Las cuatro capacidades se negocian durante el handshake de inicialización MCP."
   - q: "¿Cuál es la diferencia entre capacidades declaradas por el servidor y dependientes del cliente?"
-    a: "Las capacidades declaradas por el servidor, como el **autocompletado**, GitLab MCP Server las anuncia de forma incondicional y están disponibles para cualquier cliente que las invoque. Las capacidades dependientes del cliente, como la **elicitación**, requieren que el cliente MCP declare soporte durante la inicialización. El servidor comprueba ese soporte antes de usar la capacidad y degrada de forma elegante cuando falta — en el caso de la elicitación, recurre a las herramientas parametrizadas estándar, por lo que se preserva la funcionalidad y solo se reduce la experiencia interactiva."
+    a: "Las capacidades declaradas por el servidor son las que GitLab MCP Server anuncia por sí mismo: el **autocompletado** en todas las superficies de capacidades, y las **suscripciones a recursos** solo con `GITLAB_MCP_CAPABILITY_SURFACE=full`. Las capacidades dependientes del cliente, como la **elicitación**, las declara el cliente MCP, y el servidor comprueba esa declaración en cada llamada antes de usar la capacidad. Cuando falta, el servidor se degrada de forma controlada: un flujo guiado responde con el nombre de la acción parametrizada estándar que hace el mismo trabajo en una sola llamada, por lo que se preserva la funcionalidad y solo se reduce la experiencia interactiva. El **progreso** no es ni una cosa ni la otra: el cliente lo pide en cada llamada adjuntando un token de progreso."
+  - q: "¿Qué capacidades MCP implementa GitLab MCP Server?"
+    a: "GitLab MCP Server implementa **cuatro capacidades del protocolo MCP** (progreso, elicitación, autocompletado y suscripciones a recursos) más **metadatos de iconos** en cada herramienta, recurso y prompt. El progreso envía actualizaciones en tiempo real durante operaciones de larga duración, la elicitación permite al servidor pedir información al usuario mediante formularios estructurados, el autocompletado completa los argumentos de prompts y plantillas de recurso con valores como rutas de proyecto, ramas, usuarios y etiquetas, y las suscripciones a recursos entregan notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo. Los iconos son metadatos de presentación, no una capacidad de protocolo negociada. El autocompletado y las suscripciones los declara el servidor; la elicitación la declara el cliente, en `initialize` o, desde el protocolo `2026-07-28`, en cada petición; el progreso se pide en cada llamada."
   - q: "¿Qué ocurre si mi cliente MCP no admite una capacidad?"
     a: "GitLab MCP Server se adapta automáticamente. Las notificaciones de **progreso** son de mejor esfuerzo y se ignoran silenciosamente cuando no se admiten, así que las herramientas se completan igualmente. La **elicitación** recurre a las herramientas parametrizadas estándar, donde el asistente proporciona todos los parámetros en una sola llamada. El **autocompletado** simplemente no se ofrece, y los valores siguen siendo descubribles mediante la acción de listado del dominio (`project.list`, `branch.list`, etc. mediante `gitlab_execute_action` en la superficie predeterminada, o la acción `list` de la meta-herramienta correspondiente con `GITLAB_MCP_TOOL_SURFACE=meta`). Los **iconos** son metadatos opcionales que los clientes sin renderizado ignoran. Ninguna capacidad es obligatoria para la funcionalidad básica de las herramientas."
   - q: "¿Qué clientes MCP admiten la elicitación?"
-    a: "La elicitación la admiten **Claude Desktop** y **Claude Code**. **VS Code Copilot** y **Cursor** aún no la admiten, por lo que en esos clientes GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar. Como el soporte de capacidades de los clientes cambia con frecuencia, confirma el estado actual en la documentación del cliente específico."
+    a: "La documentación de **VS Code** (desde la versión 1.102), **Cursor** y **Claude Code** indica que admiten la elicitación. Para **Claude Desktop** y cualquier otro cliente, consulta su propia documentación: el servidor lee la declaración del cliente en cada llamada, y a un cliente que no declara la elicitación se le ofrece la acción parametrizada estándar que hace el mismo trabajo en una sola llamada. El soporte de los clientes cambia de una versión a otra."
 ---
 
 import stats from "../../../../data/stats.json";
 import FAQ from "../../../../components/FAQ.astro";
 
-GitLab MCP Server implementa **{stats.capabilities} capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— que van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar valores de argumentos, vigilar recursos de GitLab en busca de cambios y mostrar iconos reconocibles por dominio.
+GitLab MCP Server implementa las **4 capacidades MCP** que describe esta sección: progreso, elicitación, autocompletado y suscripciones a recursos. Van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar los argumentos de prompts y plantillas de recurso, vigilar recursos de GitLab en busca de cambios y mostrar iconos reconocibles por dominio.
 
-Las {stats.capabilities} capacidades se negocian durante el handshake de inicialización MCP, mientras que los iconos son metadatos de presentación que los clientes renderizan o ignoran. Ninguno es obligatorio para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor degrada de forma elegante y la operación de GitLab subyacente se completa igualmente.
+Ninguna de las {stats.capabilities} capacidades es obligatoria para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor se degrada de forma controlada y la operación de GitLab subyacente se completa igualmente. Los iconos son metadatos de presentación que los clientes renderizan o ignoran, no una capacidad que declare ninguna de las partes.
 
 ## ¿Qué capacidades proporciona GitLab MCP Server?
 
-GitLab MCP Server proporciona cinco funciones diferenciadas, resumidas a continuación. El progreso y la elicitación envían información del servidor al cliente, el autocompletado obtiene sugerencias del servidor bajo demanda, las suscripciones notifican al cliente cuando un recurso vigilado cambia y los iconos son metadatos estáticos adjuntos a cada superficie.
+GitLab MCP Server proporciona cinco funciones diferenciadas, resumidas a continuación. El progreso es una notificación que el servidor envía mientras trabaja en una llamada; la elicitación es una petición que el servidor envía al cliente, que responde con lo que introdujo el usuario; el autocompletado son peticiones que el cliente envía cuando quiere sugerencias; las suscripciones notifican al cliente cuando un recurso vigilado cambia; y los iconos son metadatos estáticos adjuntos a cada superficie.
 
-| Capacidad                                                          | Dirección                                               | Qué Habilita                                                                                                                               |
-| ------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Progress](/gitlab-mcp-server/es/capabilities/progress/)           | Servidor → Cliente                                      | Actualizaciones de progreso en tiempo real para operaciones de larga duración                                                              |
-| [Elicitation](/gitlab-mcp-server/es/capabilities/elicitation/)     | Servidor → Cliente                                      | Asistentes interactivos — formularios paso a paso para crear recursos complejos                                                            |
-| [Completions](/gitlab-mcp-server/es/capabilities/completions/)     | Cliente → Servidor                                      | Autocompletado de argumentos para nombres de proyectos, ramas, usuarios y más                                                              |
-| [Subscriptions](/gitlab-mcp-server/es/capabilities/subscriptions/) | Cliente → Servidor (actualizaciones Servidor → Cliente) | Notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo (solo `GITLAB_MCP_CAPABILITY_SURFACE=full`) |
-| [Icons](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_   | Servidor → Cliente                                      | Iconos para cada herramienta, recurso y prompt — SVG más variantes WebP clara/oscura                                                       |
+| Capacidad                                                          | Dirección                                                           | Qué Habilita                                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Progreso](/gitlab-mcp-server/es/capabilities/progress/)           | Servidor → Cliente (notificación, para una llamada con token)       | Actualizaciones de progreso en tiempo real para operaciones de larga duración                                                                                                                                  |
+| [Elicitación](/gitlab-mcp-server/es/capabilities/elicitation/)     | Servidor → Cliente (petición; el cliente responde)                  | Cuatro flujos guiados interactivos (issue, merge request, release, proyecto): formularios paso a paso para crear recursos complejos                                                                            |
+| [Autocompletado](/gitlab-mcp-server/es/capabilities/completions/)  | Cliente → Servidor (petición)                                       | Autocompletado de argumentos de prompts y plantillas de recurso: rutas de proyecto, ramas, usuarios y más                                                                                                      |
+| [Suscripciones](/gitlab-mcp-server/es/capabilities/subscriptions/) | Cliente → Servidor (petición; actualizaciones Servidor → Cliente)   | Notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo (solo `GITLAB_MCP_CAPABILITY_SURFACE=full`)                                                                     |
+| [Iconos](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_  | Servidor → Cliente (en cada listado y en la identidad del servidor) | 51 iconos: 50 para herramientas, recursos y prompts, más la marca que identifica al propio servidor. Cada uno es una entrada SVG más variantes WebP clara y oscura, transportadas como URIs de datos en base64 |
 
 ## ¿Cómo se negocian las capacidades MCP?
 
-Las capacidades se negocian una vez, durante el handshake de inicialización MCP entre el cliente y el servidor. Cada parte anuncia lo que admite, de modo que ninguna intenta usar una función que la otra no puede manejar. Tras el handshake, el servidor puede enviar notificaciones de progreso y solicitudes de elicitación, y el cliente puede pedir autocompletado.
+Las capacidades se declaran cuando empieza una sesión. En el protocolo 2025-11-25 y anteriores, ambas partes las indican en el handshake `initialize`. En el protocolo 2026-07-28 el servidor publica la misma declaración en su respuesta a `server/discover`, y el cliente indica sus propias capacidades en cada petición. Cada parte anuncia lo que admite, de modo que ninguna intenta usar una función que la otra no puede manejar. El progreso no forma parte de ninguna de las dos declaraciones: el cliente lo pide en cada llamada adjuntando un token de progreso a la petición. La [especificación de MCP](https://modelcontextprotocol.io/specification/) define cada capacidad y la forma en que se declara.
 
 ```mermaid
 sequenceDiagram
@@ -50,7 +50,34 @@ sequenceDiagram
     S-->>C: Resultado de herramienta
 ```
 
-**Las capacidades declaradas por el servidor** (autocompletado) están siempre disponibles porque GitLab MCP Server las anuncia de forma incondicional. **Las capacidades dependientes del cliente** (elicitación) requieren que el cliente MCP declare soporte — el servidor lo comprueba antes de usar la capacidad y degrada de forma elegante cuando no está disponible, recurriendo a las herramientas parametrizadas estándar para no perder funcionalidad.
+**Las capacidades declaradas por el servidor** son las que GitLab MCP Server anuncia por sí mismo: el autocompletado en todas las superficies de capacidades, y las suscripciones a recursos solo con `GITLAB_MCP_CAPABILITY_SURFACE=full` (la tabla siguiente recoge la declaración completa). **Las capacidades dependientes del cliente** (elicitación) requieren que el cliente MCP declare soporte: el servidor lo comprueba antes de usar la capacidad y se degrada de forma controlada cuando no está disponible, indicando la acción parametrizada estándar para no perder funcionalidad. **El progreso** no depende de ninguna de las dos declaraciones, solo del token de progreso que lleve la llamada.
+
+## ¿Qué declara el servidor?
+
+Lo que el servidor declara depende de la superficie de capacidades (`GITLAB_MCP_CAPABILITY_SURFACE`, o `--capability-surface` en modo HTTP), y de nada más: la superficie de herramientas, el tier y el token nunca lo cambian.
+
+| Declaración                         | `full` | `minimal` | Notas                                                                                                     |
+| ----------------------------------- | :----: | :-------: | --------------------------------------------------------------------------------------------------------- |
+| `tools` con `listChanged: true`     |   ✅    |     ✅     | La ejecución de herramientas funciona en ambas superficies                                                |
+| `resources` con `listChanged: true` |   ✅    |     ✅     | Minimal registra solo `gitlab://tools` y `gitlab://tools/{id}`, la forma exacta de llamada de cada acción |
+| `resources.subscribe`               |   ✅    |     ❌     | El servidor lo indica explícitamente, ver más abajo                                                       |
+| `prompts` con `listChanged: true`   |   ✅    |     ❌     | Full registra además el catálogo completo de prompts y recursos                                           |
+| `completions`                       |   ✅    |     ✅     | Se declara porque el manejador de autocompletado está siempre instalado                                   |
+| `logging`                           |   ❌    |     ❌     | Nunca se declara                                                                                          |
+
+Los métodos que la declaración deja fuera se rechazan con `-32601` (método no encontrado) en lugar de responderse: `logging/setLevel` en todas las superficies, y `prompts/list`, `prompts/get` y `resources/subscribe` en minimal. El manejo del progreso sigue disponible en ambas superficies, porque no necesita declaración.
+
+**Por qué `resources.subscribe` se indica explícitamente.** El SDK de MCP sobre el que está construido el servidor activaría el bit por sí solo, pero únicamente cuando ya se ha registrado algún recurso, y el servidor responde al handshake mientras su catálogo todavía se está registrando. Un cliente al que en ese momento se le dice que los recursos no admiten suscripción no vuelve a preguntar, así que en la superficie full el servidor indica el bit por sí mismo. En minimal no hay nada a lo que suscribirse, y el bit queda desactivado.
+
+**Cómo se comprueban las capacidades del cliente.** La elicitación no la declara el servidor; la declara el cliente, y el servidor lee esa declaración en cada llamada, en el momento en que un flujo guiado la necesita: de los metadatos de la propia petición en el protocolo 2026-07-28, y de lo que el cliente envió en `initialize` en las revisiones anteriores. Un flujo guiado que no encuentra soporte de elicitación responde con un mensaje que nombra la acción estándar que recibe todos los campos en una sola llamada (`issue.create`, `merge_request.create`, `project.create` o `release.create`).
+
+## ¿Qué garantiza el servidor?
+
+Esto se cumple para todas las capacidades, en todas las superficies y transportes:
+
+- **Una capacidad ausente no hace nada, nunca es un error por sí misma.** Una llamada sin token de progreso se ejecuta exactamente igual que con uno, salvo por las notificaciones, y una notificación de progreso que no se puede enviar nunca hace fallar la llamada. No hay nada que activar, y nada se rompe cuando un cliente admite menos.
+- **Las respuestas se comprueban antes de usarse.** Cada respuesta que un cliente devuelve a una elicitación se valida antes de que el servidor actúe sobre ella: una respuesta de texto debe ser texto, una elección debe ser una de las opciones ofrecidas, un número debe estar dentro de sus límites, una confirmación debe ser un sí o un no, y un formulario construido a partir de un esquema arbitrario se valida contra ese esquema. Una respuesta que no encaja se rechaza como una respuesta que el servidor no pudo leer; nunca se toma como que el usuario la rechazó o la canceló.
+- **Degradación elegante.** Un cliente al que le falta una capacidad pierde solo esa capacidad: las herramientas, los recursos y los prompts siguen funcionando, y el servidor nunca se detiene porque un cliente admita menos de lo que podría.
 
 ## ¿Qué clientes MCP admiten cada capacidad?
 
@@ -60,7 +87,7 @@ El soporte de capacidades varía según el cliente MCP, y GitLab MCP Server se a
 | -------------- | -------------- | --------------- | ------ | ----------- |
 | Progreso       | ✅              | ✅               | ✅      | ✅           |
 | Autocompletado | ✅              | ✅               | ❓      | ✅           |
-| Elicitación    | ✅              | ❌               | ❌      | ✅           |
+| Elicitación    | ❓              | ✅               | ✅      | ✅           |
 | Suscripciones² | ❓              | ✅               | ❓      | ❓           |
 | Iconos¹        | ❌              | ✅               | ❓      | ❌           |
 
@@ -71,6 +98,9 @@ capacidad), pero no está verificado si muestra las notificaciones
 resultantes — como tampoco lo está el manejo de suscripciones en Claude
 Desktop y Claude Code. Los clientes que nunca se suscriben no pierden nada:
 los recursos siguen siendo legibles bajo demanda.
+
+La fila de elicitación sigue la documentación de cada cliente, enlazada desde
+[¿Qué requiere la elicitación?](/gitlab-mcp-server/es/capabilities/elicitation/#qué-requiere-la-elicitación).
 
 ¹ Los iconos no son una capacidad negociada: el servidor los adjunta siempre y
 un cliente que no puede renderizar ninguno de ellos simplemente los ignora,

@@ -31,7 +31,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#action-catalog",
             "name": "Catálogo canónico de acciones",
-            "description": "La definición interna única de cada operación de GitLab que expone el servidor. Cada entrada lleva su ruta, esquemas de entrada y salida, clasificación de destructividad y tier de licencia. Todas las superficies visibles se generan desde este catálogo, y por eso el comportamiento y la seguridad son idénticos use el cliente la superficie que use.",
+            "description": "La definición interna única de cada operación de GitLab que expone el servidor. Cada entrada lleva su ruta, esquemas de entrada y salida, clasificación de destructividad y tier de licencia. Todas las superficies visibles se generan desde este catálogo, y por eso todas aplican la misma clasificación, los mismos filtros y el mismo formato. Solo difiere cómo se confirma una llamada destructiva: la superficie dinámica por defecto siempre exige confirm: true.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -66,14 +66,14 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#safe-mode",
             "name": "Modo seguro",
-            "description": "Un ajuste de despliegue, GITLAB_MCP_SAFE_MODE=true, que intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones del catálogo en lugar de previsualizarlas.",
+            "description": "Un ajuste de despliegue, GITLAB_MCP_SAFE_MODE=true, que intercepta cada acción mutante y devuelve una tarjeta de vista previa que nombra la acción, con los argumentos que habría enviado en un bloque JSON, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones del catálogo en lugar de previsualizarlas.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#read-only-mode",
             "name": "Modo solo lectura",
-            "description": "Un ajuste de despliegue, GITLAB_MCP_READ_ONLY=true, que omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista, lo que es una garantía más fuerte que rechazar la llamada al ejecutarla.",
+            "description": "Un ajuste de despliegue, GITLAB_MCP_READ_ONLY=true, que retira del catálogo toda acción mutante. En las superficies dinámica y meta la acción desaparece de la herramienta que la servía, y en la superficie individual su herramienta no se registra; pedir una se rechaza antes de que nada llegue a GitLab.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -115,7 +115,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#http-transport",
             "name": "Transporte HTTP",
-            "description": "Un modo multiusuario en el que un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. Las sesiones se aíslan en un pool LRU acotado indexado por un hash de token y URL de GitLab, así que no se comparte estado entre clientes.",
+            "description": "Un modo multiusuario en el que un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. El cliente de GitLab, el bucket del límite de tasa y los watchers de cada credencial se aíslan en su propia entrada de un pool LRU acotado indexado por un hash de token y URL de GitLab; el catálogo de herramientas se comparte, y no se escribe nada en disco.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -149,7 +149,7 @@ Las tres son proyecciones del mismo [catálogo de acciones](#catálogo-canónico
 
 ## Catálogo canónico de acciones
 
-El **catálogo canónico de acciones** es la definición interna única de cada operación de GitLab que expone el servidor. Cada entrada lleva su ruta, esquemas de entrada y salida, clasificación de destructividad y tier de licencia. Todas las superficies visibles se generan desde este catálogo, y por eso el comportamiento y la seguridad son idénticos use el cliente la superficie que use.
+El **catálogo canónico de acciones** es la definición interna única de cada operación de GitLab que expone el servidor. Cada entrada lleva su ruta, esquemas de entrada y salida, clasificación de destructividad y tier de licencia. Todas las superficies visibles se generan desde este catálogo, y por eso todas aplican la misma clasificación, los mismos filtros y el mismo formato. Solo difiere cómo se confirma una llamada destructiva: la superficie dinámica por defecto siempre exige `confirm: true` ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 ## ID canónico de acción
 
@@ -169,11 +169,11 @@ El **gating por tier** registra solo las acciones y campos de esquema que soport
 
 ## Modo seguro
 
-**Modo seguro** (`GITLAB_MCP_SAFE_MODE=true`) intercepta cada llamada mutante y devuelve una previsualización JSON de lo que ocurriría, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones por completo en lugar de previsualizarlas.
+**Modo seguro** (`GITLAB_MCP_SAFE_MODE=true`) intercepta cada acción mutante y devuelve una tarjeta de vista previa que nombra la acción, con los argumentos que habría enviado en un bloque JSON, en vez de ejecutarla. Se distingue del modo solo lectura, que elimina las operaciones por completo en lugar de previsualizarlas.
 
 ## Modo solo lectura
 
-El **modo solo lectura** (`GITLAB_MCP_READ_ONLY=true`) omite del catálogo registrado toda acción mutante. El asistente no puede llamar a una operación de escritura porque no existe en su lista — una garantía más fuerte que rechazar la llamada al ejecutarla.
+El **modo solo lectura** (`GITLAB_MCP_READ_ONLY=true`) retira del catálogo toda acción mutante. En las superficies dinámica y meta la acción desaparece de la herramienta que la servía, y en la superficie individual su herramienta no se registra; pedir una se rechaza antes de que nada llegue a GitLab.
 
 ## Elicitación
 
@@ -197,7 +197,7 @@ El **transporte stdio** es el predeterminado: el cliente de IA arranca el servid
 
 ## Transporte HTTP
 
-El **transporte HTTP** es el modo multiusuario: un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. Las sesiones se aíslan en un pool LRU acotado indexado por un hash de token y URL de GitLab, así que no se comparte estado entre clientes. Ver [modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
+El **transporte HTTP** es el modo multiusuario: un proceso atiende a muchos clientes por red, cada uno autenticándose con su propio token de GitLab. El cliente de GitLab, el bucket del límite de tasa y los watchers de cada credencial se aíslan en su propia entrada de un pool LRU acotado indexado por un hash de token y URL de GitLab; el catálogo de herramientas se comparte, y no se escribe nada en disco. Ver [modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 ## Tokens de esquema de herramientas
 

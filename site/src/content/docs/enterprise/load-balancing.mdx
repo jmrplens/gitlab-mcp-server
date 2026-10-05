@@ -28,10 +28,14 @@ one per instance, one licensing and identity probe per caller instead of one per
 instance, and a pool entry that stays warm rather than being rebuilt on each
 instance in turn and evicted from each in turn.
 
-Two things are not preferences. A stateful session (`--stateless=false`) lives
+Three things are not preferences. A stateful session (`--stateless=false`) lives
 in the process that minted its `Mcp-Session-Id`, and another instance answers
-that id with `404`. Resource subscriptions are watchers held by one process. If
-you run either, affinity is a requirement.
+that id with `404`. Resource subscriptions are watchers held by one process. And
+the rounds of a multi-round-trip
+[elicitation](/gitlab-mcp-server/capabilities/elicitation/#how-is-the-input-kept-safe)
+(a guided creation flow, or a confirmation before a destructive change) carry
+state signed with a key the asking process created, so another instance refuses
+the answer. If you run any of them, affinity is a requirement.
 
 ## Consistent hashing across a changing instance set
 
@@ -148,7 +152,7 @@ HAProxy computes the digest in its own configuration, so nothing has to be
 trusted to keep the raw credential out of a routing key, and it polls `/health`,
 which is what makes the drain window mean anything.
 
-```haproxy
+```text
 global
   daemon
 defaults
@@ -236,8 +240,9 @@ comes from the gateway and the credential may have been replaced.
   terminates authentication and issues its own credential downstream, hash that
   one. If it forwards the original, hash the original. If it does neither, you
   have no key and round robin is the honest choice.
-- **The rate limiter must be told the real address**, or it will charge every
-  caller's failures to the gateway. Set `--trusted-proxy-header` to the header
+- **The authentication budgets must be told the real address**, or they will
+  charge every caller's failures to the gateway. The rate limiter needs no
+  address, since it is keyed by credential. Set `--trusted-proxy-header` to the header
   your gateway sets and `--trusted-proxies` to its addresses; the header is
   believed only on a connection from a listed address, and each flag is refused
   without the other. For `X-Forwarded-For` the value is read from the right,

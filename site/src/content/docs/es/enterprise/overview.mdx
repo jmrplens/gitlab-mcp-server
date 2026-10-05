@@ -4,7 +4,7 @@ description: "Da servicio a cientos de personas desde un único despliegue de Gi
 datePublished: "2026-09-06"
 faq:
   - q: "¿Sigue haciendo falta afinidad por token entre instancias?"
-    a: "Para las llamadas ordinarias es una optimización, no un requisito: la instancia a la que se mueve un cliente ya tiene el catálogo construido, así que el movimiento cuesta un sondeo de credencial, una consulta de licencia y un cliente. La afinidad sigue manteniendo un solo cubo de límite y un solo sondeo de identidad por cliente en lugar de uno por instancia. Es obligatoria para dos cosas: las sesiones con estado, que viven en el proceso que acuñó el identificador de sesión, y las suscripciones a recursos, cuyos watchers los mantiene un proceso."
+    a: "Para las llamadas ordinarias es una optimización, no un requisito: la instancia a la que se mueve un cliente ya tiene el catálogo construido, así que el movimiento cuesta un sondeo de credencial, una consulta de licencia y un cliente. La afinidad sigue manteniendo un solo cubo de límite y un solo sondeo de identidad por cliente en lugar de uno por instancia. Es obligatoria para tres cosas: las sesiones con estado, que viven en el proceso que acuñó el identificador de sesión; las suscripciones a recursos, cuyos watchers los mantiene un proceso; y las rondas de una elicitación de varias idas y vueltas (un flujo guiado de creación, o una confirmación antes de un cambio destructivo), cuyo estado se firma con una clave que solo tiene el proceso que preguntó."
   - q: "¿Cuál es el ajuste que más se olvida detrás de un proxy?"
     a: "`--trusted-proxy-header` junto con `--trusted-proxies`. Sin ellos, los fallos de autenticación de todos los clientes se cargan a la dirección del balanceador, y diez tokens malos por minuto desde cualquier punto de la población bloquean esa dirección durante un minuto: toda credencial que el despliegue no tenga ya recibe `429` hasta que termina la ventana, la envíe quien la envíe, mientras que los clientes a los que ya está sirviendo siguen atendidos. Cada flag se rechaza sin el otro."
   - q: "¿Por qué HAProxy marca todas las instancias como DOWN?"
@@ -29,7 +29,8 @@ familiares.
 - **Dimensionar son dos preguntas, no una.** Mantener una credencial es casi
   gratis; servir llamadas es donde se agota una instancia.
 - **La afinidad es una optimización para las llamadas ordinarias y un requisito
-  para las sesiones con estado y las suscripciones.**
+  para las sesiones con estado, las suscripciones y la elicitación de varias
+  idas y vueltas.**
 - **La rotación de certificado no necesita reinicio.** Escribe el par nuevo sobre
   las mismas rutas; el siguiente handshake lo presenta.
 - **Detrás de cualquier proxy, define `--trusted-proxy-header` y

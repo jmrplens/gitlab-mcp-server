@@ -217,13 +217,15 @@ This is useful for dry-run workflows, training environments, and debugging tool 
 
 An action whose effect cannot be undone by calling its opposite is classified destructive, once per action in the catalog, and all three surfaces read that one bit (`destructiveHint`). Deleting something is the obvious case and not the whole of it: an action that hands something to a party outside the instance belongs there too. `project.mirror_add` is the one worth naming, because it does not read as destructive: creating a push mirror deletes nothing, and gives the host named in its `url` a continuing copy of the whole repository. A model acting on an issue body that asks for a "backup mirror" could otherwise send the repository away with one call, so that call needs confirmation like any other destructive one.
 
-A destructive call proceeds on the first of these that holds:
+On the meta and individual surfaces, a destructive call proceeds on the first of these that holds:
 
 1. `GITLAB_MCP_YOLO_MODE` is truthy (`1`, `true` or `yes`), or, when it is unset, `AUTOPILOT` is: for unattended pipelines.
 2. The call carries `"confirm": true`.
 3. The client supports elicitation, and the user approves the prompt.
 
 Otherwise it fails closed and nothing reaches GitLab. A client that cannot prompt gets an error asking it to send the call again with `confirm: true` only after the user explicitly approves. A user who declines gets an answer telling the model not to retry and to ask what they want instead; a prompt dismissed without an answer is reported as having changed nothing, and may be asked again.
+
+The default dynamic surface asks nothing and reads neither setting: `gitlab_execute_action` refuses an action classified destructive unless the call carries a top-level `confirm: true`, so `GITLAB_MCP_YOLO_MODE` and `AUTOPILOT` skip nothing there ([issue 1166](https://github.com/jmrplens/gitlab-mcp-server/issues/1166) tracks that difference). The two guards under [When the arguments decide](#when-the-arguments-decide) follow the order above on every surface, the dynamic one included. [Error handling](/gitlab-mcp-server/operations/error-handling/#destructive-actions-and-confirmation) quotes what each refusal says.
 
 ### When the arguments decide
 
@@ -255,7 +257,7 @@ Tool results carry text other people wrote: issue and merge request descriptions
 | A link                               | `MdTitleLink`         | Both halves are escaped, so neither can end the link, and an address that is not `http` or `https` is shown as code rather than linked    |
 | A code block (a file, a log, a diff) | `MarkdownFencedBlock` | The fence is longer than any run of backticks in the body, so nothing in it can close the block                                           |
 
-The first four also drop control characters. A code block is the one place where escaping is not the answer, because a file or a log has to be shown as it is; containment comes from the fence instead. `make check-md-escaping` type-checks every formatter and fails the build when a value from GitLab reaches one of these places without its helper.
+The first four also drop control characters. A code block is the one place where escaping is not the answer, because a file or a log has to be shown as it is; containment comes from the fence instead. A check in the project's own build reads every formatter and fails it when a value from GitLab reaches one of these places without its helper, so a release cannot ship one that does.
 
 Boundary markers around such text, such as `<user_content>` tags, were considered and not adopted. Tool results already arrive as separate structured `content` items, apart from the system and user prompts and from each other, and with the structure contained a marker would add tokens without adding a boundary. None of this stops a model from following an instruction written in plain prose; that is what the confirmation on destructive actions, read-only mode and a narrow token are for.
 
