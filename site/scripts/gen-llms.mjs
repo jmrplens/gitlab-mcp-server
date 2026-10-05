@@ -131,6 +131,7 @@ const SECTIONS = [
 		labelEs: "Instalación",
 		slugs: [
 			"install/overview",
+			"install/clients",
 			"install/binary",
 			"install/homebrew",
 			"install/winget",

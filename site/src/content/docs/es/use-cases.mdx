@@ -115,6 +115,17 @@ Cada tarjeta nombra los dominios del catálogo que usa. En la superficie dinámi
 4. _"Asigna el issue #234 a @alice"_ — distribuye el trabajo
 5. _"Genera un informe de progreso del hito v3.0"_ — crea resumen de estado
 
+### Flujo de paneles
+
+Estos pasos lanzan prompts MCP, que un cliente ofrece como comandos con barra o en un selector de prompts:
+
+1. `my_pending_reviews`: los merge requests abiertos que esperan tu revisión, en todos los proyectos
+2. `daily_standup` para el proyecto my-app: tus últimas 24 horas, como hecho, previsto y bloqueos
+3. `reviewer_workload` para el grupo platform: cuántas revisiones abiertas tiene cada miembro
+4. `stale_items_report` para el proyecto my-app: los merge requests e issues que nadie ha actualizado en 14 días
+
+[Ejemplos de uso](/gitlab-mcp-server/es/examples/usage/#paneles-e-informes) lista los argumentos de estos y del resto de prompts de panel.
+
 <FAQ />
 
 ## Referencia de la fuente

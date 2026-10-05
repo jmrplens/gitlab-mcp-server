@@ -253,7 +253,8 @@ Crea `.cursor/mcp.json` en tu proyecto:
 Escribe el token donde el servidor lo lee y registra después el comando:
 
 ```bash
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
 chmod 600 ~/.gitlab-mcp-server.env
 
 claude mcp add gitlab \
@@ -261,12 +262,12 @@ claude mcp add gitlab \
   -- /ruta/a/gitlab-mcp-server
 ```
 
-Añade `GITLAB_URL=https://gitlab.example.com` a ese mismo archivo solo para instancias autogestionadas. El comando de registro no nombra ningún token, así que nada lo pone en `argv` ni en el propio archivo de configuración de Claude Code.
+Añade `GITLAB_URL=https://gitlab.example.com` a ese mismo archivo solo para instancias autogestionadas, o escribe el archivo entero con un editor. Ninguno de los dos comandos nombra el token, así que nada lo pone en `argv`, en el historial de la shell ni en el propio archivo de configuración de Claude Code.
 
 </TabItem>
 <TabItem label="Continue">
 
-Añade a `~/.continue/config.yaml` (o al `.continue/config.yaml` de tu workspace):
+Añade a `~/.continue/config.yaml`; un espacio de trabajo puede en cambio guardar sus servidores como archivos en su carpeta `.continue/mcpServers/`, como describe la [documentación MCP de Continue](https://docs.continue.dev/customize/deep-dives/mcp):
 
 ```yaml
 mcpServers:
@@ -276,7 +277,7 @@ mcpServers:
       GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-Recarga la ventana de Continue tras editar la configuración. Consulta la [documentación MCP de Continue](https://docs.continue.dev/customize/deep-dives/mcp) para alternativas en modo HTTP y OAuth.
+Recarga la ventana de Continue tras editar la configuración. La entrada HTTP está en [Configuración de clientes](/gitlab-mcp-server/es/install/clients/#continue); Continue no documenta ningún flujo OAuth, así que por HTTP envía un token.
 
 </TabItem>
 <TabItem label="Windsurf">
@@ -301,17 +302,20 @@ Reinicia Windsurf o pulsa **Refresh** en el panel de Plugins para que se aplique
 </TabItem>
 <TabItem label="JetBrains AI">
 
-Los IDEs de JetBrains (IntelliJ IDEA, GoLand, PyCharm, etc.) con el plugin **AI Assistant** soportan servidores MCP en `Settings → Tools → AI Assistant → Model Context Protocol`.
+Los IDEs de JetBrains (IntelliJ IDEA, GoLand, PyCharm, etc.) con el plugin **AI Assistant** añaden servidores MCP en **Settings** > **Tools** > **AI Assistant** > **Model Context Protocol (MCP)**. Selecciona **Add**, después el transporte **STDIO**, y pega:
 
-Añade una entrada stdio apuntando al binario:
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/ruta/a/gitlab-mcp-server",
+      "args": []
+    }
+  }
+}
+```
 
-- **Nombre**: `gitlab`
-- **Comando**: `/ruta/a/gitlab-mcp-server`
-- **Variables de entorno**: `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`
-
-Añade `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado.
-
-Alternativamente, crea `.idea/mcp.json` en la raíz del proyecto con la misma estructura JSON usada por VS Code / Cursor. Reinicia el IDE tras editar.
+JetBrains documenta la entrada como un `command` y sus `args`, sin bloque de entorno, así que pon el token en `~/.gitlab-mcp-server.env`, como en la pestaña de Claude Code, y añade ahí `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado. El servidor lee ese archivo por su cuenta.
 
 </TabItem>
 </Tabs>

@@ -74,6 +74,8 @@ merge_request.list → project_id: "my-group/backend",
 
 Returns: MR titles, authors, branches, labels, and review status.
 
+To ask across every project at once, `merge_request.list_global` takes the same `reviewer_username` filter, together with `scope: "all"`: GitLab's global listing defaults to `created_by_me`, which would keep only the merge requests you opened yourself. The `my_pending_reviews` MCP prompt packages that question as a personal dashboard, grouped by project; clients usually offer prompts as slash commands or in a prompt picker.
+
 ### Read MR changes
 
 **Prompt**: "Show me the file changes in MR !42"
@@ -111,6 +113,8 @@ Returns: whether the MR is now approved, the approvals required and given, who a
 ## AI-powered code review
 
 There is no separate "AI review" tool. AI-powered review happens when the assistant reads an MR's diff with `mr_review.changes_get`, reasons over the code, and then writes its findings back as notes or threaded discussions. A typical request, _"Read the changes in MR !42 and flag any error-handling or security issues"_, chains the read action above with the `mr_review.note_create` and `mr_review.discussion_create` actions below, all within a single conversation.
+
+The `review_mr` MCP prompt prepares that review in one step. Run it with `project_id` and `merge_request_iid`, and the server returns the MR's full diffs with every file sorted by risk (high-risk, business logic, tests, documentation), per-file metrics, the branch context and a review plan, ready for the model to work through.
 
 ---
 
@@ -173,6 +177,20 @@ Draft notes are only visible to you until you publish them all at once with `mr_
 ## MR lifecycle
 
 Drive a merge request through its full lifecycle: open it from a feature branch, rebase it onto the latest target, merge it (optionally squashing), or close it when an approach is superseded.
+
+### Start from a new branch
+
+**Prompt**: "Create a branch feature/new-login from main in the backend project and add a login page to it"
+
+```text
+branch.create → project_id: "my-group/backend",
+  branch_name: "feature/new-login", ref: "main"
+repository.file_create → project_id: "my-group/backend",
+  branch: "feature/new-login", file_path: "src/login.html",
+  content: "...", commit_message: "Add new login page"
+```
+
+With `GITLAB_MCP_TOOL_SURFACE=individual` these are `gitlab_branch_create` and `gitlab_file_create`, and the merge request below is `gitlab_mr_create`.
 
 ### Create an MR
 

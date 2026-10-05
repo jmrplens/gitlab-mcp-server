@@ -49,8 +49,8 @@ flowchart TB
 Almacena tu token en `~/.gitlab-mcp-server.env` con permisos restringidos:
 
 ```bash
-# Crear el archivo de entorno en el home
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > ~/.gitlab-mcp-server.env
+# Crear el archivo de entorno en el home; el diálogo deja el token fuera del historial de la shell
+printf 'GitLab token: ' && read -rs t && printf 'GITLAB_TOKEN=%s\n' "$t" > ~/.gitlab-mcp-server.env && unset t && echo
 # Añade GITLAB_URL aquí solo para instancias autogestionadas.
 
 # Restringir permisos (solo lectura/escritura del propietario)

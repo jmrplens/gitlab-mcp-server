@@ -14,6 +14,7 @@ faq:
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
+import stats from "../../../../data/stats.json";
 import {
   CardGrid,
   LinkCard,
@@ -41,6 +42,19 @@ import {
 
 Esta es una referencia rápida de prompts en lenguaje natural que puedes usar con cualquier asistente de IA conectado a GitLab MCP Server, agrupados por dominio. Escribe el prompt en lenguaje natural y el servidor lo traduce automáticamente a la operación correcta de la API de GitLab. Las pestañas siguientes muestran a qué acción del catálogo se asigna cada prompt: el `action` que pasarías a `gitlab_execute_action` en la superficie dinámica predeterminada, que es también la acción de la meta-herramienta de dominio correspondiente cuando `GITLAB_MCP_TOOL_SURFACE=meta`. Cubren gestión de proyectos, revisión de código, CI/CD, releases y búsqueda.
 
+## Antes de empezar
+
+Los ejemplos dan por hecho que el servidor ya está conectado a tu cliente, como describe [Primeros pasos](/gitlab-mcp-server/es/getting-started/): en stdio el cliente lo arranca con `GITLAB_TOKEN` en su entorno, más `GITLAB_URL` para una instancia autoalojada. Para compartir un servidor entre varios clientes, arráncalo en modo HTTP:
+
+```bash
+./gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.com \
+  --http-addr=:8080 \
+  --max-http-clients=100
+```
+
+Sustituye `https://gitlab.com` por la URL de tu instancia autoalojada cuando haga falta. Los clientes se conectan a `http://<host>:8080/mcp` y envían su propio token de GitLab en cada petición, como `Authorization: Bearer <token>` o `PRIVATE-TOKEN: <token>`. `--max-http-clients` limita cuántos pares distintos de token y URL de GitLab conserva el servidor a la vez (100 por defecto). Antes de que otras máquinas lleguen a él, sírvelo con TLS o detrás de un proxy, como describe [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
+
 <Tabs>
   <TabItem label="Gestión de Proyectos">
 
@@ -54,7 +68,7 @@ El asistente ejecuta `project.list` (`gitlab_project` con `action: list` cuando 
 
 **Prompt**: "Crea un reporte de bug en my-group/my-project titulado 'Login page returns 404 after password reset' con etiquetas bug y priority::high"
 
-El asistente ejecuta `issue.create` (`gitlab_issue` con `action: create` en la superficie meta), estableciendo el título, descripción, etiquetas y proyecto en una única operación.
+El asistente ejecuta `issue.create` (`gitlab_issue` con `action: create` en la superficie meta), estableciendo el título, descripción, etiquetas y proyecto en una única operación. Si la petición no indica el proyecto o las etiquetas, el asistente puede preguntártelos antes de crear el issue.
 
 ## Gestionar etiquetas
 
@@ -77,6 +91,12 @@ El asistente ejecuta `project.milestone_get` (`gitlab_project` con `action: mile
 
 El asistente ejecuta `merge_request.list` (`gitlab_merge_request` con `action: list` en la superficie meta), filtrando por asignado y estado.
 
+## Encontrar lo que espera tu revisión
+
+**Prompt**: "¿Qué merge requests necesitan mi revisión?"
+
+El asistente puede responder con `merge_request.list_global` filtrado por `reviewer_username` y con `scope: "all"` (`gitlab_merge_request` con `action: list_global` en la superficie meta). El scope importa: el listado global de GitLab usa `created_by_me` por defecto, así que sin él la respuesta solo contiene los merge requests que abriste tú. El prompt MCP `my_pending_reviews` empaqueta la misma pregunta: lánzalo desde tu cliente (la mayoría ofrecen los prompts como comandos con barra o en un selector de prompts) y el servidor devuelve los merge requests abiertos en los que eres revisor, de todos los proyectos, agrupados por proyecto.
+
   </TabItem>
   <TabItem label="CI/CD">
 
@@ -95,6 +115,20 @@ El asistente ejecuta `pipeline.latest` (`gitlab_pipeline` con `action: latest` e
 
 El asistente ejecuta `release.create` (`gitlab_release` con `action: create` en la superficie meta), asociando el release con el tag y estableciendo la descripción.
 
+## Tag y release en una sola petición
+
+**Prompt**: "Crea el tag v1.2.0 sobre main en my-project con el mensaje 'Release 1.2.0' y publica después el release 1.2.0 desde ese tag"
+
+El asistente ejecuta `tag.create` con `tag_name`, `ref` y `message`, y después `release.create` con `tag_name`, `name` y `description` (`gitlab_tag` y `gitlab_release`, cada uno con `action: create`, en la superficie meta).
+
+## Generar notas de release
+
+**Prompt**: "Genera las notas de release de v1.1.0 a v1.2.0"
+
+Lanza el prompt MCP `generate_release_notes` con `project_id`, `from: "v1.1.0"` y `to: "v1.2.0"` (`to` vale `HEAD` por defecto). El servidor reúne los commits, los merge requests fusionados con sus etiquetas, los contribuidores y las estadísticas entre las dos refs, y el modelo los organiza en notas de release agrupadas por tipo.
+
+Para un asistente que ejecuta skills, este repositorio incluye además un [skill de notas de release](https://github.com/jmrplens/gitlab-mcp-server/blob/main/.github/skills/generate-release-notes/SKILL.md): compara dos refs (tags, ramas o commits) a través del servidor, reúne los commits y los merge requests fusionados entre ellas y escribe notas de release por categorías (funcionalidades, correcciones, mejoras, cambios incompatibles, documentación).
+
   </TabItem>
   <TabItem label="Equipo y Búsqueda">
 
@@ -103,6 +137,12 @@ El asistente ejecuta `release.create` (`gitlab_release` con `action: create` en 
 **Prompt**: "Busca usos de la función obsoleta `authenticateUser` en todos mis proyectos"
 
 El asistente ejecuta `search.code` (`gitlab_search` con `action: code` en la superficie meta), buscando en todos los proyectos el patrón de código especificado.
+
+## Conceder un logro
+
+**Prompt**: "Concede el logro 'First merge' definido en my-group al usuario 42"
+
+El asistente ejecuta `achievement.list` con `full_path: "my-group"` para convertir el nombre de la insignia en su `achievement_id` numérico, y después `achievement.award` con ese `achievement_id`, el `user_id` numérico del destinatario y un `award_message` opcional (`gitlab_achievement` con `action: list` y `action: award` en la superficie meta). `achievement.recipients` lista todas las concesiones de un logro, y `achievement.revoke` retira una por el `user_achievement_id` que creó la concesión. Los logros se leen y escriben por GraphQL y están disponibles en todos los tiers.
 
   </TabItem>
 </Tabs>
@@ -129,6 +169,95 @@ gitlab_find_action → query: "listar jobs fallidos de un pipeline"
 gitlab_execute_action → action: "job.list", params: { project_id: "42", pipeline_id: 8847, scope: ["failed"] }
 gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 501 }
 ```
+
+## Descubrir acciones y proyectos
+
+Para ver qué cubre un dominio en la superficie dinámica predeterminada, busca en el catálogo o lee el recurso del manifiesto de herramientas:
+
+```text
+Usuario: "¿Qué puedo hacer con los merge requests?"
+→ gitlab_find_action → query: "merge request"        acciones ordenadas con sus esquemas de entrada
+→ leer gitlab://tools y quedarse con las entradas merge_request.*
+→ leer gitlab://tools/merge_request.list              forma de llamada y esquema de entrada de una acción
+```
+
+Para listar tus propios proyectos, el asistente ejecuta `project.list` con `owned: true` (`gitlab_project_list` con `GITLAB_MCP_TOOL_SURFACE=individual`). Dentro de un repositorio clonado puede ahorrarse la pregunta de a qué proyecto te refieres: `discover_project.resolve` traduce el remoto git a su proyecto de GitLab y devuelve su ID, su ruta, su URL web y su rama por defecto:
+
+```text
+gitlab_execute_action → action: "discover_project.resolve", params: { remote_url: "git@gitlab.example.com:my-group/backend.git" }
+```
+
+Pasa el remoto tal como lo imprime `git remote -v`, con el esquema o el prefijo `git@`; una ruta `grupo/proyecto` sin más ya es un `project_id` válido y no necesita resolverse. Con `GITLAB_MCP_TOOL_SURFACE=meta` o `individual` la misma acción es la herramienta independiente `gitlab_discover_project`.
+
+### En la superficie meta
+
+Con `GITLAB_MCP_TOOL_SURFACE=meta`, {stats.meta.base} herramientas sirven a una instancia Free o CE. El catálogo crece con el tier: 40 en Premium autoalojado y {stats.meta.self_managed_enterprise} en Ultimate autoalojado, una más en cada caso en GitLab.com, donde `gitlab_orbit` se sirve a partir de Premium (41 en GitLab.com Premium, {stats.meta.gitlab_com} en GitLab.com Ultimate). Cada herramienta de dominio solo acepta las claves de primer nivel `action` y `params`:
+
+```text
+Recurso: gitlab://tools/gitlab_project
+→ la entrada de la herramienta gitlab_project: su descripción, que lleva la guía de cada acción, y su esquema de entrada
+
+Recurso: gitlab://tools/gitlab_merge_request.list
+→ forma de llamada y esquema de entrada de una acción
+
+Llamada: gitlab_merge_request → { action: "list", params: { project_id: "42" } }
+→ se despacha a la ruta merge_request.list
+```
+
+Las herramientas de dominio presentes en todos los tiers son `access`, `achievement`, `admin`, `branch`, `ci_catalog`, `ci_variable`, `custom_emoji`, `environment`, `feature_flags`, `group`, `issue`, `job`, `merge_request`, `model_registry`, `mr_review`, `package`, `pipeline`, `project`, `release`, `repository`, `runner`, `search`, `server`, `snippet`, `storage_move`, `tag`, `template`, `user` y `wiki`, cada una servida como `gitlab_<domain>`, junto a la herramienta independiente `gitlab_discover_project` y los cuatro flujos de creación `gitlab_interactive_*`. Las etiquetas, los hitos y los miembros son acciones de `gitlab_project` (`label_list`, `milestone_get`, `members`) y de `gitlab_group` (`group_label_list`, `group_milestone_get`, `members`); los diffs y las discusiones de merge requests son acciones de `gitlab_mr_review` (`changes_get`, `discussion_list`); el lint de CI es `gitlab_template` con `action: lint`. [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) describe la superficie al completo.
+
+## Paneles e informes
+
+Los prompts MCP reúnen los datos de GitLab para una pregunta recurrente y se los entregan al modelo listos para resumir. Los clientes suelen ofrecerlos como comandos con barra o en un selector de prompts; se registran en la superficie de capacidades `full` predeterminada, y [Recursos y prompts](/gitlab-mcp-server/es/tools/resources-prompts/#qué-son-los-prompts-mcp) lista los {stats.prompts}.
+
+Un panel personal:
+
+```text
+my_open_mrs()                    → tus MRs abiertos en todos los proyectos, como autor o asignado
+my_pending_reviews()             → MRs abiertos que esperan tu revisión
+my_issues()                      → issues asignados a ti, con detección de vencidos
+daily_standup(project_id="42")   → tus últimas 24 horas en un proyecto: hecho, previsto, bloqueos
+```
+
+Un panel de responsable de equipo:
+
+```text
+team_overview(group_id="7")                → miembros del grupo con sus MRs abiertos y fusiones recientes
+reviewer_workload(group_id="7")            → cuántos MRs abiertos revisa cada miembro
+group_mr_dashboard(group_id="7")           → los MRs del grupo por proyecto, con filtros de estado y rama destino
+user_activity_report(username="johndoe")   → eventos, MRs fusionados y revisiones de un usuario
+```
+
+La salud de un proyecto:
+
+```text
+project_health_check(project_id="42")
+→ estado del último pipeline, merge requests abiertos, higiene de ramas y recomendaciones
+
+stale_items_report(project_id="42", stale_days="30")
+→ MRs e issues sin actualizar en 30 días (14 si se omite stale_days)
+
+milestone_progress(project_id="42")
+→ avance de issues y MRs y riesgo de fecha límite de cada hito activo
+```
+
+## Cuando algo no existe
+
+Cuando `project.get` y las acciones get de los demás dominios habituales no encuentran nada, responden con un resultado marcado `isError: true` en lugar de un error de protocolo, e indican qué probar a continuación. Si se le pide el proyecto `999`, `project.get` devuelve este texto en todas las superficies:
+
+```text
+## ❓ Project Not Found
+
+The project **999** does not exist or is not accessible with your current permissions.
+
+---
+💡 **Next steps:**
+- Use project.list to search for projects by name or path
+- Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')
+- The project may have been deleted or you may lack access
+```
+
+[Manejo de errores](/gitlab-mcp-server/es/operations/error-handling/) cubre el resto de tipos de fallo.
 
 ---
 

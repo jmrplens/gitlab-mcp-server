@@ -54,18 +54,34 @@ Docker publicada, así que Docker tiene que estar instalado y en ejecución:
 }
 ```
 
-El archivo real reenvía una lista más larga con el mismo patrón `-e NOMBRE`:
-`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`,
-`GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`,
-`GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`,
-`GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`,
-`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`,
-`GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Un `-e NOMBRE` a secas copia la variable al
-contenedor desde el entorno en el que corre el propio `docker`, y solo
-cuando está definida ahí, así que las que no definas no cuestan nada. Solo
-`GITLAB_TOKEN` es obligatoria; `GITLAB_URL` usa por defecto
-`https://gitlab.com` y solo importa para una instancia autogestionada. Todas
-las variables se describen en [Configuración](/gitlab-mcp-server/es/configuration/).
+El archivo real reenvía dieciocho variables con el mismo patrón `-e NOMBRE`.
+Un `-e NOMBRE` a secas copia la variable al contenedor desde el entorno en el
+que corre el propio `docker`, y solo cuando está definida ahí, así que las
+que no definas no cuestan nada y el servidor aplica su valor por defecto:
+
+| Variable                          | Obligatoria | Valor si no se define                                                                                       |
+| --------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`                      | No          | `https://gitlab.com`; defínela para una instancia autogestionada                                            |
+| `GITLAB_TOKEN`                    | Sí          | ninguno: un token de acceso personal (`api`, o `read_api` para una superficie de solo lectura)              |
+| `GITLAB_MCP_SKIP_TLS_VERIFY`      | No          | `false`                                                                                                     |
+| `GITLAB_MCP_TOOL_SURFACE`         | No          | `dynamic` (las alternativas son `meta` e `individual`)                                                      |
+| `GITLAB_MCP_CAPABILITY_SURFACE`   | No          | `full` (`minimal` conserva solo el manifiesto `gitlab://tools`)                                             |
+| `GITLAB_MCP_META_PARAM_SCHEMA`    | No          | `opaque` (las alternativas son `compact` y `full`)                                                          |
+| `GITLAB_MCP_TIER`                 | No          | detectado a partir de la licencia y después de los planes de los namespaces, con `free` como último recurso |
+| `GITLAB_MCP_READ_ONLY`            | No          | `false`                                                                                                     |
+| `GITLAB_MCP_SAFE_MODE`            | No          | `false`                                                                                                     |
+| `GITLAB_MCP_EMBEDDED_RESOURCES`   | No          | `true`                                                                                                      |
+| `GITLAB_MCP_EXCLUDE_TOOLS`        | No          | vacío: no se excluye nada                                                                                   |
+| `GITLAB_MCP_IGNORE_SCOPES`        | No          | `false`                                                                                                     |
+| `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE` | No          | `2GB`                                                                                                       |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`  | No          | vacío: ningún directorio aparte de los siempre permitidos                                                   |
+| `GITLAB_MCP_RATE_LIMIT_RPS`       | No          | `0`: sin límite de peticiones                                                                               |
+| `GITLAB_MCP_RATE_LIMIT_BURST`     | No          | `40`                                                                                                        |
+| `GITLAB_MCP_CLIENT_COMPAT`        | No          | `auto`                                                                                                      |
+| `GITLAB_MCP_LOG_LEVEL`            | No          | `info`                                                                                                      |
+
+Qué hace cada una está en [Configuración](/gitlab-mcp-server/es/configuration/).
+`make check-openplugin` valida en el repositorio los dos manifiestos.
 
 Dos detalles de esa entrada son esenciales:
 
@@ -186,7 +202,7 @@ El siguiente arranque usa la imagen nueva. El servidor nunca comprueba si
 hay actualizaciones ni reemplaza su propio binario; aquí es Docker quien lo
 gestiona. Para fijar una versión en lugar de seguir `latest`, cambia la
 etiqueta en tu `mcp.json` local a
-`ghcr.io/jmrplens/gitlab-mcp-server:2.7.5` y actualízala a mano.
+`ghcr.io/jmrplens/gitlab-mcp-server:3.1.0` y actualízala a mano.
 
 Para desinstalar, quita el plugin como documente tu host (su interfaz o
 comando de plugins), borra la copia local de `mcp.json` si escribiste un

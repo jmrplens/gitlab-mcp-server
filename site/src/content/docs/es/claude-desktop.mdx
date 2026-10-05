@@ -6,35 +6,56 @@ datePublished: "2026-07-08"
 
 import { Steps } from "@astrojs/starlight/components";
 
-GitLab MCP Server se distribuye como **extensión de escritorio** (`.mcpb`) de
-instalación en un clic para Claude Desktop en macOS, Windows y Linux, con un
-paquete por sistema operativo. No hace falta Docker, Node.js ni Python.
+GitLab MCP Server se distribuye como
+[extensión de escritorio](https://www.anthropic.com/engineering/desktop-extensions)
+(un paquete MCPB, `.mcpb`) de instalación en un clic para Claude Desktop en
+macOS, Windows y Linux, con un paquete por sistema operativo. No hace falta
+Docker, Node.js ni Python.
 
-| Tu sistema                    | Paquete                                                                                                                                   | Descarga   | Contiene                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------- |
-| macOS (Apple Silicon e Intel) | [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb)   | unos 30 MB | el binario universal                                          |
-| Windows (x64)                 | [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) | unos 15 MB | el ejecutable x64                                             |
-| Linux (x64 y arm64)           | [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb)     | unos 31 MB | los dos binarios de Linux y un lanzador que elige el adecuado |
+| Tu sistema                    | Paquete                                                                                                                                   | Descarga   | En disco    | Contiene                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- | ------------------------------------------------------------- |
+| macOS (Apple Silicon e Intel) | [`gitlab-mcp-server-darwin.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin.mcpb)   | unos 30 MB | unos 115 MB | el binario universal (arm64 y amd64)                          |
+| Windows (x64)                 | [`gitlab-mcp-server-windows.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows.mcpb) | unos 15 MB | unos 59 MB  | el ejecutable x64                                             |
+| Linux (x64 y arm64)           | [`gitlab-mcp-server-linux.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux.mcpb)     | unos 31 MB | unos 125 MB | los dos binarios de Linux y un lanzador que elige el adecuado |
 
-Cada paquete declara solo su propio sistema, así que Claude Desktop rechaza con
-un mensaje el que se abra en otro sistema. Los tres se instalan como la misma
-extensión.
+Los paquetes por sistema operativo se publican a partir de la primera release
+posterior a 3.1.0. Hasta que salga una release más nueva, los enlaces de la
+tabla no resuelven: descarga en su lugar el
+[paquete universal](#el-paquete-universal), que publican todas las releases.
+Los tamaños en disco son los de los binarios que lleva cada paquete, tal como
+se compilaron para la 3.1.0.
 
-:::note[El paquete universal]
+Cada paquete declara solo su propio sistema en su manifiesto, así que Claude
+Desktop rechaza con un mensaje el que se abra en otro sistema en lugar de
+instalar un servidor que no puede arrancar ahí. Los tres se instalan como la
+misma extensión, `gitlab-mcp-server`, y cada uno lleva el `LICENSE` bajo el
+que se distribuye y `THIRD_PARTY_NOTICES`, los textos de licencia y aviso de
+todos los módulos que enlaza el servidor. El manifiesto es de la versión 0.4
+con `server.type: binary`, y pide Claude Desktop 0.10.0 o superior. El paquete
+de Windows lleva solo el ejecutable x64, así que una máquina Windows arm64
+ejecuta también ese.
+
+## El paquete universal
+
 [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
 lleva los servidores de los tres sistemas en un solo archivo, con una descarga
-de unos 77 MB. Cada release lo sigue publicando para que los enlaces que
-apuntan a él sigan funcionando, y se instala como la misma extensión, pero el
-paquete de tu sistema es una fracción de esa descarga. Las releases hasta la
-3.1.0 solo publican este.
-:::
+de unos 77 MB y 299 MB en disco. Cada release lo publica con ese nombre para
+que los enlaces que apuntan a él sigan funcionando, y se instala como la misma
+extensión, pero el paquete de tu sistema es el mismo servidor en entre una
+quinta parte y dos quintas partes de esa descarga. Las releases hasta la 3.1.0
+solo publican este, y no lleva ni `LICENSE` ni `THIRD_PARTY_NOTICES`. A partir
+de la primera release que construye los paquetes por sistema operativo, la
+entrada del MCP Registry (`server.json`) declara esos tres y no este: una
+entrada del registro no tiene campo de plataforma, así que un cliente no
+podría distinguirlo de los tres que sirven cada uno a un sistema.
 
 ## Instalación
 
 <Steps>
 
 1. Descarga el paquete de tu sistema de la tabla anterior, o de la
-   [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
+   [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest);
+   en la 3.1.0, es el universal `gitlab-mcp-server.mcpb`.
 
 2. Abre el archivo con Claude Desktop. En macOS y Windows, haz doble clic o
    arrástralo a la ventana de Ajustes de Claude Desktop. En Linux, usa
@@ -49,10 +70,13 @@ paquete de tu sistema es una fracción de esa descarga. Las releases hasta la
 
 :::note[Linux]
 La entrada de Linux funciona en la beta de Claude Desktop para Linux (Ubuntu
-22.04 o superior, Debian 12 o superior) en x86_64 y arm64. Un lanzador incluido
-en el paquete elige el binario de tu máquina y le cede el proceso, así que el
+22.04 o superior, Debian 12 o superior, ambos sistemas con glibc, que es lo que
+necesitan los binarios de Linux) en x86_64 y arm64. Un lanzador incluido en el
+paquete elige el binario de tu máquina y le cede el proceso, así que el
 servidor que Claude Desktop arranca y detiene es el binario real. En cualquier
 otro tipo de máquina se niega con un mensaje en el log MCP de Claude Desktop.
+[Cómo arranca la entrada de Linux](#cómo-arranca-la-entrada-de-linux) da los
+detalles.
 :::
 
 ## Ajustes
@@ -62,13 +86,16 @@ Los nombres de la primera columna son los que muestra el diálogo de instalació
 | Ajuste                                                  | Obligatorio | Por defecto          | Variable de entorno          |
 | ------------------------------------------------------- | ----------- | -------------------- | ---------------------------- |
 | GitLab URL (URL de GitLab)                              | Sí          | `https://gitlab.com` | `GITLAB_URL`                 |
-| GitLab Personal Access Token (token de acceso personal) | Sí          | —                    | `GITLAB_TOKEN`               |
+| GitLab Personal Access Token (token de acceso personal) | Sí          | ninguno              | `GITLAB_TOKEN`               |
 | Tool surface (superficie de herramientas)               | No          | `dynamic`            | `GITLAB_MCP_TOOL_SURFACE`    |
 | GitLab tier (tier de GitLab)                            | No          | autodetección        | `GITLAB_MCP_TIER`            |
 | Read-only mode (modo solo lectura)                      | No          | desactivado          | `GITLAB_MCP_READ_ONLY`       |
 | Safe mode (modo seguro)                                 | No          | desactivado          | `GITLAB_MCP_SAFE_MODE`       |
 | Skip TLS verification (omitir la verificación TLS)      | No          | desactivado          | `GITLAB_MCP_SKIP_TLS_VERIFY` |
 | Log level (nivel de log)                                | No          | `info`               | `GITLAB_MCP_LOG_LEVEL`       |
+
+El nivel de log decide cuánto escribe el servidor en los archivos de log MCP
+de Claude Desktop; elige `debug` cuando vayas a informar de un problema.
 
 :::tip[Almacenamiento del token]
 Claude Desktop cifra el Personal Access Token antes de guardarlo, con una clave
@@ -81,20 +108,23 @@ en **Edit profile** > **Access** > **Personal access tokens**.
 
 La superficie de herramientas por defecto, `dynamic`, registra solo dos
 herramientas find/execute, de modo que el servidor nunca satura la ventana de
-contexto de Claude. Cambia a `meta` (34 meta-herramientas) o `individual`
-(una herramienta por acción) en los ajustes de la
-extensión — consulta [Superficies de herramientas](/gitlab-mcp-server/es/tools/overview/).
+contexto de Claude. Cambia a `meta` (34 meta-herramientas en Free/CE) o
+`individual` (una herramienta por acción) en los ajustes de la extensión;
+consulta [Superficies de herramientas](/gitlab-mcp-server/es/tools/overview/).
 
-## Actualizaciones
+## Actualizaciones y desinstalación
 
 Las actualizaciones llegan como nuevas versiones de la extensión publicadas
 con cada release. El servidor no se actualiza a sí mismo ni reemplaza nunca su
 propio binario, así que la versión que instalaste es la que se ejecuta hasta
 que Claude Desktop instale una extensión más nueva.
 
+Para quitarla, desinstala la extensión desde los ajustes de extensiones de
+Claude Desktop; ese paso corresponde a Claude Desktop.
+
 ## Verificación
 
-Pídele a Claude algo como _"¿Con qué usuario de GitLab estoy autenticado?"_ —
+Pídele a Claude algo como _"¿Con qué usuario de GitLab estoy autenticado?"_:
 debería llamar a `gitlab_find_action` y después a `gitlab_execute_action` con
 la acción `user.current` y devolver tu nombre de usuario.
 
@@ -103,10 +133,136 @@ Configura la URL de tu instancia en el ajuste **GitLab URL**. Si usa un
 certificado autofirmado, activa **Skip TLS verification**.
 :::
 
+### Verifica el paquete que has descargado
+
+Los paquetes se construyen fuera de GoReleaser, así que no aparecen en
+`checksums.txt`. En todas las releases posteriores a v2.7.5 el workflow de
+release atesta cada uno por separado, el universal incluido, lo que te
+permite confirmar que el archivo salió de la ejecución de release de este
+repositorio:
+
+```bash
+gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+```
+
+Usa el nombre del paquete que hayas descargado. `--signer-workflow` exige que
+la atestación venga del workflow de release, porque `-R` por sí solo acepta
+una emitida por cualquier workflow del repositorio;
+`--source-ref refs/tags/v<versión>` la ata además a una release concreta. El SHA-256 de cada
+paquete que declara la entrada del MCP Registry es también el `fileSha256` que
+registra el `server.json` de esa release. El paquete de v2.7.5 no tiene
+atestación: compara su SHA-256 con
+`c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe`.
+
+Los binarios del release los cubren `checksums.txt`, su firma keyless de
+Cosign y su propia atestación de procedencia; consulta
+[integridad del release](/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release).
+
+## Cómo arranca la entrada de Linux
+
+Un manifiesto elige su comando solo por sistema operativo, así que la entrada
+`linux` no puede nombrar un binario por arquitectura. En su lugar ejecuta
+`/bin/sh ${__dirname}/server/linux/launch.sh`, y el lanzador
+(`mcpb/linux/launch.sh`, `sh` POSIX):
+
+- elige `gitlab-mcp-server-linux-amd64` para `x86_64` o `amd64` y
+  `gitlab-mcp-server-linux-arm64` para `aarch64` o `arm64` según `uname -m`,
+  y rechaza cualquier otro tipo de máquina con un mensaje en stderr;
+- busca el binario junto a sí mismo, nunca a través del directorio de
+  trabajo, y entrecomilla todas las rutas, porque el directorio de la
+  extensión cuelga de `Claude Extensions/` en el directorio de datos de Claude
+  Desktop (`~/.config/Claude` por defecto) y por tanto contiene un espacio;
+- activa el bit de ejecución del propietario si al binario le falta;
+- lo ejecuta con `exec`, así que el proceso que lanzó Claude Desktop se
+  convierte en el servidor y las señales de parada que Claude Desktop envía a
+  ese proceso le llegan;
+- no escribe nada en stdout, que transporta el JSON-RPC del servidor.
+
+Como es `/bin/sh` quien lee el lanzador, el propio lanzador no necesita bit de
+ejecución. Claude Desktop extrae cada archivo con modo 0600 y restaura 0700
+solo en las entradas cuyo modo registrado tiene el bit de ejecución del
+propietario, y por eso la compilación registra 0755 en los binarios; el
+`chmod` del propio lanzador cubre un archivo que haya perdido esos bits.
+
+## Construye los paquetes tú mismo
+
+```bash
+make mcpb          # los tres paquetes por sistema operativo y el universal, en dist/
+make check-mcpb    # valida mcpb/manifest.json y los tres manifiestos derivados de él con la CLI oficial de MCPB
+```
+
+`make mcpb` necesita macOS, por `lipo`, además de `zip`, `unzip` y `jq`.
+Compila de forma cruzada los binarios darwin arm64 y amd64 y los une con
+`lipo`, compila de forma cruzada el binario Windows amd64 y los binarios Linux
+amd64 y arm64, escribe su `THIRD_PARTY_NOTICES` con
+`cmd/gen_third_party_notices` y empaqueta los cuatro paquetes con
+`scripts/build-mcpb.sh`. Todos los paquetes usan la misma disposición y llevan
+las entradas que necesita su sistema, en este orden:
+
+```text
+manifest.json                                 todos los paquetes
+icon.png                                      todos los paquetes
+LICENSE                                       todos los paquetes
+THIRD_PARTY_NOTICES                           todos los paquetes
+server/gitlab-mcp-server                      binario universal de macOS: darwin, universal
+server/gitlab-mcp-server.exe                  Windows amd64: windows, universal
+server/linux/launch.sh                        lanzador de Linux: linux, universal
+server/linux/gitlab-mcp-server-linux-amd64    linux, universal
+server/linux/gitlab-mcp-server-linux-arm64    linux, universal
+```
+
+El paquete universal empaqueta `mcpb/manifest.json` tal cual: su comando base
+es el binario universal de macOS, con sustituciones para `win32` y `linux`. Un
+paquete por sistema operativo empaqueta el manifiesto que `mcpb/platform.jq`
+deriva de él, que lista solo esa plataforma en `compatibility.platforms`,
+convierte el comando de esa plataforma en el comando base, no lleva ninguna
+sustitución y nombra la ruta de ese comando como `entry_point` del servidor.
+Nada más cambia, y menos que nada el nombre de la extensión, así que
+cualquiera de los cuatro se instala encima de cualquier otro.
+
+Tras empaquetar, el script vuelve a leer cada archivo y borra el conjunto
+entero salvo que cada uno lleve exactamente su lista, el lanzador y los
+binarios Unix figuren como archivos Unix con modo 0755, y cada manifiesto
+empaquetado concuerde con su archivo: está presente cada ruta que nombran su
+comando, sus argumentos y cada sustitución de plataforma, cada sustitución
+tiene como clave `darwin`, `win32` o `linux` y figura en
+`compatibility.platforms`, esa lista nombra exactamente las plataformas para
+las que el archivo lleva un servidor, y ninguna sustitución declara `env`. Esa
+última regla existe porque Claude Desktop aplica el `env` de una sustitución
+en lugar del base en vez de combinar ambos, así que una sustitución que lo
+llevara arrancaría el servidor sin `GITLAB_TOKEN`.
+
+El script imprime además el tamaño de descarga y el tamaño desempaquetado de
+cada paquete, y falla ante los límites del propio Claude Desktop, leídos de su
+runtime de extensiones (2.7032.0): una entrada de más de 512 MiB, más de
+2048 MiB desempaquetados, un archivo que se desempaqueta a más de 50 veces su
+propio tamaño o más de 100.000 entradas. Avisa, sin fallar, cuando un paquete
+por sistema operativo supera los 50 MiB de descarga o los 256 MiB
+desempaquetado: los directorios que puntúan servidores MCP dejan de leer un
+paquete por encima de esos tamaños y entonces dan por no verificadas su
+procedencia, su licencia y su mantenimiento, que es lo que le pasó al único
+paquete que publicó la 3.1.0.
+
+Un `.mcpb` es un zip normal con `manifest.json` en la raíz, y el script lo
+construye con `zip` y marcas de tiempo fijas en las entradas: las mismas
+entradas producen los mismos bytes, lo que importa porque `server.json`
+registra el SHA-256 de cada paquete declarado. En una release, el workflow
+construye los cuatro paquetes a partir de los binarios de GoReleaser, adjunta
+y atesta cada uno, y `scripts/update-server-json-sha.sh` declara los tres
+paquetes por sistema operativo en `server.json`, una entrada cada uno, y
+rechaza un conjunto que no sirva a `darwin`, `win32` y `linux` exactamente una
+vez. `scripts/mcpb_launch_sh_test.py`, `scripts/mcpb_manifest_test.py` y
+`scripts/build_mcpb_sh_test.py` prueban en CI el lanzador, la derivación del
+manifiesto y las comprobaciones del script de construcción.
+
 ## Privacidad
 
 El servidor se ejecuta íntegramente en tu máquina y no envía telemetría: la
 exportación opcional de OpenTelemetry viene desactivada por defecto y la
 extensión no expone ningún ajuste que la active, así que los datos fluyen
 solo entre Claude Desktop y la instancia de GitLab que configures. Consulta
-la [Política de privacidad](/gitlab-mcp-server/es/operations/privacy/).
+la [Política de privacidad](/gitlab-mcp-server/es/operations/privacy/). El
+campo `privacy_policies` del manifiesto nombra esa misma política, como el
+`PRIVACY.md` del repositorio, y la
+[Declaración de privacidad de GitLab](https://about.gitlab.com/privacy/).

@@ -65,6 +65,17 @@ issue.list → project_id: "my-group/backend",
 
 Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas de creación.
 
+### Crear un issue
+
+**Prompt**: "Abre un bug P1 en el proyecto backend: la página de login agota el tiempo de espera"
+
+```text
+issue.create → project_id: "my-group/backend",
+  title: "Corregir el timeout del login", labels: ["bug", "P1"]
+```
+
+Si la petición no indica el proyecto o las etiquetas, el asistente puede preguntártelos antes de crear el issue. Con `GITLAB_MCP_TOOL_SURFACE=individual` la llamada es `gitlab_issue_create`.
+
 ### Asignar y etiquetar
 
 **Prompt**: "Asigna el issue #123 a johndoe y añade las etiquetas 'priority::high' y 'team::backend'"
@@ -84,6 +95,8 @@ issue.list → project_id: "my-group/backend",
 ```
 
 Devuelve: issues sin asignados que necesitan atención antes de que comience el sprint.
+
+Dos prompts MCP responden a las preguntas más amplias: `my_issues` lista todos los issues que tienes asignados en todos los proyectos, con detección de vencidos, y `stale_items_report` (`project_id`, `stale_days` opcional, 14 por defecto) encuentra los issues y merge requests que nadie ha actualizado en ese número de días.
 
 ### Cerrar issues resueltos
 

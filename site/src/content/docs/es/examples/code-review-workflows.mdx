@@ -74,6 +74,8 @@ merge_request.list → project_id: "my-group/backend",
 
 Devuelve: títulos de MRs, autores, ramas, etiquetas y estado de revisión.
 
+Para preguntar en todos los proyectos a la vez, `merge_request.list_global` acepta el mismo filtro `reviewer_username`, junto con `scope: "all"`: el listado global de GitLab usa `created_by_me` por defecto, lo que dejaría solo los merge requests que abriste tú. El prompt MCP `my_pending_reviews` empaqueta esa pregunta como panel personal, agrupado por proyecto; los clientes suelen ofrecer los prompts como comandos con barra o en un selector de prompts.
+
 ### Ver cambios de un MR
 
 **Prompt**: "Muéstrame los cambios de archivos en el MR !42"
@@ -111,6 +113,8 @@ Devuelve: si el MR queda aprobado, las aprobaciones requeridas y dadas, quién a
 ## Revisión de código con IA
 
 No existe una herramienta de "revisión con IA" separada. La revisión asistida por IA ocurre cuando el asistente lee el diff de un MR con `mr_review.changes_get`, razona sobre el código y luego escribe sus hallazgos como notas o discusiones en hilo. Una petición típica, _"Lee los cambios del MR !42 y señala cualquier problema de manejo de errores o de seguridad"_, encadena la acción de lectura anterior con las acciones `mr_review.note_create` y `mr_review.discussion_create` siguientes, todo dentro de una misma conversación.
+
+El prompt MCP `review_mr` prepara esa revisión en un solo paso. Lánzalo con `project_id` y `merge_request_iid`, y el servidor devuelve los diffs completos del MR con cada archivo clasificado por riesgo (alto riesgo, lógica de negocio, tests, documentación), métricas por archivo, el contexto de la rama y un plan de revisión, listos para que el modelo los recorra.
 
 ---
 
@@ -173,6 +177,20 @@ Las notas borrador solo son visibles para ti hasta que las publiques todas a la 
 ## Ciclo de vida del MR
 
 Lleva un merge request por todo su ciclo de vida: ábrelo desde una rama de funcionalidad, rebásalo sobre la última versión del destino, fusiónalo (opcionalmente con squash) o ciérralo cuando un enfoque queda reemplazado.
+
+### Empezar desde una rama nueva
+
+**Prompt**: "Crea una rama feature/new-login desde main en el proyecto backend y añádele una página de login"
+
+```text
+branch.create → project_id: "my-group/backend",
+  branch_name: "feature/new-login", ref: "main"
+repository.file_create → project_id: "my-group/backend",
+  branch: "feature/new-login", file_path: "src/login.html",
+  content: "...", commit_message: "Añadir nueva página de login"
+```
+
+Con `GITLAB_MCP_TOOL_SURFACE=individual` son `gitlab_branch_create` y `gitlab_file_create`, y el merge request siguiente es `gitlab_mr_create`.
 
 ### Crear un MR
 

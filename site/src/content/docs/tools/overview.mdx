@@ -188,7 +188,7 @@ Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.
 
 ### How does meta-tool mode work?
 
-Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium**, or **{stats.meta.gitlab_com} on GitLab.com Enterprise/Premium** when Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
+Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Ultimate**, or **{stats.meta.gitlab_com} on GitLab.com Ultimate** when Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
 
 ```json
 {

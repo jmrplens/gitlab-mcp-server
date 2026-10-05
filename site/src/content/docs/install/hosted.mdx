@@ -31,7 +31,8 @@ The endpoint runs in OAuth mode, which gives you two ways in:
 
 - **Sign in with OAuth, no header at all.** A client that speaks the OAuth
   flow (VS Code, Claude Code, Cursor) sends its first request without a
-  credential, receives a `401` carrying an RFC 9728 challenge that points at
+  credential, receives a `401` whose `WWW-Authenticate: Bearer` challenge
+  (RFC 6750) names the RFC 9728 metadata document at
   `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`,
   discovers `https://gitlab.com` as the authorization server there, and
   opens the browser for you to authorize. The client keeps its own token
@@ -150,8 +151,8 @@ an `oauth` block with the client ID from the server card instead of
 
 The file each client reads is listed in the
 [Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration);
-the HTTP shapes for VS Code, OpenCode and `curl` are in
-[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/#client-configuration).
+every client's HTTP entry, with a token or with OAuth, is on
+[Client configuration](/gitlab-mcp-server/install/clients/).
 
 ## Upgrade and uninstall
 

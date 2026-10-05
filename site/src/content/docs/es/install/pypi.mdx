@@ -36,7 +36,9 @@ también incluye un pequeño paquete Python `gitlab_mcp_server` con dos
 cometidos: un console script `jmrplens-gitlab-mcp-server` que cede el
 control al binario, que es lo que permite a `uvx` resolver la herramienta
 por el nombre de la distribución, y `python -m gitlab_mcp_server` para
-localizarlo desde código.
+localizarlo desde código. A partir de la primera release posterior a 3.1.0
+cada wheel lleva además el `LICENSE` del repositorio y `THIRD_PARTY_NOTICES`
+bajo `.dist-info/licenses/`. A 2026-10-05 PyPI tiene 2.7.5, 3.0.0 y 3.1.0.
 
 Por tanto, tras instalar aparecen dos comandos:
 
@@ -110,7 +112,7 @@ Comprueba la instalación:
 
 ```bash
 gitlab-mcp-server --version
-# gitlab-mcp-server 2.7.5 (commit: ...)
+# gitlab-mcp-server 3.1.0 (commit: ...)
 ```
 
 Con `uvx` no queda ningún comando en tu PATH;
@@ -157,7 +159,7 @@ a `env` solo para una instancia autogestionada. Un cliente que no herede el
 PATH de tu shell puede necesitar la ruta completa al comando;
 `which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
 imprime. Para fijar una release con `uvx` en lugar de seguir la más
-reciente, nómbrala en el argumento: `"jmrplens-gitlab-mcp-server@2.7.5"`.
+reciente, nómbrala en el argumento: `"jmrplens-gitlab-mcp-server@3.1.0"`.
 
 Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
 `"type": "stdio"`, Zed usa `context_servers`) están en las
@@ -185,7 +187,9 @@ porque `-R` por sí solo acepta una emitida por cualquier workflow del
 repositorio; añade `--source-ref refs/tags/v<versión>` para exigir además la
 release que instalaste. En Windows, `(Get-Command gitlab-mcp-server).Source` da la ruta para la
 primera forma. Para un `uvx` fijado a una versión, nombra la misma versión
-en `--from` (`jmrplens-gitlab-mcp-server==<versión>`). Las wheels llevan
+en `--from` (`jmrplens-gitlab-mcp-server==<versión>`). Las ubicaciones de
+`pip`, `uv tool install` y `uvx` se comprobaron en la 3.1.0 contra el
+`checksums.txt` firmado de la release. Las wheels llevan
 además la atestación de publicación del propio PyPI (PEP 740), visible en la
 página de cada archivo en PyPI. La firma de la release y el resto de canales
 se explican en

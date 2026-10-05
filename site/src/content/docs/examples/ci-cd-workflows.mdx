@@ -95,6 +95,20 @@ job.trace → project_id: "my-group/backend", job_id: 98765
 
 Returns: full job log output. Useful for diagnosing test failures without opening the GitLab UI.
 
+### Start from a resource or a prompt
+
+A client that reads MCP resources can begin with the latest pipeline without a tool call, then follow the same path down to the log:
+
+```text
+1. Resource: gitlab://project/42/pipelines/latest
+   → the most recent pipeline's ID, status, ref, SHA, source and web URL
+2. job.list → project_id: "42", pipeline_id: 100, scope: ["failed"]
+3. job.trace → project_id: "42", job_id: 500
+   → the job's console output, for debugging
+```
+
+The `summarize_pipeline_status` MCP prompt (`project_id`) packages the first two steps: it groups the latest pipeline's jobs by outcome and includes the failure reasons. Both need the default `full` capability surface.
+
 ---
 
 ## Manage CI/CD variables

@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-La imagen se publica como [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) y se replica como `docker.io/jmrplens/gitlab-mcp-server` en [Docker Hub](https://hub.docker.com/r/jmrplens/gitlab-mcp-server), con una etiqueta `<versión>` y `latest` en ambos registros, para `linux/amd64` y `linux/arm64`. Cada release la construye con atestaciones de procedencia y SBOM y la firma por digest con Cosign. Dentro: una base Alpine con certificados CA y datos de zona horaria, el binario en `/usr/local/bin/gitlab-mcp-server`, un usuario no-root `appuser` (UID 10001), el puerto 8080 expuesto y un `HEALTHCHECK` que ejecuta `gitlab-mcp-server --probe`, que pregunta por `/health` al servidor en marcha allá donde escuche (la imagen 2.7.5 lanza `wget` contra el puerto 8080 en su lugar).
+La imagen se publica como [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) y se replica como `docker.io/jmrplens/gitlab-mcp-server` en [Docker Hub](https://hub.docker.com/r/jmrplens/gitlab-mcp-server), con una etiqueta `<versión>` y `latest` en ambos registros, para `linux/amd64` y `linux/arm64`. Cada release la construye con atestaciones de procedencia y SBOM y la firma por digest con Cosign. Las dos variantes de plataforma se arrancan y se les pide su versión antes de publicar nada, así que ninguna puede salir incapaz de arrancar, que es lo que le pasó a la imagen `linux/arm64` de v2.7.5, cuyo binario pedía un cargador dinámico que el runtime Alpine no trae. Dentro: una base Alpine con certificados CA y datos de zona horaria, el binario en `/usr/local/bin/gitlab-mcp-server`, un usuario no-root `appuser` (UID 10001), el puerto 8080 expuesto y un `HEALTHCHECK` que ejecuta `gitlab-mcp-server --probe`, que lee el listener de los propios flags del servidor en marcha y pregunta por su `/health`, así que sigue a un puerto cambiado, a un socket unix o a TLS en el listener (la imagen 2.7.5 lanza `wget` contra `http://localhost:8080/health` en su lugar, y da por no sano cualquier otro listener).
 
 El binario de la imagen se compila sin `-trimpath`, a diferencia de los binarios del release, así que su información de compilación registra el release con el que se compiló y el SBOM de la imagen lista el servidor con esa versión, con una URL de paquete versionada que un escáner de vulnerabilidades puede casar. Las imágenes hasta la 3.1.0 incluida lo listan sin versión. A partir del primer release posterior a 3.1.0, la imagen lleva además `LICENSE` y `THIRD_PARTY_NOTICES` en `/usr/share/licenses/gitlab-mcp-server/`: los textos de licencia, aviso y patente de todos los módulos que enlaza ese binario, generados durante la compilación de la imagen a partir de los módulos del propio binario y de los paquetes que enlaza.
 
@@ -23,7 +23,8 @@ docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 `-e GITLAB_TOKEN` sin valor reenvía la variable desde el entorno que el cliente le da a `docker`, de modo que el token vive en el bloque `env` del cliente y no en la línea de comandos. Docker descarga la imagen en la primera ejecución. La entrada de cliente que lanza este comando está en [Configura tu cliente](#configura-tu-cliente) más abajo; con Claude Code el registro es esa misma línea de comandos, y tampoco lleva token:
 
 ```bash
-export GITLAB_TOKEN=glpat-xxxx
+# Pide el token sin mostrarlo, así que queda fuera del historial de la shell
+printf 'GitLab token: ' && read -rs GITLAB_TOKEN && export GITLAB_TOKEN && echo
 claude mcp add gitlab --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
@@ -34,7 +35,7 @@ Los botones de un clic para VS Code, Cursor, LM Studio y Kiro del [Inicio rápid
 
 ### Variables de entorno
 
-En modo stdio cada ajuste es una variable de entorno, y cada una que uses necesita su propio `-e NOMBRE` para que Docker la copie dentro del contenedor. La lista que reenvía la configuración del plugin incluido es una buena plantilla: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Qué hace cada una está en la página de [Configuración](/gitlab-mcp-server/es/configuration/).
+En modo stdio cada ajuste es una variable de entorno, y cada una que uses necesita su propio `-e NOMBRE` para que Docker la copie dentro del contenedor. La lista que reenvía la configuración del plugin incluido es una buena plantilla: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_MCP_SKIP_TLS_VERIFY`, `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_MCP_CAPABILITY_SURFACE`, `GITLAB_MCP_META_PARAM_SCHEMA`, `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_EMBEDDED_RESOURCES`, `GITLAB_MCP_EXCLUDE_TOOLS`, `GITLAB_MCP_IGNORE_SCOPES`, `GITLAB_MCP_UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `GITLAB_MCP_RATE_LIMIT_RPS`, `GITLAB_MCP_RATE_LIMIT_BURST`, `GITLAB_MCP_CLIENT_COMPAT` y `GITLAB_MCP_LOG_LEVEL`. Qué hace cada una está en la página de [Configuración](/gitlab-mcp-server/es/configuration/). La entrada de la imagen en el MCP Registry (`server.json`) declara diecinueve variables, las que un cliente del registro ofrece rellenar: esta lista sin `GITLAB_MCP_CLIENT_COMPAT`, más `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` y `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`.
 
 :::note[Certificados autofirmados]
 El contenedor tiene su propio almacén de CA, así que un certificado en el que confía tu host sigue siendo desconocido dentro de él. Monta la CA y apunta `SSL_CERT_FILE` a ella:
@@ -50,7 +51,13 @@ docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
 
 ## HTTP: la imagen como servicio
 
-Arrancado sin `-i`, el contenedor no tiene una entrada estándar por la que hablar y escucha en el puerto 8080, pero no arranca hasta que le digas a qué GitLab sirve:
+Arrancado sin `-i`, el contenedor no tiene una entrada estándar por la que hablar y escucha en el puerto 8080, pero no arranca hasta que le digas a qué GitLab sirve. El comando por defecto no lleva ninguna instancia, así que un `docker run -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest` a secas termina al momento con `--gitlab-url is required in HTTP mode`. La forma más sencilla conserva el comando por defecto y nombra la instancia en una variable, que rellena la lista sin reemplazar el comando:
+
+```bash
+docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+Un `GITLAB_URL` separado por comas publica varias instancias, entre las que elige después la cabecera `GITLAB-URL`. Para nombrar la instancia en la línea de comandos, pasa los flags de forma explícita; cualquier argumento tras el nombre de la imagen reemplaza el comando por defecto, así que `--http` y `--http-addr` vuelven con ellos en lugar de deducirse:
 
 ```bash
 docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
@@ -113,8 +120,9 @@ En modo HTTP la configuración viene de flags y no de variables (`--tool-surface
 
 ## Etiquetas y registros
 
-- `latest` sigue a la release más nueva; `2.7.5` y cualquier otra etiqueta de versión se quedan fijas. Fija una etiqueta de versión en producción, o fija el digest para una inmutabilidad total: `ghcr.io/jmrplens/gitlab-mcp-server:2.7.5@sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168` es la forma que usa el `server.json` del MCP Registry para la release actual.
-- `ghcr.io/jmrplens/gitlab-mcp-server` y `docker.io/jmrplens/gitlab-mcp-server` llevan las mismas imágenes: la etiqueta `2.7.5` resuelve al mismo digest en ambos. La documentación usa `ghcr.io`; usa el nombre de Docker Hub si ese es el registro que permite tu red.
+- `latest` sigue a la release más nueva; `3.1.0` y cualquier otra etiqueta de versión se quedan fijas. Fija una etiqueta de versión en producción, o fija el digest para una inmutabilidad total: `ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc` es la forma que usa el `server.json` del MCP Registry para la release actual.
+- `ghcr.io/jmrplens/gitlab-mcp-server` y `docker.io/jmrplens/gitlab-mcp-server` llevan las mismas imágenes: a 2026-10-05, `3.1.0` y `latest` resuelven a ese mismo digest en ambos. La documentación usa `ghcr.io`; usa el nombre de Docker Hub si ese es el registro que permite tu red.
+- El `docker-compose.yml` del repositorio nombra su imagen como `${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}`, así que `DOCKER_REGISTRY` y `VERSION` eligen el registro y la etiqueta sin editar el archivo.
 - La imagen lleva la etiqueta `io.modelcontextprotocol.server.name=io.github.jmrplens/gitlab-mcp-server`, que es como el MCP Registry valida su propiedad.
 
 ## Configura tu cliente

@@ -10,7 +10,7 @@ faq:
   - q: "Does GitLab MCP Server work with GitLab Community Edition?"
     a: "Yes. GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). On CE it exposes the full base catalog — {{meta.base}} base meta-tools, {{resources}} resources, and {{prompts}} prompts — covering projects, issues, merge requests, pipelines, CI/CD, wikis, releases, users, groups, search, deployments, environments, and packages. Enterprise-only features such as merge trains, DORA metrics, vulnerability management, audit events, and compliance policies require a Premium or Ultimate license and are not available on CE."
   - q: "How do I enable Enterprise tools?"
-    a: "Set the licensing tier explicitly or let the server auto-detect it. In stdio mode, set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`; in HTTP mode pass `--tier=premium` or `--tier=ultimate`. When the tier is omitted, the server detects it from the instance license (`GET /license`), then from the plans of the namespaces the token administers (`GET /namespaces`), falling back to `free`; in HTTP mode it does so per token+URL entry. Forcing the Enterprise/Premium catalog takes the meta-tool count from {{meta.base}} to {{meta.self_managed_enterprise}}. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. There is no `--enterprise` flag in HTTP mode: passing one aborts startup; use `--tier`."
+    a: "Set the licensing tier explicitly or let the server auto-detect it. In stdio mode, set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`; in HTTP mode pass `--tier=premium` or `--tier=ultimate`. When the tier is omitted, the server detects it from the instance license (`GET /license`), then from the plans of the namespaces the token administers (`GET /namespaces`), falling back to `free`; in HTTP mode it does so per token+URL entry. On a self-managed instance, forcing Premium takes the meta-tool count from {{meta.base}} to 40, and Ultimate takes it to {{meta.self_managed_enterprise}}. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. There is no `--enterprise` flag in HTTP mode: passing one aborts startup; use `--tier`."
   - q: "Which operating systems and architectures are supported?"
     a: "Pre-built binaries are available for Linux, macOS, and Windows on both amd64 and arm64 — six binaries in total, plus a universal macOS build, gitlab-mcp-server-darwin-all, that runs on both. macOS ships separate Intel (amd64) and Apple Silicon (arm64) builds. Each platform ships as a single self-contained binary — no Go runtime, interpreter or library bundle to install. The Linux builds are position-independent executables that use the glibc dynamic loader, so they need a glibc userland; on musl distributions such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl."
   - q: "Does GitLab MCP Server work with OpenAI Codex?"
@@ -25,7 +25,7 @@ import stats from "../../data/stats.json";
 
 ## GitLab edition compatibility
 
-GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only domains, registered as extra meta-tools with `GITLAB_MCP_TOOL_SURFACE=meta`, extra `gitlab_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`, and extra catalog actions on the default dynamic surface: set `GITLAB_MCP_TIER=premium` (or `GITLAB_MCP_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on detection, which reads the instance license (`GET /license`), then the plans of the namespaces the token administers (`GET /namespaces`), and falls back to `free`. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. There is no `--enterprise` flag in HTTP mode: passing one aborts startup; use `--tier`.
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The paid tiers unlock {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only domains, six with Premium and the rest with Ultimate, registered as extra meta-tools with `GITLAB_MCP_TOOL_SURFACE=meta`, extra `gitlab_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`, and extra catalog actions on the default dynamic surface: set `GITLAB_MCP_TIER=premium` (or `GITLAB_MCP_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on detection, which reads the instance license (`GET /license`), then the plans of the namespaces the token administers (`GET /namespaces`), and falls back to `free`. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. There is no `--enterprise` flag in HTTP mode: passing one aborts startup; use `--tier`.
 
 | Feature                                                                         | Community (CE) | Enterprise (EE) |
 | ------------------------------------------------------------------------------- | :------------: | :-------------: |
@@ -80,9 +80,25 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 ### Per-client compatibility profiles
 
-Most clients ignore MCP fields they do not understand, so the server ships its full surface to everyone. The one exception is handled automatically: the Codex builds bundled with ChatGPT.app reject results whose content annotations carry a fractional `priority` value, so when a session identifies itself as Codex the server rounds those priorities to the nearest spec-legal integer. Everything else (audience annotations, structured content, output schemas, icons) is delivered unchanged, and no other client is affected. Set `GITLAB_MCP_CLIENT_COMPAT=off` to disable the rewriting. The session has to know its client: over HTTP, a Codex client speaking protocol 2025-11-25 or earlier is recognized only with `--stateless=false`, since the default stateless transport keeps no `initialize` for the calls that follow it.
+MCP clients are required to ignore fields they do not understand, so the server ships its full surface to everyone: tool icons, content annotations, `structuredContent`, `outputSchema` and completions. A survey of Cursor, Windsurf, Zed, Cline, Continue, VS Code Copilot, JetBrains, Gemini CLI, Goose, opencode, Crush and Claude Code found none that rejects an unknown field. The one exception is handled automatically: the Codex builds bundled with ChatGPT.app reject results whose content annotations carry a fractional `priority` value, so when a session identifies itself as Codex the server rounds those priorities to the nearest spec-legal integer. Everything else (audience annotations, structured content, output schemas, icons) is delivered unchanged, and no other client is affected. Set `GITLAB_MCP_CLIENT_COMPAT=off` to disable the rewriting, in stdio and HTTP mode alike; the `--client-compat` flag sets the same variable and wins over the environment when it is passed. The session has to know its client: over HTTP, a Codex client speaking protocol 2025-11-25 or earlier is recognized only with `--stateless=false`, since the default stateless transport keeps no `initialize` for the calls that follow it.
+
+#### What the Codex profile changes
+
+- **The defect.** The Codex builds bundled with ChatGPT.app (verified on `codex-cli 0.148.0-alpha.9`) fail any MCP result whose annotations carry a non-integer `priority`, such as `0.6`, although the specification allows any number from 0 to 1. `rmcp`, the Rust SDK Codex builds on, types the field correctly. The fault is in Codex's build: Cargo feature unification turns on `serde_json`'s `arbitrary_precision` for the whole binary, so a decimal reaches the float field in a form the field refuses, and the result falls through to `rmcp`'s catch-all variant. A literal `1.0` fails the same way; only `0` and `1` pass. Since the server annotates its Markdown content with fractional priorities, every successful tool call used to fail in Codex with:
+
+  ```text
+  tool call error: tool call failed for `gitlab/<tool>`
+  Caused by: Unexpected response type
+  ```
+
+- **Detection.** The `clientInfo` the session reports is matched case-insensitively for `codex` in its name or its title: the one sent in `initialize` on protocol 2025-11-25 and earlier, and the one in each request's `_meta` on 2026-07-28. Codex has identified itself as `codex-mcp-client` / `Codex` since v0.20.
+- **Rewrite.** Only `priority` changes, rounded to the nearest spec-legal integer (0 or 1), in the results of `tools/call`, `resources/list`, `resources/templates/list` and `prompts/get`. A priority rounded to 0 is left out, since the field is optional. It works because Go writes an integral number as `1` and never as `1.0`. The tool annotations Codex's approval policy reads (`readOnlyHint`, `destructiveHint`) are delivered unchanged with everything else.
+- **Isolation.** Results are cloned before they are rewritten, so in HTTP mode a session of another client on the same server keeps the exact fractional priorities.
+- **OpenAI's hosted client.** It reports `clientInfo` `openai-mcp (Responses API)` or `openai-mcp (Realtime API)`, which the `codex` match does not catch, and it needs no profile: measured on 2026-09-28 ([issue 1044](https://github.com/jmrplens/gitlab-mcp-server/issues/1044)), it reads a fractional priority without error. One label is still unmeasured, the `openai-mcp/1.0.0 (Codex)` User-Agent of a tool call from ChatGPT on the web.
 
 This is a deliberate deviation from the MCP specification, which says the `clientInfo` a client reports "SHOULD NOT" be used to change what a server does, and it is kept knowingly ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)). It changes how one number is written and nothing a model reads, it never decides who a caller is or what it may do, since identity comes from the credential on each request, and it retires once a Codex built on an `rmcp` release carrying the fix ([modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), released in `rmcp` 3.5.0) is widely deployed rather than merely released. [Security](/gitlab-mcp-server/operations/security/#two-mcp-clauses-the-server-meets-in-part) states the position beside the server's other one.
+
+The fix reaches users through a chain of three links: an `rmcp` release carrying it, which exists; a Codex release built on that `rmcp`, which did not exist when last checked on 2026-10-02 (Codex's `main` moved to `rmcp` 3.3.0 on 2026-09-30, a release without the fix); and a ChatGPT.app that bundles that Codex, whose users do not choose their version. [Row 17 of the upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call) tracks each link, with [openai/codex#38979](https://github.com/openai/codex/issues/38979).
 
 For Codex, add the server to `~/.codex/config.toml` with tool pre-approval — without it, Codex asks for confirmation on every non-read-only tool, and non-interactive `codex exec` runs cancel those calls:
 
@@ -97,19 +113,51 @@ GITLAB_URL = "https://gitlab.example.com"
 GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-Keep the default `dynamic` tool surface for clients with tool-count limits (Cursor caps servers at 40 tools, Windsurf at 100, OpenAI-backed clients at 128 per request) and keep `GITLAB_MCP_META_PARAM_SCHEMA` at its `opaque` default for Codex, which silently trims tool schemas larger than ~5 KB.
+### Client limits worth knowing
+
+These are constraints of the clients, not behavior of the server. The default `dynamic` surface ({stats.dynamic} tools) fits every client below. The `meta` surface ({stats.meta.base} to {stats.meta.gitlab_com} tools, by tier and instance) fits all of them except, possibly, Cursor once the catalog passes 40 (41 tools on GitLab.com Premium, {stats.meta.self_managed_enterprise} on self-managed Ultimate), since that limit counts every enabled server's tools together. The `individual` surface suits only clients with no tool cap.
+
+| Client                                                                      | Limit                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cursor                                                                      | 40 tools across all enabled servers, as its 2025 documentation and staff stated; its current documentation states no limit                                                                                                                                                           |
+| Windsurf                                                                    | 100 tools in total                                                                                                                                                                                                                                                                   |
+| OpenAI-backed clients (Codex, Copilot CLI, VS Code Copilot with GPT models) | 128 tools per model request                                                                                                                                                                                                                                                          |
+| Codex                                                                       | Silently trims tool schemas larger than ~5 KB, so keep `GITLAB_MCP_META_PARAM_SCHEMA` at its `opaque` default; when a result carries `structuredContent`, the `content` blocks beside it do not reach the model ([openai/codex#10334](https://github.com/openai/codex/issues/10334)) |
+| Gemini CLI                                                                  | Names each tool `mcp_<server>_<tool>` (with `__` between server and tool before 0.34.0) and shortens a name longer than 63 characters by replacing its middle with `...`                                                                                                             |
+| JetBrains AI Assistant                                                      | Refuses the whole `tools/list` answer when any tool's `outputSchema` has a root type other than `object` ([LLM-30555](https://youtrack.jetbrains.com/issue/LLM-30555))                                                                                                               |
 
 ### MCP gateway validators
 
-An MCP gateway validates a server's catalog before admitting it, under rules its operator chooses — one production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) before 0.7.0) rejected any tool description containing a semicolon. The server keeps everything it lists pure ASCII with no semicolons, on every surface (a character class holds against the next rule better than a codepoint list), and a substitution knob lets a deployment meet a new gateway rule without waiting for a release:
+An MCP gateway validates a server's catalog before admitting it, under rules its operator chooses. One production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) from v1.0.0-BETA-1 through v1.0.0-RC2) rejected any tool whose description contained a semicolon, and refused the whole catalog with:
 
-```bash
-# Rewrite listed descriptions and titles: comma-separated old=new pairs,
-# applied in order (backslash escapes \, \= \\)
-GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.'
+```text
+All N tools failed validation ... Description contains unsafe characters
 ```
 
-The rewrite covers tool, prompt, resource, and resource-template descriptions and titles, including descriptions embedded in tool schemas. Names, URIs, schema constraints (`pattern`, `const`, enum values, defaults) and tool-call results are never touched, and a malformed value refuses to start the server instead of serving an unrewritten catalog. If your gateway is mcp-context-forge, upgrading to 0.7.0 or later also resolves the semicolon rejection on the gateway side ([issue 3770](https://github.com/IBM/mcp-context-forge/issues/3770)).
+The server answers on two fronts. Its own text is kept clean: everything served by `tools/list` (on any surface), `prompts/list`, `resources/list` and `resources/templates/list` is pure ASCII prose with no semicolons, schema-embedded descriptions included, because a validator that refuses "unsafe characters" usually matches a character class, and a class holds against the next rule better than a list of codepoints. `make check-gateway-chars` gates this in CI, and from a checkout of the repository `go run ./cmd/audit_gateway_chars/` prints every offender with its context. The rule covers that listed catalog only: prompt bodies and tool results are not held to it, and result Markdown carries emoji and semicolons. The next rule is yours to meet without waiting for a release: `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` (flag `--description-substitutions`, both transports) rewrites the listed text on the way out.
+
+It takes comma-separated `old=new` pairs, applied in order. A backslash escapes a literal comma, equals sign or backslash inside either half, and any other escape refuses the value. Whitespace is significant:
+
+```bash
+# Replace every semicolon with a period
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.'
+
+# Replace semicolons with commas (the comma must be escaped)
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=\,'
+
+# Two ordered substitutions: "; " becomes ". ", then ":" becomes "-"
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS='; =. ,:=-'
+```
+
+The rewrite covers what a gateway validates and nothing else: tool descriptions, titles and annotation titles, the `description` and `title` keys embedded in input and output schemas, and the descriptions and titles of prompts, prompt arguments, resources and resource templates. Names, URIs, schema constraints (`pattern`, `const`, enum values, defaults) and tool-call results are never touched. A malformed value refuses to start the server instead of serving an unrewritten catalog to the gateway it was configured for, and so does a value with more than 32 pairs or a half longer than 256 bytes. A rewrite that would make a text longer than twice its length, or than its length plus 512 bytes when that is the larger, is not applied to that text, which is served as written and reported once at WARN; an active configuration is also announced once at WARN, since a rewritten catalog looks like any other.
+
+To check that a configuration clears every character the audit knows about, run the audit from a checkout with the substitutions applied; it exits non-zero while any offender is still served:
+
+```bash
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.' go run ./cmd/audit_gateway_chars/ -apply -check
+```
+
+If your gateway is mcp-context-forge, v1.0.0-RC-3 or later drops the semicolon from the rule's default list on the gateway side ([issue 3770](https://github.com/IBM/mcp-context-forge/issues/3770), fixed by [PR 3916](https://github.com/IBM/mcp-context-forge/pull/3916)). Its `TOOL_DESCRIPTION_FORBIDDEN_PATTERNS` setting, new in that release, tunes the rule, and `VALIDATION_STRICT=false` downgrades a rejection to a logged warning. The project's Helm chart (`charts/mcp-stack/values.yaml`) and its `docker-compose.yml` still set `TOOL_DESCRIPTION_FORBIDDEN_PATTERNS` to a list containing `;`, so a gateway deployed from either keeps rejecting semicolons until you override that value. [MCP gateways](/gitlab-mcp-server/enterprise/mcp-gateways/) covers the rest of running the server behind one.
 
 ## MCP protocol features
 

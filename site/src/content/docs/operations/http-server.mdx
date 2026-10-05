@@ -371,7 +371,7 @@ A single server that owns its hostname has neither problem: the derived form is 
 :::note[Pre-registered client ID required]
 GitLab restricts dynamically-registered OAuth clients to the `mcp` scope, which grants no REST or GraphQL access — every action here would fail. Create a GitLab OAuth Application with the `api` scope (`read_api` for a deployment that runs `--read-only` or `--safe-mode`, or for a client that should only read) and configure its Application ID in each client.
 
-The deployment advertises that one scope in `scopes_supported`, and a client such as Claude Code asks GitLab for it. GitLab refuses an authorization request that names a scope the application does not have with `invalid_scope` ("The requested scope is invalid, unknown, or malformed"), and an existing application can be edited without changing its Application ID. A client that wants a read-only credential from a deployment that can write pins `read_api` (Claude Code's `oauth.scopes`, VS Code's `scopes`) against an application that has it; the token is admitted and served the read-only surface.
+The deployment advertises that one scope in `scopes_supported`, and a client such as Claude Code asks GitLab for it. GitLab refuses an authorization request that names a scope the application does not have with `invalid_scope` ("The requested scope is invalid, unknown, or malformed"), and an existing application can be edited without changing its Application ID. A client that wants a read-only credential from a deployment that can write pins `read_api` (Claude Code's `oauth.scopes`, Cursor's `auth.scopes`, Kiro's `oauth.oauthScopes`) against an application that has it; the token is admitted and served the read-only surface.
 :::
 
 **Client configuration in OAuth mode:**
@@ -386,16 +386,14 @@ The deployment advertises that one scope in `scopes_supported`, and a client suc
       "type": "http",
       "url": "https://mcp.example.com/mcp",
       "oauth": {
-        "clientId": "YOUR_GITLAB_APPLICATION_ID",
-        "scopes": ["api"]
+        "clientId": "YOUR_GITLAB_APPLICATION_ID"
       }
     }
   }
 }
 ```
 
-- **`clientId`**: The Application ID from your GitLab OAuth Application (see [OAuth application](/gitlab-mcp-server/operations/oauth-app/))
-- **`scopes`**: Must include `api` for full tool functionality
+- **`clientId`**: The Application ID from your GitLab OAuth Application (see [OAuth application](/gitlab-mcp-server/operations/oauth-app/)), the one key of VS Code's `oauth` block this entry needs
 
 VS Code handles OAuth discovery and authorization automatically.
 
@@ -754,18 +752,25 @@ Add to `.vscode/mcp.json`:
 </TabItem>
 <TabItem label="OpenCode">
 
+OpenCode keeps servers under `mcp` in `opencode.json`, and a remote one has `"type": "remote"`:
+
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "gitlab": {
+      "type": "remote",
       "url": "https://mcp.example.com/mcp",
+      "enabled": true,
       "headers": {
-        "PRIVATE-TOKEN": "glpat-your-token"
-      }
+        "PRIVATE-TOKEN": "{env:GITLAB_TOKEN}"
+      },
+      "oauth": false
     }
   }
 }
 ```
+
+`"oauth": false` stops OpenCode from answering a `401` with an OAuth flow of its own; [Client configuration](/gitlab-mcp-server/install/clients/#opencode) has the rest.
 
 </TabItem>
 <TabItem label="curl (Testing)">

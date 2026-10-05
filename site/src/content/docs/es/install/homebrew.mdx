@@ -4,7 +4,7 @@ description: Instala GitLab MCP Server en macOS o Linux desde el tap de Homebrew
 datePublished: "2026-09-01"
 ---
 
-La fórmula vive en el tap [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) y el workflow de release la regenera en cada release, a partir del mismo `checksums.txt` que la release publica. Es una fórmula binaria: Homebrew descarga el archivo de la release para tu plataforma (Apple Silicon o Intel en macOS, arm64 o x86_64 en Linux), lo comprueba contra el SHA-256 fijado en la fórmula y lo instala como `bin/gitlab-mcp-server` bajo su prefijo. No compila nada ni arrastra dependencias.
+La fórmula es `Formula/gitlab-mcp-server.rb` en el tap [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap), y el workflow de release la regenera en cada release con `scripts/update-homebrew-tap.sh`, a partir del mismo `checksums.txt` firmado que la release publica. Es una fórmula binaria: un bloque `on_macos`/`on_linux` cruzado con `on_arm`/`on_intel` elige el archivo de la release para tu plataforma (Apple Silicon o Intel en macOS, arm64 o x86_64 en Linux), Homebrew lo comprueba contra el SHA-256 fijado en la fórmula y lo instala como `bin/gitlab-mcp-server` bajo su prefijo. No compila nada ni arrastra dependencias. A partir de la primera release posterior a 3.1.0 la fórmula instala también `LICENSE` y `THIRD_PARTY_NOTICES` en el prefijo de la fórmula (`$(brew --prefix gitlab-mcp-server)`).
 
 ## Instalación
 
@@ -12,7 +12,7 @@ La fórmula vive en el tap [`jmrplens/homebrew-tap`](https://github.com/jmrplens
 brew install jmrplens/tap/gitlab-mcp-server
 ```
 
-El nombre completo añade el tap `jmrplens/tap` de paso, así que no hay un `brew tap` aparte. El tap está en la release actual, 2.7.5, con las URL y los hashes de los archivos de esa release.
+El nombre completo añade el tap `jmrplens/tap` de paso, así que no hay un `brew tap` aparte. A 2026-10-05 el tap está en la release actual, 3.1.0, con las URL y los hashes de los archivos de esa release.
 
 ## Verificación
 
@@ -20,7 +20,7 @@ El nombre completo añade el tap `jmrplens/tap` de paso, así que no hay un `bre
 gitlab-mcp-server --version
 ```
 
-imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)`. Es también lo que ejecuta el test de la propia fórmula. `brew info gitlab-mcp-server` muestra la versión instalada y los avisos de la fórmula, que repiten la configuración de cliente de más abajo. La fórmula publicada para 2.7.5 aún menciona `AUTO_UPDATE=false` y `--setup` en esos avisos; ninguno existe ya, el generador no emite esas líneas y la fórmula de la siguiente release no las llevará.
+imprime `gitlab-mcp-server 3.1.0 (commit: <commit>)`. Es también lo que ejecuta el bloque `test` de la propia fórmula. `brew info gitlab-mcp-server` muestra la versión instalada y los avisos de la fórmula, que repiten la configuración de cliente de más abajo. La fórmula publicada para 2.7.5 mencionaba `AUTO_UPDATE=false` y `--setup` en esos avisos; ninguno existe ya, el generador no emite esas líneas y la fórmula publicada no las lleva.
 
 ## Dónde queda el binario
 
@@ -41,7 +41,7 @@ Homebrew instala en su prefijo: `/opt/homebrew` en Apple Silicon, `/usr/local` e
 }
 ```
 
-Sustituye el comando por tu prefijo si no es `/opt/homebrew`, y añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el token va en `~/.gitlab-mcp-server.env`, que el servidor lee por sí mismo, y el registro no lo nombra en ninguna parte: `echo 'GITLAB_TOKEN=glpat-xxxx' > ~/.gitlab-mcp-server.env` y después `claude mcp add gitlab -- gitlab-mcp-server`. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
+Sustituye el comando por tu prefijo si no es `/opt/homebrew`, y añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el token va en `~/.gitlab-mcp-server.env`, que el servidor lee por sí mismo, y el registro no lo nombra en ninguna parte: escribe una línea `GITLAB_TOKEN=glpat-...` en ese archivo con un editor, para que el token quede fuera del historial de la shell, y después ejecuta `claude mcp add gitlab -- gitlab-mcp-server`. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
 
 ## Actualizar y desinstalar
 
@@ -52,7 +52,7 @@ brew update
 brew upgrade gitlab-mcp-server
 ```
 
-Como el workflow de release publica la fórmula regenerada como parte de cada release, `brew upgrade` ve la versión nueva en cuanto sale la GitHub Release. El generador emite ahora un bloque `livecheck` (estrategia `github_latest`) para que las propias herramientas de Homebrew avisen si el tap se queda atrás; la fórmula de 2.7.5 es anterior, y el bloque aparecerá con la siguiente release. Para eliminarla:
+Como el workflow de release publica la fórmula regenerada como parte de cada release, `brew upgrade` ve la versión nueva en cuanto la release ha salido y los paquetes de npm, PyPI y NuGet se han vuelto a leer y comprobar contra su `checksums.txt`; el tap espera a esa comprobación, así que una release que no ha salido del todo deja el tap en la versión anterior. La fórmula lleva un bloque `livecheck` (estrategia `github_latest`) para que las propias herramientas de Homebrew avisen si el tap se queda atrás. Para eliminarla:
 
 ```bash
 brew uninstall gitlab-mcp-server

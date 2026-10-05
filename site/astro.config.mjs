@@ -632,6 +632,11 @@ export default defineConfig({
 							translations: { es: "Elige una vía" },
 						},
 						{
+							slug: "install/clients",
+							label: "Client configuration",
+							translations: { es: "Configuración de clientes" },
+						},
+						{
 							slug: "install/binary",
 							label: "Native binary",
 							translations: { es: "Binario nativo" },
