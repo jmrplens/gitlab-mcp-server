@@ -398,11 +398,11 @@ func chartProvenance(run *Run, l labels) string {
 // is not an RFC 3339 timestamp alone: a record written by hand for a test is
 // still worth printing.
 func measurementDay(run *Run) string {
-	const dateLen = len(time.DateOnly)
-	if len(run.GeneratedAt) >= dateLen {
-		if _, err := time.Parse(time.DateOnly, run.GeneratedAt[:dateLen]); err == nil {
-			return run.GeneratedAt[:dateLen]
-		}
+	// A value shorter than a date is kept whole, and no such value parses as
+	// one.
+	day := run.GeneratedAt[:min(len(run.GeneratedAt), len(time.DateOnly))]
+	if _, err := time.Parse(time.DateOnly, day); err == nil {
+		return day
 	}
 	return run.GeneratedAt
 }
@@ -677,16 +677,16 @@ func latencySpec(run *Run, l labels) barSpec {
 // msLabel prints a millisecond figure at a precision that suits its size: a
 // sub-millisecond ping and a six-second cold start share an axis here.
 func msLabel(v float64) string {
-	switch {
-	case v == 0:
+	if v == 0 {
 		return "0"
-	case v < 1:
-		return fmt.Sprintf("%.2f", v)
-	case v < 10:
-		return fmt.Sprintf("%.1f", v)
-	default:
-		return fmt.Sprintf("%.0f", v)
 	}
+	if v < 1 {
+		return fmt.Sprintf("%.2f", v)
+	}
+	if v < 10 {
+		return fmt.Sprintf("%.1f", v)
+	}
+	return fmt.Sprintf("%.0f", v)
 }
 
 // scenarioLabel names a scenario in a table row.
@@ -708,14 +708,13 @@ func scenarioLabel(s Scenario) string {
 // the result MB, so a 3,235,932-byte tools/list was published as "3.1 MB" when
 // 3.1 MiB was what had been computed.
 func bytesLabel(bytes int) string {
-	switch {
-	case bytes >= 1000*1000:
+	if bytes >= 1000*1000 {
 		return fmt.Sprintf("%.1f MB", float64(bytes)/(1000*1000))
-	case bytes >= 1000:
-		return fmt.Sprintf("%.0f KB", float64(bytes)/1000)
-	default:
-		return fmt.Sprintf("%d B", bytes)
 	}
+	if bytes >= 1000 {
+		return fmt.Sprintf("%.0f KB", float64(bytes)/1000)
+	}
+	return fmt.Sprintf("%d B", bytes)
 }
 
 // joinNonEmpty joins the parts that have content, which keeps a note from

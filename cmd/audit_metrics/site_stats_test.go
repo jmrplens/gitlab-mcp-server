@@ -13,6 +13,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
@@ -59,21 +61,30 @@ func TestSiteStatsTierOrdering(t *testing.T) {
 	if stats.Dynamic != 2 {
 		t.Errorf("dynamic tools = %d, want 2 (find + execute)", stats.Dynamic)
 	}
-	if stats.Tools.Free > stats.Tools.Premium ||
-		stats.Tools.Premium > stats.Tools.UltimateSelfManaged ||
-		stats.Tools.UltimateSelfManaged > stats.Tools.GitLabCom {
-		t.Errorf("tool counts not monotonic across tiers: %+v", stats.Tools)
-	}
-	if stats.CatalogGroups.Free > stats.CatalogGroups.Premium ||
-		stats.CatalogGroups.Premium > stats.CatalogGroups.Ultimate {
-		t.Errorf("catalog group counts not monotonic across tiers: %+v", stats.CatalogGroups)
-	}
-	if stats.Meta.Base > stats.Meta.SelfManagedEnterprise ||
-		stats.Meta.SelfManagedEnterprise > stats.Meta.GitLabCom {
-		t.Errorf("meta counts not monotonic: %+v", stats.Meta)
-	}
 	if stats.Resources <= 0 || stats.Prompts <= 0 || stats.ToolPackages <= 0 {
 		t.Errorf("resources/prompts/tool_packages must be positive: %+v", stats)
+	}
+
+	// Each chain climbs one instance's tiers, so a later figure never falls
+	// below an earlier one. GitLab.com climbs through its own Premium figure,
+	// which may exceed self-managed Premium (Orbit) but never falls below it.
+	chains := []struct {
+		name   string
+		counts []int
+	}{
+		{name: "individual tools", counts: []int{stats.Tools.Free, stats.Tools.Premium, stats.Tools.UltimateSelfManaged, stats.Tools.GitLabCom}},
+		{name: "catalog groups", counts: []int{stats.CatalogGroups.Free, stats.CatalogGroups.Premium, stats.CatalogGroups.Ultimate}},
+		{name: "meta tools, self-managed", counts: []int{stats.Meta.Base, stats.Meta.Premium, stats.Meta.SelfManagedEnterprise, stats.Meta.GitLabCom}},
+		{name: "meta tools, GitLab.com", counts: []int{stats.Meta.Base, stats.Meta.Premium, stats.Meta.GitLabComPremium, stats.Meta.GitLabCom}},
+		{name: "catalog actions, self-managed", counts: []int{stats.CatalogActions.Free, stats.CatalogActions.Premium, stats.CatalogActions.SelfManagedEnterprise, stats.CatalogActions.GitLabCom}},
+		{name: "catalog actions, GitLab.com", counts: []int{stats.CatalogActions.Free, stats.CatalogActions.Premium, stats.CatalogActions.GitLabComPremium, stats.CatalogActions.GitLabCom}},
+	}
+	for _, chain := range chains {
+		t.Run(chain.name, func(t *testing.T) {
+			if !slices.IsSorted(chain.counts) {
+				t.Errorf("%s not monotonic across tiers: %v", chain.name, chain.counts)
+			}
+		})
 	}
 }
 
@@ -237,8 +248,16 @@ func TestGenerateSiteStats_RealSurfaces_MeasuresEveryFieldFromItsOwnSource(t *te
 		}
 		return catalog.CountGroups()
 	}
-	routes := func(c *gitlabclient.Client, enterprise bool) int {
-		return countActionRoutes(dynamicActionCatalog(c, enterprise).ActionMaps())
+	routes := func(c *gitlabclient.Client, tier edition.Tier) int {
+		catalog, err := tools.BuildActionCatalog(c, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(%v): %v", tier, err)
+		}
+		withStandalone, err := dynamictools.AddStandaloneCatalog(catalog, c, dynamictools.StandaloneOptions{})
+		if err != nil {
+			t.Fatalf("AddStandaloneCatalog(%v): %v", tier, err)
+		}
+		return countActionRoutes(withStandalone.ActionMaps())
 	}
 	version, err := readVersionFileAt(repositoryRoot())
 	if err != nil {
@@ -256,17 +275,25 @@ func TestGenerateSiteStats_RealSurfaces_MeasuresEveryFieldFromItsOwnSource(t *te
 		},
 		Meta: siteMetaCounts{
 			Base:                  len(mcpsurface.MetaTools(client, edition.Free)),
+			Premium:               len(mcpsurface.MetaTools(client, edition.Premium)),
 			SelfManagedEnterprise: len(mcpsurface.MetaTools(client, edition.Ultimate)),
+			GitLabComPremium:      len(mcpsurface.MetaTools(gitLabCom, edition.Premium)),
 			GitLabCom:             len(mcpsurface.MetaTools(gitLabCom, edition.Ultimate)),
 		},
-		Dynamic:        2,
-		CatalogActions: siteCatalogActions{Free: routes(client, false), SelfManagedEnterprise: routes(client, true), GitLabCom: routes(gitLabCom, true)},
-		CatalogGroups:  siteCatalogGroups{Free: groups(edition.Free), Premium: groups(edition.Premium), Ultimate: groups(edition.Ultimate)},
-		Resources:      len(resources) + len(templates),
-		Prompts:        len(mcpsurface.Prompts(client)),
-		Completions:    siteCompletionArgNames,
-		Capabilities:   siteCapabilities,
-		ToolPackages:   countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools")),
+		Dynamic: 2,
+		CatalogActions: siteCatalogActions{
+			Free:                  routes(client, edition.Free),
+			Premium:               routes(client, edition.Premium),
+			SelfManagedEnterprise: routes(client, edition.Ultimate),
+			GitLabComPremium:      routes(gitLabCom, edition.Premium),
+			GitLabCom:             routes(gitLabCom, edition.Ultimate),
+		},
+		CatalogGroups: siteCatalogGroups{Free: groups(edition.Free), Premium: groups(edition.Premium), Ultimate: groups(edition.Ultimate)},
+		Resources:     len(resources) + len(templates),
+		Prompts:       len(mcpsurface.Prompts(client)),
+		Completions:   siteCompletionArgNames,
+		Capabilities:  siteCapabilities,
+		ToolPackages:  countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools")),
 	}
 	if got := newSiteStats(t); got != want {
 		t.Fatalf("generateSiteStats() =\n%+v\nwant\n%+v", got, want)
@@ -336,38 +363,56 @@ func TestReadVersionFileAt_MissingFile_ReturnsReadError(t *testing.T) {
 	}
 }
 
-// TestSiteStatsCapabilitiesMatchesDocs pins siteCapabilities to the count
-// documented in docs/reference/capabilities/README.md, so the published
+// sitePageCount is one site page that states a count in prose, and the phrase
+// that states it.
+type sitePageCount struct {
+	page   string
+	phrase string
+}
+
+// assertSitePagesStateCount fails for every page that does not carry its
+// phrase. page is relative to the site's docs collection, the Spanish twin
+// under es/, so both languages are held to the same figure.
+func assertSitePagesStateCount(t *testing.T, constant string, pages []sitePageCount) {
+	t.Helper()
+	docs := filepath.Join(repositoryRoot(), "site", "src", "content", "docs")
+	for _, tt := range pages {
+		t.Run(tt.page, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(docs, filepath.FromSlash(tt.page))) //#nosec G304 -- fixed in-repo path
+			if err != nil {
+				t.Fatalf("read %s: %v", tt.page, err)
+			}
+			if !strings.Contains(string(data), tt.phrase) {
+				t.Errorf("%s does not contain %q; update %s or the page", tt.page, tt.phrase, constant)
+			}
+		})
+	}
+}
+
+// TestSiteStatsCapabilitiesMatchesDocs pins siteCapabilities to the count the
+// site's capability overview states in both languages, so the published
 // number cannot silently drift from the canonical capability reference.
 //
 // This is the guard the fourth capability shipped without: the site's
 // overview pages said "three MCP protocol capabilities" for as long as the
 // count lived only in hand-written prose, and nothing failed.
 func TestSiteStatsCapabilitiesMatchesDocs(t *testing.T) {
-	path := filepath.Join(repositoryRoot(), "docs", "reference", "capabilities", "README.md")
-	data, err := os.ReadFile(path) //#nosec G304 -- fixed in-repo path
-	if err != nil {
-		t.Fatalf("read capabilities README: %v", err)
-	}
-	want := "the **" + strconv.Itoa(siteCapabilities) + " MCP capabilities**"
-	if !strings.Contains(string(data), want) {
-		t.Errorf("docs do not contain %q; update siteCapabilities or the docs", want)
-	}
+	n := strconv.Itoa(siteCapabilities)
+	assertSitePagesStateCount(t, "siteCapabilities", []sitePageCount{
+		{page: "capabilities/overview.mdx", phrase: "the **" + n + " MCP capabilities**"},
+		{page: "es/capabilities/overview.mdx", phrase: "las **" + n + " capacidades MCP**"},
+	})
 }
 
 // TestSiteStatsCompletionsMatchesDocs pins siteCompletionArgNames to the count
-// documented in docs/reference/capabilities/completions.md so the published
+// the site's completions page states in both languages, so the published
 // number cannot silently drift from the canonical capability reference.
 func TestSiteStatsCompletionsMatchesDocs(t *testing.T) {
-	path := filepath.Join(repositoryRoot(), "docs", "reference", "capabilities", "completions.md")
-	data, err := os.ReadFile(path) //#nosec G304 -- fixed in-repo path
-	if err != nil {
-		t.Fatalf("read completions doc: %v", err)
-	}
-	want := "supports **" + strconv.Itoa(siteCompletionArgNames) + " argument names**"
-	if !strings.Contains(string(data), want) {
-		t.Errorf("docs do not contain %q; update siteCompletionArgNames or the docs", want)
-	}
+	n := strconv.Itoa(siteCompletionArgNames)
+	assertSitePagesStateCount(t, "siteCompletionArgNames", []sitePageCount{
+		{page: "capabilities/completions.mdx", phrase: "completes **" + n + " argument names**"},
+		{page: "es/capabilities/completions.mdx", phrase: "completa **" + n + " nombres de argumento**"},
+	})
 }
 
 // TestReadme_ActionCount_MatchesTheCommittedSiteStats holds the one catalog

@@ -132,7 +132,7 @@ faq:
   - q: "Do all modes support the same GitLab operations?"
     a: "Yes. Dynamic, meta-tool, and individual modes are all projected from one canonical action catalog, so they cover the same GitLab REST and GraphQL operations. They differ in packaging, not capability. Read-only filtering, safe mode, the destructive classification, token-scope filtering, and result formatting are shared by every mode. How a destructive call is confirmed is the one difference: the default dynamic surface needs `confirm: true` on every one and ignores `GITLAB_MCP_YOLO_MODE`."
   - q: "How many tools does each mode expose?"
-    a: "Individual mode exposes {{tools.free}} tools on Free/CE, {{tools.premium}} on self-managed Premium, {{tools.ultimate_self_managed}} on self-managed Ultimate and {{tools.gitlab_com}} on GitLab.com Ultimate, where Orbit is available. Meta-tool mode exposes {{meta.base}} tools on Free/CE, 40 on self-managed Premium, {{meta.self_managed_enterprise}} on self-managed Ultimate and {{meta.gitlab_com}} on GitLab.com Ultimate. Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available."
+    a: "Individual mode exposes {{tools.free}} tools on Free/CE, {{tools.premium}} on self-managed Premium, {{tools.ultimate_self_managed}} on self-managed Ultimate and {{tools.gitlab_com}} on GitLab.com Ultimate, where Orbit is available. Meta-tool mode exposes {{meta.base}} tools on Free/CE, {{meta.premium}} on self-managed Premium, {{meta.self_managed_enterprise}} on self-managed Ultimate and {{meta.gitlab_com}} on GitLab.com Ultimate. Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available."
   - q: "Do Enterprise tools require a paid GitLab license?"
     a: "Yes. Enterprise meta-tools, such as merge trains, DORA metrics, vulnerabilities, and compliance policies, require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls fail: Community Edition does not serve those endpoints and answers 404, and an unlicensed Enterprise Edition refuses them."
   - q: "What are the three tool modes in GitLab MCP Server?"
@@ -157,7 +157,7 @@ Every mode is projected from one **canonical action catalog**. That gives all th
 | Mode                    | Public tools exposed                                                                                                     | Best for                                      | Relative token cost |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------------- |
 | **Dynamic** _(default)_ | 2: `gitlab_find_action`, `gitlab_execute_action`                                                                         | Most assistants; lowest context overhead      | Lowest              |
-| **Meta-tool**           | {stats.meta.base} on Free/CE, 40 on self-managed Premium, up to {stats.meta.gitlab_com} on Ultimate                      | A fixed, discoverable, domain-level tool list | Medium              |
+| **Meta-tool**           | {stats.meta.base} on Free/CE, {stats.meta.premium} on self-managed Premium, up to {stats.meta.gitlab_com} on Ultimate    | A fixed, discoverable, domain-level tool list | Medium              |
 | **Individual**          | {stats.tools.free} on Free/CE, {stats.tools.premium} on self-managed Premium, up to {stats.tools.gitlab_com} on Ultimate | Clients that need every operation pre-listed  | Highest             |
 
 Set the mode with the `GITLAB_MCP_TOOL_SURFACE` environment variable (`dynamic`, `meta`, or `individual`). Dynamic mode is used when `GITLAB_MCP_TOOL_SURFACE` is unset.
@@ -188,7 +188,7 @@ Individual mode registers **one MCP tool per GitLab operation**: **{stats.tools.
 
 ### How does meta-tool mode work?
 
-Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} meta-tools on Free/CE**, **40 on self-managed Premium**, **{stats.meta.self_managed_enterprise} on self-managed Ultimate**, or **{stats.meta.gitlab_com} on GitLab.com Ultimate**, where Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
+Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler, reducing the tool count to **{stats.meta.base} meta-tools on Free/CE**, **{stats.meta.premium} on self-managed Premium**, **{stats.meta.self_managed_enterprise} on self-managed Ultimate**, or **{stats.meta.gitlab_com} on GitLab.com Ultimate**, where Orbit is available. This dramatically improves token efficiency over individual mode while keeping a fixed, browsable tool list.
 
 ```json
 {
@@ -354,7 +354,7 @@ A `gitlab_server` dispatcher is registered alongside these on every tier, and it
 
 ## Enterprise-only tools
 
-When the resolved tier is Premium or Ultimate, the server registers up to {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features. Six arrive with Premium, for 40 meta-tools (the action count of each is in parentheses):
+When the resolved tier is Premium or Ultimate, the server registers up to {stats.meta.self_managed_enterprise - stats.meta.base} additional self-managed meta-tools for GitLab Premium and Ultimate features. Six arrive with Premium, for {stats.meta.premium} meta-tools (the action count of each is in parentheses):
 
 `gitlab_audit_event` (6), `gitlab_enterprise_user` (4, needs `admin_mode`), `gitlab_geo` (8, needs `admin_mode`), `gitlab_group_scim` (4), `gitlab_merge_train` (4), `gitlab_project_alias` (4, needs `admin_mode`)
 

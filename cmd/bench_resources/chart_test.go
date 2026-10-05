@@ -24,6 +24,34 @@ func testPalette() palette {
 	}
 }
 
+// TestChartGeometry_DerivedFiguresFollowTheCanvas verifies each figure the
+// geometry block writes out is the sum it stands for: the plot is the canvas
+// less its paddings, the axis title sits a fixed distance under the plot, and
+// the provenance line a fixed distance above the bottom edge.
+//
+// The figures are spelled as literals, so nothing but this keeps them in step
+// with the canvas: a padding changed alone would draw every chart with its plot
+// overrunning the edge or stopping short of it, and every other chart test
+// reads the same constants, so none of them would notice.
+func TestChartGeometry_DerivedFiguresFollowTheCanvas(t *testing.T) {
+	cases := []struct {
+		name      string
+		got, want int
+	}{
+		{name: "plot width", got: plotW, want: chartW - padL - padR},
+		{name: "plot height", got: plotH, want: chartH - padT - padB},
+		{name: "x axis title", got: xAxisTitleY, want: padT + plotH + 42},
+		{name: "provenance line", got: provenanceY, want: chartH - 12},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %d, want %d", tc.name, tc.got, tc.want)
+			}
+		})
+	}
+}
+
 // TestRenderBars_Deterministic_ProducesIdenticalOutput verifies two renderings
 // of one spec are byte-identical. The -check gate compares committed SVGs
 // against a re-rendering, so any instability here would make it fail at random

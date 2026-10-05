@@ -174,6 +174,7 @@ const SECTIONS = [
 			"reference/cli",
 			"reference/environment",
 			"reference/output-format",
+			"reference/fine-grained-permissions",
 		],
 	},
 	{

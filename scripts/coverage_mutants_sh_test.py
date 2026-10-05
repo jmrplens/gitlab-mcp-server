@@ -21,6 +21,10 @@ baseline times, the per-mutant command run once to warm the cache, the
 -trimpath and GOROOT every command inherits (issue 1029), the coefficient
 derived from the printed base or the one the caller fixed, the ceiling on the
 deadline, and the refusals that stop a run whose figures would mean nothing.
+For a package gremlins cannot resolve where it is (issue 872), it is also
+where the copy the script measures instead is staged, beside the package or,
+when the package imports its own internal/ subtree, below it, and what that
+copy holds: the package and its fixtures, and none of the packages below it.
 
 Run with:
 
@@ -114,6 +118,38 @@ def import_paths(pattern):
     return found
 
 
+def package_dirs(base):
+    """The directories `go list ./...` names from base: every one holding a .go
+    file, and never one go ignores, testdata or a name beginning with . or _,
+    nor anything below such a one."""
+    found = []
+    for directory, subdirs, files in os.walk(base):
+        subdirs[:] = sorted(d for d in subdirs if d != "testdata" and d[0] not in "._")
+        if any(name.endswith(".go") for name in files):
+            found.append(directory)
+    return found
+
+
+def shown(directory):
+    """A directory as go list prints it. Under STUB_DIR_SEPARATOR, the part
+    below the module root as Windows prints it: the root is left as it is,
+    since the script changes into it."""
+    separator = env.get("STUB_DIR_SEPARATOR")
+    if not separator or directory == env["STUB_ROOT"]:
+        return directory
+    below = os.path.relpath(directory, env["STUB_ROOT"])
+    return env["STUB_ROOT"] + separator + below.replace("/", separator)
+
+
+def tree(directory):
+    """Every file below a directory, by its path relative to it."""
+    files = []
+    for parent, _, names in os.walk(directory):
+        for name in names:
+            files.append(os.path.relpath(os.path.join(parent, name), directory))
+    return sorted(files)
+
+
 entry = {"argv": args, "cwd": os.getcwd(), "goflags": env.get("GOFLAGS", ""), "goroot": env.get("GOROOT")}
 try:
     entry["stdout"] = os.readlink("/proc/self/fd/1")
@@ -136,16 +172,17 @@ elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.ImportPath}}":
         for pattern in patterns:
             for listed in import_paths(pattern):
                 print(listed)
+elif args[:1] == ["list"] and args[args.index("-f") + 1] == "{{.Dir}}":
+    # The packages below a staged package, listed from its own directory.
+    if args[-1] != "./...":
+        sys.stderr.write("stub go list names packages below the working directory only, not %r\n" % args[-1])
+        status = 2
+    else:
+        for directory in package_dirs(os.getcwd()):
+            print(shown(directory))
 elif args[:1] == ["list"]:
     pkgdir = os.path.normpath(os.path.join(os.getcwd(), args[-1]))
     name = env.get("STUB_PKG_NAME") or os.path.basename(pkgdir)
-    shown = pkgdir
-    separator = env.get("STUB_DIR_SEPARATOR")
-    if separator and pkgdir != env["STUB_ROOT"]:
-        # The part below the module root as Windows prints it: the root is
-        # left as it is, since the script changes into it.
-        below = os.path.relpath(pkgdir, env["STUB_ROOT"])
-        shown = env["STUB_ROOT"] + separator + below.replace("/", separator)
     counts = env.get("STUB_TEST_FILES", "3 0") if tagged(args) else "0 0"
     error = ""
     if not tagged(args) and env.get("STUB_ALL_TAGGED"):
@@ -159,17 +196,23 @@ elif args[:1] == ["list"]:
         tests, xtests = counts.split()
         print(render(args[args.index("-f") + 1], {
             "{{.Name}}": name,
-            "{{.Dir}}": shown,
+            "{{.Dir}}": shown(pkgdir),
             "{{.ImportPath}}": import_path(pkgdir),
             "{{len .TestGoFiles}}": tests,
             "{{len .XTestGoFiles}}": xtests,
+            '{{join .Imports " "}}': env.get("STUB_IMPORTS", ""),
+            '{{join .TestImports " "}}': env.get("STUB_TEST_IMPORTS", ""),
+            '{{join .XTestImports " "}}': env.get("STUB_XTEST_IMPORTS", ""),
             "{{with .Error}}{{.}}{{end}}": error,
         }))
 elif args[:2] == ["mod", "download"]:
     pass
 elif args[:1] == ["test"]:
     pattern = args[-1]
-    entry["pattern_dir_exists"] = os.path.isdir(os.path.join(os.getcwd(), pattern.rstrip(".").rstrip("/")))
+    pattern_dir = os.path.join(os.getcwd(), pattern.rstrip(".").rstrip("/"))
+    entry["pattern_dir_exists"] = os.path.isdir(pattern_dir)
+    # What the run found there, which for a staged copy is what was copied.
+    entry["tree"] = tree(pattern_dir) if entry["pattern_dir_exists"] else None
     if not tagged(args):
         print("?   \t%s\t[no test files]" % pattern)
     else:
@@ -202,6 +245,16 @@ with open(env["STUB_LOG"], "a", encoding="utf-8") as fh:
     fh.write(json.dumps(entry) + "\n")
 sys.exit(status)
 '''
+
+
+def file_tree(directory):
+    """Every file below a directory, by its path relative to it, the way the
+    stand-in records what a run found."""
+    files = []
+    for parent, _, names in os.walk(directory):
+        for name in names:
+            files.append(os.path.relpath(os.path.join(parent, name), directory))
+    return sorted(files)
 
 
 def expected_coefficient(budget, base, ceiling):
@@ -327,6 +380,38 @@ class CoverageMutantsTest(unittest.TestCase):
     def assert_refused_before_gremlins(self, proc, calls):
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertEqual(self.of(calls, "run"), [], "gremlins was started")
+
+    # The import path of the stand-in command's own internal subtree, and the
+    # two places a copy of the command can be staged.
+    OWN_INTERNAL = "example.com/m/cmd/tool/internal"
+    BESIDE = "cmd/tool.mutants-main"
+    BELOW = "cmd/tool/tool.mutants-main"
+
+    def write(self, path, text=""):
+        full = os.path.join(self.root, path)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def give_the_command_a_subtree(self):
+        """Gives cmd/tool what a command such as cmd/gen_action_grants holds
+        below it: an internal/ tree of packages with a file beside them, a
+        package further down a directory that is not one, fixtures, and the
+        directories go never reads as packages. Returns the files a staged copy
+        of it should hold: everything but the packages below it."""
+        self.write("cmd/tool/tool_test.go", "package main\n")
+        self.write("cmd/tool/.keep")
+        self.write("cmd/tool/testdata/fixture.txt")
+        self.write("cmd/tool/testdata/planted/planted.go", "package planted\n")
+        self.write("cmd/tool/assets/bg.jpg")
+        self.write("cmd/tool/assets/gen/gen.go", "package gen\n")
+        self.write("cmd/tool/_scratch/scratch.go", "package scratch\n")
+        self.write("cmd/tool/internal/NOTES.md")
+        self.write("cmd/tool/internal/derive/derive.go", "package derive\n")
+        self.write("cmd/tool/internal/derive/testdata/derive.txt")
+        self.write("cmd/tool/internal/join/join.go", "package join\n")
+        return [".keep", "_scratch/scratch.go", "assets/bg.jpg", "doc.go", "internal/NOTES.md",
+                "testdata/fixture.txt", "testdata/planted/planted.go", "tool_test.go"]
 
     def test_baseline_without_a_duration_on_its_last_line_is_timed_by_the_clock(self):
         # A -cover run ends in a coverage figure, so the last field of its
@@ -820,6 +905,117 @@ class CoverageMutantsTest(unittest.TestCase):
         self.assertEqual(self.gremlins(proc, calls)["argv"][-1], staged)
         self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
         self.assertGreaterEqual(self.printed_base(proc), SLEEP)
+        # The listing of the packages the copy leaves out is a go command
+        # before gremlins too, and loads under the same tags.
+        lists = self.package_lists(calls)
+        self.assertEqual(len(lists), 2, lists)
+        for call in lists:
+            self.assertEqual(self.tags_of(call["argv"]), "e2e", call["argv"])
+
+    def assert_staged_at(self, proc, calls, staged, copied, says):
+        """Holds a run to having measured a copy staged at staged, the
+        module-relative path, which held exactly the files copied and is gone
+        afterwards, and to the announcement saying where it was put."""
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("measuring a staged copy at " + staged + says, proc.stdout)
+        tests = self.of(calls, "test")
+        scan = "./" + staged + "/..."
+        self.assertEqual([c["argv"][-1] for c in tests], [scan, "./" + staged, scan])
+        for call in tests:
+            self.assertTrue(call["pattern_dir_exists"], call["argv"])
+        for call in self.baselines(calls):
+            self.assertEqual(call["tree"], copied)
+        self.assertEqual(self.gremlins(proc, calls)["argv"][-1], "./" + staged)
+        self.assertFalse(os.path.exists(os.path.join(self.root, staged)), "the staged copy was left behind")
+        # The packages it leaves out are listed from the package's own
+        # directory, which names its subtree.
+        listed = [c for c in self.package_lists(calls) if "{{.Dir}}" in c["argv"]]
+        self.assertEqual(len(listed), 1, calls)
+        self.assertEqual(listed[0]["cwd"], os.path.join(self.root, "cmd", "tool"))
+        self.assertEqual(listed[0]["argv"][-1], "./...")
+
+    def test_package_importing_its_own_internal_subtree_is_staged_below_it(self):
+        # cmd/gen_action_grants imports cmd/gen_action_grants/internal/..., which
+        # Go lets only cmd/gen_action_grants and the packages below it import,
+        # so its copy beside it did not build and the run was refused. Below it,
+        # every import it makes is legal. An import from the package's files,
+        # from its tests or from its external tests decides it alike, and so
+        # does one of the internal package itself rather than of one below it.
+        copied = self.give_the_command_a_subtree()
+        own = self.OWN_INTERNAL
+        cases = [
+            ("its own files", {"STUB_IMPORTS": "fmt %s/derive example.com/m/internal/pkg" % own}),
+            ("its test files", {"STUB_TEST_IMPORTS": "testing %s/join" % own}),
+            ("its external test files", {"STUB_XTEST_IMPORTS": "%s/derive" % own}),
+            ("the internal package itself", {"STUB_IMPORTS": own}),
+        ]
+        before = file_tree(os.path.join(self.root, "cmd", "tool"))
+        for name, env in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./cmd/tool", env=dict(env, STUB_PKG_NAME="main"))
+                self.assert_staged_at(proc, calls, self.BELOW, copied,
+                                      ", one level below it, since it imports its own internal/ subtree")
+                self.assertFalse(os.path.exists(os.path.join(self.root, self.BESIDE)))
+                self.assertEqual(file_tree(os.path.join(self.root, "cmd", "tool")), before,
+                                 "the package itself was changed")
+
+    def test_package_importing_no_internal_subtree_of_its_own_is_staged_beside_it(self):
+        # Beside the package is where every relative path a test climbs out by
+        # still lands, so it stays the place for every package it builds for,
+        # which is any whose internal imports are rooted above it. An import is
+        # read whole: a package whose name only begins with internal, or a path
+        # that only ends in the package's own internal one, is no import of its
+        # internal subtree. The copy leaves out the packages below it here too.
+        copied = self.give_the_command_a_subtree()
+        cases = [
+            ("no imports at all", {}),
+            ("an internal subtree above it",
+             {"STUB_IMPORTS": "example.com/m/cmd/internal/shared example.com/m/internal/pkg"}),
+            ("a package whose name only begins with internal",
+             {"STUB_IMPORTS": "example.com/m/cmd/tool/internalx"}),
+            ("a path that only ends in its own internal one",
+             {"STUB_TEST_IMPORTS": "example.org/fork/example.com/m/cmd/tool/internal/derive"}),
+        ]
+        for name, env in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./cmd/tool", env=dict(env, STUB_PKG_NAME="main"))
+                self.assert_staged_at(proc, calls, self.BESIDE, copied, "\n")
+                self.assertNotIn("below it", proc.stdout)
+                self.assertFalse(os.path.exists(os.path.join(self.root, self.BELOW)))
+
+    def test_staged_copy_of_a_windows_listing_still_leaves_the_packages_below_it_out(self):
+        # go list prints native paths, and the packages below the command are
+        # matched against paths the script writes with slashes, so a listing
+        # with backslashes has to be normalized or the copy takes internal/
+        # whole.
+        copied = self.give_the_command_a_subtree()
+        proc, calls = self.run_script("./cmd/tool", env={
+            "STUB_PKG_NAME": "main", "STUB_DIR_SEPARATOR": "\\", "STUB_IMPORTS": self.OWN_INTERNAL + "/derive"})
+        self.assert_staged_at(proc, calls, self.BELOW, copied, ", one level below it")
+
+    def test_a_leftover_copy_in_either_place_is_refused_and_kept(self):
+        # A run killed hard enough to skip its trap leaves its copy behind, a
+        # second package in the module, and the next run refuses rather than
+        # removing what it did not create. Either place counts whichever this
+        # run would use, so a package whose imports moved it is told too.
+        cases = [
+            ("beside it, staging beside it", self.BESIDE, {}),
+            ("beside it, staging below it", self.BESIDE, {"STUB_IMPORTS": self.OWN_INTERNAL + "/derive"}),
+            ("below it, staging beside it", self.BELOW, {}),
+            ("below it, staging below it", self.BELOW, {"STUB_IMPORTS": self.OWN_INTERNAL + "/derive"}),
+        ]
+        for name, leftover, env in cases:
+            with self.subTest(name):
+                self.write(leftover + "/doc.go", "package main\n")
+                proc, calls = self.run_script("./cmd/tool", env=dict(env, STUB_PKG_NAME="main"))
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(self.of(calls, "test"), [])
+                self.assertIn("gremlins: %s is already there" % leftover, proc.stderr)
+                self.assertTrue(os.path.isfile(os.path.join(self.root, leftover, "doc.go")),
+                                "the leftover was removed")
+                other = self.BELOW if leftover == self.BESIDE else self.BESIDE
+                self.assertFalse(os.path.exists(os.path.join(self.root, other)))
+                shutil.rmtree(os.path.join(self.root, leftover))
 
     def test_an_interrupt_ends_the_run_and_removes_the_staged_copy(self):
         # `trap cleanup EXIT INT TERM` ran the cleanup and returned to the
@@ -828,12 +1024,19 @@ class CoverageMutantsTest(unittest.TestCase):
         # that was gone, and one during gremlins let the run exit 0. A signal
         # sent to the script alone is what tells a returning handler from one
         # that ends the run, since the child it waits for finishes normally.
+        # A copy staged below the package is removed the same way, and the
+        # package it sat in is left as it was.
+        below = {"STUB_IMPORTS": self.OWN_INTERNAL + "/derive"}
         cases = [
-            ("SIGTERM during the baseline", signal.SIGTERM, "test", 143),
-            ("SIGINT during gremlins", signal.SIGINT, "run", 130),
+            ("SIGTERM during the baseline", signal.SIGTERM, "test", 143, {}, self.BESIDE),
+            ("SIGINT during gremlins", signal.SIGINT, "run", 130, {}, self.BESIDE),
+            ("SIGTERM during the baseline of a copy below", signal.SIGTERM, "test", 143, below, self.BELOW),
+            ("SIGINT during gremlins on a copy below", signal.SIGINT, "run", 130, below, self.BELOW),
         ]
-        staged = os.path.join(self.root, "cmd", "tool.mutants-main")
-        for name, signum, during, status in cases:
+        self.give_the_command_a_subtree()
+        package = file_tree(os.path.join(self.root, "cmd", "tool"))
+        for name, signum, during, status, env, where in cases:
+            staged = os.path.join(self.root, where)
             with self.subTest(name):
                 open(self.log, "w", encoding="utf-8").close()
                 started = os.path.join(self.scratch, "started")
@@ -850,6 +1053,7 @@ class CoverageMutantsTest(unittest.TestCase):
                     "STUB_STARTED_ON": during,
                     "STUB_TEST_SLEEP" if during == "test" else "STUB_GREMLINS_SLEEP": "1",
                 })
+                run_env.update(env)
                 proc = subprocess.Popen([SCRIPT, "./cmd/tool"], cwd=self.root, env=run_env,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 deadline = time.monotonic() + 60
@@ -861,6 +1065,7 @@ class CoverageMutantsTest(unittest.TestCase):
                 out, err = proc.communicate(timeout=60)
                 self.assertEqual(proc.returncode, status, out + err)
                 self.assertFalse(os.path.exists(staged), "the staged copy was left behind")
+                self.assertEqual(file_tree(os.path.join(self.root, "cmd", "tool")), package)
                 with open(self.log, encoding="utf-8") as fh:
                     calls = [json.loads(line) for line in fh]
                 runs = self.of(calls, "run")
@@ -909,13 +1114,23 @@ class CoverageMutantsTest(unittest.TestCase):
         # A staged copy that fails where it was staged is refused with a
         # reason of its own, since the verdicts would be about the staging,
         # and the copy is removed all the same (issue 872).
-        with self.subTest("the staged copy fails"):
-            proc, calls = self.run_script("./cmd/tool", env={"STUB_PKG_NAME": "main", "STUB_TEST_FAIL_RUN": "1"})
-            self.assert_refused_before_gremlins(proc, calls)
-            self.assertIn("the staged copy of ./cmd/tool does not pass its own tests there", proc.stderr)
-            self.assertIn("--- FAIL: TestPlanted", proc.stderr)
-            self.assertIn(trimpath, proc.stderr)
-            self.assertFalse(os.path.exists(os.path.join(self.root, "cmd", "tool.mutants-main")))
+        # A copy staged below the package is one level deeper than the tests
+        # were written for, so the refusal names the relative path a test
+        # climbs out by as the likely cause there, and only there.
+        climbs = ("so a test that climbs out of its directory with a relative path such as ../.."
+                  " lands one level short")
+        for name, env, staged in (("beside", {}, self.BESIDE),
+                                  ("below", {"STUB_IMPORTS": self.OWN_INTERNAL + "/derive"}, self.BELOW)):
+            with self.subTest("the staged copy fails", staged=name):
+                proc, calls = self.run_script("./cmd/tool",
+                                              env=dict(env, STUB_PKG_NAME="main", STUB_TEST_FAIL_RUN="1"))
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertIn("the staged copy of ./cmd/tool does not pass its own tests there", proc.stderr)
+                self.assertIn("--- FAIL: TestPlanted", proc.stderr)
+                self.assertIn(trimpath, proc.stderr)
+                self.assertEqual(climbs in proc.stderr, name == "below", proc.stderr)
+                self.assertEqual(self.baselines(calls)[0]["argv"][-1], "./" + staged + "/...")
+                self.assertFalse(os.path.exists(os.path.join(self.root, staged)))
         # The command offered to reproduce a failure is the one the script
         # ran: the caller's GOFLAGS in front of its own, the toolchain root,
         # the tags, and the package where it is. A staged copy is gone by the

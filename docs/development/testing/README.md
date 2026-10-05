@@ -184,9 +184,19 @@ through a trap. Measured on `cmd/audit_test_names`: 88 killed, 0 lived and
 100% efficacy before, 83 killed, 16 lived and 3 not covered after. The copy
 is a sibling rather than something tidier under `dist/` because Go's internal
 rule is about the path, and a copy of a `cmd/` command staged elsewhere cannot
-import `cmd/internal/...`. A staged copy that does not pass its own tests
-where it was staged stops the run rather than falling back to the run that
-lies, and a staged path that already exists is refused rather than removed.
+import `cmd/internal/...`. A command that imports its own internal subtree
+(`cmd/audit_1to1`, `cmd/gen_action_grants`) cannot be copied beside itself
+either, since `cmd/X/internal/...` is importable only from `cmd/X` and below
+it, so its copy goes one level below the package instead, the one place every
+import it makes stays legal; a test of such a command that climbs out of its
+directory with `../..` lands one level short there, and finds its file from
+the module root instead. Either way the copy holds the package's own files and
+the directories below it that are not packages (`testdata`, assets), and leaves
+out the packages below it, which it imports where they are, so the staged run
+measures the package that was named and nothing else. A staged copy that does
+not pass its own tests where it was staged stops the run rather than falling
+back to the run that lies, and a staged path that already exists, in either
+place, is refused rather than removed.
 A package whose directory already ends with its package name, which is all of
 `internal/`, is measured where it is.
 

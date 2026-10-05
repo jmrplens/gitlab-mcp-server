@@ -516,12 +516,18 @@ func TestRefusalReasons_EveryOneIsDocumented(t *testing.T) {
 			len(reasons))
 	}
 
-	guide := readTelemetryGuide(t)
-	for name, value := range reasons {
-		if !strings.Contains(guide, "`"+value+"`") {
-			t.Errorf("%s = %q is a refusal this server can record and the telemetry guide never names it, so an operator cannot filter on it",
-				name, value)
-		}
+	for _, page := range telemetryGuidePages {
+		t.Run(page, func(t *testing.T) {
+			t.Parallel()
+
+			guide := readTelemetryGuide(t, page)
+			for name, value := range reasons {
+				if !strings.Contains(guide, "`"+value+"`") {
+					t.Errorf("%s = %q is a refusal this server can record and the telemetry guide never names it, so an operator cannot filter on it",
+						name, value)
+				}
+			}
+		})
 	}
 }
 
@@ -561,15 +567,23 @@ func refusalConstants(t *testing.T) map[string]string {
 	return out
 }
 
-// readTelemetryGuide returns the operator guide, located from this package
-// rather than from a working directory a test runner chooses.
-func readTelemetryGuide(t *testing.T) string {
+// telemetryGuidePages are the operator guide on the documentation site, the
+// English page and its Spanish twin, relative to the site's docs collection.
+// Both are read because both tell an operator the set is closed.
+var telemetryGuidePages = []string{
+	"operations/telemetry.mdx",
+	"es/operations/telemetry.mdx",
+}
+
+// readTelemetryGuide returns one page of the operator guide, located from this
+// package rather than from a working directory a test runner chooses.
+func readTelemetryGuide(t *testing.T, page string) string {
 	t.Helper()
 
-	path := filepath.Join("..", "..", "docs", "guides", "telemetry.md")
+	path := filepath.Join("..", "..", "site", "src", "content", "docs", filepath.FromSlash(page))
 	content, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("reading the telemetry guide: %v", err)
+		t.Fatalf("reading the telemetry guide %s: %v", page, err)
 	}
 	return string(content)
 }

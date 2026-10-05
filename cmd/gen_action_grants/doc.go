@@ -19,9 +19,11 @@
 // It writes three artifacts: docs/development/action-requests.json, what
 // each action sends; internal/tools/actiongrants/table_gen.go, the table the
 // server reads, written as keyed literals of constants so that building it
-// costs the server nothing at startup; and
-// docs/reference/fine-grained-permissions.md, the same table for a person
-// minting a token. -check compares the three with what the tree derives now,
+// costs the server nothing at startup; and the same table for a person
+// minting a token, a page of the documentation site in each of its
+// languages: site/src/content/docs/reference/fine-grained-permissions.mdx
+// and its Spanish twin under site/src/content/docs/es/. -check compares the
+// three with what the tree derives now, both pages of the third included,
 // and -check-derivation fails on every finding and on the three gates of
 // [gateFindings] without writing anything.
 //

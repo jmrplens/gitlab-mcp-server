@@ -17,15 +17,21 @@ import (
 )
 
 // sdkFixtureDir is sdkroutes' own stand-in for client-go, which holds every
-// shape of method this reading answers for.
-const sdkFixtureDir = "../internal/sdkroutes/testdata/sdk"
+// shape of method this reading answers for. It is found from the module root
+// rather than from this package's directory, so the tests read it from a copy
+// of the package staged elsewhere in the module too, which is how a mutation
+// run measures a package main.
+func sdkFixtureDir(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(moduleRoot(t), "cmd", "internal", "sdkroutes", "testdata", "sdk")
+}
 
 // inlineDocument places a document written inline in the stand-in at the line
 // holding marker, the way graphqldocs.SDKDocuments reports one, with the text
 // the test gives it.
 func inlineDocument(t *testing.T, file, marker, text string) graphqldocs.Document {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(sdkFixtureDir, file))
+	data, err := os.ReadFile(filepath.Join(sdkFixtureDir(t), file))
 	if err != nil {
 		t.Fatalf("read %s: %v", file, err)
 	}
@@ -45,7 +51,7 @@ func inlineDocument(t *testing.T, file, marker, text string) graphqldocs.Documen
 // request a declaration answers, and a method client-go does not declare as
 // unknown.
 func TestSDKSource_Requests_AnswersByWhatTheMethodSends(t *testing.T) {
-	source := &sdkSource{sdk: sdkroutes.Read(sdkFixtureDir), documents: []graphqldocs.Document{
+	source := &sdkSource{sdk: sdkroutes.Read(sdkFixtureDir(t)), documents: []graphqldocs.Document{
 		{Name: "listAchievementsQuery", Text: "query { achievements }"},
 		{Name: "templateSource", Text: "mutation { item { {{ template \"fields\" }} } }"},
 		inlineDocument(t, "declarations.go", "query { inlineInInitializer }", "query { inlineInInitializer }"),

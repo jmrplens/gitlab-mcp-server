@@ -605,9 +605,12 @@ func quietGaveUpMore(doc *FairnessDoc) string {
 // populations contend for its own slots reaches the quiet tenant through
 // those, on an idle host as much as on a busy one, and holding it to a busy
 // host would refuse the one comparison it can make.
+//
+// A host that reported no processors puts the floor at zero, which no arm's
+// busy cores fall under, so it is never refused for that.
 func saturationFailure(doc *FairnessDoc) string {
 	floor := saturationFloor * float64(doc.Host.CPUs)
-	if floor <= 0 || doc.Bound.Shared != "" {
+	if doc.Bound.Shared != "" {
 		return ""
 	}
 	worst := math.Inf(1)
@@ -774,12 +777,14 @@ func decide(c FairnessComparison) (direction, reason string) {
 			c.LatenessShiftMs, claim,
 		)
 	}
-	if c.MedianDeltaMs > 0 {
-		return directionBetter, fmt.Sprintf("the quiet population's served %s fell by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
-			c.Metric, c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
+	// The median is not zero here, since a claim of zero is inside any
+	// spread, so its sign alone says which way it moved.
+	if math.Signbit(c.MedianDeltaMs) {
+		return directionWorse, fmt.Sprintf("the quiet population's served %s rose by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
+			c.Metric, -c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
 	}
-	return directionWorse, fmt.Sprintf("the quiet population's served %s rose by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
-		c.Metric, -c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
+	return directionBetter, fmt.Sprintf("the quiet population's served %s fell by %.3f ms, beyond the %.3f ms spread between repetitions, %s",
+		c.Metric, c.MedianDeltaMs, c.SpreadMs, survivorship(c.ServedShare))
 }
 
 // survivorship is the clause every quotable direction ends on, so the sentence
@@ -793,7 +798,7 @@ func survivorship(share float64) string {
 // a direction and breaks agreement, which errs toward under-claiming.
 func sameSign(deltas []float64) bool {
 	for _, delta := range deltas {
-		if delta == 0 || (delta > 0) != (deltas[0] > 0) {
+		if delta == 0 || math.Signbit(delta) != math.Signbit(deltas[0]) {
 			return false
 		}
 	}

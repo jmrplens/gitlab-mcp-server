@@ -1,6 +1,6 @@
-// render_test.go covers the artifacts a record turns into: the chart files,
-// the generated block in the Markdown reference and in each language of the
-// site, and the -check mode that gates all of them.
+// render_test.go covers the artifacts a record turns into: the chart files and
+// the generated block in each language of the site, and the -check mode that
+// gates all of them.
 package main
 
 import (
@@ -19,7 +19,7 @@ import (
 func projectRootForTest() (string, error) { return cmdutil.RepositoryRoot(".") }
 
 // TestWriteCharts_WritesAPairPerFigure verifies every figure is written in
-// both schemes, named so the Markdown page's <picture> can find them, and that
+// both schemes, named so the site's ChartPair component can find them, and that
 // the two schemes really differ.
 func TestWriteCharts_WritesAPairPerFigure(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "charts")
@@ -82,13 +82,13 @@ func TestWriteCharts_Check_ReportsStaleWithoutWriting(t *testing.T) {
 	}
 }
 
-// TestDocBlock_CarriesProvenanceFiguresAndTables verifies the Markdown block
-// says what the numbers are of, embeds each figure as a theme-aware picture,
-// and prints every table.
-func TestDocBlock_CarriesProvenanceFiguresAndTables(t *testing.T) {
+// TestSiteBlock_CarriesProvenanceFiguresAndTables verifies the site block
+// says what the numbers are of, embeds each figure through the component that
+// picks its scheme, and prints every table.
+func TestSiteBlock_CarriesProvenanceFiguresAndTables(t *testing.T) {
 	run := sampleRun()
 	l := englishLabels()
-	got := docBlock(run, l)
+	got := siteBlock(run, l)
 
 	for _, want := range []string{
 		"Test CPU",    // the machine
@@ -96,9 +96,7 @@ func TestDocBlock_CarriesProvenanceFiguresAndTables(t *testing.T) {
 		"go1.27.1",    // the toolchain
 		"2.7.6",       // the build
 		"01234567",    // its commit, shortened
-		"<picture>",
-		"benchmarks/memory.dark.svg",
-		"benchmarks/memory.light.svg",
+		`<ChartPair name="memory" lang="en" alt="` + l.FigureAlt[figureMemory] + `" />`,
 		l.TableCaption["summary"],
 		l.TableCaption["startup"],
 		l.TableCaption["latency"],
@@ -146,13 +144,13 @@ func TestSiteBlock_UsesTheComponentAndTheRightLanguage(t *testing.T) {
 // block replaces only what is between the markers, reports no change when
 // nothing moved, and in -check mode reports a difference without writing.
 func TestWriteSection_RewritesBetweenMarkersAndChecks(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "page.md")
-	original := "# Title\n\nprose before\n\n" + docStartMark + "\n\nold\n\n" + docEndMark + "\n\nprose after\n"
+	path := filepath.Join(t.TempDir(), "page.mdx")
+	original := "# Title\n\nprose before\n\n" + siteStartMark + "\n\nold\n\n" + siteEndMark + "\n\nprose after\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
 
-	changed, err := writeSection(path, docStartMark, docEndMark, "new content", false)
+	changed, err := writeSection(path, "new content", false)
 	if err != nil {
 		t.Fatalf("writeSection: %v", err)
 	}
@@ -171,7 +169,7 @@ func TestWriteSection_RewritesBetweenMarkersAndChecks(t *testing.T) {
 		t.Error("the rewritten page kept the previous generated content")
 	}
 
-	changed, err = writeSection(path, docStartMark, docEndMark, "new content", true)
+	changed, err = writeSection(path, "new content", true)
 	if err != nil {
 		t.Fatalf("writeSection -check: %v", err)
 	}
@@ -184,14 +182,14 @@ func TestWriteSection_RewritesBetweenMarkersAndChecks(t *testing.T) {
 // markers fails loudly instead of being silently left alone, which would leave
 // a published page carrying numbers from a run nobody remembers.
 func TestWriteSection_MissingMarkers_ReturnsError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "page.md")
+	path := filepath.Join(t.TempDir(), "page.mdx")
 	if err := os.WriteFile(path, []byte("# Title\n\nno markers here\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	if _, err := writeSection(path, docStartMark, docEndMark, "content", false); err == nil {
+	if _, err := writeSection(path, "content", false); err == nil {
 		t.Error("writeSection accepted a page with no markers")
 	}
-	if _, err := writeSection(filepath.Join(t.TempDir(), "absent.md"), docStartMark, docEndMark, "x", false); err == nil {
+	if _, err := writeSection(filepath.Join(t.TempDir(), "absent.mdx"), "x", false); err == nil {
 		t.Error("writeSection accepted a page that does not exist")
 	}
 }
@@ -199,11 +197,11 @@ func TestWriteSection_MissingMarkers_ReturnsError(t *testing.T) {
 // TestTableFormatting_MatchesTheRepositoryFormatter verifies the generated
 // tables are already in the shape cmd/format_md_tables normalizes to.
 //
-// They have to be: the formatter runs over docs/ and the site content, so a
-// generator emitting a different padding would make the two gates undo each
-// other on every run.
+// They have to be: the formatter runs over the site content, so a generator
+// emitting a different padding would make the two gates undo each other on
+// every run.
 func TestTableFormatting_MatchesTheRepositoryFormatter(t *testing.T) {
-	block := docBlock(sampleRun(), englishLabels())
+	block := siteBlock(sampleRun(), englishLabels())
 	for line := range strings.SplitSeq(block, "\n") {
 		if !strings.HasPrefix(line, "|") {
 			continue
@@ -253,8 +251,8 @@ func readFileForTest(t *testing.T, path string) string {
 }
 
 // renderTree builds a stand-in module root holding the one input renderAll
-// reads, the stylesheet, and the three pages it rewrites, each with its
-// markers and nothing between them.
+// reads, the stylesheet, and the two pages it rewrites, each with its markers
+// and nothing between them.
 func renderTree(t *testing.T) (root string, opts options) {
 	t.Helper()
 	root = t.TempDir()
@@ -280,23 +278,16 @@ func renderTree(t *testing.T) (root string, opts options) {
 	}
 
 	opts = options{
-		docCharts:  "docs/charts",
 		siteCharts: "site/charts",
-		docPage:    "docs/page.md",
 		sitePageEN: "site/en.mdx",
 		sitePageES: "site/es.mdx",
 	}
-	pages := map[string][2]string{
-		opts.docPage:    {docStartMark, docEndMark},
-		opts.sitePageEN: {siteStartMark, siteEndMark},
-		opts.sitePageES: {siteStartMark, siteEndMark},
-	}
-	for page, marks := range pages {
+	for _, page := range []string{opts.sitePageEN, opts.sitePageES} {
 		full := filepath.Join(root, filepath.FromSlash(page))
 		if mkErr := os.MkdirAll(filepath.Dir(full), 0o750); mkErr != nil {
 			t.Fatalf("create the directory for %s: %v", page, mkErr)
 		}
-		body := "before\n\n" + marks[0] + "\n\n" + marks[1] + "\n\nafter\n"
+		body := "before\n\n" + siteStartMark + "\n\n" + siteEndMark + "\n\nafter\n"
 		if writeErr := os.WriteFile(full, []byte(body), 0o600); writeErr != nil {
 			t.Fatalf("write %s: %v", page, writeErr)
 		}
@@ -304,12 +295,11 @@ func renderTree(t *testing.T) (root string, opts options) {
 	return root, opts
 }
 
-// assertChartsWritten checks that every figure exists in both schemes, in the
-// documentation directory and in each language's site directory.
+// assertChartsWritten checks that every figure exists in both schemes, in
+// each language's site directory.
 func assertChartsWritten(t *testing.T, root string, opts options, run *Run) {
 	t.Helper()
 	dirs := []string{
-		filepath.Join(root, filepath.FromSlash(opts.docCharts)),
 		filepath.Join(root, filepath.FromSlash(opts.siteCharts), englishLabels().Code),
 		filepath.Join(root, filepath.FromSlash(opts.siteCharts), spanishLabels().Code),
 	}
@@ -341,12 +331,12 @@ func TestRenderAll_WritesEveryArtifactAndThenAgreesWithItself(t *testing.T) {
 		t.Fatalf("renderAll: %v", err)
 	}
 
-	t.Run("charts for the documentation and both languages", func(t *testing.T) {
+	t.Run("charts for both languages", func(t *testing.T) {
 		assertChartsWritten(t, root, opts, run)
 	})
 
 	t.Run("each page keeps what is outside its markers", func(t *testing.T) {
-		for _, page := range []string{opts.docPage, opts.sitePageEN, opts.sitePageES} {
+		for _, page := range []string{opts.sitePageEN, opts.sitePageES} {
 			t.Run(page, func(t *testing.T) {
 				body := readFileForTest(t, filepath.Join(root, filepath.FromSlash(page)))
 				if !strings.HasPrefix(body, "before") || !strings.HasSuffix(body, "after\n") {
@@ -396,7 +386,7 @@ func TestRenderAll_SaysWhetherItChangedAnything(t *testing.T) {
 	})
 	// The report names each file relative to the root with forward slashes on
 	// every platform (rel), so the page is expected as opts spells it.
-	if !strings.Contains(first, "updated ") || !strings.Contains(first, "- "+opts.docPage+"\n") || strings.Contains(first, "already current") {
+	if !strings.Contains(first, "updated ") || !strings.Contains(first, "- "+opts.sitePageEN+"\n") || strings.Contains(first, "already current") {
 		t.Errorf("the first redraw printed %q, want the files it updated, the page among them", first)
 	}
 
@@ -434,7 +424,7 @@ func TestRenderAll_MissingStylesheet_NamesWhatItCouldNotRead(t *testing.T) {
 func TestRelAll_ShortensEveryPathAgainstTheRoot(t *testing.T) {
 	root := filepath.Join(string(filepath.Separator), "home", "someone", "gitlab-mcp-server")
 	paths := []string{
-		filepath.Join(root, "docs", "reference", "resource-benchmark.md"),
+		filepath.Join(root, "site", "src", "content", "docs", "performance", "resource-benchmark.mdx"),
 		filepath.Join(root, "site", "src", "data", "resource-benchmark.json"),
 	}
 
@@ -522,11 +512,11 @@ func TestShortCommit_TrimsToEightCharacters(t *testing.T) {
 // and the one series it explains is one that stopped on it, where the
 // sentence under the table still names it.
 func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
-	if got := seriesBlocks(sampleRun(), englishLabels(), "###"); got != "" {
+	if got := seriesBlocks(sampleRun(), englishLabels()); got != "" {
 		t.Errorf("a record with no series produced %q", got)
 	}
 
-	english := docBlock(sampleSeriesRun(), englishLabels())
+	english := siteBlock(sampleSeriesRun(), englishLabels())
 	for _, want := range []string{
 		"### Concurrency series",
 		"#### http, dynamic surface: 4 in flight per credential, 10 s per step\n",
@@ -539,7 +529,7 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 		"Every planned step ran, up to 20 credentials.",
 		"Stopped at 5 credentials: the next step (20) was estimated at 4300 MiB against a budget of 4000 MiB.",
 		"Stopped at 5 credentials: the tools/call p99 reached 31000 ms, above the 30000 ms ceiling.",
-		`<img alt="Lines on a log scale of credentials showing each surface's peak resident memory per step`,
+		`<ChartPair name="series-memory" lang="en" alt="Lines on a log scale of credentials showing each surface's peak resident memory per step`,
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(english, want) {
@@ -734,7 +724,7 @@ func TestSeriesSentence_EveryKindOfEnding(t *testing.T) {
 			run := sampleSeriesRun()
 			run.Series = run.Series[:1]
 			run.Series[0].BudgetMiB = tc.budget
-			got := seriesBlocks(run, l, "###")
+			got := seriesBlocks(run, l)
 			if !strings.Contains(got, "#### http, meta surface: 4 in flight per credential, 10 s per step\n") {
 				t.Errorf("the caption does not name the settings: %q", got)
 			}
@@ -745,10 +735,10 @@ func TestSeriesSentence_EveryKindOfEnding(t *testing.T) {
 	}
 }
 
-// TestRenderAll_ReportsWhatItCannotWriteOrCheck covers the four ways the
+// TestRenderAll_ReportsWhatItCannotWriteOrCheck covers the three ways the
 // renderer stops with the artifact named: a site chart directory that cannot
-// be created, a documentation chart directory that cannot be created, a page
-// with no markers, and a -check over artifacts that were never written.
+// be created, a page with no markers, and a -check over artifacts that were
+// never written.
 func TestRenderAll_ReportsWhatItCannotWriteOrCheck(t *testing.T) {
 	block := func(t *testing.T, root, path string) {
 		t.Helper()
@@ -775,23 +765,15 @@ func TestRenderAll_ReportsWhatItCannotWriteOrCheck(t *testing.T) {
 			want: "site charts (en)",
 		},
 		{
-			name: "documentation charts cannot be created",
-			prepare: func(t *testing.T, root string, opts *options) {
-				t.Helper()
-				block(t, root, opts.docCharts)
-			},
-			want: "documentation charts",
-		},
-		{
 			name: "a page without markers",
 			prepare: func(t *testing.T, root string, opts *options) {
 				t.Helper()
 				//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
-				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(opts.docPage)), []byte("no markers\n"), 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(opts.sitePageEN)), []byte("no markers\n"), 0o600); err != nil {
 					t.Fatalf("rewrite the page: %v", err)
 				}
 			},
-			want: "generated section in docs/page.md",
+			want: "generated section in site/en.mdx",
 		},
 		{
 			name:    "checking before anything was written",
@@ -842,14 +824,14 @@ func TestWriteCharts_ReportsWhereItCouldNotWrite(t *testing.T) {
 // reports a block that would change and leaves the file alone, and that a
 // write that fails is reported as such.
 func TestWriteSection_ChangedUnderCheck_ReportsWithoutWriting(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "page.md")
-	original := "before\n\n" + docStartMark + "\n\nold\n\n" + docEndMark + "\n\nafter\n"
+	path := filepath.Join(t.TempDir(), "page.mdx")
+	original := "before\n\n" + siteStartMark + "\n\nold\n\n" + siteEndMark + "\n\nafter\n"
 	//#nosec G703 -- both halves of the path are this test's own: a t.TempDir and a literal
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
 
-	changed, err := writeSection(path, docStartMark, docEndMark, "new", true)
+	changed, err := writeSection(path, "new", true)
 	if err != nil || !changed {
 		t.Errorf("writeSection -check = (%v, %v), want a reported change", changed, err)
 	}
@@ -860,7 +842,7 @@ func TestWriteSection_ChangedUnderCheck_ReportsWithoutWriting(t *testing.T) {
 	previous := writeOutput
 	writeOutput = func(string, []byte, os.FileMode) error { return errors.New("read-only") }
 	t.Cleanup(func() { writeOutput = previous })
-	if _, writeErr := writeSection(path, docStartMark, docEndMark, "new", false); writeErr == nil || !strings.Contains(writeErr.Error(), "read-only") {
+	if _, writeErr := writeSection(path, "new", false); writeErr == nil || !strings.Contains(writeErr.Error(), "read-only") {
 		t.Errorf("writeSection = %v, want the write failure", writeErr)
 	}
 }

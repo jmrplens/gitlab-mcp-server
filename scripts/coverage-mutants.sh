@@ -25,6 +25,24 @@
 # directory already ends with its package name needs none of this and is run
 # where it is.
 #
+# Where the copy goes is decided by Go's internal rule, which is about the
+# path: a package below X/internal may be imported from X and from below X, and
+# from nowhere else. The copy, <dir>.mutants-<name>, sits beside the package,
+# where every import of an internal subtree rooted above the package
+# (cmd/internal/... for a command) is still legal and a test that climbs out of
+# its directory with ../.. still lands where it meant to, since the copy is at
+# the package's own depth. A package that imports its own internal subtree
+# cannot be copied there: cmd/X/internal/... is importable from cmd/X and below
+# it and not from cmd/X.mutants-main, so the copy failed to build and the run
+# was refused. Such a package is staged one level below itself instead, the
+# one place from which every import it makes stays legal. Either way the copy
+# holds the package's own files and every directory below it that is not a
+# package (testdata, assets), and leaves out the packages below it, which the
+# copy imports where they are: a copy of them would be a second package that
+# nothing imports and that may not build where it lands, and its tests would be
+# timed into every mutant's deadline although none of its files is mutated.
+# So the staged run measures the package that was named and nothing else.
+#
 # What this does NOT do is paper over a staged run that cannot work. If the
 # copy does not pass its own tests where it was staged, the run stops and says
 # so rather than falling back to the unstaged run, because that run is the one
@@ -316,26 +334,34 @@ covered_by_coverpkg() {
 # says so.
 #
 # That holds only for an importable package measured where it is. No other
-# package's test can link a package main, and a package staged below as
-# <dir>.mutants-<name> is a copy nothing imports, whose files gremlins matches
-# against the profile by their module-relative path, the copy's and never the
-# original's. So either is refused whatever -i and -coverpkg say, since every
-# mutant of it would be reported NOT COVERED.
+# package's test can link a package main, and a package this script stages as
+# a copy named <dir>.mutants-<name> is one nothing imports, whose files
+# gremlins matches against the profile by their module-relative path, the
+# copy's and never the original's. So either is refused whatever -i and
+# -coverpkg say, since every mutant of it would be reported NOT COVERED.
+#
+# The imports of the package and of both kinds of its test files, on one line,
+# decide where a staged copy goes (see the staging below).
 listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Name}}
 {{.Dir}}
 {{.ImportPath}}
 {{len .TestGoFiles}} {{len .XTestGoFiles}}
+{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}
 {{with .Error}}{{.}}{{end}}' "$PKG")
 {
   IFS= read -r pkgname
   IFS= read -r pkgdir
   IFS= read -r pkgpath
   read -r tests xtests
+  IFS= read -r imports
   listerr=$(cat)
 } <<<"$listing"
 pkgdir=${pkgdir//\\//}
-# Staged when gremlins cannot resolve the package where it is (see below).
+# Staged when gremlins cannot resolve the package where it is (see below), and
+# below the package rather than beside it when it imports its own internal
+# subtree.
 stage=""
+below=""
 case "$(basename "$pkgdir")" in
   *"$pkgname") ;;
   *) stage=1 ;;
@@ -404,27 +430,87 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# copy_package copies the directory $1 into $2, which it creates: every file
+# and every directory below $1 except the packages listed in nested, and except
+# the staging directory itself, which is inside $1 when the copy is staged
+# below the package. A directory that holds a listed package further down is
+# entered rather than copied whole, so what sits beside that package (a
+# fixture next to an internal/ tree) is still copied. It runs in a subshell, so
+# the glob settings it needs, to see dot files and to read an empty directory
+# as holding nothing, stay its own.
+copy_package() (
+  shopt -s dotglob nullglob
+  mkdir "$2"
+  for entry in "$1"/*; do
+    [ "$entry" != "$staged" ] || continue
+    skip=""
+    descend=""
+    while IFS= read -r dir; do
+      case "$dir" in
+        "$entry") skip=1 ;;
+        "$entry"/*) descend=1 ;;
+      esac
+    done <<<"$nested"
+    if [ -n "$skip" ]; then
+      continue
+    elif [ -n "$descend" ]; then
+      copy_package "$entry" "$2/${entry##*/}"
+    else
+      cp -R "$entry" "$2/"
+    fi
+  done
+)
+
 target=$PKG
 # A package whose directory ends in its name is one gremlins resolves on its
 # own, and is run where it is.
 if [ -n "$stage" ]; then
-  # The copy is a sibling of the original rather than somewhere tidy like
-  # dist/, because Go's internal rule is about the path: a copy of a cmd/
-  # command staged under dist/ cannot import cmd/internal/... and fails at
-  # setup. Beside it, every import the package already makes is still legal.
+  # The copy sits next to the package rather than somewhere tidy like dist/,
+  # because Go's internal rule is about the path: a copy of a cmd/ command
+  # staged under dist/ cannot import cmd/internal/... and fails at setup.
+  # Beside the package, every import of an internal subtree rooted above it is
+  # still legal, and so is every relative path its tests climb out by, since
+  # the copy is at the same depth. The package's own internal subtree is the
+  # exception: X/internal/... is importable from X and below it and from
+  # nowhere beside it, so a package importing it, from its own files or from
+  # either kind of test file, is staged one level below itself. Every other
+  # internal subtree the package may import is rooted at one of its ancestors,
+  # and so at an ancestor of the place beside it too, which is why its own is
+  # the one that decides. An import path is read whole, never as a prefix of a
+  # longer element: X/internalx is no internal subtree.
+  case " $imports " in
+    *" $pkgpath/internal "* | *" $pkgpath/internal/"*) below=1 ;;
+  esac
   # ".mutants-" is in the name so the path cannot be one somebody meant to
   # keep, and an existing one is refused rather than removed: this script
   # deletes what it creates and nothing else, and a leftover means a previous
   # run was killed hard enough to skip its own trap, which a person should
-  # see rather than have quietly overwritten.
-  staged="$(dirname "$pkgdir")/$(basename "$pkgdir").mutants-${pkgname}"
-  if [ -e "$staged" ]; then
-    echo "gremlins: ${staged#"$root"/} is already there, which means a previous staged run did not clean up after itself; remove it and try again" >&2
-    staged=""
-    exit 1
+  # see rather than have quietly overwritten. Both places are looked at, since
+  # a leftover of either is a second copy of the package in the module whichever
+  # place this run would use.
+  name="$(basename "$pkgdir").mutants-${pkgname}"
+  for leftover in "$(dirname "$pkgdir")/$name" "$pkgdir/$name"; do
+    if [ -e "$leftover" ]; then
+      echo "gremlins: ${leftover#"$root"/} is already there, which means a previous staged run did not clean up after itself; remove it and try again" >&2
+      exit 1
+    fi
+  done
+  where=""
+  if [ -n "$below" ]; then
+    where=", one level below it, since it imports its own internal/ subtree, which nothing beside it may import"
+    staged_at="$pkgdir/$name"
+  else
+    staged_at="$(dirname "$pkgdir")/$name"
   fi
-  echo "gremlins: $PKG is package $pkgname in a directory that does not end in \"$pkgname\", which gremlins cannot resolve (issue 872); measuring a staged copy at ${staged#"$root"/}"
-  cp -R "$pkgdir" "$staged"
+  # The packages below this one, as go names them, which the copy leaves out.
+  # Listed from the package's own directory, which names its subtree whether
+  # or not it is the module root, and before the copy exists, which would
+  # otherwise be listed as one of them.
+  nested=$(cd "$pkgdir" && go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Dir}}' ./...)
+  nested=${nested//\\//}
+  echo "gremlins: $PKG is package $pkgname in a directory that does not end in \"$pkgname\", which gremlins cannot resolve (issue 872); measuring a staged copy at ${staged_at#"$root"/}$where"
+  staged=$staged_at
+  copy_package "$pkgdir" "$staged"
   target="./${staged#"$root"/}"
 fi
 
@@ -497,6 +583,9 @@ if ! baseline; then
   if [ -n "$staged" ]; then
     echo "gremlins: the staged copy of $PKG does not pass its own tests there, so the verdicts would be about the staging rather than the package; refusing to measure" >&2
     echo "gremlins: a test that reads its own directory or import path is the usual cause. Run it unstaged to see, and read issue 872 before trusting a clean figure from one." >&2
+    if [ -n "$below" ]; then
+      echo "gremlins: the copy is one level below $PKG, so a test that climbs out of its directory with a relative path such as ../.. lands one level short of where it meant to; a test that finds such a file from the module root reads it from either place" >&2
+    fi
   else
     echo "gremlins: $PKG does not pass its own tests, or a package below it does not (the output above says which), so every mutant would read as killed; refusing to measure" >&2
   fi

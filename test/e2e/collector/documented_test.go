@@ -66,11 +66,22 @@ func TestRealCollector_EveryDocumentedNameIsReallyEmitted(t *testing.T) {
 	}
 }
 
-// readGuide returns the operator guide's text.
+// readGuide returns the operator guide's text: the page on the documentation
+// site and its Spanish twin, one after the other. Their tables name the same
+// keys, and reading both holds a name that reaches one translation alone to
+// the collector as well.
 func readGuide(t *testing.T) string {
 	t.Helper()
 
-	path := filepath.Join(repoRoot(), "docs", "guides", "telemetry.md")
+	docs := filepath.Join(repoRoot(), "site", "src", "content", "docs")
+	return readGuidePage(t, filepath.Join(docs, "operations", "telemetry.mdx")) + "\n" +
+		readGuidePage(t, filepath.Join(docs, "es", "operations", "telemetry.mdx"))
+}
+
+// readGuidePage returns the text of one page of the operator guide.
+func readGuidePage(t *testing.T, path string) string {
+	t.Helper()
+
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading the telemetry guide: %v", err)

@@ -92,11 +92,10 @@ func paletteFromTheme(css, scheme string) (palette, error) {
 	if start < 0 {
 		return palette{}, fmt.Errorf("theme.css: no %q block", selector)
 	}
-	end := strings.Index(css[start:], "\n}")
-	if end < 0 {
+	block, _, closed := strings.Cut(css[start:], "\n}")
+	if !closed {
 		return palette{}, fmt.Errorf("theme.css: %q block is not closed", selector)
 	}
-	block := css[start : start+end]
 
 	var err error
 	read := func(name string) string {

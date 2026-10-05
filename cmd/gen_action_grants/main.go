@@ -168,13 +168,18 @@ func run(progress io.Writer, root string, opts options, in sources) error {
 		return nil
 	}
 	table := &result.joined.Table
-	artifacts := []struct {
+	type artifact struct {
 		path    string
 		content []byte
-	}{
+	}
+	artifacts := []artifact{
 		{requestsPath, renderRequests(result.joined.Actions)},
 		{tablePath, renderTable(table)},
-		{referencePath, renderReference(table)},
+	}
+	// The reference is the third artifact, written once per language of the
+	// site.
+	for _, language := range referenceLanguages() {
+		artifacts = append(artifacts, artifact{language.path, language.render(table)})
 	}
 	var errs []error
 	for _, artifact := range artifacts {

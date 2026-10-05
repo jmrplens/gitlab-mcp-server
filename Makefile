@@ -1586,8 +1586,8 @@ check-site-stats:
 ## GitLab, so it needs no instance and no credentials. Takes several minutes:
 ## every scenario builds a tool catalog per client, which is the cost being
 ## measured. Writes site/src/data/resource-benchmark.json, the SVG pairs under
-## docs/reference/benchmarks and site/public/benchmarks, and the generated
-## blocks in the three documentation pages.
+## site/public/benchmarks (one directory per language), and the generated block
+## in the English and Spanish performance/resource-benchmark pages of the site.
 bench-resources:
 	go run ./cmd/bench_resources/
 
@@ -2208,8 +2208,9 @@ endef
 ## gen-action-grants: derive what every catalog action sends from its handlers,
 ## join it to what the live GitLab record declares for a fine-grained token,
 ## and rewrite docs/development/action-requests.json,
-## internal/tools/actiongrants/table_gen.go and
-## docs/reference/fine-grained-permissions.md. It writes nothing while the
+## internal/tools/actiongrants/table_gen.go and the reference page,
+## site/src/content/docs/reference/fine-grained-permissions.mdx with its
+## Spanish twin under site/src/content/docs/es/. It writes nothing while the
 ## derivation has a finding.
 gen-action-grants:
 	$(call action_grants,)

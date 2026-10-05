@@ -784,6 +784,11 @@ export default defineConfig({
 							label: "Output format",
 							translations: { es: "Formato de salida" },
 						},
+						{
+							slug: "reference/fine-grained-permissions",
+							label: "Fine-grained permissions",
+							translations: { es: "Permisos de grano fino" },
+						},
 					],
 				},
 				{

@@ -371,10 +371,10 @@ func cpuFigures(startup, total cpuSample, loadWall time.Duration) (cpu CPU, note
 	if total.ok {
 		cpu.TotalSeconds = round(total.seconds)
 	}
-	switch {
-	case !startup.ok || !total.ok:
+	if !startup.ok || !total.ok {
 		return cpu, []string{"CPU time unavailable: the platform did not answer a sample"}
-	case total.seconds < startup.seconds:
+	}
+	if total.seconds < startup.seconds {
 		// Consumed time is monotonic per process, but the sampler sums a set
 		// of them, so a client that exits between the two samples takes its
 		// time out of the total. Saying so beats publishing the difference.
