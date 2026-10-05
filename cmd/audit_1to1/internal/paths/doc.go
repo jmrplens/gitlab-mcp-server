@@ -176,7 +176,11 @@
 // -scope=paths rather than written here. mrapprovals.ConfigOutput,
 // the first confirmed phantom this repository found, is the case the join was
 // built against: its old shape produces exactly the twenty findings the fix
-// removed, and its current one produces none.
+// removed. It also shows where the record stops: the same twenty keys are
+// what every Enterprise build answers the route with, through a helper
+// override the route's annotation does not reflect, so its current shape
+// publishes them with their presence and answers each finding with a
+// declaration naming that override.
 //
 // A converter is not the only way an output type is filled. The compact
 // projections of an entity, a milestone's issue rows, a resource group's job

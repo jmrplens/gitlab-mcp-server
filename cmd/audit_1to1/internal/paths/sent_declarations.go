@@ -405,22 +405,32 @@ const reasonBillableMemberEntity = "ee/lib/ee/api/members.rb describes GET /grou
 //
 // Both endpoints exist and both send what the record says; nothing here calls
 // either. mrapprovals serves the approval endpoints through GetConfiguration,
-// which is the GET and answers with MergeRequestApprovals, and mrchanges serves
-// the diff through ListMergeRequestDiffs rather than the deprecated /changes.
-// So the entity in front of this type is one no request this server makes has
-// ever produced, and publishing an approval count or a diff on a merge request
-// list entry would invent a key GitLab does not send there.
+// which is the GET, and publishes there the approval state an Enterprise
+// instance answers it with, and mrchanges serves the diff through
+// ListMergeRequestDiffs rather than the deprecated /changes. So the entity in
+// front of this type is one no request for a merge request has ever produced,
+// and publishing an approval count or a diff on a merge request list entry
+// would invent a key GitLab does not send there.
 const (
 	reasonApprovalStateSDKRoute = "client-go declares MergeRequestApprovalsService.ChangeApprovalConfiguration as answering with *MergeRequest, and it " +
 		"sends POST /projects/:id/merge_requests/:merge_request_iid/approvals, whose desc annotates Entities::ApprovalState. readSDKRoutes therefore " +
 		"puts the approval state into the union of the eighteen endpoints it reads for the merge request structs, and the seventeen others answer with " +
 		"a merge request that carries none of these keys. No handler in this repository calls that method: the only recorded request to that path is " +
-		"the GET, from internal/tools/mrapprovals through GetConfiguration, which answers with Entities::MergeRequestApprovals and is published there."
+		"the GET, from internal/tools/mrapprovals through GetConfiguration, which a Community Edition instance answers with Entities::MergeRequestApprovals and every Enterprise build, through the present_approval override in ee/lib/ee/api/merge_request_approvals.rb, with Entities::ApprovalState; mrapprovals.ConfigOutput publishes both."
 	reasonChangesSDKRoute = "client-go declares MergeRequestsService.GetMergeRequestChanges as answering with *MergeRequest, and it sends " +
 		"GET /projects/:id/merge_requests/:merge_request_iid/changes, whose desc annotates Entities::MergeRequestChanges. That entity's changes array " +
 		"and overflow flag join the union the same way the approval state does. The method is deprecated in client-go and no handler here calls it: " +
 		"internal/tools/mrchanges serves the diff through ListMergeRequestDiffs on /diffs, and the request inventory records no request to /changes at all."
 )
+
+// reasonApprovalGroupSDKRoute answers the group keys held against the group
+// an approval rule or an Enterprise approval state names.
+//
+// The type grain judges a one-key object's payload as a response, so once
+// approver_groups wrapped mrapprovals.GroupOutput as {group: ...} the type
+// came to be judged on its own, through the converter that pairs it with
+// gl.Group, against every route client-go answers with that struct.
+const reasonApprovalGroupSDKRoute = "mrapprovals.GroupOutput pairs with gl.Group through groupOutput, so readSDKRoutes holds it against the group routes GroupsService answers with that struct (GET /groups, GET /groups/:id, POST /groups and the rest). No handler in internal/tools/mrapprovals calls any of them: the type is filled from the groups nested in an approval rule (ee/lib/api/entities/merge_request_approval_rule.rb, through gl.MergeRequestApprovalRule) and, under group, in the approver_groups of the approval state an Enterprise instance answers the approvals GET with (ee/lib/api/entities/approval_state.rb). It keeps the documented reference subset of those groups, and group.get returns a group whole."
 
 // The entities the closes-issues route and the two create_todo routes are read
 // on.
@@ -694,6 +704,13 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// project member lists do declare show_seat_info, so the same key on those
 	// types is published from the SDK rather than answered here.
 	{Package: accessRequestsPkg, Entity: memberEntity, Field: "is_using_seat", Category: categoryOptionNeverPassed, Reason: reasonShowSeatInfoNeverPassed},
+
+	// The group the approval rules and the Enterprise approval state carry,
+	// which the type grain holds against the group routes since
+	// approver_groups wraps it in a one-key object. Answered with a splat per
+	// entity because every key of both is there for the one reason.
+	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: "API::Entities::Group", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
+	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: "API::Entities::GroupDetail", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
 
 	// The two entities client-go's own return types put in front of the merge
 	// request output, answered with a splat because every key the entity has is

@@ -324,38 +324,15 @@ func (r *diffRun) isCuratedRefSubset(pkg, mcpType string) bool {
 // curatedRefSubsets (a whole nested reference type), this is per-field on a primary
 // output type. Each entry cites the doc/api/<file>. Key = "<pkg>.<MCP type>.<tag>".
 var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[string]string{
-	// mrapprovals: gl.MergeRequestApprovals models the response of
-	// POST /projects/:id/merge_requests/:iid/approvals, deprecated in GitLab
-	// 16.0. gitlab_mr_approval_config calls the GET at that path, which answers
-	// with four fields, so the twenty below are the zero value on every tier.
-	//
-	// The citation is deliberately not doc/api/merge_request_approvals.md, the
-	// form every other entry here takes: that page still prints an example body
-	// carrying all of them under the GET, so citing it would cite a document
-	// that contradicts the omission. The generated OpenAPI record separates the
-	// two endpoints, the Grape entity
-	// GitLab renders the GET with exposes exactly the four, and the CE
-	// end-to-end suite observed four against a live 19.3 instance.
-	"mrapprovals.ConfigOutput.id":                                docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.iid":                               docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.project_id":                        docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.title":                             docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.description":                       docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.state":                             docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.created_at":                        docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.updated_at":                        docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.merge_status":                      docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approvals_required":                docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approvals_left":                    docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approvals_before_merge":            docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.require_password_to_approve":       docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.has_approval_rules":                docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.merge_request_approvers_available": docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.multiple_approval_rules_available": docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.suggested_approvers":               docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approvers":                         docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approver_groups":                   docMRApprovalsGET,
-	"mrapprovals.ConfigOutput.approval_rules_left":               docMRApprovalsGET,
+	// mrapprovals and mergerequests: gl.MergeRequestApprovals declares
+	// approvals_before_merge, and neither entity GitLab answers the approvals
+	// GET, the approve or the unapprove with exposes it: not the four keys a
+	// Community Edition instance sends, and not the approval state an
+	// Enterprise one sends instead. The other nineteen keys the struct declares
+	// beyond the four are published, read off the captured answer with their
+	// presence, since every Enterprise build sends them.
+	"mrapprovals.ConfigOutput.approvals_before_merge":    docApprovalsBeforeMergeNeverSent,
+	"mergerequests.ApproveOutput.approvals_before_merge": docApprovalsBeforeMergeNeverSent,
 	// runners: gl.RunnerDetails carries Token because client-go reuses one
 	// struct for the runner endpoints, and GitLab mints a runner's
 	// authentication token once, at registration. The runner details response
@@ -387,15 +364,24 @@ var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[
 // open here. GitLab publishes the document, so the citation names it there.
 const docAPIShapesRecord = "GitLab's generated OpenAPI document (doc/api/openapi/openapi_v2.yaml) "
 
-// docMRApprovalsGET cites the record that separates the two endpoints sharing
-// the approvals path, since GitLab's own prose page does not.
-const docMRApprovalsGET = docAPIShapesRecord +
-	"(GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals declares approved, approved_by, " +
-	"user_can_approve and user_has_approved; every other field of the SDK type appears only under the POST at " +
-	"the same path, deprecated in GitLab 16.0)"
+// docApprovalsBeforeMergeNeverSent cites the two entities the approvals GET,
+// the approve and the unapprove are answered with, neither of which exposes
+// the key client-go declares.
+//
+// It cites GitLab's source rather than doc/api/merge_request_approvals.md,
+// the form most entries here take, because that page prints neither shape
+// whole: its examples are a subset of the Enterprise answer, and it never
+// shows the Community one. It is one literal rather than a concatenation, as
+// is the one below, because gremlins mutates the operator of a constant
+// expression and no test can execute a constant to catch it.
+const docApprovalsBeforeMergeNeverSent = "lib/api/entities/merge_request_approvals.rb (the four keys present_approval renders on Community Edition) and ee/lib/api/entities/approval_state.rb (what ee/lib/ee/api/merge_request_approvals.rb renders on every Enterprise build instead) expose no approvals_before_merge; the key is the merge request's, exposed by ee/lib/ee/api/entities/merge_request_basic.rb"
 
-// docRunnerDetailsGET cites the record for the same reason docMRApprovalsGET
-// does: runners.md prints one example body for the whole page, so the prose
+// docApprovalStateInvalidRules cites the entity that sends the one key of the
+// Enterprise approval state client-go does not declare.
+const docApprovalStateInvalidRules = "ee/lib/api/entities/approval_state.rb exposes invalid_approvers_rules (Entities::ApprovalRuleShort: id, name, rule_type), which every Enterprise build answers the approvals GET, the approve and the unapprove with; gl.MergeRequestApprovals does not declare it, so it is read off the captured answer (ADR-0021)"
+
+// docRunnerDetailsGET cites the record rather than the prose page:
+// runners.md prints one example body for the whole page, so the prose
 // cannot tell the registration response from the details one.
 const docRunnerDetailsGET = docAPIShapesRecord +
 	"(GET /api/v4/runners/{id} and PUT /api/v4/runners/{id} declare no token; POST /api/v4/runners, the " +
@@ -441,6 +427,12 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
 	"mrapprovals.RuleOutput.overridden": docMRApprovals,
+
+	// mrapprovals and mergerequests: the one key of the Enterprise approval
+	// state client-go does not declare, read off the captured answer rather
+	// than a raw fetch, and published on both outputs that carry the state.
+	"mrapprovals.ConfigOutput.invalid_approvers_rules":    docApprovalStateInvalidRules,
+	"mergerequests.ApproveOutput.invalid_approvers_rules": docApprovalStateInvalidRules,
 
 	// invites: queued_users is documented in doc/api/invitations.md on the
 	// add-a-member response for an instance with member promotion management
@@ -894,9 +886,10 @@ var acceptedExtraOutputs = &declarationTable{name: "acceptedExtraOutputs", entri
 
 	// Server-composed convenience fields (not API fields): we derive these for the
 	// model, they are additive and intentional.
-	"events.ContributionEventOutput.target_url": "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
-	"events.ProjectEventOutput.target_url":      "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
-	"orbit.QueryOutput.formatted_text":          "the text/plain body GitLab answers POST /orbit/query with for the llm format (writeLLMResultResponse in workhorse/internal/orbit/sendquery.go), read through QueryRaw and published under the name the other Orbit llm answers use; a body with no keys has no struct field to pair with",
+	"events.ContributionEventOutput.target_url":     "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
+	"events.ProjectEventOutput.target_url":          "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
+	"orbit.QueryOutput.formatted_text":              "the text/plain body GitLab answers POST /orbit/query with for the llm format (writeLLMResultResponse in workhorse/internal/orbit/sendquery.go), read through QueryRaw and published under the name the other Orbit llm answers use; a body with no keys has no struct field to pair with",
+	"mergerequests.ApproveOutput.approved_by_count": "server-counted length of the approved_by list GitLab sends with an approve or an unapprove; not an API field",
 
 	// SDK-sourced field the SDK leaves json-untagged: gl.Feature.Gates exists and is
 	// the documented feature-flag `gates` array; the SDK struct field carries no json

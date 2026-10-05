@@ -225,7 +225,7 @@ readable without opening the tracker:
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), merged | **Yes, unreleased** | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [modelcontextprotocol/go-sdk#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first | No | No | Yes |
-| 24 | gitlab-org/gitlab | [Approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation) | In part, by GitLab, [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183); nothing by us | No | No | No upstream block; on EE this server publishes 4 of the 24 keys of the GET and 5 of the approve POST's | None; the carve-outs are the defect, and the fix is planned as a pull request of ours |
+| 24 | gitlab-org/gitlab | [Approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation) | In part, by GitLab, [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183); nothing by us | No | No | No upstream block; this server publishes what each edition sends on the GET and both POSTs | Yes, a shape declaration per EE key against the CE annotation; the carve-outs were the defect |
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
@@ -5960,32 +5960,40 @@ sections below record.
   Nothing has been raised by us.
 - **In review**: no.
 - **Merged**: no.
-- **Blocking**: no upstream block, but trusting the CE annotation cost this
-  server data. `merge_request.approval_config` publishes the four keys of
-  `ConfigOutput` (`internal/tools/mrapprovals/mr_approvals.go`) on every
-  tier, so on GitLab.com and on every EE instance a model is given 4 of the 24
-  keys GitLab sends, and none of the approvals required and left, the merge
-  status or the approvers. The approve and unapprove POSTs answer through the
-  same helper (below). `merge_request.approve` (`Approve` in
-  `internal/tools/mergerequests/merge_requests.go`) publishes five of the EE
-  keys, `approvals_required`, `approved`, `user_has_approved` and
-  `user_can_approve` off client-go's struct and `approved_by` off the captured
-  response, and `approvals_required` reads 0 on CE, where GitLab does not send
-  it; `merge_request.unapprove` publishes nothing of its answer.
-- **Workaround**: none, and what this entry used to call one is the defect:
-  the twenty `docOmittedFields` entries for `mrapprovals.ConfigOutput` in
-  `cmd/audit_1to1/internal/structs/analyze.go` cite GitLab's generated
-  OpenAPI document and declare those keys absent on every tier. The fix is
-  planned as a pull request of ours, measured on CE and EE. It reads the EE
-  keys from the captured response
+- **Blocking**: no upstream block. Trusting the CE annotation cost this
+  server data until the change under Workaround:
+  `merge_request.approval_config` published the four keys of `ConfigOutput`
+  on every tier, so on GitLab.com and on every EE instance a model was given
+  4 of the 24 keys GitLab sends; `merge_request.approve` published five of
+  them, with `approvals_required` reading 0 on CE, where GitLab does not send
+  it; and `merge_request.unapprove` published nothing of its answer. The
+  approve and unapprove POSTs answer through the same helper (below).
+- **Workaround**: yes, for the annotation, and what this entry used to call
+  one was a defect of ours. `configToOutput` in
+  `internal/tools/mrapprovals/mr_approvals.go` cut `ConfigOutput` down to the
+  four keys a Community Edition instance sends
+  ([issue 580](https://github.com/jmrplens/gitlab-mcp-server/issues/580)),
+  and twenty `docOmittedFields` entries in
+  `cmd/audit_1to1/internal/structs/analyze.go`, citing GitLab's generated
+  OpenAPI document, excused the cut by declaring those keys absent on every
+  tier. The three actions now read the twenty EE keys off the captured
+  response
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  or into pointer fields, since `omitempty` on client-go's value-typed struct
-  cannot tell a missing key from a zero such as `approvals_left: 0`.
-  client-go's `MergeRequestApprovals` has no `invalid_approvers_rules`, which
-  the EE answer carries, and still models `approvals_before_merge`, which it
-  does not. Once the keys are published, R-PATH reports them against the live
-  record, which keeps the CE annotation, so a shape declaration answers that
-  until GitLab annotates the EE route with `ApprovalState`.
+  into `mrapprovals.EnterpriseApprovalState`: each key is absent when GitLab
+  did not send it (a pointer, or for the two timestamps a string left empty)
+  and each list is published only when GitLab sent one, so a CE answer
+  carries none of them and an EE one keeps its zeros, such as
+  `approvals_left: 0`.
+  client-go's `MergeRequestApprovals` cannot serve for them: its value-typed
+  fields read zero whether or not the key was sent, it has no
+  `invalid_approvers_rules`, it types `approval_rules_left` with the whole
+  rule where GitLab sends the short reference, and `UnapproveMergeRequest`
+  discards the body. `approvals_before_merge`, which it still models and no
+  edition sends here, stays out. What remains is one shape declaration per
+  key on `mrapprovals.ConfigOutput` in
+  `cmd/audit_1to1/internal/paths/shape_declarations.go`, because the live
+  record reads the CE annotation of the three routes; they retire when GitLab
+  annotates the EE answer with `ApprovalState`.
 
 **Where**: `lib/api/merge_request_approvals.rb` presents
 `GET /projects/:id/merge_requests/:merge_request_iid/approvals` through
@@ -6043,7 +6051,7 @@ GitLab.com and found the 24 keys, which the EE prepend above explains.
 says what each edition answers, covering the GET and the approve and
 unapprove POSTs, which share the helper and the annotation, or the move
 [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183)
-proposes; the change on this side is the pull request above.
+proposes; the change on this side is made (Workaround).
 
 ### Two project group listings are annotated with the whole Group entity
 
