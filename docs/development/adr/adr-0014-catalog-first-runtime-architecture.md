@@ -2,7 +2,7 @@
 title: "ADR-0014: Catalog-first runtime architecture"
 status: "Accepted"
 date: "2026-05-15"
-authors: "jmrplens, GitHub Copilot"
+authors: "jmrplens"
 tags: ["architecture", "decision", "action-spec", "action-catalog", "tool-surfaces"]
 supersedes: "ADR-0004 runtime registration mechanics; ADR-0005 meta registration mechanics; ADR-0011 dynamic catalog source wording"
 superseded_by: ""

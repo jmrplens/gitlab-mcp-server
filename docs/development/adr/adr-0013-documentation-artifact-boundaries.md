@@ -1,18 +1,30 @@
 ---
 title: "ADR-0013: Documentation artifact boundaries"
-status: "Accepted"
+status: "Superseded"
 date: "2026-05-13"
-authors: "jmrplens, GitHub Copilot"
+authors: "jmrplens"
 tags: ["documentation", "decision", "testing", "evaluation", "ai-guidance"]
 supersedes: ""
-superseded_by: ""
+superseded_by: "ADR-0025"
 ---
 
 # ADR-0013: Documentation Artifact Boundaries
 
 ## Status
 
-Status: Accepted.
+Status: Superseded by [ADR-0025](adr-0025-the-site-is-the-only-home-of-user-documentation.md)
+on 2026-10-05. Accepted 2026-05-13.
+
+> The record below is kept as written, as history. ADR-0025 makes the documentation site the
+> only home of the user documentation, so the layout this record describes is no longer the
+> tree's: `docs/` keeps `docs/development` alone, and the README carries one generated block,
+> the token claim. ALT-001 and ALT-002 kept the statistics and the model evaluation summaries
+> in the README because commands maintained them; both left the README under
+> [issue 1163](https://github.com/jmrplens/gitlab-mcp-server/issues/1163), with
+> `cmd/gen_stats`, while the testing reference and the results page under
+> `docs/development/testing` keep their generated blocks. The rules here that still hold
+> (transient artifacts stay out of the documentation, a managed block changes through its
+> command, Mermaid is preferred over ASCII diagrams) are restated in ADR-0025.
 
 ## Context
 
