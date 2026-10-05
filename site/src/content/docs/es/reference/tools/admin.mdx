@@ -1164,20 +1164,21 @@ Sin parámetros.
 - **Nivel**: Free
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                   | Tipo      | Requerido | Descripción                                                     |
-| --------------------------- | --------- | --------- | --------------------------------------------------------------- |
-| `url`                       | `string`  | sí        | Hook URL to receive events                                      |
-| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches        |
-| `description`               | `string`  | no        | Description for the hook                                        |
-| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                        |
-| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                 |
-| `name`                      | `string`  | no        | Descriptive name for the hook                                   |
-| `push_events`               | `boolean` | no        | Trigger on push events                                          |
-| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name) |
-| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                             |
-| `signing_token`             | `string`  | no        | Write-only signing token for webhook signature validation       |
-| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                      |
-| `token`                     | `string`  | no        | Secret token for payload validation                             |
+| Parámetro                   | Tipo      | Requerido | Descripción                                                             |
+| --------------------------- | --------- | --------- | ----------------------------------------------------------------------- |
+| `url`                       | `string`  | sí        | Hook URL to receive events                                              |
+| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches                |
+| `custom_webhook_template`   | `string`  | no        | Custom payload template (JSON) sent instead of the default webhook body |
+| `description`               | `string`  | no        | Description for the hook                                                |
+| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                                |
+| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                         |
+| `name`                      | `string`  | no        | Descriptive name for the hook                                           |
+| `push_events`               | `boolean` | no        | Trigger on push events                                                  |
+| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name)         |
+| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                                     |
+| `signing_token`             | `string`  | no        | Write-only signing token for webhook signature validation               |
+| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                              |
+| `token`                     | `string`  | no        | Secret token for payload validation                                     |
 
 ### `admin.system_hook_delete`
 
@@ -1215,21 +1216,22 @@ Sin parámetros.
 - **Nivel**: Free
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                   | Tipo      | Requerido | Descripción                                                       |
-| --------------------------- | --------- | --------- | ----------------------------------------------------------------- |
-| `id`                        | `integer` | sí        | System hook ID to edit                                            |
-| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches          |
-| `description`               | `string`  | no        | Updated hook description                                          |
-| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                          |
-| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                   |
-| `name`                      | `string`  | no        | Updated hook name                                                 |
-| `push_events`               | `boolean` | no        | Trigger on push events                                            |
-| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name)   |
-| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                               |
-| `signing_token`             | `string`  | no        | Updated write-only signing token for webhook signature validation |
-| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                        |
-| `token`                     | `string`  | no        | Updated secret token for payload validation                       |
-| `url`                       | `string`  | no        | Updated hook URL                                                  |
+| Parámetro                   | Tipo      | Requerido | Descripción                                                                     |
+| --------------------------- | --------- | --------- | ------------------------------------------------------------------------------- |
+| `id`                        | `integer` | sí        | System hook ID to edit                                                          |
+| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches                        |
+| `custom_webhook_template`   | `string`  | no        | Updated custom payload template (JSON) sent instead of the default webhook body |
+| `description`               | `string`  | no        | Updated hook description                                                        |
+| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                                        |
+| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                                 |
+| `name`                      | `string`  | no        | Updated hook name                                                               |
+| `push_events`               | `boolean` | no        | Trigger on push events                                                          |
+| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name)                 |
+| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                                             |
+| `signing_token`             | `string`  | no        | Updated write-only signing token for webhook signature validation               |
+| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                                      |
+| `token`                     | `string`  | no        | Updated secret token for payload validation                                     |
+| `url`                       | `string`  | no        | Updated hook URL                                                                |
 
 ### `admin.system_hook_get`
 
