@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,751 |
-| Unit test functions                                   | 19,290 |
+| Total test functions                                  | 20,764 |
+| Unit test functions                                   | 19,303 |
 | E2E test functions                                    |  1,461 |
 | cmd test functions                                    |  4,572 |
 | Test files (internal/)                                |    698 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,220 | 63.7% |
 | `TestFunc` (no underscore)             |    913 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,618 | 31.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,631 | 31.9% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,798 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            386 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,534 |        457 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,547 |        457 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,461 |        407 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,572 |        312 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,751** |  **1,417** |                                                                                                 |
+| **Total**               |     **20,764** |  **1,417** |                                                                                                 |
 
 ### Core Packages
 
@@ -97,7 +97,7 @@
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   478 |   100.0% |    57 |
-| mergerequests     |   315 |   100.0% |    30 |
+| mergerequests     |   319 |   100.0% |    30 |
 | groups            |   314 |   100.0% |    37 |
 | dynamic           |   287 |   100.0% |     2 |
 | issues            |   279 |   100.0% |    21 |
@@ -115,10 +115,10 @@
 | snippets          |   112 |   100.0% |    15 |
 | branches          |   110 |   100.0% |    10 |
 | accesstokens      |   108 |   100.0% |    18 |
+| mrapprovals       |   108 |   100.0% |     7 |
 | pipelineschedules |   108 |   100.0% |    11 |
 | groupmilestones   |   105 |   100.0% |     8 |
 | groupmembers      |   104 |   100.0% |    10 |
-| mrapprovals       |    99 |   100.0% |     7 |
 | files             |    97 |   100.0% |     8 |
 | integrations      |    90 |   100.0% |    12 |
 
@@ -236,12 +236,12 @@
 | markdown                |         10 |          1 |   100.0% |         1 |
 | memberroles             |         55 |          4 |   100.0% |         6 |
 | members                 |         75 |          3 |   100.0% |         6 |
-| mergerequests           |        315 |          5 |   100.0% |        30 |
+| mergerequests           |        319 |          5 |   100.0% |        30 |
 | mergetrains             |         25 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |         81 |          2 |   100.0% |         7 |
 | modelregistry           |          7 |          3 |   100.0% |         1 |
-| mrapprovals             |         99 |          3 |   100.0% |         7 |
+| mrapprovals             |        108 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
 | mrchanges               |         43 |          1 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,534** |    **457** |          | **1,190** |
+| **Total**               | **10,547** |    **457** |          | **1,190** |
 
 </details>
 

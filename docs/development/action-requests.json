@@ -15238,7 +15238,7 @@
     {
       "id": "merge_request.unapprove",
       "handlers": [
-        "mergerequests.UnapproveOutput"
+        "mergerequests.Unapprove"
       ],
       "requests": [
         {

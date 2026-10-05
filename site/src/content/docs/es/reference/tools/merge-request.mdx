@@ -103,7 +103,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.approval_config`
 
-> Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: [`merge_request.approval_state`](#merge_requestapproval_state), [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approve`](#merge_requestapprove).
+> Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve, and on an Enterprise Edition instance also the approvals required and left, the rules left to satisfy and the suggested approvers, which Community Edition does not send. For each rule's status, use the approval state. See also: [`merge_request.approval_state`](#merge_requestapproval_state), [`merge_request.approval_rules`](#merge_requestapproval_rules), [`merge_request.approve`](#merge_requestapprove).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `approval_config`
 - **Herramienta individual**: `gitlab_mr_approval_config`
@@ -277,7 +277,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.approve`
 
-> Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: [`merge_request.unapprove`](#merge_requestunapprove), [`merge_request.merge`](#merge_requestmerge), [`merge_request.get`](#merge_requestget).
+> Approve a merge request on behalf of the caller. Returns: the approval state with the approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve, and on an Enterprise Edition instance also the approvals required and left and the rules left to satisfy. See also: [`merge_request.unapprove`](#merge_requestunapprove), [`merge_request.merge`](#merge_requestmerge), [`merge_request.get`](#merge_requestget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `approve`
 - **Herramienta individual**: `gitlab_mr_approve`
@@ -1115,7 +1115,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_request.unapprove`
 
-> Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: [`merge_request.approve`](#merge_requestapprove), [`merge_request.get`](#merge_requestget).
+> Remove the caller's approval from a merge request. Returns: the approval state left after the withdrawal, in the shape the approve answers with: the approved-by count and users, the overall approved flag, whether the caller has approved and may approve, and on an Enterprise Edition instance the approvals required and left. See also: [`merge_request.approve`](#merge_requestapprove), [`merge_request.get`](#merge_requestget).
 
 - **Meta-herramienta**: `gitlab_merge_request`, acción `unapprove`
 - **Herramienta individual**: `gitlab_mr_unapprove`

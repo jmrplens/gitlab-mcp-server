@@ -131282,7 +131282,7 @@
   },
   {
     "name": "gitlab_mr_approval_config",
-    "description": "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
+    "description": "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve, and on an Enterprise Edition instance also the approvals required and left, the rules left to satisfy and the suggested approvers, which Community Edition does not send. For each rule's status, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -131307,7 +131307,49 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approval_rules_left": {
+          "description": "Rules not yet satisfied (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvals_left": {
+          "description": "Approvals still missing, 0 when none are (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "approvals_required": {
+          "description": "Approvals the merge request requires (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "approved": {
+          "description": "Community Edition: whether anyone has approved. Enterprise Edition: whether the approvals required are met, true when none are required",
           "type": "boolean"
         },
         "approved_by": {
@@ -131360,6 +131402,203 @@
             "array"
           ]
         },
+        "approver_groups": {
+          "description": "Deprecated: the groups of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvers": {
+          "description": "Deprecated: the users of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "description": "When the merge request was created (Enterprise Edition only)",
+          "type": "string"
+        },
+        "description": {
+          "description": "Merge request description (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "has_approval_rules": {
+          "description": "Whether any user-defined approval rule applies (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id": {
+          "description": "Merge request ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "iid": {
+          "description": "Merge request IID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "invalid_approvers_rules": {
+          "description": "Rules no eligible user can satisfy (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "merge_request_approvers_available": {
+          "description": "Whether the license includes approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_status": {
+          "description": "Deprecated mergeability status (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "multiple_approval_rules_available": {
+          "description": "Whether the license allows several approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -131369,10 +131608,87 @@
             "array"
           ]
         },
+        "project_id": {
+          "description": "Project ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "require_password_to_approve": {
+          "description": "Deprecated: whether approving asks for the password (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "state": {
+          "description": "Merge request state (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "suggested_approvers": {
+          "description": "Users suggested as approvers (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "locked"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "title": {
+          "description": "Merge request title (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "updated_at": {
+          "description": "When the merge request was last updated (Enterprise Edition only)",
+          "type": "string"
+        },
         "user_can_approve": {
+          "description": "Whether the calling user may approve",
           "type": "boolean"
         },
         "user_has_approved": {
+          "description": "Whether the calling user has approved",
           "type": "boolean"
         }
       },
@@ -133387,7 +133703,7 @@
   },
   {
     "name": "gitlab_mr_approve",
-    "description": "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
+    "description": "Approve a merge request on behalf of the caller. Returns: the approval state with the approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve, and on an Enterprise Edition instance also the approvals required and left and the rules left to satisfy. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -133416,10 +133732,49 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approval_rules_left": {
+          "description": "Rules not yet satisfied (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvals_left": {
+          "description": "Approvals still missing, 0 when none are (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "approvals_required": {
-          "type": "integer"
+          "description": "Approvals the merge request requires (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "approved": {
+          "description": "Community Edition: whether anyone has approved. Enterprise Edition: whether the approvals required are met, true when none are required",
           "type": "boolean"
         },
         "approved_by": {
@@ -133479,6 +133834,203 @@
         "approved_by_count": {
           "type": "integer"
         },
+        "approver_groups": {
+          "description": "Deprecated: the groups of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvers": {
+          "description": "Deprecated: the users of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "description": "When the merge request was created (Enterprise Edition only)",
+          "type": "string"
+        },
+        "description": {
+          "description": "Merge request description (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "has_approval_rules": {
+          "description": "Whether any user-defined approval rule applies (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id": {
+          "description": "Merge request ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "iid": {
+          "description": "Merge request IID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "invalid_approvers_rules": {
+          "description": "Rules no eligible user can satisfy (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "merge_request_approvers_available": {
+          "description": "Whether the license includes approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_status": {
+          "description": "Deprecated mergeability status (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "multiple_approval_rules_available": {
+          "description": "Whether the license allows several approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -133488,6 +134040,81 @@
             "array"
           ]
         },
+        "project_id": {
+          "description": "Project ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "require_password_to_approve": {
+          "description": "Deprecated: whether approving asks for the password (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "state": {
+          "description": "Merge request state (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "suggested_approvers": {
+          "description": "Users suggested as approvers (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "locked"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "title": {
+          "description": "Merge request title (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "updated_at": {
+          "description": "When the merge request was last updated (Enterprise Edition only)",
+          "type": "string"
+        },
         "user_can_approve": {
           "type": "boolean"
         },
@@ -133496,7 +134123,6 @@
         }
       },
       "required": [
-        "approvals_required",
         "approved_by_count",
         "approved",
         "user_has_approved",
@@ -155335,7 +155961,7 @@
   },
   {
     "name": "gitlab_mr_unapprove",
-    "description": "Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_approve, gitlab_mr_get.",
+    "description": "Remove the caller's approval from a merge request. Returns: the approval state left after the withdrawal, in the shape the approve answers with: the approved-by count and users, the overall approved flag, whether the caller has approved and may approve, and on an Enterprise Edition instance the approvals required and left. See also: gitlab_mr_approve, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155369,8 +155995,304 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "message": {
+        "approval_rules_left": {
+          "description": "Rules not yet satisfied (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvals_left": {
+          "description": "Approvals still missing, 0 when none are (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "approvals_required": {
+          "description": "Approvals the merge request requires (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "approved": {
+          "description": "Community Edition: whether anyone has approved. Enterprise Edition: whether the approvals required are met, true when none are required",
+          "type": "boolean"
+        },
+        "approved_by": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "approved_at": {
+                "type": "string"
+              },
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approved_by_count": {
+          "type": "integer"
+        },
+        "approver_groups": {
+          "description": "Deprecated: the groups of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvers": {
+          "description": "Deprecated: the users of the first regular rule (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "description": "When the merge request was created (Enterprise Edition only)",
           "type": "string"
+        },
+        "description": {
+          "description": "Merge request description (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "has_approval_rules": {
+          "description": "Whether any user-defined approval rule applies (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id": {
+          "description": "Merge request ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "iid": {
+          "description": "Merge request IID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "invalid_approvers_rules": {
+          "description": "Rules no eligible user can satisfy (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "merge_request_approvers_available": {
+          "description": "Whether the license includes approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_status": {
+          "description": "Deprecated mergeability status (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "multiple_approval_rules_available": {
+          "description": "Whether the license allows several approval rules (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "next_steps": {
           "items": {
@@ -155381,13 +156303,93 @@
             "array"
           ]
         },
-        "status": {
+        "project_id": {
+          "description": "Project ID (Enterprise Edition only)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "require_password_to_approve": {
+          "description": "Deprecated: whether approving asks for the password (Enterprise Edition only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "state": {
+          "description": "Merge request state (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "suggested_approvers": {
+          "description": "Users suggested as approvers (Enterprise Edition only)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "locked"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "title": {
+          "description": "Merge request title (Enterprise Edition only)",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "updated_at": {
+          "description": "When the merge request was last updated (Enterprise Edition only)",
           "type": "string"
+        },
+        "user_can_approve": {
+          "type": "boolean"
+        },
+        "user_has_approved": {
+          "type": "boolean"
         }
       },
       "required": [
-        "status",
-        "message"
+        "approved_by_count",
+        "approved",
+        "user_has_approved",
+        "user_can_approve"
       ],
       "type": "object"
     },
