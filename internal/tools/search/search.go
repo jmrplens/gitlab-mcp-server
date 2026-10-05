@@ -56,12 +56,10 @@ func searchOpts(page, perPage int, ref, searchType string) (*gl.SearchOptions, e
 		typ := gl.SearchType(searchType)
 		opts.SearchType = &typ
 	}
-	if page > 0 {
-		opts.Page = int64(page)
-	}
-	if perPage > 0 {
-		opts.PerPage = int64(perPage)
-	}
+	// A page or size of zero or less sends nothing, since the options omit a
+	// zero and GitLab then applies its own default.
+	opts.Page = int64(max(page, 0))
+	opts.PerPage = int64(max(perPage, 0))
 	return opts, nil
 }
 
@@ -87,6 +85,7 @@ type scopedSearchArgs[T any] struct {
 	query         string
 	projectID     toolutil.StringOrInt
 	groupID       toolutil.StringOrInt
+	ref           string
 	page          int
 	perPage       int
 	searchType    string
@@ -110,27 +109,28 @@ func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T,
 		return nil, nil, fmt.Errorf("%s: query is required", args.operation)
 	}
 
-	opts, err := searchOpts(args.page, args.perPage, "", args.searchType)
+	opts, err := searchOpts(args.page, args.perPage, args.ref, args.searchType)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var (
-		items []T
-		resp  *gl.Response
-	)
-	switch {
-	case args.projectID != "":
-		items, resp, err = args.projectSearch(string(args.projectID), args.query, opts, gl.WithContext(ctx))
-	case args.groupID != "":
-		items, resp, err = args.groupSearch(string(args.groupID), args.query, opts, gl.WithContext(ctx))
-	default:
-		items, resp, err = args.globalSearch(args.query, opts, gl.WithContext(ctx))
-	}
+	items, resp, err := args.search(ctx, opts)
 	if err != nil && (!args.capturesPage || !commits.MisreadByClientGo(err)) {
 		return nil, nil, wrapSearchErr(args.operation, err)
 	}
 	return items, resp, nil
+}
+
+// search sends the query to the narrowest scope the caller named: the
+// project, else the group, else the whole instance.
+func (args scopedSearchArgs[T]) search(ctx context.Context, opts *gl.SearchOptions) ([]T, *gl.Response, error) {
+	if args.projectID != "" {
+		return args.projectSearch(string(args.projectID), args.query, opts, gl.WithContext(ctx))
+	}
+	if args.groupID != "" {
+		return args.groupSearch(string(args.groupID), args.query, opts, gl.WithContext(ctx))
+	}
+	return args.globalSearch(args.query, opts, gl.WithContext(ctx))
 }
 
 func convertSearchResults[T, O any](items []T, convert func(T) O) []O {
@@ -185,33 +185,14 @@ type CodeOutput struct {
 // Code searches for code (blobs) in GitLab. Scope priority:
 // project_id > group_id > global.
 func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (CodeOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return CodeOutput{}, err
-	}
-	if input.Query == "" {
-		return CodeOutput{}, errors.New("searchCode: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, input.Ref, input.SearchType)
+	searchClient := client.GL().Search
+	blobs, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Blob]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, ref: input.Ref, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchCode", projectSearch: searchClient.BlobsByProject,
+		groupSearch: searchClient.BlobsByGroup, globalSearch: searchClient.Blobs,
+	})
 	if err != nil {
 		return CodeOutput{}, err
-	}
-
-	var (
-		blobs []*gl.Blob
-		resp  *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		blobs, resp, err = client.GL().Search.BlobsByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		blobs, resp, err = client.GL().Search.BlobsByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		blobs, resp, err = client.GL().Search.Blobs(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return CodeOutput{}, wrapSearchErr("searchCode", err)
 	}
 
 	out := make([]BlobOutput, len(blobs))
@@ -226,9 +207,7 @@ func Code(ctx context.Context, client *gitlabclient.Client, input CodeInput) (Co
 			ProjectID: b.ProjectID,
 		}
 	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return CodeOutput{Blobs: out, Pagination: pag}, nil
+	return CodeOutput{Blobs: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -665,33 +644,14 @@ type UsersOutput struct {
 // Users searches for users in GitLab.
 // Scope priority: project_id > group_id > global.
 func Users(ctx context.Context, client *gitlabclient.Client, input UsersInput) (UsersOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return UsersOutput{}, err
-	}
-	if input.Query == "" {
-		return UsersOutput{}, errors.New("searchUsers: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	users, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.User]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchUsers", projectSearch: searchClient.UsersByProject,
+		groupSearch: searchClient.UsersByGroup, globalSearch: searchClient.Users,
+	})
 	if err != nil {
 		return UsersOutput{}, err
-	}
-
-	var (
-		users []*gl.User
-		resp  *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		users, resp, err = client.GL().Search.UsersByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		users, resp, err = client.GL().Search.UsersByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		users, resp, err = client.GL().Search.Users(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return UsersOutput{}, wrapSearchErr("searchUsers", err)
 	}
 
 	out := make([]UserOutput, len(users))
@@ -705,9 +665,7 @@ func Users(ctx context.Context, client *gitlabclient.Client, input UsersInput) (
 			WebURL:    u.WebURL,
 		}
 	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return UsersOutput{Users: out, Pagination: pag}, nil
+	return UsersOutput{Users: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -742,33 +700,14 @@ type WikiOutput struct {
 // Wiki searches for wiki blobs in GitLab.
 // Scope priority: project_id > group_id > global.
 func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (WikiOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return WikiOutput{}, err
-	}
-	if input.Query == "" {
-		return WikiOutput{}, errors.New("searchWiki: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	wikis, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Wiki]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchWiki", projectSearch: searchClient.WikiBlobsByProject,
+		groupSearch: searchClient.WikiBlobsByGroup, globalSearch: searchClient.WikiBlobs,
+	})
 	if err != nil {
 		return WikiOutput{}, err
-	}
-
-	var (
-		wikis []*gl.Wiki
-		resp  *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		wikis, resp, err = client.GL().Search.WikiBlobsByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		wikis, resp, err = client.GL().Search.WikiBlobsByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		wikis, resp, err = client.GL().Search.WikiBlobs(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return WikiOutput{}, wrapSearchErr("searchWiki", err)
 	}
 
 	out := make([]WikiBlobOutput, len(wikis))
@@ -780,7 +719,5 @@ func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (Wi
 			Format:  string(w.Format),
 		}
 	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return WikiOutput{WikiBlobs: out, Pagination: pag}, nil
+	return WikiOutput{WikiBlobs: out, Pagination: searchPagination(resp, len(out))}, nil
 }

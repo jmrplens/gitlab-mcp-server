@@ -5,14 +5,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The spec names of the search actions, and the domain the catalog publishes
-// them under. Separating the two is what the specs below are registered with
-// and what RelatedActions names respectively: the spec name alone resolves to
-// no action.
+// The spec names of the search actions. A spec name is what the specs below
+// are registered with, and it resolves to no action on its own: RelatedActions
+// names the canonical ID, the name under the catalog's search domain.
 const (
-	catalogDomain = "search"
-	domainPrefix  = catalogDomain + "."
-
 	specCode          = "code"
 	specProjects      = "projects"
 	specMergeRequests = "merge_requests"
@@ -25,20 +21,22 @@ const (
 	specWiki          = "wiki"
 )
 
-// The canonical search action IDs the RelatedActions metadata names, derived
-// from the spec names above so a rename cannot leave a cross-link pointing at
-// an action that is no longer there.
+// The canonical search action IDs the RelatedActions metadata names. Each is
+// written whole, as most domains write their IDs, and
+// TestSearchActionIDs_AreTheSpecNamesUnderTheCatalogDomain holds it to its
+// spec name under the search domain, so a rename cannot leave a cross-link
+// pointing at an action that is no longer there.
 const (
-	actionSearchCode          = domainPrefix + specCode
-	actionSearchProjects      = domainPrefix + specProjects
-	actionSearchMergeRequests = domainPrefix + specMergeRequests
-	actionSearchIssues        = domainPrefix + specIssues
-	actionSearchCommits       = domainPrefix + specCommits
-	actionSearchMilestones    = domainPrefix + specMilestones
-	actionSearchNotes         = domainPrefix + specNotes
-	actionSearchSnippets      = domainPrefix + specSnippets
-	actionSearchUsers         = domainPrefix + specUsers
-	actionSearchWiki          = domainPrefix + specWiki
+	actionSearchCode          = "search.code"
+	actionSearchProjects      = "search.projects"
+	actionSearchMergeRequests = "search.merge_requests"
+	actionSearchIssues        = "search.issues"
+	actionSearchCommits       = "search.commits"
+	actionSearchMilestones    = "search.milestones"
+	actionSearchNotes         = "search.notes"
+	actionSearchSnippets      = "search.snippets"
+	actionSearchUsers         = "search.users"
+	actionSearchWiki          = "search.wiki"
 )
 
 // The canonical IDs of the other domains' actions this one cross-links to.
@@ -111,9 +109,7 @@ func decorateSearchMeta(options *toolutil.ActionSpecOptions, individualTool stri
 	if len(meta.aliases) > 0 {
 		options.Aliases = append([]string(nil), meta.aliases...)
 	}
-	if len(meta.tags) > 0 {
-		options.Tags = append(options.Tags, meta.tags...)
-	}
+	options.Tags = append(options.Tags, meta.tags...)
 	if len(meta.related) > 0 {
 		options.RelatedActions = append([]string(nil), meta.related...)
 	}
