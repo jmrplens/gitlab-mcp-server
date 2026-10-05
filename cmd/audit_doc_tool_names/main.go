@@ -37,6 +37,7 @@ var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
 // a future reader can tell an exemption from an oversight.
 var allowed = map[string]string{
 	"gitlab_com":         "stats.tools.gitlab_com. A generated data property, not a tool",
+	"gitlab_com_premium": "stats.meta.gitlab_com_premium. A generated data property, not a tool",
 	"gitlab_orbit":       "prose prefix for the gitlab_orbit_* family",
 	"gitlab_url":         "mcpb user_config key (gitlab_url), not a tool",
 	"gitlab_refused":     "a model evaluation record value: the answer a step carries when GitLab refused a correctly dispatched call",

@@ -191,7 +191,7 @@ Pass the remote exactly as `git remote -v` prints it, scheme or `git@` prefix in
 
 ### On the meta surface
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, {stats.meta.base} tools serve a Free or CE instance. The catalog grows with the tier: 40 on self-managed Premium and {stats.meta.self_managed_enterprise} on self-managed Ultimate, one more of each on GitLab.com, where `gitlab_orbit` is served from Premium up (41 on GitLab.com Premium, {stats.meta.gitlab_com} on GitLab.com Ultimate). Each domain tool takes only the top-level keys `action` and `params`:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, {stats.meta.base} tools serve a Free or CE instance. The catalog grows with the tier: {stats.meta.premium} on self-managed Premium and {stats.meta.self_managed_enterprise} on self-managed Ultimate, one more of each on GitLab.com, where `gitlab_orbit` is served from Premium up ({stats.meta.gitlab_com_premium} on GitLab.com Premium, {stats.meta.gitlab_com} on GitLab.com Ultimate). Each domain tool takes only the top-level keys `action` and `params`:
 
 ```text
 Resource: gitlab://tools/gitlab_project

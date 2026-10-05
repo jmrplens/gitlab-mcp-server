@@ -132,7 +132,7 @@ faq:
   - q: "¿Todos los modos admiten las mismas operaciones de GitLab?"
     a: "Sí. Los modos dinámico, meta-herramientas e individual se proyectan desde un único catálogo canónico de acciones, por lo que cubren las mismas operaciones REST y GraphQL de GitLab. Se diferencian en el empaquetado, no en la capacidad. El filtrado de solo lectura, el modo seguro, la clasificación destructiva, el filtrado por alcance de token y el formato de resultados son comunes a todos los modos. La única diferencia es cómo se confirma una llamada destructiva: la superficie dinámica por defecto exige `confirm: true` en cada una e ignora `GITLAB_MCP_YOLO_MODE`."
   - q: "¿Cuántas herramientas expone cada modo?"
-    a: "El modo individual expone {{tools.free}} herramientas en Free/CE, {{tools.premium}} en Premium autoalojado, {{tools.ultimate_self_managed}} en Ultimate autoalojado y {{tools.gitlab_com}} en GitLab.com Ultimate, donde Orbit está disponible. El modo meta-herramientas expone {{meta.base}} herramientas en Free/CE, 40 en Premium autoalojado, {{meta.self_managed_enterprise}} en Ultimate autoalojado y {{meta.gitlab_com}} en GitLab.com Ultimate. El modo dinámico expone siempre exactamente dos herramientas públicas, sin importar cuántas operaciones de GitLab estén disponibles."
+    a: "El modo individual expone {{tools.free}} herramientas en Free/CE, {{tools.premium}} en Premium autoalojado, {{tools.ultimate_self_managed}} en Ultimate autoalojado y {{tools.gitlab_com}} en GitLab.com Ultimate, donde Orbit está disponible. El modo meta-herramientas expone {{meta.base}} herramientas en Free/CE, {{meta.premium}} en Premium autoalojado, {{meta.self_managed_enterprise}} en Ultimate autoalojado y {{meta.gitlab_com}} en GitLab.com Ultimate. El modo dinámico expone siempre exactamente dos herramientas públicas, sin importar cuántas operaciones de GitLab estén disponibles."
   - q: "¿Las herramientas Enterprise requieren una licencia de GitLab de pago?"
     a: "Sí. Las meta-herramientas Enterprise, como merge trains, métricas DORA, vulnerabilidades y políticas de cumplimiento, requieren una licencia de GitLab Premium o Ultimate en la instancia conectada. Forzar el catálogo Enterprise en una instancia Community Edition registra las herramientas, pero las llamadas a la API subyacente fallan: Community Edition no sirve esos endpoints y responde 404, y una Enterprise Edition sin licencia las rechaza."
   - q: "¿Cuáles son los tres modos de herramientas de GitLab MCP Server?"
@@ -157,7 +157,7 @@ Cada modo se proyecta desde un único **catálogo canónico de acciones**. Eso d
 | Modo                     | Herramientas públicas expuestas                                                                                         | Ideal para                                               | Coste relativo de tokens |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------ |
 | **Dinámico** _(predet.)_ | 2: `gitlab_find_action`, `gitlab_execute_action`                                                                        | La mayoría de asistentes; mínimo coste de contexto       | El más bajo              |
-| **Meta-herramientas**    | {stats.meta.base} en Free/CE, 40 en Premium autoalojado, hasta {stats.meta.gitlab_com} en Ultimate                      | Una lista fija y explorable a nivel de dominio           | Medio                    |
+| **Meta-herramientas**    | {stats.meta.base} en Free/CE, {stats.meta.premium} en Premium autoalojado, hasta {stats.meta.gitlab_com} en Ultimate    | Una lista fija y explorable a nivel de dominio           | Medio                    |
 | **Individual**           | {stats.tools.free} en Free/CE, {stats.tools.premium} en Premium autoalojado, hasta {stats.tools.gitlab_com} en Ultimate | Clientes que necesitan todas las operaciones de antemano | El más alto              |
 
 Define el modo con la variable de entorno `GITLAB_MCP_TOOL_SURFACE` (`dynamic`, `meta` o `individual`). El modo dinámico se usa cuando `GITLAB_MCP_TOOL_SURFACE` no está definido.
@@ -190,7 +190,7 @@ El modo individual registra **una herramienta MCP por operación de GitLab**: **
 
 ### ¿Cómo funciona el modo meta-herramientas?
 
-El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas en Free/CE**, **40 en Premium autoalojado**, **{stats.meta.self_managed_enterprise} en Ultimate autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Ultimate**, donde Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
+El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones relacionadas en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado, reduciendo el recuento a **{stats.meta.base} meta-herramientas en Free/CE**, **{stats.meta.premium} en Premium autoalojado**, **{stats.meta.self_managed_enterprise} en Ultimate autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Ultimate**, donde Orbit está disponible. Esto mejora drásticamente la eficiencia de tokens frente al modo individual manteniendo una lista de herramientas fija y explorable.
 
 ```json
 {
@@ -356,7 +356,7 @@ Junto a estas se registra en todos los tiers una meta-herramienta `gitlab_server
 
 ## Herramientas exclusivas de Enterprise
 
-Cuando el nivel resuelto es Premium o Ultimate, el servidor registra hasta {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas autoalojadas adicionales para funciones de GitLab Premium y Ultimate. Seis llegan con Premium, para 40 meta-herramientas (el número de acciones de cada una va entre paréntesis):
+Cuando el nivel resuelto es Premium o Ultimate, el servidor registra hasta {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas autoalojadas adicionales para funciones de GitLab Premium y Ultimate. Seis llegan con Premium, para {stats.meta.premium} meta-herramientas (el número de acciones de cada una va entre paréntesis):
 
 `gitlab_audit_event` (6), `gitlab_enterprise_user` (4, necesita `admin_mode`), `gitlab_geo` (8, necesita `admin_mode`), `gitlab_group_scim` (4), `gitlab_merge_train` (4), `gitlab_project_alias` (4, necesita `admin_mode`)
 

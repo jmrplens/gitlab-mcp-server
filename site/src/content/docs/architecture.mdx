@@ -175,7 +175,7 @@ Dynamic mode is the default low-token surface and is documented in [Dynamic tool
 
 ### Meta-tool mode
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} meta-tools** instead of the individual catalog: 29 catalog-backed tools (28 GitLab domain dispatchers plus `gitlab_server`), `gitlab_discover_project`, and the four interactive creation flows. The Premium tier adds 6 meta-tools for 40 total, Ultimate 11 more for {stats.meta.self_managed_enterprise} total on a self-managed instance, and GitLab.com adds `gitlab_orbit` (GitLab.com's Knowledge Graph feature) on Premium and Ultimate alike, for {stats.meta.gitlab_com} total on GitLab.com Ultimate. Each meta-tool groups related operations:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} meta-tools** instead of the individual catalog: 29 catalog-backed tools (28 GitLab domain dispatchers plus `gitlab_server`), `gitlab_discover_project`, and the four interactive creation flows. The Premium tier adds 6 meta-tools for {stats.meta.premium} total, Ultimate 11 more for {stats.meta.self_managed_enterprise} total on a self-managed instance, and GitLab.com adds `gitlab_orbit` (GitLab.com's Knowledge Graph feature) on Premium and Ultimate alike, for {stats.meta.gitlab_com} total on GitLab.com Ultimate. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD

@@ -47,7 +47,7 @@ Dynamic mode exposes that catalog through find and execute tools instead. The mo
 | Surface             |            Free/CE |                        Premium (self-managed) |                                     Ultimate (self-managed) |                   GitLab.com Ultimate with Orbit |
 | ------------------- | -----------------: | --------------------------------------------: | ----------------------------------------------------------: | -----------------------------------------------: |
 | `dynamic` (default) |    {stats.dynamic} |                               {stats.dynamic} |                                             {stats.dynamic} |                                  {stats.dynamic} |
-| `meta`              |  {stats.meta.base} |                                            40 |                        {stats.meta.self_managed_enterprise} |                          {stats.meta.gitlab_com} |
+| `meta`              |  {stats.meta.base} |                          {stats.meta.premium} |                        {stats.meta.self_managed_enterprise} |                          {stats.meta.gitlab_com} |
 | `individual`        | {stats.tools.free} | {stats.tools.premium.toLocaleString("en-US")} | {stats.tools.ultimate_self_managed.toLocaleString("en-US")} | {stats.tools.gitlab_com.toLocaleString("en-US")} |
 
 The two dynamic tools reach the same catalog the meta-tools dispatch to: dynamic mode changes how an action is discovered, not what it does.

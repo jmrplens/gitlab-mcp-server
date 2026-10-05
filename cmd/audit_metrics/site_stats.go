@@ -8,9 +8,9 @@
 // these counts:
 //
 //   - tools.*           individual tool surface via [mcpsurface.IndividualTools] per tier
-//   - meta.*            meta-tool surface via [mcpsurface.MetaTools] per tier
+//   - meta.*            meta-tool surface via [mcpsurface.MetaTools] per tier and instance
 //   - dynamic           the fixed find/execute dynamic surface (2 tools)
-//   - catalog_actions.* dynamic catalog action routes per tier
+//   - catalog_actions.* dynamic catalog action routes per tier and instance
 //   - catalog_groups.*  catalog group count per tier (IncludeMCP)
 //   - resources/prompts registered MCP resource and prompt counts
 //   - tool_packages     Go package directories under internal/tools
@@ -36,18 +36,20 @@ import (
 // implements: completions, progress, elicitation, and resource
 // subscriptions. Capabilities are wired individually in cmd/server rather
 // than through an enumerable registry, so this value mirrors the canonical
-// count documented in docs/reference/capabilities/README.md ("the 4 MCP
-// capabilities"). It is pinned by TestSiteStatsCapabilitiesMatchesDocs so
-// it cannot silently drift — which is exactly how the site's capability
-// count went stale when the fourth capability shipped.
+// count the site's capability overview states in both languages ("the 4 MCP
+// capabilities", "las 4 capacidades MCP"). It is pinned by
+// TestSiteStatsCapabilitiesMatchesDocs so it cannot silently drift, which is
+// exactly how the site's capability count went stale when the fourth
+// capability shipped.
 const siteCapabilities = 4
 
 // siteCompletionArgNames is the number of distinct completion argument types
 // the server supports. The completion handler dispatches argument types through
 // a switch in internal/completions rather than an enumerable registry, so this
-// value mirrors the canonical count documented in
-// docs/reference/capabilities/completions.md ("18 argument names"). It is pinned
-// by TestSiteStatsCompletionsMatchesDocs so it cannot silently drift.
+// value mirrors the canonical count the site's completions page states in both
+// languages ("completes 18 argument names", "completa 18 nombres de
+// argumento"). It is pinned by TestSiteStatsCompletionsMatchesDocs so it cannot
+// silently drift.
 const siteCompletionArgNames = 18
 
 // siteStats is the single-sourced statistics payload written to
@@ -74,17 +76,26 @@ type siteToolCounts struct {
 	GitLabCom           int `json:"gitlab_com"`
 }
 
-// siteMetaCounts holds the meta-tool surface size per deployment.
+// siteMetaCounts holds the meta-tool surface size per tier and instance.
+//
+// Base is Free/CE, SelfManagedEnterprise and GitLabCom are Ultimate. Premium
+// is measured on both instances because they differ there: GitLab.com serves
+// the Orbit group from Premium up, and no self-managed instance serves it.
 type siteMetaCounts struct {
 	Base                  int `json:"base"`
+	Premium               int `json:"premium"`
 	SelfManagedEnterprise int `json:"self_managed_enterprise"`
+	GitLabComPremium      int `json:"gitlab_com_premium"`
 	GitLabCom             int `json:"gitlab_com"`
 }
 
-// siteCatalogActions holds the dynamic catalog action-route count per tier.
+// siteCatalogActions holds the dynamic catalog action-route count per tier
+// and instance, with the same split as [siteMetaCounts].
 type siteCatalogActions struct {
 	Free                  int `json:"free"`
+	Premium               int `json:"premium"`
 	SelfManagedEnterprise int `json:"self_managed_enterprise"`
+	GitLabComPremium      int `json:"gitlab_com_premium"`
 	GitLabCom             int `json:"gitlab_com"`
 }
 
@@ -136,23 +147,27 @@ func siteToolCountsFor(client, gitLabComClient *gitlabclient.Client) siteToolCou
 	}
 }
 
-// siteMetaCountsFor sizes the meta-tool surface for every published
-// deployment.
+// siteMetaCountsFor sizes the meta-tool surface for every published tier
+// and instance.
 func siteMetaCountsFor(client, gitLabComClient *gitlabclient.Client) siteMetaCounts {
 	return siteMetaCounts{
-		Base:                  len(listServerTools(client, true, false)),
-		SelfManagedEnterprise: len(listServerTools(client, true, true)),
-		GitLabCom:             len(listServerTools(gitLabComClient, true, true)),
+		Base:                  countMetaTools(client, edition.Free),
+		Premium:               countMetaTools(client, edition.Premium),
+		SelfManagedEnterprise: countMetaTools(client, edition.Ultimate),
+		GitLabComPremium:      countMetaTools(gitLabComClient, edition.Premium),
+		GitLabCom:             countMetaTools(gitLabComClient, edition.Ultimate),
 	}
 }
 
 // siteCatalogActionsFor counts the dynamic catalog action routes each
-// published tier exposes.
+// published tier and instance exposes.
 func siteCatalogActionsFor(client, gitLabComClient *gitlabclient.Client) siteCatalogActions {
 	return siteCatalogActions{
-		Free:                  countActionRoutes(dynamicActionCatalog(client, false).ActionMaps()),
-		SelfManagedEnterprise: countActionRoutes(dynamicActionCatalog(client, true).ActionMaps()),
-		GitLabCom:             countActionRoutes(dynamicActionCatalog(gitLabComClient, true).ActionMaps()),
+		Free:                  countCatalogActions(client, edition.Free),
+		Premium:               countCatalogActions(client, edition.Premium),
+		SelfManagedEnterprise: countCatalogActions(client, edition.Ultimate),
+		GitLabComPremium:      countCatalogActions(gitLabComClient, edition.Premium),
+		GitLabCom:             countCatalogActions(gitLabComClient, edition.Ultimate),
 	}
 }
 
@@ -171,6 +186,20 @@ func siteCatalogGroupsFor(client *gitlabclient.Client) siteCatalogGroups {
 // derives its per-surface individual-tool numbers from.
 func countIndividualTools(client *gitlabclient.Client, tier edition.Tier) int {
 	return len(mcpsurface.IndividualTools(client, tier))
+}
+
+// countMetaTools returns the number of tools the meta surface advertises at
+// tier, from the same [mcpsurface] listing [listServerTools] reads for the
+// text report.
+func countMetaTools(client *gitlabclient.Client, tier edition.Tier) int {
+	return len(mcpsurface.MetaTools(client, tier))
+}
+
+// countCatalogActions returns the number of action routes the dynamic
+// catalog holds at tier, the catalog [dynamicActionCatalog] builds for the
+// text report.
+func countCatalogActions(client *gitlabclient.Client, tier edition.Tier) int {
+	return countActionRoutes(dynamicActionCatalogForTier(client, tier).ActionMaps())
 }
 
 // countCatalogGroupsForTier builds the canonical action catalog for tier

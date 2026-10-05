@@ -8,13 +8,17 @@
   },
   "meta": {
     "base": 34,
+    "premium": 40,
     "self_managed_enterprise": 51,
+    "gitlab_com_premium": 41,
     "gitlab_com": 52
   },
   "dynamic": 2,
   "catalog_actions": {
     "free": 872,
+    "premium": 1026,
     "self_managed_enterprise": 1092,
+    "gitlab_com_premium": 1032,
     "gitlab_com": 1098
   },
   "catalog_groups": {

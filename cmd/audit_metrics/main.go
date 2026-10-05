@@ -534,7 +534,14 @@ func printDynamicSearchMetrics(base, enterprise, gitLabCom dynamictools.Registry
 // projects the catalog would take — and both errors already name the group
 // or the step that produced them.
 func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
-	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true}))
+	return dynamicActionCatalogForTier(client, edition.TierForEnterprise(enterprise))
+}
+
+// dynamicActionCatalogForTier is [dynamicActionCatalog] at an explicit tier,
+// for the figures that need Premium, which the base/enterprise split of the
+// text report has no way to name.
+func dynamicActionCatalogForTier(client *gitlabclient.Client, tier edition.Tier) *actioncatalog.Catalog {
+	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true}))
 	return cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
 }
 
