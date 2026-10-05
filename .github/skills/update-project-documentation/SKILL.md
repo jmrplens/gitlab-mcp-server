@@ -30,7 +30,7 @@ For each code change, identify which documentation files are affected:
 |-------------|----------------------|
 | New exported type/function | Its godoc comment (`make audit-godocs-check`), possibly tools/resources reference |
 | Modified function signature | Godoc comment, tools reference, examples |
-| New MCP tool | The `docs/reference/tools/` page that owns the domain (`doc-ownership.json` there; `go run ./cmd/audit_doc_coverage/` gates it); the catalog tables in `docs/reference/tools/README.md` are generated |
+| New MCP tool | The site's per-domain tool reference, which is generated: run `make gen-tool-reference` (a new catalog group first needs its entry in `cmd/gen_tool_reference/domains.json`) |
 | New MCP resource | `docs/reference/resources.md` |
 | New MCP prompt | `docs/reference/prompts.md` |
 | Configuration change | `docs/reference/configuration.md`, `docs/reference/env.md`, `docs/reference/cli.md`, and the `CLAUDE.md` variable and flag tables |
@@ -61,7 +61,7 @@ For each affected document:
 - **UPD-007**: Never introduce TBD/TODO placeholders in updates
 - **UPD-008**: Maintain consistent terminology with the rest of the documentation
 - **UPD-009**: When creating or editing Markdown pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
-- **UPD-010**: Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the catalog tables in `docs/reference/tools/README.md`, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
+- **UPD-010**: Never hand-edit generator-owned content: the README's generated blocks, `docs/development/testing/testing.md`, the site's per-domain tool reference under `site/src/content/docs/reference/tools/` and its `es/` twin, the benchmark charts and tables under `docs/reference/benchmarks/` and `docs/charts/`, `llms.txt`, `llms-full.txt`, `lhm.plugin.json`, and the versions stamped into `server.json`. Run the generator instead (`make update-all` runs them all; ADR-0013)
 
 ### For New APIs
 
@@ -128,7 +128,7 @@ After completing updates, provide a summary:
 ### Documents Updated
 | Document | Sections Changed | Change Type |
 |----------|-----------------|-------------|
-| `docs/reference/tools/branches.md` | Added `gitlab_branch_new_action` section | New API |
+| `site/src/content/docs/reference/tools/branch.mdx` | Regenerated with `make gen-tool-reference` for `branch.new_action` | New API |
 | `docs/concepts/architecture.md` | Updated component view | Modified API |
 
 ### Parity Status

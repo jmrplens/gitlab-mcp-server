@@ -1,0 +1,233 @@
+---
+title: "Ramas"
+description: "Ramas de Git en un proyecto de GitLab: crearlas, listarlas, leerlas y borrarlas, protegerlas y leer las reglas de rama que agrega GitLab."
+sidebar:
+  order: 35
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Gestión de ramas de un proyecto: leer y listar ramas, crear una a partir de una rama, una etiqueta o un commit, borrar una o todas las que ya están fusionadas, y proteger una rama con los niveles de acceso que pueden hacer push y merge, para después leer, actualizar o quitar esa protección.
+
+`branch.rule_list` lee las reglas de rama que GitLab compone por GraphQL: para cada patrón de rama protegida, quién puede hacer push y merge, sus reglas de aprobación y sus comprobaciones de estado externas, en una sola respuesta donde la API REST necesita varias llamadas.
+
+## Preguntas de ejemplo
+
+- "Lista las ramas del proyecto 42"
+- "Crea una rama llamada feature-login a partir de main"
+- "Borra todas las ramas ya fusionadas en main"
+- "¿Quién puede hacer push a main?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `branch.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_branch` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_branch_create`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 5 de 11, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+
+| Acción                                               | Individual                       |
+| ---------------------------------------------------- | -------------------------------- |
+| [`branch.create`](#branchcreate)                     | `gitlab_branch_create`           |
+| [`branch.delete`](#branchdelete)                     | `gitlab_branch_delete`           |
+| [`branch.delete_merged`](#branchdelete_merged)       | `gitlab_branch_delete_merged`    |
+| [`branch.get`](#branchget)                           | `gitlab_branch_get`              |
+| [`branch.get_protected`](#branchget_protected)       | `gitlab_protected_branch_get`    |
+| [`branch.list`](#branchlist)                         | `gitlab_branch_list`             |
+| [`branch.list_protected`](#branchlist_protected)     | `gitlab_protected_branches_list` |
+| [`branch.protect`](#branchprotect)                   | `gitlab_branch_protect`          |
+| [`branch.rule_list`](#branchrule_list)               | `gitlab_list_branch_rules`       |
+| [`branch.unprotect`](#branchunprotect)               | `gitlab_branch_unprotect`        |
+| [`branch.update_protected`](#branchupdate_protected) | `gitlab_protected_branch_update` |
+
+### `branch.create`
+
+> Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: [`branch.list`](#branchlist), [`merge_request.create`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestcreate), [`repository.compare`](/gitlab-mcp-server/reference/tools/repository/#repositorycompare).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `create`
+- **Herramienta individual**: `gitlab_branch_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                  |
+| ------------- | ---------------- | --------- | ------------------------------------------------------------ |
+| `branch_name` | `string`         | sí        | New branch name (param 'branch_name' not 'branch' or 'name') |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                               |
+| `ref`         | `string`         | sí        | Branch name, tag, or commit SHA to create from               |
+
+### `branch.delete`
+
+> Delete a single branch by name. Returns: a success confirmation. Fails for protected or default branches. See also: [`branch.list`](#branchlist), [`branch.unprotect`](#branchunprotect).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `delete`
+- **Herramienta individual**: `gitlab_branch_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                    |
+| ------------- | ---------------- | --------- | ------------------------------ |
+| `branch_name` | `string`         | sí        | Branch name to delete          |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `branch.delete_merged`
+
+> Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: [`branch.list`](#branchlist), [`merge_request.list`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestlist).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `delete_merged`
+- **Herramienta individual**: `gitlab_branch_delete_merged`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `branch.get`
+
+> Get a single branch by name. Returns: the branch with protection, default, and merged flags, push/merge permissions, the head commit object, and web URL. See also: [`branch.list`](#branchlist), [`branch.protect`](#branchprotect), [`branch.unprotect`](#branchunprotect).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `get`
+- **Herramienta individual**: `gitlab_branch_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                |
+| ------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `branch_name` | `string`         | sí        | Branch name to retrieve (param 'branch_name' not 'branch') |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `branch.get_protected`
+
+> Get a single protected branch or wildcard rule by name. Returns: the rule with push, merge, and unprotect access-level arrays, allow-force-push, and CODEOWNERS-approval flags. See also: [`branch.list_protected`](#branchlist_protected), [`branch.update_protected`](#branchupdate_protected), [`branch.unprotect`](#branchunprotect).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `get_protected`
+- **Herramienta individual**: `gitlab_protected_branch_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                    |
+| ------------- | ---------------- | --------- | ------------------------------ |
+| `branch_name` | `string`         | sí        | Name of the protected branch   |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `branch.list`
+
+> List repository branches in one project with optional search/regex filtering, ordering, and offset or keyset pagination. Returns: matching branches with protection, default, merged flags, the head commit object, and pagination metadata. See also: [`branch.get`](#branchget), [`branch.create`](#branchcreate), [`repository.compare`](/gitlab-mcp-server/reference/tools/repository/#repositorycompare).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `list`
+- **Herramienta individual**: `gitlab_branch_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. name, updated)                                                                                                   |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `regex`      | `string`                 | no        | Filter branches whose names match this regular expression                                                                                         |
+| `search`     | `string`                 | no        | Filter branches by name (substring match)                                                                                                         |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `branch.list_protected`
+
+> List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination. Returns: protected rules with push/merge/unprotect access-level arrays and pagination metadata. See also: [`branch.get_protected`](#branchget_protected), [`branch.protect`](#branchprotect), [`branch.update_protected`](#branchupdate_protected).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `list_protected`
+- **Herramienta individual**: `gitlab_protected_branches_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. name)                                                                                                            |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `search`     | `string`                 | no        | Filter protected branches by name (substring match)                                                                                               |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `branch.protect`
+
+> Protect a branch or wildcard with push/merge/unprotect access levels and optional fine-grained allowed_to_push/merge/unprotect entries. Returns: the protected rule with its access-level arrays. Idempotent: returns the existing rule when the branch is already protected. See also: [`branch.unprotect`](#branchunprotect), [`branch.get_protected`](#branchget_protected), [`branch.update_protected`](#branchupdate_protected).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `protect`
+- **Herramienta individual**: `gitlab_branch_protect`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                                | Tipo                              | Requerido | Descripción                                                                                                                                           |
+| ---------------------------------------- | --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `branch_name`                            | `string`                          | sí        | Branch name or wildcard (e.g. 'main' or 'release/\*')                                                                                                 |
+| `project_id`                             | `string/integer`                  | sí        | Project ID or URL-encoded path                                                                                                                        |
+| `allow_force_push`                       | `boolean`                         | no        | Allow force push to this branch                                                                                                                       |
+| `allowed_to_merge`                       | `object[]`                        | no        | Fine-grained merge access entries (by user, group, deploy key, or access level)                                                                       |
+| `allowed_to_push`                        | `object[]`                        | no        | Fine-grained push access entries (by user, group, deploy key, or access level)                                                                        |
+| `allowed_to_unprotect`                   | `object[]`                        | no        | Fine-grained unprotect access entries (by user, group, deploy key, or access level)                                                                   |
+| `code_owner_approval_required` (Premium) | `boolean`                         | no        | Require CODEOWNERS approval for changes to matching files                                                                                             |
+| `merge_access_level`                     | `integer` (`0`, `30`, `40`, `60`) | no        | Access level for merge: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.                                |
+| `push_access_level`                      | `integer` (`0`, `30`, `40`, `60`) | no        | Access level for push: 0=No access, 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). Use an integer.                                 |
+| `unprotect_access_level`                 | `integer` (`30`, `40`, `60`)      | no        | Access level allowed to unprotect: 30=Developer, 40=Maintainer, 60=Admin (GitLab Self-Managed only). 0 (No access) is not valid here. Use an integer. |
+
+### `branch.rule_list`
+
+> List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its id, matched pattern, default and protected flags, matching branch count, branch protection settings (who may push, merge and unprotect, allow force push, code-owner approval required, security-policy flags), approval rules with eligible approvers, external status checks, and keyset pagination metadata. Pages forward only: this GitLab connection takes first and after, and rejects last and before. See also: [`branch.list_protected`](#branchlist_protected), [`branch.get_protected`](#branchget_protected), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `rule_list`
+- **Herramienta individual**: `gitlab_list_branch_rules`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo      | Requerido | Descripción                                                       |
+| -------------- | --------- | --------- | ----------------------------------------------------------------- |
+| `project_path` | `string`  | sí        | required,Project full path (e.g. my-group/my-project)             |
+| `after`        | `string`  | no        | Cursor for forward pagination (from previous response end_cursor) |
+| `first`        | `integer` | no        | Number of items to return (default 20, max 100)                   |
+
+### `branch.unprotect`
+
+> Remove protection from a branch (idempotent). Returns: a status and message confirming protection removed or already absent. See also: [`branch.protect`](#branchprotect), [`branch.get_protected`](#branchget_protected), [`branch.delete`](#branchdelete).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `unprotect`
+- **Herramienta individual**: `gitlab_branch_unprotect`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                            |
+| ------------- | ---------------- | --------- | -------------------------------------- |
+| `branch_name` | `string`         | sí        | Name of the protected branch to remove |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path         |
+
+### `branch.update_protected`
+
+> Update an existing protected branch rule: allow-force-push, CODEOWNERS approval, rename, or fine-grained allowed_to_push/merge/unprotect entries. Returns: the updated rule with its access-level arrays. See also: [`branch.get_protected`](#branchget_protected), [`branch.list_protected`](#branchlist_protected), [`branch.protect`](#branchprotect).
+
+- **Meta-herramienta**: `gitlab_branch`, acción `update_protected`
+- **Herramienta individual**: `gitlab_protected_branch_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                                | Tipo             | Requerido | Descripción                                                                         |
+| ---------------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------- |
+| `branch_name`                            | `string`         | sí        | Name of the protected branch to update                                              |
+| `project_id`                             | `string/integer` | sí        | Project ID or URL-encoded path                                                      |
+| `allow_force_push`                       | `boolean`        | no        | Allow force push to this branch                                                     |
+| `allowed_to_merge`                       | `object[]`       | no        | Fine-grained merge access entries (by user, group, deploy key, or access level)     |
+| `allowed_to_push`                        | `object[]`       | no        | Fine-grained push access entries (by user, group, deploy key, or access level)      |
+| `allowed_to_unprotect`                   | `object[]`       | no        | Fine-grained unprotect access entries (by user, group, deploy key, or access level) |
+| `code_owner_approval_required` (Premium) | `boolean`        | no        | Require CODEOWNERS approval                                                         |
+| `name`                                   | `string`         | no        | New name or wildcard for the protected branch rule (rename)                         |

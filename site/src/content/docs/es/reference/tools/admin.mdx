@@ -1,0 +1,1521 @@
+---
+title: "Administración"
+description: "Administración de la instancia en GitLab MCP Server: ajustes, licencia, system hooks, Sidekiq, importaciones, aplicaciones OAuth, estados de Terraform, agentes de clúster y más."
+sidebar:
+  order: 1
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Administración a nivel de instancia de GitLab: ajustes de la aplicación y apariencia, la licencia, los mensajes de difusión, los feature flags de la instancia, los system hooks, las métricas de Sidekiq, los límites de plan, los datos de uso y Service Ping, las marcas de migraciones de base de datos, las aplicaciones OAuth, las estadísticas y metadatos de la aplicación, los atributos personalizados y los temas. Aquí están también las importaciones: las importaciones masivas entre instancias de GitLab y las importaciones desde GitHub, Bitbucket Cloud, Bitbucket Server y los gists de GitHub.
+
+Algunas funciones de nivel de proyecto también son acciones de este grupo: los archivos seguros de CI/CD, los ajustes y claves de cliente del seguimiento de errores, las imágenes de métricas de alertas, los estados de Terraform, los agentes de clúster y sus tokens, y el vaciado de la caché del dependency proxy de un grupo. La mayoría de las acciones necesitan un administrador, y GitLab rechaza a cualquier otro con su propio error.
+
+## Preguntas de ejemplo
+
+- "Muestra los ajustes de la aplicación de la instancia"
+- "Lista los mensajes de difusión activos"
+- "¿Qué colas de Sidekiq se están acumulando?"
+- "Importa el repositorio de GitHub acme/api en el grupo platform"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `admin.alert_metric_image_delete`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_admin` con `action` igual al nombre de la acción, como `alert_metric_image_delete`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_delete_alert_metric_image`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
+
+Acciones de solo lectura: 41 de 92, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                           | Individual                                |
+| -------------------------------------------------------------------------------- | ----------------------------------------- |
+| [`admin.alert_metric_image_delete`](#adminalert_metric_image_delete)             | `gitlab_delete_alert_metric_image`        |
+| [`admin.alert_metric_image_list`](#adminalert_metric_image_list)                 | `gitlab_list_alert_metric_images`         |
+| [`admin.alert_metric_image_update`](#adminalert_metric_image_update)             | `gitlab_update_alert_metric_image`        |
+| [`admin.alert_metric_image_upload`](#adminalert_metric_image_upload)             | `gitlab_upload_alert_metric_image`        |
+| [`admin.app_statistics_get`](#adminapp_statistics_get)                           | `gitlab_get_application_statistics`       |
+| [`admin.appearance_get`](#adminappearance_get)                                   | `gitlab_get_appearance`                   |
+| [`admin.appearance_update`](#adminappearance_update)                             | `gitlab_update_appearance`                |
+| [`admin.application_create`](#adminapplication_create)                           | `gitlab_create_application`               |
+| [`admin.application_delete`](#adminapplication_delete)                           | `gitlab_delete_application`               |
+| [`admin.application_list`](#adminapplication_list)                               | `gitlab_list_applications`                |
+| [`admin.application_renew_secret`](#adminapplication_renew_secret)               | `gitlab_renew_application_secret`         |
+| [`admin.broadcast_message_create`](#adminbroadcast_message_create)               | `gitlab_create_broadcast_message`         |
+| [`admin.broadcast_message_delete`](#adminbroadcast_message_delete)               | `gitlab_delete_broadcast_message`         |
+| [`admin.broadcast_message_get`](#adminbroadcast_message_get)                     | `gitlab_get_broadcast_message`            |
+| [`admin.broadcast_message_list`](#adminbroadcast_message_list)                   | `gitlab_list_broadcast_messages`          |
+| [`admin.broadcast_message_update`](#adminbroadcast_message_update)               | `gitlab_update_broadcast_message`         |
+| [`admin.bulk_import_cancel`](#adminbulk_import_cancel)                           | `gitlab_cancel_bulk_import`               |
+| [`admin.bulk_import_entity_failures`](#adminbulk_import_entity_failures)         | `gitlab_list_bulk_import_entity_failures` |
+| [`admin.bulk_import_entity_get`](#adminbulk_import_entity_get)                   | `gitlab_get_bulk_import_entity`           |
+| [`admin.bulk_import_entity_list`](#adminbulk_import_entity_list)                 | `gitlab_list_bulk_import_entities`        |
+| [`admin.bulk_import_get`](#adminbulk_import_get)                                 | `gitlab_get_bulk_import`                  |
+| [`admin.bulk_import_list`](#adminbulk_import_list)                               | `gitlab_list_bulk_imports`                |
+| [`admin.bulk_import_start`](#adminbulk_import_start)                             | `gitlab_start_bulk_import`                |
+| [`admin.cluster_agent_delete`](#admincluster_agent_delete)                       | `gitlab_delete_cluster_agent`             |
+| [`admin.cluster_agent_get`](#admincluster_agent_get)                             | `gitlab_get_cluster_agent`                |
+| [`admin.cluster_agent_list`](#admincluster_agent_list)                           | `gitlab_list_cluster_agents`              |
+| [`admin.cluster_agent_register`](#admincluster_agent_register)                   | `gitlab_register_cluster_agent`           |
+| [`admin.cluster_agent_token_create`](#admincluster_agent_token_create)           | `gitlab_create_cluster_agent_token`       |
+| [`admin.cluster_agent_token_get`](#admincluster_agent_token_get)                 | `gitlab_get_cluster_agent_token`          |
+| [`admin.cluster_agent_token_list`](#admincluster_agent_token_list)               | `gitlab_list_cluster_agent_tokens`        |
+| [`admin.cluster_agent_token_revoke`](#admincluster_agent_token_revoke)           | `gitlab_revoke_cluster_agent_token`       |
+| [`admin.custom_attr_delete`](#admincustom_attr_delete)                           | `gitlab_delete_custom_attribute`          |
+| [`admin.custom_attr_get`](#admincustom_attr_get)                                 | `gitlab_get_custom_attribute`             |
+| [`admin.custom_attr_list`](#admincustom_attr_list)                               | `gitlab_list_custom_attributes`           |
+| [`admin.custom_attr_set`](#admincustom_attr_set)                                 | `gitlab_set_custom_attribute`             |
+| [`admin.db_migration_mark`](#admindb_migration_mark)                             | `gitlab_mark_migration`                   |
+| [`admin.dependency_proxy_delete`](#admindependency_proxy_delete)                 | `gitlab_purge_dependency_proxy`           |
+| [`admin.error_tracking_create`](#adminerror_tracking_create)                     | `gitlab_create_error_tracking_client_key` |
+| [`admin.error_tracking_delete`](#adminerror_tracking_delete)                     | `gitlab_delete_error_tracking_client_key` |
+| [`admin.error_tracking_get_settings`](#adminerror_tracking_get_settings)         | `gitlab_get_error_tracking_settings`      |
+| [`admin.error_tracking_list`](#adminerror_tracking_list)                         | `gitlab_list_error_tracking_client_keys`  |
+| [`admin.error_tracking_update_settings`](#adminerror_tracking_update_settings)   | `gitlab_enable_disable_error_tracking`    |
+| [`admin.feature_delete`](#adminfeature_delete)                                   | `gitlab_delete_feature_flag`              |
+| [`admin.feature_list`](#adminfeature_list)                                       | `gitlab_list_features`                    |
+| [`admin.feature_list_definitions`](#adminfeature_list_definitions)               | `gitlab_list_feature_definitions`         |
+| [`admin.feature_set`](#adminfeature_set)                                         | `gitlab_set_feature_flag`                 |
+| [`admin.import_bitbucket`](#adminimport_bitbucket)                               | `gitlab_import_from_bitbucket_cloud`      |
+| [`admin.import_bitbucket_server`](#adminimport_bitbucket_server)                 | `gitlab_import_from_bitbucket_server`     |
+| [`admin.import_cancel_github`](#adminimport_cancel_github)                       | `gitlab_cancel_github_import`             |
+| [`admin.import_gists`](#adminimport_gists)                                       | `gitlab_import_github_gists`              |
+| [`admin.import_github`](#adminimport_github)                                     | `gitlab_import_from_github`               |
+| [`admin.license_add`](#adminlicense_add)                                         | `gitlab_add_license`                      |
+| [`admin.license_delete`](#adminlicense_delete)                                   | `gitlab_delete_license`                   |
+| [`admin.license_get`](#adminlicense_get)                                         | `gitlab_get_license`                      |
+| [`admin.metadata_get`](#adminmetadata_get)                                       | `gitlab_get_metadata`                     |
+| [`admin.plan_limits_change`](#adminplan_limits_change)                           | `gitlab_change_plan_limits`               |
+| [`admin.plan_limits_get`](#adminplan_limits_get)                                 | `gitlab_get_plan_limits`                  |
+| [`admin.secure_file_create`](#adminsecure_file_create)                           | `gitlab_create_secure_file`               |
+| [`admin.secure_file_delete`](#adminsecure_file_delete)                           | `gitlab_remove_secure_file`               |
+| [`admin.secure_file_get`](#adminsecure_file_get)                                 | `gitlab_show_secure_file`                 |
+| [`admin.secure_file_list`](#adminsecure_file_list)                               | `gitlab_list_secure_files`                |
+| [`admin.settings_get`](#adminsettings_get)                                       | `gitlab_get_settings`                     |
+| [`admin.settings_update`](#adminsettings_update)                                 | `gitlab_update_settings`                  |
+| [`admin.sidekiq_compound_metrics`](#adminsidekiq_compound_metrics)               | `gitlab_get_sidekiq_compound_metrics`     |
+| [`admin.sidekiq_job_stats`](#adminsidekiq_job_stats)                             | `gitlab_get_sidekiq_job_stats`            |
+| [`admin.sidekiq_process_metrics`](#adminsidekiq_process_metrics)                 | `gitlab_get_sidekiq_process_metrics`      |
+| [`admin.sidekiq_queue_metrics`](#adminsidekiq_queue_metrics)                     | `gitlab_get_sidekiq_queue_metrics`        |
+| [`admin.system_hook_add`](#adminsystem_hook_add)                                 | `gitlab_add_system_hook`                  |
+| [`admin.system_hook_delete`](#adminsystem_hook_delete)                           | `gitlab_delete_system_hook`               |
+| [`admin.system_hook_delete_url_variable`](#adminsystem_hook_delete_url_variable) | `gitlab_delete_system_hook_url_variable`  |
+| [`admin.system_hook_edit`](#adminsystem_hook_edit)                               | `gitlab_edit_system_hook`                 |
+| [`admin.system_hook_get`](#adminsystem_hook_get)                                 | `gitlab_get_system_hook`                  |
+| [`admin.system_hook_list`](#adminsystem_hook_list)                               | `gitlab_list_system_hooks`                |
+| [`admin.system_hook_set_url_variable`](#adminsystem_hook_set_url_variable)       | `gitlab_set_system_hook_url_variable`     |
+| [`admin.system_hook_test`](#adminsystem_hook_test)                               | `gitlab_test_system_hook`                 |
+| [`admin.terraform_state_delete`](#adminterraform_state_delete)                   | `gitlab_delete_terraform_state`           |
+| [`admin.terraform_state_get`](#adminterraform_state_get)                         | `gitlab_get_terraform_state`              |
+| [`admin.terraform_state_list`](#adminterraform_state_list)                       | `gitlab_list_terraform_states`            |
+| [`admin.terraform_state_lock`](#adminterraform_state_lock)                       | `gitlab_lock_terraform_state`             |
+| [`admin.terraform_state_unlock`](#adminterraform_state_unlock)                   | `gitlab_unlock_terraform_state`           |
+| [`admin.terraform_version_delete`](#adminterraform_version_delete)               | `gitlab_delete_terraform_state_version`   |
+| [`admin.topic_create`](#admintopic_create)                                       | `gitlab_create_topic`                     |
+| [`admin.topic_delete`](#admintopic_delete)                                       | `gitlab_delete_topic`                     |
+| [`admin.topic_get`](#admintopic_get)                                             | `gitlab_get_topic`                        |
+| [`admin.topic_list`](#admintopic_list)                                           | `gitlab_list_topics`                      |
+| [`admin.topic_update`](#admintopic_update)                                       | `gitlab_update_topic`                     |
+| [`admin.usage_data_metric_definitions`](#adminusage_data_metric_definitions)     | `gitlab_get_metric_definitions`           |
+| [`admin.usage_data_non_sql_metrics`](#adminusage_data_non_sql_metrics)           | `gitlab_get_non_sql_metrics`              |
+| [`admin.usage_data_queries`](#adminusage_data_queries)                           | `gitlab_get_usage_queries`                |
+| [`admin.usage_data_service_ping`](#adminusage_data_service_ping)                 | `gitlab_get_service_ping`                 |
+| [`admin.usage_data_track_event`](#adminusage_data_track_event)                   | `gitlab_track_event`                      |
+| [`admin.usage_data_track_events`](#adminusage_data_track_events)                 | `gitlab_track_events`                     |
+
+### `admin.alert_metric_image_delete`
+
+> Delete an alert metric image. Returns: a success status. See also: [`admin.alert_metric_image_list`](#adminalert_metric_image_list), [`admin.alert_metric_image_upload`](#adminalert_metric_image_upload).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_delete`
+- **Herramienta individual**: `gitlab_delete_alert_metric_image`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `alert_iid`  | `integer`        | sí        | Alert IID                      |
+| `image_id`   | `integer`        | sí        | Metric image ID                |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.alert_metric_image_list`
+
+> List alert metric images. Returns: an array of metric images with id, filename, url, and url_text. See also: [`admin.alert_metric_image_upload`](#adminalert_metric_image_upload), [`admin.alert_metric_image_update`](#adminalert_metric_image_update).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_list`
+- **Herramienta individual**: `gitlab_list_alert_metric_images`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `alert_iid`  | `integer`                | sí        | Alert IID                                                                                                                                         |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. created_at, id)                                                                                 |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc or desc)                                                                                                                      |
+
+### `admin.alert_metric_image_update`
+
+> Update an alert metric image. Returns: the updated metric image. See also: [`admin.alert_metric_image_list`](#adminalert_metric_image_list), [`admin.alert_metric_image_delete`](#adminalert_metric_image_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_update`
+- **Herramienta individual**: `gitlab_update_alert_metric_image`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                     |
+| ------------ | ---------------- | --------- | ------------------------------- |
+| `alert_iid`  | `integer`        | sí        | Alert IID                       |
+| `image_id`   | `integer`        | sí        | Metric image ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path  |
+| `url`        | `string`         | no        | URL to link the metric image to |
+| `url_text`   | `string`         | no        | Text for the URL link           |
+
+### `admin.alert_metric_image_upload`
+
+> Upload an alert metric image. Returns: the uploaded metric image with id, filename, and url. See also: [`admin.alert_metric_image_list`](#adminalert_metric_image_list), [`admin.alert_metric_image_update`](#adminalert_metric_image_update).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `alert_metric_image_upload`
+- **Herramienta individual**: `gitlab_upload_alert_metric_image`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                  |
+| ---------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `alert_iid`      | `integer`        | sí        | Alert IID                                                                                                                                                    |
+| `filename`       | `string`         | sí        | Image filename                                                                                                                                               |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                               |
+| `content_base64` | `string`         | no        | Base64-encoded image content. Only one of file_path or content_base64 should be provided.                                                                    |
+| `file_path`      | `string`         | no        | Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or content_base64 should be provided. |
+| `url`            | `string`         | no        | URL to link the metric image to                                                                                                                              |
+| `url_text`       | `string`         | no        | Text for the URL link                                                                                                                                        |
+
+### `admin.app_statistics_get`
+
+> Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: [`admin.metadata_get`](#adminmetadata_get), [`server.status`](/gitlab-mcp-server/reference/tools/server/#serverstatus).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `app_statistics_get`
+- **Herramienta individual**: `gitlab_get_application_statistics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.appearance_get`
+
+> Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: [`admin.appearance_update`](#adminappearance_update), [`admin.settings_get`](#adminsettings_get), [`admin.metadata_get`](#adminmetadata_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `appearance_get`
+- **Herramienta individual**: `gitlab_get_appearance`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.appearance_update`
+
+> Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: [`admin.appearance_get`](#adminappearance_get), [`admin.settings_get`](#adminsettings_get), [`admin.metadata_get`](#adminmetadata_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `appearance_update`
+- **Herramienta individual**: `gitlab_update_appearance`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                         | Tipo      | Requerido | Descripción                                                      |
+| --------------------------------- | --------- | --------- | ---------------------------------------------------------------- |
+| `description`                     | `string`  | no        | Instance description on sign-in page                             |
+| `email_header_and_footer_enabled` | `boolean` | no        | Enable header and footer in emails                               |
+| `favicon`                         | `string`  | no        | Path to the favicon image asset                                  |
+| `footer_message`                  | `string`  | no        | Message in footer bar                                            |
+| `header_logo`                     | `string`  | no        | Path to the header logo image asset                              |
+| `header_message`                  | `string`  | no        | Message in header bar                                            |
+| `logo`                            | `string`  | no        | Path to the instance logo image asset                            |
+| `member_guidelines`               | `string`  | no        | Markdown guidelines for adding members                           |
+| `message_background_color`        | `string`  | no        | Background color for header/footer messages (hex)                |
+| `message_font_color`              | `string`  | no        | Font color for header/footer messages (hex)                      |
+| `new_project_guidelines`          | `string`  | no        | Markdown guidelines for new projects                             |
+| `profile_image_guidelines`        | `string`  | no        | Markdown guidelines for profile images                           |
+| `pwa_description`                 | `string`  | no        | PWA description                                                  |
+| `pwa_icon`                        | `string`  | no        | Path to the PWA icon image asset                                 |
+| `pwa_name`                        | `string`  | no        | Progressive Web App name                                         |
+| `pwa_short_name`                  | `string`  | no        | PWA short name                                                   |
+| `site_name`                       | `string`  | no        | Site name GitLab appends after the page title in the browser tab |
+| `title`                           | `string`  | no        | Application title displayed in the header                        |
+| `url`                             | `string`  | no        | Redirect URL for the system header/footer logo image             |
+
+### `admin.application_create`
+
+> Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: [`admin.application_list`](#adminapplication_list), [`admin.application_delete`](#adminapplication_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `application_create`
+- **Herramienta individual**: `gitlab_create_application`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro      | Tipo      | Requerido | Descripción                         |
+| -------------- | --------- | --------- | ----------------------------------- |
+| `name`         | `string`  | sí        | Application name                    |
+| `redirect_uri` | `string`  | sí        | OAuth2 redirect URI                 |
+| `scopes`       | `string`  | sí        | Space-separated list of scopes      |
+| `confidential` | `boolean` | no        | Whether application is confidential |
+
+### `admin.application_delete`
+
+> Delete an instance OAuth application. Returns: a success status. See also: [`admin.application_list`](#adminapplication_list), [`admin.application_create`](#adminapplication_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `application_delete`
+- **Herramienta individual**: `gitlab_delete_application`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción              |
+| --------- | --------- | --------- | ------------------------ |
+| `id`      | `integer` | sí        | Application ID to delete |
+
+### `admin.application_list`
+
+> List instance OAuth applications. Returns: an array of applications with id, application_id, name, redirect URIs, and scopes. See also: [`admin.application_create`](#adminapplication_create), [`admin.application_delete`](#adminapplication_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `application_list`
+- **Herramienta individual**: `gitlab_list_applications`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | For keyset pagination: name of the column by which to order results                                                                               |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | For keyset pagination: sort order (asc or desc)                                                                                                   |
+
+### `admin.application_renew_secret`
+
+> Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: [`admin.application_list`](#adminapplication_list), [`admin.application_create`](#adminapplication_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `application_renew_secret`
+- **Herramienta individual**: `gitlab_renew_application_secret`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción                                   |
+| --------- | --------- | --------- | --------------------------------------------- |
+| `id`      | `integer` | sí        | Application ID whose secret should be renewed |
+
+### `admin.broadcast_message_create`
+
+> Create a broadcast message. Returns: the created message with id, theme, target, and schedule. See also: [`admin.broadcast_message_update`](#adminbroadcast_message_update), [`admin.broadcast_message_list`](#adminbroadcast_message_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_create`
+- **Herramienta individual**: `gitlab_create_broadcast_message`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro              | Tipo                                                                                                                   | Requerido | Descripción                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `message`              | `string`                                                                                                               | sí        | Message text. Supports Markdown.                                                                                                                        |
+| `broadcast_type`       | `string` (`banner`, `notification`)                                                                                    | no        | Type: banner or notification                                                                                                                            |
+| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it                                            |
+| `dismissable`          | `boolean`                                                                                                              | no        | Whether message can be dismissed                                                                                                                        |
+| `ends_at`              | `string`                                                                                                               | no        | End time in ISO 8601 format                                                                                                                             |
+| `font`                 | `string`                                                                                                               | no        | Font for the message                                                                                                                                    |
+| `starts_at`            | `string`                                                                                                               | no        | Start time in ISO 8601 format                                                                                                                           |
+| `target_access_levels` | `integer[]`                                                                                                            | no        | Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner) |
+| `target_path`          | `string`                                                                                                               | no        | Target path to show message on                                                                                                                          |
+| `theme`                | `string` (`indigo`, `light-indigo`, `blue`, `light-blue`, `green`, `light-green`, `red`, `light-red`, `dark`, `light`) | no        | Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.                        |
+
+### `admin.broadcast_message_delete`
+
+> Delete a broadcast message. Returns: a success status. See also: [`admin.broadcast_message_get`](#adminbroadcast_message_get), [`admin.broadcast_message_create`](#adminbroadcast_message_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_delete`
+- **Herramienta individual**: `gitlab_delete_broadcast_message`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción          |
+| --------- | --------- | --------- | -------------------- |
+| `id`      | `integer` | sí        | Broadcast message ID |
+
+### `admin.broadcast_message_get`
+
+> Get a broadcast message by id. Returns: the message with text, theme, target, and schedule. See also: [`admin.broadcast_message_list`](#adminbroadcast_message_list), [`admin.broadcast_message_update`](#adminbroadcast_message_update).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_get`
+- **Herramienta individual**: `gitlab_get_broadcast_message`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción          |
+| --------- | --------- | --------- | -------------------- |
+| `id`      | `integer` | sí        | Broadcast message ID |
+
+### `admin.broadcast_message_list`
+
+> List instance broadcast messages. Returns: an array of broadcast messages with id, message, theme, target, starts_at, and ends_at. See also: [`admin.broadcast_message_get`](#adminbroadcast_message_get), [`admin.broadcast_message_create`](#adminbroadcast_message_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_list`
+- **Herramienta individual**: `gitlab_list_broadcast_messages`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `admin.broadcast_message_update`
+
+> Update a broadcast message. Returns: the updated message. See also: [`admin.broadcast_message_get`](#adminbroadcast_message_get), [`admin.broadcast_message_delete`](#adminbroadcast_message_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `broadcast_message_update`
+- **Herramienta individual**: `gitlab_update_broadcast_message`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro              | Tipo                                                                                                                   | Requerido | Descripción                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | `integer`                                                                                                              | sí        | Broadcast message ID                                                                                                                                    |
+| `broadcast_type`       | `string` (`banner`, `notification`)                                                                                    | no        | Type: banner or notification                                                                                                                            |
+| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it                                            |
+| `dismissable`          | `boolean`                                                                                                              | no        | Whether message can be dismissed                                                                                                                        |
+| `ends_at`              | `string`                                                                                                               | no        | End time in ISO 8601 format                                                                                                                             |
+| `font`                 | `string`                                                                                                               | no        | Font for the message                                                                                                                                    |
+| `message`              | `string`                                                                                                               | no        | Message text. Supports Markdown.                                                                                                                        |
+| `starts_at`            | `string`                                                                                                               | no        | Start time in ISO 8601 format                                                                                                                           |
+| `target_access_levels` | `integer[]`                                                                                                            | no        | Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner) |
+| `target_path`          | `string`                                                                                                               | no        | Target path to show message on                                                                                                                          |
+| `theme`                | `string` (`indigo`, `light-indigo`, `blue`, `light-blue`, `green`, `light-green`, `red`, `light-red`, `dark`, `light`) | no        | Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.                        |
+
+### `admin.bulk_import_cancel`
+
+> Cancel a bulk import. Returns: the bulk import with its updated (canceled) status. See also: [`admin.bulk_import_get`](#adminbulk_import_get), [`admin.bulk_import_list`](#adminbulk_import_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_cancel`
+- **Herramienta individual**: `gitlab_cancel_bulk_import`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción    |
+| --------- | --------- | --------- | -------------- |
+| `id`      | `integer` | sí        | Bulk import ID |
+
+### `admin.bulk_import_entity_failures`
+
+> List bulk import entity failures. Returns: an array of failure records with relation, exception, and correlation id. See also: [`admin.bulk_import_entity_get`](#adminbulk_import_entity_get), [`admin.bulk_import_entity_list`](#adminbulk_import_entity_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_failures`
+- **Herramienta individual**: `gitlab_list_bulk_import_entity_failures`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                      |
+| ---------------- | --------- | --------- | -------------------------------- |
+| `bulk_import_id` | `integer` | sí        | Bulk import ID                   |
+| `entity_id`      | `integer` | sí        | Entity ID within the bulk import |
+
+### `admin.bulk_import_entity_get`
+
+> Get a bulk import entity. Returns: the entity with source path, destination path, entity_type, and status. See also: [`admin.bulk_import_entity_list`](#adminbulk_import_entity_list), [`admin.bulk_import_entity_failures`](#adminbulk_import_entity_failures).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_get`
+- **Herramienta individual**: `gitlab_get_bulk_import_entity`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                      |
+| ---------------- | --------- | --------- | -------------------------------- |
+| `bulk_import_id` | `integer` | sí        | Bulk import ID                   |
+| `entity_id`      | `integer` | sí        | Entity ID within the bulk import |
+
+### `admin.bulk_import_entity_list`
+
+> List bulk import entities. Returns: an array of migrated entities with id, source_full_path, entity_type, and status. See also: [`admin.bulk_import_entity_get`](#adminbulk_import_entity_get), [`admin.bulk_import_entity_failures`](#adminbulk_import_entity_failures).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_entity_list`
+- **Herramienta individual**: `gitlab_list_bulk_import_entities`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo                                                                         | Requerido | Descripción                                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bulk_import_id` | `integer`                                                                    | no        | Bulk import ID. If omitted, returns entities across all imports.                                                                                  |
+| `order_by`       | `string`                                                                     | no        | Column to order results by (e.g. created_at)                                                                                                      |
+| `page`           | `integer`                                                                    | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`     | `string`                                                                     | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`     | `string`                                                                     | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`       | `integer`                                                                    | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`           | `string` (`asc`, `desc`)                                                     | no        | Sort direction (asc, desc)                                                                                                                        |
+| `status`         | `string` (`created`, `started`, `finished`, `timeout`, `failed`, `canceled`) | no        | Filter by entity status: created, started, finished, timeout, failed, canceled                                                                    |
+
+### `admin.bulk_import_get`
+
+> Get a bulk import by id. Returns: the bulk import with status, source URL, and timestamps. See also: [`admin.bulk_import_list`](#adminbulk_import_list), [`admin.bulk_import_entity_list`](#adminbulk_import_entity_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_get`
+- **Herramienta individual**: `gitlab_get_bulk_import`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción    |
+| --------- | --------- | --------- | -------------- |
+| `id`      | `integer` | sí        | Bulk import ID |
+
+### `admin.bulk_import_list`
+
+> List bulk imports. Returns: an array of bulk imports with id, status, source_type, and timestamps. See also: [`admin.bulk_import_start`](#adminbulk_import_start), [`admin.bulk_import_get`](#adminbulk_import_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_list`
+- **Herramienta individual**: `gitlab_list_bulk_imports`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                                                         | Requerido | Descripción                                                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                                                                     | no        | Column to order results by (e.g. created_at)                                                                                                      |
+| `page`       | `integer`                                                                    | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                                                                     | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                                                                     | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                                                                    | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)                                                     | no        | Sort direction (asc, desc)                                                                                                                        |
+| `status`     | `string` (`created`, `started`, `finished`, `timeout`, `failed`, `canceled`) | no        | Filter by status: created, started, finished, timeout, failed, canceled                                                                           |
+
+### `admin.bulk_import_start`
+
+> Start a bulk import (direct transfer). Returns: the created bulk import with id and status. See also: [`admin.bulk_import_list`](#adminbulk_import_list), [`admin.bulk_import_get`](#adminbulk_import_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `bulk_import_start`
+- **Herramienta individual**: `gitlab_start_bulk_import`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo       | Requerido | Descripción                                            |
+| --------------- | ---------- | --------- | ------------------------------------------------------ |
+| `configuration` | `object`   | sí        | Source instance connection details (url, access_token) |
+| `entities`      | `object[]` | sí        | List of entities to migrate                            |
+
+### `admin.cluster_agent_delete`
+
+> Delete a cluster agent. Returns: a success status. See also: [`admin.cluster_agent_get`](#admincluster_agent_get), [`admin.cluster_agent_register`](#admincluster_agent_register).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_delete`
+- **Herramienta individual**: `gitlab_delete_cluster_agent`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `agent_id`   | `integer`        | sí        | Agent ID                       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.cluster_agent_get`
+
+> Get a cluster agent. Returns: the agent with id, name, config project, and created_at. See also: [`admin.cluster_agent_list`](#admincluster_agent_list), [`admin.cluster_agent_token_list`](#admincluster_agent_token_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_get`
+- **Herramienta individual**: `gitlab_get_cluster_agent`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `agent_id`   | `integer`        | sí        | Agent ID                       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.cluster_agent_list`
+
+> List project cluster agents. Returns: an array of agents with id, name, and created_at. See also: [`admin.cluster_agent_get`](#admincluster_agent_get), [`admin.cluster_agent_register`](#admincluster_agent_register).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_list`
+- **Herramienta individual**: `gitlab_list_cluster_agents`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'.                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: asc or desc.                                                                                                |
+
+### `admin.cluster_agent_register`
+
+> Register a cluster agent. Returns: the created agent with id and name. See also: [`admin.cluster_agent_list`](#admincluster_agent_list), [`admin.cluster_agent_token_create`](#admincluster_agent_token_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_register`
+- **Herramienta individual**: `gitlab_register_cluster_agent`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `name`       | `string`         | sí        | Agent name                     |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.cluster_agent_token_create`
+
+> Create a cluster agent token. Returns: the created token including the secret value (shown once). See also: [`admin.cluster_agent_token_list`](#admincluster_agent_token_list), [`admin.cluster_agent_token_revoke`](#admincluster_agent_token_revoke).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_create`
+- **Herramienta individual**: `gitlab_create_cluster_agent_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                    |
+| ------------- | ---------------- | --------- | ------------------------------ |
+| `agent_id`    | `integer`        | sí        | Agent ID                       |
+| `name`        | `string`         | sí        | Token name                     |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path |
+| `description` | `string`         | no        | Token description              |
+
+### `admin.cluster_agent_token_get`
+
+> Get a cluster agent token. Returns: the token with id, name, status, and last_used_at. See also: [`admin.cluster_agent_token_list`](#admincluster_agent_token_list), [`admin.cluster_agent_token_create`](#admincluster_agent_token_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_get`
+- **Herramienta individual**: `gitlab_get_cluster_agent_token`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `agent_id`   | `integer`        | sí        | Agent ID                       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `token_id`   | `integer`        | sí        | Token ID                       |
+
+### `admin.cluster_agent_token_list`
+
+> List cluster agent tokens. Returns: an array of agent tokens with id, name, and status. See also: [`admin.cluster_agent_token_get`](#admincluster_agent_token_get), [`admin.cluster_agent_token_create`](#admincluster_agent_token_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_list`
+- **Herramienta individual**: `gitlab_list_cluster_agent_tokens`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent_id`   | `integer`                | sí        | Agent ID                                                                                                                                          |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'.                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: asc or desc.                                                                                                |
+
+### `admin.cluster_agent_token_revoke`
+
+> Revoke a cluster agent token. Returns: a success status. See also: [`admin.cluster_agent_token_get`](#admincluster_agent_token_get), [`admin.cluster_agent_token_create`](#admincluster_agent_token_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `cluster_agent_token_revoke`
+- **Herramienta individual**: `gitlab_revoke_cluster_agent_token`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `agent_id`   | `integer`        | sí        | Agent ID                       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `token_id`   | `integer`        | sí        | Token ID                       |
+
+### `admin.custom_attr_delete`
+
+> Delete a custom attribute. Returns: a success status. See also: [`admin.custom_attr_get`](#admincustom_attr_get), [`admin.custom_attr_set`](#admincustom_attr_set).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_delete`
+- **Herramienta individual**: `gitlab_delete_custom_attribute`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo                                  | Requerido | Descripción                            |
+| --------------- | ------------------------------------- | --------- | -------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key to delete                |
+| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+
+### `admin.custom_attr_get`
+
+> Get a custom attribute by key. Returns: the attribute with key and value. See also: [`admin.custom_attr_list`](#admincustom_attr_list), [`admin.custom_attr_set`](#admincustom_attr_set).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_get`
+- **Herramienta individual**: `gitlab_get_custom_attribute`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                                  | Requerido | Descripción                            |
+| --------------- | ------------------------------------- | --------- | -------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key                          |
+| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+
+### `admin.custom_attr_list`
+
+> List custom attributes for a resource. Returns: an array of key/value custom attributes. See also: [`admin.custom_attr_get`](#admincustom_attr_get), [`admin.custom_attr_set`](#admincustom_attr_set).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_list`
+- **Herramienta individual**: `gitlab_list_custom_attributes`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo                                  | Requerido | Descripción                            |
+| --------------- | ------------------------------------- | --------- | -------------------------------------- |
+| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+
+### `admin.custom_attr_set`
+
+> Set a custom attribute. Returns: the stored attribute with key and value. See also: [`admin.custom_attr_get`](#admincustom_attr_get), [`admin.custom_attr_delete`](#admincustom_attr_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `custom_attr_set`
+- **Herramienta individual**: `gitlab_set_custom_attribute`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo                                  | Requerido | Descripción                            |
+| --------------- | ------------------------------------- | --------- | -------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key                          |
+| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+| `value`         | `string`                              | sí        | Attribute value                        |
+
+### `admin.db_migration_mark`
+
+> Mark a database migration as complete. Returns: a success status. See also: [`admin.settings_get`](#adminsettings_get), [`admin.metadata_get`](#adminmetadata_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `db_migration_mark`
+- **Herramienta individual**: `gitlab_mark_migration`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción                                          |
+| ---------- | --------- | --------- | ---------------------------------------------------- |
+| `version`  | `integer` | sí        | Migration version number to mark as successful       |
+| `database` | `string`  | no        | Database the migration belongs to. Defaults to main. |
+
+### `admin.dependency_proxy_delete`
+
+> Purge a group's dependency proxy cache. Returns: a success status. See also: [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget), [`admin.settings_get`](#adminsettings_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `dependency_proxy_delete`
+- **Herramienta individual**: `gitlab_purge_dependency_proxy`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `admin.error_tracking_create`
+
+> Create an error-tracking client key. Returns: the created client key with public_key and sentry_dsn. See also: [`admin.error_tracking_list`](#adminerror_tracking_list), [`admin.error_tracking_get_settings`](#adminerror_tracking_get_settings).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_create`
+- **Herramienta individual**: `gitlab_create_error_tracking_client_key`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.error_tracking_delete`
+
+> Delete an error-tracking client key. Returns: a success status. See also: [`admin.error_tracking_list`](#adminerror_tracking_list), [`admin.error_tracking_create`](#adminerror_tracking_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_delete`
+- **Herramienta individual**: `gitlab_delete_error_tracking_client_key`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `key_id`     | `integer`        | sí        | Client key ID                  |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.error_tracking_get_settings`
+
+> Get error-tracking settings. Returns: the settings with active flag and integrated mode. See also: [`admin.error_tracking_update_settings`](#adminerror_tracking_update_settings), [`admin.error_tracking_list`](#adminerror_tracking_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_get_settings`
+- **Herramienta individual**: `gitlab_get_error_tracking_settings`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.error_tracking_list`
+
+> List error-tracking client keys. Returns: an array of client keys with id, public_key, and sentry_dsn. See also: [`admin.error_tracking_create`](#adminerror_tracking_create), [`admin.error_tracking_get_settings`](#adminerror_tracking_get_settings).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_list`
+- **Herramienta individual**: `gitlab_list_error_tracking_client_keys`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+
+### `admin.error_tracking_update_settings`
+
+> Enable or disable error tracking. Returns: the updated error-tracking settings. See also: [`admin.error_tracking_get_settings`](#adminerror_tracking_get_settings), [`admin.error_tracking_list`](#adminerror_tracking_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `error_tracking_update_settings`
+- **Herramienta individual**: `gitlab_enable_disable_error_tracking`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                      |
+| ------------ | ---------------- | --------- | -------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path   |
+| `active`     | `boolean`        | no        | Enable or disable error tracking |
+| `integrated` | `boolean`        | no        | Use integrated error tracking    |
+
+### `admin.feature_delete`
+
+> Delete a feature flag. Returns: a success status. See also: [`admin.feature_set`](#adminfeature_set), [`admin.feature_list`](#adminfeature_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `feature_delete`
+- **Herramienta individual**: `gitlab_delete_feature_flag`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                 |
+| --------- | -------- | --------- | --------------------------- |
+| `name`    | `string` | sí        | Feature flag name to delete |
+
+### `admin.feature_list`
+
+> List instance feature flags. Returns: an array of features with name, state, and gates (boolean, actors, groups, percentages). See also: [`admin.feature_list_definitions`](#adminfeature_list_definitions), [`admin.feature_set`](#adminfeature_set).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `feature_list`
+- **Herramienta individual**: `gitlab_list_features`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.feature_list_definitions`
+
+> List feature flag definitions. Returns: an array of definitions with name, type, default_enabled, group, and milestone. See also: [`admin.feature_list`](#adminfeature_list), [`admin.feature_set`](#adminfeature_set).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `feature_list_definitions`
+- **Herramienta individual**: `gitlab_list_feature_definitions`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.feature_set`
+
+> Set a feature flag gate. Returns: the updated feature with its name, state, and gate values. See also: [`admin.feature_list`](#adminfeature_list), [`admin.feature_delete`](#adminfeature_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `feature_set`
+- **Herramienta individual**: `gitlab_set_feature_flag`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo                                                    | Requerido | Descripción                                                                      |
+| --------------- | ------------------------------------------------------- | --------- | -------------------------------------------------------------------------------- |
+| `name`          | `string`                                                | sí        | Feature flag name                                                                |
+| `value`         | `boolean/integer/string`                                | sí        | Value to set (true, false, integer percentage, or string)                        |
+| `feature_group` | `string`                                                | no        | Feature group name                                                               |
+| `force`         | `boolean`                                               | no        | Force the change even if the flag is read-only                                   |
+| `group`         | `string`                                                | no        | GitLab group path                                                                |
+| `key`           | `string` (`percentage_of_actors`, `percentage_of_time`) | no        | Gate key (percentage_of_actors or percentage_of_time)                            |
+| `namespace`     | `string`                                                | no        | GitLab namespace path                                                            |
+| `project`       | `string`                                                | no        | Project path such as gitlab-org/gitlab-foss. Separate several paths with commas. |
+| `repository`    | `string`                                                | no        | GitLab repository path                                                           |
+| `user`          | `string`                                                | no        | GitLab username                                                                  |
+
+### `admin.import_bitbucket`
+
+> Import a repository from Bitbucket Cloud. Returns: the created project for the imported repository. See also: [`admin.import_bitbucket_server`](#adminimport_bitbucket_server), [`admin.import_github`](#adminimport_github).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `import_bitbucket`
+- **Herramienta individual**: `gitlab_import_from_bitbucket_cloud`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                | Tipo     | Requerido | Descripción                                                                                                                                                                   |
+| ------------------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bitbucket_username`     | `string` | sí        | Bitbucket Cloud username                                                                                                                                                      |
+| `repo_path`              | `string` | sí        | Bitbucket repository path (e.g. owner/repo)                                                                                                                                   |
+| `target_namespace`       | `string` | sí        | Target namespace for the imported project                                                                                                                                     |
+| `bitbucket_api_token`    | `string` | no        | Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email                      |
+| `bitbucket_app_password` | `string` | no        | Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email |
+| `bitbucket_email`        | `string` | no        | Atlassian account email associated with the API token (required when using bitbucket_api_token)                                                                               |
+| `new_name`               | `string` | no        | New name for the imported project                                                                                                                                             |
+
+### `admin.import_bitbucket_server`
+
+> Import a repository from Bitbucket Server. Returns: the created project for the imported repository. See also: [`admin.import_bitbucket`](#adminimport_bitbucket), [`admin.import_github`](#adminimport_github).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `import_bitbucket_server`
+- **Herramienta individual**: `gitlab_import_from_bitbucket_server`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo                                   | Requerido | Descripción                                                                                                        |
+| --------------------------- | -------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `bitbucket_server_project`  | `string`                               | sí        | Bitbucket Server project key                                                                                       |
+| `bitbucket_server_repo`     | `string`                               | sí        | Bitbucket Server repository slug                                                                                   |
+| `bitbucket_server_url`      | `string`                               | sí        | Bitbucket Server URL                                                                                               |
+| `bitbucket_server_username` | `string`                               | sí        | Bitbucket Server username                                                                                          |
+| `personal_access_token`     | `string`                               | sí        | Bitbucket Server personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors |
+| `new_name`                  | `string`                               | no        | New name for the imported project                                                                                  |
+| `new_namespace`             | `string`                               | no        | Target namespace for the imported project                                                                          |
+| `timeout_strategy`          | `string` (`optimistic`, `pessimistic`) | no        | Timeout strategy (optimistic or pessimistic)                                                                       |
+
+### `admin.import_cancel_github`
+
+> Cancel a GitHub import. Returns: the project with its updated import status. See also: [`admin.import_github`](#adminimport_github), [`admin.import_gists`](#adminimport_gists).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `import_cancel_github`
+- **Herramienta individual**: `gitlab_cancel_github_import`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción                                   |
+| ------------ | --------- | --------- | --------------------------------------------- |
+| `project_id` | `integer` | sí        | The GitLab project ID of the import to cancel |
+
+### `admin.import_gists`
+
+> Import GitHub gists into snippets. Returns: a success status. The import runs asynchronously. See also: [`admin.import_github`](#adminimport_github), [`admin.import_cancel_github`](#adminimport_cancel_github).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `import_gists`
+- **Herramienta individual**: `gitlab_import_github_gists`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro               | Tipo     | Requerido | Descripción                                                                                              |
+| ----------------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| `personal_access_token` | `string` | sí        | GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors |
+
+### `admin.import_github`
+
+> Import a repository from GitHub. Returns: the created project for the imported repository with its import status. See also: [`admin.import_cancel_github`](#adminimport_cancel_github), [`admin.import_gists`](#adminimport_gists).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `import_github`
+- **Herramienta individual**: `gitlab_import_from_github`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro               | Tipo                                   | Requerido | Descripción                                                                                              |
+| ----------------------- | -------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| `personal_access_token` | `string`                               | sí        | GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors |
+| `repo_id`               | `integer`                              | sí        | GitHub repository ID                                                                                     |
+| `target_namespace`      | `string`                               | sí        | Target namespace for the imported project                                                                |
+| `github_hostname`       | `string`                               | no        | GitHub hostname for GitHub Enterprise                                                                    |
+| `new_name`              | `string`                               | no        | New name for the imported project                                                                        |
+| `optional_stages`       | `object`                               | no        | Optional import stages to enable (each defaults to disabled when omitted)                                |
+| `timeout_strategy`      | `string` (`optimistic`, `pessimistic`) | no        | Timeout strategy (optimistic or pessimistic)                                                             |
+
+### `admin.license_add`
+
+> Add a GitLab Enterprise license. Returns: the installed license with plan, expiration, and entitlements. See also: [`admin.license_get`](#adminlicense_get), [`admin.license_delete`](#adminlicense_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `license_add`
+- **Herramienta individual**: `gitlab_add_license`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro | Tipo     | Requerido | Descripción                         |
+| --------- | -------- | --------- | ----------------------------------- |
+| `license` | `string` | sí        | The license string (Base64-encoded) |
+
+### `admin.license_delete`
+
+> Delete an instance license. Returns: a success status. See also: [`admin.license_get`](#adminlicense_get), [`admin.license_add`](#adminlicense_add).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `license_delete`
+- **Herramienta individual**: `gitlab_delete_license`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción          |
+| --------- | --------- | --------- | -------------------- |
+| `id`      | `integer` | sí        | License ID to delete |
+
+### `admin.license_get`
+
+> Get the active instance license. Returns: the license with plan, expires_at, user_limit, active_users, and add-ons. See also: [`admin.license_add`](#adminlicense_add), [`admin.license_delete`](#adminlicense_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `license_get`
+- **Herramienta individual**: `gitlab_get_license`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.metadata_get`
+
+> Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: [`server.status`](/gitlab-mcp-server/reference/tools/server/#serverstatus), [`admin.settings_get`](#adminsettings_get), [`admin.app_statistics_get`](#adminapp_statistics_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `metadata_get`
+- **Herramienta individual**: `gitlab_get_metadata`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.plan_limits_change`
+
+> Change plan limits. Returns: every limit of the plan after the change, as the read returns them. See also: [`admin.plan_limits_get`](#adminplan_limits_get), [`admin.settings_get`](#adminsettings_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `plan_limits_change`
+- **Herramienta individual**: `gitlab_change_plan_limits`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                        | Tipo      | Requerido | Descripción                                                                       |
+| -------------------------------- | --------- | --------- | --------------------------------------------------------------------------------- |
+| `plan_name`                      | `string`  | sí        | Plan name to update (e.g. default, free, bronze, silver, gold, premium, ultimate) |
+| `conan_max_file_size`            | `integer` | no        | Maximum Conan package file size in bytes                                          |
+| `generic_packages_max_file_size` | `integer` | no        | Maximum generic package file size in bytes                                        |
+| `helm_max_file_size`             | `integer` | no        | Maximum Helm chart file size in bytes                                             |
+| `maven_max_file_size`            | `integer` | no        | Maximum Maven package file size in bytes                                          |
+| `npm_max_file_size`              | `integer` | no        | Maximum NPM package file size in bytes                                            |
+| `nuget_max_file_size`            | `integer` | no        | Maximum NuGet package file size in bytes                                          |
+| `pypi_max_file_size`             | `integer` | no        | Maximum PyPI package file size in bytes                                           |
+| `terraform_module_max_file_size` | `integer` | no        | Maximum Terraform module file size in bytes                                       |
+
+### `admin.plan_limits_get`
+
+> Get plan limits for a plan. Returns: every limit GitLab sends (package file sizes, CI/CD, dotenv, namespace storage, webhook and Service Desk rates) and the change history of the storage limits. See also: [`admin.plan_limits_change`](#adminplan_limits_change), [`admin.settings_get`](#adminsettings_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `plan_limits_get`
+- **Herramienta individual**: `gitlab_get_plan_limits`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro   | Tipo     | Requerido | Descripción                                                                       |
+| ----------- | -------- | --------- | --------------------------------------------------------------------------------- |
+| `plan_name` | `string` | no        | Plan name to filter (e.g. default, free, bronze, silver, gold, premium, ultimate) |
+
+### `admin.secure_file_create`
+
+> Create a secure file. Returns: the created secure file with id, name, and checksum. See also: [`admin.secure_file_list`](#adminsecure_file_list), [`admin.secure_file_get`](#adminsecure_file_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `secure_file_create`
+- **Herramienta individual**: `gitlab_create_secure_file`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                            |
+| ---------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`           | `string`         | sí        | Name for the secure file                                                                                                                               |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                         |
+| `content_base64` | `string`         | no        | Base64-encoded file content. Only one of file_path or content_base64 should be provided.                                                               |
+| `file_path`      | `string`         | no        | Absolute path to a local file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or content_base64 should be provided. |
+
+### `admin.secure_file_delete`
+
+> Remove a secure file. Returns: a success status. See also: [`admin.secure_file_list`](#adminsecure_file_list), [`admin.secure_file_create`](#adminsecure_file_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `secure_file_delete`
+- **Herramienta individual**: `gitlab_remove_secure_file`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `file_id`    | `integer`        | sí        | Secure file ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.secure_file_get`
+
+> Show a secure file. Returns: the secure file with id, name, checksum, and metadata. See also: [`admin.secure_file_list`](#adminsecure_file_list), [`admin.secure_file_create`](#adminsecure_file_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `secure_file_get`
+- **Herramienta individual**: `gitlab_show_secure_file`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `file_id`    | `integer`        | sí        | Secure file ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.secure_file_list`
+
+> List project secure files. Returns: an array of secure files with id, name, checksum, and created_at. See also: [`admin.secure_file_get`](#adminsecure_file_get), [`admin.secure_file_create`](#adminsecure_file_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `secure_file_list`
+- **Herramienta individual**: `gitlab_list_secure_files`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by                                                                                                       |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `admin.settings_get`
+
+> Get the current GitLab application (instance) settings. Returns: the full application settings object including sign-up, visibility, CI/CD, and rate-limit configuration. See also: [`admin.settings_update`](#adminsettings_update), [`admin.appearance_get`](#adminappearance_get), [`admin.metadata_get`](#adminmetadata_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `settings_get`
+- **Herramienta individual**: `gitlab_get_settings`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.settings_update`
+
+> Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: [`admin.settings_get`](#adminsettings_get), [`admin.appearance_update`](#adminappearance_update).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `settings_update`
+- **Herramienta individual**: `gitlab_update_settings`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro  | Tipo     | Requerido | Descripción                                                                                                                                                                                                                                                                |
+| ---------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings` | `object` | sí        | Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size). A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. |
+
+### `admin.sidekiq_compound_metrics`
+
+> Get combined Sidekiq metrics. Returns: queue, process, and job statistics in a single object. See also: [`admin.sidekiq_queue_metrics`](#adminsidekiq_queue_metrics), [`admin.sidekiq_job_stats`](#adminsidekiq_job_stats).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_compound_metrics`
+- **Herramienta individual**: `gitlab_get_sidekiq_compound_metrics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.sidekiq_job_stats`
+
+> Get Sidekiq job statistics. Returns: aggregate counts of processed, failed, and enqueued jobs. See also: [`admin.sidekiq_queue_metrics`](#adminsidekiq_queue_metrics), [`admin.sidekiq_compound_metrics`](#adminsidekiq_compound_metrics).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_job_stats`
+- **Herramienta individual**: `gitlab_get_sidekiq_job_stats`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.sidekiq_process_metrics`
+
+> Get Sidekiq process metrics. Returns: the list of Sidekiq processes with concurrency and queue assignments. See also: [`admin.sidekiq_queue_metrics`](#adminsidekiq_queue_metrics), [`admin.sidekiq_compound_metrics`](#adminsidekiq_compound_metrics).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_process_metrics`
+- **Herramienta individual**: `gitlab_get_sidekiq_process_metrics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.sidekiq_queue_metrics`
+
+> Get Sidekiq queue metrics. Returns: per-queue backlog and latency figures. See also: [`admin.sidekiq_process_metrics`](#adminsidekiq_process_metrics), [`admin.sidekiq_compound_metrics`](#adminsidekiq_compound_metrics).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `sidekiq_queue_metrics`
+- **Herramienta individual**: `gitlab_get_sidekiq_queue_metrics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.system_hook_add`
+
+> Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: [`admin.system_hook_edit`](#adminsystem_hook_edit), [`admin.system_hook_test`](#adminsystem_hook_test).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_add`
+- **Herramienta individual**: `gitlab_add_system_hook`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo      | Requerido | Descripción                                                     |
+| --------------------------- | --------- | --------- | --------------------------------------------------------------- |
+| `url`                       | `string`  | sí        | Hook URL to receive events                                      |
+| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches        |
+| `description`               | `string`  | no        | Description for the hook                                        |
+| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                        |
+| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                 |
+| `name`                      | `string`  | no        | Descriptive name for the hook                                   |
+| `push_events`               | `boolean` | no        | Trigger on push events                                          |
+| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name) |
+| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                             |
+| `signing_token`             | `string`  | no        | Write-only signing token for webhook signature validation       |
+| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                      |
+| `token`                     | `string`  | no        | Secret token for payload validation                             |
+
+### `admin.system_hook_delete`
+
+> Delete an instance system hook. Returns: a success status. See also: [`admin.system_hook_get`](#adminsystem_hook_get), [`admin.system_hook_add`](#adminsystem_hook_add).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_delete`
+- **Herramienta individual**: `gitlab_delete_system_hook`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción              |
+| --------- | --------- | --------- | ------------------------ |
+| `id`      | `integer` | sí        | System hook ID to delete |
+
+### `admin.system_hook_delete_url_variable`
+
+> Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: [`admin.system_hook_set_url_variable`](#adminsystem_hook_set_url_variable), [`admin.system_hook_get`](#adminsystem_hook_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_delete_url_variable`
+- **Herramienta individual**: `gitlab_delete_system_hook_url_variable`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción                     |
+| --------- | --------- | --------- | ------------------------------- |
+| `id`      | `integer` | sí        | System hook ID                  |
+| `key`     | `string`  | sí        | URL variable key name to delete |
+
+### `admin.system_hook_edit`
+
+> Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: [`admin.system_hook_get`](#adminsystem_hook_get), [`admin.system_hook_list`](#adminsystem_hook_list), [`admin.system_hook_test`](#adminsystem_hook_test).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_edit`
+- **Herramienta individual**: `gitlab_edit_system_hook`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro                   | Tipo      | Requerido | Descripción                                                       |
+| --------------------------- | --------- | --------- | ----------------------------------------------------------------- |
+| `id`                        | `integer` | sí        | System hook ID to edit                                            |
+| `branch_filter_strategy`    | `string`  | no        | Branch filter strategy: wildcard, regex, or all_branches          |
+| `description`               | `string`  | no        | Updated hook description                                          |
+| `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                          |
+| `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                   |
+| `name`                      | `string`  | no        | Updated hook name                                                 |
+| `push_events`               | `boolean` | no        | Trigger on push events                                            |
+| `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name)   |
+| `repository_update_events`  | `boolean` | no        | Trigger on repository update events                               |
+| `signing_token`             | `string`  | no        | Updated write-only signing token for webhook signature validation |
+| `tag_push_events`           | `boolean` | no        | Trigger on tag push events                                        |
+| `token`                     | `string`  | no        | Updated secret token for payload validation                       |
+| `url`                       | `string`  | no        | Updated hook URL                                                  |
+
+### `admin.system_hook_get`
+
+> Get a system hook by id. Returns: the system hook with url, event triggers, and SSL verification setting. See also: [`admin.system_hook_list`](#adminsystem_hook_list), [`admin.system_hook_edit`](#adminsystem_hook_edit).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_get`
+- **Herramienta individual**: `gitlab_get_system_hook`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción    |
+| --------- | --------- | --------- | -------------- |
+| `id`      | `integer` | sí        | System hook ID |
+
+### `admin.system_hook_list`
+
+> List instance system hooks. Returns: an array of system hooks with id, url, and event triggers, with pagination metadata. See also: [`admin.system_hook_get`](#adminsystem_hook_get), [`admin.system_hook_add`](#adminsystem_hook_add).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_list`
+- **Herramienta individual**: `gitlab_list_system_hooks`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
+| ---------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `page`     | `integer` | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page` | `integer` | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `admin.system_hook_set_url_variable`
+
+> Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: [`admin.system_hook_edit`](#adminsystem_hook_edit), [`admin.system_hook_get`](#adminsystem_hook_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_set_url_variable`
+- **Herramienta individual**: `gitlab_set_system_hook_url_variable`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción                                                                                |
+| --------- | --------- | --------- | ------------------------------------------------------------------------------------------ |
+| `id`      | `integer` | sí        | System hook ID                                                                             |
+| `key`     | `string`  | sí        | URL variable key name. Letters and underscores only. GitLab rejects keys containing digits |
+| `value`   | `string`  | sí        | URL variable value. Must be non-empty                                                      |
+
+### `admin.system_hook_test`
+
+> Send a test event to a system hook. Returns: the delivery status of the test event. See also: [`admin.system_hook_get`](#adminsystem_hook_get), [`admin.system_hook_edit`](#adminsystem_hook_edit).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `system_hook_test`
+- **Herramienta individual**: `gitlab_test_system_hook`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción            |
+| --------- | --------- | --------- | ---------------------- |
+| `id`      | `integer` | sí        | System hook ID to test |
+
+### `admin.terraform_state_delete`
+
+> Delete a Terraform state. Returns: a success status. See also: [`admin.terraform_state_get`](#adminterraform_state_get), [`admin.terraform_version_delete`](#adminterraform_version_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_delete`
+- **Herramienta individual**: `gitlab_delete_terraform_state`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `name`       | `string`         | sí        | Terraform state name           |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.terraform_state_get`
+
+> Get a Terraform state. Returns: the state with name, lock info, and latest version. See also: [`admin.terraform_state_list`](#adminterraform_state_list), [`admin.terraform_state_lock`](#adminterraform_state_lock).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_get`
+- **Herramienta individual**: `gitlab_get_terraform_state`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo     | Requerido | Descripción                            |
+| -------------- | -------- | --------- | -------------------------------------- |
+| `name`         | `string` | sí        | Terraform state name                   |
+| `project_path` | `string` | sí        | Full project path (e.g. group/project) |
+
+### `admin.terraform_state_list`
+
+> List Terraform states. Returns: an array of states with name, lock status, and latest version. See also: [`admin.terraform_state_get`](#adminterraform_state_get), [`admin.terraform_state_lock`](#adminterraform_state_lock).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_list`
+- **Herramienta individual**: `gitlab_list_terraform_states`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo     | Requerido | Descripción                            |
+| -------------- | -------- | --------- | -------------------------------------- |
+| `project_path` | `string` | sí        | Full project path (e.g. group/project) |
+
+### `admin.terraform_state_lock`
+
+> Lock a Terraform state. Returns: the state with its lock acquired. See also: [`admin.terraform_state_unlock`](#adminterraform_state_unlock), [`admin.terraform_state_get`](#adminterraform_state_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_lock`
+- **Herramienta individual**: `gitlab_lock_terraform_state`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `name`       | `string`         | sí        | Terraform state name           |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `admin.terraform_state_unlock`
+
+> Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: [`admin.terraform_state_lock`](#adminterraform_state_lock), [`admin.terraform_state_get`](#adminterraform_state_get), [`admin.terraform_state_list`](#adminterraform_state_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_state_unlock`
+- **Herramienta individual**: `gitlab_unlock_terraform_state`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                            |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `name`       | `string`         | sí        | Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id. |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                         |
+
+### `admin.terraform_version_delete`
+
+> Delete a Terraform state version. Returns: a success status. See also: [`admin.terraform_state_delete`](#adminterraform_state_delete), [`admin.terraform_state_get`](#adminterraform_state_get).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `terraform_version_delete`
+- **Herramienta individual**: `gitlab_delete_terraform_state_version`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `name`       | `string`         | sí        | Terraform state name           |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `serial`     | `integer`        | sí        | State version serial number    |
+
+### `admin.topic_create`
+
+> Create an instance project topic. Returns: the created topic with id, name, title, and description. See also: [`admin.topic_update`](#admintopic_update), [`admin.topic_list`](#admintopic_list).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `topic_create`
+- **Herramienta individual**: `gitlab_create_topic`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo     | Requerido | Descripción                              |
+| ------------- | -------- | --------- | ---------------------------------------- |
+| `name`        | `string` | sí        | Topic name (slug-like unique identifier) |
+| `description` | `string` | no        | Topic description                        |
+| `title`       | `string` | no        | Topic display title                      |
+
+### `admin.topic_delete`
+
+> Delete a project topic. Returns: a success status. See also: [`admin.topic_get`](#admintopic_get), [`admin.topic_create`](#admintopic_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `topic_delete`
+- **Herramienta individual**: `gitlab_delete_topic`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción |
+| ---------- | --------- | --------- | ----------- |
+| `topic_id` | `integer` | sí        | Topic ID    |
+
+### `admin.topic_get`
+
+> Get a single project topic by id. Returns: the topic with id, name, title, description, avatar, and project count. See also: [`admin.topic_list`](#admintopic_list), [`admin.topic_update`](#admintopic_update).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `topic_get`
+- **Herramienta individual**: `gitlab_get_topic`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción |
+| ---------- | --------- | --------- | ----------- |
+| `topic_id` | `integer` | sí        | Topic ID    |
+
+### `admin.topic_list`
+
+> List instance project topics. Returns: an array of topics with id, name, title, description, and project counts. See also: [`admin.topic_get`](#admintopic_get), [`admin.topic_create`](#admintopic_create).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `topic_list`
+- **Herramienta individual**: `gitlab_list_topics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by                                                                                                       |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `search`     | `string`                 | no        | Filter topics by search query                                                                                                                     |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset-paginated results: 'asc' or 'desc'                                                                                          |
+
+### `admin.topic_update`
+
+> Update a project topic. Returns: the updated topic. See also: [`admin.topic_get`](#admintopic_get), [`admin.topic_delete`](#admintopic_delete).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `topic_update`
+- **Herramienta individual**: `gitlab_update_topic`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro     | Tipo      | Requerido | Descripción           |
+| ------------- | --------- | --------- | --------------------- |
+| `topic_id`    | `integer` | sí        | Topic ID              |
+| `description` | `string`  | no        | New topic description |
+| `name`        | `string`  | no        | New topic name        |
+| `title`       | `string`  | no        | New topic title       |
+
+### `admin.usage_data_metric_definitions`
+
+> Get usage metric definitions. Returns: the metric dictionary with key, description, and category for each Service Ping metric. See also: [`admin.usage_data_service_ping`](#adminusage_data_service_ping), [`admin.usage_data_queries`](#adminusage_data_queries).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_metric_definitions`
+- **Herramienta individual**: `gitlab_get_metric_definitions`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.usage_data_non_sql_metrics`
+
+> Get non-SQL usage metrics. Returns: the non-SQL portion of the Service Ping data. See also: [`admin.usage_data_service_ping`](#adminusage_data_service_ping), [`admin.usage_data_queries`](#adminusage_data_queries).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_non_sql_metrics`
+- **Herramienta individual**: `gitlab_get_non_sql_metrics`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.usage_data_queries`
+
+> Get usage data queries. Returns: the SQL query definitions backing Service Ping metrics. See also: [`admin.usage_data_service_ping`](#adminusage_data_service_ping), [`admin.usage_data_metric_definitions`](#adminusage_data_metric_definitions).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_queries`
+- **Herramienta individual**: `gitlab_get_usage_queries`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.usage_data_service_ping`
+
+> Get the Service Ping payload. Returns: the aggregated instance usage data report. See also: [`admin.usage_data_non_sql_metrics`](#adminusage_data_non_sql_metrics), [`admin.usage_data_queries`](#adminusage_data_queries).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_service_ping`
+- **Herramienta individual**: `gitlab_get_service_ping`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `admin.usage_data_track_event`
+
+> Track one usage event. Returns: a success status. See also: [`admin.usage_data_track_events`](#adminusage_data_track_events), [`admin.usage_data_service_ping`](#adminusage_data_service_ping).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_track_event`
+- **Herramienta individual**: `gitlab_track_event`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro               | Tipo      | Requerido | Descripción                                                    |
+| ----------------------- | --------- | --------- | -------------------------------------------------------------- |
+| `event`                 | `string`  | sí        | Event name to track                                            |
+| `additional_properties` | `object`  | no        | Additional event properties forwarded to the tracking endpoint |
+| `namespace_id`          | `integer` | no        | Namespace ID                                                   |
+| `project_id`            | `integer` | no        | Project ID                                                     |
+| `send_to_snowplow`      | `boolean` | no        | Whether to send event to Snowplow                              |
+
+### `admin.usage_data_track_events`
+
+> Track multiple usage events. Returns: a success status. See also: [`admin.usage_data_track_event`](#adminusage_data_track_event), [`admin.usage_data_service_ping`](#adminusage_data_service_ping).
+
+- **Meta-herramienta**: `gitlab_admin`, acción `usage_data_track_events`
+- **Herramienta individual**: `gitlab_track_events`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro | Tipo       | Requerido | Descripción              |
+| --------- | ---------- | --------- | ------------------------ |
+| `events`  | `object[]` | sí        | Array of events to track |

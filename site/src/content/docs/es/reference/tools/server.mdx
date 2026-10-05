@@ -1,0 +1,61 @@
+---
+title: "Diagnóstico del servidor"
+description: "Diagnóstico del propio GitLab MCP Server: si GitLab responde, las versiones del servidor y de GitLab y a quién pertenece el token."
+sidebar:
+  order: 13
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Dos acciones de solo lectura sobre este servidor y no sobre los datos de GitLab. `server.status` informa de si el servidor alcanza GitLab, de la versión y la edición de GitLab y del usuario al que pertenece el token, y es lo primero que hay que llamar cuando otra acción se rechaza con 401 o 403. `server.health_check` comprueba la conexión con GitLab, y solo se sirve en las superficies dinámica y meta.
+
+## Preguntas de ejemplo
+
+- "¿Funciona la conexión con GitLab?"
+- "¿Con qué versión de GitLab habla el servidor?"
+- "¿A qué usuario pertenece este token?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `server.status`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_server` con `action` igual al nombre de la acción, como `status`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_server_status`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                       | Individual             |
+| -------------------------------------------- | ---------------------- |
+| [`server.health_check`](#serverhealth_check) |                        |
+| [`server.status`](#serverstatus)             | `gitlab_server_status` |
+
+### `server.health_check`
+
+> Verify MCP server connectivity to GitLab, authenticated identity, and response health before troubleshooting other tool failures.
+
+- **Meta-herramienta**: `gitlab_server`, acción `health_check`
+- **Herramienta individual**: ninguna, la superficie individual no sirve esta acción
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.
+
+### `server.status`
+
+> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/reference/tools/user/#userme).
+
+- **Meta-herramienta**: `gitlab_server`, acción `status`
+- **Herramienta individual**: `gitlab_server_status`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.

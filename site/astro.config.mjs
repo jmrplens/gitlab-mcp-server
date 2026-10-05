@@ -789,6 +789,16 @@ export default defineConfig({
 							label: "Fine-grained permissions",
 							translations: { es: "Permisos de grano fino" },
 						},
+						// One page per catalog group, written by
+						// cmd/gen_tool_reference: listed from the directory so a
+						// group the catalog gains needs no edit here. Each page
+						// carries its sidebar.order, the index first.
+						{
+							label: "Tools by domain",
+							translations: { es: "Herramientas por dominio" },
+							collapsed: true,
+							items: [{ autogenerate: { directory: "reference/tools" } }],
+						},
 					],
 				},
 				{

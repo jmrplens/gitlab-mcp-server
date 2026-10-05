@@ -1,0 +1,62 @@
+---
+title: "Descubrimiento de proyectos"
+description: "Resuelve una URL de remoto de git al proyecto de GitLab que hay detrás y a su ID de proyecto."
+sidebar:
+  order: 12
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+La mayoría de las acciones reciben un `project_id`, y un modelo que trabaja en una copia de trabajo a menudo solo tiene el remoto de git. `discover_project.resolve` convierte una URL de remoto completa, tal como la imprime `git remote -v` o la guarda `.git/config`, en HTTPS o en SSH, en el proyecto y su ID, y solo lee. Cuando ya se conoce la ruta o el ID del proyecto no hace falta: pásalo directamente a la acción.
+
+## Preguntas de ejemplo
+
+- "¿Qué proyecto de GitLab es este repositorio?"
+- "Encuentra el ID de proyecto de `git@gitlab.example.com:group/app.git`"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `discover_project.resolve`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** e **individual** (`GITLAB_MCP_TOOL_SURFACE=meta` o `individual`): cada acción es una herramienta propia, como `gitlab_discover_project`, con el mismo nombre en las dos superficies, a la que se le pasan directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 1 de 1, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                                 | Individual                |
+| ------------------------------------------------------ | ------------------------- |
+| [`discover_project.resolve`](#discover_projectresolve) | `gitlab_discover_project` |
+
+### `discover_project.resolve`
+
+> Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.
+>
+> When to use: only when the user or workspace provides a complete git remote URL from .git/config (\[remote "origin"\] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.
+> NOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.
+>
+> IMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):
+>
+> - HTTPS: [`https://gitlab.example.com/group/project.git`](https://gitlab.example.com/group/project.git)
+> - SSH shorthand: `git@gitlab.example.com:group/project.git`
+> - SSH protocol: `ssh://git@gitlab.example.com/group/project.git`
+>
+> Returns: \{id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path\}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).
+>
+> See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`server.status`](/gitlab-mcp-server/reference/tools/server/#serverstatus), [`search.projects`](/gitlab-mcp-server/reference/tools/search/#searchprojects).
+
+- **Meta-herramienta**: `gitlab_discover_project`, una herramienta propia
+- **Herramienta individual**: `gitlab_discover_project`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo     | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------ | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `remote_url` | `string` | sí        | Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: '[`https://gitlab.example.com/group/project.git`](https://gitlab.example.com/group/project.git)' or '`git@gitlab.example.com:group/project.git`'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path. Project paths are already valid project_id values. |

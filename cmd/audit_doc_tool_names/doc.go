@@ -3,10 +3,9 @@
 // names against the names it registers, and the `domain.action` IDs against
 // the catalog it builds.
 //
-// cmd/audit_doc_coverage already audits the docs against the canonical action
-// catalog, but it asks which actions are documented rather than whether the
+// Asking which actions are documented says nothing about whether the
 // documented ones exist, so a page could name a tool no surface has ever
-// registered and audit clean. That is exactly how `gitlab_list_issues`
+// registered and still read as complete. That is exactly how `gitlab_list_issues`
 // survived in guides and examples: the individual surface projects
 // domain-first names (`gitlab_issue_list`), so every copy-pasted verb-first
 // example answered `unknown tool` at runtime.

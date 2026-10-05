@@ -169,7 +169,7 @@ You operate in different modes depending on the type of plan requested. Always i
 
 **Key questions to investigate**:
 
-- Are all individual tools, including GitLab.com-only Orbit tools, documented in `docs/reference/tools`?
+- Is the generated per-domain tool reference current (`make check-tool-reference`), and does every catalog group, GitLab.com-only Orbit included, have its overview in `cmd/gen_tool_reference/domains.json`?
 - Does `docs/reference/configuration.md` match current environment variables?
 - Are new capabilities reflected in `docs/reference/capabilities/README.md`?
 - Do examples in `docs/guides/examples` still work?
@@ -311,7 +311,7 @@ Include: file counts, coverage percentages, specific patterns found, existing is
 - [ ] `go test ./internal/tools/{domain}/ -count=1`
 - [ ] `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`
 - [ ] Coverage ≥ [target]%
-- [ ] Documentation updated in `docs/reference/tools`
+- [ ] Tool reference regenerated (`make gen-tool-reference`)
 
 ## 10. Related
 

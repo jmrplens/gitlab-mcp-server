@@ -1,0 +1,457 @@
+---
+title: "Revisión de merge requests"
+description: "Revisar un merge request: sus cambios y versiones del diff, notas, discusiones en hilo y en línea, y notas en borrador publicadas como una sola revisión."
+sidebar:
+  order: 38
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Lo que hace una revisión con un merge request: leer sus cambios, sus versiones del diff y sus diffs en bruto; leer y escribir sus notas; abrir, responder y resolver discusiones en hilo, en línea sobre una línea del diff o generales; y encolar notas en borrador que siguen siendo privadas hasta que se publican, una a una o todas juntas como una sola revisión.
+
+Aprobar, fusionar y el resto del ciclo de vida del merge request están en [Merge requests](/gitlab-mcp-server/reference/tools/merge-request/), igual que los emoji de reacción en sus notas.
+
+## Preguntas de ejemplo
+
+- "¿Qué ha cambiado en el merge request !15?"
+- "Comenta la línea 42 de src/app.go en el merge request !15"
+- "Resuelve los hilos abiertos que inicié en el merge request !15"
+- "Publica mi revisión en borrador"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `mr_review.changes_get`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_mr_review` con `action` igual al nombre de la acción, como `changes_get`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_mr_changes_get`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 10 de 23, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                 | Individual                         |
+| ---------------------------------------------------------------------- | ---------------------------------- |
+| [`mr_review.changes_get`](#mr_reviewchanges_get)                       | `gitlab_mr_changes_get`            |
+| [`mr_review.diff_version_get`](#mr_reviewdiff_version_get)             | `gitlab_mr_diff_version_get`       |
+| [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list)         | `gitlab_mr_diff_versions_list`     |
+| [`mr_review.discussion_create`](#mr_reviewdiscussion_create)           | `gitlab_mr_discussion_create`      |
+| [`mr_review.discussion_get`](#mr_reviewdiscussion_get)                 | `gitlab_mr_discussion_get`         |
+| [`mr_review.discussion_list`](#mr_reviewdiscussion_list)               | `gitlab_mr_discussion_list`        |
+| [`mr_review.discussion_note_delete`](#mr_reviewdiscussion_note_delete) | `gitlab_mr_discussion_note_delete` |
+| [`mr_review.discussion_note_update`](#mr_reviewdiscussion_note_update) | `gitlab_mr_discussion_note_update` |
+| [`mr_review.discussion_reply`](#mr_reviewdiscussion_reply)             | `gitlab_mr_discussion_reply`       |
+| [`mr_review.discussion_resolve`](#mr_reviewdiscussion_resolve)         | `gitlab_mr_discussion_resolve`     |
+| [`mr_review.draft_note_create`](#mr_reviewdraft_note_create)           | `gitlab_mr_draft_note_create`      |
+| [`mr_review.draft_note_delete`](#mr_reviewdraft_note_delete)           | `gitlab_mr_draft_note_delete`      |
+| [`mr_review.draft_note_get`](#mr_reviewdraft_note_get)                 | `gitlab_mr_draft_note_get`         |
+| [`mr_review.draft_note_list`](#mr_reviewdraft_note_list)               | `gitlab_mr_draft_note_list`        |
+| [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish)         | `gitlab_mr_draft_note_publish`     |
+| [`mr_review.draft_note_publish_all`](#mr_reviewdraft_note_publish_all) | `gitlab_mr_draft_note_publish_all` |
+| [`mr_review.draft_note_update`](#mr_reviewdraft_note_update)           | `gitlab_mr_draft_note_update`      |
+| [`mr_review.note_create`](#mr_reviewnote_create)                       | `gitlab_mr_note_create`            |
+| [`mr_review.note_delete`](#mr_reviewnote_delete)                       | `gitlab_mr_note_delete`            |
+| [`mr_review.note_get`](#mr_reviewnote_get)                             | `gitlab_mr_note_get`               |
+| [`mr_review.note_list`](#mr_reviewnote_list)                           | `gitlab_mr_notes_list`             |
+| [`mr_review.note_update`](#mr_reviewnote_update)                       | `gitlab_mr_note_update`            |
+| [`mr_review.raw_diffs`](#mr_reviewraw_diffs)                           | `gitlab_mr_raw_diffs`              |
+
+### `mr_review.changes_get`
+
+> Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list), [`mr_review.raw_diffs`](#mr_reviewraw_diffs), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `changes_get`
+- **Herramienta individual**: `gitlab_mr_changes_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `unidiff`           | `boolean`                | no        | Return diffs in unified diff format (default: false)                                                                                              |
+
+### `mr_review.diff_version_get`
+
+> Get a single merge request diff version with its commits and file diffs. Returns: the diff version with id, SHAs, state, real_size, the full commit list, and per-file diffs (optionally in unified-diff format). See also: [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list), [`mr_review.changes_get`](#mr_reviewchanges_get).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `diff_version_get`
+- **Herramienta individual**: `gitlab_mr_diff_version_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                          |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                       |
+| `version_id`        | `integer`        | sí        | Diff version ID                                      |
+| `unidiff`           | `boolean`        | no        | Return diffs in unified diff format (default: false) |
+
+### `mr_review.diff_versions_list`
+
+> List all diff versions (historical snapshots) of a merge request. Returns: an array of diff versions with id, head/base/start SHAs, state, real_size, and created_at, plus pagination metadata. See also: [`mr_review.diff_version_get`](#mr_reviewdiff_version_get), [`mr_review.changes_get`](#mr_reviewchanges_get).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `diff_versions_list`
+- **Herramienta individual**: `gitlab_mr_diff_versions_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+
+### `mr_review.discussion_create`
+
+> Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: [`mr_review.discussion_reply`](#mr_reviewdiscussion_reply), [`mr_review.discussion_list`](#mr_reviewdiscussion_list), [`mr_review.changes_get`](#mr_reviewchanges_get).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_create`
+- **Herramienta individual**: `gitlab_mr_discussion_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                                 |
+| ------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `body`              | `string`         | sí        | Discussion body                                                                                             |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                  |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                              |
+| `commit_id`         | `string`         | no        | SHA of the commit to anchor the discussion to (optional).                                                   |
+| `created_at`        | `string`         | no        | Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+| `position`          | `object`         | no        | Diff position for inline comments. Omit for general MR discussions.                                         |
+
+### `mr_review.discussion_get`
+
+> Get a single merge request discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: [`mr_review.discussion_list`](#mr_reviewdiscussion_list), [`mr_review.discussion_reply`](#mr_reviewdiscussion_reply), [`mr_review.discussion_resolve`](#mr_reviewdiscussion_resolve).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_get`
+- **Herramienta individual**: `gitlab_mr_discussion_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `discussion_id`     | `string`         | sí        | ID of the discussion                                       |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `mr_review.discussion_list`
+
+> List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: [`mr_review.discussion_get`](#mr_reviewdiscussion_get), [`mr_review.discussion_create`](#mr_reviewdiscussion_create), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget), [`mr_review.note_list`](#mr_reviewnote_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_list`
+- **Herramienta individual**: `gitlab_mr_discussion_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Column to order keyset-paginated results by (e.g. created_at, updated_at)                                                                         |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort direction (asc or desc)                                                                                                                      |
+
+### `mr_review.discussion_note_delete`
+
+> Delete a note from a merge request discussion thread (destructive). Returns: a deletion confirmation message. See also: [`mr_review.discussion_note_update`](#mr_reviewdiscussion_note_update), [`mr_review.discussion_get`](#mr_reviewdiscussion_get), [`mr_review.discussion_list`](#mr_reviewdiscussion_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_note_delete`
+- **Herramienta individual**: `gitlab_mr_discussion_note_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `discussion_id`     | `string`         | sí        | ID of the discussion containing the note                   |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | ID of the note to delete                                   |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `mr_review.discussion_note_update`
+
+> Update the body or resolved state of a note in a merge request discussion thread. Returns: the updated note. See also: [`mr_review.discussion_reply`](#mr_reviewdiscussion_reply), [`mr_review.discussion_note_delete`](#mr_reviewdiscussion_note_delete), [`mr_review.discussion_get`](#mr_reviewdiscussion_get).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_note_update`
+- **Herramienta individual**: `gitlab_mr_discussion_note_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                           |
+| ------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `discussion_id`     | `string`         | sí        | ID of the discussion containing the note                                                              |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                            |
+| `note_id`           | `integer`        | sí        | ID of the note to update                                                                              |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `body`              | `string`         | no        | New body text (Markdown). Leave empty to keep current body.                                           |
+| `created_at`        | `string`         | no        | Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+| `resolved`          | `boolean`        | no        | Set to true to resolve, false to unresolve. Omit to leave unchanged.                                  |
+
+### `mr_review.discussion_reply`
+
+> Add a reply note to an existing merge request discussion thread. Returns: the created note (author, body, timestamps, resolvable state). See also: [`mr_review.discussion_create`](#mr_reviewdiscussion_create), [`mr_review.discussion_get`](#mr_reviewdiscussion_get), [`mr_review.discussion_note_update`](#mr_reviewdiscussion_note_update).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_reply`
+- **Herramienta individual**: `gitlab_mr_discussion_reply`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                                                           |
+| ------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `body`              | `string`         | sí        | Reply body                                                                                            |
+| `discussion_id`     | `string`         | sí        | ID of the discussion to reply to                                                                      |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                            |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `created_at`        | `string`         | no        | Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `mr_review.discussion_resolve`
+
+> Resolve or unresolve a merge request discussion thread. Returns: the thread with its updated resolved state and notes. See also: [`mr_review.discussion_get`](#mr_reviewdiscussion_get), [`mr_review.discussion_list`](#mr_reviewdiscussion_list), [`mr_review.discussion_reply`](#mr_reviewdiscussion_reply).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_resolve`
+- **Herramienta individual**: `gitlab_mr_discussion_resolve`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `discussion_id`     | `string`         | sí        | ID of the discussion to resolve                            |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+| `resolved`          | `boolean`        | sí        | True to resolve, false to unresolve                        |
+
+### `mr_review.draft_note_create`
+
+> Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: [`mr_review.draft_note_list`](#mr_reviewdraft_note_list), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish), [`mr_review.draft_note_publish_all`](#mr_reviewdraft_note_publish_all).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_create`
+- **Herramienta individual**: `gitlab_mr_draft_note_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                   | Tipo             | Requerido | Descripción                                                                        |
+| --------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------- |
+| `merge_request_iid`         | `integer`        | sí        | Merge request internal ID                                                          |
+| `note`                      | `string`         | sí        | Note body text (Markdown)                                                          |
+| `project_id`                | `string/integer` | sí        | Project ID or URL-encoded path                                                     |
+| `commit_id`                 | `string`         | no        | SHA of the commit to comment on                                                    |
+| `in_reply_to_discussion_id` | `string`         | no        | Discussion ID to reply to                                                          |
+| `position`                  | `object`         | no        | Diff position for inline comments on specific lines. Omit for general MR comments. |
+| `resolve_discussion`        | `boolean`        | no        | Resolve the discussion when published                                              |
+
+### `mr_review.draft_note_delete`
+
+> Delete a pending draft note permanently. Returns: a success confirmation naming the note, merge request, and project. See also: [`mr_review.draft_note_list`](#mr_reviewdraft_note_list), [`mr_review.draft_note_get`](#mr_reviewdraft_note_get).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_delete`
+- **Herramienta individual**: `gitlab_mr_draft_note_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `note_id`           | `integer`        | sí        | Draft note ID                  |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `mr_review.draft_note_get`
+
+> Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: [`mr_review.draft_note_list`](#mr_reviewdraft_note_list), [`mr_review.draft_note_update`](#mr_reviewdraft_note_update), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_get`
+- **Herramienta individual**: `gitlab_mr_draft_note_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `note_id`           | `integer`        | sí        | Draft note ID                  |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `mr_review.draft_note_list`
+
+> List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata. See also: [`mr_review.draft_note_get`](#mr_reviewdraft_note_get), [`mr_review.draft_note_create`](#mr_reviewdraft_note_create), [`mr_review.draft_note_publish_all`](#mr_reviewdraft_note_publish_all).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_list`
+- **Herramienta individual**: `gitlab_mr_draft_note_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                | sí        | Merge request internal ID                                                                                                                         |
+| `project_id`        | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string`                 | no        | Order by: id (default)                                                                                                                            |
+| `page`              | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`) | no        | Sort: asc or desc (default)                                                                                                                       |
+
+### `mr_review.draft_note_publish`
+
+> Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: [`mr_review.draft_note_publish_all`](#mr_reviewdraft_note_publish_all), [`mr_review.draft_note_list`](#mr_reviewdraft_note_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_publish`
+- **Herramienta individual**: `gitlab_mr_draft_note_publish`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `note_id`           | `integer`        | sí        | Draft note ID                  |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `mr_review.draft_note_publish_all`
+
+> Publish all of the user's pending draft notes on a merge request, optionally with a summary note and a reviewer state. Returns: a success confirmation naming the merge request and project. See also: [`mr_review.draft_note_list`](#mr_reviewdraft_note_list), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_publish_all`
+- **Herramienta individual**: `gitlab_mr_draft_note_publish_all`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo                                       | Requerido | Descripción                                                                                                                                     |
+| ------------------- | ------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                                  | sí        | Merge request internal ID                                                                                                                       |
+| `project_id`        | `string/integer`                           | sí        | Project ID or URL-encoded path                                                                                                                  |
+| `internal`          | `boolean`                                  | no        | Whether the summary note is internal, visible only to members who can see internal notes. Defaults to false and applies only together with note |
+| `note`              | `string`                                   | no        | Summary comment GitLab posts on the merge request after publishing the drafts. Markdown is supported                                            |
+| `reviewer_state`    | `string` (`requested_changes`, `reviewed`) | no        | Review state to record for the caller as a reviewer after publishing: requested_changes or reviewed. It does not record a formal approval       |
+
+### `mr_review.draft_note_update`
+
+> Update a pending draft note's body or position. Returns: the updated draft note. See also: [`mr_review.draft_note_get`](#mr_reviewdraft_note_get), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_update`
+- **Herramienta individual**: `gitlab_mr_draft_note_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                               |
+| ------------------- | ---------------- | --------- | ----------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID                 |
+| `note_id`           | `integer`        | sí        | Draft note ID                             |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path            |
+| `note`              | `string`         | no        | Updated note body text (Markdown)         |
+| `position`          | `object`         | no        | Updated diff position for inline comments |
+
+### `mr_review.note_create`
+
+> Add a general comment (note) to a merge request. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags. See also: [`mr_review.note_list`](#mr_reviewnote_list), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget), [`mr_review.discussion_create`](#mr_reviewdiscussion_create).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `note_create`
+- **Herramienta individual**: `gitlab_mr_note_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro                     | Tipo             | Requerido | Descripción                                                                                                                                             |
+| ----------------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`                        | `string`         | sí        | Comment body (Markdown supported)                                                                                                                       |
+| `merge_request_iid`           | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                              |
+| `project_id`                  | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                          |
+| `created_at`                  | `string`         | no        | Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise. |
+| `internal`                    | `boolean`        | no        | Mark note as internal (visible only to project members)                                                                                                 |
+| `merge_request_diff_head_sha` | `string`         | no        | Required for the deduplication of system notes: SHA referencing the most recent diff version of the merge request.                                      |
+
+### `mr_review.note_delete`
+
+> Delete a merge request note permanently. Returns: a success confirmation naming the note, MR, and project. See also: [`mr_review.note_get`](#mr_reviewnote_get), [`mr_review.note_list`](#mr_reviewnote_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `note_delete`
+- **Herramienta individual**: `gitlab_mr_note_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | ID of the note to delete                                   |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `mr_review.note_get`
+
+> Get a single merge request note by its ID. Returns: the note with author, body, timestamps, position, and resolvable/internal flags. See also: [`mr_review.note_list`](#mr_reviewnote_list), [`mr_review.note_update`](#mr_reviewnote_update), [`mr_review.note_delete`](#mr_reviewnote_delete).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `note_get`
+- **Herramienta individual**: `gitlab_mr_note_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | ID of the note to retrieve                                 |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `mr_review.note_list`
+
+> List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata. See also: [`mr_review.note_get`](#mr_reviewnote_get), [`mr_review.note_create`](#mr_reviewnote_create), [`mr_review.discussion_list`](#mr_reviewdiscussion_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `note_list`
+- **Herramienta individual**: `gitlab_mr_notes_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo                                  | Requerido | Descripción                                                                                                                                       |
+| ------------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`                             | sí        | Merge request IID (project-scoped, not 'merge_request_id')                                                                                        |
+| `project_id`        | `string/integer`                      | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`          | `string` (`created_at`, `updated_at`) | no        | Order by field (created_at, updated_at)                                                                                                           |
+| `page`              | `integer`                             | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`        | `string`                              | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`        | `string`                              | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`          | `integer`                             | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`              | `string` (`asc`, `desc`)              | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `mr_review.note_update`
+
+> Update a merge request note's body. Returns: the updated note with new body and updated_at timestamp. See also: [`mr_review.note_get`](#mr_reviewnote_get), [`mr_review.note_list`](#mr_reviewnote_list), [`mr_review.note_delete`](#mr_reviewnote_delete).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `note_update`
+- **Herramienta individual**: `gitlab_mr_note_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                                                |
+| ------------------- | ---------------- | --------- | ---------------------------------------------------------- |
+| `body`              | `string`         | sí        | Updated comment body                                       |
+| `merge_request_iid` | `integer`        | sí        | Merge request IID (project-scoped, not 'merge_request_id') |
+| `note_id`           | `integer`        | sí        | ID of the note to update                                   |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                             |
+
+### `mr_review.raw_diffs`
+
+> Get the raw unified-diff output for a merge request in plain-text git-apply format. Returns: raw_diff, a single plain-text unified diff for the MR head suitable for patch application or programmatic analysis. See also: [`mr_review.changes_get`](#mr_reviewchanges_get), [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list).
+
+- **Meta-herramienta**: `gitlab_mr_review`, acción `raw_diffs`
+- **Herramienta individual**: `gitlab_mr_raw_diffs`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro           | Tipo             | Requerido | Descripción                    |
+| ------------------- | ---------------- | --------- | ------------------------------ |
+| `merge_request_iid` | `integer`        | sí        | Merge request internal ID      |
+| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path |

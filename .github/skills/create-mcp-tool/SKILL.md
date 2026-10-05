@@ -385,8 +385,8 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...
 
 ## Step 8: Update Documentation
 
-1. Add the tools to the page under `docs/reference/tools/` that owns the domain (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages, and `go run ./cmd/audit_doc_coverage/` is the gate); create a new page and an ownership entry only for a new area
-2. The catalog tables in `docs/reference/tools/README.md` are generator-owned; do not hand-edit them
+1. Run `make gen-tool-reference`: the site's per-domain tool reference (`site/src/content/docs/reference/tools/` and its `es/` twin) is generated from the catalog, one page per catalog group, so the new action appears on its group's page with its ID, tools, tier, annotations, description and parameters. Never edit those pages by hand
+2. A new catalog group stops that generator until `cmd/gen_tool_reference/domains.json` gives it an index category, a title, a one-line description, an overview and sample questions, in English and Spanish; an existing group's overview is updated there when the new action changes what the group is for
 3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing/testing.md` with new test counts and coverage values
 
 ## Step 9: Verify
@@ -397,7 +397,7 @@ go run ./cmd/gen_testing_docs/ --check
 npx markdownlint-cli2 docs/development/testing/testing.md
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 make check-test-subtests check-test-goroutines check-test-file-names check-e2e-static
-go run ./cmd/audit_doc_coverage/
+make check-tool-reference
 ```
 
 ## Validation Checklist

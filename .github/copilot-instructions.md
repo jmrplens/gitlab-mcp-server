@@ -21,7 +21,6 @@ gitlab-mcp-server/
 │   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk|paths|grants; -validate-docs); grants is R-GRANT, the fine-grained table held to the live GitLab record
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
-│   ├── audit_doc_coverage/ # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_doc_tool_names/ # Every `gitlab_*` name the docs mention exists on the surface it claims (make check-doc-tool-names)
 │   ├── audit_dynamic_aliases/ # Dynamic-toolset alias governance
 │   ├── audit_e2e_coverage/ # What the e2e suite dispatched, and the catalog actions it never reached (make audit-e2e-coverage, make check-e2e-static)
@@ -51,6 +50,7 @@ gitlab-mcp-server/
 │   ├── gen_lhm_manifest/   # Capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/           # llms.txt / llms-full.txt
 │   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
+│   ├── gen_tool_reference/ # The site's per-domain tool reference, one page per catalog group in English and Spanish, from the catalog and domains.json (make gen-tool-reference; check-tool-reference gates it)
 │   ├── gen_third_party_notices/ # THIRD_PARTY_NOTICES from the release binaries' build information, the packages they link and the module cache (GoReleaser's sboms, the Dockerfile, make mcpb)
 │   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger
 │   ├── gen_model_results/  # Folds a model evaluation run's shards into the published record

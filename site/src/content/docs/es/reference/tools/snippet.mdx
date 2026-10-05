@@ -1,0 +1,641 @@
+---
+title: "Snippets"
+description: "Snippets personales y de proyecto, su contenido, discusiones, notas y emoji de reacción."
+sidebar:
+  order: 42
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los snippets son fragmentos de código o de texto guardados fuera de un repositorio. Los snippets personales son del usuario: listarlos, leerlos, crearlos, actualizarlos y borrarlos, leer su contenido o un archivo de él, listar todos los snippets de la instancia (cosa de un administrador) y explorar los públicos. Los snippets de proyecto son las acciones `snippet.project_*`. Las discusiones en hilo y las notas de un snippet de proyecto, y los emoji de reacción en un snippet y en sus notas, también son acciones de este grupo.
+
+## Preguntas de ejemplo
+
+- "Lista mis snippets"
+- "Crea un snippet con este script"
+- "Muestra las discusiones del snippet 10 del proyecto 42"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `snippet.content`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_snippet` con `action` igual al nombre de la acción, como `content`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_snippet_content`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 17 de 34, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+
+| Acción                                                                   | Individual                              |
+| ------------------------------------------------------------------------ | --------------------------------------- |
+| [`snippet.content`](#snippetcontent)                                     | `gitlab_snippet_content`                |
+| [`snippet.create`](#snippetcreate)                                       | `gitlab_snippet_create`                 |
+| [`snippet.delete`](#snippetdelete)                                       | `gitlab_snippet_delete`                 |
+| [`snippet.discussion_add_note`](#snippetdiscussion_add_note)             | `gitlab_add_snippet_discussion_note`    |
+| [`snippet.discussion_create`](#snippetdiscussion_create)                 | `gitlab_create_snippet_discussion`      |
+| [`snippet.discussion_delete_note`](#snippetdiscussion_delete_note)       | `gitlab_delete_snippet_discussion_note` |
+| [`snippet.discussion_get`](#snippetdiscussion_get)                       | `gitlab_get_snippet_discussion`         |
+| [`snippet.discussion_list`](#snippetdiscussion_list)                     | `gitlab_list_snippet_discussions`       |
+| [`snippet.discussion_update_note`](#snippetdiscussion_update_note)       | `gitlab_update_snippet_discussion_note` |
+| [`snippet.emoji_snippet_create`](#snippetemoji_snippet_create)           | `gitlab_snippet_emoji_create`           |
+| [`snippet.emoji_snippet_delete`](#snippetemoji_snippet_delete)           | `gitlab_snippet_emoji_delete`           |
+| [`snippet.emoji_snippet_get`](#snippetemoji_snippet_get)                 | `gitlab_snippet_emoji_get`              |
+| [`snippet.emoji_snippet_list`](#snippetemoji_snippet_list)               | `gitlab_snippet_emoji_list`             |
+| [`snippet.emoji_snippet_note_create`](#snippetemoji_snippet_note_create) | `gitlab_snippet_note_emoji_create`      |
+| [`snippet.emoji_snippet_note_delete`](#snippetemoji_snippet_note_delete) | `gitlab_snippet_note_emoji_delete`      |
+| [`snippet.emoji_snippet_note_get`](#snippetemoji_snippet_note_get)       | `gitlab_snippet_note_emoji_get`         |
+| [`snippet.emoji_snippet_note_list`](#snippetemoji_snippet_note_list)     | `gitlab_snippet_note_emoji_list`        |
+| [`snippet.explore`](#snippetexplore)                                     | `gitlab_snippet_explore`                |
+| [`snippet.file_content`](#snippetfile_content)                           | `gitlab_snippet_file_content`           |
+| [`snippet.get`](#snippetget)                                             | `gitlab_snippet_get`                    |
+| [`snippet.list`](#snippetlist)                                           | `gitlab_snippet_list`                   |
+| [`snippet.list_all`](#snippetlist_all)                                   | `gitlab_snippet_list_all`               |
+| [`snippet.note_create`](#snippetnote_create)                             | `gitlab_snippet_note_create`            |
+| [`snippet.note_delete`](#snippetnote_delete)                             | `gitlab_snippet_note_delete`            |
+| [`snippet.note_get`](#snippetnote_get)                                   | `gitlab_snippet_note_get`               |
+| [`snippet.note_list`](#snippetnote_list)                                 | `gitlab_snippet_note_list`              |
+| [`snippet.note_update`](#snippetnote_update)                             | `gitlab_snippet_note_update`            |
+| [`snippet.project_content`](#snippetproject_content)                     | `gitlab_project_snippet_content`        |
+| [`snippet.project_create`](#snippetproject_create)                       | `gitlab_project_snippet_create`         |
+| [`snippet.project_delete`](#snippetproject_delete)                       | `gitlab_project_snippet_delete`         |
+| [`snippet.project_get`](#snippetproject_get)                             | `gitlab_project_snippet_get`            |
+| [`snippet.project_list`](#snippetproject_list)                           | `gitlab_project_snippet_list`           |
+| [`snippet.project_update`](#snippetproject_update)                       | `gitlab_project_snippet_update`         |
+| [`snippet.update`](#snippetupdate)                                       | `gitlab_snippet_update`                 |
+
+### `snippet.content`
+
+> Read a personal snippet's raw content. Returns: the snippet ID and raw text content. See also: [`snippet.get`](#snippetget), [`snippet.file_content`](#snippetfile_content).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `content`
+- **Herramienta individual**: `gitlab_snippet_content`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción |
+| ------------ | --------- | --------- | ----------- |
+| `snippet_id` | `integer` | sí        | Snippet ID  |
+
+### `snippet.create`
+
+> Create a personal snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: [`snippet.get`](#snippetget), [`snippet.update`](#snippetupdate), [`snippet.list`](#snippetlist).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `create`
+- **Herramienta individual**: `gitlab_snippet_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo                                       | Requerido | Descripción                                                                |
+| ------------- | ------------------------------------------ | --------- | -------------------------------------------------------------------------- |
+| `title`       | `string`                                   | sí        | Snippet title                                                              |
+| `content`     | `string`                                   | no        | Snippet content (single-file, deprecated in favor of files)                |
+| `description` | `string`                                   | no        | Snippet description                                                        |
+| `file_name`   | `string`                                   | no        | File name (single-file snippet, deprecated in favor of files)              |
+| `files`       | `object[]`                                 | no        | Files to include in the snippet                                            |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | Visibility: private, internal, or public. Defaults to private when omitted |
+
+Además necesita al menos uno de estos: `file_name` y `content`; `files`.
+
+### `snippet.delete`
+
+> Delete a personal snippet permanently. Returns: a success confirmation. See also: [`snippet.get`](#snippetget), [`snippet.list`](#snippetlist).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `delete`
+- **Herramienta individual**: `gitlab_snippet_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción |
+| ------------ | --------- | --------- | ----------- |
+| `snippet_id` | `integer` | sí        | Snippet ID  |
+
+### `snippet.discussion_add_note`
+
+> Add a reply note to an existing snippet discussion thread. Returns: the created note (author, body, timestamps). See also: [`snippet.discussion_create`](#snippetdiscussion_create), [`snippet.discussion_get`](#snippetdiscussion_get), [`snippet.discussion_update_note`](#snippetdiscussion_update_note).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_add_note`
+- **Herramienta individual**: `gitlab_add_snippet_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
+| --------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `body`          | `string`         | sí        | Note body (Markdown supported)                                                                        |
+| `discussion_id` | `string`         | sí        | Discussion ID to reply to                                                                             |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `snippet_id`    | `integer`        | sí        | Snippet ID                                                                                            |
+| `created_at`    | `string`         | no        | Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `snippet.discussion_create`
+
+> Create a new discussion thread on a project snippet with an initial note. Returns: the created thread with its first note. See also: [`snippet.discussion_add_note`](#snippetdiscussion_add_note), [`snippet.discussion_list`](#snippetdiscussion_list), [`snippet.note_create`](#snippetnote_create).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_create`
+- **Herramienta individual**: `gitlab_create_snippet_discussion`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                 |
+| ------------ | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `body`       | `string`         | sí        | Discussion body (Markdown supported)                                                                        |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                              |
+| `snippet_id` | `integer`        | sí        | Snippet ID                                                                                                  |
+| `created_at` | `string`         | no        | Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `snippet.discussion_delete_note`
+
+> Delete a note from a snippet discussion thread (destructive). Returns: a deletion confirmation message. See also: [`snippet.discussion_update_note`](#snippetdiscussion_update_note), [`snippet.discussion_get`](#snippetdiscussion_get), [`snippet.discussion_list`](#snippetdiscussion_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_delete_note`
+- **Herramienta individual**: `gitlab_delete_snippet_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `discussion_id` | `string`         | sí        | Discussion ID                  |
+| `note_id`       | `integer`        | sí        | Note ID to delete              |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id`    | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.discussion_get`
+
+> Get a single snippet discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state). See also: [`snippet.discussion_list`](#snippetdiscussion_list), [`snippet.discussion_add_note`](#snippetdiscussion_add_note), [`snippet.project_get`](#snippetproject_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_get`
+- **Herramienta individual**: `gitlab_get_snippet_discussion`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `discussion_id` | `string`         | sí        | Discussion ID                  |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id`    | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.discussion_list`
+
+> List discussion threads on a project snippet with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: [`snippet.discussion_get`](#snippetdiscussion_get), [`snippet.discussion_create`](#snippetdiscussion_create), [`snippet.project_get`](#snippetproject_get), [`snippet.note_list`](#snippetnote_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_list`
+- **Herramienta individual**: `gitlab_list_snippet_discussions`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `snippet_id` | `integer`                | sí        | Snippet ID                                                                                                                                        |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. created_at, updated_at)                                                                         |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc or desc)                                                                                                                      |
+
+### `snippet.discussion_update_note`
+
+> Update the body of a note in a snippet discussion thread. Returns: the updated note. See also: [`snippet.discussion_add_note`](#snippetdiscussion_add_note), [`snippet.discussion_delete_note`](#snippetdiscussion_delete_note), [`snippet.discussion_get`](#snippetdiscussion_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `discussion_update_note`
+- **Herramienta individual**: `gitlab_update_snippet_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
+| --------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `body`          | `string`         | sí        | Updated note body                                                                                     |
+| `discussion_id` | `string`         | sí        | Discussion ID                                                                                         |
+| `note_id`       | `integer`        | sí        | Note ID to update                                                                                     |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `snippet_id`    | `integer`        | sí        | Snippet ID                                                                                            |
+| `created_at`    | `string`         | no        | Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `snippet.emoji_snippet_create`
+
+> Add an emoji reaction to a project snippet. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`snippet.emoji_snippet_list`](#snippetemoji_snippet_list), [`snippet.emoji_snippet_delete`](#snippetemoji_snippet_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_create`
+- **Herramienta individual**: `gitlab_snippet_emoji_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                               |
+| ------------ | ---------------- | --------- | ----------------------------------------- |
+| `name`       | `string`         | sí        | Emoji name without colons (e.g. thumbsup) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path            |
+| `snippet_id` | `integer`        | sí        | Snippet ID                                |
+
+### `snippet.emoji_snippet_delete`
+
+> Remove an emoji reaction from a project snippet by award id. Returns: a success confirmation naming the award emoji. See also: [`snippet.emoji_snippet_list`](#snippetemoji_snippet_list), [`snippet.emoji_snippet_get`](#snippetemoji_snippet_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_delete`
+- **Herramienta individual**: `gitlab_snippet_emoji_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `award_id`   | `integer`        | sí        | Award emoji ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.emoji_snippet_get`
+
+> Get a single emoji reaction on a project snippet by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`snippet.emoji_snippet_list`](#snippetemoji_snippet_list), [`snippet.emoji_snippet_delete`](#snippetemoji_snippet_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_get`
+- **Herramienta individual**: `gitlab_snippet_emoji_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `award_id`   | `integer`        | sí        | Award emoji ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.emoji_snippet_list`
+
+> List all emoji reactions on a project snippet. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`snippet.emoji_snippet_get`](#snippetemoji_snippet_get), [`snippet.emoji_snippet_create`](#snippetemoji_snippet_create), [`snippet.project_get`](#snippetproject_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_list`
+- **Herramienta individual**: `gitlab_snippet_emoji_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `snippet_id` | `integer`                | sí        | Snippet ID                                                                                                                                        |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order: 'asc' or 'desc'.                                                                                                                      |
+
+### `snippet.emoji_snippet_note_create`
+
+> Add an emoji reaction to a project snippet note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`snippet.emoji_snippet_note_list`](#snippetemoji_snippet_note_list), [`snippet.emoji_snippet_note_delete`](#snippetemoji_snippet_note_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_note_create`
+- **Herramienta individual**: `gitlab_snippet_note_emoji_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                               |
+| ------------ | ---------------- | --------- | ----------------------------------------- |
+| `name`       | `string`         | sí        | Emoji name without colons (e.g. thumbsup) |
+| `note_id`    | `integer`        | sí        | Note ID                                   |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path            |
+| `snippet_id` | `integer`        | sí        | Snippet ID                                |
+
+### `snippet.emoji_snippet_note_delete`
+
+> Remove an emoji reaction from a project snippet note by award id. Returns: a success confirmation naming the award emoji. See also: [`snippet.emoji_snippet_note_list`](#snippetemoji_snippet_note_list), [`snippet.emoji_snippet_note_get`](#snippetemoji_snippet_note_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_note_delete`
+- **Herramienta individual**: `gitlab_snippet_note_emoji_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `award_id`   | `integer`        | sí        | Award emoji ID                 |
+| `note_id`    | `integer`        | sí        | Note ID                        |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.emoji_snippet_note_get`
+
+> Get a single emoji reaction on a project snippet note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: [`snippet.emoji_snippet_note_list`](#snippetemoji_snippet_note_list), [`snippet.emoji_snippet_note_delete`](#snippetemoji_snippet_note_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_note_get`
+- **Herramienta individual**: `gitlab_snippet_note_emoji_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `award_id`   | `integer`        | sí        | Award emoji ID                 |
+| `note_id`    | `integer`        | sí        | Note ID                        |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.emoji_snippet_note_list`
+
+> List all emoji reactions on a project snippet note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: [`snippet.emoji_snippet_note_get`](#snippetemoji_snippet_note_get), [`snippet.emoji_snippet_note_create`](#snippetemoji_snippet_note_create), [`snippet.note_get`](#snippetnote_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `emoji_snippet_note_list`
+- **Herramienta individual**: `gitlab_snippet_note_emoji_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `note_id`    | `integer`                | sí        | Note ID                                                                                                                                           |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `snippet_id` | `integer`                | sí        | Snippet ID                                                                                                                                        |
+| `order_by`   | `string`                 | no        | Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.                                                        |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order: 'asc' or 'desc'.                                                                                                                      |
+
+### `snippet.explore`
+
+> List public snippets across the instance. Returns: public snippets with author, visibility, and pagination metadata. See also: [`snippet.list`](#snippetlist), [`snippet.get`](#snippetget).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `explore`
+- **Herramienta individual**: `gitlab_snippet_explore`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `snippet.file_content`
+
+> Read one file from a multi-file personal snippet at a ref. Returns: the snippet ID, ref, file name, and raw content. See also: [`snippet.content`](#snippetcontent), [`snippet.get`](#snippetget).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `file_content`
+- **Herramienta individual**: `gitlab_snippet_file_content`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción                          |
+| ------------ | --------- | --------- | ------------------------------------ |
+| `file_name`  | `string`  | sí        | File name to retrieve                |
+| `ref`        | `string`  | sí        | Git ref (branch, tag, or commit SHA) |
+| `snippet_id` | `integer` | sí        | Snippet ID                           |
+
+### `snippet.get`
+
+> Get a single personal snippet by ID. Returns: snippet metadata, visibility, author, files, and web URL. See also: [`snippet.list`](#snippetlist), [`snippet.content`](#snippetcontent), [`snippet.update`](#snippetupdate), [`snippet.delete`](#snippetdelete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `get`
+- **Herramienta individual**: `gitlab_snippet_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo      | Requerido | Descripción |
+| ------------ | --------- | --------- | ----------- |
+| `snippet_id` | `integer` | sí        | Snippet ID  |
+
+### `snippet.list`
+
+> List snippets owned by the authenticated user. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: [`snippet.get`](#snippetget), [`snippet.create`](#snippetcreate), [`snippet.explore`](#snippetexplore).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `list`
+- **Herramienta individual**: `gitlab_snippet_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `snippet.list_all`
+
+> List all snippets on the instance (admin). Returns: snippets with author, visibility, repository storage, and pagination metadata. See also: [`snippet.list`](#snippetlist), [`snippet.explore`](#snippetexplore), [`snippet.get`](#snippetget).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `list_all`
+- **Herramienta individual**: `gitlab_snippet_list_all`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro                      | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------------------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `created_after`                | `string`                 | no        | Filter snippets created after (ISO 8601)                                                                                                          |
+| `created_before`               | `string`                 | no        | Filter snippets created before (ISO 8601)                                                                                                         |
+| `order_by`                     | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                |
+| `page`                         | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`                   | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`                   | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`                     | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `repository_storage` (Premium) | `string`                 | no        | Filter by repository storage name (admin only)                                                                                                    |
+| `sort`                         | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `snippet.note_create`
+
+> Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: [`snippet.note_list`](#snippetnote_list), [`snippet.note_get`](#snippetnote_get), [`snippet.project_get`](#snippetproject_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `note_create`
+- **Herramienta individual**: `gitlab_snippet_note_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                             |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`       | `string`         | sí        | Note body (Markdown supported)                                                                                                                          |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                          |
+| `snippet_id` | `integer`        | sí        | Snippet ID                                                                                                                                              |
+| `created_at` | `string`         | no        | Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise. |
+
+### `snippet.note_delete`
+
+> Delete a snippet note permanently. Returns: a success confirmation naming the note, snippet, and project. See also: [`snippet.note_get`](#snippetnote_get), [`snippet.note_list`](#snippetnote_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `note_delete`
+- **Herramienta individual**: `gitlab_snippet_note_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `note_id`    | `integer`        | sí        | ID of the note to delete       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.note_get`
+
+> Get a single snippet note by its ID. Returns: the note with author, body, timestamps, and position. See also: [`snippet.note_list`](#snippetnote_list), [`snippet.note_update`](#snippetnote_update), [`snippet.note_delete`](#snippetnote_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `note_get`
+- **Herramienta individual**: `gitlab_snippet_note_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `note_id`    | `integer`        | sí        | ID of the note to retrieve     |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `snippet_id` | `integer`        | sí        | Snippet ID                     |
+
+### `snippet.note_list`
+
+> List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: [`snippet.note_get`](#snippetnote_get), [`snippet.note_create`](#snippetnote_create), [`snippet.project_get`](#snippetproject_get).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `note_list`
+- **Herramienta individual**: `gitlab_snippet_note_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                  | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                      | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `snippet_id` | `integer`                             | sí        | Snippet ID                                                                                                                                        |
+| `order_by`   | `string` (`created_at`, `updated_at`) | no        | Order by field (created_at, updated_at)                                                                                                           |
+| `page`       | `integer`                             | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                              | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                              | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                             | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)              | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `snippet.note_update`
+
+> Update a snippet note's body. Returns: the updated note with new body and updated_at timestamp. See also: [`snippet.note_get`](#snippetnote_get), [`snippet.note_list`](#snippetnote_list), [`snippet.note_delete`](#snippetnote_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `note_update`
+- **Herramienta individual**: `gitlab_snippet_note_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                            |
+| ------------ | ---------------- | --------- | -------------------------------------- |
+| `body`       | `string`         | sí        | Updated note body (Markdown supported) |
+| `note_id`    | `integer`        | sí        | ID of the note to update               |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path         |
+| `snippet_id` | `integer`        | sí        | Snippet ID                             |
+
+### `snippet.project_content`
+
+> Read a project snippet's raw content. Returns: the snippet ID and raw text content. See also: [`snippet.project_get`](#snippetproject_get), [`snippet.project_list`](#snippetproject_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_content`
+- **Herramienta individual**: `gitlab_project_snippet_content`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+| `snippet_id` | `integer`        | sí        | Snippet ID         |
+
+### `snippet.project_create`
+
+> Create a project snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: [`snippet.project_get`](#snippetproject_get), [`snippet.project_update`](#snippetproject_update), [`snippet.project_list`](#snippetproject_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_create`
+- **Herramienta individual**: `gitlab_project_snippet_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo                                       | Requerido | Descripción                                                                |
+| ------------- | ------------------------------------------ | --------- | -------------------------------------------------------------------------- |
+| `project_id`  | `string`                                   | sí        | Project ID or path                                                         |
+| `title`       | `string`                                   | sí        | Snippet title                                                              |
+| `content`     | `string`                                   | no        | Content (single-file, deprecated in favor of files)                        |
+| `description` | `string`                                   | no        | Snippet description                                                        |
+| `file_name`   | `string`                                   | no        | File name (single-file, deprecated in favor of files)                      |
+| `files`       | `object[]`                                 | no        | Files to include in the snippet                                            |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | Visibility: private, internal, or public. Defaults to private when omitted |
+
+Además necesita al menos uno de estos: `file_name` y `content`; `files`.
+
+### `snippet.project_delete`
+
+> Delete a project snippet permanently. Returns: a success confirmation. See also: [`snippet.project_get`](#snippetproject_get), [`snippet.project_list`](#snippetproject_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_delete`
+- **Herramienta individual**: `gitlab_project_snippet_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+| `snippet_id` | `integer`        | sí        | Snippet ID         |
+
+### `snippet.project_get`
+
+> Get a single project snippet. Returns: snippet metadata, visibility, author, files, and web URL. See also: [`snippet.project_list`](#snippetproject_list), [`snippet.project_content`](#snippetproject_content), [`snippet.project_update`](#snippetproject_update), [`snippet.project_delete`](#snippetproject_delete).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_get`
+- **Herramienta individual**: `gitlab_project_snippet_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción        |
+| ------------ | ---------------- | --------- | ------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or path |
+| `snippet_id` | `integer`        | sí        | Snippet ID         |
+
+### `snippet.project_list`
+
+> List a project's snippets. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: [`snippet.project_get`](#snippetproject_get), [`snippet.project_create`](#snippetproject_create), [`snippet.list`](#snippetlist).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_list`
+- **Herramienta individual**: `gitlab_project_snippet_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or path                                                                                                                                |
+| `order_by`   | `string`                 | no        | Column to order results by for keyset pagination (e.g. id, created_at, updated_at)                                                                |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc, desc)                                                                                                                        |
+
+### `snippet.project_update`
+
+> Update a project snippet. Returns: the updated snippet with metadata, files, and web URL. See also: [`snippet.project_get`](#snippetproject_get), [`snippet.project_delete`](#snippetproject_delete), [`snippet.project_list`](#snippetproject_list).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `project_update`
+- **Herramienta individual**: `gitlab_project_snippet_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro     | Tipo                                       | Requerido | Descripción                                               |
+| ------------- | ------------------------------------------ | --------- | --------------------------------------------------------- |
+| `project_id`  | `string/integer`                           | sí        | Project ID or path                                        |
+| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                |
+| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)   |
+| `description` | `string`                                   | no        | New description                                           |
+| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files) |
+| `files`       | `object[]`                                 | no        | File operations to apply                                  |
+| `title`       | `string`                                   | no        | New title                                                 |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public              |
+
+### `snippet.update`
+
+> Update a personal snippet. Returns: the updated snippet with metadata, files, and web URL. See also: [`snippet.get`](#snippetget), [`snippet.delete`](#snippetdelete), [`snippet.list`](#snippetlist).
+
+- **Meta-herramienta**: `gitlab_snippet`, acción `update`
+- **Herramienta individual**: `gitlab_snippet_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro     | Tipo                                       | Requerido | Descripción                                               |
+| ------------- | ------------------------------------------ | --------- | --------------------------------------------------------- |
+| `snippet_id`  | `integer`                                  | sí        | Snippet ID                                                |
+| `content`     | `string`                                   | no        | New content (single-file, deprecated in favor of files)   |
+| `description` | `string`                                   | no        | New description                                           |
+| `file_name`   | `string`                                   | no        | New file name (single-file, deprecated in favor of files) |
+| `files`       | `object[]`                                 | no        | File operations to apply                                  |
+| `title`       | `string`                                   | no        | New title                                                 |
+| `visibility`  | `string` (`private`, `internal`, `public`) | no        | New visibility: private, internal, or public              |

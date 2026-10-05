@@ -1,0 +1,52 @@
+---
+title: "Registro de modelos"
+description: "Descarga los archivos de una versión de modelo del registro de modelos de GitLab de un proyecto."
+sidebar:
+  order: 36
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+El registro de modelos guarda modelos de aprendizaje automático y sus versiones en un proyecto. `model_registry.download` descarga un archivo de una versión de modelo, para inferencia, evaluación o una compilación. Publicar y borrar versiones de modelo no son acciones de este servidor.
+
+## Preguntas de ejemplo
+
+- "Descarga model.onnx de la versión 3 del modelo classifier del proyecto 42"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `model_registry.download`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_model_registry` con `action` igual al nombre de la acción, como `download`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_download_ml_model_package`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 1 de 1, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                               | Individual                         |
+| ---------------------------------------------------- | ---------------------------------- |
+| [`model_registry.download`](#model_registrydownload) | `gitlab_download_ml_model_package` |
+
+### `model_registry.download`
+
+> Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: [`package.list`](/gitlab-mcp-server/reference/tools/package/#packagelist), [`release.link_create`](/gitlab-mcp-server/reference/tools/release/#releaselink_create), [`repository.raw_blob`](/gitlab-mcp-server/reference/tools/repository/#repositoryraw_blob).
+
+- **Meta-herramienta**: `gitlab_model_registry`, acción `download`
+- **Herramienta individual**: `gitlab_download_ml_model_package`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo             | Requerido | Descripción                                                                                                                                   |
+| ------------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `filename`         | `string`         | sí        | Name of the file to download                                                                                                                  |
+| `model_version_id` | `string/integer` | sí        | Model version ID. Either the numeric version ID from the model version URL or a candidate run ID prefixed with candidate: such as candidate:5 |
+| `path`             | `string`         | sí        | Path within the model package                                                                                                                 |
+| `project_id`       | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                |

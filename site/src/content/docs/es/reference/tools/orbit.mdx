@@ -1,0 +1,129 @@
+---
+title: "Grafo de conocimiento Orbit"
+description: "Consultas de solo lectura contra Orbit, el grafo de conocimiento experimental de GitLab.com."
+sidebar:
+  order: 19
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.tools` y `orbit.dsl` describen cómo consultarlo, `orbit.query` ejecuta una consulta y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/tools/orbit/) explica el flujo de trabajo.
+
+## Preguntas de ejemplo
+
+- "¿Está disponible Orbit para este token de GitLab.com?"
+- "Muestra el esquema del grafo de conocimiento"
+- "¿Ha terminado de indexarse gitlab-org/gitlab?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `orbit.dsl`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_orbit` con `action` igual al nombre de la acción, como `dsl`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_orbit_dsl`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 6:
+
+- **Free**: 0
+- **Premium**: 0 en una instancia autogestionada, 6 en GitLab.com
+- **Ultimate**: 0 en una instancia autogestionada, 6 en GitLab.com
+
+Acciones de solo lectura: 6 de 6, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                     | Individual                  |
+| ------------------------------------------ | --------------------------- |
+| [`orbit.dsl`](#orbitdsl)                   | `gitlab_orbit_dsl`          |
+| [`orbit.graph_status`](#orbitgraph_status) | `gitlab_orbit_graph_status` |
+| [`orbit.query`](#orbitquery)               | `gitlab_orbit_query`        |
+| [`orbit.schema`](#orbitschema)             | `gitlab_orbit_schema`       |
+| [`orbit.status`](#orbitstatus)             | `gitlab_orbit_status`       |
+| [`orbit.tools`](#orbittools)               | `gitlab_orbit_tools`        |
+
+### `orbit.dsl`
+
+> Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `dsl`
+- **Herramienta individual**: `gitlab_orbit_dsl`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo     | Requerido | Descripción                                                                                        |
+| ----------------- | -------- | --------- | -------------------------------------------------------------------------------------------------- |
+| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
+
+### `orbit.graph_status`
+
+> Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `graph_status`
+- **Herramienta individual**: `gitlab_orbit_graph_status`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo      | Requerido | Descripción                                                                                             |
+| ----------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `full_path`       | `string`  | no        | Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field. |
+| `namespace_id`    | `integer` | no        | Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.               |
+| `project_id`      | `integer` | no        | Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.                       |
+| `response_format` | `string`  | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.      |
+
+### `orbit.query`
+
+> Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `query`
+- **Herramienta individual**: `gitlab_orbit_query`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo     | Requerido | Descripción                                                                                                                                                          |
+| ----------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`           | `object` | sí        | Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant. |
+| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.                                                                   |
+
+### `orbit.schema`
+
+> Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `schema`
+- **Herramienta individual**: `gitlab_orbit_schema`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo       | Requerido | Descripción                                                                                               |
+| ----------------- | ---------- | --------- | --------------------------------------------------------------------------------------------------------- |
+| `expand`          | `string[]` | no        | Node names to expand with full properties and relationships.                                              |
+| `format`          | `string`   | no        | Schema response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
+| `response_format` | `string`   | no        | Alias for format. Must match format when both are set.                                                    |
+
+### `orbit.status`
+
+> Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `status`
+- **Herramienta individual**: `gitlab_orbit_status`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo     | Requerido | Descripción                                                                                        |
+| ----------------- | -------- | --------- | -------------------------------------------------------------------------------------------------- |
+| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
+
+### `orbit.tools`
+
+> List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
+
+- **Meta-herramienta**: `gitlab_orbit`, acción `tools`
+- **Herramienta individual**: `gitlab_orbit_tools`
+- **Nivel**: Premium, solo GitLab.com
+- **Comportamiento**: solo lectura, idempotente
+
+Sin parámetros.

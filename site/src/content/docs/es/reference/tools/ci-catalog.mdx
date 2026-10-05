@@ -1,0 +1,72 @@
+---
+title: "Catálogo de CI/CD"
+description: "Busca e inspecciona los componentes reutilizables publicados en el catálogo de CI/CD de GitLab."
+sidebar:
+  order: 9
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+El catálogo de CI/CD lista los proyectos que publican componentes de CI/CD reutilizables, las piezas que un pipeline incorpora con `include:component`. `ci_catalog.list` busca y ordena los recursos publicados y `ci_catalog.get` lee uno, con los componentes y entradas de su última versión y sus versiones recientes. El catálogo lo sirve la API GraphQL de GitLab, y las dos acciones solo leen.
+
+## Preguntas de ejemplo
+
+- "Busca en el catálogo de CI/CD componentes para construir imágenes Docker"
+- "¿Qué versiones del componente auto-deploy están publicadas?"
+- "Lista los recursos del catálogo ordenados por estrellas"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `ci_catalog.get`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_ci_catalog` con `action` igual al nombre de la acción, como `get`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_get_catalog_resource`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                               | Individual                      |
+| ------------------------------------ | ------------------------------- |
+| [`ci_catalog.get`](#ci_catalogget)   | `gitlab_get_catalog_resource`   |
+| [`ci_catalog.list`](#ci_cataloglist) | `gitlab_list_catalog_resources` |
+
+### `ci_catalog.get`
+
+> Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, the latest version's README as Markdown and as HTML, latest-version components with their 30-day usage and their typed inputs (default, options, regex and conditional rules), the last ten versions with author and commit, star count, starrers path, and web path. See also: [`ci_catalog.list`](#ci_cataloglist), [`template.lint`](/gitlab-mcp-server/reference/tools/template/#templatelint), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget).
+
+- **Meta-herramienta**: `gitlab_ci_catalog`, acción `get`
+- **Herramienta individual**: `gitlab_get_catalog_resource`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro   | Tipo     | Requerido | Descripción                                                                                                                                |
+| ----------- | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `full_path` | `string` | no        | Full path of the project hosting the resource (e.g. my-group/my-components). Give exactly one of id or full_path. Sending both is refused. |
+| `id`        | `string` | no        | Catalog resource GID (e.g. `gid://gitlab/Ci::CatalogResource/1`). Give exactly one of id or full_path. Sending both is refused.            |
+
+### `ci_catalog.list`
+
+> List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with id, name, full path, description, icon, latest version and release date, star count, starrers path, 30-day usage count, archived flag, topics, verification and visibility levels, web path, and keyset pagination metadata. See also: [`ci_catalog.get`](#ci_catalogget), [`template.lint`](/gitlab-mcp-server/reference/tools/template/#templatelint), [`pipeline.create`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinecreate).
+
+- **Meta-herramienta**: `gitlab_ci_catalog`, acción `list`
+- **Herramienta individual**: `gitlab_list_catalog_resources`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo                                                                                                                                                                                               | Requerido | Descripción                                                                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `after`   | `string`                                                                                                                                                                                           | no        | Cursor for forward pagination (from previous response end_cursor)                                                                                                                         |
+| `before`  | `string`                                                                                                                                                                                           | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted                                                   |
+| `first`   | `integer`                                                                                                                                                                                          | no        | Number of items to return (default 20, max 100)                                                                                                                                           |
+| `last`    | `integer`                                                                                                                                                                                          | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                                                                  |
+| `scope`   | `string` (`ALL`, `NAMESPACES`)                                                                                                                                                                     | no        | Filter scope: ALL (default) or NAMESPACES                                                                                                                                                 |
+| `search`  | `string`                                                                                                                                                                                           | no        | Search resources by name or description                                                                                                                                                   |
+| `sort`    | `string` (`NAME_ASC`, `NAME_DESC`, `LATEST_RELEASED_AT_ASC`, `LATEST_RELEASED_AT_DESC`, `STAR_COUNT_ASC`, `STAR_COUNT_DESC`, `CREATED_ASC`, `CREATED_DESC`, `USAGE_COUNT_ASC`, `USAGE_COUNT_DESC`) | no        | Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC, CREATED_ASC, CREATED_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC |

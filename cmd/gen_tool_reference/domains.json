@@ -1,0 +1,1445 @@
+{
+	"categories": [
+		{ "id": "projects", "title": { "en": "Projects, groups and users", "es": "Proyectos, grupos y usuarios" } },
+		{ "id": "code", "title": { "en": "Code and repositories", "es": "Código y repositorios" } },
+		{ "id": "review", "title": { "en": "Merge requests", "es": "Merge requests" } },
+		{ "id": "planning", "title": { "en": "Planning and collaboration", "es": "Planificación y colaboración" } },
+		{ "id": "cicd", "title": { "en": "CI/CD and delivery", "es": "CI/CD y entrega" } },
+		{ "id": "security", "title": { "en": "Security and compliance", "es": "Seguridad y cumplimiento" } },
+		{ "id": "insights", "title": { "en": "Metrics and knowledge graph", "es": "Métricas y grafo de conocimiento" } },
+		{ "id": "admin", "title": { "en": "Instance administration", "es": "Administración de la instancia" } },
+		{ "id": "server", "title": { "en": "This server", "es": "Este servidor" } }
+	],
+	"groups": {
+		"gitlab_access": {
+			"category": "projects",
+			"title": { "en": "Access tokens and credentials", "es": "Tokens de acceso y credenciales" },
+			"description": {
+				"en": "Project, group and personal access tokens, deploy tokens, deploy keys, access requests and invitations.",
+				"es": "Tokens de acceso de proyecto, de grupo y personales, tokens y claves de despliegue, solicitudes de acceso e invitaciones."
+			},
+			"overview": {
+				"en": [
+					"The credentials that give someone or something access to a project or a group: project, group and personal access tokens (list, read, rotate and revoke, and create for projects and groups), deploy tokens, deploy keys, the access requests users file to join, and the invitations sent to them. Rotating a token replaces it in one call, which keeps the CI/CD configuration that holds it working; revoking or deleting a credential is destructive.",
+					"Creating a personal access token is a user action rather than one of these (see [Users](/gitlab-mcp-server/reference/tools/user/)), and so are SSH keys and impersonation tokens. Project and group members are managed on the [Projects](/gitlab-mcp-server/reference/tools/project/) and [Groups](/gitlab-mcp-server/reference/tools/group/) pages, and the CI/CD job token scope on [Jobs](/gitlab-mcp-server/reference/tools/job/)."
+				],
+				"es": [
+					"Las credenciales que dan acceso a un proyecto o a un grupo a alguien o a algo: tokens de acceso de proyecto, de grupo y personales (listar, leer, rotar y revocar, y crear para proyectos y grupos), tokens de despliegue, claves de despliegue, las solicitudes de acceso que presentan los usuarios para unirse y las invitaciones que se les envían. Rotar un token lo sustituye en una llamada, así que la configuración de CI/CD que lo guarda sigue funcionando; revocar o borrar una credencial es destructivo.",
+					"Crear un token de acceso personal es una acción de usuario y no una de estas (consulta [Usuarios](/gitlab-mcp-server/reference/tools/user/)), igual que las claves SSH y los tokens de suplantación. Los miembros de proyectos y grupos se gestionan en las páginas de [Proyectos](/gitlab-mcp-server/reference/tools/project/) y [Grupos](/gitlab-mcp-server/reference/tools/group/), y el ámbito del token de job de CI/CD en [Jobs](/gitlab-mcp-server/reference/tools/job/)."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the access tokens of project 42",
+					"Rotate the deploy-bot project token before it expires",
+					"Create a read-only deploy token for my-group/my-app",
+					"Approve the pending access requests on group platform"
+				],
+				"es": [
+					"Lista los tokens de acceso del proyecto 42",
+					"Rota el token de proyecto deploy-bot antes de que caduque",
+					"Crea un token de despliegue de solo lectura para my-group/my-app",
+					"Aprueba las solicitudes de acceso pendientes del grupo platform"
+				]
+			}
+		},
+		"gitlab_achievement": {
+			"category": "planning",
+			"title": { "en": "Achievements", "es": "Logros" },
+			"description": {
+				"en": "The achievements a namespace defines and the awards made from them, through GitLab's GraphQL API.",
+				"es": "Los logros que define un espacio de nombres y las concesiones que se hacen de ellos, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A group or project defines an achievement, and awarding it to a person creates a user achievement: a separate record with its own numeric ID that can be revoked, hidden from a profile, reordered or erased apart from the achievement behind it. So two identifiers run through these actions: `achievement_id` names the achievement, and `user_achievement_id` names one award of it, which is what `achievement.revoke` and the `achievement.user_achievement_*` actions take.",
+					"Revoking an award keeps it on record and marks it revoked, `achievement.user_achievement_delete` erases one award, and `achievement.delete` removes the achievement with every award made from it. Achievements are generally available from GitLab 19.3; on an older instance an administrator has to enable the `achievements` feature flag first."
+				],
+				"es": [
+					"Un grupo o un proyecto define un logro, y concedérselo a una persona crea un logro de usuario: un registro aparte, con su propio ID numérico, que se puede revocar, ocultar de un perfil, reordenar o borrar sin tocar el logro del que procede. Por eso estas acciones manejan dos identificadores: `achievement_id` nombra el logro y `user_achievement_id` nombra una concesión de él, que es lo que reciben `achievement.revoke` y las acciones `achievement.user_achievement_*`.",
+					"Revocar una concesión la conserva en el registro marcada como revocada, `achievement.user_achievement_delete` borra una concesión y `achievement.delete` elimina el logro con todas las concesiones hechas de él. Los logros están disponibles de forma general desde GitLab 19.3; en una instancia anterior un administrador tiene que activar antes el feature flag `achievements`."
+				]
+			},
+			"questions": {
+				"en": [
+					"What achievements does the platform group define?",
+					"Give the First Contribution achievement to user 42",
+					"Who holds the First Contribution achievement?",
+					"Hide that award from my profile"
+				],
+				"es": [
+					"¿Qué logros define el grupo platform?",
+					"Concede el logro First Contribution al usuario 42",
+					"¿Quién tiene el logro First Contribution?",
+					"Oculta esa concesión de mi perfil"
+				]
+			}
+		},
+		"gitlab_admin": {
+			"category": "admin",
+			"title": { "en": "Administration", "es": "Administración" },
+			"description": {
+				"en": "Instance administration in GitLab MCP Server: settings, license, system hooks, Sidekiq, imports, OAuth applications, Terraform states, cluster agents and more.",
+				"es": "Administración de la instancia en GitLab MCP Server: ajustes, licencia, system hooks, Sidekiq, importaciones, aplicaciones OAuth, estados de Terraform, agentes de clúster y más."
+			},
+			"overview": {
+				"en": [
+					"Instance-level administration of a GitLab instance: application settings and appearance, the license, broadcast messages, instance feature flags, system hooks, Sidekiq metrics, plan limits, usage data and Service Ping, database migration marks, OAuth applications, application statistics and metadata, custom attributes, and topics. Imports live here too: bulk imports between GitLab instances, and imports from GitHub, Bitbucket Cloud, Bitbucket Server and GitHub gists.",
+					"A few project-level features are also actions of this group: CI/CD secure files, error tracking settings and client keys, alert metric images, Terraform states, cluster agents and their tokens, and purging a group's dependency proxy cache. Most actions need an administrator, and GitLab refuses anyone else with its own error."
+				],
+				"es": [
+					"Administración a nivel de instancia de GitLab: ajustes de la aplicación y apariencia, la licencia, los mensajes de difusión, los feature flags de la instancia, los system hooks, las métricas de Sidekiq, los límites de plan, los datos de uso y Service Ping, las marcas de migraciones de base de datos, las aplicaciones OAuth, las estadísticas y metadatos de la aplicación, los atributos personalizados y los temas. Aquí están también las importaciones: las importaciones masivas entre instancias de GitLab y las importaciones desde GitHub, Bitbucket Cloud, Bitbucket Server y los gists de GitHub.",
+					"Algunas funciones de nivel de proyecto también son acciones de este grupo: los archivos seguros de CI/CD, los ajustes y claves de cliente del seguimiento de errores, las imágenes de métricas de alertas, los estados de Terraform, los agentes de clúster y sus tokens, y el vaciado de la caché del dependency proxy de un grupo. La mayoría de las acciones necesitan un administrador, y GitLab rechaza a cualquier otro con su propio error."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show the instance's application settings",
+					"List the active broadcast messages",
+					"Which Sidekiq queues are backing up?",
+					"Import the GitHub repository acme/api into group platform"
+				],
+				"es": [
+					"Muestra los ajustes de la aplicación de la instancia",
+					"Lista los mensajes de difusión activos",
+					"¿Qué colas de Sidekiq se están acumulando?",
+					"Importa el repositorio de GitHub acme/api en el grupo platform"
+				]
+			}
+		},
+		"gitlab_attestation": {
+			"category": "security",
+			"title": { "en": "Build attestations", "es": "Atestaciones de compilación" },
+			"description": {
+				"en": "List and download the build attestations (SLSA provenance) GitLab holds for a project's artifacts.",
+				"es": "Lista y descarga las atestaciones de compilación (procedencia SLSA) que GitLab guarda para los artefactos de un proyecto."
+			},
+			"overview": {
+				"en": [
+					"Build attestations record how an artifact was built: GitLab stores them per project as SLSA provenance, keyed by the digest of the artifact they describe. `attestation.list` finds the attestations of one subject digest, and `attestation.download` fetches one of them by its IID."
+				],
+				"es": [
+					"Las atestaciones de compilación registran cómo se construyó un artefacto: GitLab las guarda por proyecto como procedencia SLSA, indexadas por el digest del artefacto que describen. `attestation.list` encuentra las atestaciones de un digest y `attestation.download` descarga una de ellas por su IID."
+				]
+			},
+			"questions": {
+				"en": [
+					"Which attestations does project 42 hold for this sha256 digest?",
+					"Download attestation 3 of project 42"
+				],
+				"es": [
+					"¿Qué atestaciones tiene el proyecto 42 para este digest sha256?",
+					"Descarga la atestación 3 del proyecto 42"
+				]
+			}
+		},
+		"gitlab_audit_event": {
+			"category": "security",
+			"title": { "en": "Audit events", "es": "Eventos de auditoría" },
+			"description": {
+				"en": "List and read GitLab audit events at instance, group and project level.",
+				"es": "Lista y lee los eventos de auditoría de GitLab a nivel de instancia, de grupo y de proyecto."
+			},
+			"overview": {
+				"en": [
+					"Audit events are GitLab's record of who changed what, kept for compliance. These actions list them and read one, at each of the three levels GitLab keeps them: the instance, a group and a project. The instance level needs an administrator."
+				],
+				"es": [
+					"Los eventos de auditoría son el registro de GitLab de quién cambió qué, guardado por cumplimiento. Estas acciones los listan y leen uno, en cada uno de los tres niveles en los que GitLab los guarda: la instancia, un grupo y un proyecto. El nivel de instancia necesita un administrador."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show last week's audit events for group platform",
+					"Who changed the settings of project 42 yesterday?",
+					"List instance audit events since 2026-09-01"
+				],
+				"es": [
+					"Muestra los eventos de auditoría de la semana pasada del grupo platform",
+					"¿Quién cambió ayer los ajustes del proyecto 42?",
+					"Lista los eventos de auditoría de la instancia desde el 2026-09-01"
+				]
+			}
+		},
+		"gitlab_branch": {
+			"category": "code",
+			"title": { "en": "Branches", "es": "Ramas" },
+			"description": {
+				"en": "Git branches in a GitLab project: create, list, read and delete them, protect them, and read the branch rules GitLab aggregates.",
+				"es": "Ramas de Git en un proyecto de GitLab: crearlas, listarlas, leerlas y borrarlas, protegerlas y leer las reglas de rama que agrega GitLab."
+			},
+			"overview": {
+				"en": [
+					"Branch management in one project: read and list branches, create one from a branch, tag or commit, delete one or every branch already merged, and protect a branch with the access levels allowed to push and to merge, then read, update or remove that protection.",
+					"`branch.rule_list` reads the branch rules GitLab assembles over GraphQL: for each protected branch pattern, who may push and merge, its approval rules and its external status checks, in one answer where the REST API needs several calls."
+				],
+				"es": [
+					"Gestión de ramas de un proyecto: leer y listar ramas, crear una a partir de una rama, una etiqueta o un commit, borrar una o todas las que ya están fusionadas, y proteger una rama con los niveles de acceso que pueden hacer push y merge, para después leer, actualizar o quitar esa protección.",
+					"`branch.rule_list` lee las reglas de rama que GitLab compone por GraphQL: para cada patrón de rama protegida, quién puede hacer push y merge, sus reglas de aprobación y sus comprobaciones de estado externas, en una sola respuesta donde la API REST necesita varias llamadas."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the branches of project 42",
+					"Create a branch called feature-login from main",
+					"Delete every branch already merged into main",
+					"Who can push to main?"
+				],
+				"es": [
+					"Lista las ramas del proyecto 42",
+					"Crea una rama llamada feature-login a partir de main",
+					"Borra todas las ramas ya fusionadas en main",
+					"¿Quién puede hacer push a main?"
+				]
+			}
+		},
+		"gitlab_ci_catalog": {
+			"category": "cicd",
+			"title": { "en": "CI/CD Catalog", "es": "Catálogo de CI/CD" },
+			"description": {
+				"en": "Search and inspect the reusable components published to the GitLab CI/CD Catalog.",
+				"es": "Busca e inspecciona los componentes reutilizables publicados en el catálogo de CI/CD de GitLab."
+			},
+			"overview": {
+				"en": [
+					"The CI/CD Catalog lists the projects that publish reusable CI/CD components, the building blocks a pipeline pulls in with `include:component`. `ci_catalog.list` searches and sorts the published resources, and `ci_catalog.get` reads one, with the components and inputs of its latest version and its recent versions. The Catalog is served by GitLab's GraphQL API, and both actions only read."
+				],
+				"es": [
+					"El catálogo de CI/CD lista los proyectos que publican componentes de CI/CD reutilizables, las piezas que un pipeline incorpora con `include:component`. `ci_catalog.list` busca y ordena los recursos publicados y `ci_catalog.get` lee uno, con los componentes y entradas de su última versión y sus versiones recientes. El catálogo lo sirve la API GraphQL de GitLab, y las dos acciones solo leen."
+				]
+			},
+			"questions": {
+				"en": [
+					"Search the CI/CD Catalog for Docker build components",
+					"Which versions of the auto-deploy component are published?",
+					"List the catalog resources sorted by stars"
+				],
+				"es": [
+					"Busca en el catálogo de CI/CD componentes para construir imágenes Docker",
+					"¿Qué versiones del componente auto-deploy están publicadas?",
+					"Lista los recursos del catálogo ordenados por estrellas"
+				]
+			}
+		},
+		"gitlab_ci_variable": {
+			"category": "cicd",
+			"title": { "en": "CI/CD variables", "es": "Variables de CI/CD" },
+			"description": {
+				"en": "CI/CD variables at project, group and instance level: list, read, create, update and delete them.",
+				"es": "Variables de CI/CD a nivel de proyecto, de grupo y de instancia: listarlas, leerlas, crearlas, actualizarlas y borrarlas."
+			},
+			"overview": {
+				"en": [
+					"CI/CD variables at the three scopes GitLab keeps them: a project, a group and the instance, each with the same five operations. A variable can be protected, masked or masked and hidden, and project and group variables can be scoped to an environment, so one key can hold a different value per environment. Instance variables need an administrator, and deleting a variable cannot be undone."
+				],
+				"es": [
+					"Variables de CI/CD en los tres ámbitos en los que GitLab las guarda: un proyecto, un grupo y la instancia, cada uno con las mismas cinco operaciones. Una variable puede ser protegida, enmascarada o enmascarada y oculta, y las de proyecto y de grupo pueden limitarse a un entorno, así que una clave puede tener un valor distinto en cada entorno. Las variables de instancia necesitan un administrador, y borrar una variable no se puede deshacer."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the CI/CD variables of project 42",
+					"Add a masked DEPLOY_TOKEN variable scoped to production",
+					"Which group variables does group platform define?"
+				],
+				"es": [
+					"Lista las variables de CI/CD del proyecto 42",
+					"Añade una variable enmascarada DEPLOY_TOKEN limitada a production",
+					"¿Qué variables de grupo define el grupo platform?"
+				]
+			}
+		},
+		"gitlab_compliance_policy": {
+			"category": "security",
+			"title": { "en": "Compliance policy settings", "es": "Ajustes de política de cumplimiento" },
+			"description": {
+				"en": "Read and update the instance's compliance policy settings, the namespace that centrally manages security policies.",
+				"es": "Lee y actualiza los ajustes de política de cumplimiento de la instancia, el espacio de nombres que gestiona de forma centralizada las políticas de seguridad."
+			},
+			"overview": {
+				"en": [
+					"One administrator setting of the instance: the namespace that centrally manages security policies, held as `csp_namespace_id`. `compliance_policy.get` reads it and `compliance_policy.update` sets it."
+				],
+				"es": [
+					"Un ajuste de administrador de la instancia: el espacio de nombres que gestiona de forma centralizada las políticas de seguridad, guardado como `csp_namespace_id`. `compliance_policy.get` lo lee y `compliance_policy.update` lo cambia."
+				]
+			},
+			"questions": {
+				"en": [
+					"Which namespace manages the instance's security policies?",
+					"Set the security policy namespace to group 12"
+				],
+				"es": [
+					"¿Qué espacio de nombres gestiona las políticas de seguridad de la instancia?",
+					"Fija el espacio de nombres de políticas de seguridad en el grupo 12"
+				]
+			}
+		},
+		"gitlab_custom_emoji": {
+			"category": "planning",
+			"title": { "en": "Custom emoji", "es": "Emoji personalizados" },
+			"description": {
+				"en": "The custom emoji a group defines for its projects: list, add and delete them through GitLab's GraphQL API.",
+				"es": "Los emoji personalizados que define un grupo para sus proyectos: listarlos, añadirlos y borrarlos a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A group's custom emoji are images it adds to the emoji its projects can react with and write in Markdown. These actions list, add and delete them. Reacting to an issue, a merge request or a snippet with an emoji is not one of them: those are actions of the [issue](/gitlab-mcp-server/reference/tools/issue/), [merge request](/gitlab-mcp-server/reference/tools/merge-request/) and [snippet](/gitlab-mcp-server/reference/tools/snippet/) groups. Deleting an emoji leaves the reactions that used it in place, shown as its `:name:`."
+				],
+				"es": [
+					"Los emoji personalizados de un grupo son imágenes que añade a los emoji con los que sus proyectos pueden reaccionar y escribir en Markdown. Estas acciones los listan, los añaden y los borran. Reaccionar con un emoji a un issue, a un merge request o a un snippet no es una de ellas: son acciones de los grupos de [issues](/gitlab-mcp-server/reference/tools/issue/), [merge requests](/gitlab-mcp-server/reference/tools/merge-request/) y [snippets](/gitlab-mcp-server/reference/tools/snippet/). Borrar un emoji deja en su sitio las reacciones que lo usaban, mostradas como su `:name:`."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the custom emoji of group platform",
+					"Add a party_parrot emoji to group platform",
+					"Delete the outdated custom emoji"
+				],
+				"es": [
+					"Lista los emoji personalizados del grupo platform",
+					"Añade un emoji party_parrot al grupo platform",
+					"Borra el emoji personalizado obsoleto"
+				]
+			}
+		},
+		"gitlab_dependency": {
+			"category": "security",
+			"title": { "en": "Dependencies and SBOM", "es": "Dependencias y SBOM" },
+			"description": {
+				"en": "List a project's dependencies and create and download CycloneDX SBOM exports of a pipeline.",
+				"es": "Lista las dependencias de un proyecto y crea y descarga exportaciones SBOM CycloneDX de un pipeline."
+			},
+			"overview": {
+				"en": [
+					"The dependency list GitLab builds from a project's dependency scanning, filtered by package manager, and the software bill of materials it exports from a pipeline: `dependency.export_create` starts a CycloneDX export, `dependency.export_get` reports whether it is ready, and `dependency.export_download` fetches the document."
+				],
+				"es": [
+					"La lista de dependencias que GitLab construye a partir del análisis de dependencias de un proyecto, filtrable por gestor de paquetes, y la lista de materiales de software que exporta de un pipeline: `dependency.export_create` inicia una exportación CycloneDX, `dependency.export_get` dice si ya está lista y `dependency.export_download` descarga el documento."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the npm dependencies of project 42",
+					"Export an SBOM for pipeline 1234",
+					"Download the finished SBOM export"
+				],
+				"es": [
+					"Lista las dependencias npm del proyecto 42",
+					"Exporta un SBOM del pipeline 1234",
+					"Descarga la exportación SBOM terminada"
+				]
+			}
+		},
+		"gitlab_discover_project": {
+			"category": "projects",
+			"title": { "en": "Project discovery", "es": "Descubrimiento de proyectos" },
+			"description": {
+				"en": "Resolve a git remote URL to the GitLab project behind it and its project ID.",
+				"es": "Resuelve una URL de remoto de git al proyecto de GitLab que hay detrás y a su ID de proyecto."
+			},
+			"overview": {
+				"en": [
+					"Most actions take a `project_id`, and a model working in a checkout often holds only the git remote. `discover_project.resolve` turns a complete remote URL, as `git remote -v` prints it or `.git/config` holds it, in HTTPS or SSH form, into the project and its ID, and only reads. When the project path or ID is already known it is not needed: pass that to the action directly."
+				],
+				"es": [
+					"La mayoría de las acciones reciben un `project_id`, y un modelo que trabaja en una copia de trabajo a menudo solo tiene el remoto de git. `discover_project.resolve` convierte una URL de remoto completa, tal como la imprime `git remote -v` o la guarda `.git/config`, en HTTPS o en SSH, en el proyecto y su ID, y solo lee. Cuando ya se conoce la ruta o el ID del proyecto no hace falta: pásalo directamente a la acción."
+				]
+			},
+			"questions": {
+				"en": [
+					"Which GitLab project is this repository?",
+					"Find the project ID for `git@gitlab.example.com:group/app.git`"
+				],
+				"es": [
+					"¿Qué proyecto de GitLab es este repositorio?",
+					"Encuentra el ID de proyecto de `git@gitlab.example.com:group/app.git`"
+				]
+			}
+		},
+		"gitlab_dora_metrics": {
+			"category": "insights",
+			"title": { "en": "DORA metrics", "es": "Métricas DORA" },
+			"description": {
+				"en": "The four DORA metrics of a project or a group: deployment frequency, lead time for changes, time to restore service and change failure rate.",
+				"es": "Las cuatro métricas DORA de un proyecto o un grupo: frecuencia de despliegue, tiempo de entrega de cambios, tiempo de restauración del servicio y tasa de fallos de cambio."
+			},
+			"overview": {
+				"en": [
+					"GitLab computes the four DORA metrics from a project's deployments: deployment frequency, lead time for changes, time to restore service and change failure rate. `dora_metrics.project` and `dora_metrics.group` read one of them over a date range, by day, by month or as one figure, optionally for chosen environment tiers."
+				],
+				"es": [
+					"GitLab calcula las cuatro métricas DORA a partir de los despliegues de un proyecto: frecuencia de despliegue, tiempo de entrega de cambios, tiempo de restauración del servicio y tasa de fallos de cambio. `dora_metrics.project` y `dora_metrics.group` leen una de ellas en un intervalo de fechas, por día, por mes o como una sola cifra, y opcionalmente para los tipos de entorno elegidos."
+				]
+			},
+			"questions": {
+				"en": [
+					"What is the deployment frequency of project 42 this quarter?",
+					"Show the monthly change failure rate of group platform",
+					"How long did project 42 take to restore service in September?"
+				],
+				"es": [
+					"¿Cuál es la frecuencia de despliegue del proyecto 42 este trimestre?",
+					"Muestra la tasa mensual de fallos de cambio del grupo platform",
+					"¿Cuánto tardó el proyecto 42 en restaurar el servicio en septiembre?"
+				]
+			}
+		},
+		"gitlab_enterprise_user": {
+			"category": "projects",
+			"title": { "en": "Enterprise users", "es": "Usuarios empresariales" },
+			"description": {
+				"en": "The enterprise users of a top-level group: list and read them, disable their two-factor authentication and delete them.",
+				"es": "Los usuarios empresariales de un grupo de nivel superior: listarlos y leerlos, desactivar su autenticación en dos pasos y borrarlos."
+			},
+			"overview": {
+				"en": [
+					"Enterprise users are the accounts a top-level group owns, typically because their email domain is verified for the group. These actions list and read them, disable a user's two-factor authentication, and delete one."
+				],
+				"es": [
+					"Los usuarios empresariales son las cuentas que posee un grupo de nivel superior, normalmente porque el dominio de su correo está verificado para el grupo. Estas acciones los listan y los leen, desactivan la autenticación en dos pasos de un usuario y borran uno."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the enterprise users of group acme",
+					"Disable two-factor authentication for enterprise user 42",
+					"Show the enterprise user alice"
+				],
+				"es": [
+					"Lista los usuarios empresariales del grupo acme",
+					"Desactiva la autenticación en dos pasos del usuario empresarial 42",
+					"Muestra el usuario empresarial alice"
+				]
+			}
+		},
+		"gitlab_environment": {
+			"category": "cicd",
+			"title": { "en": "Environments and deployments", "es": "Entornos y despliegues" },
+			"description": {
+				"en": "Environments, protected environments, deploy freeze periods and deployments of a GitLab project.",
+				"es": "Entornos, entornos protegidos, periodos de congelación de despliegues y despliegues de un proyecto de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A project's environments (create, read, update, stop and delete), the deployment records made to them (list, read, create, update, delete, the merge requests a deployment shipped, and approving or rejecting a deployment waiting at a manual gate), and the deploy freeze periods that block deployments on a schedule. Protected environments, which restrict who may deploy to an environment, are the actions served from Premium.",
+					"Stopping an environment runs its on-stop jobs, and `force` skips them; stopping and deleting are destructive."
+				],
+				"es": [
+					"Los entornos de un proyecto (crear, leer, actualizar, parar y borrar), los registros de despliegue hechos en ellos (listar, leer, crear, actualizar, borrar, los merge requests que entregó un despliegue y aprobar o rechazar un despliegue que espera en una puerta manual) y los periodos de congelación que bloquean los despliegues según un calendario. Los entornos protegidos, que limitan quién puede desplegar en un entorno, son las acciones que se sirven a partir de Premium.",
+					"Parar un entorno ejecuta sus jobs de parada, y `force` se los salta; parar y borrar son destructivas."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the environments of project 42",
+					"What is deployed to production right now?",
+					"Add a deploy freeze over the end-of-year holidays",
+					"Approve the deployment waiting on production"
+				],
+				"es": [
+					"Lista los entornos del proyecto 42",
+					"¿Qué está desplegado ahora mismo en production?",
+					"Añade una congelación de despliegues durante las vacaciones de fin de año",
+					"Aprueba el despliegue que espera en production"
+				]
+			}
+		},
+		"gitlab_external_status_check": {
+			"category": "review",
+			"title": { "en": "External status checks", "es": "Comprobaciones de estado externas" },
+			"description": {
+				"en": "External status checks of a project and the status each one reports on a merge request.",
+				"es": "Comprobaciones de estado externas de un proyecto y el estado que cada una notifica en un merge request."
+			},
+			"overview": {
+				"en": [
+					"An external status check sends a project's merge requests to an outside service, which answers with a passed or failed status that can gate the merge. These actions manage a project's checks (list, create, update, delete), list the status of each check on one merge request, set that status, and retry a check that failed."
+				],
+				"es": [
+					"Una comprobación de estado externa envía los merge requests de un proyecto a un servicio externo, que responde con un estado de aprobado o fallido que puede condicionar el merge. Estas acciones gestionan las comprobaciones de un proyecto (listar, crear, actualizar, borrar), listan el estado de cada comprobación en un merge request, fijan ese estado y reintentan una comprobación que falló."
+				]
+			},
+			"questions": {
+				"en": [
+					"Which external status checks does project 42 have?",
+					"Show the status checks of merge request !15",
+					"Retry the failed compliance check on merge request !15"
+				],
+				"es": [
+					"¿Qué comprobaciones de estado externas tiene el proyecto 42?",
+					"Muestra las comprobaciones de estado del merge request !15",
+					"Reintenta la comprobación de cumplimiento fallida del merge request !15"
+				]
+			}
+		},
+		"gitlab_feature_flags": {
+			"category": "cicd",
+			"title": { "en": "Feature flags", "es": "Feature flags" },
+			"description": {
+				"en": "A project's feature flags and the user lists their strategies target.",
+				"es": "Los feature flags de un proyecto y las listas de usuarios a las que apuntan sus estrategias."
+			},
+			"overview": {
+				"en": [
+					"Feature flags a project's application reads to switch a feature on gradually: each flag carries strategies (all users, a percentage of users or of rollout, chosen user IDs or a user list), scoped to environments. These actions manage the flags and the user lists a strategy can target. Turning a flag inactive keeps its history; deleting it does not. The instance's own GitLab feature flags are administration actions instead (see [Administration](/gitlab-mcp-server/reference/tools/admin/))."
+				],
+				"es": [
+					"Feature flags que lee la aplicación de un proyecto para activar una función de forma gradual: cada flag tiene estrategias (todos los usuarios, un porcentaje de usuarios o de despliegue, unos IDs de usuario o una lista de usuarios), limitadas a entornos. Estas acciones gestionan los flags y las listas de usuarios a las que puede apuntar una estrategia. Desactivar un flag conserva su historial; borrarlo no. Los feature flags propios de GitLab en la instancia son acciones de administración (consulta [Administración](/gitlab-mcp-server/reference/tools/admin/))."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the feature flags of project 42",
+					"Roll new-checkout out to 25 percent of users in production",
+					"Create a user list for the beta testers"
+				],
+				"es": [
+					"Lista los feature flags del proyecto 42",
+					"Despliega new-checkout al 25 por ciento de los usuarios en production",
+					"Crea una lista de usuarios para los probadores de la beta"
+				]
+			}
+		},
+		"gitlab_geo": {
+			"category": "admin",
+			"title": { "en": "Geo sites", "es": "Sitios Geo" },
+			"description": {
+				"en": "GitLab Geo replication sites: create, read, edit, delete and repair them, and read their replication status.",
+				"es": "Sitios de replicación de GitLab Geo: crearlos, leerlos, editarlos, borrarlos y repararlos, y leer su estado de replicación."
+			},
+			"overview": {
+				"en": [
+					"Geo replicates a GitLab instance to other sites. These actions manage the sites (list, read, create, edit and delete), repair a site's OAuth application, and read the replication status of one site or of all of them. They are administrator actions."
+				],
+				"es": [
+					"Geo replica una instancia de GitLab en otros sitios. Estas acciones gestionan los sitios (listar, leer, crear, editar y borrar), reparan la aplicación OAuth de un sitio y leen el estado de replicación de un sitio o de todos. Son acciones de administrador."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the Geo sites",
+					"What is the replication status of Geo site 2?",
+					"Repair the OAuth application of the secondary site"
+				],
+				"es": [
+					"Lista los sitios Geo",
+					"¿Cuál es el estado de replicación del sitio Geo 2?",
+					"Repara la aplicación OAuth del sitio secundario"
+				]
+			}
+		},
+		"gitlab_group": {
+			"category": "projects",
+			"title": { "en": "Groups", "es": "Grupos" },
+			"description": {
+				"en": "GitLab groups: their lifecycle, subgroups, members, sharing, labels, milestones, boards, badges, webhooks, epics, wikis, service accounts and more.",
+				"es": "Grupos de GitLab: su ciclo de vida, subgrupos, miembros, compartición, etiquetas, hitos, tableros, insignias, webhooks, épicas, wikis, cuentas de servicio y más."
+			},
+			"overview": {
+				"en": [
+					"Everything done to a group: create, read, list, search, update, archive, transfer, delete and restore it; its subgroups, projects and issues; its members and its sharing with other groups; its labels, milestones, boards and badges; uploads and its avatar; export and import; its releases; and its service accounts with their personal access tokens. Labels, milestones, boards, members and the rest have no group of their own: each is a set of actions here.",
+					"From Premium the group also carries webhooks, push rules, protected branches and environments, epics with their notes, discussions, issues and boards, group wikis, LDAP and SAML group links, SSH certificates, billable members and activity counts; from Ultimate, the credentials inventory and security settings."
+				],
+				"es": [
+					"Todo lo que se hace con un grupo: crearlo, leerlo, listarlo, buscarlo, actualizarlo, archivarlo, transferirlo, borrarlo y restaurarlo; sus subgrupos, proyectos e issues; sus miembros y su compartición con otros grupos; sus etiquetas, hitos, tableros e insignias; las subidas y su avatar; la exportación y la importación; sus releases; y sus cuentas de servicio con sus tokens de acceso personales. Etiquetas, hitos, tableros, miembros y el resto no tienen grupo propio: cada uno es un conjunto de acciones de este.",
+					"A partir de Premium el grupo trae también webhooks, reglas de push, ramas y entornos protegidos, épicas con sus notas, discusiones, issues y tableros, wikis de grupo, vínculos de grupo LDAP y SAML, certificados SSH, miembros facturables y recuentos de actividad; a partir de Ultimate, el inventario de credenciales y los ajustes de seguridad."
+				]
+			},
+			"questions": {
+				"en": [
+					"List my GitLab groups",
+					"Who are the members of group platform?",
+					"Share group platform with the developers group",
+					"List the open epics of group platform"
+				],
+				"es": [
+					"Lista mis grupos de GitLab",
+					"¿Quiénes son los miembros del grupo platform?",
+					"Comparte el grupo platform con el grupo developers",
+					"Lista las épicas abiertas del grupo platform"
+				]
+			}
+		},
+		"gitlab_group_scim": {
+			"category": "projects",
+			"title": { "en": "Group SCIM identities", "es": "Identidades SCIM de grupo" },
+			"description": {
+				"en": "The SCIM identities a group's identity provider provisions: list, read, update and delete them.",
+				"es": "Las identidades SCIM que aprovisiona el proveedor de identidad de un grupo: listarlas, leerlas, actualizarlas y borrarlas."
+			},
+			"overview": {
+				"en": [
+					"When a group's identity provider provisions users over SCIM, GitLab keeps a SCIM identity linking each user to the provider's ID for them. These actions list a group's SCIM identities, read one, change the ID it is linked to, and delete it."
+				],
+				"es": [
+					"Cuando el proveedor de identidad de un grupo aprovisiona usuarios por SCIM, GitLab guarda una identidad SCIM que enlaza cada usuario con el ID que le da el proveedor. Estas acciones listan las identidades SCIM de un grupo, leen una, cambian el ID al que está enlazada y la borran."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the SCIM identities of group acme",
+					"Which GitLab user is SCIM identity 7f3a?",
+					"Unlink the SCIM identity of a departed employee"
+				],
+				"es": [
+					"Lista las identidades SCIM del grupo acme",
+					"¿Qué usuario de GitLab es la identidad SCIM 7f3a?",
+					"Desvincula la identidad SCIM de un empleado que se ha ido"
+				]
+			}
+		},
+		"gitlab_interactive": {
+			"category": "server",
+			"title": { "en": "Guided creation flows", "es": "Flujos de creación guiados" },
+			"description": {
+				"en": "Guided flows that create an issue, a merge request, a project or a release by asking the user step by step.",
+				"es": "Flujos guiados que crean un issue, un merge request, un proyecto o una release preguntando al usuario paso a paso."
+			},
+			"overview": {
+				"en": [
+					"Four flows that create something in GitLab by asking the user for each field through MCP elicitation, then for a final confirmation, before any request reaches GitLab: an issue, a merge request, a project and a release. Cancelling any prompt creates nothing. They are for a person in the loop; a script or a model that already has every field calls `issue.create`, `merge_request.create`, `project.create` or `release.create` instead."
+				],
+				"es": [
+					"Cuatro flujos que crean algo en GitLab preguntando al usuario cada campo mediante la elicitación de MCP, y después una confirmación final, antes de que ninguna petición llegue a GitLab: un issue, un merge request, un proyecto y una release. Cancelar cualquier pregunta no crea nada. Son para una persona que participa; un script o un modelo que ya tiene todos los campos llama a `issue.create`, `merge_request.create`, `project.create` o `release.create`."
+				]
+			},
+			"questions": {
+				"en": [
+					"Walk me through creating an issue in project 42",
+					"Help me open a merge request step by step",
+					"Guide me through publishing a release for v2.0.0"
+				],
+				"es": [
+					"Guíame para crear un issue en el proyecto 42",
+					"Ayúdame a abrir un merge request paso a paso",
+					"Guíame para publicar una release de v2.0.0"
+				]
+			}
+		},
+		"gitlab_issue": {
+			"category": "planning",
+			"title": { "en": "Issues and work items", "es": "Issues y work items" },
+			"description": {
+				"en": "GitLab issues and work items: their lifecycle, notes, discussions, links, time tracking, award emoji, resource events, statistics and saved views.",
+				"es": "Issues y work items de GitLab: su ciclo de vida, notas, discusiones, enlaces, control de tiempo, emoji de reacción, eventos de recurso, estadísticas y vistas guardadas."
+			},
+			"overview": {
+				"en": [
+					"The whole life of an issue: create, read, list (in a project, a group or everywhere the user can see), update (closing and reopening included), reorder, move to another project and delete; subscriptions and to-do items; its notes and threaded discussions; links to other issues; time estimates and spent time; its participants and the merge requests related to it or closing it; award emoji on the issue and its notes; and the label, milestone and state events of its history. Issue statistics count issues by state.",
+					"Work items, the GraphQL model behind issues, epics and tasks, are actions here too, with their types and saved views. Iteration and weight events, and listing a project's or a group's iterations, are served from Premium."
+				],
+				"es": [
+					"Toda la vida de un issue: crearlo, leerlo, listarlo (en un proyecto, en un grupo o en todo lo que el usuario puede ver), actualizarlo (cerrarlo y reabrirlo incluidos), reordenarlo, moverlo a otro proyecto y borrarlo; las suscripciones y las tareas pendientes; sus notas y discusiones en hilo; los enlaces a otros issues; las estimaciones y el tiempo dedicado; sus participantes y los merge requests relacionados o que lo cierran; los emoji de reacción en el issue y en sus notas; y los eventos de etiqueta, hito y estado de su historial. Las estadísticas cuentan los issues por estado.",
+					"Los work items, el modelo GraphQL que hay detrás de issues, épicas y tareas, son también acciones de este grupo, con sus tipos y sus vistas guardadas. Los eventos de iteración y de peso, y listar las iteraciones de un proyecto o de un grupo, se sirven a partir de Premium."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the open issues of project 42",
+					"Create an issue about the login bug and assign it to me",
+					"Close issue 10 with a comment",
+					"How much time has been spent on issue 7?"
+				],
+				"es": [
+					"Lista los issues abiertos del proyecto 42",
+					"Crea un issue sobre el fallo del inicio de sesión y asígnamelo",
+					"Cierra el issue 10 con un comentario",
+					"¿Cuánto tiempo se ha dedicado al issue 7?"
+				]
+			}
+		},
+		"gitlab_job": {
+			"category": "cicd",
+			"title": { "en": "Jobs", "es": "Jobs" },
+			"description": {
+				"en": "CI/CD jobs: list and read them, read their logs and artifacts, play, retry, cancel and erase them, and manage the CI/CD job token scope.",
+				"es": "Jobs de CI/CD: listarlos y leerlos, leer sus logs y artefactos, ejecutarlos, reintentarlos, cancelarlos y borrarlos, y gestionar el ámbito del token de job de CI/CD."
+			},
+			"overview": {
+				"en": [
+					"The jobs of a pipeline or a project: list them and their trigger jobs, read one and its log, wait for one to finish, play a manual job, retry, cancel or erase one; download a job's artifact archive, one report or one file of it, or the latest successful archive or file for a ref, keep a job's artifacts, and delete them for a job or a whole project.",
+					"The CI/CD job token scope is here too: which projects and groups may use this project's job token to reach it, read and changed with the `job.token_scope_*` actions."
+				],
+				"es": [
+					"Los jobs de un pipeline o de un proyecto: listarlos junto con sus jobs de disparo, leer uno y su log, esperar a que termine, ejecutar un job manual, reintentar, cancelar o borrar uno; descargar el archivo de artefactos de un job, un informe o un archivo de él, o el último archivo o artefacto correcto de una referencia, conservar los artefactos de un job y borrarlos de un job o de todo un proyecto.",
+					"Aquí está también el ámbito del token de job de CI/CD: qué proyectos y grupos pueden usar el token de job de este proyecto para alcanzarlo, que se lee y se cambia con las acciones `job.token_scope_*`."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show the log of the failed job in pipeline 1234",
+					"Retry job 5678",
+					"Download the artifacts of the build job on main",
+					"Which projects may use this project's job token?"
+				],
+				"es": [
+					"Muestra el log del job fallido del pipeline 1234",
+					"Reintenta el job 5678",
+					"Descarga los artefactos del job build en main",
+					"¿Qué proyectos pueden usar el token de job de este proyecto?"
+				]
+			}
+		},
+		"gitlab_member_role": {
+			"category": "projects",
+			"title": { "en": "Custom member roles", "es": "Roles de miembro personalizados" },
+			"description": {
+				"en": "Custom member roles at instance and group level: list, create and delete them.",
+				"es": "Roles de miembro personalizados a nivel de instancia y de grupo: listarlos, crearlos y borrarlos."
+			},
+			"overview": {
+				"en": [
+					"A custom member role adds chosen permissions to one of GitLab's base access levels. These actions list, create and delete custom roles, at the instance (an administrator's) or in a top-level group."
+				],
+				"es": [
+					"Un rol de miembro personalizado añade los permisos elegidos a uno de los niveles de acceso base de GitLab. Estas acciones listan, crean y borran roles personalizados, en la instancia (cosa de un administrador) o en un grupo de nivel superior."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the custom roles of group acme",
+					"Create a Developer-based role that can also manage vulnerabilities",
+					"Delete the unused custom role 9"
+				],
+				"es": [
+					"Lista los roles personalizados del grupo acme",
+					"Crea un rol basado en Developer que también pueda gestionar vulnerabilidades",
+					"Borra el rol personalizado 9, que ya no se usa"
+				]
+			}
+		},
+		"gitlab_merge_request": {
+			"category": "review",
+			"title": { "en": "Merge requests", "es": "Merge requests" },
+			"description": {
+				"en": "The merge request lifecycle: create, list, update, merge, rebase and delete, approvals and approval rules, dependencies, context commits, time tracking, award emoji and resource events.",
+				"es": "El ciclo de vida de los merge requests: crear, listar, actualizar, fusionar, rebasar y borrar, aprobaciones y reglas de aprobación, dependencias, commits de contexto, control de tiempo, emoji de reacción y eventos de recurso."
+			},
+			"overview": {
+				"en": [
+					"The life of a merge request: create, read, list (in a project, a group or everywhere), update, merge, cancel an automatic merge, rebase and delete; approve and unapprove it, read its approval configuration and reset its approvals; its commits, context commits, pipelines (list them or start one), participants, reviewers, related issues and the issues it closes; subscriptions, to-do items, time estimates and spent time; award emoji on it and its notes; and the label, milestone and state events of its history.",
+					"Approval rules, approval state, project and group approval settings, and merge request dependencies are served from Premium. Comments, discussions, diffs and draft notes are on [Merge request review](/gitlab-mcp-server/reference/tools/mr-review/)."
+				],
+				"es": [
+					"La vida de un merge request: crearlo, leerlo, listarlo (en un proyecto, en un grupo o en todas partes), actualizarlo, fusionarlo, cancelar una fusión automática, rebasarlo y borrarlo; aprobarlo y retirar la aprobación, leer su configuración de aprobación y restablecer sus aprobaciones; sus commits, commits de contexto, pipelines (listarlos o lanzar uno), participantes, revisores, issues relacionados y los issues que cierra; suscripciones, tareas pendientes, estimaciones y tiempo dedicado; los emoji de reacción en él y en sus notas; y los eventos de etiqueta, hito y estado de su historial.",
+					"Las reglas de aprobación, el estado de aprobación, los ajustes de aprobación de proyecto y de grupo y las dependencias entre merge requests se sirven a partir de Premium. Los comentarios, las discusiones, los diffs y las notas en borrador están en [Revisión de merge requests](/gitlab-mcp-server/reference/tools/mr-review/)."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show the open merge requests of project 42",
+					"Create a merge request from feature-login to main",
+					"Merge merge request !15 once its pipeline passes",
+					"Which merge requests are waiting for my review?"
+				],
+				"es": [
+					"Muestra los merge requests abiertos del proyecto 42",
+					"Crea un merge request de feature-login a main",
+					"Fusiona el merge request !15 cuando pase su pipeline",
+					"¿Qué merge requests esperan mi revisión?"
+				]
+			}
+		},
+		"gitlab_merge_train": {
+			"category": "review",
+			"title": { "en": "Merge trains", "es": "Merge trains" },
+			"description": {
+				"en": "Merge trains, GitLab's queue of merge requests merged in order: list them and add a merge request to one.",
+				"es": "Los merge trains, la cola de GitLab de merge requests que se fusionan en orden: listarlos y añadir un merge request a uno."
+			},
+			"overview": {
+				"en": [
+					"A merge train queues merge requests into a target branch and tests each against the ones ahead of it before merging it. These actions list a project's merge trains or the train of one target branch, read the train entry of a merge request, and add a merge request to its train."
+				],
+				"es": [
+					"Un merge train pone en cola los merge requests hacia una rama de destino y prueba cada uno junto con los que van delante antes de fusionarlo. Estas acciones listan los merge trains de un proyecto o el tren de una rama de destino, leen la entrada de un merge request en el tren y añaden un merge request a su tren."
+				]
+			},
+			"questions": {
+				"en": [
+					"What is on the merge train for main?",
+					"Add merge request !15 to the merge train",
+					"Where is merge request !15 in the train?"
+				],
+				"es": [
+					"¿Qué hay en el merge train de main?",
+					"Añade el merge request !15 al merge train",
+					"¿En qué posición del tren está el merge request !15?"
+				]
+			}
+		},
+		"gitlab_model_registry": {
+			"category": "cicd",
+			"title": { "en": "Model registry", "es": "Registro de modelos" },
+			"description": {
+				"en": "Download the files of a model version from a project's GitLab model registry.",
+				"es": "Descarga los archivos de una versión de modelo del registro de modelos de GitLab de un proyecto."
+			},
+			"overview": {
+				"en": [
+					"The model registry keeps machine learning models and their versions in a project. `model_registry.download` fetches one file of a model version, for inference, evaluation or a build. Publishing and deleting model versions are not actions of this server."
+				],
+				"es": [
+					"El registro de modelos guarda modelos de aprendizaje automático y sus versiones en un proyecto. `model_registry.download` descarga un archivo de una versión de modelo, para inferencia, evaluación o una compilación. Publicar y borrar versiones de modelo no son acciones de este servidor."
+				]
+			},
+			"questions": {
+				"en": [
+					"Download model.onnx from version 3 of the classifier model in project 42"
+				],
+				"es": [
+					"Descarga model.onnx de la versión 3 del modelo classifier del proyecto 42"
+				]
+			}
+		},
+		"gitlab_mr_review": {
+			"category": "review",
+			"title": { "en": "Merge request review", "es": "Revisión de merge requests" },
+			"description": {
+				"en": "Reviewing a merge request: its changes and diff versions, notes, threaded and inline discussions, and draft notes published as one review.",
+				"es": "Revisar un merge request: sus cambios y versiones del diff, notas, discusiones en hilo y en línea, y notas en borrador publicadas como una sola revisión."
+			},
+			"overview": {
+				"en": [
+					"What a review does to a merge request: read its changes, its diff versions and its raw diffs; read and write its notes; open, reply to and resolve threaded discussions, inline on a line of the diff or general; and queue draft notes that stay private until they are published, one at a time or all together as a single review.",
+					"Approving, merging and the rest of the merge request's lifecycle are on [Merge requests](/gitlab-mcp-server/reference/tools/merge-request/), and so are award emoji on its notes."
+				],
+				"es": [
+					"Lo que hace una revisión con un merge request: leer sus cambios, sus versiones del diff y sus diffs en bruto; leer y escribir sus notas; abrir, responder y resolver discusiones en hilo, en línea sobre una línea del diff o generales; y encolar notas en borrador que siguen siendo privadas hasta que se publican, una a una o todas juntas como una sola revisión.",
+					"Aprobar, fusionar y el resto del ciclo de vida del merge request están en [Merge requests](/gitlab-mcp-server/reference/tools/merge-request/), igual que los emoji de reacción en sus notas."
+				]
+			},
+			"questions": {
+				"en": [
+					"What changed in merge request !15?",
+					"Comment on line 42 of src/app.go in merge request !15",
+					"Resolve the open threads I started on merge request !15",
+					"Publish my draft review"
+				],
+				"es": [
+					"¿Qué ha cambiado en el merge request !15?",
+					"Comenta la línea 42 de src/app.go en el merge request !15",
+					"Resuelve los hilos abiertos que inicié en el merge request !15",
+					"Publica mi revisión en borrador"
+				]
+			}
+		},
+		"gitlab_orbit": {
+			"category": "insights",
+			"title": { "en": "Orbit knowledge graph", "es": "Grafo de conocimiento Orbit" },
+			"description": {
+				"en": "Read-only queries against Orbit, GitLab.com's experimental knowledge graph.",
+				"es": "Consultas de solo lectura contra Orbit, el grafo de conocimiento experimental de GitLab.com."
+			},
+			"overview": {
+				"en": [
+					"Orbit is GitLab.com's experimental knowledge graph of code and project data. Its six actions are served only to a session connected to GitLab.com at Premium or Ultimate, and all of them read: `orbit.status` checks the service, `orbit.schema` describes the graph, `orbit.tools` and `orbit.dsl` describe how to query it, `orbit.query` runs a query, and `orbit.graph_status` reports the indexing of a namespace or a project. GitLab answers 404 while its `knowledge_graph` feature flag is off for the caller. The [Orbit page](/gitlab-mcp-server/tools/orbit/) explains the workflow."
+				],
+				"es": [
+					"Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.tools` y `orbit.dsl` describen cómo consultarlo, `orbit.query` ejecuta una consulta y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/tools/orbit/) explica el flujo de trabajo."
+				]
+			},
+			"questions": {
+				"en": [
+					"Is Orbit available for this GitLab.com token?",
+					"Show the knowledge graph schema",
+					"Has gitlab-org/gitlab finished indexing?"
+				],
+				"es": [
+					"¿Está disponible Orbit para este token de GitLab.com?",
+					"Muestra el esquema del grafo de conocimiento",
+					"¿Ha terminado de indexarse gitlab-org/gitlab?"
+				]
+			}
+		},
+		"gitlab_package": {
+			"category": "cicd",
+			"title": { "en": "Packages and container registry", "es": "Paquetes y registro de contenedores" },
+			"description": {
+				"en": "The package registry and the container registry: publish and download generic packages, browse and delete packages, images and tags, and manage protection rules.",
+				"es": "El registro de paquetes y el registro de contenedores: publicar y descargar paquetes genéricos, explorar y borrar paquetes, imágenes y tags, y gestionar reglas de protección."
+			},
+			"overview": {
+				"en": [
+					"The package registry of a project or a group: list packages of any format and their files, read and delete them, and publish and download files of the generic package registry, including publishing a file and linking it to a release in one step, or a whole local directory. The container registry: list a project's or a group's repositories, read and delete them, and list, read and delete their tags, one at a time or in bulk.",
+					"Protection rules restrict who may push or delete packages and container images: package protection rules, container repository protection rules and container image tag protection rules, each listed, created, updated and deleted here."
+				],
+				"es": [
+					"El registro de paquetes de un proyecto o de un grupo: listar paquetes de cualquier formato y sus archivos, leerlos y borrarlos, y publicar y descargar archivos del registro de paquetes genéricos, incluido publicar un archivo y enlazarlo a una release en un solo paso, o un directorio local entero. El registro de contenedores: listar los repositorios de un proyecto o de un grupo, leerlos y borrarlos, y listar, leer y borrar sus tags, uno a uno o en bloque.",
+					"Las reglas de protección limitan quién puede subir o borrar paquetes e imágenes de contenedor: reglas de protección de paquetes, de repositorios de contenedores y de tags de imagen, que aquí se listan, crean, actualizan y borran."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the packages of project 42",
+					"Upload the release binary to the generic package registry",
+					"Show the tags of the api image",
+					"Delete the container tags older than the last ten"
+				],
+				"es": [
+					"Lista los paquetes del proyecto 42",
+					"Sube el binario de la release al registro de paquetes genéricos",
+					"Muestra los tags de la imagen api",
+					"Borra los tags de contenedor más antiguos que los diez últimos"
+				]
+			}
+		},
+		"gitlab_pipeline": {
+			"category": "cicd",
+			"title": { "en": "Pipelines", "es": "Pipelines" },
+			"description": {
+				"en": "CI/CD pipelines: run, read, retry, cancel and delete them, read their variables and test reports, and manage schedules, trigger tokens and resource groups.",
+				"es": "Pipelines de CI/CD: lanzarlos, leerlos, reintentarlos, cancelarlos y borrarlos, leer sus variables e informes de pruebas, y gestionar programaciones, tokens de disparo y grupos de recursos."
+			},
+			"overview": {
+				"en": [
+					"A project's pipelines: list them, read one or the latest, run one, wait for one to finish, retry, cancel and delete one, update its metadata, and read its variables and its JUnit test report or summary. Deleting a pipeline removes its jobs with it.",
+					"Pipeline schedules (with their variables, running one now and taking one over), pipeline trigger tokens (and running a pipeline with one), and resource groups, the locks that keep jobs from running at once, are actions of this group too."
+				],
+				"es": [
+					"Los pipelines de un proyecto: listarlos, leer uno o el último, lanzar uno, esperar a que termine, reintentar, cancelar y borrar uno, actualizar sus metadatos y leer sus variables y su informe de pruebas JUnit o su resumen. Borrar un pipeline borra con él sus jobs.",
+					"Las programaciones de pipelines (con sus variables, ejecutar una ahora y quedarse con una), los tokens de disparo de pipelines (y lanzar un pipeline con uno) y los grupos de recursos, los bloqueos que impiden que unos jobs se ejecuten a la vez, también son acciones de este grupo."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show the pipelines of project 42",
+					"What is the status of the latest pipeline on main?",
+					"Retry the failed pipeline",
+					"Which tests failed in pipeline 1234?"
+				],
+				"es": [
+					"Muestra los pipelines del proyecto 42",
+					"¿Cuál es el estado del último pipeline en main?",
+					"Reintenta el pipeline fallido",
+					"¿Qué pruebas fallaron en el pipeline 1234?"
+				]
+			}
+		},
+		"gitlab_project": {
+			"category": "projects",
+			"title": { "en": "Projects", "es": "Proyectos" },
+			"description": {
+				"en": "GitLab projects: their lifecycle, members, sharing, webhooks, labels, milestones, boards, badges, mirrors, Pages, integrations, uploads, import and export, service accounts and more.",
+				"es": "Proyectos de GitLab: su ciclo de vida, miembros, compartición, webhooks, etiquetas, hitos, tableros, insignias, mirrors, Pages, integraciones, subidas, importación y exportación, cuentas de servicio y más."
+			},
+			"overview": {
+				"en": [
+					"Everything done to a project: create (for the user or for someone else), read, list, update, fork, star, archive, transfer, delete and restore it, with its forks, starrers, users, groups, languages, statistics and storage; its members and its sharing with groups; webhooks; labels, milestones, boards and badges; push mirrors; Pages and its custom domains; integrations, including group integrations and the group Datadog integration; Markdown uploads and its avatar; export and import; housekeeping; and its service accounts with their personal access tokens.",
+					"From Premium the project also carries approval rules and approval settings, push rules, pull mirroring, target branch rules and the dependency firewall's package evaluation; from Ultimate, its security settings. Repository content, branches, issues and merge requests have pages of their own."
+				],
+				"es": [
+					"Todo lo que se hace con un proyecto: crearlo (para el usuario o para otro), leerlo, listarlo, actualizarlo, hacer un fork, marcarlo con estrella, archivarlo, transferirlo, borrarlo y restaurarlo, con sus forks, quienes lo marcan, usuarios, grupos, lenguajes, estadísticas y almacenamiento; sus miembros y su compartición con grupos; webhooks; etiquetas, hitos, tableros e insignias; mirrors de push; Pages y sus dominios propios; integraciones, incluidas las de grupo y la integración de Datadog de grupo; subidas de Markdown y su avatar; exportación e importación; mantenimiento; y sus cuentas de servicio con sus tokens de acceso personales.",
+					"A partir de Premium el proyecto trae también reglas y ajustes de aprobación, reglas de push, mirrors de pull, reglas de rama de destino y la evaluación de paquetes del dependency firewall; a partir de Ultimate, sus ajustes de seguridad. El contenido del repositorio, las ramas, los issues y los merge requests tienen sus propias páginas."
+				]
+			},
+			"questions": {
+				"en": [
+					"List my GitLab projects",
+					"Create a private project called my-app in group platform",
+					"Who has access to project 42?",
+					"Add a push mirror to the backup host"
+				],
+				"es": [
+					"Lista mis proyectos de GitLab",
+					"Crea un proyecto privado llamado my-app en el grupo platform",
+					"¿Quién tiene acceso al proyecto 42?",
+					"Añade un mirror de push al servidor de copias de seguridad"
+				]
+			}
+		},
+		"gitlab_project_alias": {
+			"category": "projects",
+			"title": { "en": "Project aliases", "es": "Alias de proyecto" },
+			"description": {
+				"en": "Project aliases, the short names an administrator gives projects to clone them by: list, read, create and delete them.",
+				"es": "Alias de proyecto, los nombres cortos que un administrador da a los proyectos para clonarlos: listarlos, leerlos, crearlos y borrarlos."
+			},
+			"overview": {
+				"en": [
+					"A project alias is a short name an administrator gives a project, which git clones the project by. These actions list the aliases, read one, create one and delete one, and are administrator actions."
+				],
+				"es": [
+					"Un alias de proyecto es un nombre corto que un administrador da a un proyecto, por el que git clona el proyecto. Estas acciones listan los alias, leen uno, crean uno y borran uno, y son acciones de administrador."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the project aliases",
+					"Create the alias gitlab for project 42",
+					"Delete the alias legacy-api"
+				],
+				"es": [
+					"Lista los alias de proyecto",
+					"Crea el alias gitlab para el proyecto 42",
+					"Borra el alias legacy-api"
+				]
+			}
+		},
+		"gitlab_release": {
+			"category": "cicd",
+			"title": { "en": "Releases", "es": "Releases" },
+			"description": {
+				"en": "Releases of a GitLab project and the asset links attached to them.",
+				"es": "Las releases de un proyecto de GitLab y los enlaces de recursos adjuntos a ellas."
+			},
+			"overview": {
+				"en": [
+					"A release wraps a tag with its notes, milestones and downloadable assets. These actions list releases, read one or the latest, create one (for an existing tag or a new one from a ref), update and delete one, and manage the asset links of a release, one at a time or as a batch after a build. Deleting a release keeps its tag."
+				],
+				"es": [
+					"Una release envuelve un tag con sus notas, hitos y recursos descargables. Estas acciones listan releases, leen una o la última, crean una (para un tag existente o uno nuevo a partir de una referencia), actualizan y borran una, y gestionan los enlaces de recursos de una release, uno a uno o en lote tras una compilación. Borrar una release conserva su tag."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the releases of project 42",
+					"Create release v2.0.0 with the changelog as notes",
+					"Attach the build artifacts to release v2.0.0"
+				],
+				"es": [
+					"Lista las releases del proyecto 42",
+					"Crea la release v2.0.0 con el changelog como notas",
+					"Adjunta los artefactos de la compilación a la release v2.0.0"
+				]
+			}
+		},
+		"gitlab_repository": {
+			"category": "code",
+			"title": { "en": "Repository files and commits", "es": "Archivos y commits del repositorio" },
+			"description": {
+				"en": "Repository content: the file tree, files, blame and history, commits, diffs, cherry-picks and reverts, comparisons, archives, changelogs, submodules and Markdown rendering.",
+				"es": "El contenido del repositorio: el árbol de archivos, archivos, blame e historial, commits, diffs, cherry-picks y reverts, comparaciones, archivos comprimidos, changelogs, submódulos y renderizado de Markdown."
+			},
+			"overview": {
+				"en": [
+					"What a repository holds: browse its tree, read a file raw or with its metadata, its blame and its history, and create, update or delete one; read blobs; compare two refs and find their merge base; download an archive; list contributors; generate or add a changelog.",
+					"Commits: list, read and create them, read a commit's diff, refs, merge requests and signature, cherry-pick and revert one, set and read commit statuses, and comment on a commit or hold a threaded discussion on it. Submodules can be listed, read into and updated, and Markdown can be rendered as GitLab renders it."
+				],
+				"es": [
+					"Lo que contiene un repositorio: explorar su árbol, leer un archivo en bruto o con sus metadatos, su blame y su historial, y crear, actualizar o borrar uno; leer blobs; comparar dos referencias y encontrar su base de fusión; descargar un archivo comprimido; listar los colaboradores; generar o añadir un changelog.",
+					"Los commits: listarlos, leerlos y crearlos, leer el diff, las referencias, los merge requests y la firma de un commit, hacer cherry-pick y revert de uno, fijar y leer estados de commit, y comentar un commit o mantener una discusión en hilo sobre él. Los submódulos se pueden listar, leer por dentro y actualizar, y el Markdown se puede renderizar como lo renderiza GitLab."
+				]
+			},
+			"questions": {
+				"en": [
+					"Show the file tree of project 42",
+					"Get the contents of README.md on main",
+					"Compare main and develop",
+					"Who last changed line 120 of src/server.go?"
+				],
+				"es": [
+					"Muestra el árbol de archivos del proyecto 42",
+					"Obtén el contenido de README.md en main",
+					"Compara main y develop",
+					"¿Quién cambió por última vez la línea 120 de src/server.go?"
+				]
+			}
+		},
+		"gitlab_runner": {
+			"category": "cicd",
+			"title": { "en": "Runners", "es": "Runners" },
+			"description": {
+				"en": "CI/CD runners at instance, group and project level, their registration and authentication tokens, their jobs and managers, and runner controllers.",
+				"es": "Runners de CI/CD a nivel de instancia, de grupo y de proyecto, sus tokens de registro y de autenticación, sus jobs y gestores, y los controladores de runners."
+			},
+			"overview": {
+				"en": [
+					"Runners: list the ones the user owns, every runner of the instance (an administrator's), a group's or a project's; read, update (pausing included) and remove one; list its jobs and its managers; enable or disable it for a project; register one with a registration token, verify a runner authentication token, and delete a runner by its token; and reset the registration tokens of the instance, a group or a project, or a runner's own authentication token.",
+					"Runner controllers, the experimental control plane administrators use to manage runners, are the actions served from Ultimate: controllers, their scopes and their tokens."
+				],
+				"es": [
+					"Los runners: listar los que posee el usuario, todos los de la instancia (cosa de un administrador), los de un grupo o los de un proyecto; leer, actualizar (pausarlo incluido) y quitar uno; listar sus jobs y sus gestores; habilitarlo o deshabilitarlo para un proyecto; registrar uno con un token de registro, verificar un token de autenticación de runner y borrar un runner por su token; y restablecer los tokens de registro de la instancia, de un grupo o de un proyecto, o el token de autenticación de un runner.",
+					"Los controladores de runners, el plano de control experimental con el que los administradores gestionan los runners, son las acciones que se sirven a partir de Ultimate: los controladores, sus ámbitos y sus tokens."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the runners available to project 42",
+					"Show the details of runner 5",
+					"Which jobs has runner 5 run today?",
+					"Pause the runner tagged gpu"
+				],
+				"es": [
+					"Lista los runners disponibles para el proyecto 42",
+					"Muestra los detalles del runner 5",
+					"¿Qué jobs ha ejecutado hoy el runner 5?",
+					"Pausa el runner con la etiqueta gpu"
+				]
+			}
+		},
+		"gitlab_search": {
+			"category": "code",
+			"title": { "en": "Search", "es": "Búsqueda" },
+			"description": {
+				"en": "Search GitLab across the instance, a group or a project for code, merge requests, issues, commits, milestones, notes, projects, snippets, users and wiki pages.",
+				"es": "Busca en GitLab, en toda la instancia, en un grupo o en un proyecto, código, merge requests, issues, commits, hitos, notas, proyectos, snippets, usuarios y páginas wiki."
+			},
+			"overview": {
+				"en": [
+					"Full-text search, one action per kind of result: code, merge requests, issues, commits, milestones, notes, projects, snippets, users and wiki pages. Each searches a project or a group when given one, and the whole instance otherwise. `search_type` asks for a search backend, `basic`, `advanced` or `zoekt`, and GitLab refuses one the instance has not enabled. Every action only reads."
+				],
+				"es": [
+					"Búsqueda de texto completo, una acción por tipo de resultado: código, merge requests, issues, commits, hitos, notas, proyectos, snippets, usuarios y páginas wiki. Cada una busca en un proyecto o en un grupo cuando se le da uno, y en toda la instancia si no. `search_type` pide un motor de búsqueda, `basic`, `advanced` o `zoekt`, y GitLab rechaza uno que la instancia no tiene activado. Todas las acciones solo leen."
+				]
+			},
+			"questions": {
+				"en": [
+					"Search the code of group platform for parseConfig",
+					"Find merge requests that mention the login bug",
+					"Which issues mention timeout in project 42?"
+				],
+				"es": [
+					"Busca parseConfig en el código del grupo platform",
+					"Encuentra merge requests que mencionen el fallo del inicio de sesión",
+					"¿Qué issues mencionan timeout en el proyecto 42?"
+				]
+			}
+		},
+		"gitlab_security_attribute": {
+			"category": "security",
+			"title": { "en": "Security attributes", "es": "Atributos de seguridad" },
+			"description": {
+				"en": "Security attributes that classify GitLab groups and projects under a security category, through GitLab's GraphQL API.",
+				"es": "Atributos de seguridad que clasifican grupos y proyectos de GitLab dentro de una categoría de seguridad, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A security attribute is a label from a [security category](/gitlab-mcp-server/reference/tools/security-category/) that classifies a group or a project, such as its business impact. These actions create, update and delete attributes, apply and remove them on one project, and add, remove or replace them across several groups and projects at once. They are classification metadata, apart from the scanner output on [Vulnerabilities](/gitlab-mcp-server/reference/tools/vulnerability/)."
+				],
+				"es": [
+					"Un atributo de seguridad es una etiqueta de una [categoría de seguridad](/gitlab-mcp-server/reference/tools/security-category/) que clasifica un grupo o un proyecto, por ejemplo por su impacto en el negocio. Estas acciones crean, actualizan y borran atributos, los aplican y los quitan en un proyecto, y los añaden, quitan o sustituyen en varios grupos y proyectos a la vez. Son metadatos de clasificación, aparte de los resultados de los analizadores que están en [Vulnerabilidades](/gitlab-mcp-server/reference/tools/vulnerability/)."
+				]
+			},
+			"questions": {
+				"en": [
+					"Create a security attribute called High under category 7",
+					"Apply security attribute 9 to project 42",
+					"Replace the security attributes of these projects"
+				],
+				"es": [
+					"Crea un atributo de seguridad llamado High en la categoría 7",
+					"Aplica el atributo de seguridad 9 al proyecto 42",
+					"Sustituye los atributos de seguridad de estos proyectos"
+				]
+			}
+		},
+		"gitlab_security_category": {
+			"category": "security",
+			"title": { "en": "Security categories", "es": "Categorías de seguridad" },
+			"description": {
+				"en": "Security categories, which group the security attributes of a namespace, through GitLab's GraphQL API.",
+				"es": "Categorías de seguridad, que agrupan los atributos de seguridad de un espacio de nombres, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A security category groups the [security attributes](/gitlab-mcp-server/reference/tools/security-attribute/) of a namespace and decides whether more than one of them can be applied to the same group or project. These actions create, update and delete categories. Deleting a category deletes its attributes too."
+				],
+				"es": [
+					"Una categoría de seguridad agrupa los [atributos de seguridad](/gitlab-mcp-server/reference/tools/security-attribute/) de un espacio de nombres y decide si se puede aplicar más de uno de ellos al mismo grupo o proyecto. Estas acciones crean, actualizan y borran categorías. Borrar una categoría borra también sus atributos."
+				]
+			},
+			"questions": {
+				"en": [
+					"Create a security category named Business impact",
+					"Rename security category 7",
+					"Delete a custom security category and its attributes"
+				],
+				"es": [
+					"Crea una categoría de seguridad llamada Business impact",
+					"Cambia el nombre de la categoría de seguridad 7",
+					"Borra una categoría de seguridad propia y sus atributos"
+				]
+			}
+		},
+		"gitlab_security_finding": {
+			"category": "security",
+			"title": { "en": "Security findings", "es": "Hallazgos de seguridad" },
+			"description": {
+				"en": "The security findings one pipeline's scanners reported, through GitLab's GraphQL API.",
+				"es": "Los hallazgos de seguridad que notificaron los analizadores de un pipeline, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A finding is what one scanner reported in one pipeline; a [vulnerability](/gitlab-mcp-server/reference/tools/vulnerability/) is the tracked record GitLab keeps of a finding across pipelines. `security_finding.list` lists the findings of one pipeline, filtered by severity, report type, scanner or state, which is what a pipeline's security report showed."
+				],
+				"es": [
+					"Un hallazgo es lo que notificó un analizador en un pipeline; una [vulnerabilidad](/gitlab-mcp-server/reference/tools/vulnerability/) es el registro que GitLab mantiene de un hallazgo entre pipelines. `security_finding.list` lista los hallazgos de un pipeline, filtrados por gravedad, tipo de informe, analizador o estado, que es lo que mostró el informe de seguridad de ese pipeline."
+				]
+			},
+			"questions": {
+				"en": [
+					"What did the SAST scan find in pipeline 456?",
+					"List the critical findings of the latest pipeline",
+					"Show the secret detection findings of pipeline 123"
+				],
+				"es": [
+					"¿Qué encontró el análisis SAST en el pipeline 456?",
+					"Lista los hallazgos críticos del último pipeline",
+					"Muestra los hallazgos de detección de secretos del pipeline 123"
+				]
+			}
+		},
+		"gitlab_security_scan_profile": {
+			"category": "security",
+			"title": { "en": "Security scan profiles", "es": "Perfiles de análisis de seguridad" },
+			"description": {
+				"en": "Attach and detach security scan profiles on projects and groups, and read which profiles a project runs, through GitLab's GraphQL API.",
+				"es": "Asocia y desasocia perfiles de análisis de seguridad en proyectos y grupos, y lee qué perfiles ejecuta un proyecto, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"A security scan profile bundles a scanning configuration, such as secret detection or dependency scanning, that applies to the projects and groups it is attached to. `security_scan_profile.attach` takes the name of one of GitLab's default profiles, or a persisted profile's numeric ID, and attaches it; `security_scan_profile.detach` takes the persisted profile's ID; `security_scan_profile.list_project_statuses` reports each profile's status on a project.",
+					"Scan profiles need GitLab 18.7 or later, and each default profile has its own minimum release, which an attach refusal names. Every target must belong to a group namespace, all of one root namespace."
+				],
+				"es": [
+					"Un perfil de análisis de seguridad agrupa una configuración de análisis, como la detección de secretos o el análisis de dependencias, que se aplica a los proyectos y grupos a los que está asociado. `security_scan_profile.attach` recibe el nombre de uno de los perfiles predeterminados de GitLab, o el ID numérico de un perfil guardado, y lo asocia; `security_scan_profile.detach` recibe el ID del perfil guardado; `security_scan_profile.list_project_statuses` informa del estado de cada perfil en un proyecto.",
+					"Los perfiles de análisis necesitan GitLab 18.7 o posterior, y cada perfil predeterminado tiene su propia versión mínima, que nombra el rechazo de una asociación. Todos los destinos tienen que pertenecer a un espacio de nombres de grupo, y todos al mismo espacio de nombres raíz."
+				]
+			},
+			"questions": {
+				"en": [
+					"Attach the dependency scanning profile to project 42",
+					"Which scan profiles are active on project 42?",
+					"Detach the scan profile from these groups"
+				],
+				"es": [
+					"Asocia el perfil de análisis de dependencias al proyecto 42",
+					"¿Qué perfiles de análisis están activos en el proyecto 42?",
+					"Desasocia el perfil de análisis de estos grupos"
+				]
+			}
+		},
+		"gitlab_server": {
+			"category": "server",
+			"title": { "en": "Server diagnostics", "es": "Diagnóstico del servidor" },
+			"description": {
+				"en": "Diagnostics of GitLab MCP Server itself: whether GitLab answers, the server and GitLab versions, and who the token belongs to.",
+				"es": "Diagnóstico del propio GitLab MCP Server: si GitLab responde, las versiones del servidor y de GitLab y a quién pertenece el token."
+			},
+			"overview": {
+				"en": [
+					"Two read-only actions about this server rather than about GitLab's data. `server.status` reports whether the server reaches GitLab, the GitLab version and edition, and the user the token belongs to, and is the first thing to call when another action is refused with 401 or 403. `server.health_check` probes the connection to GitLab, and is served on the dynamic and meta surfaces only."
+				],
+				"es": [
+					"Dos acciones de solo lectura sobre este servidor y no sobre los datos de GitLab. `server.status` informa de si el servidor alcanza GitLab, de la versión y la edición de GitLab y del usuario al que pertenece el token, y es lo primero que hay que llamar cuando otra acción se rechaza con 401 o 403. `server.health_check` comprueba la conexión con GitLab, y solo se sirve en las superficies dinámica y meta."
+				]
+			},
+			"questions": {
+				"en": [
+					"Is the GitLab connection working?",
+					"Which GitLab version is the server talking to?",
+					"Which user does this token belong to?"
+				],
+				"es": [
+					"¿Funciona la conexión con GitLab?",
+					"¿Con qué versión de GitLab habla el servidor?",
+					"¿A qué usuario pertenece este token?"
+				]
+			}
+		},
+		"gitlab_snippet": {
+			"category": "code",
+			"title": { "en": "Snippets", "es": "Snippets" },
+			"description": {
+				"en": "Personal and project snippets, their content, discussions, notes and award emoji.",
+				"es": "Snippets personales y de proyecto, su contenido, discusiones, notas y emoji de reacción."
+			},
+			"overview": {
+				"en": [
+					"Snippets are pieces of code or text kept outside a repository. Personal snippets belong to the user: list, read, create, update and delete them, read their content or one file of it, list every snippet of the instance (an administrator's), and browse the public ones. Project snippets are the `snippet.project_*` actions. Threaded discussions and notes on a project snippet, and award emoji on a snippet and on its notes, are actions of this group too."
+				],
+				"es": [
+					"Los snippets son fragmentos de código o de texto guardados fuera de un repositorio. Los snippets personales son del usuario: listarlos, leerlos, crearlos, actualizarlos y borrarlos, leer su contenido o un archivo de él, listar todos los snippets de la instancia (cosa de un administrador) y explorar los públicos. Los snippets de proyecto son las acciones `snippet.project_*`. Las discusiones en hilo y las notas de un snippet de proyecto, y los emoji de reacción en un snippet y en sus notas, también son acciones de este grupo."
+				]
+			},
+			"questions": {
+				"en": [
+					"List my snippets",
+					"Create a snippet with this script",
+					"Show the discussions on snippet 10 of project 42"
+				],
+				"es": [
+					"Lista mis snippets",
+					"Crea un snippet con este script",
+					"Muestra las discusiones del snippet 10 del proyecto 42"
+				]
+			}
+		},
+		"gitlab_storage_move": {
+			"category": "admin",
+			"title": { "en": "Repository storage moves", "es": "Movimientos de almacenamiento" },
+			"description": {
+				"en": "Move the repositories of projects, groups and snippets between storage shards, and follow the moves.",
+				"es": "Mueve los repositorios de proyectos, grupos y snippets entre shards de almacenamiento y sigue los movimientos."
+			},
+			"overview": {
+				"en": [
+					"An administrator moves repositories between Gitaly storage shards with storage moves. For each of projects, groups and snippets these actions list every move, list the moves of one, read a move, schedule one, and schedule moves for every repository on a shard. Group moves are served from Premium."
+				],
+				"es": [
+					"Un administrador mueve repositorios entre shards de almacenamiento de Gitaly con movimientos de almacenamiento. Para proyectos, grupos y snippets, estas acciones listan todos los movimientos, listan los de uno, leen un movimiento, programan uno y programan movimientos para todos los repositorios de un shard. Los movimientos de grupos se sirven a partir de Premium."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the project storage moves in progress",
+					"Move project 42 to the storage2 shard",
+					"What is the state of group storage move 7?"
+				],
+				"es": [
+					"Lista los movimientos de almacenamiento de proyectos en curso",
+					"Mueve el proyecto 42 al shard storage2",
+					"¿En qué estado está el movimiento de almacenamiento de grupo 7?"
+				]
+			}
+		},
+		"gitlab_tag": {
+			"category": "code",
+			"title": { "en": "Tags", "es": "Tags" },
+			"description": {
+				"en": "Git tags in a GitLab project: create, list, read and delete them, read their signatures, and protect them.",
+				"es": "Tags de Git en un proyecto de GitLab: crearlos, listarlos, leerlos y borrarlos, leer sus firmas y protegerlos."
+			},
+			"overview": {
+				"en": [
+					"Tag management in one project: list, read, create and delete tags, read the GPG or X.509 signature of a tag, and protect tag patterns with the access level allowed to create them, then read or remove that protection. Deleting a tag also removes the release attached to it."
+				],
+				"es": [
+					"Gestión de tags de un proyecto: listar, leer, crear y borrar tags, leer la firma GPG o X.509 de un tag, y proteger patrones de tag con el nivel de acceso que puede crearlos, para después leer o quitar esa protección. Borrar un tag borra también la release asociada a él."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the tags of project 42",
+					"Create tag v2.0.0 on main",
+					"Is tag v1.9.0 signed?"
+				],
+				"es": [
+					"Lista los tags del proyecto 42",
+					"Crea el tag v2.0.0 en main",
+					"¿Está firmado el tag v1.9.0?"
+				]
+			}
+		},
+		"gitlab_template": {
+			"category": "cicd",
+			"title": { "en": "Templates and CI lint", "es": "Plantillas y lint de CI" },
+			"description": {
+				"en": "GitLab's built-in templates for CI/CD YAML, Dockerfiles, .gitignore files, licenses and projects, and the CI lint.",
+				"es": "Las plantillas integradas de GitLab para YAML de CI/CD, Dockerfiles, archivos .gitignore, licencias y proyectos, y el lint de CI."
+			},
+			"overview": {
+				"en": [
+					"The templates GitLab ships: CI/CD YAML, Dockerfiles, `.gitignore` files and licenses, each listed and read by name, and the project templates of a project or group. `template.lint` validates CI/CD configuration given as text, and `template.lint_project` validates a project's committed `.gitlab-ci.yml`, both without running a pipeline. Every action only reads."
+				],
+				"es": [
+					"Las plantillas que trae GitLab: YAML de CI/CD, Dockerfiles, archivos `.gitignore` y licencias, cada una listada y leída por nombre, y las plantillas de proyecto de un proyecto o grupo. `template.lint` valida configuración de CI/CD dada como texto y `template.lint_project` valida el `.gitlab-ci.yml` que tiene un proyecto en el repositorio, las dos sin lanzar un pipeline. Todas las acciones solo leen."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the CI/CD templates",
+					"Show the Go .gitignore template",
+					"Validate this .gitlab-ci.yml against project 42"
+				],
+				"es": [
+					"Lista las plantillas de CI/CD",
+					"Muestra la plantilla .gitignore de Go",
+					"Valida este .gitlab-ci.yml contra el proyecto 42"
+				]
+			}
+		},
+		"gitlab_user": {
+			"category": "projects",
+			"title": { "en": "Users", "es": "Usuarios" },
+			"description": {
+				"en": "GitLab users: accounts and their state, SSH and GPG keys, emails, personal access and impersonation tokens, status, to-do items, events, notification settings, namespaces and avatars.",
+				"es": "Usuarios de GitLab: las cuentas y su estado, claves SSH y GPG, correos, tokens de acceso personales y de suplantación, estado, tareas pendientes, eventos, ajustes de notificación, espacios de nombres y avatares."
+			},
+			"overview": {
+				"en": [
+					"The current user and every user an administrator manages: read and list users, create, modify and delete accounts, and block, unblock, ban, unban, activate, deactivate, approve or reject one; SSH and GPG keys and emails, for the current user or for another; personal access tokens and impersonation tokens; the user's status and avatar; activities, memberships, contribution and project events; to-do items; notification settings; namespaces; instance service accounts; and runners created for the user.",
+					"Project and group access tokens, deploy tokens and deploy keys are on [Access tokens and credentials](/gitlab-mcp-server/reference/tools/access/)."
+				],
+				"es": [
+					"El usuario actual y cada usuario que gestiona un administrador: leer y listar usuarios, crear, modificar y borrar cuentas, y bloquear, desbloquear, vetar, levantar el veto, activar, desactivar, aprobar o rechazar una; claves SSH y GPG y correos, del usuario actual o de otro; tokens de acceso personales y tokens de suplantación; el estado y el avatar del usuario; actividades, pertenencias y eventos de contribución y de proyecto; tareas pendientes; ajustes de notificación; espacios de nombres; cuentas de servicio de la instancia; y runners creados para el usuario.",
+					"Los tokens de acceso de proyecto y de grupo, los tokens de despliegue y las claves de despliegue están en [Tokens de acceso y credenciales](/gitlab-mcp-server/reference/tools/access/)."
+				]
+			},
+			"questions": {
+				"en": [
+					"Who am I logged in as?",
+					"List my SSH keys",
+					"What are my pending to-do items?",
+					"Block user spammer42"
+				],
+				"es": [
+					"¿Con qué usuario he iniciado sesión?",
+					"Lista mis claves SSH",
+					"¿Cuáles son mis tareas pendientes?",
+					"Bloquea al usuario spammer42"
+				]
+			}
+		},
+		"gitlab_vulnerability": {
+			"category": "security",
+			"title": { "en": "Vulnerabilities", "es": "Vulnerabilidades" },
+			"description": {
+				"en": "List, read and triage a project's vulnerabilities, count them by severity and summarize a pipeline's security reports, through GitLab's GraphQL API.",
+				"es": "Lista, lee y clasifica las vulnerabilidades de un proyecto, cuéntalas por gravedad y resume los informes de seguridad de un pipeline, a través de la API GraphQL de GitLab."
+			},
+			"overview": {
+				"en": [
+					"Vulnerabilities are the records GitLab keeps of what its security scanners found, tracked across pipelines. These actions list a project's vulnerabilities with filters, read one, triage it (confirm, dismiss, resolve, or revert it to detected), count a project's vulnerabilities by severity, and summarize the security reports of one pipeline. What a single pipeline's scanners reported is on [Security findings](/gitlab-mcp-server/reference/tools/security-finding/)."
+				],
+				"es": [
+					"Las vulnerabilidades son los registros que GitLab mantiene de lo que encontraron sus analizadores de seguridad, con seguimiento entre pipelines. Estas acciones listan las vulnerabilidades de un proyecto con filtros, leen una, la clasifican (confirmarla, descartarla, resolverla o devolverla a detectada), cuentan las vulnerabilidades de un proyecto por gravedad y resumen los informes de seguridad de un pipeline. Lo que notificaron los analizadores de un solo pipeline está en [Hallazgos de seguridad](/gitlab-mcp-server/reference/tools/security-finding/)."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the critical vulnerabilities of project 42",
+					"Dismiss vulnerability 42 as a false positive",
+					"How many vulnerabilities does project 42 have by severity?",
+					"Which scanners ran in pipeline 123?"
+				],
+				"es": [
+					"Lista las vulnerabilidades críticas del proyecto 42",
+					"Descarta la vulnerabilidad 42 como falso positivo",
+					"¿Cuántas vulnerabilidades tiene el proyecto 42 por gravedad?",
+					"¿Qué analizadores se ejecutaron en el pipeline 123?"
+				]
+			}
+		},
+		"gitlab_wiki": {
+			"category": "code",
+			"title": { "en": "Project wikis", "es": "Wikis de proyecto" },
+			"description": {
+				"en": "The pages of a project's wiki and the files attached to it.",
+				"es": "Las páginas de la wiki de un proyecto y los archivos adjuntos a ella."
+			},
+			"overview": {
+				"en": [
+					"A project's wiki: list its pages, read one, create, update and delete one, and upload a file attachment that a page can reference. Group wikis are actions of [Groups](/gitlab-mcp-server/reference/tools/group/), served from Premium."
+				],
+				"es": [
+					"La wiki de un proyecto: listar sus páginas, leer una, crear, actualizar y borrar una, y subir un archivo adjunto que una página puede referenciar. Las wikis de grupo son acciones de [Grupos](/gitlab-mcp-server/reference/tools/group/), que se sirven a partir de Premium."
+				]
+			},
+			"questions": {
+				"en": [
+					"List the wiki pages of project 42",
+					"Show the Home wiki page",
+					"Create a wiki page with the release checklist"
+				],
+				"es": [
+					"Lista las páginas de la wiki del proyecto 42",
+					"Muestra la página Home de la wiki",
+					"Crea una página de la wiki con la lista de comprobación de la release"
+				]
+			}
+		}
+	}
+}

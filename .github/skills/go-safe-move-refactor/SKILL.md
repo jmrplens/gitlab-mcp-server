@@ -47,7 +47,7 @@ Record:
 2. List all non-test handler files in the source package to find everything that exists
 3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
-5. If a page under `docs/reference/tools/` owns the domain (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages), read it for supplementary user-facing context — but do NOT skip the move if no doc exists
+5. If the domain's catalog group has a generated tool reference page (`site/src/content/docs/reference/tools/<group>.mdx`, written by `make gen-tool-reference`), read it for supplementary user-facing context, but do NOT skip the move if there is none
 
 ### Step 2: Analyze Dependencies
 
@@ -358,5 +358,5 @@ Before moving any domain:
 
 1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
 2. **Read the source file(s)** (`internal/tools/{domain}.go`) to understand our implementation: handler functions, `client.GL().{Service}.*` calls, and our Input/Output struct subset.
-3. **If a `docs/reference/tools/` page owns the domain** (see `doc-ownership.json` there), read it for supplementary user-facing context. If no doc exists, `go doc` + source code provide everything needed.
+3. **If the domain's catalog group has a generated tool reference page** (`site/src/content/docs/reference/tools/<group>.mdx`), read it for supplementary user-facing context. If there is none, `go doc` + source code provide everything needed.
 4. **Check catalog exposure**: verify the domain appears in `ActionSpecs` and catalog aggregation. Uncataloged files are in-progress features — still move them, but note the gap.

@@ -1,0 +1,243 @@
+---
+title: "Logros"
+description: "Los logros que define un espacio de nombres y las concesiones que se hacen de ellos, a través de la API GraphQL de GitLab."
+sidebar:
+  order: 25
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Un grupo o un proyecto define un logro, y concedérselo a una persona crea un logro de usuario: un registro aparte, con su propio ID numérico, que se puede revocar, ocultar de un perfil, reordenar o borrar sin tocar el logro del que procede. Por eso estas acciones manejan dos identificadores: `achievement_id` nombra el logro y `user_achievement_id` nombra una concesión de él, que es lo que reciben `achievement.revoke` y las acciones `achievement.user_achievement_*`.
+
+Revocar una concesión la conserva en el registro marcada como revocada, `achievement.user_achievement_delete` borra una concesión y `achievement.delete` elimina el logro con todas las concesiones hechas de él. Los logros están disponibles de forma general desde GitLab 19.3; en una instancia anterior un administrador tiene que activar antes el feature flag `achievements`.
+
+## Preguntas de ejemplo
+
+- "¿Qué logros define el grupo platform?"
+- "Concede el logro First Contribution al usuario 42"
+- "¿Quién tiene el logro First Contribution?"
+- "Oculta esa concesión de mi perfil"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `achievement.award`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_achievement` con `action` igual al nombre de la acción, como `award`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_achievement_award`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 4 de 12, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                         | Individual                                    |
+| ------------------------------------------------------------------------------ | --------------------------------------------- |
+| [`achievement.award`](#achievementaward)                                       | `gitlab_achievement_award`                    |
+| [`achievement.create`](#achievementcreate)                                     | `gitlab_achievement_create`                   |
+| [`achievement.delete`](#achievementdelete)                                     | `gitlab_achievement_delete`                   |
+| [`achievement.list`](#achievementlist)                                         | `gitlab_achievement_list`                     |
+| [`achievement.recipients`](#achievementrecipients)                             | `gitlab_achievement_recipients`               |
+| [`achievement.revoke`](#achievementrevoke)                                     | `gitlab_achievement_revoke`                   |
+| [`achievement.unique_users`](#achievementunique_users)                         | `gitlab_achievement_unique_users`             |
+| [`achievement.update`](#achievementupdate)                                     | `gitlab_achievement_update`                   |
+| [`achievement.user_achievement_delete`](#achievementuser_achievement_delete)   | `gitlab_achievement_user_achievement_delete`  |
+| [`achievement.user_achievement_reorder`](#achievementuser_achievement_reorder) | `gitlab_achievement_user_achievement_reorder` |
+| [`achievement.user_achievement_update`](#achievementuser_achievement_update)   | `gitlab_achievement_user_achievement_update`  |
+| [`achievement.user_list`](#achievementuser_list)                               | `gitlab_achievement_user_list`                |
+
+### `achievement.award`
+
+> Award an achievement to a user. Returns: the new award with its own id, achievement_id, user_id, awarded_by_user_id, award_message, priority, show_on_profile, and timestamps. See also: [`achievement.revoke`](#achievementrevoke), [`achievement.recipients`](#achievementrecipients), [`achievement.user_list`](#achievementuser_list).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `award`
+- **Herramienta individual**: `gitlab_achievement_award`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                          |
+| ---------------- | --------- | --------- | ---------------------------------------------------- |
+| `achievement_id` | `integer` | sí        | Numeric ID of the achievement to hand out            |
+| `user_id`        | `integer` | sí        | Numeric ID of the user receiving the achievement     |
+| `award_message`  | `string`  | no        | Note shown alongside the award, up to 200 characters |
+
+### `achievement.create`
+
+> Define a new achievement in a group or project namespace. Creating one awards it to nobody. Returns: the created achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: [`achievement.award`](#achievementaward), [`achievement.list`](#achievementlist), [`achievement.update`](#achievementupdate).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `create`
+- **Herramienta individual**: `gitlab_achievement_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro               | Tipo      | Requerido | Descripción                                                                                                                                                                                                                                |
+| ----------------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                  | `string`  | sí        | Display name of the achievement such as First Contribution                                                                                                                                                                                 |
+| `namespace_id`          | `integer` | sí        | Numeric ID of the group or project namespace that will own the achievement                                                                                                                                                                 |
+| `avatar_content_base64` | `string`  | no        | Base64-encoded avatar image bytes. Alternative to avatar_file_path. Only one of the two should be provided                                                                                                                                 |
+| `avatar_content_type`   | `string`  | no        | MIME type of the avatar image such as image/png. Defaults to application/octet-stream when omitted                                                                                                                                         |
+| `avatar_file_path`      | `string`  | no        | Absolute path to a local image file the MCP server reads. Alternative to avatar_content_base64 for files too large to base64-encode. Only one of the two should be provided, and neither is available when the server is reached over HTTP |
+| `avatar_filename`       | `string`  | no        | File name for the avatar image such as badge.png. Required whenever an avatar is sent, because GitLab identifies the upload part by its file name                                                                                          |
+| `description`           | `string`  | no        | Free-text explanation of what the achievement is awarded for                                                                                                                                                                               |
+
+### `achievement.delete`
+
+> Delete an achievement definition and every award made from it. Returns: deletion confirmation plus the achievement as it looked when removed. See also: [`achievement.revoke`](#achievementrevoke), [`achievement.list`](#achievementlist), [`achievement.create`](#achievementcreate).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `delete`
+- **Herramienta individual**: `gitlab_achievement_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                                                          |
+| ---------------- | --------- | --------- | ------------------------------------------------------------------------------------ |
+| `achievement_id` | `integer` | sí        | Numeric ID of the achievement to delete. Every award made from it is removed with it |
+
+### `achievement.list`
+
+> List the achievements a group or project namespace defines, with cursor pagination. Returns: each achievement with id, namespace_id, name, description, avatar_url, and timestamps, plus pagination cursors. See also: [`achievement.recipients`](#achievementrecipients), [`achievement.create`](#achievementcreate), [`achievement.award`](#achievementaward).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `list`
+- **Herramienta individual**: `gitlab_achievement_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro   | Tipo        | Requerido | Descripción                                                                                                                             |
+| ----------- | ----------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `full_path` | `string`    | sí        | Full path of the group or project namespace such as my-group or my-group/my-project                                                     |
+| `after`     | `string`    | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
+| `before`    | `string`    | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
+| `first`     | `integer`   | no        | Number of items to return (default 20, max 100)                                                                                         |
+| `ids`       | `integer[]` | no        | Numeric achievement IDs to restrict the result to. Omit to list every achievement in the namespace                                      |
+| `last`      | `integer`   | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |
+
+### `achievement.recipients`
+
+> List every award of one achievement, revoked awards and repeat awards included, with cursor pagination. Returns: each award with its own id, achievement_id, user_id, award_message, priority, show_on_profile, and revocation stamps, plus pagination cursors. See also: [`achievement.unique_users`](#achievementunique_users), [`achievement.user_list`](#achievementuser_list), [`achievement.revoke`](#achievementrevoke).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `recipients`
+- **Herramienta individual**: `gitlab_achievement_recipients`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                                                                                                             |
+| ---------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `achievement_id` | `integer` | sí        | Numeric ID of the achievement whose awards to list                                                                                      |
+| `full_path`      | `string`  | sí        | Full path of the group or project namespace that owns the achievement                                                                   |
+| `after`          | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
+| `before`         | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
+| `first`          | `integer` | no        | Number of items to return (default 20, max 100)                                                                                         |
+| `last`           | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |
+
+### `achievement.revoke`
+
+> Revoke one award while keeping its record, which is then stamped with revoked_at and revoked_by_user_id. Returns: confirmation plus the revoked award. See also: [`achievement.user_achievement_delete`](#achievementuser_achievement_delete), [`achievement.award`](#achievementaward), [`achievement.recipients`](#achievementrecipients).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `revoke`
+- **Herramienta individual**: `gitlab_achievement_revoke`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro             | Tipo      | Requerido | Descripción                                                                    |
+| --------------------- | --------- | --------- | ------------------------------------------------------------------------------ |
+| `user_achievement_id` | `integer` | sí        | Numeric ID of the award to revoke. The award record is kept and marked revoked |
+
+### `achievement.unique_users`
+
+> List the distinct users who hold one achievement, deduplicated across repeat awards, with cursor pagination. Returns: each user with id, username, name, state, avatar_url, and web_url, plus pagination cursors. See also: [`achievement.recipients`](#achievementrecipients), [`achievement.user_list`](#achievementuser_list), [`achievement.list`](#achievementlist).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `unique_users`
+- **Herramienta individual**: `gitlab_achievement_unique_users`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                                                                                                             |
+| ---------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `achievement_id` | `integer` | sí        | Numeric ID of the achievement whose recipients to count                                                                                 |
+| `full_path`      | `string`  | sí        | Full path of the group or project namespace that owns the achievement                                                                   |
+| `after`          | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
+| `before`         | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
+| `first`          | `integer` | no        | Number of items to return (default 20, max 100)                                                                                         |
+| `last`           | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |
+
+### `achievement.update`
+
+> Change an existing achievement's name, description, or avatar. Omitted fields keep their current value. Returns: the updated achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: [`achievement.list`](#achievementlist), [`achievement.create`](#achievementcreate), [`achievement.delete`](#achievementdelete).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `update`
+- **Herramienta individual**: `gitlab_achievement_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro               | Tipo      | Requerido | Descripción                                                                                                                                                                                                                                |
+| ----------------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `achievement_id`        | `integer` | sí        | Numeric ID of the achievement to change                                                                                                                                                                                                    |
+| `avatar_content_base64` | `string`  | no        | Base64-encoded avatar image bytes. Alternative to avatar_file_path. Only one of the two should be provided                                                                                                                                 |
+| `avatar_content_type`   | `string`  | no        | MIME type of the avatar image such as image/png. Defaults to application/octet-stream when omitted                                                                                                                                         |
+| `avatar_file_path`      | `string`  | no        | Absolute path to a local image file the MCP server reads. Alternative to avatar_content_base64 for files too large to base64-encode. Only one of the two should be provided, and neither is available when the server is reached over HTTP |
+| `avatar_filename`       | `string`  | no        | File name for the avatar image such as badge.png. Required whenever an avatar is sent, because GitLab identifies the upload part by its file name                                                                                          |
+| `description`           | `string`  | no        | New description. Omit to leave the current description unchanged                                                                                                                                                                           |
+| `name`                  | `string`  | no        | New display name. Omit to leave the current name unchanged                                                                                                                                                                                 |
+
+### `achievement.user_achievement_delete`
+
+> Erase one award record outright, keeping no revocation history. Returns: confirmation plus the deleted award. See also: [`achievement.revoke`](#achievementrevoke), [`achievement.user_list`](#achievementuser_list), [`achievement.delete`](#achievementdelete).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `user_achievement_delete`
+- **Herramienta individual**: `gitlab_achievement_user_achievement_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro             | Tipo      | Requerido | Descripción                                                                                  |
+| --------------------- | --------- | --------- | -------------------------------------------------------------------------------------------- |
+| `user_achievement_id` | `integer` | sí        | Numeric ID of the award to delete. The record is removed outright rather than marked revoked |
+
+### `achievement.user_achievement_reorder`
+
+> Set the display order of one user's awards, highest priority first. Returns: confirmation plus every award in its new order with the assigned priority. See also: [`achievement.user_list`](#achievementuser_list), [`achievement.user_achievement_update`](#achievementuser_achievement_update), [`achievement.award`](#achievementaward).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `user_achievement_reorder`
+- **Herramienta individual**: `gitlab_achievement_user_achievement_reorder`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro              | Tipo        | Requerido | Descripción                                                                                                          |
+| ---------------------- | ----------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `user_achievement_ids` | `integer[]` | sí        | Numeric award IDs in the order they should appear, highest priority first. All of one user's awards should be listed |
+
+### `achievement.user_achievement_update`
+
+> Change one award, which today means its show_on_profile visibility. Returns: the updated award with id, achievement_id, user_id, priority, show_on_profile, and timestamps. See also: [`achievement.user_list`](#achievementuser_list), [`achievement.user_achievement_reorder`](#achievementuser_achievement_reorder), [`achievement.update`](#achievementupdate).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `user_achievement_update`
+- **Herramienta individual**: `gitlab_achievement_user_achievement_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro             | Tipo      | Requerido | Descripción                                                                                         |
+| --------------------- | --------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `user_achievement_id` | `integer` | sí        | Numeric ID of the award to change                                                                   |
+| `show_on_profile`     | `boolean` | no        | Whether the recipient's profile displays this award. Omit to leave the current visibility unchanged |
+
+### `achievement.user_list`
+
+> List the awards one user holds, by username, with cursor pagination. Returns: each award with id, achievement_id, user_id, priority, show_on_profile, award_message, and revocation stamps, plus pagination cursors. See also: [`achievement.recipients`](#achievementrecipients), [`achievement.user_achievement_reorder`](#achievementuser_achievement_reorder), [`achievement.award`](#achievementaward).
+
+- **Meta-herramienta**: `gitlab_achievement`, acción `user_list`
+- **Herramienta individual**: `gitlab_achievement_user_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                                                                                                             |
+| ---------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `username`       | `string`  | sí        | Account name of the user whose awards to list, without a leading at sign                                                                |
+| `after`          | `string`  | no        | Cursor for forward pagination (from previous response end_cursor)                                                                       |
+| `before`         | `string`  | no        | Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted |
+| `first`          | `integer` | no        | Number of items to return (default 20, max 100)                                                                                         |
+| `include_hidden` | `boolean` | no        | Include awards the user hid from their profile. Only the user themself and namespace or instance maintainers and owners see these       |
+| `last`           | `integer` | no        | Number of items to return from the end of the range (backward pagination). Cannot be combined with first                                |

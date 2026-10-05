@@ -1,0 +1,116 @@
+---
+title: "Usuarios empresariales"
+description: "Los usuarios empresariales de un grupo de nivel superior: listarlos y leerlos, desactivar su autenticación en dos pasos y borrarlos."
+sidebar:
+  order: 46
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los usuarios empresariales son las cuentas que posee un grupo de nivel superior, normalmente porque el dominio de su correo está verificado para el grupo. Estas acciones los listan y los leen, desactivan la autenticación en dos pasos de un usuario y borran uno.
+
+## Preguntas de ejemplo
+
+- "Lista los usuarios empresariales del grupo acme"
+- "Desactiva la autenticación en dos pasos del usuario empresarial 42"
+- "Muestra el usuario empresarial alice"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `enterprise_user.delete`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_enterprise_user` con `action` igual al nombre de la acción, como `delete`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_delete_enterprise_user`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
+
+- **Free**: 0
+- **Premium**: 4
+- **Ultimate**: 4
+
+Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
+
+Acciones de solo lectura: 2 de 4, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                       | Individual                           |
+| ------------------------------------------------------------ | ------------------------------------ |
+| [`enterprise_user.delete`](#enterprise_userdelete)           | `gitlab_delete_enterprise_user`      |
+| [`enterprise_user.disable_2fa`](#enterprise_userdisable_2fa) | `gitlab_disable_2fa_enterprise_user` |
+| [`enterprise_user.get`](#enterprise_userget)                 | `gitlab_get_enterprise_user`         |
+| [`enterprise_user.list`](#enterprise_userlist)               | `gitlab_list_enterprise_users`       |
+
+### `enterprise_user.delete`
+
+> Delete an enterprise user, optionally with hard_delete. Returns: a success confirmation naming the user and group. See also: [`enterprise_user.get`](#enterprise_userget), [`enterprise_user.list`](#enterprise_userlist), [`enterprise_user.disable_2fa`](#enterprise_userdisable_2fa).
+
+- **Meta-herramienta**: `gitlab_enterprise_user`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_enterprise_user`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                    |
+| ------------- | ---------------- | --------- | ---------------------------------------------- |
+| `group_id`    | `string/integer` | sí        | Group ID or URL-encoded path                   |
+| `user_id`     | `integer`        | sí        | User ID                                        |
+| `hard_delete` | `boolean`        | no        | Permanently delete user instead of soft delete |
+
+### `enterprise_user.disable_2fa`
+
+> Disable two-factor authentication for an enterprise user. Returns: a success confirmation naming the user and group. See also: [`enterprise_user.get`](#enterprise_userget), [`enterprise_user.list`](#enterprise_userlist), [`enterprise_user.delete`](#enterprise_userdelete).
+
+- **Meta-herramienta**: `gitlab_enterprise_user`, acción `disable_2fa`
+- **Herramienta individual**: `gitlab_disable_2fa_enterprise_user`
+- **Nivel**: Premium
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+| `user_id`  | `integer`        | sí        | User ID                      |
+
+### `enterprise_user.get`
+
+> Get a single enterprise user by group_id and user_id. Returns: the full user profile (identities, SCIM identities, custom attributes, sign-in metadata, admin/auditor flags, license seat usage, and web URL). See also: [`enterprise_user.list`](#enterprise_userlist), [`enterprise_user.disable_2fa`](#enterprise_userdisable_2fa), [`enterprise_user.delete`](#enterprise_userdelete).
+
+- **Meta-herramienta**: `gitlab_enterprise_user`, acción `get`
+- **Herramienta individual**: `gitlab_get_enterprise_user`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+| `user_id`  | `integer`        | sí        | User ID                      |
+
+### `enterprise_user.list`
+
+> List enterprise users for a top-level group with filtering and pagination. Returns: enterprise users with full profile fields (identities, SCIM identities, custom attributes, sign-in metadata, license seat usage) and pagination metadata. See also: [`enterprise_user.get`](#enterprise_userget), [`enterprise_user.disable_2fa`](#enterprise_userdisable_2fa), [`enterprise_user.delete`](#enterprise_userdelete).
+
+- **Meta-herramienta**: `gitlab_enterprise_user`, acción `list`
+- **Herramienta individual**: `gitlab_list_enterprise_users`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo                             | Requerido | Descripción                                                                                                                                       |
+| ---------------- | -------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`       | `string/integer`                 | sí        | Group ID or URL-encoded path                                                                                                                      |
+| `active`         | `boolean`                        | no        | Filter for active users only                                                                                                                      |
+| `blocked`        | `boolean`                        | no        | Filter for blocked users only                                                                                                                     |
+| `created_after`  | `string`                         | no        | Filter users created after this date (ISO 8601)                                                                                                   |
+| `created_before` | `string`                         | no        | Filter users created before this date (ISO 8601)                                                                                                  |
+| `order_by`       | `string`                         | no        | Column to order keyset-paginated results by (e.g. id)                                                                                             |
+| `page`           | `integer`                        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`     | `string`                         | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`     | `string`                         | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`       | `integer`                        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `search`         | `string`                         | no        | Search by name or username or email                                                                                                               |
+| `sort`           | `string` (`asc`, `desc`)         | no        | Sort order for keyset pagination: asc or desc                                                                                                     |
+| `two_factor`     | `string` (`enabled`, `disabled`) | no        | Filter by 2FA status: enabled or disabled                                                                                                         |
+| `username`       | `string`                         | no        | Filter by exact username                                                                                                                          |

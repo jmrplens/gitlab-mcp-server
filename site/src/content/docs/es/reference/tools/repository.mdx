@@ -1,0 +1,832 @@
+---
+title: "Archivos y commits del repositorio"
+description: "El contenido del repositorio: el árbol de archivos, archivos, blame e historial, commits, diffs, cherry-picks y reverts, comparaciones, archivos comprimidos, changelogs, submódulos y renderizado de Markdown."
+sidebar:
+  order: 4
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Lo que contiene un repositorio: explorar su árbol, leer un archivo en bruto o con sus metadatos, su blame y su historial, y crear, actualizar o borrar uno; leer blobs; comparar dos referencias y encontrar su base de fusión; descargar un archivo comprimido; listar los colaboradores; generar o añadir un changelog.
+
+Los commits: listarlos, leerlos y crearlos, leer el diff, las referencias, los merge requests y la firma de un commit, hacer cherry-pick y revert de uno, fijar y leer estados de commit, y comentar un commit o mantener una discusión en hilo sobre él. Los submódulos se pueden listar, leer por dentro y actualizar, y el Markdown se puede renderizar como lo renderiza GitLab.
+
+## Preguntas de ejemplo
+
+- "Muestra el árbol de archivos del proyecto 42"
+- "Obtén el contenido de README.md en main"
+- "Compara main y develop"
+- "¿Quién cambió por última vez la línea 120 de src/server.go?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `repository.archive`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_repository` con `action` igual al nombre de la acción, como `archive`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_repository_archive`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 27 de 41, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                                                 | Individual                              |
+| -------------------------------------------------------------------------------------- | --------------------------------------- |
+| [`repository.archive`](#repositoryarchive)                                             | `gitlab_repository_archive`             |
+| [`repository.blob`](#repositoryblob)                                                   | `gitlab_repository_blob`                |
+| [`repository.changelog_add`](#repositorychangelog_add)                                 | `gitlab_repository_changelog_add`       |
+| [`repository.changelog_generate`](#repositorychangelog_generate)                       | `gitlab_repository_changelog_generate`  |
+| [`repository.commit_cherry_pick`](#repositorycommit_cherry_pick)                       | `gitlab_commit_cherry_pick`             |
+| [`repository.commit_comment_create`](#repositorycommit_comment_create)                 | `gitlab_commit_comment_create`          |
+| [`repository.commit_comments`](#repositorycommit_comments)                             | `gitlab_commit_comments`                |
+| [`repository.commit_create`](#repositorycommit_create)                                 | `gitlab_commit_create`                  |
+| [`repository.commit_diff`](#repositorycommit_diff)                                     | `gitlab_commit_diff`                    |
+| [`repository.commit_discussion_add_note`](#repositorycommit_discussion_add_note)       | `gitlab_add_commit_discussion_note`     |
+| [`repository.commit_discussion_create`](#repositorycommit_discussion_create)           | `gitlab_create_commit_discussion`       |
+| [`repository.commit_discussion_delete_note`](#repositorycommit_discussion_delete_note) | `gitlab_delete_commit_discussion_note`  |
+| [`repository.commit_discussion_get`](#repositorycommit_discussion_get)                 | `gitlab_get_commit_discussion`          |
+| [`repository.commit_discussion_list`](#repositorycommit_discussion_list)               | `gitlab_list_commit_discussions`        |
+| [`repository.commit_discussion_update_note`](#repositorycommit_discussion_update_note) | `gitlab_update_commit_discussion_note`  |
+| [`repository.commit_get`](#repositorycommit_get)                                       | `gitlab_commit_get`                     |
+| [`repository.commit_list`](#repositorycommit_list)                                     | `gitlab_commit_list`                    |
+| [`repository.commit_merge_requests`](#repositorycommit_merge_requests)                 | `gitlab_commit_merge_requests`          |
+| [`repository.commit_refs`](#repositorycommit_refs)                                     | `gitlab_commit_refs`                    |
+| [`repository.commit_revert`](#repositorycommit_revert)                                 | `gitlab_commit_revert`                  |
+| [`repository.commit_signature`](#repositorycommit_signature)                           | `gitlab_commit_signature`               |
+| [`repository.commit_status_set`](#repositorycommit_status_set)                         | `gitlab_commit_status_set`              |
+| [`repository.commit_statuses`](#repositorycommit_statuses)                             | `gitlab_commit_statuses`                |
+| [`repository.compare`](#repositorycompare)                                             | `gitlab_repository_compare`             |
+| [`repository.contributors`](#repositorycontributors)                                   | `gitlab_repository_contributors`        |
+| [`repository.file_blame`](#repositoryfile_blame)                                       | `gitlab_file_blame`                     |
+| [`repository.file_create`](#repositoryfile_create)                                     | `gitlab_file_create`                    |
+| [`repository.file_delete`](#repositoryfile_delete)                                     | `gitlab_file_delete`                    |
+| [`repository.file_get`](#repositoryfile_get)                                           | `gitlab_file_get`                       |
+| [`repository.file_history`](#repositoryfile_history)                                   | `gitlab_commit_list`                    |
+| [`repository.file_metadata`](#repositoryfile_metadata)                                 | `gitlab_file_metadata`                  |
+| [`repository.file_raw`](#repositoryfile_raw)                                           | `gitlab_file_raw`                       |
+| [`repository.file_raw_metadata`](#repositoryfile_raw_metadata)                         | `gitlab_file_raw_metadata`              |
+| [`repository.file_update`](#repositoryfile_update)                                     | `gitlab_file_update`                    |
+| [`repository.list_submodules`](#repositorylist_submodules)                             | `gitlab_list_repository_submodules`     |
+| [`repository.markdown_render`](#repositorymarkdown_render)                             | `gitlab_render_markdown`                |
+| [`repository.merge_base`](#repositorymerge_base)                                       | `gitlab_repository_merge_base`          |
+| [`repository.raw_blob`](#repositoryraw_blob)                                           | `gitlab_repository_raw_blob`            |
+| [`repository.read_submodule_file`](#repositoryread_submodule_file)                     | `gitlab_read_repository_submodule_file` |
+| [`repository.tree`](#repositorytree)                                                   | `gitlab_repository_tree`                |
+| [`repository.update_submodule`](#repositoryupdate_submodule)                           | `gitlab_update_repository_submodule`    |
+
+### `repository.archive`
+
+> Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: [`repository.tree`](#repositorytree), [`tag.list`](/gitlab-mcp-server/reference/tools/tag/#taglist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `archive`
+- **Herramienta individual**: `gitlab_repository_archive`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                      |
+| ------------ | ---------------- | --------- | -------------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                   |
+| `format`     | `string`         | no        | Archive format: tar.gz, tar.bz2, tbz, tbz2, tb2, bz2, tar, zip (default: tar.gz) |
+| `path`       | `string`         | no        | Subdirectory path to archive (omit for entire repo)                              |
+| `sha`        | `string`         | no        | Commit SHA, branch, or tag to archive (default: default branch)                  |
+
+### `repository.blob`
+
+> Get a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: [`repository.raw_blob`](#repositoryraw_blob), [`repository.tree`](#repositorytree).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `blob`
+- **Herramienta individual**: `gitlab_repository_blob`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                 |
+| ------------ | ---------------- | --------- | ------------------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path              |
+| `sha`        | `string`         | sí        | Blob SHA (from tree listing or commit diff) |
+
+### `repository.changelog_add`
+
+> Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: [`repository.changelog_generate`](#repositorychangelog_generate), [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `changelog_add`
+- **Herramienta individual**: `gitlab_repository_changelog_add`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                                  |
+| ------------- | ---------------- | --------- | ---------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                               |
+| `version`     | `string`         | sí        | Version string for the changelog                                             |
+| `branch`      | `string`         | no        | Branch to commit the changelog to (default: default branch)                  |
+| `config_file` | `string`         | no        | Path to the changelog config file in the project                             |
+| `date`        | `string`         | no        | Date and time of the release as an RFC3339 timestamp (default: current time) |
+| `file`        | `string`         | no        | Path to the changelog file (default: CHANGELOG.md)                           |
+| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                       |
+| `message`     | `string`         | no        | Commit message for the changelog update                                      |
+| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                          |
+| `trailer`     | `string`         | no        | Git trailer to use for changelog generation (default: Changelog)             |
+
+### `repository.changelog_generate`
+
+> Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: [`repository.changelog_add`](#repositorychangelog_add), [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `changelog_generate`
+- **Herramienta individual**: `gitlab_repository_changelog_generate`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                                                  |
+| ------------- | ---------------- | --------- | ---------------------------------------------------------------------------- |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                                               |
+| `version`     | `string`         | sí        | Version string                                                               |
+| `config_file` | `string`         | no        | Path to the changelog config file                                            |
+| `date`        | `string`         | no        | Date and time of the release as an RFC3339 timestamp (default: current time) |
+| `from`        | `string`         | no        | Start of the range (commit SHA or tag)                                       |
+| `to`          | `string`         | no        | End of the range (commit SHA or tag, default: HEAD)                          |
+| `trailer`     | `string`         | no        | Git trailer to use (default: Changelog)                                      |
+
+### `repository.commit_cherry_pick`
+
+> Cherry-pick a commit onto a target branch, optionally as a dry run. Returns: the newly created commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.commit_revert`](#repositorycommit_revert).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_cherry_pick`
+- **Herramienta individual**: `gitlab_commit_cherry_pick`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                  |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------ |
+| `branch`     | `string`         | sí        | Target branch name                                           |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                               |
+| `dry_run`    | `boolean`        | no        | If true, does not create the commit but checks for conflicts |
+| `message`    | `string`         | no        | Custom commit message (defaults to original)                 |
+| `sha`        | `string`         | no        | Commit SHA to cherry-pick                                    |
+
+### `repository.commit_comment_create`
+
+> Post a comment on a commit, optionally inline on a specific file path and line. Returns: the created comment with note text, author user object, and optional path/line/line_type. See also: [`repository.commit_comments`](#repositorycommit_comments), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_get`](#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_comment_create`
+- **Herramienta individual**: `gitlab_commit_comment_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo                    | Requerido | Descripción                                   |
+| ------------ | ----------------------- | --------- | --------------------------------------------- |
+| `note`       | `string`                | sí        | Comment text                                  |
+| `project_id` | `string/integer`        | sí        | Project ID or URL-encoded path                |
+| `sha`        | `string`                | sí        | Commit SHA                                    |
+| `line`       | `integer`               | no        | Line number to comment on                     |
+| `line_type`  | `string` (`new`, `old`) | no        | Line type: new or old (default: new)          |
+| `path`       | `string`                | no        | File path to comment on (for inline comments) |
+
+### `repository.commit_comments`
+
+> List the comments on a commit. Returns: comment entries with note text, author user object, optional file path, line, and line type, plus pagination metadata. See also: [`repository.commit_comment_create`](#repositorycommit_comment_create), [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_comments`
+- **Herramienta individual**: `gitlab_commit_comments`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `sha`        | `string`                 | sí        | Commit SHA                                                                                                                                        |
+| `order_by`   | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+
+### `repository.commit_create`
+
+> Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.tree`](#repositorytree), [`repository.commit_get`](#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_create`
+- **Herramienta individual**: `gitlab_commit_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                   |
+| ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------- |
+| `actions`        | `object[]`       | sí        | List of file actions (create, update, delete, move, chmod)                                    |
+| `branch`         | `string`         | sí        | Target branch name                                                                            |
+| `commit_message` | `string`         | sí        | Commit message                                                                                |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                                |
+| `author_email`   | `string`         | no        | Custom author email                                                                           |
+| `author_name`    | `string`         | no        | Custom author name                                                                            |
+| `force`          | `boolean`        | no        | When true, force-overwrite the target branch even if a conflict exists                        |
+| `start_branch`   | `string`         | no        | Branch to start from if target branch does not exist                                          |
+| `start_project`  | `string`         | no        | Project ID or path of the source project to start the branch from (for cross-project commits) |
+| `start_sha`      | `string`         | no        | SHA to start from if target branch does not exist (alternative to start_branch)               |
+| `stats`          | `boolean`        | no        | Include commit stats (additions, deletions, total) in the response                            |
+
+### `repository.commit_diff`
+
+> Get the file diffs of a single commit, optionally in unified-diff format. Returns: per-file diffs (old/new path, diff body, new/renamed/deleted flags, file modes) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.file_history`](#repositoryfile_history), [`repository.commit_comments`](#repositorycommit_comments).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_diff`
+- **Herramienta individual**: `gitlab_commit_diff`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `sha`        | `string`                 | sí        | Commit SHA hash to get diffs for                                                                                                                  |
+| `order_by`   | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `unidiff`    | `boolean`                | no        | Return diffs in unified diff format                                                                                                               |
+
+### `repository.commit_discussion_add_note`
+
+> Add a reply note to an existing commit discussion thread. Returns: the created note (author, body, timestamps, resolvable state). See also: [`repository.commit_discussion_create`](#repositorycommit_discussion_create), [`repository.commit_discussion_get`](#repositorycommit_discussion_get), [`repository.commit_discussion_update_note`](#repositorycommit_discussion_update_note).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_add_note`
+- **Herramienta individual**: `gitlab_add_commit_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
+| --------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `body`          | `string`         | sí        | Note body (Markdown supported)                                                                        |
+| `commit_sha`    | `string`         | sí        | Commit SHA                                                                                            |
+| `discussion_id` | `string`         | sí        | Discussion ID to reply to                                                                             |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `created_at`    | `string`         | no        | Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `repository.commit_discussion_create`
+
+> Create a new discussion thread on a commit, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: [`repository.commit_discussion_add_note`](#repositorycommit_discussion_add_note), [`repository.commit_discussion_list`](#repositorycommit_discussion_list), [`repository.commit_diff`](#repositorycommit_diff).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_create`
+- **Herramienta individual**: `gitlab_create_commit_discussion`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                 |
+| ------------ | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `body`       | `string`         | sí        | Discussion body (Markdown supported)                                                                        |
+| `commit_sha` | `string`         | sí        | Commit SHA                                                                                                  |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                              |
+| `created_at` | `string`         | no        | Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+| `position`   | `object`         | no        | Position for inline diff comments                                                                           |
+
+### `repository.commit_discussion_delete_note`
+
+> Delete a note from a commit discussion thread (destructive). Returns: a deletion confirmation message. See also: [`repository.commit_discussion_update_note`](#repositorycommit_discussion_update_note), [`repository.commit_discussion_get`](#repositorycommit_discussion_get), [`repository.commit_discussion_list`](#repositorycommit_discussion_list).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_delete_note`
+- **Herramienta individual**: `gitlab_delete_commit_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `commit_sha`    | `string`         | sí        | Commit SHA                     |
+| `discussion_id` | `string`         | sí        | Discussion ID                  |
+| `note_id`       | `integer`        | sí        | Note ID to delete              |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `repository.commit_discussion_get`
+
+> Get a single commit discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: [`repository.commit_discussion_list`](#repositorycommit_discussion_list), [`repository.commit_discussion_add_note`](#repositorycommit_discussion_add_note), [`repository.commit_get`](#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_get`
+- **Herramienta individual**: `gitlab_get_commit_discussion`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                    |
+| --------------- | ---------------- | --------- | ------------------------------ |
+| `commit_sha`    | `string`         | sí        | Commit SHA                     |
+| `discussion_id` | `string`         | sí        | Discussion ID                  |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `repository.commit_discussion_list`
+
+> List discussion threads on a commit with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: [`repository.commit_discussion_get`](#repositorycommit_discussion_get), [`repository.commit_discussion_create`](#repositorycommit_discussion_create), [`repository.commit_get`](#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_list`
+- **Herramienta individual**: `gitlab_list_commit_discussions`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commit_sha` | `string`                 | sí        | Commit SHA                                                                                                                                        |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string`                 | no        | Column to order keyset-paginated results by (e.g. created_at, updated_at)                                                                         |
+| `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`) | no        | Sort direction (asc or desc)                                                                                                                      |
+
+### `repository.commit_discussion_update_note`
+
+> Update the body of a note in a commit discussion thread. Returns: the updated note (author, body, timestamps). See also: [`repository.commit_discussion_add_note`](#repositorycommit_discussion_add_note), [`repository.commit_discussion_delete_note`](#repositorycommit_discussion_delete_note), [`repository.commit_discussion_get`](#repositorycommit_discussion_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_discussion_update_note`
+- **Herramienta individual**: `gitlab_update_commit_discussion_note`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                           |
+| --------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `body`          | `string`         | sí        | Updated note body                                                                                     |
+| `commit_sha`    | `string`         | sí        | Commit SHA                                                                                            |
+| `discussion_id` | `string`         | sí        | Discussion ID                                                                                         |
+| `note_id`       | `integer`        | sí        | Note ID to update                                                                                     |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                        |
+| `created_at`    | `string`         | no        | Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights |
+
+### `repository.commit_get`
+
+> Get a single commit from a project by SHA (full, short, branch, or tag). Returns: full commit metadata, message, parent IDs, author/committer, dates, stats, trailers, project ID, and last pipeline. See also: [`repository.file_history`](#repositoryfile_history), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_refs`](#repositorycommit_refs), [`repository.commit_statuses`](#repositorycommit_statuses).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_get`
+- **Herramienta individual**: `gitlab_commit_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                    |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                 |
+| `sha`        | `string`         | sí        | Commit SHA hash to retrieve                                                    |
+| `stats`      | `boolean`        | no        | Include commit stats (additions, deletions, total). Defaults to true on GitLab |
+
+### `repository.commit_list`
+
+> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_list`
+- **Herramienta individual**: `gitlab_commit_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| -------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`   | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `all`          | `boolean`                | no        | Retrieve every commit from the whole repository (across all branches)                                                                             |
+| `author`       | `string`                 | no        | Filter by commit author name or email                                                                                                             |
+| `first_parent` | `boolean`                | no        | Follow only the first parent commit upon seeing a merge commit                                                                                    |
+| `order_by`     | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`         | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`   | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`   | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `path`         | `string`                 | no        | File path to filter commits by (only commits touching this path)                                                                                  |
+| `per_page`     | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `ref_name`     | `string`                 | no        | Branch name, tag, or commit SHA to list commits from (default: default branch)                                                                    |
+| `since`        | `string`                 | no        | Return commits after this date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)                                                                       |
+| `sort`         | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `trailers`     | `boolean`                | no        | Parse and include Git trailers for every commit                                                                                                   |
+| `until`        | `string`                 | no        | Return commits before this date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)                                                                      |
+| `with_stats`   | `boolean`                | no        | Include commit stats (additions, deletions, total)                                                                                                |
+
+### `repository.commit_merge_requests`
+
+> List merge requests associated with a commit. Returns: compact MR rows with IID, project, title, state, draft flag, source/target branches, merge commit SHA, labels, author, web URL, and created, updated, merged and closed times, with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget), [`mr_review.changes_get`](/gitlab-mcp-server/reference/tools/mr-review/#mr_reviewchanges_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_merge_requests`
+- **Herramienta individual**: `gitlab_commit_merge_requests`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                           |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `sha`        | `string`         | sí        | Commit SHA                                                                                                            |
+| `page`       | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`   | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `repository.commit_refs`
+
+> List branches and tags that reference (contain) a commit, optionally filtered by ref type. Returns: ref entries with type and name plus pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`tag.list`](/gitlab-mcp-server/reference/tools/tag/#taglist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_refs`
+- **Herramienta individual**: `gitlab_commit_refs`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                              | Requerido | Descripción                                                                                                                                       |
+| ------------ | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                  | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `sha`        | `string`                          | sí        | Commit SHA to look up                                                                                                                             |
+| `order_by`   | `string`                          | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`       | `integer`                         | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                          | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                          | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                         | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)          | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `type`       | `string` (`branch`, `tag`, `all`) | no        | Filter by ref type: branch, tag, or all (default: all)                                                                                            |
+
+### `repository.commit_revert`
+
+> Revert a commit on a target branch, creating a new commit that undoes it. Returns: the newly created revert commit (SHA, title, author, dates, web URL) or a conflict error. See also: [`repository.commit_get`](#repositorycommit_get), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.commit_cherry_pick`](#repositorycommit_cherry_pick).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_revert`
+- **Herramienta individual**: `gitlab_commit_revert`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `branch`     | `string`         | sí        | Target branch name             |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `sha`        | `string`         | no        | Commit SHA to revert           |
+
+### `repository.commit_signature`
+
+> Get the signature (GPG/X.509/SSH) of a commit for authenticity verification. Returns: the signing key ID, primary key ID, signer name/email, verification status, and optional subkey ID. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.file_history`](#repositoryfile_history).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_signature`
+- **Herramienta individual**: `gitlab_commit_signature`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+| `sha`        | `string`         | sí        | Commit SHA                     |
+
+### `repository.commit_status_set`
+
+> Set or update the pipeline status of a commit (used by external CI/reporting integrations). Returns: the resulting status with state, name, ref, coverage, pipeline ID, timestamps, and author user object. See also: [`repository.commit_statuses`](#repositorycommit_statuses), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinelist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_status_set`
+- **Herramienta individual**: `gitlab_commit_status_set`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro     | Tipo                                                                        | Requerido | Descripción                                               |
+| ------------- | --------------------------------------------------------------------------- | --------- | --------------------------------------------------------- |
+| `project_id`  | `string/integer`                                                            | sí        | Project ID or URL-encoded path                            |
+| `sha`         | `string`                                                                    | sí        | Commit SHA                                                |
+| `state`       | `string` (`pending`, `running`, `success`, `failed`, `canceled`, `skipped`) | sí        | Status state: pending, running, success, failed, canceled |
+| `context`     | `string`                                                                    | no        | Status context label (overrides name)                     |
+| `coverage`    | `number`                                                                    | no        | Code coverage percentage                                  |
+| `description` | `string`                                                                    | no        | Short description of the status                           |
+| `name`        | `string`                                                                    | no        | Status name / context                                     |
+| `pipeline_id` | `integer`                                                                   | no        | Pipeline ID to associate the status with                  |
+| `ref`         | `string`                                                                    | no        | Branch or tag name                                        |
+| `target_url`  | `string`                                                                    | no        | URL to link from the status                               |
+
+### `repository.commit_statuses`
+
+> List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: [`repository.commit_status_set`](#repositorycommit_status_set), [`repository.commit_get`](#repositorycommit_get), [`pipeline.list`](/gitlab-mcp-server/reference/tools/pipeline/#pipelinelist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `commit_statuses`
+- **Herramienta individual**: `gitlab_commit_statuses`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| ------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`  | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `sha`         | `string`                 | sí        | Commit SHA                                                                                                                                        |
+| `all`         | `boolean`                | no        | Return all statuses including retries                                                                                                             |
+| `name`        | `string`                 | no        | Status name filter                                                                                                                                |
+| `order_by`    | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`        | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`  | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`  | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`    | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `pipeline_id` | `integer`                | no        | Pipeline ID filter                                                                                                                                |
+| `ref`         | `string`                 | no        | Branch or tag name filter                                                                                                                         |
+| `sort`        | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `stage`       | `string`                 | no        | Stage name filter                                                                                                                                 |
+
+### `repository.compare`
+
+> Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: [`repository.tree`](#repositorytree), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `compare`
+- **Herramienta individual**: `gitlab_repository_compare`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro         | Tipo             | Requerido | Descripción                                                          |
+| ----------------- | ---------------- | --------- | -------------------------------------------------------------------- |
+| `from`            | `string`         | sí        | Branch name, tag, or commit SHA to compare from                      |
+| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path                                       |
+| `to`              | `string`         | sí        | Branch name, tag, or commit SHA to compare to                        |
+| `from_project_id` | `integer`        | no        | Source project ID for cross-project comparison, minimum=1            |
+| `straight`        | `boolean`        | no        | Use straight comparison (from..to) instead of merge-base (from...to) |
+| `unidiff`         | `boolean`        | no        | Return diffs in unified diff format                                  |
+
+### `repository.contributors`
+
+> List repository contributors. Returns: each contributor's name, email, commit count, additions, deletions, and pagination metadata. See also: [`repository.tree`](#repositorytree), [`repository.file_history`](#repositoryfile_history).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `contributors`
+- **Herramienta individual**: `gitlab_repository_contributors`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo                                  | Requerido | Descripción                                                                                                                                       |
+| ------------ | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                      | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `order_by`   | `string` (`name`, `email`, `commits`) | no        | Order by: name, email, or commits (number of commits). Contributors are ordered by commit date when omitted                                       |
+| `page`       | `integer`                             | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token` | `string`                              | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination` | `string`                              | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `per_page`   | `integer`                             | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `sort`       | `string` (`asc`, `desc`)              | no        | Sort direction: asc or desc (default: asc)                                                                                                        |
+
+### `repository.file_blame`
+
+> Get blame information for a file, optionally for a line range. Returns: file_path and blame ranges, each with commit id, message, author name/email, authored and committed dates, and the covered lines. See also: [`repository.file_get`](#repositoryfile_get), [`repository.file_history`](#repositoryfile_history).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_blame`
+- **Herramienta individual**: `gitlab_file_blame`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo             | Requerido | Descripción                                             |
+| ------------- | ---------------- | --------- | ------------------------------------------------------- |
+| `file_path`   | `string`         | sí        | URL-encoded full path of the file                       |
+| `project_id`  | `string/integer` | sí        | Project ID or URL-encoded path                          |
+| `range_end`   | `integer`        | no        | End line number for blame range                         |
+| `range_start` | `integer`        | no        | Start line number for blame range                       |
+| `ref`         | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch) |
+
+### `repository.file_create`
+
+> Create a new file in a repository in a single commit. Returns: file_path, branch, commit_id, and last_commit_id. See also: [`repository.file_update`](#repositoryfile_update), [`repository.file_get`](#repositoryfile_get), [`repository.file_delete`](#repositoryfile_delete).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_create`
+- **Herramienta individual**: `gitlab_file_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro          | Tipo                        | Requerido | Descripción                                                        |
+| ------------------ | --------------------------- | --------- | ------------------------------------------------------------------ |
+| `branch`           | `string`                    | sí        | Branch to create the file on                                       |
+| `commit_message`   | `string`                    | sí        | Commit message                                                     |
+| `content`          | `string`                    | sí        | File content                                                       |
+| `file_path`        | `string`                    | sí        | URL-encoded full path of the new file                              |
+| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                                     |
+| `author_email`     | `string`                    | no        | Commit author email                                                |
+| `author_name`      | `string`                    | no        | Commit author name                                                 |
+| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text)                   |
+| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file                              |
+| `start_branch`     | `string`                    | no        | Branch to start from (creates new branch if different from branch) |
+
+### `repository.file_delete`
+
+> Delete a file from a repository in a single commit. Returns: a success confirmation naming the file and project. See also: [`repository.file_get`](#repositoryfile_get), [`repository.file_update`](#repositoryfile_update).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_delete`
+- **Herramienta individual**: `gitlab_file_delete`
+- **Nivel**: Free
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                 |
+| ---------------- | ---------------- | --------- | ------------------------------------------- |
+| `branch`         | `string`         | sí        | Branch to delete the file from              |
+| `commit_message` | `string`         | sí        | Commit message                              |
+| `file_path`      | `string`         | sí        | URL-encoded full path of the file to delete |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path              |
+| `author_email`   | `string`         | no        | Commit author email                         |
+| `author_name`    | `string`         | no        | Commit author name                          |
+| `last_commit_id` | `string`         | no        | Last known commit ID for optimistic locking |
+| `start_branch`   | `string`         | no        | Branch to start from                        |
+
+### `repository.file_get`
+
+> Get a single file's decoded content and metadata from a repository. Returns: file_name, file_path, size, encoding, content, content_sha256, ref, blob_id, commit_id, last_commit_id, and execute_filemode. See also: [`repository.file_raw`](#repositoryfile_raw), [`repository.file_metadata`](#repositoryfile_metadata), [`repository.file_blame`](#repositoryfile_blame), [`repository.tree`](#repositorytree).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_get`
+- **Herramienta individual**: `gitlab_file_get`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                           |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | URL-encoded full path of the file (e.g. src%2Fmain.go or src/main.go) |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
+| `ref`        | `string`         | no        | Branch name, tag, or commit SHA (defaults to default branch)          |
+
+### `repository.file_history`
+
+> List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: [`repository.commit_get`](#repositorycommit_get), [`repository.commit_diff`](#repositorycommit_diff), [`repository.commit_statuses`](#repositorycommit_statuses), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_history`
+- **Herramienta individual**: `gitlab_commit_list`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro      | Tipo                     | Requerido | Descripción                                                                                                                                       |
+| -------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`   | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                    |
+| `all`          | `boolean`                | no        | Retrieve every commit from the whole repository (across all branches)                                                                             |
+| `author`       | `string`                 | no        | Filter by commit author name or email                                                                                                             |
+| `first_parent` | `boolean`                | no        | Follow only the first parent commit upon seeing a merge commit                                                                                    |
+| `order_by`     | `string`                 | no        | For keyset pagination, the column to order results by                                                                                             |
+| `page`         | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                             |
+| `page_token`   | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'. |
+| `pagination`   | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.  |
+| `path`         | `string`                 | no        | File path to filter commits by (only commits touching this path)                                                                                  |
+| `per_page`     | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                             |
+| `ref_name`     | `string`                 | no        | Branch name, tag, or commit SHA to list commits from (default: default branch)                                                                    |
+| `since`        | `string`                 | no        | Return commits after this date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)                                                                       |
+| `sort`         | `string` (`asc`, `desc`) | no        | Sort order for keyset pagination: 'asc' or 'desc'                                                                                                 |
+| `trailers`     | `boolean`                | no        | Parse and include Git trailers for every commit                                                                                                   |
+| `until`        | `string`                 | no        | Return commits before this date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)                                                                      |
+| `with_stats`   | `boolean`                | no        | Include commit stats (additions, deletions, total)                                                                                                |
+
+### `repository.file_metadata`
+
+> Get a file's metadata without content (HEAD request). Returns: file_name, file_path, size, encoding, ref, blob_id, commit_id, last_commit_id, execute_filemode, and content_sha256. See also: [`repository.file_get`](#repositoryfile_get), [`repository.file_raw_metadata`](#repositoryfile_raw_metadata).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_metadata`
+- **Herramienta individual**: `gitlab_file_metadata`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                             |
+| ------------ | ---------------- | --------- | ------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | URL-encoded full path of the file                       |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                          |
+| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch) |
+
+### `repository.file_raw`
+
+> Get the raw content of a file from a repository. Returns: file_path, size, content, and content_category. See also: [`repository.file_get`](#repositoryfile_get), [`repository.file_raw_metadata`](#repositoryfile_raw_metadata).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_raw`
+- **Herramienta individual**: `gitlab_file_raw`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                           |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | URL-encoded full path of the file                                     |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
+| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself |
+| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)               |
+
+### `repository.file_raw_metadata`
+
+> Get raw file metadata without content (HEAD request to the raw endpoint). Returns: file_name, file_path, size, encoding, ref, blob_id, commit_id, last_commit_id, execute_filemode, and content_sha256. See also: [`repository.file_raw`](#repositoryfile_raw), [`repository.file_metadata`](#repositoryfile_metadata).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_raw_metadata`
+- **Herramienta individual**: `gitlab_file_raw_metadata`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                           |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------- |
+| `file_path`  | `string`         | sí        | URL-encoded full path of the file                                     |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                        |
+| `lfs`        | `boolean`        | no        | Fetch the target of an LFS pointer instead of the pointer file itself |
+| `ref`        | `string`         | no        | Branch, tag, or commit SHA (defaults to default branch)               |
+
+### `repository.file_update`
+
+> Update an existing file in a repository in a single commit. Returns: file_path, branch, commit_id, and last_commit_id. See also: [`repository.file_create`](#repositoryfile_create), [`repository.file_get`](#repositoryfile_get), [`repository.file_delete`](#repositoryfile_delete).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `file_update`
+- **Herramienta individual**: `gitlab_file_update`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro          | Tipo                        | Requerido | Descripción                                      |
+| ------------------ | --------------------------- | --------- | ------------------------------------------------ |
+| `branch`           | `string`                    | sí        | Branch to update the file on                     |
+| `commit_message`   | `string`                    | sí        | Commit message                                   |
+| `content`          | `string`                    | sí        | New file content                                 |
+| `file_path`        | `string`                    | sí        | URL-encoded full path of the file to update      |
+| `project_id`       | `string/integer`            | sí        | Project ID or URL-encoded path                   |
+| `author_email`     | `string`                    | no        | Commit author email                              |
+| `author_name`      | `string`                    | no        | Commit author name                               |
+| `encoding`         | `string` (`text`, `base64`) | no        | Content encoding: text or base64 (default: text) |
+| `execute_filemode` | `boolean`                   | no        | Enable execute permission on the file            |
+| `last_commit_id`   | `string`                    | no        | Last known commit ID for optimistic locking      |
+| `start_branch`     | `string`                    | no        | Branch to start from                             |
+
+### `repository.list_submodules`
+
+> List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project, and pinned commit_sha, plus a count. See also: [`repository.read_submodule_file`](#repositoryread_submodule_file), [`repository.update_submodule`](#repositoryupdate_submodule), [`repository.tree`](#repositorytree).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `list_submodules`
+- **Herramienta individual**: `gitlab_list_repository_submodules`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                  |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                               |
+| `ref`        | `string`         | no        | Branch name, tag, or commit SHA (defaults to default branch) |
+
+### `repository.markdown_render`
+
+> Render arbitrary Markdown text to HTML using the GitLab Markdown API. Optionally apply GitLab Flavored Markdown and resolve references within a project's context. Returns: the rendered HTML string. See also: [`repository.file_get`](#repositoryfile_get), [`wiki.get`](/gitlab-mcp-server/reference/tools/wiki/#wikiget).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `markdown_render`
+- **Herramienta individual**: `gitlab_render_markdown`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro | Tipo      | Requerido | Descripción                                                |
+| --------- | --------- | --------- | ---------------------------------------------------------- |
+| `text`    | `string`  | sí        | Markdown text to render                                    |
+| `gfm`     | `boolean` | no        | Use GitLab Flavored Markdown (default false)               |
+| `project` | `string`  | no        | Project path for resolving references (e.g. group/project) |
+
+### `repository.merge_base`
+
+> Find the common ancestor (merge base) of two or more refs. Returns: the merge-base commit with metadata and web URL. See also: [`repository.compare`](#repositorycompare), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `merge_base`
+- **Herramienta individual**: `gitlab_repository_merge_base`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                              |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------ |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                           |
+| `refs`       | `string[]`       | sí        | Two or more branch names, tags, or commit SHAs to find the merge base of |
+
+### `repository.raw_blob`
+
+> Get the raw content of a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: [`repository.blob`](#repositoryblob), [`repository.tree`](#repositorytree).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `raw_blob`
+- **Herramienta individual**: `gitlab_repository_raw_blob`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                 |
+| ------------ | ---------------- | --------- | ------------------------------------------- |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path              |
+| `sha`        | `string`         | sí        | Blob SHA (from tree listing or commit diff) |
+
+### `repository.read_submodule_file`
+
+> Read a file from inside a submodule at the parent-pinned commit. Returns: file_name, file_path, submodule_path, resolved_project, commit_sha, size, decoded content, and encoding. See also: [`repository.list_submodules`](#repositorylist_submodules), [`repository.file_get`](#repositoryfile_get), [`repository.update_submodule`](#repositoryupdate_submodule).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `read_submodule_file`
+- **Herramienta individual**: `gitlab_read_repository_submodule_file`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                             |
+| ---------------- | ---------------- | --------- | ----------------------------------------------------------------------- |
+| `file_path`      | `string`         | sí        | Path of the file inside the submodule (e.g. src/main.c)                 |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path of the parent repository                 |
+| `submodule_path` | `string`         | sí        | Path to the submodule as defined in .gitmodules (e.g. libs/core-module) |
+| `ref`            | `string`         | no        | Branch/tag/SHA in the parent repository (defaults to default branch)    |
+
+### `repository.tree`
+
+> List repository tree items. Returns: paths, object IDs, entry types (blob/tree/commit), modes, each entry's last commit when with_last_commit is set, and pagination metadata. See also: [`repository.blob`](#repositoryblob), [`repository.raw_blob`](#repositoryraw_blob), [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `tree`
+- **Herramienta individual**: `gitlab_repository_tree`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro          | Tipo                     | Requerido | Descripción                                                                                                                                                         |
+| ------------------ | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`       | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                                      |
+| `order_by`         | `string`                 | no        | Column to order keyset-paginated results by: 'id', 'name', 'path', or 'type' (only used with pagination='keyset')                                                   |
+| `page`             | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                               |
+| `page_token`       | `string`                 | no        | Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.                   |
+| `pagination`       | `string`                 | no        | Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.                    |
+| `path`             | `string`                 | no        | Path inside the repository to list (default: root)                                                                                                                  |
+| `per_page`         | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                               |
+| `recursive`        | `boolean`                | no        | List files recursively through subdirectories. Cannot be combined with with_last_commit                                                                             |
+| `ref`              | `string`                 | no        | Branch name, tag, or commit SHA (default: default branch)                                                                                                           |
+| `sort`             | `string` (`asc`, `desc`) | no        | Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')                                                                          |
+| `with_last_commit` | `boolean`                | no        | Include, as last_commit, the most recent commit that changed each entry (GitLab 19.3 or later, and an older instance ignores it). Cannot be combined with recursive |
+
+### `repository.update_submodule`
+
+> Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, status, project_id, trailers, last_pipeline, and web_url. See also: [`repository.list_submodules`](#repositorylist_submodules), [`repository.read_submodule_file`](#repositoryread_submodule_file), [`repository.commit_get`](#repositorycommit_get).
+
+- **Meta-herramienta**: `gitlab_repository`, acción `update_submodule`
+- **Herramienta individual**: `gitlab_update_repository_submodule`
+- **Nivel**: Free
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                |
+| ---------------- | ---------------- | --------- | ------------------------------------------ |
+| `branch`         | `string`         | sí        | Branch name to commit the update to        |
+| `commit_sha`     | `string`         | sí        | Full commit SHA to update the submodule to |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path             |
+| `submodule`      | `string`         | sí        | URL-encoded full path to the submodule     |
+| `commit_message` | `string`         | no        | Custom commit message (optional)           |

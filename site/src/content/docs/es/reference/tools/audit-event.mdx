@@ -1,0 +1,138 @@
+---
+title: "Eventos de auditoría"
+description: "Lista y lee los eventos de auditoría de GitLab a nivel de instancia, de grupo y de proyecto."
+sidebar:
+  order: 16
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Los eventos de auditoría son el registro de GitLab de quién cambió qué, guardado por cumplimiento. Estas acciones los listan y leen uno, en cada uno de los tres niveles en los que GitLab los guarda: la instancia, un grupo y un proyecto. El nivel de instancia necesita un administrador.
+
+## Preguntas de ejemplo
+
+- "Muestra los eventos de auditoría de la semana pasada del grupo platform"
+- "¿Quién cambió ayer los ajustes del proyecto 42?"
+- "Lista los eventos de auditoría de la instancia desde el 2026-09-01"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `audit_event.get_group`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_audit_event` con `action` igual al nombre de la acción, como `get_group`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_get_group_audit_event`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 6:
+
+- **Free**: 0
+- **Premium**: 6
+- **Ultimate**: 6
+
+Acciones de solo lectura: 6 de 6, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                                   | Individual                          |
+| -------------------------------------------------------- | ----------------------------------- |
+| [`audit_event.get_group`](#audit_eventget_group)         | `gitlab_get_group_audit_event`      |
+| [`audit_event.get_instance`](#audit_eventget_instance)   | `gitlab_get_instance_audit_event`   |
+| [`audit_event.get_project`](#audit_eventget_project)     | `gitlab_get_project_audit_event`    |
+| [`audit_event.list_group`](#audit_eventlist_group)       | `gitlab_list_group_audit_events`    |
+| [`audit_event.list_instance`](#audit_eventlist_instance) | `gitlab_list_instance_audit_events` |
+| [`audit_event.list_project`](#audit_eventlist_project)   | `gitlab_list_project_audit_events`  |
+
+### `audit_event.get_group`
+
+> Get a single group-level audit event by group_id and ID. Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: [`audit_event.list_group`](#audit_eventlist_group), [`audit_event.get_project`](#audit_eventget_project), [`audit_event.get_instance`](#audit_eventget_instance).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `get_group`
+- **Herramienta individual**: `gitlab_get_group_audit_event`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo             | Requerido | Descripción                  |
+| ---------- | ---------------- | --------- | ---------------------------- |
+| `event_id` | `integer`        | sí        | Audit event ID               |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path |
+
+### `audit_event.get_instance`
+
+> Get a single instance-level audit event by ID (administrator only). Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: [`audit_event.list_instance`](#audit_eventlist_instance), [`audit_event.get_group`](#audit_eventget_group), [`audit_event.get_project`](#audit_eventget_project).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `get_instance`
+- **Herramienta individual**: `gitlab_get_instance_audit_event`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro  | Tipo      | Requerido | Descripción    |
+| ---------- | --------- | --------- | -------------- |
+| `event_id` | `integer` | sí        | Audit event ID |
+
+### `audit_event.get_project`
+
+> Get a single project-level audit event by project_id and ID. Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: [`audit_event.list_project`](#audit_eventlist_project), [`audit_event.get_group`](#audit_eventget_group), [`audit_event.get_instance`](#audit_eventget_instance).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `get_project`
+- **Herramienta individual**: `gitlab_get_project_audit_event`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `event_id`   | `integer`        | sí        | Audit event ID                 |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
+
+### `audit_event.list_group`
+
+> List group-level audit events for a group. Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: [`audit_event.get_group`](#audit_eventget_group), [`audit_event.list_project`](#audit_eventlist_project), [`audit_event.list_instance`](#audit_eventlist_instance).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `list_group`
+- **Herramienta individual**: `gitlab_list_group_audit_events`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                           |
+| ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `group_id`       | `string/integer` | sí        | Group ID or URL-encoded path                                                                                          |
+| `created_after`  | `string`         | no        | Return events created after this date (ISO 8601 YYYY-MM-DD)                                                           |
+| `created_before` | `string`         | no        | Return events created before this date (ISO 8601 YYYY-MM-DD)                                                          |
+| `page`           | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`       | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `audit_event.list_instance`
+
+> List instance-level audit events (administrator only). Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: [`audit_event.get_instance`](#audit_eventget_instance), [`audit_event.list_group`](#audit_eventlist_group), [`audit_event.list_project`](#audit_eventlist_project).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `list_instance`
+- **Herramienta individual**: `gitlab_list_instance_audit_events`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo      | Requerido | Descripción                                                                                                           |
+| ---------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `created_after`  | `string`  | no        | Return events created after this date (ISO 8601 YYYY-MM-DD)                                                           |
+| `created_before` | `string`  | no        | Return events created before this date (ISO 8601 YYYY-MM-DD)                                                          |
+| `page`           | `integer` | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`       | `integer` | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
+
+### `audit_event.list_project`
+
+> List project-level audit events for a project. Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: [`audit_event.get_project`](#audit_eventget_project), [`audit_event.list_group`](#audit_eventlist_group), [`audit_event.list_instance`](#audit_eventlist_instance).
+
+- **Meta-herramienta**: `gitlab_audit_event`, acción `list_project`
+- **Herramienta individual**: `gitlab_list_project_audit_events`
+- **Nivel**: Premium
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                           |
+| ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                                                                                        |
+| `created_after`  | `string`         | no        | Return events created after this date (ISO 8601 YYYY-MM-DD)                                                           |
+| `created_before` | `string`         | no        | Return events created before this date (ISO 8601 YYYY-MM-DD)                                                          |
+| `page`           | `integer`        | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
+| `per_page`       | `integer`        | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |

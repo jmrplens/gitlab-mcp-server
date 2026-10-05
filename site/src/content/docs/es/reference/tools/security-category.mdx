@@ -1,0 +1,91 @@
+---
+title: "Categorías de seguridad"
+description: "Categorías de seguridad, que agrupan los atributos de seguridad de un espacio de nombres, a través de la API GraphQL de GitLab."
+sidebar:
+  order: 8
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Una categoría de seguridad agrupa los [atributos de seguridad](/gitlab-mcp-server/reference/tools/security-attribute/) de un espacio de nombres y decide si se puede aplicar más de uno de ellos al mismo grupo o proyecto. Estas acciones crean, actualizan y borran categorías. Borrar una categoría borra también sus atributos.
+
+## Preguntas de ejemplo
+
+- "Crea una categoría de seguridad llamada Business impact"
+- "Cambia el nombre de la categoría de seguridad 7"
+- "Borra una categoría de seguridad propia y sus atributos"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `security_category.create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_security_category` con `action` igual al nombre de la acción, como `create`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_create_security_category`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 3:
+
+- **Free**: 0
+- **Premium**: 0
+- **Ultimate**: 3
+
+Acciones de solo lectura: 0 de 3, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+
+| Acción                                                 | Individual                        |
+| ------------------------------------------------------ | --------------------------------- |
+| [`security_category.create`](#security_categorycreate) | `gitlab_create_security_category` |
+| [`security_category.delete`](#security_categorydelete) | `gitlab_delete_security_category` |
+| [`security_category.update`](#security_categoryupdate) | `gitlab_update_security_category` |
+
+### `security_category.create`
+
+> Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: [`security_attribute.create`](/gitlab-mcp-server/reference/tools/security-attribute/#security_attributecreate), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate`](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate)
+
+- **Meta-herramienta**: `gitlab_security_category`, acción `create`
+- **Herramienta individual**: `gitlab_create_security_category`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro            | Tipo      | Requerido | Descripción                                                  |
+| -------------------- | --------- | --------- | ------------------------------------------------------------ |
+| `name`               | `string`  | sí        | Security category name                                       |
+| `namespace_id`       | `integer` | sí        | Numeric namespace ID                                         |
+| `description`        | `string`  | no        | Security category description                                |
+| `multiple_selection` | `boolean` | no        | Whether multiple attributes can be selected for the category |
+
+### `security_category.delete`
+
+> Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation and the IDs of the security attributes deleted with the category. See also: [`security_attribute.create`](/gitlab-mcp-server/reference/tools/security-attribute/#security_attributecreate), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy`](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy)
+
+- **Meta-herramienta**: `gitlab_security_category`, acción `delete`
+- **Herramienta individual**: `gitlab_delete_security_category`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro     | Tipo      | Requerido | Descripción                  |
+| ------------- | --------- | --------- | ---------------------------- |
+| `category_id` | `integer` | sí        | Numeric security category ID |
+
+### `security_category.update`
+
+> Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: [`security_attribute.create`](/gitlab-mcp-server/reference/tools/security-attribute/#security_attributecreate), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget), [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget). API docs: [`https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate`](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate)
+
+- **Meta-herramienta**: `gitlab_security_category`, acción `update`
+- **Herramienta individual**: `gitlab_update_security_category`
+- **Nivel**: Ultimate
+- **Comportamiento**: escribe, idempotente
+
+| Parámetro      | Tipo      | Requerido | Descripción                       |
+| -------------- | --------- | --------- | --------------------------------- |
+| `category_id`  | `integer` | sí        | Numeric security category ID      |
+| `namespace_id` | `integer` | sí        | Numeric namespace ID              |
+| `description`  | `string`  | no        | New security category description |
+| `name`         | `string`  | no        | New security category name        |
+
+Además necesita al menos uno de estos: `name`; `description`.

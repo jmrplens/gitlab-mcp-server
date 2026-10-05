@@ -151,6 +151,12 @@ jobs:
       - name: Check generated llms files
         if: env.FRESHNESS == 'checked'
         run: make check-llms
+      # The per-domain tool reference of the site is written from the action
+      # catalog, one page per group in both languages; a group, an action, a
+      # tier or a parameter that changes leaves its page stale here.
+      - name: Check the per-domain tool reference
+        if: env.FRESHNESS == 'checked'
+        run: make check-tool-reference
       - name: Check LobeHub manifest
         if: env.FRESHNESS == 'checked'
         run: make check-lhm-manifest

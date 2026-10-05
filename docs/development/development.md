@@ -29,7 +29,6 @@ gitlab-mcp-server/
 │   ├── audit_catalog_first/     # ActionSpec catalog coverage inventory
 │   ├── audit_dead_consts/       # Every unexported constant is one something reads, which unused cannot say inside a const group
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
-│   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_doc_tool_names/    # Every gitlab_* name and every domain.action ID the docs mention is one the server serves
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
 │   ├── audit_e2e_coverage/      # What the e2e suite dispatched, the catalog actions it never reached, and the push-time gate over the typed action ids
@@ -56,6 +55,7 @@ gitlab-mcp-server/
 │   ├── gen_model_corpus/        # Renders the model evaluation corpus breadth ledger
 │   ├── gen_model_results/       # Folds a model evaluation run's shards into the published record
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
+│   ├── gen_tool_reference/      # Writes the site's per-domain tool reference from the catalog and domains.json
 │   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
 │   └── internal/                # Shared helpers for the commands above (actionids, apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
@@ -403,7 +403,7 @@ With the catalog-first modular sub-package architecture:
 4. **Create ActionSpecs**: define `ActionSpecs(client, ...)` or update the owning aggregation builder with typed `ActionRoute` constructors and individual projection metadata
 5. **Create markdown formatters**: register output formatters from the sub-package with `toolutil.RegisterMarkdown` or `toolutil.RegisterMarkdownResult`
 6. **Regenerate catalog manifest**: run `make gen-action-catalog-manifest` when the source-defined builder set changes, then run `make check-action-catalog-manifest`
-7. **Update documentation**: `docs/reference/tools/{domain}.md` and `docs/reference/tools/README.md`
+7. **Regenerate the tool reference**: run `make gen-tool-reference`, which writes the site's per-domain tool reference from the catalog; a new catalog group needs its overview and sample questions in `cmd/gen_tool_reference/domains.json` first
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
 When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_find_action`, `gitlab_execute_action`, the `gitlab://tools` manifest, generated LLM files, and audit commands. Do not create package-local `RegisterTools` functions or dynamic-only copies of ordinary GitLab actions.

@@ -1,0 +1,175 @@
+---
+title: "Flujos de creación guiados"
+description: "Flujos guiados que crean un issue, un merge request, un proyecto o una release preguntando al usuario paso a paso."
+sidebar:
+  order: 18
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Cuatro flujos que crean algo en GitLab preguntando al usuario cada campo mediante la elicitación de MCP, y después una confirmación final, antes de que ninguna petición llegue a GitLab: un issue, un merge request, un proyecto y una release. Cancelar cualquier pregunta no crea nada. Son para una persona que participa; un script o un modelo que ya tiene todos los campos llama a `issue.create`, `merge_request.create`, `project.create` o `release.create`.
+
+## Preguntas de ejemplo
+
+- "Guíame para crear un issue en el proyecto 42"
+- "Ayúdame a abrir un merge request paso a paso"
+- "Guíame para publicar una release de v2.0.0"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `interactive.issue_create`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** e **individual** (`GITLAB_MCP_TOOL_SURFACE=meta` o `individual`): cada acción es una herramienta propia, como `gitlab_interactive_issue_create`, con el mismo nombre en las dos superficies, a la que se le pasan directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Necesita un cliente que admita la [elicitación](/gitlab-mcp-server/capabilities/elicitation/) de MCP, por la que cada acción hace sus preguntas.
+
+Acciones de solo lectura: 0 de 4, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                                     | Individual                          |
+| ---------------------------------------------------------- | ----------------------------------- |
+| [`interactive.issue_create`](#interactiveissue_create)     | `gitlab_interactive_issue_create`   |
+| [`interactive.mr_create`](#interactivemr_create)           | `gitlab_interactive_mr_create`      |
+| [`interactive.project_create`](#interactiveproject_create) | `gitlab_interactive_project_create` |
+| [`interactive.release_create`](#interactiverelease_create) | `gitlab_interactive_release_create` |
+
+### `interactive.issue_create`
+
+> Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.
+>
+> Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.
+>
+> After invocation, the tool elicits in order:
+>
+> - title (string, required): issue title.
+> - description (string, optional, multi-line, Markdown): leave empty to skip.
+> - labels (string, optional): comma-separated. Trimmed and deduped server-side.
+> - confidential (boolean, optional): yes/no confirmation. Defaults to public when declined.
+> - confirm (boolean, required): final yes/no review of the assembled summary.
+>
+> Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.
+>
+> When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use issue.create with all fields pre-supplied.
+>
+> Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming issue.create as the alternative.
+>
+> Returns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.
+>
+> See also: [`issue.create`](/gitlab-mcp-server/reference/tools/issue/#issuecreate), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+
+- **Meta-herramienta**: `gitlab_interactive_issue_create`, una herramienta propia
+- **Herramienta individual**: `gitlab_interactive_issue_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                    |
+| ------------ | ---------------- | --------- | -------------------------------------------------------------- |
+| `project_id` | `string/integer` | no        | Project ID or URL-encoded path where the issue will be created |
+
+### `interactive.mr_create`
+
+> Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.
+>
+> Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.
+>
+> After invocation, the tool elicits in order:
+>
+> - source_branch (string, required): branch with the changes to merge.
+> - target_branch (string, required): branch to merge into (e.g. main, develop).
+> - title (string, required): MR title.
+> - description (string, optional, multi-line, Markdown): leave empty to skip.
+> - labels (string, optional): comma-separated. Trimmed and deduped server-side.
+> - remove_source_branch (boolean, optional): yes/no confirmation, default unset.
+> - squash (boolean, optional): yes/no confirmation, default unset.
+> - confirm (boolean, required): final yes/no review of the assembled summary.
+>
+> Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use merge_request.create with all fields pre-supplied and handle 422 as the expected duplicate case.
+>
+> When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use merge_request.create with all fields pre-supplied.
+>
+> Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming merge_request.create as the alternative.
+>
+> Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.
+>
+> See also: [`merge_request.create`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestcreate), [`branch.create`](/gitlab-mcp-server/reference/tools/branch/#branchcreate).
+
+- **Meta-herramienta**: `gitlab_interactive_mr_create`, una herramienta propia
+- **Herramienta individual**: `gitlab_interactive_mr_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                 |
+| ------------ | ---------------- | --------- | ----------------------------------------------------------- |
+| `project_id` | `string/integer` | no        | Project ID or URL-encoded path where the MR will be created |
+
+### `interactive.project_create`
+
+> Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.
+>
+> Input: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.
+>
+> After invocation, the tool elicits in order:
+>
+> - name (string, required): project display name and (when path is omitted) URL slug.
+> - description (string, optional): leave empty to skip.
+> - visibility (enum, required): one of private, internal, public.
+> - initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.
+> - default_branch (string, optional): leave empty to use the GitLab default ('main').
+> - confirm (boolean, required): final yes/no review of the assembled summary.
+>
+> When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use project.create with all fields pre-supplied.
+>
+> Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.
+>
+> Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming project.create as the alternative.
+>
+> Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).
+>
+> See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`group.get`](/gitlab-mcp-server/reference/tools/group/#groupget).
+
+- **Meta-herramienta**: `gitlab_interactive_project_create`, una herramienta propia
+- **Herramienta individual**: `gitlab_interactive_project_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+Sin parámetros.
+
+### `interactive.release_create`
+
+> Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.
+>
+> Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.
+>
+> After invocation, the tool elicits in order:
+>
+> - tag_name (string, required): must reference an existing tag in the project. Create it first via tag.create.
+> - name (string, optional): release title. Answer with an empty value to let GitLab name the release after the tag. Declining the prompt aborts.
+> - description (string, optional, multi-line, Markdown): release notes. Leave empty to skip.
+> - confirm (boolean, required): final yes/no review of the assembled summary.
+>
+> When to use: human-in-the-loop release publishing. NOT for: CI/automated release creation. Use release.create with all fields pre-supplied.
+>
+> Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming release.create as the alternative.
+>
+> Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.
+>
+> Returns: JSON with the created release (tag_name, name, description, web_url).
+>
+> See also: [`release.create`](/gitlab-mcp-server/reference/tools/release/#releasecreate), [`tag.create`](/gitlab-mcp-server/reference/tools/tag/#tagcreate).
+
+- **Meta-herramienta**: `gitlab_interactive_release_create`, una herramienta propia
+- **Herramienta individual**: `gitlab_interactive_release_create`
+- **Nivel**: Free
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                      |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------- |
+| `project_id` | `string/integer` | no        | Project ID or URL-encoded path where the release will be created |

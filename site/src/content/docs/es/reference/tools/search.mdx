@@ -1,0 +1,224 @@
+---
+title: "Búsqueda"
+description: "Busca en GitLab, en toda la instancia, en un grupo o en un proyecto, código, merge requests, issues, commits, hitos, notas, proyectos, snippets, usuarios y páginas wiki."
+sidebar:
+  order: 7
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+{/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
+
+Búsqueda de texto completo, una acción por tipo de resultado: código, merge requests, issues, commits, hitos, notas, proyectos, snippets, usuarios y páginas wiki. Cada una busca en un proyecto o en un grupo cuando se le da uno, y en toda la instancia si no. `search_type` pide un motor de búsqueda, `basic`, `advanced` o `zoekt`, y GitLab rechaza uno que la instancia no tiene activado. Todas las acciones solo leen.
+
+## Preguntas de ejemplo
+
+- "Busca parseConfig en el código del grupo platform"
+- "Encuentra merge requests que mencionen el fallo del inicio de sesión"
+- "¿Qué issues mencionan timeout en el proyecto 42?"
+
+## Cómo llamarlo
+
+- **Dinámica**, la superficie predeterminada: llama a `gitlab_execute_action` con `action` igual al ID de la acción, como `search.code`, y sus parámetros en `params`. `gitlab_find_action` encuentra un ID a partir de una descripción de la tarea.
+- **Meta** (`GITLAB_MCP_TOOL_SURFACE=meta`): llama a `gitlab_search` con `action` igual al nombre de la acción, como `code`, y sus parámetros en `params`.
+- **Individual** (`GITLAB_MCP_TOOL_SURFACE=individual`): llama a la herramienta propia de la acción, como `gitlab_search_code`, pasándole directamente sus parámetros.
+
+## Disponibilidad
+
+Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
+
+Acciones de solo lectura: 10 de 10, las que conserva un despliegue en modo de solo lectura.
+
+## Acciones
+
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+
+| Acción                                           | Individual                     |
+| ------------------------------------------------ | ------------------------------ |
+| [`search.code`](#searchcode)                     | `gitlab_search_code`           |
+| [`search.commits`](#searchcommits)               | `gitlab_search_commits`        |
+| [`search.issues`](#searchissues)                 | `gitlab_search_issues`         |
+| [`search.merge_requests`](#searchmerge_requests) | `gitlab_search_merge_requests` |
+| [`search.milestones`](#searchmilestones)         | `gitlab_search_milestones`     |
+| [`search.notes`](#searchnotes)                   | `gitlab_search_notes`          |
+| [`search.projects`](#searchprojects)             | `gitlab_search_projects`       |
+| [`search.snippets`](#searchsnippets)             | `gitlab_search_snippets`       |
+| [`search.users`](#searchusers)                   | `gitlab_search_users`          |
+| [`search.wiki`](#searchwiki)                     | `gitlab_search_wiki`           |
+
+### `search.code`
+
+> Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: [`search.projects`](#searchprojects), [`repository.file_get`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_get), [`repository.tree`](/gitlab-mcp-server/reference/tools/repository/#repositorytree).
+
+- **Meta-herramienta**: `gitlab_search`, acción `code`
+- **Herramienta individual**: `gitlab_search_code`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query text (param 'query' not 'search')                                                                                                                                                                              |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `ref`         | `string`                                | no        | Branch or tag name to search in (default: default branch)                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.commits`
+
+> Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: [`search.code`](#searchcode), [`repository.commit_get`](/gitlab-mcp-server/reference/tools/repository/#repositorycommit_get), [`repository.file_history`](/gitlab-mcp-server/reference/tools/repository/#repositoryfile_history).
+
+- **Meta-herramienta**: `gitlab_search`, acción `commits`
+- **Herramienta individual**: `gitlab_search_commits`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.issues`
+
+> Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: [`search.merge_requests`](#searchmerge_requests), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist), [`issue.get`](/gitlab-mcp-server/reference/tools/issue/#issueget).
+
+- **Meta-herramienta**: `gitlab_search`, acción `issues`
+- **Herramienta individual**: `gitlab_search_issues`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query text (param 'query' not 'search')                                                                                                                                                                              |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.merge_requests`
+
+> Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: [`search.issues`](#searchissues), [`merge_request.list`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestlist), [`merge_request.get`](/gitlab-mcp-server/reference/tools/merge-request/#merge_requestget).
+
+- **Meta-herramienta**: `gitlab_search`, acción `merge_requests`
+- **Herramienta individual**: `gitlab_search_merge_requests`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query text (param 'query' not 'search')                                                                                                                                                                              |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.milestones`
+
+> Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: [`project.milestone_list`](/gitlab-mcp-server/reference/tools/project/#projectmilestone_list), [`project.milestone_get`](/gitlab-mcp-server/reference/tools/project/#projectmilestone_get), [`search.issues`](#searchissues).
+
+- **Meta-herramienta**: `gitlab_search`, acción `milestones`
+- **Herramienta individual**: `gitlab_search_milestones`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.notes`
+
+> Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: [`search.issues`](#searchissues), [`search.merge_requests`](#searchmerge_requests), [`issue.note_list`](/gitlab-mcp-server/reference/tools/issue/#issuenote_list).
+
+- **Meta-herramienta**: `gitlab_search`, acción `notes`
+- **Herramienta individual**: `gitlab_search_notes`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`  | `string`                                | sí        | Project ID or URL-encoded path                                                                                                                                                                                              |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.projects`
+
+> Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: [`project.get`](/gitlab-mcp-server/reference/tools/project/#projectget), [`project.list`](/gitlab-mcp-server/reference/tools/project/#projectlist), [`search.code`](#searchcode).
+
+- **Meta-herramienta**: `gitlab_search`, acción `projects`
+- **Herramienta individual**: `gitlab_search_projects`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path. Omit for a global search                                                                                                                                                                      |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.snippets`
+
+> Search snippet titles globally. Returns: matching snippets with title, file name, description, visibility, author, project ID, web and raw URLs, and timestamps plus pagination metadata. See also: [`search.code`](#searchcode), [`search.projects`](#searchprojects).
+
+- **Meta-herramienta**: `gitlab_search`, acción `snippets`
+- **Herramienta individual**: `gitlab_search_snippets`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.users`
+
+> Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: [`user.get`](/gitlab-mcp-server/reference/tools/user/#userget), [`user.list`](/gitlab-mcp-server/reference/tools/user/#userlist), [`project.members`](/gitlab-mcp-server/reference/tools/project/#projectmembers).
+
+- **Meta-herramienta**: `gitlab_search`, acción `users`
+- **Herramienta individual**: `gitlab_search_users`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
+
+### `search.wiki`
+
+> Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: [`search.code`](#searchcode), [`wiki.list`](/gitlab-mcp-server/reference/tools/wiki/#wikilist), [`wiki.get`](/gitlab-mcp-server/reference/tools/wiki/#wikiget).
+
+- **Meta-herramienta**: `gitlab_search`, acción `wiki`
+- **Herramienta individual**: `gitlab_search_wiki`
+- **Nivel**: Free
+- **Comportamiento**: solo lectura, idempotente
+
+| Parámetro     | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`       | `string`                                | sí        | Search query string                                                                                                                                                                                                         |
+| `group_id`    | `string`                                | no        | Group ID or URL-encoded path (optional)                                                                                                                                                                                     |
+| `page`        | `integer`                               | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.                                                                                                       |
+| `per_page`    | `integer`                               | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.                                                                                                       |
+| `project_id`  | `string`                                | no        | Project ID or URL-encoded path (optional)                                                                                                                                                                                   |
+| `search_type` | `string` (`basic`, `advanced`, `zoekt`) | no        | Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance. |
