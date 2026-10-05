@@ -5,10 +5,10 @@
 // PARITY. `<Fact kind="…">` carries a language-independent vocabulary, which
 // is what lets an English declaration and its Spanish twin be recognised as
 // the same declaration. So every sheet must present the same sequence of
-// kinds in both locales. check-i18n-parity.mjs counts headings and backticked
-// identifiers and notices neither a sheet that loses its "what it does not
-// do" row nor one that gains a kind in one locale — the labels live in the
-// component now, not in the prose it compares.
+// kinds in both locales. check-i18n-parity.mjs only checks that each English
+// page has a Spanish file at the same path and the reverse; it reads no page,
+// so it notices neither a sheet that loses its "what it does not do" row nor
+// one that gains a kind in one locale.
 //
 // TABLE LAYOUT. Whether a markdown table stacks on a narrow screen is decided
 // from its own contents per file (src/lib/wide-tables.mjs), so a page and its

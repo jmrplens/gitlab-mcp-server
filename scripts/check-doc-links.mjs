@@ -21,9 +21,7 @@ const trackedDocs = [
 			.split("\n")
 			.filter(Boolean),
 	),
-]
-	.filter((file) => !file.startsWith("plan/"))
-	.filter((file) => !file.startsWith(".github/skills/"));
+].filter((file) => !file.startsWith("plan/"));
 
 // ---------------------------------------------------------------------------
 // Anchors

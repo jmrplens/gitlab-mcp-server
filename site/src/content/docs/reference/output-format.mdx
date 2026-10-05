@@ -395,7 +395,7 @@ Every action publishes the JSON Schema of its output, and where to read it depen
 
 The schemas follow the instance tier. On a lower tier a field that only a higher tier fills is left out of the output schema, while the output itself is not filtered, so a field GitLab sends anyway still arrives.
 
-How an action gets its schema, from the typed route constructors to the audit that reports a route without one, is contributor material: see [Tool surfaces and the canonical action core](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/tool-surfaces-and-action-core.md) in the repository.
+How an action gets its schema, from the typed route constructors to the audit that reports a route without one, is contributor material: see [Output schemas per action](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/architecture.md#output-schemas-per-action) in the repository's internal architecture page.
 
 ## Further reading
 
