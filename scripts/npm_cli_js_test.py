@@ -95,12 +95,15 @@ def alive(pid):
         return False
     # The process can be reaped between the signal probe and the read, which
     # removes its /proc entry; that is a process that is gone. Opening the file
-    # rather than testing for it first is what keeps the two from racing.
+    # rather than testing for it first is what keeps the two from racing. A
+    # host whose /proc keeps no Linux-style stat file, which this process's own
+    # entry tells, cannot say whether the process is a zombie, so the signal
+    # probe's answer stands there.
     try:
         with open("/proc/{}/stat".format(pid), encoding="utf-8") as fh:
             text = fh.read()
     except FileNotFoundError:
-        return not os.path.isdir("/proc/self")
+        return not os.path.exists("/proc/self/stat")
     return text[text.rindex(")") + 2] != "Z"
 
 
