@@ -411,9 +411,3 @@ El [índice completo de ADR](https://github.com/jmrplens/gitlab-mcp-server/blob/
 - [`modelcontextprotocol/go-sdk`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp): el SDK oficial de MCP en Go (el servidor se construye sobre la v1.8.0), que implementa el registro de herramientas, recursos y prompts y ambos transportes
 - [`gitlab-org/api/client-go`](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3): el cliente Go oficial de la API de GitLab (v3), usado en cada llamada REST y en las operaciones GraphQL que implementa, como work items y logros; los demás [dominios GraphQL](#graphql) envían sus propios documentos a través de él
 - [`tiktoken-go/tokenizer`](https://pkg.go.dev/github.com/tiktoken-go/tokenizer) — el tokenizador cl100k_base en Go puro tras las mediciones publicadas de huella de tokens
-
-## Referencia de la fuente
-
-:::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/concepts/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) en el repositorio.
-:::

@@ -199,7 +199,7 @@ La concesión de un token de grano fino se fija al crear el token, así que cada
 | `Access denied: Fine-grained personal access tokens are not yet supported.`                                                            | Los tokens de grano fino no están habilitados para el usuario del token (el feature flag `granular_personal_access_tokens` de GitLab), así que se rechaza cada llamada que haga el token                                                               | Usa un token clásico, o pide al administrador de la instancia que los habilite                   |
 | `404 Not Found`, como entrada `errors[]` de GraphQL (por REST, un `404` simple)                                                        | Lo que nombra la llamada no se encontró, o queda fuera de lo que el token puede ver                                                                                                                                                                    | Comprueba el ID o la ruta, y que la concesión cubra su proyecto o grupo                          |
 
-Una lista puede nombrar un permiso que la página de creación de tokens no ofrece: para dieciséis permisos en bruto, la búsqueda de GitLab prefiere la etiqueta de una definición obsoleta (`[Webhook: Test]` donde la página ofrece Webhook: Trigger). Eso se ha leído en el código fuente de GitLab y aún no se ha visto en una instancia en marcha ([fila 85 de upstream-bugs](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)). La [referencia de permisos de grano fino](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md) nombra el permiso que ofrece la página para cada acción que ejecuta este servidor.
+Una lista puede nombrar un permiso que la página de creación de tokens no ofrece: para dieciséis permisos en bruto, la búsqueda de GitLab prefiere la etiqueta de una definición obsoleta (`[Webhook: Test]` donde la página ofrece Webhook: Trigger). Eso se ha leído en el código fuente de GitLab y aún no se ha visto en una instancia en marcha ([fila 85 de upstream-bugs](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)). La [referencia de permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/) nombra el permiso que ofrece la página para cada acción que ejecuta este servidor.
 
 **Las respuestas del propio servidor.**
 
@@ -376,9 +376,3 @@ Si no puedes resolver un problema:
 </Steps>
 
 <FAQ />
-
-## Referencia de la fuente
-
-:::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/guides/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md) en el repositorio.
-:::

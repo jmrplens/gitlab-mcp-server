@@ -22,7 +22,7 @@ import FAQ from "../../../../components/FAQ.astro";
 Orbit expone la API experimental Knowledge Graph de GitLab.com mediante **seis herramientas MCP de solo lectura**: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`. Solo está disponible cuando el servidor se conecta a `https://gitlab.com` y el nivel resuelto es Premium o Ultimate (`GITLAB_MCP_TIER=premium` o `GITLAB_MCP_TIER=ultimate`, `--tier=premium` o `--tier=ultimate` en modo HTTP, o el nivel detectado a partir de la licencia de la instancia y después de los planes de los namespaces). La variable de entorno `GITLAB_ENTERPRISE` se eliminó en 3.0.0 y se ignora. Orbit nunca escribe: cada herramienta inspecciona salud, esquema o datos indexados, o ejecuta una consulta de solo lectura sobre el grafo.
 
 :::note[Referencia técnica]
-Para la referencia completa de las herramientas, consulta [`docs/reference/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) en el repositorio.
+Para cada acción con sus parámetros, consulta la página [Grafo de conocimiento Orbit](/gitlab-mcp-server/es/reference/tools/orbit/) de la referencia de herramientas.
 :::
 
 ## ¿Cuándo está disponible Orbit?
