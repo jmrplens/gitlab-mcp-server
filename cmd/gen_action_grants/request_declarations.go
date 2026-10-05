@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -43,19 +44,22 @@ const userCoreBasic = `id
 
 // workItemScalars are the fields every WorkItem fragment of client-go's
 // selects outside its features (workitems.go, workItemCEFields and
-// workItemTemplate), with UserCoreBasic spread into the author.
-const workItemScalars = `id
+// workItemTemplate), with UserCoreBasic spread into the author. This and the
+// documents below are assembled with fmt.Sprintf rather than +, because a
+// package-level initializer is outside every coverage block: a + there is a
+// mutant a mutation run can change and no test can be credited with killing.
+var workItemScalars = fmt.Sprintf(`id
 	iid
 	workItemType { name }
 	state
 	title
 	description
 	confidential
-	author { ` + userCoreBasic + ` }
+	author { %s }
 	createdAt
 	updatedAt
 	closedAt
-	webUrl`
+	webUrl`, userCoreBasic)
 
 // workItemFeatures are the selections client-go keeps for each feature of a
 // work item, by the name ReturnedFields and its field registry give it.
@@ -63,7 +67,7 @@ const workItemScalars = `id
 // at, so each is written out whole rather than cut to what decides today's
 // verdict.
 var workItemFeatures = map[string]string{
-	"assignees":       `assignees { assignees { nodes { ` + userCoreBasic + ` } } }`,
+	"assignees":       fmt.Sprintf(`assignees { assignees { nodes { %s } } }`, userCoreBasic),
 	"color":           `color { color textColor }`,
 	"healthStatus":    `healthStatus { healthStatus }`,
 	"hierarchy":       `hierarchy { hasParent parent { iid namespace { fullPath } } hasChildren children { nodes { iid namespace { fullPath } } } }`,
@@ -112,17 +116,17 @@ var (
 // with what the method passes the template: nothing for get, create and
 // update, and for a list the fragment its fields render.
 var (
-	getWorkItemDocument = `query GetWorkItem($fullPath: ID!, $iid: String!) {
-	namespace(fullPath: $fullPath) { workItem(iid: $iid) { ` + staticWorkItemFragment + ` } }
-}`
+	getWorkItemDocument = fmt.Sprintf(`query GetWorkItem($fullPath: ID!, $iid: String!) {
+	namespace(fullPath: $fullPath) { workItem(iid: $iid) { %s } }
+}`, staticWorkItemFragment)
 	listWorkItemsDocument  = listDocument(workItemListFragment)
 	listEpicsDocument      = listDocument(epicListFragment)
-	createWorkItemDocument = `mutation CreateWorkItem($input: WorkItemCreateInput!) {
-	workItemCreate(input: $input) { workItem { ` + staticWorkItemFragment + ` } errors }
-}`
-	updateWorkItemDocument = `mutation UpdateWorkItem($input: WorkItemUpdateInput!) {
-	workItemUpdate(input: $input) { workItem { ` + staticWorkItemFragment + ` } errors }
-}`
+	createWorkItemDocument = fmt.Sprintf(`mutation CreateWorkItem($input: WorkItemCreateInput!) {
+	workItemCreate(input: $input) { workItem { %s } errors }
+}`, staticWorkItemFragment)
+	updateWorkItemDocument = fmt.Sprintf(`mutation UpdateWorkItem($input: WorkItemUpdateInput!) {
+	workItemUpdate(input: $input) { workItem { %s } errors }
+}`, staticWorkItemFragment)
 )
 
 // listDocument is client-go's ListWorkItems shell around one fragment.
@@ -185,9 +189,7 @@ var requestDeclarations = []derive.Declaration{
 	},
 	{
 		Action: "release.get_latest", Category: categoryFollowsRedirect,
-		Reason: "GitLab answers the latest-release permalink with a redirect to the release's own route " +
-			"(lib/api/releases.rb, redirect expose_path(redirect_url)), which the HTTP client follows with the token, " +
-			"and GitLab judges the token again there; a trace of the action on 19.4.1 reaches both routes",
+		Reason:  "GitLab answers the latest-release permalink with a redirect to the release's own route (lib/api/releases.rb, redirect expose_path(redirect_url)), which the HTTP client follows with the token, and GitLab judges the token again there; a trace of the action on 19.4.1 reaches both routes",
 		Follows: "GET /projects/:/releases/permalink/latest", Requests: []derive.Request{rest("GET", "/projects/:/releases/:")},
 	},
 	{
@@ -207,12 +209,12 @@ var requestDeclarations = []derive.Declaration{
 	{
 		Action: "admin.terraform_state_get", Category: categoryFormat,
 		Reason:   "client-go formats the project path and the state name into the query with %q",
-		Replaces: categoryFormat + " TerraformStates.Get", Requests: []derive.Request{graphql("TerraformStates.Get", terraformStateGetDocument)},
+		Replaces: "sdk-graphql-format TerraformStates.Get", Requests: []derive.Request{graphql("TerraformStates.Get", terraformStateGetDocument)},
 	},
 	{
 		Action: "admin.terraform_state_list", Category: categoryFormat,
 		Reason:   "client-go formats the project path into the query with %q",
-		Replaces: categoryFormat + " TerraformStates.List", Requests: []derive.Request{graphql("TerraformStates.List", terraformStateListDocument)},
+		Replaces: "sdk-graphql-format TerraformStates.List", Requests: []derive.Request{graphql("TerraformStates.List", terraformStateListDocument)},
 	},
 }
 

@@ -148,7 +148,9 @@ func fileTypedConstant(t *testing.T, value *ast.ValueSpec, declared map[string]m
 // here rather than at the first table that carries it.
 func TestCauseAndEffectConstants_NameEveryValueFinegrainedDeclares(t *testing.T) {
 	declared := map[string]map[string]string{"Cause": {}, "Effect": {}}
-	files, err := filepath.Glob(filepath.Join("..", "..", "internal", "finegrained", "*.go"))
+	// Found from the module root, so a copy of this package staged elsewhere
+	// in the module reads the same sources.
+	files, err := filepath.Glob(filepath.Join(moduleRoot(t), "internal", "finegrained", "*.go"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("list the finegrained sources: %v, %d files", err, len(files))
 	}
