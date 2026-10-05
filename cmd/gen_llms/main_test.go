@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -275,11 +276,142 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		"1 prompts:\n\n- review_mr: Review one merge request diff.\n\n",
 		"## Documentation\n\n- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): ",
 		"- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): ",
-		"- [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide\n",
+		"- [Getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/): Installation and first-run guide\n",
+		"- [MCP clients](https://jmrp.io/docs/gitlab-mcp-server/install/clients/): Config-file path and entry for each MCP client",
+		"are on [the MCP clients page](https://jmrp.io/docs/gitlab-mcp-server/install/clients/).\n\n",
+		"- [All tools](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/): Per-domain tool reference generated from the action catalog",
+		"- [Privacy policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md): ",
 		// The companion sizes are measured, not hard-coded: llms.txt is rendered
 		// after them precisely so it can quote what they actually came out as.
 		"## Optional\n\n- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): 3 KB, ~1k tokens. Every tool and action",
 		"- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): 3 KB, ~1k tokens. The three splits above concatenated.",
+	})
+}
+
+// TestRun_LinksEachDocumentationPageToTheSite verifies that every link
+// llms.txt writes reaches a page that exists. The documentation site is the
+// one home of the user documentation, so a user page is linked there, by the
+// slug the site serves it at, and a site link must name an .mdx page under
+// site/src/content/docs and, when it carries an anchor, a heading of that page
+// slugged the way Starlight slugs it. A link into the repository is left only
+// for what the site does not carry: a root file such as PRIVACY.md, or a
+// contributor page under docs/development, never a user page under docs/.
+//
+// Nothing else checks these: the documentation link checker reads Markdown
+// and MDX, while these links live in Go source and in a generated .txt file.
+func TestRun_LinksEachDocumentationPageToTheSite(t *testing.T) {
+	repoRoot, err := mcpsurface.ProjectRoot()
+	if err != nil {
+		t.Fatalf("ProjectRoot() error: %v", err)
+	}
+	got := readGenerated(t, generateCanned(t), llmsFileName)
+
+	links := regexp.MustCompile(`\]\((https?://[^)\s]+)\)`).FindAllStringSubmatch(got, -1)
+	if len(links) == 0 {
+		t.Fatal("llms.txt carries no links at all")
+	}
+	sitePages := 0
+	for _, link := range links {
+		target := link[1]
+		if strings.HasPrefix(target, siteBaseURL) && !strings.HasSuffix(target, ".txt") {
+			sitePages++
+		}
+		t.Run(target, func(t *testing.T) {
+			if path, inRepo := strings.CutPrefix(target, repoBlobBaseURL); inRepo {
+				if strings.HasPrefix(path, "docs/") && !strings.HasPrefix(path, "docs/development/") {
+					t.Errorf("%s is a user page linked as a copy in the repository; link its page on the site", path)
+				}
+				if _, statErr := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(path))); statErr != nil {
+					t.Errorf("%s names no file in the repository: %v", path, statErr)
+				}
+				return
+			}
+			slug, inSite := strings.CutPrefix(target, siteBaseURL)
+			if !inSite {
+				t.Fatalf("%s is neither a site page nor a repository file", target)
+			}
+			if strings.HasSuffix(slug, ".txt") {
+				// A generated llms file, published beside the pages rather
+				// than written as one.
+				return
+			}
+			requireSitePage(t, repoRoot, slug)
+		})
+	}
+	if sitePages == 0 {
+		t.Error("llms.txt links no page of the documentation site")
+	}
+}
+
+// requireSitePage fails the test unless slug, a site path with its trailing
+// slash and an optional anchor, names an .mdx page of the English site and,
+// when it carries an anchor, a heading of that page.
+func requireSitePage(t *testing.T, repoRoot, slug string) {
+	t.Helper()
+	page, anchor, _ := strings.Cut(slug, "#")
+	if !strings.HasSuffix(page, "/") {
+		t.Errorf("%s lacks the trailing slash the site serves its pages at", slug)
+	}
+	base := filepath.Join(repoRoot, "site", "src", "content", "docs", filepath.FromSlash(strings.TrimSuffix(page, "/")))
+	var content []byte
+	for _, candidate := range []string{base + ".mdx", filepath.Join(base, "index.mdx")} {
+		data, readErr := os.ReadFile(candidate)
+		if readErr == nil {
+			content = data
+			break
+		}
+	}
+	if content == nil {
+		t.Fatalf("%s names no page under site/src/content/docs", page)
+	}
+	if anchor == "" {
+		return
+	}
+	for line := range strings.SplitSeq(string(content), "\n") {
+		heading := strings.TrimLeft(line, "#")
+		if heading != line && strings.HasPrefix(heading, " ") && starlightSlug(strings.TrimSpace(heading)) == anchor {
+			return
+		}
+	}
+	t.Errorf("%s names no heading %q", page, anchor)
+}
+
+// starlightSlug is the anchor Starlight gives a heading: github-slugger's
+// rule, lower case with every character but a letter, a digit, a hyphen, an
+// underscore or a space dropped and each space made a hyphen. A repeated
+// heading's numeric suffix is left out, since no link here names one.
+func starlightSlug(heading string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(heading) {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
+			b.WriteRune(r)
+		case r == ' ':
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
+}
+
+// TestRun_NamesOpenCodesOwnConfigKey verifies the install instructions do not
+// tell an assistant to configure OpenCode under mcpServers. OpenCode keeps its
+// servers under mcp in opencode.json, with a type, the command as an array and
+// an environment block, and ignores an mcpServers block, so an assistant
+// following the old sentence wrote a configuration nothing read.
+func TestRun_NamesOpenCodesOwnConfigKey(t *testing.T) {
+	got := readGenerated(t, generateCanned(t), llmsFileName)
+
+	_, rest, found := strings.Cut(got, "Most use a `mcpServers` key: ")
+	if !found {
+		t.Fatal("llms.txt no longer lists the clients that use mcpServers")
+	}
+	list, _, _ := strings.Cut(rest, ".")
+	if strings.Contains(strings.ToLower(list), "opencode") {
+		t.Errorf("the mcpServers list names OpenCode, which reads mcp: %q", list)
+	}
+	requireFragments(t, got, []string{
+		"OpenCode uses `mcp` in `opencode.json`, where each entry carries `\"type\": \"local\"`, takes `command` as an array",
+		"names its variables `environment` rather than `env`",
 	})
 }
 
@@ -665,8 +797,8 @@ func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
 
 // TestValidateLLMSTxt_RejectsRelativeFileListTarget guards the GEO regression
 // where every llms.txt link was a repository-relative path. llms.txt is served
-// from the docs domain, so "docs/getting-started.md" resolved against that host
-// and 404'd — 17 of 18 links were dead. Only absolute URLs work for every
+// from the docs domain, so a path into the repository resolved against that
+// host and 404'd: 17 of 18 links were dead. Only absolute URLs work for every
 // consumer, so generation must fail rather than publish dead links again.
 func TestValidateLLMSTxt_RejectsRelativeFileListTarget(t *testing.T) {
 	content := strings.Join([]string{
@@ -768,8 +900,8 @@ func TestAbsoluteLLMSTarget_ResolvesRepoRelativeAndPreservesAbsolute(t *testing.
 	}{
 		{
 			name:   "repo relative doc path gains the blob prefix",
-			target: "docs/getting-started.md",
-			want:   repoBlobBaseURL + "docs/getting-started.md",
+			target: "docs/development/testing/model-results.md",
+			want:   repoBlobBaseURL + "docs/development/testing/model-results.md",
 		},
 		{
 			name:   "repo root file gains the blob prefix",
