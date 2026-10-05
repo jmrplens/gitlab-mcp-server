@@ -317,6 +317,7 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 		PushEvents:             &f,
 		PushEventsBranchFilter: "main",
 		BranchFilterStrategy:   "wildcard",
+		CustomWebhookTemplate:  "edit-template",
 		TagPushEvents:          &tr,
 		MergeRequestsEvents:    &tr,
 		RepositoryUpdateEvents: &tr,
@@ -336,6 +337,7 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 		`"signing_token":"signing-secret"`,
 		`"push_events_branch_filter":"main"`,
 		`"branch_filter_strategy":"wildcard"`,
+		`"custom_webhook_template":"edit-template"`,
 		`"push_events":false`,
 		`"tag_push_events":true`,
 		`"merge_requests_events":true`,
@@ -647,6 +649,7 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 		PushEvents:             &f,
 		PushEventsBranchFilter: "main",
 		BranchFilterStrategy:   "wildcard",
+		CustomWebhookTemplate:  "add-template",
 		TagPushEvents:          &tr,
 		MergeRequestsEvents:    &tr,
 		RepositoryUpdateEvents: &tr,
@@ -679,6 +682,7 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 		`"signing_token":"signing-secret"`,
 		`"push_events_branch_filter":"main"`,
 		`"branch_filter_strategy":"wildcard"`,
+		`"custom_webhook_template":"add-template"`,
 		`"push_events":false`,
 		`"tag_push_events":true`,
 		`"merge_requests_events":true`,
@@ -806,6 +810,7 @@ var hookRequestStrings = []struct {
 	{"signing_token", "signing-value", func(i *AddInput, v string) { i.SigningToken = v }, func(i *EditInput, v string) { i.SigningToken = v }},
 	{"push_events_branch_filter", "release/*", func(i *AddInput, v string) { i.PushEventsBranchFilter = v }, func(i *EditInput, v string) { i.PushEventsBranchFilter = v }},
 	{"branch_filter_strategy", "wildcard", func(i *AddInput, v string) { i.BranchFilterStrategy = v }, func(i *EditInput, v string) { i.BranchFilterStrategy = v }},
+	{"custom_webhook_template", "templated-body", func(i *AddInput, v string) { i.CustomWebhookTemplate = v }, func(i *EditInput, v string) { i.CustomWebhookTemplate = v }},
 }
 
 // TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther holds each string
@@ -816,7 +821,7 @@ var hookRequestStrings = []struct {
 // a neighbor (`if input.Description != ""` copying `input.Name`) produced the
 // same request there, and the one input that sets a name without a description
 // asserts only that the name arrived. Driving one string at a time, and
-// refusing every other string key, tells all six apart on both call paths.
+// refusing every other string key, tells all seven apart on both call paths.
 func TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther(t *testing.T) {
 	for _, field := range hookRequestStrings {
 		t.Run(field.key, func(t *testing.T) {
@@ -963,13 +968,14 @@ func TestEdit_WithoutURL_LeavesTheURLOutOfTheRequest(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Fields GitLab sends beside the ones the SDK's own Hook models
+// Fields GitLab sends beside the event flags
 // ---------------------------------------------------------------------------.
 
-// hookSentJSON is one hook carrying every key the SDK's Hook leaves out: the
-// branch filter and the strategy that reads it, the alert status and how long
-// the hook stays disabled, the payload template, the custom headers and the
-// organization a system hook belongs to.
+// hookSentJSON is one hook carrying every key GitLab sends beside the event
+// flags, which client-go's Hook models since v3.15.0: the branch filter and
+// the strategy that reads it, the alert status and how long the hook stays
+// disabled, the payload template, the custom headers and the organization a
+// system hook belongs to.
 const hookSentJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook",` +
 	`"created_at":"2026-01-01T00:00:00Z","push_events":true,` +
 	`"push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",` +
@@ -1048,10 +1054,10 @@ func hookBodyFor(list bool, body string) string {
 	return body
 }
 
-// TestSystemHooks_PublishTheFieldsGitLabSendsBesideTheSDKs verifies that each
-// handler that answers with a hook publishes the seven keys the SDK's Hook
-// does not model, read off the captured response.
-func TestSystemHooks_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+// TestSystemHooks_PublishTheFieldsBesideTheEventFlags verifies that each
+// handler that answers with a hook publishes the seven keys GitLab sends
+// beside the event flags, each on its own field.
+func TestSystemHooks_PublishTheFieldsBesideTheEventFlags(t *testing.T) {
 	for _, hookCall := range hookCalls {
 		t.Run(hookCall.name, func(t *testing.T) {
 			hook, err := hookCall.call(systemHookClient(t, hookBodyFor(hookCall.list, hookSentJSON)))
@@ -1107,11 +1113,12 @@ func TestSystemHooks_OmitTheConditionalFieldsGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestSystemHooks_UnreadableCapturedFields verifies every handler that answers
-// with a hook reports the captured response's decode failure rather than a
-// half-filled hook. The SDK's own Hook has no organization_id, so only the
-// read beside it can notice that GitLab sent a string there.
-func TestSystemHooks_UnreadableCapturedFields(t *testing.T) {
+// TestSystemHooks_UnreadableOrganization_Refused verifies every handler that
+// answers with a hook refuses one whose organization_id is not a number
+// rather than publishing a half-filled hook. client-go models organization_id
+// on its own Hook as of v3.15.0, so its decoder is what refuses it, and the
+// handlers read nothing beside it any more.
+func TestSystemHooks_UnreadableOrganization_Refused(t *testing.T) {
 	const poisoned = `{"id":1,"url":"https://example.com/hook","organization_id":"not-a-number"}`
 	cases := make([]testutil.CapturedCase, 0, len(hookCalls))
 	for _, hookCall := range hookCalls {
@@ -1120,7 +1127,7 @@ func TestSystemHooks_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}})
 	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
 // TestFormatHookMarkdown_CustomHeaderValuesRedacted verifies the custom header

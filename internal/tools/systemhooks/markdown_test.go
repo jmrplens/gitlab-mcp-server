@@ -220,8 +220,8 @@ func TestFormatHookMarkdown_OneFlagAtATime(t *testing.T) {
 }
 
 // TestFormatHookMarkdown_SentFields verifies the hook card names the fields
-// read off the captured response, with every secret value redacted, and leaves
-// each of them out of a hook that carries none.
+// GitLab sends beside the event flags, with every secret value redacted, and
+// leaves each of them out of a hook that carries none.
 func TestFormatHookMarkdown_SentFields(t *testing.T) {
 	t.Run("every field populated", func(t *testing.T) {
 		assertRendered(t, hookText(t, FormatHookMarkdown(HookItem{

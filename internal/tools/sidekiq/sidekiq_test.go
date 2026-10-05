@@ -518,7 +518,7 @@ func TestSidekiq_EachMetricReachesItsOwnEndpoint(t *testing.T) {
 
 		// Each endpoint is accepted under two spellings on purpose. client-go
 		// declares the four Sidekiq routes with a leading slash, still so at
-		// the v3.14.0 pin, and so sends /api/v4//sidekiq/..., which GitLab
+		// the v3.15.0 pin, and so sends /api/v4//sidekiq/..., which GitLab
 		// redirects to the canonical path
 		// (docs/development/upstream-bugs.md, entry 33; the double slash
 		// is declared in cmd/audit_1to1/internal/paths/endpoint_declarations.go

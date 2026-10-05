@@ -4468,6 +4468,9 @@
                 "branch_filter_strategy": {
                   "type": "string"
                 },
+                "custom_webhook_template": {
+                  "type": "string"
+                },
                 "description": {
                   "type": "string"
                 },
@@ -4580,6 +4583,9 @@
               "additionalProperties": true,
               "properties": {
                 "branch_filter_strategy": {
+                  "type": "string"
+                },
+                "custom_webhook_template": {
                   "type": "string"
                 },
                 "description": {
