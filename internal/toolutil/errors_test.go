@@ -621,9 +621,9 @@ func TestExtractGitLabMessage(t *testing.T) {
 			name: "truncates long messages",
 			err: &gl.ErrorResponse{
 				Response: &http.Response{StatusCode: http.StatusBadRequest},
-				Message:  strings.Repeat("a", 400),
+				Message:  strings.Repeat("a", 2100),
 			},
-			want: strings.Repeat("a", 300) + "...",
+			want: strings.Repeat("a", 2048) + "...",
 		},
 		{
 			name: "array error with brackets preserved",
@@ -1472,8 +1472,8 @@ func TestCollectJSONFieldTypesDirect(t *testing.T) {
 
 // upstreamBodySentinel and upstreamBodyMarker bracket a body that never came
 // from GitLab: a proxy error page, a WAF block, a captive portal. The first is
-// near the front of the body and the second is past the 300-byte cap that used
-// to apply to one copy of it and to neither of the others.
+// near the front of the body and the second is past the cap on a GitLab
+// message, which used to apply to one copy of it and to neither of the others.
 const (
 	upstreamBodySentinel = "internal-host-secret-9f3a"
 	upstreamBodyMarker   = "trailing-marker-b71c"
@@ -1485,7 +1485,7 @@ const (
 // behind a "failed to parse unknown error format" prefix.
 func upstreamErrorResponse(t *testing.T, status int) *gl.ErrorResponse {
 	t.Helper()
-	body := "<html><body>" + upstreamBodySentinel + strings.Repeat(" filler", 60) + upstreamBodyMarker + "</body></html>"
+	body := "<html><body>" + upstreamBodySentinel + strings.Repeat(" filler", 300) + upstreamBodyMarker + "</body></html>"
 	return &gl.ErrorResponse{
 		StatusCode: status,
 		Response: &http.Response{
@@ -1736,16 +1736,24 @@ func TestExtractGitLabMessage_BoundsAndFlattensTheMessage(t *testing.T) {
 		},
 		{
 			name:    "long message truncated",
-			message: "{error: " + strings.Repeat("a", 400) + "}",
-			want:    "{error: " + strings.Repeat("a", 292) + "...",
+			message: "{error: " + strings.Repeat("a", 2100) + "}",
+			want:    "{error: " + strings.Repeat("a", 2040) + "...",
 		},
 		{
 			// Exactly at the cap, which is the length the cut must not fire on:
 			// a message trimmed here would end in an ellipsis promising more
 			// text that was never there.
 			name:    "message at the cap is kept whole",
-			message: "{error: " + strings.Repeat("a", 291) + "}",
-			want:    "{error: " + strings.Repeat("a", 291) + "}",
+			message: "{error: " + strings.Repeat("a", 2039) + "}",
+			want:    "{error: " + strings.Repeat("a", 2039) + "}",
+		},
+		{
+			// One byte past the cap, the length the cut must fire on: the
+			// boundary is pinned from both sides, so a cap moved by one in
+			// either direction fails one of these two cases.
+			name:    "message one byte past the cap is cut",
+			message: "{error: " + strings.Repeat("a", 2040) + "}",
+			want:    "{error: " + strings.Repeat("a", 2040) + "...",
 		},
 	}
 	for _, tt := range tests {
@@ -2177,9 +2185,9 @@ func TestSanitizeError_RendersWhatTheResponseCarried(t *testing.T) {
 			name: "no request line, with a message",
 			err: &gl.ErrorResponse{
 				StatusCode: http.StatusNotFound,
-				Message:    strings.Repeat("a", 400),
+				Message:    strings.Repeat("a", 2100),
 			},
-			want: "404 " + strings.Repeat("a", 300) + "...",
+			want: "404 " + strings.Repeat("a", 2048) + "...",
 		},
 		{
 			name: "no request line and a message that may not be reflected",
@@ -2225,7 +2233,7 @@ func TestSanitizeError_CollapsesTheTextOnlyWhenTheMessageWouldSurvive(t *testing
 	tooLong := &gl.ErrorResponse{
 		StatusCode: http.StatusNotFound,
 		Response:   &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
-		Message:    strings.Repeat("a", 400),
+		Message:    strings.Repeat("a", 2100),
 	}
 
 	tests := []struct {
@@ -2246,7 +2254,7 @@ func TestSanitizeError_CollapsesTheTextOnlyWhenTheMessageWouldSurvive(t *testing
 		{
 			name: "a message past the cap takes the whole text with it",
 			err:  fmt.Errorf("reading the project (%s): %w", tooLong.Message, tooLong),
-			want: projectRequestLine + ": 404 " + strings.Repeat("a", 300) + "...",
+			want: projectRequestLine + ": 404 " + strings.Repeat("a", 2048) + "...",
 		},
 	}
 	for _, tt := range tests {
@@ -2911,7 +2919,7 @@ func TestSanitizeError_GraphQLGatewayBody_ReflectsNoUpstreamDetail(t *testing.T)
 
 // graphQLUpstreamMessage is a GraphQL error message past the cap, across two
 // lines, whose tail names a host only the operator's network knows.
-var graphQLUpstreamMessage = strings.Repeat("x", 400) + " upstream gitlab-web-03.internal\nsecond line"
+var graphQLUpstreamMessage = strings.Repeat("x", 2100) + " upstream gitlab-web-03.internal\nsecond line"
 
 // graphQLErrorsBody renders a GraphQL response listing messages as its
 // errors, the shape GitLab's GraphQL endpoint refuses a query with.
@@ -2957,15 +2965,15 @@ func TestSanitizeError_GraphQLErrorMessages_BoundedLikeARESTMessage(t *testing.T
 			name:       "a message past the cap, across two lines, naming an upstream host",
 			status:     http.StatusForbidden,
 			body:       graphQLErrorsBody(t, graphQLUpstreamMessage),
-			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("x", 300) + "...)",
+			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("x", 2048) + "...)",
 			unwanted:   []string{"gitlab-web-03.internal", "second line"},
 		},
 		{
 			name:       "several messages whose list passes the cap",
 			status:     http.StatusForbidden,
-			body:       graphQLErrorsBody(t, strings.Repeat("a", 200), strings.Repeat("b", 200)),
-			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("a", 200) + ", " + strings.Repeat("b", 98) + "...)",
-			unwanted:   []string{strings.Repeat("b", 99)},
+			body:       graphQLErrorsBody(t, strings.Repeat("a", 1200), strings.Repeat("b", 1200)),
+			wantSuffix: "/api/graphql: 403 (GraphQL errors: " + strings.Repeat("a", 1200) + ", " + strings.Repeat("b", 846) + "...)",
+			unwanted:   []string{strings.Repeat("b", 847)},
 		},
 		{
 			name:       "GitLab's own message across two lines",
@@ -3068,7 +3076,7 @@ func TestSanitizeError_GraphQLRefusalWrapped_CollapsesOnlyWhenAMessageWouldSurvi
 		{
 			name: "a message past the cap takes the whole text with it",
 			err:  fmt.Errorf("listing epics (%s): %w", graphQLUpstreamMessage, pastTheCap),
-			want: projectRequestLine + ": 403 (GraphQL errors: " + strings.Repeat("x", 300) + "...)",
+			want: projectRequestLine + ": 403 (GraphQL errors: " + strings.Repeat("x", 2048) + "...)",
 		},
 		{
 			name: "a message GitLab did not compose takes the whole text with it",
@@ -3560,7 +3568,7 @@ func TestClassifyError_FineGrainedRefusalOverGraphQL_IsReadFromEachEntry(t *test
 // permissions is quoted the way a GitLab message is: flattened onto one line
 // and cut at the same length, since it is the instance's text.
 func TestClassifyError_FineGrainedRefusal_BoundsWhatItQuotes(t *testing.T) {
-	long := strings.Repeat("Resource: Read, ", 40) + "Last: Read"
+	long := strings.Repeat("Resource: Read, ", 200) + "Last: Read"
 	sentence := "Access denied: This operation requires a fine-grained personal access token with the following project permissions: [" + long + "]."
 	got := ClassifyError(GraphQLTopLevelError("op", []GraphQLError{{Message: sentence}}))
 	if strings.Contains(got, "Last: Read") || !strings.Contains(got, "...]") {

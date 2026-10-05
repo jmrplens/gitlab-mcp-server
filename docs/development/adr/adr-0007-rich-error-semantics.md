@@ -96,7 +96,7 @@ WrapErrWithHint:    "op: classification — specific detail. Suggestion: hint: <
 
 - **NEG-001**: Messages are concise (one sentence diagnosis + one sentence suggestion). The extra tokens are worth the self-correction capability.
 - **NEG-002**: E2E tests exercise the full error flow against a real GitLab instance. Stale tool references would surface as test failures.
-- **NEG-003**: `ExtractGitLabMessage` falls back to the raw message when parsing fails, and truncates at 300 characters.
+- **NEG-003**: `ExtractGitLabMessage` reflects only a body GitLab composed, drops one client-go could not parse, and truncates what it reflects at 2048 bytes (`maxGitLabMessageLen`, register row RQB-010).
 
 ## References
 

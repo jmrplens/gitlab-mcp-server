@@ -833,10 +833,11 @@ func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
 // of here returns through, so it is not tested a second time on the way in: a
 // copy of that test could only agree with the one below it.
 //
-// What survives is flattened onto one line and truncated to 300 characters.
-// GitLab's messages routinely quote input an attacker chose — a branch name, a
-// path, a title — so the span has to stay a span: with its newlines intact it
-// could add structure to the error text a model reads.
+// What survives is flattened onto one line and truncated to
+// [maxGitLabMessageLen] bytes. GitLab's messages routinely quote input an
+// attacker chose (a branch name, a path, a title), so the span has to stay a
+// span: with its newlines intact it could add structure to the error text a
+// model reads.
 func ExtractGitLabMessage(err error) string {
 	glErr, ok := gitLabResponseOf(err)
 	if !ok {
@@ -875,8 +876,23 @@ func ExtractGitLabMessage(err error) string {
 	return boundedGitLabMessage(msg)
 }
 
-// maxGitLabMessageLen caps how much of GitLab's own message is reflected.
-const maxGitLabMessageLen = 300
+// maxGitLabMessageLen caps how much of GitLab's own message is reflected, in
+// bytes: one REST message, and the list of a GraphQL refusal's messages taken
+// as one. Register row RQB-010 declares this constant as one of its
+// enforcement sites; the register holds no copy of the value, which lives
+// here alone.
+//
+// It is sized by the longest refusal GitLab is known to write for a mistake a
+// caller can correct: an Orbit query naming a relationship type the ontology
+// does not hold is refused with every type it does hold, 60 names and 854
+// bytes as client-go renders the body (GitLab.com, Orbit 0.137.0, read
+// 2026-10-05). At the 300 bytes this bound used to be, that list was cut
+// after its seventeenth name, so the one a query most often needs,
+// IN_PROJECT, never reached the model. A schema violation also quotes the
+// part of the caller's query it refuses before it says where that part is,
+// which is why the bound is more than twice the longest list rather than
+// just above it.
+const maxGitLabMessageLen = 2048
 
 // boundedGitLabMessage renders ErrorResponse.Message for a reader: an unparsed
 // upstream body is dropped entirely, what remains is flattened onto one line
@@ -914,7 +930,7 @@ func flattenErrorText(s string) string {
 // client-go could not parse, is the entire body. So the raw upstream bytes
 // arrived in the text a model reads and in the slog "tool call failed" line,
 // uncapped, even though ExtractGitLabMessage was capping its own copy of them
-// at 300 characters a few lines earlier.
+// a few lines earlier.
 type sanitizedCauseError struct {
 	text  string
 	cause error
