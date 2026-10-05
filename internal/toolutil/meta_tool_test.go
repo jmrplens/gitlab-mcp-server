@@ -3110,8 +3110,7 @@ func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 //   - stripReservedKeys: presence of reserved keys mixed with real fields
 //     (covers the "out[k] = v" copy branch).
 //   - UnmarshalParams: double-failure path preserves the original error.
-//   - enrichWithHints: non-object JSON short-circuit and non-text content
-//     iteration.
+//   - FinishToolResult: the hint scan iterating past non-text content.
 
 // TestSetMetaParamSchemaMode_ValidValues verifies that each documented mode
 // is accepted and round-trips through currentMetaParamSchemaMode.

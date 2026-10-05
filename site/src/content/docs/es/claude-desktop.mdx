@@ -192,66 +192,12 @@ make mcpb          # los tres paquetes por sistema operativo y el universal, en 
 make check-mcpb    # valida mcpb/manifest.json y los tres manifiestos derivados de él con la CLI oficial de MCPB
 ```
 
-`make mcpb` necesita macOS, por `lipo`, además de `zip`, `unzip` y `jq`.
-Compila de forma cruzada los binarios darwin arm64 y amd64 y los une con
-`lipo`, compila de forma cruzada el binario Windows amd64 y los binarios Linux
-amd64 y arm64, escribe su `THIRD_PARTY_NOTICES` con
-`cmd/gen_third_party_notices` y empaqueta los cuatro paquetes con
-`scripts/build-mcpb.sh`. Todos los paquetes usan la misma disposición y llevan
-las entradas que necesita su sistema, en este orden:
-
-```text
-manifest.json                                 todos los paquetes
-icon.png                                      todos los paquetes
-LICENSE                                       todos los paquetes
-THIRD_PARTY_NOTICES                           todos los paquetes
-server/gitlab-mcp-server                      binario universal de macOS: darwin, universal
-server/gitlab-mcp-server.exe                  Windows amd64: windows, universal
-server/linux/launch.sh                        lanzador de Linux: linux, universal
-server/linux/gitlab-mcp-server-linux-amd64    linux, universal
-server/linux/gitlab-mcp-server-linux-arm64    linux, universal
-```
-
-El paquete universal empaqueta `mcpb/manifest.json` tal cual: su comando base
-es el binario universal de macOS, con sustituciones para `win32` y `linux`. Un
-paquete por sistema operativo empaqueta el manifiesto que `mcpb/platform.jq`
-deriva de él, que lista solo esa plataforma en `compatibility.platforms`,
-convierte el comando de esa plataforma en el comando base, no lleva ninguna
-sustitución y nombra la ruta de ese comando como `entry_point` del servidor.
-Nada más cambia, y menos que nada el nombre de la extensión, así que
-cualquiera de los cuatro se instala encima de cualquier otro.
-
-Tras empaquetar, el script vuelve a leer cada archivo y borra el conjunto
-entero salvo que cada uno lleve exactamente su lista, el lanzador y los
-binarios Unix figuren como archivos Unix con modo 0755, y cada manifiesto
-empaquetado concuerde con su archivo: está presente cada ruta que nombran su
-comando, sus argumentos y cada sustitución de plataforma, cada sustitución
-tiene como clave `darwin`, `win32` o `linux` y figura en
-`compatibility.platforms`, esa lista nombra exactamente las plataformas para
-las que el archivo lleva un servidor, y ninguna sustitución declara `env`. Esa
-última regla existe porque Claude Desktop aplica el `env` de una sustitución
-en lugar del base en vez de combinar ambos, así que una sustitución que lo
-llevara arrancaría el servidor sin `GITLAB_TOKEN`.
-
-El script imprime además el tamaño de descarga y el tamaño desempaquetado de
-cada paquete, y falla ante los límites del propio Claude Desktop, leídos de su
-runtime de extensiones (2.7032.0): una entrada de más de 512 MiB, más de
-2048 MiB desempaquetados, un archivo que se desempaqueta a más de 50 veces su
-propio tamaño o más de 100.000 entradas. Avisa, sin fallar, cuando un paquete
-por sistema operativo supera los 50 MiB de descarga o los 256 MiB
-desempaquetado: los directorios que puntúan servidores MCP dejan de leer un
-paquete por encima de esos tamaños y entonces dan por no verificadas su
-procedencia, su licencia y su mantenimiento, que es lo que le pasó al único
-paquete que publicó la 3.1.0.
-
-Un `.mcpb` es un zip normal con `manifest.json` en la raíz, y el script lo
-construye con `zip` y marcas de tiempo fijas en las entradas: las mismas
-entradas producen los mismos bytes, lo que importa porque `server.json`
-registra el SHA-256 de cada paquete declarado. Una release construye los
-cuatro paquetes a partir de sus propios binarios, adjunta y atesta cada uno, y
-declara los tres paquetes por sistema operativo en `server.json`, una entrada
-cada uno, para que un cliente que elige desde el registro reciba el paquete de
-su sistema.
+`make mcpb` necesita macOS, por `lipo`, además de `zip`, `unzip` y `jq`, y
+construye los cuatro paquetes que adjunta una release. Qué lleva cada paquete,
+cómo se derivan los manifiestos por sistema operativo y qué comprueba y
+rechaza la construcción antes de conservar un paquete se describe, para
+quien contribuye, en
+[las notas de distribución](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/distribution.md#the-claude-desktop-bundles).
 
 ## Privacidad
 

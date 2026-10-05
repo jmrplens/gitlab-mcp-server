@@ -106,7 +106,7 @@ winget install --id jmrplens.gitlab-mcp-server -e   # winget, Windows
 docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside the token. Every channel, per-client configuration and verification step is in the [installation guide](https://jmrp.io/docs/gitlab-mcp-server/install/overview/), and an assistant installing it for you will find the same in [`llms.txt`](llms.txt).
+For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside the token; with the Docker image, also forward it by adding `-e GITLAB_URL` to the `docker` arguments, since the container receives only the variables named there ([Docker install](https://jmrp.io/docs/gitlab-mcp-server/install/docker/#configure-your-client)). Every channel, per-client configuration and verification step is in the [installation guide](https://jmrp.io/docs/gitlab-mcp-server/install/overview/), and an assistant installing it for you will find the same in [`llms.txt`](llms.txt).
 
 **To try it first**, a public instance runs at `https://mcp.jmrp.io/gitlab`, and the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) calls it read-only after an OAuth sign-in. Your token and every request pass through that machine, so run it yourself to keep using it; the [hosted endpoint page](https://jmrp.io/docs/gitlab-mcp-server/install/hosted/) says what it is and is not.
 

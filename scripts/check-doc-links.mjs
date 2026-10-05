@@ -108,6 +108,17 @@ const siteContentRoot = path.join(repoRoot, "site", "src", "content") + path.sep
 const siteAddress =
 	/^https?:\/\/(?:jmrp\.io\/docs|jmrplens\.github\.io)\/gitlab-mcp-server(?=[/#?]|$)/i;
 const siteDocsRoot = path.join(repoRoot, "site", "src", "content", "docs");
+const sitePublicRoot = path.join(repoRoot, "site", "public");
+
+// The files the site serves that no page answers for, beside what
+// site/public holds: the two documentation indexes and the repository's llms
+// files that site/scripts/gen-llms.mjs writes into site/public before a build,
+// which a checkout that has not built the site does not have, and the sitemap
+// the build writes. The llms names are read from the script that publishes
+// them, so a file it stops publishing stops being a valid link target here in
+// the same change.
+const siteGeneratedFiles = readSiteGeneratedFiles();
+const siteSitemap = /^sitemap(?:-index|-\d+)?\.xml$/;
 
 const anchorCache = new Map();
 
@@ -258,7 +269,7 @@ function checkTarget(file, line, rawTarget) {
 // folder by the index inside it, and the Spanish pages by the same path under
 // es/, so the route alone names the file. A route ending in an extension is a
 // file the site serves as it is (llms.txt, a chart, the sitemap), which has no
-// page and no headings to hold it to.
+// headings to hold it to and is held to being a file the site serves.
 function checkSiteTarget(file, line, target) {
 	const rest = target.replace(siteAddress, "");
 	const hash = rest.indexOf("#");
@@ -267,6 +278,9 @@ function checkSiteTarget(file, line, target) {
 		(hash === -1 ? rest : rest.slice(0, hash)).replace(/\?.*$/, ""),
 	).replace(/^\/+|\/+$/g, "");
 	if (/\.[a-z0-9]+$/i.test(route)) {
+		if (!siteServesFile(route)) {
+			issues.push({ file, line, target, reason: `no file the site serves /${route}` });
+		}
 		return;
 	}
 	const base = path.join(siteDocsRoot, route === "" ? "index" : route);
@@ -281,6 +295,38 @@ function checkSiteTarget(file, line, target) {
 		return;
 	}
 	checkFragment(file, line, target, resolved, fragment);
+}
+
+// siteServesFile answers whether a route ending in an extension is a file the
+// site serves: one under site/public, one the build generates, or the sitemap.
+function siteServesFile(route) {
+	if (siteGeneratedFiles.has(route) || siteSitemap.test(route)) {
+		return true;
+	}
+	const candidate = path.join(sitePublicRoot, route);
+	return (
+		candidate.startsWith(sitePublicRoot + path.sep) &&
+		(statSync(candidate, { throwIfNoEntry: false })?.isFile() ?? false)
+	);
+}
+
+// readSiteGeneratedFiles names the files site/scripts/gen-llms.mjs writes into
+// site/public: the English and Spanish indexes it builds, and each file it
+// republishes under its publishAs name. A tree without the script publishes
+// only the two indexes, so a link to an llms file fails there rather than
+// passing on a name nothing writes.
+function readSiteGeneratedFiles() {
+	const generated = new Set(["llms.txt", "es/llms.txt"]);
+	const script = path.join(repoRoot, "site", "scripts", "gen-llms.mjs");
+	if (!existsSync(script)) {
+		return generated;
+	}
+	for (const match of readFileSync(script, "utf8").matchAll(
+		/\bpublishAs:\s*"([^"]+)"/g,
+	)) {
+		generated.add(match[1]);
+	}
+	return generated;
 }
 
 // pageOf names the file whose headings answer a fragment. A link can resolve to

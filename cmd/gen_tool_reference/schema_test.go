@@ -133,6 +133,7 @@ func TestServedDescription_SeeAlsoClause_IsRewrittenAsTheDynamicSurfaceServesIt(
 		{name: "unknown dropped", action: describedAs("Get it. See also: gitlab_widget_get, gitlab_gone."), want: "Get it. See also: widget.get."},
 		{name: "empty clause removed", action: describedAs("Get it.\n\nSee also: gitlab_gone."), want: "Get it."},
 		{name: "usage when undescribed", action: actioncatalog.Action{Usage: "Use it."}, want: "Use it."},
+		{name: "usage served as it is", action: actioncatalog.Action{Usage: "Use it. See also: gitlab_widget_get, gitlab_gone."}, want: "Use it. See also: gitlab_widget_get, gitlab_gone."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -146,10 +147,4 @@ func TestServedDescription_SeeAlsoClause_IsRewrittenAsTheDynamicSurfaceServesIt(
 // describedAs is an action whose individual tool is described as text.
 func describedAs(text string) actioncatalog.Action {
 	return actioncatalog.Action{IndividualTool: toolutil.IndividualToolSpec{Description: text}}
-}
-
-func TestSeeAlsoNames_Clause_ListsItsNames(t *testing.T) {
-	if got := seeAlsoNames("See also: a, b.c."); !slices.Equal(got, []string{"a", "b.c"}) {
-		t.Errorf("seeAlsoNames() = %v", got)
-	}
 }

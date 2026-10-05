@@ -474,7 +474,7 @@ Counted on 2026-10-05 over the non-test Go files under `internal/`, with
 | `WrapErrWithStatusHint` | 869                                 |
 | `WrapErrWithHint`       | 378                                 |
 | `WrapErrWithMessage`    | 365                                 |
-| `WrapErr`               | 261                                 |
+| `WrapErr`               | 257                                 |
 | `NotFoundResult`        | 22, one shared formatter per domain |
 
 164 of the 180 packages under `internal/tools` carry at least one hint, in 193
