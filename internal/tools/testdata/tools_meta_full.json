@@ -5547,6 +5547,10 @@
                   "description": "Branch filter strategy: wildcard, regex, or all_branches",
                   "type": "string"
                 },
+                "custom_webhook_template": {
+                  "description": "Custom payload template (JSON) sent instead of the default webhook body",
+                  "type": "string"
+                },
                 "description": {
                   "description": "Description for the hook",
                   "type": "string"
@@ -5687,6 +5691,10 @@
               "properties": {
                 "branch_filter_strategy": {
                   "description": "Branch filter strategy: wildcard, regex, or all_branches",
+                  "type": "string"
+                },
+                "custom_webhook_template": {
+                  "description": "Updated custom payload template (JSON) sent instead of the default webhook body",
                   "type": "string"
                 },
                 "description": {

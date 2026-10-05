@@ -507,6 +507,7 @@ Add an instance system hook. Returns: the created system hook with id, url, and 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `custom_webhook_template` (string): Custom payload template (JSON) sent instead of the default webhook body
 - `description` (string): Description for the hook
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
 - `merge_requests_events` (boolean): Trigger on merge request events
@@ -2840,6 +2841,7 @@ Edit an instance system hook, including event triggers, SSL verification, and UR
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `custom_webhook_template` (string): Updated custom payload template (JSON) sent instead of the default webhook body
 - `description` (string): Updated hook description
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
 - `id` (integer) (required): System hook ID to edit

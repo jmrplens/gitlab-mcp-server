@@ -17957,6 +17957,7 @@
       "path": "/hooks",
       "body": [
         "branch_filter_strategy",
+        "custom_webhook_template",
         "description",
         "enable_ssl_verification",
         "merge_requests_events",
@@ -18004,6 +18005,7 @@
       "path": "/hooks/:hook_id",
       "body": [
         "branch_filter_strategy",
+        "custom_webhook_template",
         "description",
         "enable_ssl_verification",
         "merge_requests_events",
