@@ -349,9 +349,8 @@ func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(po
 		first, last := plan.credentials(pop)
 		last = min(last, len(conns))
 		for index := first; index < last; index++ {
-			wg.Add(1)
-			go func(conn *clientConn, position int) {
-				defer wg.Done()
+			conn, position := conns[index], index-first
+			wg.Go(func() {
 				paceCredential(ctx, paceInput{
 					conn:  conn,
 					pop:   pop.Name,
@@ -369,7 +368,7 @@ func drive(ctx context.Context, in driveInput, start time.Time, ticksFor func(po
 					tally:    tally,
 					present:  present,
 				})
-			}(conns[index], index-first)
+			})
 		}
 	}
 	wg.Wait()
@@ -671,10 +670,10 @@ func fairnessProcess(in processInput) (process FairnessProcess, notes []string) 
 // consumed is the processor time between two samples, refusing to publish a
 // difference either sample cannot support.
 func consumed(who string, start, end cpuSample) (delta cpuSample, notes []string) {
-	switch {
-	case !start.ok || !end.ok:
+	if !start.ok || !end.ok {
 		return cpuSample{}, []string{who + " processor time unavailable: the platform did not answer a sample"}
-	case end.seconds < start.seconds:
+	}
+	if end.seconds < start.seconds {
 		return cpuSample{}, []string{who + " processor time unavailable: consumed time fell between samples"}
 	}
 	return cpuSample{seconds: end.seconds - start.seconds, ok: true}, nil

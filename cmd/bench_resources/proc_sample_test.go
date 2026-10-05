@@ -336,6 +336,25 @@ func TestTicksFromGetconf_FallsBackToUserHZ(t *testing.T) {
 	}
 }
 
+// TestGetconfTicks_AnswersWhereGetconfIsInstalled verifies the question put to
+// getconf is given time to be answered, and is answered with a number.
+//
+// The fallback is the value every Linux this runs on has, so a getconf that
+// was never given time to answer would publish the same figures here and go
+// unnoticed until the command ran on a host whose USER_HZ is another.
+func TestGetconfTicks_AnswersWhereGetconfIsInstalled(t *testing.T) {
+	if _, err := exec.LookPath("getconf"); err != nil {
+		t.Skipf("getconf is not installed here: %v", err)
+	}
+	out, err := getconfTicks()
+	if err != nil {
+		t.Fatalf("getconfTicks: %v", err)
+	}
+	if ticks, parseErr := strconv.ParseFloat(strings.TrimSpace(string(out)), 64); parseErr != nil || ticks <= 0 {
+		t.Errorf("getconf answered %q, want a positive number of ticks", out)
+	}
+}
+
 // TestReadProcStat_PSFallback_ReadsTheProcessOrFails walks the ps path every
 // platform but Linux takes, by declaring another platform on a Linux that
 // has the same ps: this process is read, a process that does not exist is

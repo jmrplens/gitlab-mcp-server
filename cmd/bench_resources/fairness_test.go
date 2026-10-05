@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,35 @@ func TestRateLimitRefusalPrefix_MatchesTheServersOwnWording(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestFairnessBounds_SpelledWords_AreTheConstantsTheyName verifies the two
+// words the bound table spells whole are the ones the constants beside them
+// hold: the process listing bucket's refusal, which is the server's prefix
+// followed by the method, and the header the OAuth arms tell the server to
+// trust, which is the one the flood writes its addresses into.
+//
+// Either drifting apart from its constant fails quietly at run time: a prefix
+// that is not the server's turns every refusal into a failure, and a trusted
+// header the flood does not send charges every invented token to one address.
+func TestFairnessBounds_SpelledWords_AreTheConstantsTheyName(t *testing.T) {
+	processListing, err := boundByID("tools-list-process")
+	if err != nil {
+		t.Fatalf("boundByID: %v", err)
+	}
+	if len(processListing.Refusals) != 1 {
+		t.Fatalf("the process listing bound declares %d refusals, want one", len(processListing.Refusals))
+	}
+	t.Run("the process listing refusal", func(t *testing.T) {
+		if got, want := processListing.Refusals[0].TextPrefix, toolutil.RateLimitRefusalPrefix+methodToolsList; got != want {
+			t.Errorf("TextPrefix = %q, want %q", got, want)
+		}
+	})
+	t.Run("the header the OAuth arms trust", func(t *testing.T) {
+		if want := "--trusted-proxy-header=" + headerForwardedFor; !slices.Contains(oauthArgs, want) {
+			t.Errorf("oauthArgs = %q, want it to carry %q", oauthArgs, want)
+		}
+	})
 }
 
 // TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure verifies the four

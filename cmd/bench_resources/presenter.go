@@ -78,8 +78,9 @@ func newPresenter(plan fairnessPlan, endpoint string, bearer bool) *presenter {
 }
 
 // maxFloodSources is how many sources 127.2.0.0/16 holds once its network and
-// broadcast addresses are set aside.
-const maxFloodSources = 1<<16 - 2
+// broadcast addresses are set aside: 1<<16 - 2, which the test of
+// sourceAddress holds by the last address it names.
+const maxFloodSources = 65534
 
 // sourceAddress is the loopback address the flood's source at index leaves
 // from.

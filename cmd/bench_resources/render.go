@@ -124,10 +124,10 @@ func writeCharts(dir string, run *Run, l labels, palettes map[string]palette, ch
 // disk differs.
 func writeFile(path string, content []byte, check bool) (bool, error) {
 	existing, err := os.ReadFile(path) // #nosec G304 -- generated output paths, from this command's flags
-	switch {
-	case err == nil && bytes.Equal(existing, content):
+	if err == nil && bytes.Equal(existing, content) {
 		return false, nil
-	case err != nil && !os.IsNotExist(err):
+	}
+	if err != nil && !os.IsNotExist(err) {
 		// Any other read failure is not evidence about the file's contents.
 		// Treating it as one made -check report a stale artifact when the
 		// path was a directory or unreadable, which sends a reader to
@@ -202,10 +202,7 @@ func buildLabel(run *Run) string {
 
 // shortCommit trims a commit to the width the rest of the documentation uses.
 func shortCommit(commit string) string {
-	if len(commit) > 8 {
-		return commit[:8]
-	}
-	return commit
+	return commit[:min(len(commit), 8)]
 }
 
 // tableHeading is the level the generated tables sit at: under the site page's
@@ -422,16 +419,16 @@ func mib(value float64) string {
 // mebibytes, where whole numbers would round a credential's whole cost away,
 // and a resident set of thousands, where two decimals are noise.
 func mibFine(value float64) string {
-	switch {
-	case value == 0:
+	if value == 0 {
 		return "n/a"
-	case value < 10:
-		return fmt.Sprintf("%.2f", value)
-	case value < 100:
-		return fmt.Sprintf("%.1f", value)
-	default:
-		return fmt.Sprintf("%.0f", value)
 	}
+	if value < 10 {
+		return fmt.Sprintf("%.2f", value)
+	}
+	if value < 100 {
+		return fmt.Sprintf("%.1f", value)
+	}
+	return fmt.Sprintf("%.0f", value)
 }
 
 // ms renders a millisecond figure for a table.

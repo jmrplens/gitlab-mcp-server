@@ -25,6 +25,10 @@ import (
 // A chart travels: it is embedded, screenshotted and quoted away from the page
 // that states those, and a resident-set curve with no machine attached is a
 // number nobody can act on.
+//
+// The derived figures are written out rather than computed, and
+// TestChartGeometry_DerivedFiguresFollowTheCanvas holds each to the sum it
+// stands for, so changing the canvas or a padding means changing them too.
 const (
 	chartW = 900
 	chartH = 500
@@ -32,14 +36,14 @@ const (
 	padR   = 30
 	padT   = 92
 	padB   = 96
-	plotW  = chartW - padL - padR
-	plotH  = chartH - padT - padB
+	plotW  = 794 // chartW - padL - padR
+	plotH  = 312 // chartH - padT - padB
 
-	// xAxisTitleY and provenanceY are measured from the plot rather than from
-	// the bottom edge, so growing the canvas moves the footer and leaves the
-	// axis title where it sits under its tick labels.
-	xAxisTitleY = padT + plotH + 42
-	provenanceY = chartH - 12
+	// xAxisTitleY is measured from the plot and provenanceY from the bottom
+	// edge, so growing the canvas moves the footer and leaves the axis title
+	// where it sits under its tick labels.
+	xAxisTitleY = 446 // padT + plotH + 42
+	provenanceY = 488 // chartH - 12
 
 	fontStack = `font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"`
 )
@@ -273,9 +277,9 @@ type scale struct {
 // pos returns the y coordinate for a value.
 func (s scale) pos(v float64) float64 {
 	if s.log {
-		if v <= 0 {
-			v = s.lo
-		}
+		// A log axis has no place for zero or below, so anything under its
+		// floor is drawn on it.
+		v = max(v, s.lo)
 		ratio := (math.Log10(v) - math.Log10(s.lo)) / (math.Log10(s.hi) - math.Log10(s.lo))
 		return padT + (1-clamp01(ratio))*plotH
 	}
@@ -295,11 +299,15 @@ func linearScale(maxValue float64) (axis scale, ticks []float64) {
 		maxValue = 1
 	}
 	step := niceStep(maxValue / 5)
-	hi := math.Ceil(maxValue/step) * step
-	for v := 0.0; v <= hi+step/2; v += step {
+	steps := math.Ceil(maxValue / step)
+	// One tick per step from zero to the top of the axis, both included; the
+	// sum is kept running, as the published charts were drawn with it.
+	v := 0.0
+	for range int(steps) + 1 {
 		ticks = append(ticks, v)
+		v += step
 	}
-	return scale{lo: 0, hi: hi}, ticks
+	return scale{lo: 0, hi: steps * step}, ticks
 }
 
 // logScale picks whole decades covering the data, with a tick per decade.
@@ -326,10 +334,7 @@ func logScale(minValue, maxValue float64) (axis scale, ticks []float64) {
 	// otherwise put the ceiling at infinity and take every tick with it.
 	const maxExp = 308
 	loExp := min(max(math.Floor(math.Log10(minValue)), -maxExp), maxExp-1)
-	hiExp := min(max(math.Ceil(math.Log10(maxValue)), loExp+1), maxExp)
-	if hiExp > loExp+maxDecades {
-		hiExp = loExp + maxDecades
-	}
+	hiExp := min(max(math.Ceil(math.Log10(maxValue)), loExp+1), maxExp, loExp+maxDecades)
 	for exp := loExp; exp <= hiExp; exp++ {
 		ticks = append(ticks, math.Pow(10, exp))
 	}
@@ -343,16 +348,17 @@ func niceStep(raw float64) float64 {
 		return 1
 	}
 	magnitude := math.Pow(10, math.Floor(math.Log10(raw)))
-	switch normalized := raw / magnitude; {
-	case normalized <= 1:
+	normalized := raw / magnitude
+	if normalized <= 1 {
 		return magnitude
-	case normalized <= 2:
-		return 2 * magnitude
-	case normalized <= 5:
-		return 5 * magnitude
-	default:
-		return 10 * magnitude
 	}
+	if normalized <= 2 {
+		return 2 * magnitude
+	}
+	if normalized <= 5 {
+		return 5 * magnitude
+	}
+	return 10 * magnitude
 }
 
 // renderBars draws a grouped bar chart.
@@ -564,11 +570,12 @@ func linearXTicks(e lineExtent) []float64 {
 	stride := math.Max(1, niceStep(needed/perUnit))
 
 	// The first candidate is the first multiple of the stride at or past the
-	// origin; the origin itself, and anything too close to either end, is
-	// what the spacing test below turns away.
+	// origin; the origin itself, and anything too close to the start, is what
+	// the spacing test below turns away. The walk stops at the first candidate
+	// too close to the end, since every later one is closer still.
 	ticks := []float64{e.minX}
-	for x := math.Ceil(e.minX/stride) * stride; x < e.maxX; x += stride {
-		if (x-e.minX)*perUnit < needed || (e.maxX-x)*perUnit < needed {
+	for x := math.Ceil(e.minX/stride) * stride; (e.maxX-x)*perUnit >= needed; x += stride {
+		if (x-e.minX)*perUnit < needed {
 			continue
 		}
 		ticks = append(ticks, x)
@@ -715,12 +722,10 @@ func placeEndLabels(labels []endLabel) []endLabel {
 		}
 		shiftEndLabels(group, wanted-meanEndLabelY(group))
 
-		if over := group[len(group)-1].y - bottom; over > 0 {
-			shiftEndLabels(group, -over)
-		}
-		if under := top - group[0].y; under > 0 {
-			shiftEndLabels(group, under)
-		}
+		// Pulled up by what overruns the axis, then pushed down by what
+		// overruns the top; either is nothing when the group fits.
+		shiftEndLabels(group, -max(group[len(group)-1].y-bottom, 0))
+		shiftEndLabels(group, max(top-group[0].y, 0))
 		for _, label := range group {
 			if label.y <= bottom {
 				placed = append(placed, label)

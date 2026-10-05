@@ -530,12 +530,13 @@ func steadyWorker(ctx context.Context, c *clientConn, bound phaseBound, call too
 // completed in it, in milliseconds, with the same honesty rule cpuFigures
 // applies: an unanswered or backwards sample publishes nothing, with a note.
 func cpuPerCall(start, end cpuSample, calls int) (msPerCall float64, notes []string) {
-	switch {
-	case !start.ok || !end.ok:
+	if !start.ok || !end.ok {
 		return 0, []string{"CPU per call unavailable: the platform did not answer a sample"}
-	case end.seconds < start.seconds:
+	}
+	if end.seconds < start.seconds {
 		return 0, []string{"CPU per call unavailable: consumed time fell between samples"}
-	case calls == 0:
+	}
+	if calls == 0 {
 		return 0, []string{"CPU per call unavailable: no call completed"}
 	}
 	return round((end.seconds - start.seconds) * 1000 / float64(calls)), nil

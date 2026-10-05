@@ -359,8 +359,9 @@ func (b boundSpec) quietRate() float64 {
 	if b.Bucket == nil {
 		return defaultQuietRate
 	}
+	// A share is a fraction of verbs, so it is never below zero.
 	share := b.meteredShare(b.QuietVerbs)
-	if share <= 0 {
+	if share == 0 {
 		return defaultQuietRate
 	}
 	return min(quietDefaultShare*b.Bucket.meteredRate()/share, defaultQuietRate)
@@ -405,8 +406,9 @@ const rateLimitRefusal = toolutil.RateLimitRefusalPrefix
 
 // serverBusyCode is what the listen ceilings refuse with, which is a different
 // number from the buckets': a classifier that keyed on one code alone would
-// count one bound's refusals against the other.
-const serverBusyCode = -32000
+// count one bound's refusals against the other. Read from the register the
+// server's layers alias, like the wording above.
+const serverBusyCode = tenancy.CodeServerBusyLegacy
 
 // The statuses a refusal can arrive with, spelled here so a refusalSpec reads
 // as data.
@@ -455,7 +457,8 @@ var oauthArgs = []string{
 	"--auth-mode=oauth",
 	"--public-url=https://bench.invalid",
 	"--trusted-proxies=127.0.0.0/8",
-	"--trusted-proxy-header=" + headerForwardedFor,
+	// headerForwardedFor, spelled whole; a test holds the two together.
+	"--trusted-proxy-header=X-Forwarded-For",
 }
 
 // headerForwardedFor is the header the flood names its client address in.
@@ -541,7 +544,9 @@ var fairnessBounds = []boundSpec{
 		Refusals: []refusalSpec{
 			{
 				Status: httpOK, Code: rateLimitCode, Method: methodToolsList,
-				TextPrefix: rateLimitRefusal + methodToolsList,
+				// rateLimitRefusal and the method, spelled whole; a test holds
+				// it to the prefix the server writes.
+				TextPrefix: "rate limit exceeded for tools/list",
 			},
 		},
 		NoisyVerbs: []string{verbList},
@@ -618,8 +623,9 @@ var fairnessBounds = []boundSpec{
 }
 
 // rateLimitCode is the JSON-RPC code a bucket refuses with on a method whose
-// result carries no error flag.
-const rateLimitCode = -42900
+// result carries no error flag, read from the register the server's layers
+// alias.
+const rateLimitCode = tenancy.CodeTooManyRequests
 
 // methodSubscriptionsListen is the method the listen ceiling refuses, named so
 // the bound above reads as data rather than as a string.
@@ -1152,10 +1158,10 @@ var errBoundDidNotFire = errors.New("the bound refused nothing")
 // match one of the declared shapes stays a failure: over-matching would count
 // a broken server as a fair one.
 func classifyOutcome(method string, err error, refusals []refusalSpec) string {
-	switch {
-	case err == nil:
+	if err == nil {
 		return outcomeServed
-	case isDeadline(err):
+	}
+	if isDeadline(err) {
 		return outcomeTimedOut
 	}
 	if slices.ContainsFunc(refusals, func(r refusalSpec) bool { return r.matches(method, err) }) {

@@ -28,12 +28,14 @@ import (
 // clockTicks is the kernel's USER_HZ, the unit /proc/<pid>/stat reports CPU
 // time in. It is 100 on every Linux this runs on; getconf is consulted anyway
 // because a wrong divisor would silently scale every CPU figure published.
-var clockTicks = func() float64 {
+var clockTicks = ticksFromGetconf(getconfTicks())
+
+// getconfTicks asks getconf for USER_HZ, giving it five seconds to answer.
+func getconfTicks() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "getconf", "CLK_TCK").Output()
-	return ticksFromGetconf(out, err)
-}()
+	return exec.CommandContext(ctx, "getconf", "CLK_TCK").Output()
+}
 
 // ticksFromGetconf reads USER_HZ out of getconf's answer, falling back to
 // the value every Linux this runs on has when getconf is missing, silent or
@@ -268,9 +270,7 @@ func (s *sampler) observe() {
 		return
 	}
 	s.mu.Lock()
-	if current.rssBytes > s.peak {
-		s.peak = current.rssBytes
-	}
+	s.peak = max(s.peak, current.rssBytes)
 	s.sum += current.rssBytes
 	s.count++
 	s.mu.Unlock()

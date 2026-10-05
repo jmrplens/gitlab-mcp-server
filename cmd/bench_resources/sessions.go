@@ -359,8 +359,9 @@ func initializeMessage(id int64) string {
 		`"capabilities":{},"clientInfo":{"name":"bench-resources","version":"1"}}}`, id, methodInitialize, sessionProtocol)
 }
 
-// initializedMessage is the notification that completes the handshake.
-const initializedMessage = `{"jsonrpc":"2.0","method":"` + methodInitialized + `"}`
+// initializedMessage is the notification that completes the handshake, naming
+// methodInitialized; a test holds the two together.
+const initializedMessage = `{"jsonrpc":"2.0","method":"notifications/initialized"}`
 
 // callMessage is a request with no params: a ping, which asks a session
 // whether the server still holds it, or a tools/list.

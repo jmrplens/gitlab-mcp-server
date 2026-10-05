@@ -132,17 +132,18 @@ func (s *stubGitLab) answerVerification(body string) http.HandlerFunc {
 			defer s.invented.leave()
 		}
 		pause(r.Context(), time.Duration(s.delay.Load()))
-		switch {
-		case invented:
+		if invented {
 			w.Header().Set(headerContentType, mediaJSON)
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
-		case body == "":
-			w.WriteHeader(http.StatusNotFound)
-		default:
-			w.Header().Set(headerContentType, mediaJSON)
-			_, _ = w.Write([]byte(body))
+			return
 		}
+		if body == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set(headerContentType, mediaJSON)
+		_, _ = w.Write([]byte(body))
 	}
 }
 

@@ -436,6 +436,13 @@ func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
 	// defer, since the cases run in parallel after this function has returned.
 	bounded, stop := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(stop)
+	// The refusal asks for a short backoff, not none: a hundred credentials
+	// refused at once and asking again with no pause would spin against the
+	// bound until it refilled. Stated here as a floor rather than read off the
+	// constant, which the timing check below reads and so cannot judge.
+	if coldListBackoff < 100*time.Millisecond {
+		t.Errorf("coldListBackoff = %s, want at least 100ms between asks", coldListBackoff)
+	}
 	for _, tc := range []struct {
 		name      string
 		ctx       context.Context
@@ -453,11 +460,17 @@ func TestColdList_RateRefusal_IsAskedAgainAndAnythingElseStands(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			conn := &scriptedConn{answer: answering(tc.script)}
+			started := time.Now()
 			if err := coldList(tc.ctx, conn); !errors.Is(err, tc.wantErr) {
 				t.Errorf("coldList = %v, want %v", err, tc.wantErr)
 			}
 			if got := conn.calls.Load(); got != tc.wantCalls {
 				t.Errorf("%d calls, want %d", got, tc.wantCalls)
+			}
+			// Each ask again waits out the backoff first, which is what keeps
+			// admission from answering a refusal with another request at once.
+			if waited, least := time.Since(started), time.Duration(tc.wantCalls-1)*coldListBackoff; waited < least {
+				t.Errorf("coldList returned after %s, want at least %s of backoff", waited, least)
 			}
 		})
 	}

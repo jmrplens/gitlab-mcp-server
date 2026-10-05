@@ -246,6 +246,9 @@ func TestSessionMessages_AreWhatAStatefulClientSends(t *testing.T) {
 				`"capabilities":{},"clientInfo":{"name":"bench-resources","version":"1"}}}`,
 		},
 		{"initialized", initializedMessage, `{"jsonrpc":"2.0","method":"notifications/initialized"}`},
+		// The message spells its method whole and is sent with the constant
+		// beside it, so the two are held together here.
+		{"initialized names the method sent with it", initializedMessage, `{"jsonrpc":"2.0","method":"` + methodInitialized + `"}`},
 		{"ping", callMessage(3, methodPing), `{"jsonrpc":"2.0","id":3,"method":"ping"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
