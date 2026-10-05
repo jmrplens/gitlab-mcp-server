@@ -148,9 +148,13 @@ func verb(check bool) string {
 // prune removes from dir every page this run did not generate, or under check
 // reports each as stale. A directory that does not exist has nothing to prune;
 // under check, its missing pages are already reported by the comparison.
+// Something other than a directory at that path is an error on every system:
+// Windows reports reading a file as a directory as a path that does not exist,
+// so a not-exist answer is believed only when nothing is there at all.
 func prune(root, dir string, pages []page, check bool) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(root, dir))
-	if errors.Is(err, os.ErrNotExist) {
+	path := filepath.Join(root, dir)
+	entries, err := os.ReadDir(path)
+	if errors.Is(err, os.ErrNotExist) && !occupied(path) {
 		return nil, nil
 	}
 	if err != nil {
@@ -178,6 +182,13 @@ func prune(root, dir string, pages []page, check bool) ([]string, error) {
 		}
 	}
 	return orphans, nil
+}
+
+// occupied reports whether anything at all is at path, a dangling symbolic
+// link included, which is why it asks Lstat rather than Stat.
+func occupied(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
 }
 
 // removeFile is os.Remove behind a variable: the file it is handed was listed

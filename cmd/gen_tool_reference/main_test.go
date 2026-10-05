@@ -191,6 +191,22 @@ func TestPrune_DirectoryIsAFile_ReportsTheRead(t *testing.T) {
 	}
 }
 
+// TestPrune_DanglingLinkAtTheDirectory_ReportsTheRead holds the case Windows
+// takes for a file: reading the path as a directory answers "does not exist"
+// while something is there. A dangling symbolic link gives Linux the same pair
+// of answers, so the branch that refuses to read it as an empty directory runs
+// on the system the coverage and condition gates measure.
+func TestPrune_DanglingLinkAtTheDirectory_ReportsTheRead(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink(filepath.Join(root, "nowhere"), filepath.Join(root, "pages")); err != nil {
+		t.Skipf("this platform will not create a symbolic link here: %v", err)
+	}
+	_, err := prune(root, "pages", nil, false)
+	if err == nil || !strings.Contains(err.Error(), "read pages") {
+		t.Errorf("prune() error = %v, want the read named", err)
+	}
+}
+
 func TestRunMain_Flags_MapToExitCodes(t *testing.T) {
 	original := runReference
 	t.Cleanup(func() { runReference = original })
