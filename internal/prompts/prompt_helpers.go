@@ -87,6 +87,21 @@ const (
 	maxListItems = 100
 )
 
+// scopeAll is the scope every read of GitLab's global merge request and issue
+// lists sends (GET /merge_requests and GET /issues, the lists that are not a
+// project's or a group's).
+//
+// Those two routes answer with scope=created_by_me when no scope is sent, so a
+// list filtered by an author, an assignee or a reviewer is that filter applied
+// only to what the caller created. A prompt asking for the merge requests a
+// user is reviewing read the ones the caller had opened and was reviewing,
+// almost always none, and a report on another user read that user's work only
+// where the caller had authored it (issue 1164). The filter is what names the
+// user here, so the scope has to name everybody. The project and group lists
+// declare no default and answer with every visible item already, which is why
+// their calls carry no scope.
+const scopeAll = "all"
+
 // groupIDArg returns a required prompt argument for the GitLab group ID.
 func groupIDArg() *mcp.PromptArgument {
 	return &mcp.PromptArgument{

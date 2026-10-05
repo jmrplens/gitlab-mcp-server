@@ -81,6 +81,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 		AuthorID:     new(userID),
 		State:        new("merged"),
 		CreatedAfter: new(since),
+		Scope:        new(scopeAll),
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	warnFetch(ctx, "merged merge requests", err)
@@ -90,6 +91,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 		ReviewerID:   gl.ReviewerID(userID),
 		State:        new("opened"),
 		UpdatedAfter: new(since),
+		Scope:        new(scopeAll),
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	warnFetch(ctx, "merge requests under review", err)
