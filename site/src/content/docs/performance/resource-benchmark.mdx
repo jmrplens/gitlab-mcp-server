@@ -4,9 +4,9 @@ description: "What the server costs to run, measured rather than estimated: resi
 datePublished: "2026-09-04"
 faq:
   - q: "How much memory should I give the container?"
-    a: "In HTTP mode, size for **credentials that are calling, not for tokens and not for requests**. The process idles at 35 to 38 MiB holding no tool catalog at all. Holding credentials is nearly free: the concurrency series measured a settled live heap growing by 50.6 KiB per credential on the dynamic surface, 52.6 KiB on meta and 29.8 KiB on individual, so a thousand admitted credentials are under 120 MiB of live heap on any surface. What costs memory is serving them: with every credential holding requests in flight, the peak resident set grew by 1.92, 0.81 and 4.27 MiB per credential and stood at 1.5, 1.0 and 4.7 GiB at the thousand-credential step. So a pool of a hundred idle tokens is about five mebibytes; a hundred callers at once is 0.4 to 1.7 GiB. 512 MiB serves twenty concurrent credentials on dynamic or meta; individual needs a gigabyte and a half for the same. In stdio mode each client gets its own process of roughly 106 to 277 MiB."
+    a: "In HTTP mode, size for **credentials that are calling, not for tokens and not for requests**. The process idles at 35 to 38 MiB holding no tool catalog at all. Holding credentials is nearly free: the concurrency series measured a settled live heap growing by 50.6 KiB per credential on the dynamic surface, 52.6 KiB on meta and 29.8 KiB on individual, so a thousand admitted credentials add 29 to 51 MiB, for a settled live heap under 120 MiB on any surface. What costs memory is serving them: with every credential holding requests in flight, the peak resident set grew by 1.92, 0.81 and 4.27 MiB per credential and stood at 1.4, 1.0 and 4.6 GiB at the thousand-credential step. So a pool of a hundred idle tokens is about five mebibytes; a hundred callers at once is 0.4 to 1.7 GiB. 512 MiB serves twenty concurrent credentials on dynamic or meta; individual needs a gigabyte and a half for the same. In stdio mode each client gets its own process of roughly 106 to 277 MiB."
   - q: "Why is the first tool call after a new token so slow?"
-    a: "It is paying for registration. The process answers `/health` in 51 to 59 ms while holding no catalog; the first credential of a configuration builds one, which took 0.32 seconds on dynamic, 0.32 on meta and 1.28 on individual on the host measured. Every later call is served from the built catalog, and so is every later credential of the same configuration, since the server is built once per configuration shape and shared. The wait returns whenever the pool reclaims the entry, which `--pool-idle-timeout` and `--max-http-clients` decide."
+    a: "It is paying for registration. The process answers `/health` in 51 to 59 ms while holding no catalog; the first credential of a configuration builds one, which took 0.32 seconds on dynamic, 0.32 on meta and 1.28 on individual on the host measured. Every later call is served from the built catalog, and so is every later credential of the same configuration, since the server is built once per configuration shape and shared, and kept for the life of the process. A credential arriving after the pool reclaimed its entry, which `--pool-idle-timeout` and `--max-http-clients` decide, pays only its own entry build (the credential probe, the tier and the scopes) and a warm listing."
   - q: "Does the tool surface change how much memory the server needs?"
     a: "For tenancy it does not change it at all: 51 KiB per credential on dynamic, 53 on meta and 30 on individual, across surfaces whose registered tool counts differ by a factor of five hundred, because the server and its catalog are built once per configuration shape and shared. Under load the surfaces do separate, and not by tool count: meta is the cheapest per calling credential at 0.81 MiB against 1.92 for dynamic and 4.27 for individual, which is what a surface allocates while it answers a call. What the surface really changes is the size of a `tools/list`: 12 KB on dynamic, 599 KB on meta and 3.2 MB on individual, which is a warm response of milliseconds against seconds, and 120 ms of processor time for the average call on individual, where every second call is one of those listings."
 ---
@@ -23,7 +23,7 @@ measured on both transports across the settings that move them.
 - **HTTP mode sizes by credentials that are calling.** An idle process holds no
   tool catalog; the first credential of a configuration builds one, and it is
   then shared by every other credential of that configuration.
-- **Holding a credential and serving one differ by three orders of
+- **Holding a credential and serving one differ by one to two orders of
   magnitude.** The concurrency series reports both at every step: 30 to 53 KiB
   of settled live heap per credential held, 0.81 to 4.27 MiB of peak resident
   set per credential calling.
@@ -36,39 +36,121 @@ measured on both transports across the settings that move them.
 - **The tool surface does not change what a credential costs to hold**, and
   decides everything about the responses: a `tools/list` is 12 KB on `dynamic`
   and 3.2 MB on `individual`.
-- **These are this release's numbers.** The reference host is re-measured for
-  every release and the values here are replaced, with no comparison against
-  what they were.
+- **These are one measurement's numbers.** The build and the date they were
+  taken on are named under Measurements, and a new measurement replaces them,
+  with no comparison against what they were.
 
 </Aside>
+
+## What is measured
+
+Six axes, chosen because they are the ones that move the numbers:
+
+| Axis                 | Values                                       | Why it matters                                                                                                                                      |
+| -------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport            | stdio, HTTP                                  | stdio gives every client its own process; HTTP serves everyone from one, pooling credential state per token and one built catalog per configuration |
+| Tool surface         | `dynamic`, `meta`, `individual`              | The dynamic surface registers two tools and the individual one roughly a thousand                                                                   |
+| Concurrent clients   | 8 processes on stdio, 64 credentials on HTTP | On HTTP the pool holds one entry per token, so this is the axis a shared deployment grows along                                                     |
+| Parallel requests    | 2 to 4 in flight per client                  | Separates the cost of having clients from the cost of them all calling at once                                                                      |
+| Telemetry            | off, on                                      | Exporting is work the server would not otherwise do                                                                                                 |
+| Credentials at scale | 1 to 1000 on HTTP, one series per surface    | A shared deployment meets hundreds of tokens; the series measures the slope and the latency knee instead of multiplying a per-token figure          |
+
+Four metrics, taken from the operating system and from the wire rather than
+from inside the program:
+
+- **Resident set**, in mebibytes, at four moments: idle, with one client, with
+  every client, and at its peak under load. It is read from the kernel rather
+  than from Go's own heap accounting, because the resident set is what a
+  container limit is measured against: the two differ by more than a factor of
+  two, and only one of them gets a process killed.
+- **Processor time**, split into what building the surfaces cost and what
+  serving the requests cost. The load figure is a percentage of one core, so
+  above 100% means several cores were busy.
+- **Goroutine count**, at rest, with every client attached.
+- **Latency percentiles**, per MCP method, from the client's side of the wire.
+
+The concurrency series records, at each credential count: the resident set over
+the steady phase, as a mean and a peak; the settled live heap and the settled
+resident set, read once that phase has stopped; processor time per completed
+call; the p50 and p99 of `tools/call` and of `tools/list`; the goroutine count;
+the pool counters the driver knows (the entries admitted and the capacity it
+sized the pool to); and a CPU profile and a heap profile of the server, kept
+beside the record for the analysis rather than committed.
 
 ## How this was measured
 
 The real binary, built from the current checkout and started the way a client
-starts it, on both transports. GitLab is stood in by an HTTP server inside the
-harness, so a run needs no instance, no credentials and no network, and two
-people re-measuring compare this server rather than their GitLab
-installations. The tool surface is passed explicitly rather than read from the
-environment, so a developer machine and CI measure the same thing.
+starts it, on both transports. A harness that reassembled the server from the
+same packages would be reporting on its own copy, and would miss the readiness
+gate, the authentication chain, the pool and the flag parsing, which is most of
+what an operator is sizing for. GitLab is stood in by an HTTP server inside the
+harness, answering the version and user endpoints the server probes while it
+builds a pool entry and `404` for the scope and tier probes, which every caller
+reads as "this instance will not say". A run therefore needs no instance, no
+credentials and no network, and two people re-measuring compare this server
+rather than their GitLab installations. The OTLP collector is stood in the same
+way, so the telemetry scenarios measure what exporting costs rather than what a
+collector does with the payload. The tool surface is passed explicitly rather
+than read from the environment, so a developer machine and CI measure the same
+thing, and the environment a measured process inherits is stripped of every
+variable this server reads.
 
-Everything below is regenerated by one command, `make bench-resources`, which
-runs the benchmark and redraws the charts from the record it writes. The
+A few details change what the numbers mean:
+
+- **The rate limiter is off** (`--rate-limit-rps=0`) in every scenario on this
+  page. HTTP mode defaults to ten requests a second, which a benchmark firing
+  parallel requests would spend its time being refused by, so a capacity figure
+  measured with it on would be the cost of saying no. Refusals are a different
+  measurement: `test/e2e/http` checks that they happen, and
+  `make bench-fairness` measures whether they help anybody, in an opt-in mode
+  that publishes nothing here.
+- **The harness speaks JSON-RPC directly, not through the Go SDK.** From
+  protocol 2026-07-28 a client may serve `tools/list` from its own cache, and
+  the SDK client does: measured through it, a listing that costs the server
+  hundreds of milliseconds returns in microseconds without a request ever
+  leaving the process. What is published here is the work the server does; a
+  caching client pays it less often, and never less than once per session.
+- **Protocol 2026-07-28 has no handshake.** It removed `initialize` and `ping`,
+  so the first thing a client waits for is its first real request, and the
+  startup figures are anchored on the first `tools/list`.
+- **The point scenarios take the goroutine count from a traceback signal.**
+  They start the server without its profile listener, so the process is the one
+  an operator runs, and the only way to ask is `SIGQUIT` with `GOTRACEBACK=all`,
+  which prints every goroutine's stack and ends the process; it is the last
+  thing each scenario does. The series reads the count off `--pprof-addr`
+  instead, which leaves the process alive for the next step.
+- **Percentiles are nearest-rank**, so every published percentile is a value
+  that was actually observed rather than one interpolated between two that
+  were.
+
+The Measurements section below is regenerated by one command,
+`make bench-resources`, which runs the benchmark and redraws the charts and
+tables from the record it writes; the prose around it is written by hand. The
 machine, the build and the method are named in the text under the heading, and
 every chart repeats along its bottom edge the part of that a figure read away
 from this page cannot do without: how many logical processors measured, on
 which operating system and kernel, and when.
 
-**This page is a snapshot, and only a snapshot.** Every release re-measures on
-the reference host and replaces these values wholesale: no "before" column, no
-ratio against an earlier run, no history. A figure compared against a run whose
-code no longer exists says nothing about the instance you are sizing.
+**This page is a snapshot, and only a snapshot.** A new measurement on the
+reference host replaces these values wholesale: no "before" column, no ratio
+against an earlier run, no history. A figure compared against a run whose code
+no longer exists says nothing about the instance you are sizing. What moved
+between measurements, and why, is kept in
+[Resource Hot Spots](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/resource-hot-spots.md),
+and what a change was for in its
+[ADR](https://github.com/jmrplens/gitlab-mcp-server/tree/main/docs/development/adr).
 
 The **point scenarios** run 64 credentials on HTTP and 8 processes on stdio,
 admitting them one at a time and then loading all of them at once. 64 sits past
 the point where the host saturates and below the pool's own default bound of
-100, so the scenario runs the shipped default and measures real contention;
-8 on stdio, because each one is a whole process with its own catalog and eight
-concurrent clients is a busy developer machine.
+100, so the scenario runs the shipped default and measures real contention; a
+point scenario passes no pool flag, and nothing it admitted is evicted before it
+is measured. 8 on stdio, because each one is a whole process with its own
+catalog and eight concurrent clients is a busy developer machine. The point
+scenarios stay out of the series' way: one to a thousand credentials is the
+series' question, and they exist for the axes it does not measure at all, which
+are stdio, telemetry, `resources/list` latency, the goroutine count of a
+process with no profile listener, and the serial ramp itself.
 
 A shared deployment meets hundreds, so the benchmark also runs a **concurrency
 series** per surface: one HTTP process, given 1, 2, 5, 10, 20, 50, 100, 200,
@@ -80,6 +162,34 @@ the goroutine count, and captures a CPU and a heap profile of the server
 through its `--pprof-addr` listener, which the analysis reads and the site does
 not publish.
 
+The series process is started with `--pprof-addr` on a loopback port the
+driver picks and `--max-http-clients` set to the largest count, so nothing a
+step admitted is evicted before the next step measures it. `-clients` replaces
+the list of counts, and `-quick` uses 1, 2 and 5. At each count the driver:
+
+1. **Admits the new credentials**, eight at a time, each warmed with one cold
+   `tools/list` so the pool holds a built entry for it.
+2. **Runs a steady phase** of ten seconds (`-step-duration`) in which every
+   credential keeps the scenario's parallelism in flight, each worker
+   alternating `tools/call` and `tools/list`. A fixed duration rather than a
+   fixed call count, because a CPU profile is taken over wall-clock seconds and
+   a count that took seconds at one credential would take unbounded time once
+   latency degrades, which is the region the series exists to reach. Every
+   per-call figure divides by the calls that actually completed.
+3. **Profiles the server while it serves**: a CPU profile over the first 80% of
+   the phase and, as the phase ends, a heap profile taken after a collection
+   and the goroutine total. Profiles land under
+   `bench/profiles/<scenario>/<clients>.cpu.pb.gz` and `<clients>.heap.pb.gz`
+   (`-profiles`), which git ignores.
+4. **Takes a settled reading**: with the load stopped, the process is left
+   alone for half a second, a collection is forced, and the live heap is read
+   with the resident set beside it. It is the same measurement the end-to-end
+   test `TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials` makes
+   on every push, taken here at every step of the ladder.
+
+Telemetry stays off for the series, so it measures the same server the point
+scenarios do.
+
 **Each step is then measured a second time, with the load stopped.** The two
 readings answer different questions: the resident set over the steady phase is
 what N credentials cost while all of them are calling, and the settled reading,
@@ -89,13 +199,31 @@ so one is never a substitute for the other. The settled resident set is
 recorded beside the settled heap and lags it, because freeing a heap does not
 hand the pages back: Go's scavenger returns them on its own schedule.
 
-A series stops early rather than take the host down: before each
-step the resident set it would reach is estimated from the steps so far, and
-the rest of the list is skipped when the estimate exceeds the memory budget
-(80% of the host's available memory unless one is given); a step whose
-`tools/call` p99 passes 30 seconds is the last one run. Where a series
-stopped, and why, is printed under its table. In the run published here none
-of them stopped: all three reached a thousand credentials.
+On the reference host the two are not close. At a thousand credentials on the
+dynamic surface the peak resident set was 1454 MiB against a settled live heap
+of 88.3 MiB, a factor of sixteen. The heap profiles say what the difference is
+made of, read first step against last. On `dynamic` the entries that build the
+catalog do not move: `toolutil.cloneSchemaMap` holds 10.0 MiB at one credential
+and 10.0 MiB at a thousand, and so do the search index, the action catalog and
+the schema maps beneath them. What grows is the connections and the
+credentials: the `bufio` reader and writer of each open socket, absent from the
+profile at one credential and 35.6 MiB across the four thousand held at the
+last step, and the GitLab client of each pool entry, 5.0 MiB across a thousand
+of them. The rest of the gap never reaches the settled figure at all, because
+it is the JSON of the calls that were in flight when the load stopped.
+
+A series stops early rather than take the host down: before each step the
+resident set it would reach is estimated from the steps so far, a straight line
+fitted through their peaks (with a single step to go on, the extrapolation is
+proportional, which errs toward stopping early), and the rest of the list is
+skipped when the estimate exceeds the memory budget: `-memory-budget`, in MiB,
+or 80% of the host's available memory (`MemAvailable` in `/proc/meminfo`) read
+when the run starts. A host that does not report it runs with no budget, and
+the series says so. A step whose `tools/call` p99 passes 30 seconds is the last
+one run, since past that a client has given up and the next step would measure
+timeouts rather than the server. Where a series stopped, and why, is printed
+under its table. In the run published here none of them stopped: all three
+reached a thousand credentials.
 
 <Aside type="caution" title="Read these as shapes, not as constants">
 One machine, one operating system, one Go toolchain. The relationships between
@@ -245,7 +373,11 @@ the "all clients" column is what eight of them weigh together.
 
 **HTTP.** Start from 35 to 38 MiB for a process serving nobody, then add one
 catalog per distinct configuration, built by the first credential that asks
-for it and shared by every other credential of that configuration. That is
+for it and shared by every other credential of that configuration: the server
+is built once per configuration shape
+([ADR-0020](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0020-one-server-per-configuration-shape.md)),
+so what a credential holds is its client, its rate-limit bucket, its listen
+counter and its watchers. That is
 what the "per extra client" column reports: 0.15, 0.09 and -0.53 MiB on
 `dynamic`, `meta` and `individual`, which is nothing above the noise of a
 resident-set reading, across a ladder that admits 64 credentials one at a
@@ -254,40 +386,72 @@ column beside it: 324 to 1422 MiB with all 64 calling.
 
 **There are two axes, and only one of them is the pool.** Holding a credential
 costs 50.6 KiB of settled live heap on `dynamic`, 52.6 KiB on `meta` and 29.8
-KiB on `individual`, so a thousand admitted credentials are 88, 83 and 117 MiB
-of live heap and under a third of a gibibyte of resident set. Serving them is
+KiB on `individual`, so a thousand admitted credentials add 49, 51 and 29 MiB,
+for a settled live heap of 88.3, 83.5 and 117.4 MiB and a settled resident set
+of 0.28, 0.24 and 0.32 GiB. Serving them is
 where an instance runs out: with every credential holding two to four requests
 in flight, the peak resident set grows 1.92, 0.81 and 4.27 MiB per credential,
-and at the thousand-credential step it stood at 1.5, 1.0 and 4.7 GiB.
+and at the thousand-credential step it stood at 1.4, 1.0 and 4.6 GiB.
 
 A practical rule for HTTP: **budget for concurrent callers, at 1 to 4 MiB
 each depending on the surface, on top of 40 MiB for the process and one
 catalog per configuration**. `--max-http-clients` bounds pooled credentials and
 is not a memory setting: at 50 KiB each, its default of 100 is five mebibytes.
 Shorten `--pool-idle-timeout` if you want entries reclaimed sooner, but expect
-the memory back in kilobytes rather than gigabytes.
+the memory back in kilobytes rather than gigabytes: what the timeout still
+bounds is the live GitLab clients and watchers an entry holds.
+
+**There is no floor, only a client count.** "512 MiB is enough" is the shape of
+advice this page cannot give on its own, because any fixed figure has a number
+of concurrently calling credentials hidden inside it. Read the peak column of
+the scenario or series step that matches your surface and your expected
+concurrency, and give the container that plus a margin for the pages Go has
+not returned yet. [Sizing a Deployment](/gitlab-mcp-server/performance/sizing/#measured-at-scale)
+does that arithmetic for twenty, a hundred and a thousand callers at once.
 
 <Aside type="note" title="Two at-rest figures, both correct">
-The end-to-end test that runs on every push reports about **8 KiB** per
-credential, and the series above reports **30 to 53 KiB**. They answer
-different questions. The test's clients complete their `tools/list` and
-disconnect, so it measures the pool entry with no connection open. The
-benchmark driver keeps its sockets open, four per credential on `dynamic` and
-`meta` and two on `individual`, so its figure also carries the buffers behind
-those connections, at roughly 10 KiB each. Size against the series figure: a
-credential you are sizing for is a connected one.
+The end-to-end test
+`TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials`, which runs on
+every push, reports about **8 KiB** per credential, and the series above
+reports **30 to 53 KiB**. They answer different questions. The test's clients
+complete their `tools/list` and disconnect, so it measures the pool entry with
+no connection open. The benchmark driver keeps its sockets open, four per
+credential on `dynamic` and `meta` and two on `individual`, so its figure also
+carries the buffers behind those connections. Solving the three slopes above
+for a fixed term plus a per-socket one gives about 7 to 9 KiB of pool entry and
+10 to 11 KiB per open connection, the same order as the test's 8 KiB. Size
+against the series figure: a credential you are sizing for is a connected one.
 </Aside>
 
-**Throughput.** In the series, the calls completed per step stop growing at
-about five credentials on `dynamic` and `meta`: a call costs 8 ms of processor
-time, so a sixteen-thread host completes 11,000 to 17,900 per ten-second step
-whatever the number of credentials, and latency past that point is queueing,
-with the p50 of `tools/call` on `dynamic` climbing from 11 ms at one credential
-to 269 ms at a hundred and 3.1 seconds at a thousand. `individual` is a
+**Throughput.** In the series, the calls completed per ten-second step climb
+steeply up to about five credentials on `dynamic` and `meta` and slowly after
+it: a call costs about 8 ms of processor time, so the host's threads are the
+ceiling. On `dynamic` the step completes 13,684 calls at five credentials,
+about 1,370 a second, and 16,777 to 17,851 between fifty and two hundred,
+roughly 1,700 to 1,800 a second, which at 7.6 to 7.7 ms a call is about
+thirteen to fourteen of the sixteen threads; on `meta` it completes 10,810 at
+five and 11,000 to 12,400 from ten to two hundred. Latency past that point is
+queueing, with the p50 of `tools/call` on `dynamic` climbing from 11 ms at one
+credential to 269 ms at a hundred and 3.1 seconds at a thousand. `individual` is a
 different shape: a `tools/call` costs about a millisecond, but a call there
 averages 120 ms of processor time, because every second call is a `tools/list`
 serialising three megabytes of schemas, so a single credential with two
-requests in flight already keeps three cores busy.
+requests in flight already keeps three cores busy, and its `tools/list` p50 is
+151 ms before any contention exists at all.
+
+**A step at the top of the ladder outlasts its ten seconds**, which is worth
+knowing before dividing the call count by the step duration. A worker finishes
+the call it has in flight rather than abandoning it, and at the last steps one
+call takes tens of seconds: `individual` at a thousand credentials completed
+3,637 calls at 98.3 ms of processor time each, which is 357 core-seconds and
+cannot fit in ten seconds of a sixteen-thread host. The per-call figures are
+sound, because both sides of the division come from the same window; the
+window is simply longer than the step duration names.
+
+Where the memory that grows with the credential count actually goes, read from
+the heap and CPU profiles the series writes, is worked through in
+[Resource Hot Spots](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/resource-hot-spots.md),
+which also keeps the history this page does not.
 
 ## What a client waits for
 
@@ -300,9 +464,15 @@ starts building immediately, so its first request waits on the same work, at
 0.35, 0.34 and 1.28 seconds.
 
 That wait is per configuration rather than per credential, since the built
-server is shared, and it returns: when every entry of a configuration has been
-reclaimed by `--pool-idle-timeout` or evicted at the pool's size bound, the
-next request that needs it rebuilds from scratch.
+server is shared, and it is paid once per configuration for the life of the
+process: a configuration's server is dropped only when its registration fails
+([ADR-0020](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0020-one-server-per-configuration-shape.md),
+NEG-004), never because its entries were reclaimed. A credential arriving after
+`--pool-idle-timeout` or the pool's size bound took its entry pays only its own
+entry build, the credential probe, the tier and the scopes, and then a warm
+listing. Two consequences: a client that gives up before its first call answers
+has not hit a hung server, and an HTTP deployment pays the wait once per
+configuration, not once per entry reclaimed.
 
 Once warm, the picture inverts. A `tools/list` costs 1.9 to 21 ms on `dynamic`,
 42 to 270 ms on `meta` and 0.38 to 2.4 seconds on `individual`, which is the
@@ -318,23 +488,181 @@ time, and no material memory. It is off by default; see
 [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) for what it exports
 and where it goes.
 
+## What this does not measure
+
+- **A real GitLab.** Every tool call answered here is answered on loopback, so
+  the latency figures are the server's own overhead with the instance's
+  contribution removed. Add your own instance's round trip to them.
+- **A client's cache.** The published `tools/list` latency is what the server
+  spends, not what a 2026-07-28 client waits for on a repeated call.
+- **Anything but this machine.** One host, one operating system, one Go
+  toolchain, all named in the generated text above. The shape of the numbers
+  should carry to other machines; the absolute values will not.
+- **Disk and network.** Nothing here writes to disk in the hot path, and the
+  only network is loopback.
+- **Pool evictions.** The series sizes the pool to its largest step, so none
+  happen, and the counters it records say so by construction. What an evicted
+  and rebuilt entry costs is the cold `tools/list` the ramp measures.
+- **The driver's own load.** The driver and the server share the host, and at
+  a thousand credentials the driver is reading thousands of responses a second.
+  The server's figures are its own (resident set and processor time are read
+  per process), but the latencies include whatever the driver added by being
+  busy.
+
 ## Reproducing
 
 ```bash
 make bench-resources          # measure, then redraw everything
 make bench-resources-render   # redraw from the committed record, no measuring
-make check-bench-resources    # verify the charts match the record
+make check-bench-resources    # verify the charts and tables match the record
 ```
 
 The eight point scenarios take five to ten minutes on the reference host: the
 stdio half spends most of it building one catalog per process, which is the
 cost being measured rather than overhead of the harness, and the HTTP half
 spends it serving 64 credentials at once. The series then take as long as the
-host's memory lets them, up to a quarter of an hour per surface. The series can
-also be measured on one host
-and rendered on another: build the driver and the server, and on the host
-with the memory run the driver with `-binary`, `-json`, `-profiles` and
-`-no-render`, which reads nothing from a repository; then copy the record back
-and run `make bench-resources-render`. The developer-facing details, including
-what the harness deliberately does not measure, are in
-[the resource benchmark reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resource-benchmark.md).
+host's memory lets them, up to a quarter of an hour per surface where a
+thousand credentials fit, less where the budget stops them earlier. For a
+faster check while changing the harness itself, measure a smoke matrix into a
+record of its own and draw nothing:
+
+```bash
+go run ./cmd/bench_resources/ -quick -json /tmp/bench.json \
+  -profiles /tmp/bench-profiles -no-render
+```
+
+A partial matrix refuses to write to the published record: replacing measured
+numbers with a smoke test would leave the documentation presenting them as the
+figures. A `-clients` list of your own is partial for the same reason.
+
+### Measuring on one host, rendering on another
+
+The series at 500 and 1000 credentials needs tens of gigabytes, which is not
+always the machine the documentation is written on. The driver therefore has a
+measure-only mode that reads nothing from the repository. Build both binaries
+in a checkout, copy them to the host that has the memory, and run:
+
+```bash
+go build -o dist/bench_resources ./cmd/bench_resources
+go build -o dist/gitlab-mcp-server ./cmd/server
+
+# On the measuring host, with no Go toolchain and no checkout:
+./bench_resources -binary ./gitlab-mcp-server \
+  -json /var/tmp/bench/resource-benchmark.json \
+  -profiles /var/tmp/bench/profiles \
+  -no-render
+```
+
+Then copy the record back over `site/src/data/resource-benchmark.json` and
+redraw from it with `make bench-resources-render`; the profiles stay on the
+measuring host, or beside the record under `bench/profiles/`, which git
+ignores. Two things about the measuring host: the driver and the server each
+hold one socket per request in flight, so at a thousand credentials with four
+in flight each the open-file limit has to allow several thousand descriptors
+(Go raises the soft limit to the hard one on its own, so `ulimit -Hn` is the
+figure to check); and the budget is read from the host's available memory when
+the run starts, so stop whatever else is using it first, or pass
+`-memory-budget` explicitly.
+
+### The held mode
+
+`-held <counts>` measures the other shape of request: one the server holds open
+because GitLab has not answered. It is the measurement the
+[held-call ceiling](/gitlab-mcp-server/operations/http-server/#requests-held-open-at-once)
+was sized from. Every other mode drives requests the server answers as fast as
+it can, so none of them sees what a held call costs or what a process holding
+too many does. The stand-in GitLab holds every project read a step sends it,
+headers first (the server gives GitLab a minute to answer with headers, and
+would abandon and resend a read held before them), so each step is a known
+number of calls to the dynamic surface's `gitlab_execute_action` running
+`project.get`, spread round robin across `-held-credentials`, held at once and
+sampled while they are held.
+
+A step is sampled once every call it offered is either held at the stand-in or
+has come back, or once that count has stopped moving for three seconds (a
+process out of descriptors accepts no more connections, so some calls are
+neither), or after two minutes. The sample is the process's open descriptors
+(Linux only, from `/proc/<pid>/fd`; elsewhere recorded as unknown with a note),
+its goroutines and live heap from the profiling listener, its resident set, and
+a `/health` probe on a connection of its own, since a probe riding an old
+keep-alive connection would answer for a process that no longer accepts one.
+Each step then releases the hold and files every call as served, refused (a
+`503`, the status the held-call ceiling answers a 2026-07-28 client with, its
+first text kept) or failed, and prices one held call as the step's growth over
+the idle process divided by the calls held.
+
+`-held-nofile <n>` starts the server through
+`/bin/sh -c 'ulimit -n "$0" && exec "$@"'`, which sets the soft and the hard
+limit together and puts the server in the shell's place, so the process sampled
+is the server. Setting the hard limit is the point: the Go runtime raises the
+soft limit to the hard one before the server starts, so lowering only the soft
+limit would measure nothing. The server sizes its held-call ceiling from that
+limit, 192 under 1024. The mode writes `bench/held.json`, which is not
+committed, draws nothing, and is refused if `-held-json` names the published
+record. `make bench-held` runs the ladder the ceiling was measured with, under a
+limit of 1024.
+
+| Flag                | Type     | Default           | Description                                                                                |
+| ------------------- | -------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| `-held`             | `string` | `""`              | Comma-separated counts of calls held open at once, ascending; empty runs the matrix        |
+| `-held-credentials` | `int`    | `1`               | Credentials the calls are spread across                                                    |
+| `-held-nofile`      | `int`    | `0`               | Descriptor limit the server is started under; `0` inherits this process's (not on Windows) |
+| `-held-json`        | `string` | `bench/held.json` | Document to write; refused if it names the published record                                |
+
+```bash
+# What a held call costs, and what the process does past a descriptor limit
+go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024
+go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024 -held-credentials 100
+```
+
+### The sessions mode
+
+`-sessions <counts>` measures what the stateful transport keeps: a session. It
+is the measurement the
+[session ceiling](/gitlab-mcp-server/operations/http-server/#stateful-sessions-kept-at-once)
+was sized from. The server is started with `--stateless=false`, and each step
+opens a known number of sessions at once, spread round robin across
+`-sessions-credentials`, each an `initialize` on protocol 2025-11-25 followed by
+`notifications/initialized`. With `-sessions-stream`, every session also opens
+its standalone stream, the `GET` a stateful client holds open for the server's
+notifications, and keeps it open for the step. Before the first step each
+credential opens a session, lists its tools and deletes it, so the pool holds a
+built entry for every credential and the entry is not priced as part of the
+sessions.
+
+A step is sampled the way a held step is (the same settling rule, the same
+figures, the same `/health` probe on a connection of its own), while every
+session it opened sits idle. It then pings every session the server gave an id,
+each ping waiting no longer than the `/health` probe does, and counts the ones
+that answered: that is the number of sessions the server holds, seen from
+outside, and the count stops at the first ping that got no answer at all, since
+a process that accepted no connection will not accept the next. Every open is
+filed as opened, refused (a `503`, the status the session ceiling answers with,
+its first text kept) or failed, one session is priced as the step's growth over
+the idle process divided by the sessions open at the sample, and every stream
+is closed and every session deleted before the next step.
+
+`-sessions-nofile <n>` starts the server under a descriptor limit exactly as
+`-held-nofile` does. The server sizes its session ceiling from the held-call
+ceiling that limit gives it, 96 under 1024. The mode writes
+`bench/sessions.json`, which is not committed, draws nothing, and is refused if
+`-sessions-json` names the published record; it cannot be combined with `-held`
+or `-fairness`. `make bench-sessions` runs the ladder the ceiling was measured
+with, under a limit of 1024 and with every session's stream open.
+
+| Flag                    | Type     | Default               | Description                                                                                |
+| ----------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `-sessions`             | `string` | `""`                  | Comma-separated counts of sessions open at once, ascending; empty runs the matrix          |
+| `-sessions-credentials` | `int`    | `1`                   | Credentials the sessions are spread across                                                 |
+| `-sessions-nofile`      | `int`    | `0`                   | Descriptor limit the server is started under; `0` inherits this process's (not on Windows) |
+| `-sessions-stream`      | `bool`   | `false`               | Open each session's standalone stream and hold it open for the step                        |
+| `-sessions-json`        | `string` | `bench/sessions.json` | Document to write; refused if it names the published record                                |
+
+```bash
+# What a stateful session costs, with and without its standalone stream
+go run ./cmd/bench_resources/ -sessions 100,500,1000,2000,4000
+go run ./cmd/bench_resources/ -sessions 50,96,100,500,1000,2000,4000 -sessions-nofile 1024 -sessions-stream
+```
+
+The rest of the command's flags, and the fairness mode, are in the
+[command reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/cmd-utilities.md#bench_resources).

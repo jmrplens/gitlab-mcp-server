@@ -41,8 +41,19 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
 It covers descriptions and titles across tools, prompts, resources and resource
 templates, and never touches names, URIs, `pattern`, `const`, enum values or
 tool-call payloads. A malformed value refuses startup rather than serving the
-gateway the unrewritten catalog it already rejected. See
-[Compatibility](/gitlab-mcp-server/compatibility/) for the full rule set.
+gateway the unrewritten catalog it already rejected.
+
+Verify a configuration against the character audit before deploying it. The
+audit runs from a checkout of this repository, applies the substitutions in
+the variable to every listed surface and exits non-zero while any semicolon or
+character outside ASCII is still served:
+
+```bash
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.' go run ./cmd/audit_gateway_chars/ -apply -check
+```
+
+See [Compatibility](/gitlab-mcp-server/compatibility/#mcp-gateway-validators)
+for the full rule set.
 
 ## The credential has to reach the server
 

@@ -66,10 +66,13 @@ Reinventing that surface would mean maintaining a second, worse copy of a
 configuration you already know, and it would break the ordinary case of a host
 that exports `OTEL_EXPORTER_OTLP_ENDPOINT` once for every service on it.
 
-### Three traps in the standard variables
+### Four traps in the standard variables
 
-These are not this server's doing, they catch people, and each one fails
-quietly.
+These are not this server's doing, and they catch people. Three of them leave
+telemetry running on something other than what you meant; the fourth,
+`http/json`, is refused at startup with an `ERROR` line,
+`telemetry disabled: it could not be started`, and the server goes on serving
+without telemetry.
 
 <Aside type="caution" title="`http://` is not the default">
 The Go exporters default to `https://localhost:4318`. Turning telemetry on with
@@ -82,45 +85,84 @@ batch fails for all three signals. Write the scheme explicitly:
 <Aside type="caution" title="Durations are integer milliseconds">
 "Any value that represents a timeout MUST be an integer representing a number of
 milliseconds." So `OTEL_EXPORTER_OTLP_TIMEOUT=30s` does not mean thirty seconds:
-it parses as nothing and the 10s default stands. Write `30000`. Every
-`OTEL_BSP_*`, `OTEL_BLRP_*` and `OTEL_METRIC_*` duration behaves the same way,
-while every flag *this* server defines takes a Go duration, which makes the
-inconsistency easier to trip over rather than harder.
+it parses as nothing and the 10s default stands.
+
+```bash
+OTEL_EXPORTER_OTLP_TIMEOUT=30000   # thirty seconds
+OTEL_EXPORTER_OTLP_TIMEOUT=30s     # nothing; the default is kept
+```
+
+The `OTEL_BSP_*` and `OTEL_BLRP_*` durations (`*_SCHEDULE_DELAY` and
+`*_EXPORT_TIMEOUT`), `OTEL_METRIC_EXPORT_INTERVAL` and
+`OTEL_METRIC_EXPORT_TIMEOUT` behave the same way, while every flag *this*
+server defines takes a Go duration, which makes the inconsistency easier to
+trip over rather than harder.
 </Aside>
 
 <Aside type="caution" title="`http/json` is refused at startup">
 Since v1.46.0 the Go trace exporter implements it and the metric and log
 exporters do not. Honoring it would give one deployment two encodings at once,
 JSON spans beside protobuf metrics, from a single setting that reads as though
-it selects one thing. It fails by name rather than silently downgrading.
+it selects one thing. It fails by name rather than silently downgrading or
+silently splitting.
 </Aside>
+
+<Aside type="caution" title="`OTEL_EXPORTER_OTLP_INSECURE=true` overrides an `https` endpoint for traces and metrics">
+The specification says the variable "only applies to OTLP/gRPC when an endpoint
+is provided without the http or https scheme". The Go trace and metric
+exporters do not read it that way: their environment configuration applies the
+scheme first and the `INSECURE` options after, so the later one wins and an
+`https` endpoint is downgraded to plaintext, taking whatever credential you set
+with it. The log exporters resolve the scheme first and are correct, which is
+why one deployment can end up exporting two signals in the clear and the third
+over TLS.
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://collector.example.com:4318
+OTEL_EXPORTER_OTLP_INSECURE=true   # traces and metrics go out in plaintext anyway
+```
+
+The precedence runs the other way too: an `INSECURE=false` beside an `http`
+endpoint upgrades traces and metrics to TLS. For those two signals any
+non-empty value decides and only `true` (in any capitalization) means plaintext, so
+`INSECURE=1` upgrades them as surely as `false` does; the log exporter accepts
+only `true` and `false` and ignores anything else.
+</Aside>
+
+This server emulates that deviation per signal rather than reading the scheme
+off the URL, so the [plaintext warning](#authenticating-to-your-collector) names
+the signals that are actually affected. It does not refuse the configuration:
+the endpoint is yours to choose.
 
 ## Authenticating to your collector
 
 There is **no username and password option**, and none is missing: the
 specification defines no such variable. Every scheme is a header.
 
-This server does not refuse that configuration, because a collector on a trusted
-private network reached over plaintext is a real deployment and the endpoint is
-yours to choose. It does say so once at startup, naming the signals affected:
+| What your collector wants | What to set                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Nothing (the default)     | Set nothing. A supported configuration, not a fallback.                                                  |
+| A bearer token            | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20YOUR_TOKEN`                                           |
+| Basic auth                | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20$(printf 'user:pass' \| base64)`                       |
+| A vendor API key          | `OTEL_EXPORTER_OTLP_HEADERS=api-key=YOUR_KEY`                                                            |
+| Several at once           | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20tok,x-tenant=acme`                                    |
+| Mutual TLS                | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE=/path/cert.pem` and `OTEL_EXPORTER_OTLP_CLIENT_KEY=/path/key.pem` |
+| A private CA              | `OTEL_EXPORTER_OTLP_CERTIFICATE=/path/ca.pem`                                                            |
 
-```text
-level=WARN msg="a collector credential is configured against a plaintext endpoint
-on another host; it crosses the network in the clear on every export" signals=[traces]
+A header configured for a signal whose endpoint is plaintext and on another
+host, either an `http://` endpoint or an `https://` one that
+`OTEL_EXPORTER_OTLP_INSECURE` downgrades as described above, crosses the
+network in the clear on every export. This server does not refuse that
+configuration, because a collector on a trusted private network reached over
+plaintext is a real deployment and the endpoint is yours to choose. It does say
+so once at startup, naming the signals affected:
+
+```json
+{"level":"WARN","msg":"a collector credential is configured against a plaintext endpoint on another host; it crosses the network in the clear on every export","component":"telemetry","signals":["traces"]}
 ```
 
 Loopback is exempt: a credential that never leaves the machine cannot be observed
 on a network, so a sidecar collector raises nothing.
-
-| What your collector wants | What to set                                                                 |
-| ------------------------- | --------------------------------------------------------------------------- |
-| Nothing (the default)     | Set nothing. A supported configuration, not a fallback.                     |
-| A bearer token            | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20YOUR_TOKEN`              |
-| Basic auth                | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20BASE64`                   |
-| A vendor API key          | `OTEL_EXPORTER_OTLP_HEADERS=api-key=YOUR_KEY`                               |
-| Several at once           | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20tok,x-tenant=acme`       |
-| Mutual TLS                | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` and `OTEL_EXPORTER_OTLP_CLIENT_KEY` |
-| A private CA              | `OTEL_EXPORTER_OTLP_CERTIFICATE`                                            |
 
 <Aside type="danger" title="The encoding is where this goes wrong">
 The value is W3C Baggage format and is percent-decoded.
@@ -143,13 +185,16 @@ header parser prints what it could not parse, and the log exporter hands the
 entire variable to the error handler, so one malformed non-credential pair is
 enough to print a perfectly well formed credential beside it. This server reads
 the same variables the exporters do at startup and redacts those values, and
-their percent-decoded spellings, out of every SDK diagnostic it emits.
+their percent-decoded spellings, out of every SDK diagnostic it emits. The
+variable name is left in place, because an operator whose configuration is
+malformed needs to know which one to fix.
 
 ## What is recorded
 
 ### Spans
 
 One span per MCP request, plus one child span per GitLab API call it caused.
+HTTP mode adds one span per inbound HTTP request, described after the table.
 
 | Attribute                   | On                       | Meaning                                                                                                        |
 | --------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
@@ -171,51 +216,105 @@ surface every tool call names the same two tools, so `gen_ai.tool.name` is
 `gitlab_execute_action` whether the server listed issues or deleted a branch.
 The action attribute is the only thing that tells them apart.
 
-The child span of a GitLab call carries the method, the host, the port and the
-response status, and, when the route is one the server's fine-grained
-permission table holds, `url.template`: the route as GitLab declares it, such
-as `/api/v4/projects/:id/issues`, which also names the span. The template
-carries the placeholders and never the values a request filled in, and an
-instance installed under a path of its own (`https://host/gitlab`) gets the
-same template, the path in front of `/api/` left out; a route the table does
-not hold carries none, and its span is named by its method alone. It is a span
-attribute only, never a metric dimension.
+The child span of a GitLab call carries `http.request.method`, the host and
+port it was sent to and the response status, and, when the route is one the
+server's fine-grained permission table holds, `url.template`: the route as
+GitLab declares it, such as `/api/v4/projects/:id/issues`, which also names the
+span (`GET /api/v4/projects/:id/issues`). The template carries the placeholders
+and never the values a request filled in. An instance installed under a path of
+its own (a relative URL root, `https://host/gitlab`) gets the same template: the
+path in front of `/api/` is the instance's and is left out. A request to a route
+the table does not hold, `/api/v4/version` among them, carries no template, and
+its span is named by its method alone. The template is a span attribute only:
+it is not a dimension of `http.client.request.duration`, whose series it would
+multiply by every route GitLab serves.
+
+In HTTP mode every inbound HTTP request also gets a server span of its own,
+opened before host validation, CORS and the credential check. The MCP span
+starts after authentication, so this is the one that records a request refused
+before it reached MCP, as its status code. It is named by the method and
+carries `http.request.method`, `url.scheme` (read from the connection, never
+from `X-Forwarded-Proto`), `network.protocol.name` and
+`http.response.status_code`. A method outside the convention's list is recorded
+as `_OTHER`, with the verb as sent, cut at 32 characters, in
+`http.request.method_original` on the span only. It records no path, because on
+a published endpoint the path is whatever a scanner sends. A `4xx` leaves the
+span status unset, as the convention requires of a server span, and a `5xx`
+marks it as an error.
 
 ### Metrics
 
-| Instrument                             | Unit         | What it answers                                     |
-| -------------------------------------- | ------------ | --------------------------------------------------- |
-| `mcp.server.operation.duration`        | `s`          | how long requests take, by method and action        |
-| `mcp.client.operation.duration`        | `s`          | how long this server waits on the client            |
-| `http.client.request.duration`         | `s`          | how long GitLab takes                               |
-| `mcp.server.session.duration`          | `s`          | how long a client stays connected                   |
-| `gitlab_mcp.credential_pool.entries`   | `{entry}`    | how many credentials the pool holds (HTTP mode)     |
-| `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | how many it may hold, which is `--max-http-clients` |
-| `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entries dropped, split by reason                    |
+| Instrument                             | Unit         | What it answers                                                                                                     |
+| -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `mcp.server.operation.duration`        | `s`          | how long requests take, by method and action                                                                        |
+| `mcp.client.operation.duration`        | `s`          | how long this server waits on the client for what it initiates (elicitation, sampling, `roots/list`, notifications) |
+| `http.client.request.duration`         | `s`          | how long GitLab takes                                                                                               |
+| `mcp.server.session.duration`          | `s`          | how long a client stays connected (stdio and `--stateless=false`)                                                   |
+| `gitlab_mcp.credential_pool.entries`   | `{entry}`    | how many credentials the pool holds (HTTP mode)                                                                     |
+| `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | how many it may hold, which is `--max-http-clients`                                                                 |
+| `gitlab_mcp.credential_pool.evictions` | `{eviction}` | entries dropped, split by `gitlab_mcp.credential_pool.eviction.reason`                                              |
+| `http.server.request.duration`         | `s`          | how long an inbound HTTP request takes, the credential check included and refused requests too (HTTP mode)          |
+| `gitlab_mcp.auth.blocks`               | `{request}`  | requests refused before their credential was read, split by `gitlab_mcp.auth.block.reason` (HTTP mode)              |
 
 `mcp.server.session.duration` is deliberately not recorded under the default
 stateless HTTP transport, where each POST is its own session: the histogram
 would be a copy of `mcp.server.operation.duration` under a name promising
 something else.
 
+`http.server.request.duration` is measured by the HTTP span above, and its
+dimensions are that span's method, scheme, protocol name and status code, the
+original verb left out. `gitlab_mcp.auth.blocks` counts each refusal under the
+budget that answered it, as `gitlab_mcp.auth.block.reason`: `failure_lockout`
+and `distinct_tokens` are the two
+[authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets),
+and `transport_source` is a coarser one charged to the address the connection
+came from rather than to the one a trusted proxy header names, which exists
+only when such a header is trusted. All three are exported from startup, zeros
+included. The address refused is deliberately not a dimension: it would make
+the series identify people, and grow without bound under exactly the traffic it
+measures.
+
 The three credential-pool instruments carry this server's own namespace rather
 than the convention's `mcp.`, because a credential pool is this deployment's
-concept and not the protocol's. `gitlab_mcp.credential_pool.eviction.reason`
-takes one of eight values: `size_pressure`, `size_pressure_busy`, `idle`,
-`stale_credential`, `rejected_credential`, `invalid_credential`,
-`below_minimum` (a credential GitLab accepts that carries neither `read_api`
-nor `api`, found so once its entry was serving) and `rebuild`. All eight are
-exported from process start, zeros included, so a panel is never
-empty for the ambiguous reason.
+concept and not the protocol's, and a name under `mcp.` would claim part of a
+namespace the semantic convention owns. They are published by HTTP mode only,
+and `capacity` is published beside `entries` so "how close to the bound" is
+answerable without typing the flag's value into a dashboard query.
 
-`size_pressure_busy` is the one to alert on: it is the only path that ends a
-subscription somebody is waiting on, it means the pool held nothing quiet to
-take, and it has a matching `WARN` line carrying `in_use=true` and the
-`max_size` to raise.
+`gitlab_mcp.credential_pool.eviction.reason` takes one of eight values, one per
+removal path, and every one of them is exported from process start whether it
+has fired or not, zeros included, so a panel is never empty for the ambiguous
+reason:
+
+| Reason                | What happened                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `size_pressure`       | The pool was full and dropped the least recently used entry that was doing nothing                                                                                                                                                                                                                                                                                                                                                   |
+| `size_pressure_busy`  | The pool was full, **every** entry was serving a subscription (a resource watcher or an open `subscriptions/listen` stream), and the oldest went anyway                                                                                                                                                                                                                                                                              |
+| `idle`                | `--pool-idle-timeout` reclaimed an entry nobody had used                                                                                                                                                                                                                                                                                                                                                                             |
+| `stale_credential`    | The credential had not been checked against GitLab inside the one-hour age ceiling, so the entry is rebuilt rather than trusted                                                                                                                                                                                                                                                                                                      |
+| `rejected_credential` | GitLab refused the credential on a call: a `401` naming the token, or a `401` the credential probe then confirmed, never a permission refusal. A GraphQL `401` to a token carrying neither `api` nor `read_api` names the token too ([Refused calls](/gitlab-mcp-server/operations/http-server/#refused-calls))                                                                                                                      |
+| `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                                                                                                                                                                                                                                                                                                                                                           |
+| `below_minimum`       | GitLab said of a credential the pool already serves that it is genuine and carries neither `read_api` nor `api`, the admission minimum: a confirmation or a revalidation got `403 insufficient_scope`, or the token's own description, asked again because its kind was unknown when the entry was built, named only scopes below it ([Credential verification](/gitlab-mcp-server/operations/http-server/#credential-verification)) |
+| `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it                                                                                                                                                                                                                                                                                                                                                    |
+
+`size_pressure_busy` is the one to alert on. Every eviction ends the
+subscriptions of the credential it removes, but this is the only one that takes
+a subscriber's entry for want of room, its credential still good, and it means
+the pool held nothing quiet to take: see [the lever](/gitlab-mcp-server/operations/http-server/#the-lever-and-what-it-costs)
+for the value of `--max-http-clients` that puts it out of reach. It has a
+matching `WARN` line carrying `in_use=true` and the `max_size` to raise:
+
+```text
+server pool: evicted an entry that was serving a subscription
+```
+
+Entries dropped at shutdown are deliberately uncounted: nothing observes a
+metric after the process ends.
 
 One attribute the convention asks for is missing, and it cannot be supplied:
 `jsonrpc.request.id`. The Go SDK gives a receiving middleware no access to the
-JSON-RPC id of the message it is handling, so there is nothing to record.
+JSON-RPC id of the message it is handling, so there is nothing to record. It is
+[registered upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-receiving-middleware-cannot-read-the-json-rpc-request-id).
 
 Seconds, not milliseconds. The convention fixes that, and it is the opposite of
 the `duration` field in this server's log records.
@@ -352,9 +451,22 @@ Not by default and not by any setting, because there is no setting:
   the status and, where the server's table holds it, the route template, which
   names the endpoint with placeholders where the URL would carry project paths,
   identifiers and query values. The parent span already names the action.
+- **`token_suffix`**, the last four characters of an HTTP client's credential.
+  It keeps being written to stderr, where it is what an operator correlates a
+  refusal by on their own terminal, and it is stripped from the exported copy
+  of every log record at any depth: it authenticates nothing and correlates
+  everything, which is not a distinction a telemetry backend can make for you.
+- **The `Host` header of a request the host guard refused.** It stays on
+  stderr, where it is what you read to find out which host a misconfigured
+  proxy is forwarding, and it is stripped from the exported copy the same way:
+  on a published endpoint the value is whatever a caller chose to send. It
+  reached collectors in 3.0.0, unnoticed because the test that says it cannot
+  was winning its race against the log batch, and is stripped from 3.1.0 on.
 
 An end-to-end test drives real traffic carrying a distinctive project path, a
-search query and a token, then searches every exported payload for all three.
+search query and a token, then searches every exported payload for all three;
+another sends a spoofed `Host`, a spoofed `X-Forwarded-For` and a probe path
+and does the same.
 
 ## Recording who made a call
 
@@ -386,15 +498,21 @@ whichever way it points. The conventions agree: these attributes are `Opt-In`,
 whose rule is "Instrumentations SHOULD populate the attribute if and only if the
 user configures the instrumentation to do so".
 
-**`pseudonymous`** emits `user.hash`, an HMAC-SHA256 digest under a 32-byte key
-generated at startup and never written anywhere. It gives a shared endpoint the
+**`pseudonymous`** emits `user.hash`, an HMAC-SHA256 digest. By default its key
+comes from 32 random bytes generated at startup and never written anywhere; with
+`GITLAB_MCP_TELEMETRY_IDENTITY_KEY` set it is derived from that key instead
+([Logs](#logs) has both settings). It gives a shared endpoint the
 one thing it genuinely needs, telling one caller's traffic from another's, so a
 burst can be attributed and a session followed, without naming anybody.
 
 <Aside type="note" title="Two properties of the digest">
-It is **stable within a process and different after a restart**, deliberately: a
-digest stable across processes would let anyone holding two deployments' exports
-link the same person across both.
+By default it is **stable within a process and different after a restart**,
+deliberately: a digest stable across processes would let anyone holding two
+deployments' exports link the same person across both. Setting
+`GITLAB_MCP_TELEMETRY_IDENTITY_KEY` makes it stable across processes and
+restarts, which is that setting's purpose (read
+[what setting the key means](#what-setting-the-key-means) first); a rotation
+interval changes it within a process each time the generated key is replaced.
 
 Pseudonymous is not anonymous. Somebody who can correlate a known person's
 activity with a digest can link the two. That is inherent to the technique, not
@@ -484,6 +602,7 @@ failing.
 | Attribute requirement levels | [Attribute Requirement Level](https://opentelemetry.io/docs/specs/semconv/general/attribute-requirement-level/)       |
 | Error recording              | [Recording Errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)                             |
 | Identity attributes          | [User attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/user/)                              |
+| Trace context in `_meta`     | [MCP specification](https://modelcontextprotocol.io/specification/)                                                   |
 
 The MCP semantic convention is **Development** status, which its own maturity
 table describes as "SHOULD NOT be used in production" and "MAY be removed

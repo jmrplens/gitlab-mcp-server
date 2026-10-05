@@ -8,7 +8,7 @@ faq:
   - q: "Does the listener do mTLS?"
     a: "No. It requests no client certificate and verifies none; authentication on it is the bearer credential, in either supported mode. Mutual TLS at the edge is a property of the proxy in front, which is where it belongs for a deployment with many clients anyway, since the proxy is what holds the client CA and the revocation list."
   - q: "Is a unix socket the right choice for a same-machine proxy?"
-    a: "It removes the network hop rather than encrypting it, which is usually what you want. It has one cost at scale: a unix socket has no peer address, and the authentication failure budget is keyed on the caller's address, so every caller behind the proxy shares one budget. Ten failed authentications a minute from anywhere answer `429` to everybody for a minute. Bind loopback TCP with `--trusted-proxy-header` and `--trusted-proxies` if per-caller failure accounting matters more than the hop."
+    a: "It removes the network hop rather than encrypting it, which is usually what you want. It has one cost at scale: a unix socket has no peer address, and the authentication failure budget is keyed on the caller's address, so every caller behind the proxy shares one budget. Ten failed authentications a minute from anywhere spend it for a minute, and until the window ends every credential the server does not already hold is answered `429`; callers it is already serving stay served. Bind loopback TCP with `--trusted-proxy-header` and `--trusted-proxies` if per-caller failure accounting matters more than the hop."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -108,10 +108,15 @@ For the proxy-to-server hop, `proxy_ssl_verify on` with
 
 A unix socket has no peer address. The authentication failure budget is keyed on
 the caller's address, so on a socket **every caller shares one budget**: ten
-failed authentications a minute from anywhere behind the proxy answer `429` to
-everybody for a minute. `--trusted-proxy-header` cannot repair it either, since
-the header is believed only from a peer that parses as an address, and no socket
-peer does.
+failed authentications a minute from anywhere behind the proxy spend it for
+everybody for a minute. A caller whose credential this deployment is already
+serving is still served while it is spent, so the damage is bounded to
+credentials the server does not currently hold: every one of them is answered
+`429` inside that window, a caller authenticating for the first time and one
+whose entry the pool has reclaimed alike
+([why the exemption is safe](/gitlab-mcp-server/operations/http-server/#rejection-status-codes)).
+`--trusted-proxy-header` cannot repair it either, since the header is believed
+only from a peer that parses as an address, and no socket peer does.
 
 The alternative is one line: bind loopback TCP instead and tell the server who
 the proxy is.

@@ -43,8 +43,20 @@ Cubre descripciones y títulos en herramientas, prompts, recursos y plantillas d
 recurso, y nunca toca nombres, URI, `pattern`, `const`, valores de enumeración
 ni cargas de llamadas a herramientas. Un valor mal formado impide el arranque en
 lugar de servir a la pasarela el catálogo sin reescribir que ya rechazó.
-Consulta [Compatibilidad](/gitlab-mcp-server/es/compatibility/) para el conjunto
-completo de reglas.
+
+Comprueba una configuración contra la auditoría de caracteres antes de
+desplegarla. La auditoría se ejecuta desde una copia de este repositorio, aplica
+las sustituciones de la variable a todas las superficies listadas y termina con
+un código distinto de cero mientras se siga sirviendo algún punto y coma o algún
+carácter fuera de ASCII:
+
+```bash
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.' go run ./cmd/audit_gateway_chars/ -apply -check
+```
+
+Consulta
+[Compatibilidad](/gitlab-mcp-server/es/compatibility/#validadores-de-pasarelas-mcp)
+para el conjunto completo de reglas.
 
 ## La credencial tiene que llegar al servidor
 

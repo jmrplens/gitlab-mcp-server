@@ -8,7 +8,7 @@ faq:
   - q: "¿El listener hace mTLS?"
     a: "No. No pide certificado de cliente ni verifica ninguno; la autenticación en él es la credencial bearer, en cualquiera de los dos modos soportados. El TLS mutuo en el borde es una propiedad del proxy de delante, que es donde corresponde en un despliegue con muchos clientes, porque el proxy es quien tiene la CA de clientes y la lista de revocación."
   - q: "¿Es un socket unix la opción correcta para un proxy en la misma máquina?"
-    a: "Elimina el salto de red en lugar de cifrarlo, que suele ser lo que quieres. Tiene un coste a escala: un socket unix no tiene dirección de par, y el presupuesto de fallos de autenticación se indexa por la dirección de quien llama, así que todos los clientes detrás del proxy comparten un presupuesto. Diez autenticaciones fallidas por minuto desde cualquier punto responden `429` a todo el mundo durante un minuto. Enlaza TCP de loopback con `--trusted-proxy-header` y `--trusted-proxies` si la contabilidad de fallos por cliente te importa más que el salto."
+    a: "Elimina el salto de red en lugar de cifrarlo, que suele ser lo que quieres. Tiene un coste a escala: un socket unix no tiene dirección de par, y el presupuesto de fallos de autenticación se indexa por la dirección de quien llama, así que todos los clientes detrás del proxy comparten un presupuesto. Diez autenticaciones fallidas por minuto desde cualquier punto lo agotan durante un minuto, y hasta que termina la ventana toda credencial que el servidor no tenga ya recibe `429`; los clientes a los que ya está sirviendo siguen atendidos. Enlaza TCP de loopback con `--trusted-proxy-header` y `--trusted-proxies` si la contabilidad de fallos por cliente te importa más que el salto."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -111,10 +111,15 @@ Para el salto entre el proxy y el servidor, `proxy_ssl_verify on` con
 Un socket unix no tiene dirección de par. El presupuesto de fallos de
 autenticación se indexa por la dirección de quien llama, así que sobre un socket
 **todos los clientes comparten un presupuesto**: diez autenticaciones fallidas
-por minuto desde cualquier punto detrás del proxy responden `429` a todo el
-mundo durante un minuto. `--trusted-proxy-header` tampoco lo arregla, porque la
-cabecera solo se cree desde un par que se analiza como dirección, y ningún par
-de socket lo hace.
+por minuto desde cualquier punto detrás del proxy lo agotan para todo el mundo
+durante un minuto. Un cliente cuya credencial este despliegue ya está sirviendo
+sigue atendido mientras está agotado, así que el daño se limita a las
+credenciales que el servidor no tiene en ese momento: todas ellas reciben `429`
+dentro de esa ventana, tanto quien se autentica por primera vez como quien ha
+visto al pool recuperar su entrada
+([por qué la exención es segura](/gitlab-mcp-server/es/operations/http-server/#códigos-de-estado-de-rechazo)).
+`--trusted-proxy-header` tampoco lo arregla, porque la cabecera solo se cree
+desde un par que se analiza como dirección, y ningún par de socket lo hace.
 
 La alternativa es una línea: enlaza TCP de loopback y dile al servidor quién es
 el proxy.

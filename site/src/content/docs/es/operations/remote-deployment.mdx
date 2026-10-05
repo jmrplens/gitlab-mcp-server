@@ -4,13 +4,13 @@ description: "Ejecuta GitLab MCP Server para otras personas: como servicio del s
 datePublished: "2026-09-04"
 faq:
   - q: "¿Puedo balancear varias instancias con round robin?"
-    a: "Funciona, y paga varias veces por la misma caché. Cada instancia mantiene un pool de servidores indexado por un hash del token y la URL de GitLab, y una caché de identidad OAuth indexada por instancia y token. Ambas son por proceso y guardan objetos vivos, así que no se comparte nada entre instancias. Un cliente que aterriza en una instancia distinta en cada petición reconstruye allí una entrada del pool (una construcción del catálogo medida en 1,8 segundos en la superficie dinámica y 3,0 en la individual) y vuelve a verificar su token contra GitLab. El round robin es correcto; simplemente paga N veces. La afinidad por token fija a cada cliente en la instancia que ya tiene su entrada."
+    a: "Para las llamadas normales funciona, y paga varias veces por la mitad barata de la caché. Cada instancia mantiene un pool de servidores indexado por un hash del token y la URL de GitLab, y una caché de identidad OAuth indexada por instancia y token. Ambas son por proceso y guardan objetos vivos, así que no se comparte nada entre instancias. A un cliente que aterriza en una instancia distinta en cada petición se le construye allí una entrada del pool (se leen sus ámbitos y se detecta el nivel de licencia) y se vuelve a verificar su token contra GitLab. El catálogo de herramientas no se reconstruye por él: una instancia registra el catálogo una vez por forma de configuración y lo comparte con todas las credenciales de esa forma. El round robin es correcto; simplemente paga N veces. Dos cosas sí necesitan afinidad, porque viven en un proceso: las sesiones con estado heredadas y las suscripciones a recursos. La afinidad por token fija a cada cliente en la instancia que ya tiene su entrada."
   - q: "¿Por qué no usar simplemente IP hash para la afinidad?"
     a: "Porque la dirección es la granularidad equivocada. Una oficina, un concentrador VPN o una flota de runners de CI es una sola dirección, así que todo eso se agolpa en una instancia; y un cliente que se mueve entre redes cambia de clave y aterriza frío cada vez. Tras una CDN el balanceador además tiene que recuperar primero la dirección real. El IP hash es barato y no necesita ningún secreto, lo cual es una ventaja real, pero lo que se cachea está indexado por el token, así que la clave de enrutado también debería estarlo."
   - q: "¿Necesito un proxy inverso?"
-    a: "No. El binario responde sus propios preflight de CORS, sus propios 404, sus propias cabeceras de seguridad, y termina TLS con `--tls-cert` y `--tls-key`. Cuando el proxy comparte máquina, `--http-addr=/run/gitlab-mcp/server.sock` elimina el salto en lugar de cifrarlo. Un proxy se gana su sitio por la renovación de certificados sin reinicio, por alojar otros servicios en el mismo nombre y por balancear varias instancias."
+    a: "No. El binario responde sus propios preflight de CORS, sus propios 404, sus propias cabeceras de seguridad, termina TLS con `--tls-cert` y `--tls-key`, y presenta un certificado renovado en el siguiente handshake sin reiniciar. Cuando el proxy comparte máquina, `--http-addr=/run/gitlab-mcp/server.sock` elimina el salto en lugar de cifrarlo. Un proxy se gana su sitio por obtener certificados automáticamente, por alojar otros servicios en el mismo nombre y por balancear varias instancias."
   - q: "Mis clientes OAuth reciben un 404 durante el descubrimiento. ¿Qué falla?"
-    a: "Casi seguro que el proxy solo enruta el prefijo de ruta. El documento de metadatos RFC 9728 vive en la **raíz del host**, no bajo la ruta de `--public-url`: arrancado con `--public-url=https://mcp.example.com/gitlab`, el servidor lo sirve en `/.well-known/oauth-protected-resource/gitlab` y responde 404 a `/gitlab/.well-known/oauth-protected-resource/gitlab`. `/health` y la ficha del servidor *sí* se montan además bajo el prefijo; los metadatos OAuth no. Enruta `/.well-known/oauth-protected-resource` al mismo upstream sin reescribirla."
+    a: "Casi seguro que el proxy solo enruta el prefijo de ruta. El documento de metadatos RFC 9728 vive en la **raíz del host**, no bajo la ruta de `--public-url`: arrancado con `--public-url=https://mcp.example.com/gitlab`, el servidor lo sirve en `/.well-known/oauth-protected-resource/gitlab` y responde 404 a `/gitlab/.well-known/oauth-protected-resource/gitlab`. `/health` y la ficha del servidor *sí* se montan además bajo el prefijo; los metadatos OAuth no. Enruta esa ruta derivada exacta, `/.well-known/oauth-protected-resource/gitlab`, al mismo upstream sin reescribirla, y nunca un prefijo de ella."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -18,9 +18,9 @@ import FAQ from "../../../../components/FAQ.astro";
 
 :::tip[De un vistazo]
 
-- **En modo HTTP el servidor no guarda ninguna credencial propia.** Cada petición lleva el token de quien llama, así que no hay ningún token de servidor que esconder en un fichero de unidad y `/health` no necesita autenticación.
-- **Nada de esto necesita un proxy inverso para ser correcto.** El binario termina TLS, responde sus propios preflight de CORS y puede escuchar en un socket unix.
-- **Varias instancias no se balancean con round robin gratis.** El pool de servidores y la caché de identidad OAuth son por proceso, así que un cliente que se mueve reconstruye ambas. Fíjalo con afinidad por token.
+- **En modo HTTP el servidor no guarda ninguna credencial propia.** Cada petición lleva el token de quien llama, así que no hay ningún token de servidor que esconder en un fichero de unidad, `/health` no necesita autenticación, y ejecutar varias instancias es un problema de caché y no de replicar estado.
+- **Nada de esto necesita un proxy inverso para ser correcto.** El binario termina TLS, recarga por su cuenta un certificado renovado, responde sus propios preflight de CORS y puede escuchar en un socket unix.
+- **Varias instancias no se balancean con round robin gratis.** El pool de servidores y la caché de identidad OAuth son por proceso, así que a un cliente que se mueve se le construye la entrada y se le verifica el token de nuevo en cada instancia. Fíjalo con afinidad por token, que las sesiones con estado y las suscripciones exigen.
 
 :::
 
@@ -56,6 +56,7 @@ menos privilegios:
 # /etc/systemd/system/gitlab-mcp-server.service
 [Unit]
 Description=GitLab MCP Server
+Documentation=https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/
 After=network-online.target
 Wants=network-online.target
 
@@ -100,8 +101,10 @@ WantedBy=multi-user.target
 
 `ProtectSystem=strict` monta todo el sistema de ficheros en solo lectura y al
 servidor le da igual: no escribe nada en disco. Los registros van a la salida de
-error estándar, que recoge `journald`. Las lecturas no se ven afectadas, así que
-los certificados y el fichero de entorno siguen siendo legibles.
+error estándar, que recoge `journald`, y el único fichero que llega a crear es
+el socket unix de la segunda forma, más abajo. Las lecturas no se ven
+afectadas, así que los certificados y el fichero de entorno siguen siendo
+legibles.
 
 `RestrictAddressFamilies=` omite `AF_NETLINK` a propósito. El binario publicado
 se compila con `CGO_ENABLED=0` y usa el resolvedor propio de Go, que llega al
@@ -111,12 +114,14 @@ a `gitlab.com` fue respondida por GitLab con y sin `AF_NETLINK` en la lista.
 
 **Un socket unix necesita un usuario fijo.** `DynamicUser=yes` asigna un usuario
 y un grupo transitorios en cada arranque, así que no hay ningún grupo al que
-añadir el proxy:
+añadir el proxy. Crea un usuario de sistema y comparte un grupo real:
 
 ```bash
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin gitlab-mcp
 sudo usermod -aG gitlab-mcp www-data   # o nginx, o caddy
 ```
+
+Después sustituye las líneas de identidad y de dirección:
 
 ```ini
 User=gitlab-mcp
@@ -135,6 +140,20 @@ se elimine al parar. Además tiene que poder **escribirse**: el servidor no
 vincula la ruta publicada directamente. Crea un directorio de preparación `0700`
 al lado, vincula el socket allí y le aplica los permisos, y después lo enlaza a
 su sitio, de modo que un socket solo aparece ya con sus permisos definitivos.
+Un directorio padre de solo lectura, por tanto, falla, aunque el proceso no
+escriba nada más.
+
+Mantén `/etc/gitlab-mcp-server/env` con modo `0600` y propiedad de root:
+systemd lo lee antes de soltar privilegios, así que el usuario del servicio
+nunca necesita leerlo. Después instala y comprueba:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now gitlab-mcp-server
+curl -fsS http://127.0.0.1:8080/health
+# La forma con socket: curl -fsS --unix-socket /run/gitlab-mcp/server.sock http://localhost/health
+journalctl -u gitlab-mcp-server -f
+```
 
 </TabItem>
 <TabItem label="launchd">
@@ -165,8 +184,15 @@ macOS, como demonio del sistema bajo `/Library/LaunchDaemons/`:
     </dict>
     <key>UserName</key>
     <string>_gitlabmcp</string>
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/gitlab-mcp-server.log</string>
     <key>StandardErrorPath</key>
     <string>/usr/local/var/log/gitlab-mcp-server.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>GITLAB_MCP_LOG_LEVEL</key>
+        <string>info</string>
+    </dict>
 </dict>
 </plist>
 ```
@@ -176,9 +202,10 @@ sudo launchctl load -w /Library/LaunchDaemons/io.github.jmrplens.gitlab-mcp-serv
 sudo launchctl print system/io.github.jmrplens.gitlab-mcp-server
 ```
 
-Un plist es legible por cualquiera, así que un secreto no va en
-`EnvironmentVariables`. Ponlo en un fichero que lea el demonio, nombrado por
-`GITLAB_MCP_ENV_FILE` con una ruta absoluta.
+`EnvironmentVariables` sirve para un ajuste como el nivel de registro. Pero un
+plist es legible por cualquiera, así que un secreto no va ahí. Ponlo en un
+fichero que lea el demonio, nombrado por `GITLAB_MCP_ENV_FILE` con una ruta
+absoluta.
 
 </TabItem>
 <TabItem label="Windows">
@@ -202,8 +229,9 @@ nssm start GitLabMcpServer
 de **ámbito de usuario** bajo `%LOCALAPPDATA%\Microsoft\WinGet\Packages\`,
 accesible mediante un enlace simbólico en un directorio `Links` por usuario. Un
 servicio no se ejecuta como ese usuario y no debe depender de esa ruta, así que
-añade `--scope machine` o copia el ejecutable a un directorio de máquina y apunta
-el envoltorio al fichero real y no al enlace.
+añade `--scope machine`, que instala bajo `%PROGRAMFILES%\WinGet\Packages\`, o
+copia el ejecutable a un directorio de máquina, y apunta el envoltorio al
+fichero real y no al enlace.
 
 `--http-socket-mode` se acepta en Windows y no se aplica: el servidor registra
 un aviso y deja que decida la ACL del directorio. Usa allí un listener TCP.
@@ -219,28 +247,38 @@ un aviso y deja que decida la ACL del directorio. Usa allí un listener TCP.
   casualidad, pero una unidad que ponga `StandardInput=socket` o `tty` obtiene
   stdio. `--http` dice lo que quieres decir y no lo mueve cómo el supervisor
   conecte un descriptor de fichero.
-- **La activación por socket no está soportada.** Una unidad `.socket`, o la
-  clave `Sockets` de launchd, entrega el socket de escucha al servicio en el
-  descriptor de fichero 0, y este servidor lee un socket ahí como «un supervisor
-  me ha dado un canal stdio». Vincula el socket tú mismo con `--http-addr`.
+- **La activación por socket no está soportada.** Una unidad `.socket` pasa su
+  socket mediante `LISTEN_FDS`, a partir del descriptor de fichero 3, y la clave
+  `Sockets` de launchd mediante `launch_activate_socket()`; el servidor no lee
+  ninguno de los dos, así que un socket pasado así se ignora y el servidor
+  vincula `--http-addr` por su cuenta. Solo `StandardInput=socket`, o
+  `inetdCompatibility` de launchd, pone un socket en el descriptor de fichero 0,
+  y este servidor lee un socket ahí como «un supervisor me ha dado un canal
+  stdio», así que con `--transport auto` hablaría JSON-RPC por él en lugar de
+  aceptar conexiones. Vincula el socket tú mismo con `--http-addr`, y en systemd
+  con `RuntimeDirectory=`.
 - **Los secretos van en un fichero de entorno, nunca en la línea de órdenes.** La
-  línea de órdenes de un servicio la puede leer cualquier usuario local. El modo
-  HTTP no tiene ningún token de GitLab que esconder, pero existen dos secretos
-  reales: `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`, que no tiene opción de línea de
-  órdenes precisamente por esto, y lo que lleve `OTEL_EXPORTER_OTLP_HEADERS`.
+  línea de órdenes de un servicio la puede leer cualquier usuario local: el
+  `ExecStart=` de una unidad de systemd, mediante `systemctl show` y `/proc`, así
+  que un secreto va en `EnvironmentFile=`. El modo HTTP no tiene ningún token de
+  GitLab que esconder, pero existen dos secretos reales:
+  `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`, que no tiene opción de línea de órdenes
+  precisamente por esto, y lo que lleve `OTEL_EXPORTER_OTLP_HEADERS`.
 
 Un socket huérfano no siempre se limpia solo. Al arrancar, el servidor sondea un
 socket existente y lo elimina únicamente cuando la conexión es rechazada, lo que
 demuestra que nadie está escuchando. Un socket vivo se rechaza en lugar de
 robarse, una ruta que no es un socket nunca se borra, y un sondeo que falla por
-cualquier otro motivo se niega a arrancar y te dice que elimines el fichero a
-mano.
+cualquier otro motivo (un permiso denegado, por ejemplo) se niega a arrancar y te
+dice que elimines el fichero a mano.
 
 ## Ejecutarlo con Docker
 
 La imagen y su línea de órdenes están descritas en
 [Docker](/gitlab-mcp-server/es/install/docker/). Lo que sigue es la forma de
 despliegue.
+
+### Un contenedor
 
 ```bash
 docker run -d --name gitlab-mcp \
@@ -252,35 +290,44 @@ docker run -d --name gitlab-mcp \
   --security-opt no-new-privileges:true \
   --memory 512m \
   -e GITLAB_URL=https://gitlab.example.com \
-  ghcr.io/jmrplens/gitlab-mcp-server:2.7.5
+  ghcr.io/jmrplens/gitlab-mcp-server:3.1.0@sha256:87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc
 ```
 
 **La instancia llega como variable de entorno, no como argumento.** Cualquier
 argumento después del nombre de la imagen reemplaza el `CMD` por completo, y el
 `CMD` es `--transport auto --http-addr 0.0.0.0:8080`. Escribir
-`docker run <imagen> --gitlab-url=…` los perdería ambos en silencio.
+`docker run <imagen> --gitlab-url=…` los perdería ambos en silencio, y sin
+ningún transporte nombrado el proceso sirve stdio en lugar de HTTP.
+`-e GITLAB_URL=` rellena la lista de instancias sin tocar la orden, porque el
+modo HTTP lee la variable cuando falta la opción.
 
 **Sin `-i`.** `auto` sirve HTTP exactamente cuando la entrada estándar es
 `/dev/null`, que es lo que da `docker run` sin `-i`. Añadir `-i` le entrega al
 contenedor una tubería, lo que significa un cliente, y el contenedor le habla
 stdio a nadie.
 
+**`-p 127.0.0.1:8080:8080` publica el puerto solo en loopback.**
+`-p 8080:8080` lo publica en todas las interfaces y, con la integración de
+iptables que Docker trae por defecto, eso se salta el cortafuegos de la máquina.
+
 **`--read-only` funciona porque la imagen no escribe nada en ejecución.** La
 única excepción es un socket unix, cuya vinculación necesita un directorio padre
-con permiso de escritura para el paso de preparación descrito arriba. El
-contenedor ya se ejecuta como `appuser` (uid 10001), así que `--user` sobra.
+con permiso de escritura para el paso de preparación descrito arriba, así que
+dale un `--tmpfs` o un volumen. El contenedor ya se ejecuta como `appuser` (uid
+10001), así que `--user` sobra, y `--cap-drop ALL` es seguro porque nada
+escucha en un puerto privilegiado.
 
 **Fija el digest, no solo la etiqueta.** Una etiqueta se puede volver a subir; un
-digest es lo que un cliente resuelve de verdad. `2.7.5` y `latest` resolvían a
-`sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168` el
-2026-09-01, tanto en `ghcr.io` como en el espejo de Docker Hub.
+digest es lo que un cliente resuelve de verdad. `3.1.0` y `latest` resolvían al
+digest de arriba el 2026-10-04, tanto en `ghcr.io` como en Docker Hub, y es el
+digest que fija para esa versión el `server.json` del MCP Registry.
 
 ### Compose
 
 ```yaml
 services:
   gitlab-mcp-server:
-    image: ghcr.io/jmrplens/gitlab-mcp-server:2.7.5
+    image: ghcr.io/jmrplens/gitlab-mcp-server:3.1.0
     restart: unless-stopped
     networks: [mcp]
     ports:
@@ -318,10 +365,11 @@ networks:
         - subnet: 172.28.0.0/24
 ```
 
-Nombrar una instancia no es opcional: el modo HTTP termina con `--gitlab-url is
-required in HTTP mode` cuando no se da ninguna, porque un despliegue que no
-nombra ninguna instancia enviaría el token que aporte quien llama al host que
-esa misma persona ponga en `GITLAB-URL`.
+Una lista `command:` reemplaza el `CMD`, y por eso `--http` y `--http-addr` se
+vuelven a escribir. Nombrar una instancia no es opcional: el modo HTTP termina
+con `--gitlab-url is required in HTTP mode` cuando no se da ninguna, porque un
+despliegue que no nombra ninguna instancia enviaría el token que aporte quien
+llama al host que esa misma persona ponga en `GITLAB-URL`.
 
 `--trusted-proxies` nombra desde dónde conecta el proxy, y tiene que ser una
 dirección que solo el proxy pueda tener. El ejemplo declara su propia red con
@@ -336,24 +384,32 @@ a qué dirección se cargan los fallos de quien llama.
 Varias opciones **no tienen equivalente en variable de entorno** y deben ir como
 argumentos: `--http-addr`, `--http-socket-mode`, `--tls-cert`, `--tls-key`,
 `--trusted-proxy-header`, `--trusted-proxies`, `--stateless`, `--json-response`,
-`--http-idle-timeout`, `--max-request-body-bytes` y `--allow-any-gitlab-url`.
+`--http-idle-timeout`, `--max-request-body-bytes`, `--allow-any-gitlab-url`,
+`--resource-documentation`, `--resource-policy-uri` y `--resource-tos-uri`, y
+tampoco lo tienen los propios selectores de transporte `--http` y `--transport`.
+Casi todas las demás pueden venir del entorno, `--rate-limit-rps` y
+`--rate-limit-burst` incluidas, y una opción pasada explícitamente sigue
+ganando.
 
-El `HEALTHCHECK` de la propia imagen, desde la 2.8.0, es `gitlab-mcp-server
---probe`: el binario localiza el proceso del servidor dentro del contenedor,
-lee `--http-addr`,
-`--tls-cert` y el transporte de su propia línea de comandos, y pregunta por
-`/health` allí donde realmente se sirve. Mueve el listener a otro puerto, a un
-socket unix o detrás de `--tls-cert`, y la comprobación lo sigue sin que nadie
-se lo diga. Un contenedor que un cliente ejecuta por stdio (`docker run -i`) no
-tiene listener; la sonda lo da por saludable mientras el proceso corra.
-`--probe <url>`, `--probe unix:<ruta>` o `--probe host:puerto` se salta el
-descubrimiento, para una comprobación lanzada desde fuera del contenedor.
+El `HEALTHCHECK` de la propia imagen, desde la 3.0.0, es
+`gitlab-mcp-server --probe`: el binario localiza el proceso del servidor dentro
+del contenedor, lee `--http-addr`, `--tls-cert` y el transporte de la línea de
+comandos de ese proceso, y pregunta por `/health` allí donde realmente se sirve.
+Mueve el listener a otro puerto, a un socket unix o detrás de `--tls-cert`, y la
+comprobación lo sigue sin que nadie se lo diga. Un contenedor que un cliente
+ejecuta por stdio (`docker run -i`) no tiene listener; la sonda lo da por
+saludable mientras el proceso corra. `--probe <url>`, `--probe unix:<ruta>` o
+`--probe host:puerto` se salta el descubrimiento, para una comprobación lanzada
+desde fuera del contenedor.
 
-El bloque de Compose de arriba vuelve a declarar la comprobación, que es lo que
-necesita una imagen hasta la 2.7.5: esas llevan `wget` contra
-`http://localhost:8080/health`, así que cualquier otro listener queda marcado
-como no saludable mientras sirve. Fijada a la 2.8.0 o posterior, el bloque
-`healthcheck:` puede quitarse y usarse el de la propia imagen.
+El bloque de Compose de arriba vuelve a declarar la comprobación de la imagen
+solo para que un cambio en el intervalo de la imagen no cambie en silencio el
+del despliegue; quita el bloque `healthcheck:` para usar el de la propia imagen.
+Una imagen hasta la 2.7.5 no tiene `--probe`: su comprobación ejecuta `wget`
+contra `http://localhost:8080/health`, así que cualquier otro listener queda
+marcado como no saludable mientras sirve, y la línea `test:` de arriba falla ahí
+como opción desconocida. Fijada a una de esas, vuelve a declarar la comprobación
+con `wget` contra donde escuche ese despliegue.
 
 ### Secretos
 
@@ -375,7 +431,22 @@ secrets:
 
 `GITLAB_MCP_ENV_FILE` se resuelve una sola vez desde el entorno del proceso
 antes de cargar ningún fichero dotenv, así que un fichero cargado no puede
-nombrar otro, y debe ser una ruta absoluta. Se lleva bien con `read_only: true`.
+nombrar otro. Da una ruta absoluta: una relativa se resuelve contra el
+directorio de trabajo y genera un aviso al arrancar. Se lleva bien con
+`read_only: true`, porque el secreto llega como un montaje de solo lectura.
+
+### Una instancia o varias
+
+`--gitlab-url` puede darse más de una vez, o una sola vez separada por comas.
+Una instancia fija el despliegue y la cabecera `GITLAB-URL` se ignora. Varias
+publican una lista permitida: la cabecera pasa a ser obligatoria, y una que
+nombre algo fuera de la lista se rechaza en lugar de atenderse.
+`--allow-any-gitlab-url` no publica ninguna y deja que la cabecera nombre
+cualquier host, y una petición que entonces la omita se rechaza con `400`; el
+servidor se niega a arrancar con ella salvo que `--http-addr` escuche en una
+dirección de loopback o en un socket unix, así que solo tiene sitio en un
+despliegue local de un único usuario. La tabla completa está en
+[Publicar más de una instancia](/gitlab-mcp-server/es/operations/http-server/#publicar-más-de-una-instancia).
 
 ## Tras un proxy inverso
 
@@ -394,6 +465,19 @@ nombrar otro, y debe ser una ruta absoluta. Se lleva bien con `read_only: true`.
 | Enrutar `/.well-known/` sin cambios | En modo OAuth los metadatos RFC 9728 viven en la **raíz del host**, no bajo el prefijo de ruta                                                                                                                                                                                                                                                                                                                                                                                                     |
 | No añadir cabeceras CORS            | El servidor responde el preflight por sí mismo. Dos cabeceras `Access-Control-Allow-Origin` son un fallo de CORS, no una fusión                                                                                                                                                                                                                                                                                                                                                                    |
 
+**`--public-url` es lo que hace aceptable el host reenviado.** Todos los proxies
+de abajo conservan el `Host` del cliente y conectan con el servidor por
+loopback, que es también la forma de un ataque de DNS rebinding: una página
+resuelve un nombre que controla el atacante a la dirección de loopback, y el
+navegador llega al servidor local con ese nombre en `Host`. Así que un
+despliegue al que se llega como `mcp.example.com` arranca con
+`--public-url=https://mcp.example.com`, y cualquier otro host se sigue
+rechazando con `403`, en `/health` igual que en `/mcp`. Una petición que no
+lleva ningún `Host`, que es lo que envía la comprobación de salud de un
+balanceador, se sirve. La regla completa, la alternativa del proxy de confianza
+y lo que hace un listener comodín están en
+[Tras un proxy inverso](/gitlab-mcp-server/es/operations/http-server/#tras-un-proxy-inverso).
+
 :::caution[La ruta de metadatos está en la raíz del host]
 
 Arrancado con `--public-url=https://mcp.example.com/gitlab`, el servidor
@@ -411,9 +495,11 @@ responde:
 
 `/health` y la ficha del servidor se montan bajo el prefijo además de en la
 raíz, y la ficha también tras la forma `/mcp` del endpoint, porque la extensión
-de fichas de servidor añade su sufijo a la URL del endpoint y no al host. El AI
-Catalog no le corresponde al servidor: lista lo que publica el host entero, y
-un despliegue que quiera uno lo sirve desde el proxy (consulta
+de fichas de servidor añade su sufijo a la URL del endpoint y no al host: un
+cliente configurado con `.../gitlab/mcp` encuentra la ficha en
+`.../gitlab/mcp/server-card`. El AI Catalog no le corresponde al servidor: lista
+lo que publica el host entero, y un despliegue que quiera uno lo sirve desde el
+proxy (consulta
 [Publicar un AI Catalog](/gitlab-mcp-server/es/operations/http-server/#publicar-un-ai-catalog)).
 Los metadatos OAuth no se montan bajo el prefijo, y el desafío `401` apunta a
 la forma derivada. La forma escueta tampoco se sirve: es el documento del
@@ -422,18 +508,28 @@ proxy que solo enruta `/gitlab` responde `404` al documento que todo cliente
 OAuth pide primero, y el descubrimiento falla antes de llegar siquiera al
 endpoint MCP.
 
+Enruta la ruta derivada, exacta y nunca como prefijo, al mismo upstream sin
+reescribirla. La derivación, y por qué un prefijo responde por los demás
+servidores del mismo host, están en
+[Dónde viven los metadatos](/gitlab-mcp-server/es/operations/http-server/#dónde-viven-los-metadatos-raíz-del-host-o-sub-ruta).
+
 :::
 
 Dos más que muerden. **No dejes que el proxy hable CORS:** el servidor responde
 su propio preflight a partir de `--trusted-origins`, a la que se añade
 automáticamente el origen de `--public-url`, y un proxy que también emita
 `Access-Control-Allow-Origin` produce dos, que los navegadores rechazan de
-plano mientras `curl` informa de un alegre `200`. La única excepción es un
-documento que el proxy sirve por sí mismo en lugar de reenviarlo: el AI Catalog
-del ejemplo de nginx nunca llega al servidor, así que el proxy es lo único que
-puede enviar su cabecera CORS. Y **todo lo que el proxy no enrute es un `404`,
-no un `401`**, porque el endpoint MCP se monta en patrones concretos y no como
-comodín.
+plano mientras `curl` informa de un alegre `200`, así que solo falla en el único
+cliente que importa. `test/e2e/http` fija esa colisión con un nginx real, y la
+parte del servidor está en
+[Protección cross-origin](/gitlab-mcp-server/es/operations/security/#protección-cross-origin).
+La única excepción es un documento que el proxy sirve por sí mismo en lugar de
+reenviarlo: el AI Catalog del ejemplo de nginx nunca llega al servidor, así que
+el proxy es lo único que puede enviar su cabecera CORS. Y **todo lo que el proxy
+no enrute es un `404`, no un `401`**, porque el endpoint MCP se monta en
+patrones concretos y no como comodín: una ruta que el servidor no sirve responde
+`{"error":"not found"}` sin pedir ninguna credencial. Un `404` donde esperabas
+un `401` suele significar que la ruta nunca llegó al manejador.
 
 <Tabs>
 <TabItem label="nginx">
@@ -452,10 +548,14 @@ server {
     ssl_certificate     /etc/letsencrypt/live/mcp.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/mcp.example.com/privkey.pem;
 
-    # Metadatos RFC 9728: raíz del host, nunca reescrita.
-    location /.well-known/oauth-protected-resource {
+    # Metadatos RFC 9728: la ruta exacta que deriva --public-url, en la raíz
+    # del host, nunca un prefijo y nunca reescrita. Este despliegue es dueño
+    # de su nombre de host, así que deriva la ruta escueta.
+    location = /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+        proxy_set_header Host       $host;
+        proxy_set_header Connection "";
     }
 
     # AI Catalog: documento propio del host, servido aquí y nunca reenviado.
@@ -476,7 +576,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Con keepalive arriba: vacía Connection para reutilizar las conexiones.
+        proxy_set_header Connection        "";
 
+        # Los eventos enviados por el servidor no deben retenerse.
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_read_timeout 1h;
@@ -500,11 +603,19 @@ un segundo proxy delante de nginx sigue siendo el cliente, siempre que los dos
 proxies estén en la lista. Un valor que el cliente se inventara por la izquierda
 nunca se alcanza, y un salto que no sea una dirección carga al origen de la
 conexión. `X-Real-IP` puesta desde `$remote_addr` en el salto más cercano al
-servidor lleva una sola dirección y no necesita recorrido.
+servidor lleva una sola dirección y no necesita recorrido, y es la cabecera que
+usa la propia prueba de extremo a extremo del proyecto con proxy.
 
 nginx pasa las cabeceras de petición del cliente al upstream por defecto, así
 que `Authorization`, `PRIVATE-TOKEN` y `GITLAB-URL` llegan sin ninguna línea
-`proxy_set_header`.
+`proxy_set_header`. La única costumbre de nginx que conviene conocer es que
+descarta las cabeceras que contienen guiones bajos salvo que se ponga
+`underscores_in_headers on`; ninguna de las cabeceras de este servidor contiene
+uno. `Host` es la excepción a ese paso directo: nginx envía el nombre de su
+upstream salvo que se le diga otra cosa, y por eso las dos ubicaciones que
+reenvían lo fijan. Vacían `Connection` por un motivo parecido: nginx envía
+`Connection: close` al upstream salvo que se le diga otra cosa, lo que cerraría
+cada conexión que `keepalive` está ahí para reutilizar.
 
 </TabItem>
 <TabItem label="Caddy">
@@ -536,6 +647,8 @@ well-known ya queda enrutada.
 </TabItem>
 <TabItem label="Traefik">
 
+Con el proveedor Docker, sobre el contenedor del bloque de Compose de arriba:
+
 ```yaml
     labels:
       - "traefik.enable=true"
@@ -550,6 +663,7 @@ Traefik no hace búfer de las respuestas salvo que se añada un middleware
 es el timeout de respuesta del entry point, que es global y no por ruta:
 
 ```yaml
+# configuración estática de traefik
 entryPoints:
   websecure:
     address: ":443"
@@ -559,14 +673,17 @@ entryPoints:
         idleTimeout: 3m
 ```
 
-`readTimeout: 0` elimina el límite de cuánto puede durar una petición. Traefik
-pone `X-Forwarded-For` cuando es el borde, o cuando el salto anterior está en
-`forwardedHeaders.trustedIPs`.
+`readTimeout: 0` elimina el límite de cuánto puede durar una petición, que es lo
+que necesita un stream de larga duración. Traefik pone `X-Forwarded-For` cuando
+es el borde, o cuando el salto anterior está en `forwardedHeaders.trustedIPs`.
 
 Una regla `Host()` casa con todas las rutas del host, así que el documento
 well-known queda cubierto. Una regla `PathPrefix()` es donde se abre la trampa:
-añade un segundo router para
-`PathPrefix('/.well-known/oauth-protected-resource')` apuntando al mismo
+un servidor enrutado con `` PathPrefix(`/gitlab`) `` y arrancado con
+`--public-url=https://mcp.example.com/gitlab` publica sus metadatos en
+`/.well-known/oauth-protected-resource/gitlab`, fuera de ese prefijo. Añade un
+segundo router para exactamente esa ruta,
+`` Path(`/.well-known/oauth-protected-resource/gitlab`) ``, apuntando al mismo
 servicio.
 
 </TabItem>
@@ -593,7 +710,8 @@ cuerpo de la respuesta y el stream llega todo de golpe. `timeout=3600` es el
 timeout de lectura de esta ruta, distinto del `Timeout` global del servidor.
 
 Deja la autenticación al servidor MCP, así que nada de esto debería estar tras
-`Require valid-user`. `mod_remoteip` con `RemoteIPHeader X-Forwarded-For`
+`Require valid-user`; Apache reenvía `Authorization` al upstream cuando no la
+consume él mismo. `mod_remoteip` con `RemoteIPHeader X-Forwarded-For`
 corrige la dirección en los propios registros de Apache, y el servidor MCP sigue
 necesitando `--trusted-proxy-header` y `--trusted-proxies` para su propio
 limitador.
@@ -623,8 +741,10 @@ ingress:
   - service: http_status:404
 ```
 
-Deja `disableChunkedEncoding` en false. Activarlo elimina la transferencia
-troceada hacia el origen, que es lo que necesita un cuerpo SSE.
+`disableChunkedEncoding: false` es el valor por defecto, escrito explícitamente.
+El ajuste rige la petición que `cloudflared` envía al origen, para un origen que
+no sabe leer un cuerpo de petición troceado, y no la respuesta del origen, así
+que el stream SSE no depende de él en ningún sentido.
 
 Cloudflare pone `CF-Connecting-IP`, así que nombra esa:
 `--trusted-proxy-header=CF-Connecting-IP --trusted-proxies=127.0.0.1`, ya que
@@ -633,12 +753,14 @@ aquí, porque Cloudflare la reescribe en cada petición y un cliente no puede
 falsificarla a través del borde.
 
 Dos comportamientos de Cloudflare que conviene comprobar antes de culpar al
-servidor. El proxy aplica un límite de inactividad a una respuesta que un stream
-`subscriptions/listen` tranquilo puede alcanzar aunque el keep-alive del
-servidor mantenga la conexión abierta a nivel TCP; y las propias reglas de CORS
-y de caché de Cloudflare, si están activadas para ese nombre, aterrizan
-exactamente en la misma colisión que un `Access-Control-Allow-Origin` puesto por
-el proxy.
+servidor. El proxy aplica un límite de inactividad a una respuesta, y lo que
+mantiene por debajo de él a un stream `subscriptions/listen` tranquilo es el
+keep-alive del servidor: un comentario SSE (`: keep-alive`) escrito en el cuerpo
+de la respuesta tras 25 segundos sin escribir, no un keep-alive a nivel TCP, así
+que solo llega al borde si nada en el camino retiene el cuerpo. Y las propias
+reglas de CORS y de caché de Cloudflare, si están activadas para ese nombre,
+aterrizan exactamente en la misma colisión que un
+`Access-Control-Allow-Origin` puesto por el proxy.
 
 </TabItem>
 </Tabs>
@@ -657,23 +779,24 @@ gitlab-mcp-server --http --http-addr=:8443 \
 
 Las dos opciones o ninguna: `--tls-cert requires --tls-key` es un error de
 arranque, no un aviso. TLS 1.2 es el suelo y no hay techo, así que un proxy
-actual negocia 1.3 y todo lo anterior a 1.2 se rechaza.
+actual negocia 1.3 y todo lo anterior a 1.2 se rechaza. La mecánica de ambos
+listeners está en
+[Escuchar en un socket unix o con TLS](/gitlab-mcp-server/es/operations/http-server/#escuchar-en-un-socket-unix-o-con-tls).
 
-:::caution[Los certificados se cargan al arrancar]
+:::note[Un certificado renovado no necesita reinicio]
 
-Un certificado renovado no surte efecto hasta que el proceso se reinicia. No hay
-señal de recarga; las únicas señales atendidas son `SIGINT` y `SIGTERM`, y ambas
-significan apagado. Con certbot, eso es un hook de despliegue:
-
-```bash
-# /etc/letsencrypt/renewal-hooks/deploy/gitlab-mcp-server.sh
-#!/bin/sh
-systemctl restart gitlab-mcp-server
-```
-
-Un reinicio tira el pool y corta los streams abiertos, así que programa la
-renovación donde una reconexión breve sea aceptable, o termina TLS en un proxy
-que sí recargue en caliente.
+El par se carga al arrancar, de forma estricta: un fichero que falta o una clave
+que no casa con su certificado detiene el arranque. A partir de ahí el
+certificado se sirve mediante una función que comprueba los dos ficheros en
+cada handshake y los vuelve a leer cuando alguno ha cambiado, así que una
+renovación que escribe el par nuevo sobre las mismas rutas se presenta en el
+siguiente handshake, mientras las conexiones ya abiertas conservan el anterior
+hasta que se sustituyen. Un par a medio escribir o ilegible mantiene en servicio
+el certificado anterior y se registra una sola vez. No hay señal de recarga ni
+hace falta: las únicas señales atendidas son `SIGINT` y `SIGTERM`, y ambas
+significan apagado, y un `SIGHUP` termina el proceso. El hook de renovación y
+las propiedades que fijan las pruebas están en
+[Rotación de certificado sin caída](/gitlab-mcp-server/es/enterprise/tls/#rotación-de-certificado-sin-caída).
 
 :::
 
@@ -687,8 +810,10 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
   petición seleccionó, con metadatos RFC 9728 para que los clientes la
   descubran. `--public-url` es obligatoria y debe ser el origen https accesible
   desde fuera.
-- **Los certificados y su renovación.** Se cargan al arrancar, así que renovar
-  significa reiniciar.
+- **Los certificados y su renovación.** Se vuelven a leer en el handshake
+  cuando los ficheros cambian, así que renovar es escribir un fichero y no
+  reiniciar; consulta
+  [TLS entre el proxy y el servidor](#tls-entre-el-proxy-y-el-servidor).
 - **Limitación de tasa.** `--rate-limit-rps` vale 10 por defecto en modo HTTP con
   una ráfaga de 40, contada por token del pool y no por dirección, y un
   presupuesto aparte por dirección cubre los fallos de autenticación, que es el
@@ -698,10 +823,17 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
 - **Límites.** `--max-http-clients` acota las entradas del pool, no las sesiones
   ni las peticiones que retienen; el proceso acota las llamadas retenidas a la vez
   en todas las credenciales según su límite de descriptores (192 bajo un límite
-  duro de 1024), sin opción de configurarlo, y rechaza la siguiente como ocupado. `--pool-idle-timeout` recupera las que no se usan, y
+  duro de 1024), sin opción de configurarlo, y rechaza la siguiente como ocupado
+  (consulta
+  [Peticiones retenidas a la vez](/gitlab-mcp-server/es/operations/http-server/#peticiones-retenidas-a-la-vez)).
+  `--pool-idle-timeout` recupera las entradas que no se usan, salvo una con una
+  suscripción viva, que no está ociosa por mucho tiempo que haga desde su última
+  petición.
   `--session-timeout` solo se aplica al modo con estado, donde el proceso además
   mantiene como mucho la mitad de sesiones que llamadas puede retener (96 bajo un
-  límite duro de 1024) y rechaza el siguiente `initialize` como ocupado.
+  límite duro de 1024) y rechaza el siguiente `initialize` como ocupado
+  (consulta
+  [Sesiones con estado a la vez](/gitlab-mcp-server/es/operations/http-server/#sesiones-con-estado-a-la-vez)).
   Ninguno de los dos techos tiene uno por credencial a su lado, porque una
   credencial es una clave que quien llama puede acuñar, así que una sola
   credencial puede llenar cualquiera de ellos; y el servidor no tiene un tope
@@ -716,21 +848,37 @@ unix. Un despliegue sin proxy debería aun así ser deliberado en cinco cosas:
 
 ## Varias instancias tras un mismo proxy
 
-### La afinidad es estructural, no una preferencia
+:::note[A escala]
+
+Atender a cientos de personas desde un único despliegue tiene su propia sección:
+[Despliegues empresariales](/gitlab-mcp-server/es/enterprise/overview/) cubre el
+dimensionado a partir de las mediciones, el hashing consistente con un conjunto
+de instancias que cambia, la expulsión guiada por la salud, los gateways MCP, la
+rotación de certificados y la operación a escala. Esta sección es la primera
+pasada sobre la que se construyen.
+
+:::
+
+### La afinidad es una preferencia, con dos excepciones
 
 Cada instancia mantiene dos cachés. Ambas son por proceso, ambas están indexadas
 por quien llama, y ninguna se puede compartir:
 
 - El **pool de servidores**, indexado por
   `SHA-256(token + "\x00" + urlDeGitLab)`. En un fallo de caché se construye la
-  entrada: se sondean los ámbitos del token, se detecta el nivel de licencia de
-  la instancia y se registra y poda todo un catálogo de herramientas para ese
-  nivel. La construcción del catálogo es el coste entero, medido en **1,8
-  segundos en la superficie dinámica y 3,0 segundos en la individual**, y se
-  paga en la primera petición de cada credencial en lugar de una vez por proceso
-  como lo paga stdio. El saludo inicial se responde de inmediato desde un
-  esqueleto, así que el coste cae en la primera llamada a herramienta y no en
-  `initialize`.
+  entrada: se verifica la credencial, se leen sus ámbitos, se detecta el nivel
+  de licencia de la instancia y la entrada se vincula al servidor MCP de su
+  forma de configuración. El catálogo de herramientas **no** se construye por
+  credencial: se registra una vez por forma y lo comparten todas las
+  credenciales de esa forma
+  ([ADR-0020](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0020-one-server-per-configuration-shape.md)),
+  así que su construcción (el primer cliente de una forma la esperó 0,32
+  segundos en la superficie dinámica y 1,28 en la individual en la
+  [medición de recursos](/gitlab-mcp-server/es/performance/resource-benchmark/#qué-espera-un-cliente),
+  en la máquina que esta indica) se paga una vez por forma en cada instancia y
+  no una vez por cliente. El saludo inicial se responde antes de que exista el
+  catálogo, así que incluso esa primera construcción cae en la primera petición
+  que necesita el catálogo y no en `initialize`.
 - La **caché de identidad OAuth**, indexada por instancia y token, con
   `--oauth-cache-ttl` en 15 minutos por defecto. Un fallo de caché es una ida y
   vuelta a GitLab para verificar la credencial.
@@ -740,19 +888,23 @@ ninguna versión de esto en la que una segunda instancia lea la caché de la
 primera. La pregunta para un balanceador no es, por tanto, si las peticiones
 funcionarán en cualquier sitio: con el `--stateless=true` por defecto cada POST
 se basta a sí mismo y cualquier instancia responde correctamente. La pregunta es
-cuántas veces estás dispuesto a pagar por una caché pensada para pagarse una.
+cuántas veces estás dispuesto a pagar por una caché pensada para pagarse una, y
+como su mitad cara se comparte por configuración en lugar de guardarse por
+credencial, la respuesta es pequeña: un sondeo de la credencial, una consulta
+de licencia y un cliente.
 
 Dos cosas no solo cuestan de más cuando un cliente se mueve, se rompen. Una
 sesión con estado (`--stateless=false`) vive en el proceso que acuñó su
 `Mcp-Session-Id`, y otra instancia responde a ese identificador con `404`, que un
 cliente lee como que su sesión ha terminado. Las suscripciones a recursos son
-observadores que mantiene un proceso y desaparecen con él.
+observadores que mantiene un proceso y desaparecen con él. Si usas cualquiera de
+las dos, la afinidad no es una optimización.
 
 ### Las tres distribuciones
 
 | Distribución   | Clave                               | Lo que cuesta                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Round robin    | ninguna                             | Toda instancia acaba con una entrada para cada cliente, así que la memoria del pool se multiplica por el número de instancias y cada cliente paga una construcción de catálogo de 1,8 a 3,0 segundos en cada instancia que toca por primera vez. La verificación del token contra GitLab pasa de una vez por TTL a una vez por TTL y por instancia. Correcto, y paga N veces                      |
+| Round robin    | ninguna                             | Toda instancia acaba con una entrada para cada cliente, así que el sondeo de la credencial, la consulta de licencia y la verificación del token de cada cliente se pagan una vez por instancia en lugar de una sola vez. El catálogo detrás de esas entradas es por forma de configuración, así que no se multiplica. Correcto, y paga N veces por la mitad barata                                |
 | IP hash        | la dirección del cliente            | Gratis, una directiva, ningún secreto que guardar. La clave es la granularidad equivocada en ambos sentidos: una oficina, un concentrador VPN o una flota de runners de CI es una sola dirección, así que todo eso se agolpa en una instancia, mientras que un cliente que se mueve entre redes cambia de clave y aterriza frío cada vez. Tras una CDN necesita recuperar antes la dirección real |
 | Hash del token | un resumen con sal de la credencial | Encaja con la granularidad de lo que se cachea, porque la clave del pool se deriva del token. Cuesta un secreto que gestionar, un plan alternativo para las peticiones sin credencial y una entrada fría cada vez que un cliente rota su token. Es lo que hace el endpoint alojado                                                                                                                |
 
@@ -783,11 +935,15 @@ no se puede reutilizar como credencial.
 Tres detalles deciden si la afinidad se sostiene de verdad:
 
 - **Normaliza antes de resumir.** Quita el prefijo de esquema `Bearer` y los
-  espacios alrededor. El mismo token escrito de dos formas resume de dos formas.
-- **Recurre a la dirección, no a nada.** Una clave vacía hace que todas las
-  peticiones anónimas resuman igual y se amontonen en una instancia.
+  espacios alrededor. El mismo token escrito de dos formas resume de dos formas
+  y aterriza en dos instancias.
+- **Recurre a la dirección, no a nada.** Una petición sin credencial no tiene
+  clave, y una clave vacía hace que todas las peticiones anónimas resuman igual
+  y se amontonen en una instancia. `$remote_addr` las reparte.
 - **Usa hashing consistente.** Quitar una de tres instancias reubica entonces
-  aproximadamente un tercio de los clientes en lugar de rebarajarlos a todos.
+  aproximadamente un tercio de los clientes en lugar de rebarajarlos a todos,
+  que es la diferencia entre una actualización progresiva que calienta un pool
+  frío y otra que los calienta todos.
 
 ### Un balanceador nginx completo
 
@@ -831,6 +987,9 @@ server {
     listen 443 ssl;
     server_name mcp.example.com;
 
+    ssl_certificate     /etc/letsencrypt/live/mcp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mcp.example.com/privkey.pem;
+
     location / {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
@@ -838,6 +997,7 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
 
         proxy_buffering off;
         proxy_request_buffering off;
@@ -848,9 +1008,12 @@ server {
         proxy_next_upstream_tries 2;
     }
 
-    location /.well-known/oauth-protected-resource {
+    # La ruta de metadatos derivada exacta, nunca un prefijo.
+    location = /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+        proxy_set_header Host       $host;
+        proxy_set_header Connection "";
     }
 }
 ```
@@ -867,8 +1030,9 @@ Sin él, nginx reintenta un `POST` en otra instancia solo cuando la petición no
 llegó a enviarse, que es exactamente la garantía que se quiere aquí: un
 `tools/call` que creó una incidencia y luego perdió su respuesta no debe
 repetirse en una segunda instancia. `error timeout` por sí solo es a nivel de
-conexión. Añadir `http_500` o `non_idempotent` convierte una llamada mutadora ya
-entregada en dos.
+conexión, y sin `non_idempotent` ninguna condición, `http_500` incluida, pasa a
+otra instancia un `POST` que ya se envió. Añadir `non_idempotent`, con cualquier
+condición, convierte una llamada mutadora ya entregada en dos.
 
 :::
 
@@ -901,44 +1065,54 @@ al menos un intervalo de sondeo (`--drain-delay=10s` para una sonda de 5
 segundos que tolera dos fallos): el listener se mantiene abierto ese tiempo
 respondiendo `503`, el balanceador retira el backend, y solo entonces se cierra
 el listener y las peticiones en vuelo reciben sus 15 segundos para terminar
-antes de que se cierren las conexiones restantes. Un balanceador que no pueda
-sondear sigue funcionando a la antigua: retira el backend a mano, deja drenar
-los streams y después señala.
+antes de que se cierren las conexiones restantes. Con hashing consistente, los
+clientes fijados a esa instancia pasan a una vecina, calientan allí una entrada
+y vuelven cuando regresa. Un balanceador que no pueda sondear sigue funcionando
+a la antigua: retira el backend a mano, deja drenar los streams y después
+señala.
 
 **`/health` es la sonda, y es honesta sobre lo que sabe.** Sin credencial, sin
 ida y vuelta a GitLab, `200` con `status`, `version`, `commit`, `build`,
 `config_digest`, `started_at` y `uptime_seconds`. `status` es `ok` mientras
 sirve y `draining` una vez solicitada la parada; el estado HTTP lleva el mismo
 veredicto. `build` es la etiqueta para un cuadro de mando, la release más
-cercana más el commit corto. `config_digest` es la comprobación de flota: todas
-las instancias detrás de un balanceador deben publicar el mismo, o una de ellas
-sirve un catálogo distinto a los clientes que le lleguen y nada más lo nota. A
-propósito no comprueba si GitLab está accesible, y no hay un endpoint de
-disponibilidad aparte.
+cercana más el commit corto, así que un binario de release y una compilación de
+`main` se leen igual. `config_digest` es la comprobación de flota: todas las
+instancias detrás de un balanceador deben publicar el mismo, o una de ellas
+sirve un catálogo distinto a los clientes que le lleguen y nada más lo nota.
+Compáralo en el mismo bucle que demuestra la afinidad. A propósito no comprueba
+si GitLab está accesible, así que un balanceador no debe leer un `200` como
+«GitLab funciona», y no hay un endpoint de disponibilidad aparte. Cada campo se
+describe en
+[Verificación de salud](/gitlab-mcp-server/es/operations/http-server/#verificación-de-salud).
 
 **Dale a la flota una dirección de salida fija.** GitLab aplica sus propios
 límites de tasa y cualquier lista blanca de IP por dirección de origen. Unas
 instancias tras una pasarela NAT con dirección estable son un solo cliente para
 GitLab; unas instancias con direcciones públicas efímeras son varias
-impredecibles.
+impredecibles, y para ellas no se puede escribir una lista blanca.
 
 **Recuerda que el limitador se multiplica.** `--rate-limit-rps` es por entrada de
 token del pool dentro de un proceso, así que tres instancias significan hasta
-tres cubos para un mismo cliente salvo que la afinidad lo fije a uno. Con round
-robin, o lo divides entre el número de instancias o pones el límite real en el
-balanceador.
+tres cubos para un mismo cliente salvo que la afinidad lo fije a uno. Con
+afinidad por token, el número configurado es el número. Con round robin, o lo
+divides entre el número de instancias o pones el límite real en el balanceador.
 
 **La revalidación sigue corriendo por instancia.** `--revalidate-interval`
 vuelve a comprobar las credenciales del pool cada 15 minutos por defecto y
 desaloja las que GitLab ya rechaza; ponerlo a `0` no hace que un token revocado
 dure para siempre, porque una entrada de más de una hora se reconstruye en el
-siguiente uso de todas formas. Eso es por instancia, así que la afinidad lo
-mantiene en una.
+siguiente uso de todas formas. Eso es por instancia, así que el mismo token se
+vuelve a comprobar una vez por cada instancia que lo tiene, y esa es una cosa
+más que la afinidad mantiene en una.
 
 ## Para seguir leyendo
 
+- [Despliegues empresariales](/gitlab-mcp-server/es/enterprise/overview/) para el dimensionado a partir de mediciones, el balanceo a escala, los gateways MCP, la rotación de certificados y la operación
 - [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para cada opción, el pool de servidores y las reglas de derivación de OAuth
+- [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/) para crear la aplicación de GitLab frente a la que se autorizan los clientes
 - [Seguridad](/gitlab-mcp-server/es/operations/security/) para el modelo de amenazas, CORS y la lista de comprobación de fortificación
+- [Dimensionar un despliegue](/gitlab-mcp-server/es/performance/sizing/) para lo que cuestan una credencial, una forma de configuración y una llamada
 - [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) para lo que una instancia puede contar sobre sí misma
 - [Solución de problemas](/gitlab-mcp-server/es/operations/troubleshooting/) para síntomas y sus causas habituales
 

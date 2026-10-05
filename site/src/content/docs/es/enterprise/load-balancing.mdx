@@ -100,6 +100,9 @@ server {
     listen 443 ssl;
     server_name mcp.example.com;
 
+    ssl_certificate     /etc/letsencrypt/live/mcp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mcp.example.com/privkey.pem;
+
     location / {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
@@ -118,9 +121,13 @@ server {
         proxy_next_upstream_tries 2;
     }
 
-    location /.well-known/oauth-protected-resource {
+    # La ruta exacta de metadatos derivada, nunca un prefijo. location / ya
+    # la alcanza; esto la mantiene si / se reduce a un prefijo de ruta.
+    location = /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host       $host;
     }
 }
 ```
@@ -178,10 +185,11 @@ backend mcp_servers
 `option httpchk` no envía cabecera `Host` salvo que se configure una, y un
 servidor enlazado a un host concreto con `--http-addr` respondía a esa petición
 con `403`, lo que marcaba todas las instancias como caídas de forma permanente.
-Ahora se sirve: una petición que no nombra ningún host no es el ataque de DNS
-rebinding contra el que existe esa comprobación, porque un navegador siempre
-envía uno. Añadir `hdr Host mcp.example.com` a la línea `http-check send` sigue
-siendo buena práctica y es obligatorio contra un servidor anterior.
+La versión 3.0.0 la sirve: una petición que no nombra ningún host no es el
+ataque de DNS rebinding contra el que existe esa comprobación, porque un
+navegador siempre envía uno. Añadir `hdr Host mcp.example.com` a la línea
+`http-check send` sigue siendo buena práctica y es obligatorio contra un
+servidor anterior a la 3.0.0.
 
 `retries 1` sin `option redispatch` es la mitad deliberada: HAProxy reintenta un
 fallo de conexión y nunca una petición que ya entregó, así que un `tools/call`
@@ -215,8 +223,9 @@ instancia convierte una llamada mutadora en dos, y ni el cliente ni el servidor
 pueden notarlo.
 
 - **nginx**: `proxy_next_upstream error timeout` y nada más. No añadas nunca
-  `non_idempotent` ni `http_500`: ambos hacen que nginx repita una petición que
-  se entregó y se respondió.
+  `non_idempotent`: con él, cualquier condición, `http_500` incluida, hace que
+  nginx repita un `POST` que se entregó y se respondió. Sin él nginx nunca pasa
+  a otra instancia un `POST` que ya envió, digan lo que digan las condiciones.
 - **HAProxy**: deja `option redispatch` desactivado y `retry-on` en su valor por
   defecto de fallos de conexión.
 - **Cualquier otro**: la regla es que un reintento solo es seguro cuando se puede
