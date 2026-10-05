@@ -11,6 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -329,12 +332,28 @@ func TestSharedRegistry_CodexSessionDoesNotLeakIntoOthers(t *testing.T) {
 }
 
 // TestDetection_TitleOnly verifies the profile also matches when only the
-// title identifies Codex (defensive against clientInfo.name changes).
+// title identifies Codex (defensive against clientInfo.name changes), and only
+// when the title is Codex's own: a title that merely contains the word names
+// some other client, which keeps the fraction.
 func TestDetection_TitleOnly(t *testing.T) {
-	impl := &mcp.Implementation{Name: "some-wrapper", Title: "Codex IDE", Version: "1.0.0"}
-	res := callEcho(t, connect(t, impl))
-	if tc := textContent(t, res); tc.Annotations.Priority != 1 {
-		t.Error("float priority kept: title-based Codex detection failed")
+	for _, tc := range []struct {
+		name    string
+		title   string
+		rounded bool
+	}{
+		{name: "codex_title", title: "Codex", rounded: true},
+		{name: "title_containing_codex", title: "Codex IDE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			impl := &mcp.Implementation{Name: "some-wrapper", Title: tc.title, Version: "1.0.0"}
+			got := textContent(t, callEcho(t, connect(t, impl))).Annotations.Priority
+			if tc.rounded && got != 1 {
+				t.Errorf("title %q: priority = %v, want the Codex profile's 1", tc.title, got)
+			}
+			if !tc.rounded && got != 0.6 {
+				t.Errorf("title %q: priority = %v, want the untouched 0.6", tc.title, got)
+			}
+		})
 	}
 }
 
@@ -533,6 +552,13 @@ func TestMiddleware_ResultWithError_ForwardsBothUntouched(t *testing.T) {
 // TestProfileFromClientInfo_Branches verifies detection over every input
 // shape, including the defensive nil clientInfo the public API cannot
 // produce through a real session.
+//
+// The match is held to the two spellings Codex has reported since v0.20, a
+// case-insensitive "codex-mcp-client" name prefix and a title of exactly
+// "Codex" (issue 1043). The negative rows are the reason: OpenAI's hosted
+// client reports "openai-mcp (...)" and reads a fractional priority without
+// error, and the one label still unmeasured carries the word "Codex", so a
+// substring match would round priorities for a client that does not need it.
 func TestProfileFromClientInfo_Branches(t *testing.T) {
 	tests := []struct {
 		name string
@@ -541,8 +567,16 @@ func TestProfileFromClientInfo_Branches(t *testing.T) {
 	}{
 		{name: "nil", impl: nil, want: clientcompat.ProfileDefault},
 		{name: "codex_name", impl: &mcp.Implementation{Name: "codex-mcp-client"}, want: clientcompat.ProfileCodex},
+		{name: "codex_name_with_suffix", impl: &mcp.Implementation{Name: "codex-mcp-client-next"}, want: clientcompat.ProfileCodex},
 		{name: "codex_title", impl: &mcp.Implementation{Name: "wrapper", Title: "Codex"}, want: clientcompat.ProfileCodex},
-		{name: "case_insensitive", impl: &mcp.Implementation{Name: "CODEX-cli"}, want: clientcompat.ProfileCodex},
+		{name: "name_case_insensitive", impl: &mcp.Implementation{Name: "CODEX-MCP-Client"}, want: clientcompat.ProfileCodex},
+		{name: "name_shorter_than_the_prefix", impl: &mcp.Implementation{Name: "codex"}, want: clientcompat.ProfileDefault},
+		{name: "name_containing_codex", impl: &mcp.Implementation{Name: "my-codex-mcp-client"}, want: clientcompat.ProfileDefault},
+		{name: "codex_cli_name", impl: &mcp.Implementation{Name: "codex-cli"}, want: clientcompat.ProfileDefault},
+		{name: "openai_mcp_codex_label", impl: &mcp.Implementation{Name: "openai-mcp (Codex)"}, want: clientcompat.ProfileDefault},
+		{name: "openai_mcp_responses", impl: &mcp.Implementation{Name: "openai-mcp (Responses API)"}, want: clientcompat.ProfileDefault},
+		{name: "title_other_case", impl: &mcp.Implementation{Name: "wrapper", Title: "codex"}, want: clientcompat.ProfileDefault},
+		{name: "title_containing_codex", impl: &mcp.Implementation{Name: "wrapper", Title: "Codex IDE"}, want: clientcompat.ProfileDefault},
 		{name: "generic", impl: &mcp.Implementation{Name: "claude-code", Title: "Claude Code"}, want: clientcompat.ProfileDefault},
 	}
 	for _, tt := range tests {
@@ -575,6 +609,213 @@ func TestProfileForRequest_DefensiveBranches(t *testing.T) {
 	req := &mcp.CallToolRequest{Session: ss}
 	if got := clientcompat.ProfileForRequestForTest(req); got != clientcompat.ProfileDefault {
 		t.Errorf("profileForRequest(uninitialized session) = %v, want default", got)
+	}
+}
+
+// TestProfileForRequest_ClientRequest_HasNoServerSession verifies a request
+// whose session is a client's, not a server's, is read as knowing no client
+// and falls through to a User-Agent it cannot carry, so it keeps the default.
+func TestProfileForRequest_ClientRequest_HasNoServerSession(t *testing.T) {
+	if got := clientcompat.ProfileForRequestForTest(&mcp.CreateMessageRequest{}); got != clientcompat.ProfileDefault {
+		t.Errorf("profileForRequest(client request) = %v, want default", got)
+	}
+}
+
+// codexUserAgent is the User-Agent Codex's MCP client sends on every
+// Streamable HTTP request.
+const codexUserAgent = "codex-mcp-client/0.148.0"
+
+// userAgentExtra is the RequestExtra the SDK attaches to a request that came
+// over HTTP with the given User-Agent.
+func userAgentExtra(userAgent string) *mcp.RequestExtra {
+	return &mcp.RequestExtra{Header: http.Header{"User-Agent": {userAgent}}}
+}
+
+// TestProfileFromUserAgent_Branches verifies the User-Agent match: a
+// case-insensitive "codex-mcp-client/" prefix and nothing else. ChatGPT web's
+// tool calls carry "openai-mcp/1.0.0 (Codex)", which is the negative the rule
+// is narrowed for, and a prefix without its slash or one that only appears
+// later in the header names some other client.
+func TestProfileFromUserAgent_Branches(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		userAgent string
+		want      clientcompat.Profile
+	}{
+		{name: "codex", userAgent: codexUserAgent, want: clientcompat.ProfileCodex},
+		{name: "prefix_alone", userAgent: "codex-mcp-client/", want: clientcompat.ProfileCodex},
+		{name: "case_insensitive", userAgent: "Codex-MCP-Client/0.20.0", want: clientcompat.ProfileCodex},
+		{name: "empty", userAgent: "", want: clientcompat.ProfileDefault},
+		{name: "prefix_without_slash", userAgent: "codex-mcp-client", want: clientcompat.ProfileDefault},
+		{name: "prefix_not_at_start", userAgent: "proxy codex-mcp-client/0.148.0", want: clientcompat.ProfileDefault},
+		{name: "chatgpt_web", userAgent: "openai-mcp/1.0.0 (Codex)", want: clientcompat.ProfileDefault},
+		{name: "openai_responses", userAgent: "openai-mcp/1.0.0 (Responses API)", want: clientcompat.ProfileDefault},
+		{name: "go_default", userAgent: "Go-http-client/1.1", want: clientcompat.ProfileDefault},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clientcompat.ProfileFromUserAgentForTest(tc.userAgent); got != tc.want {
+				t.Errorf("profileFromUserAgent(%q) = %v, want %v", tc.userAgent, got, tc.want)
+			}
+		})
+	}
+}
+
+// genericServerSession completes a real initialize handshake with a client
+// that names itself as something other than Codex and returns the server side
+// of it, so a test can hold a session whose clientInfo is known and not Codex.
+func genericServerSession(t *testing.T) *mcp.ServerSession {
+	t.Helper()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := newTestServer().Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+	session, err := mcp.NewClient(genericImpl, nil).Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return ss
+}
+
+// TestProfileForRequest_UserAgentFallback verifies the User-Agent is read
+// only when the session knows no client, and that clientInfo decides whenever
+// it is there.
+//
+// Why it matters: the fallback exists for a Codex client on protocol
+// 2025-11-25 or earlier over stateless HTTP, whose session never saw
+// initialize (issue 1043). Were the User-Agent read ahead of the clientInfo,
+// a client that names itself in clientInfo would have its answer decided by a
+// second self-reported label instead, which widens the deviation register row
+// IDN-013 records beyond the one case it was accepted for.
+func TestProfileForRequest_UserAgentFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		req  func(t *testing.T) mcp.Request
+		want clientcompat.Profile
+	}{
+		{
+			name: "no_session_codex_user_agent",
+			req: func(*testing.T) mcp.Request {
+				return &mcp.CallToolRequest{Extra: userAgentExtra(codexUserAgent)}
+			},
+			want: clientcompat.ProfileCodex,
+		},
+		{
+			name: "no_session_chatgpt_web_user_agent",
+			req: func(*testing.T) mcp.Request {
+				return &mcp.CallToolRequest{Extra: userAgentExtra("openai-mcp/1.0.0 (Codex)")}
+			},
+			want: clientcompat.ProfileDefault,
+		},
+		{
+			name: "no_session_no_header",
+			req: func(*testing.T) mcp.Request {
+				return &mcp.CallToolRequest{Extra: &mcp.RequestExtra{}}
+			},
+			want: clientcompat.ProfileDefault,
+		},
+		{
+			name: "generic_client_info_wins_over_codex_user_agent",
+			req: func(t *testing.T) mcp.Request {
+				t.Helper()
+				return &mcp.CallToolRequest{Session: genericServerSession(t), Extra: userAgentExtra(codexUserAgent)}
+			},
+			want: clientcompat.ProfileDefault,
+		},
+		{
+			name: "codex_client_info_wins_over_other_user_agent",
+			req: func(t *testing.T) mcp.Request {
+				t.Helper()
+				return &mcp.CallToolRequest{Session: codexServerSession(t), Extra: userAgentExtra("Go-http-client/1.1")}
+			},
+			want: clientcompat.ProfileCodex,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clientcompat.ProfileForRequestForTest(tc.req(t)); got != tc.want {
+				t.Errorf("profileForRequest = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// statelessLegacyPriority sends one tools/call at protocol 2025-11-25 to the
+// SDK's stateless Streamable HTTP handler serving a test server with the
+// middleware installed, carrying the given User-Agent, and returns the
+// priority written on the result's one content block.
+//
+// It drives the transport the server runs by default, rather than a request
+// built by hand, because what the fallback rests on is a property of that
+// transport: each POST is a session of its own whose initialize params the SDK
+// synthesizes with no clientInfo, while the request still carries its header.
+func statelessLegacyPriority(t *testing.T, userAgent string) float64 {
+	t.Helper()
+	server := newTestServer()
+	ts := httptest.NewServer(mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+	))
+	t.Cleanup(ts.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"echo","arguments":{}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build the request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("send the request: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read the answer: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusOK, raw)
+	}
+	var answer struct {
+		Result struct {
+			Content []struct {
+				Annotations struct {
+					Priority float64 `json:"priority"`
+				} `json:"annotations"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err = json.Unmarshal(raw, &answer); err != nil || len(answer.Result.Content) != 1 {
+		t.Fatalf("the answer is not a one-block tool result (%v): %s", err, raw)
+	}
+	return answer.Result.Content[0].Annotations.Priority
+}
+
+// TestStatelessHTTP_LegacyProtocol_ReadsTheUserAgent verifies the fallback on
+// the transport it was written for: at protocol 2025-11-25 the default
+// stateless transport gives the call a session that knows no client, so only
+// Codex's own User-Agent rounds the priority, and ChatGPT web's label, an
+// OpenAI hosted client's and a request with no User-Agent keep the fraction.
+func TestStatelessHTTP_LegacyProtocol_ReadsTheUserAgent(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		userAgent string
+		want      float64
+	}{
+		{name: "codex", userAgent: codexUserAgent, want: 1},
+		{name: "chatgpt_web", userAgent: "openai-mcp/1.0.0 (Codex)", want: 0.6},
+		{name: "openai_responses", userAgent: "openai-mcp/1.0.0 (Responses API)", want: 0.6},
+		{name: "none", userAgent: "", want: 0.6},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := statelessLegacyPriority(t, tc.userAgent); got != tc.want {
+				t.Errorf("User-Agent %q: priority = %v, want %v", tc.userAgent, got, tc.want)
+			}
+		})
 	}
 }
 

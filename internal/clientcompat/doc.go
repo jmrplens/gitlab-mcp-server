@@ -10,30 +10,43 @@
 // arbitrary_precision on for the whole binary, so a buffered decimal reaches
 // the float field as serde_json's private number map, the field refuses it and
 // the untagged result falls through to rmcp's CustomResult (row 17 of
-// docs/development/upstream-bugs.md). This package
-// detects Codex from the clientInfo the session reports and writes the
-// priority as the nearest spec-legal integer (0 or 1) for that session;
+// docs/development/upstream-bugs.md). The fix is released in rmcp 3.5.0, and
+// no Codex release builds on it yet. This package detects Codex and writes
+// the priority as the nearest spec-legal integer (0 or 1) for that session;
 // audience, structuredContent, outputSchema, icons, and every other field are
 // preserved, and every other client keeps the exact float values.
 //
-// It reaches only a session that knows its client: stdio in either protocol
-// era, HTTP with --stateless=false, and any session at 2026-07-28, whose
-// requests each carry clientInfo in _meta. Over the default stateless HTTP
-// transport a client on 2025-11-25 or earlier reports clientInfo only in an
-// initialize no later POST's session saw, so it is sent the fraction. OpenAI's
-// hosted client reports openai-mcp, which the "codex" match does not catch,
-// and needs no profile: measured on 2026-09-28 (issue 1044), it reads a
-// fractional priority without error. Row 17 records that and the one label
-// still unmeasured.
+// Codex is recognized by the clientInfo the session reports, matched to the
+// two spellings Codex has used since v0.20: a case-insensitive
+// "codex-mcp-client" name prefix, or a title of exactly "Codex". That reaches
+// stdio in either protocol era, HTTP with --stateless=false, and any session
+// at 2026-07-28, whose requests each carry clientInfo in _meta. Over the
+// default stateless HTTP transport a client on 2025-11-25 or earlier reports
+// clientInfo only in an initialize no later POST's session saw, so a session
+// with no clientInfo falls back to the request's User-Agent, matched to a
+// case-insensitive "codex-mcp-client/" prefix, which Codex's MCP client sends
+// on every Streamable HTTP request (issue 1043). The clientInfo decides
+// whenever the session has one.
+//
+// The match is held to Codex's own spellings rather than a "codex" substring
+// because OpenAI's hosted client needs no profile: measured on 2026-09-28
+// (issue 1044), it reports clientInfo "openai-mcp (Responses API)" or
+// "(Realtime API)" with no title and reads a fractional priority without
+// error. A ChatGPT web tool call carries the User-Agent
+// "openai-mcp/1.0.0 (Codex)", whose clientInfo is the one label still
+// unmeasured; neither match catches the word in it. Row 17 records both.
 //
 // Choosing a response from clientInfo is a deliberate deviation from MCP
 // 2026-07-28, which says implementations SHOULD NOT use it "to change the
 // behavior of the client or server" (issue 959, register row IDN-013). It is
 // kept because it changes how one number is written and nothing a model
 // reads, and it never decides who a caller is or what it may do, which is the
-// note's second half and is met. GITLAB_MCP_CLIENT_COMPAT=off removes it, and
-// it retires once a Codex built on an rmcp release carrying the fix is widely
-// deployed, not merely released.
+// note's second half and is met. The User-Agent fallback widens the same
+// deviation to a second self-reported label, read only where the clientInfo
+// is absent and for the same one number (issue 1043, recorded on the same
+// row). GITLAB_MCP_CLIENT_COMPAT=off removes both, and the profile retires
+// once a Codex built on an rmcp release carrying the fix is widely deployed,
+// not merely released.
 //
 // The rounding holds only because encoding/json writes an integral float64 as
 // 1 and never as 1.0, which Codex rejects as well; a test pins that wire form.

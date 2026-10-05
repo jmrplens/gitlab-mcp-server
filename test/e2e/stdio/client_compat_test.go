@@ -50,6 +50,7 @@ func TestClientCompat_CodexProfile_OnTheWire(t *testing.T) {
 		{name: "codex at 2026-07-28 gets integers", client: codexClientInfo, rounded: true},
 		{name: "codex at 2025-11-25 gets integers", client: codexClientInfo, legacy: true, rounded: true},
 		{name: "another client keeps the fraction", client: `{"name":"claude-code","title":"Claude Code","version":"2.0.0"}`},
+		{name: "an openai-mcp label carrying the word Codex keeps the fraction", client: `{"name":"openai-mcp (Codex)","version":"1.0.0"}`},
 		{name: "codex with the profile switched off keeps the fraction", client: codexClientInfo, off: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
