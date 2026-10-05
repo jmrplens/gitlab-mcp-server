@@ -100,7 +100,7 @@ WrapErrWithHint:    "op: classification — specific detail. Suggestion: hint: <
 
 ## References
 
-- [Error Handling Documentation](../../concepts/error-handling.md)
+- [Error Handling Documentation](https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/)
 - [Development Guide: Error Handling](../development.md#error-handling-in-tool-handlers)
 - [ADR-0004: Modular tools sub-packages](adr-0004-modular-tools-subpackages.md)
 - `internal/toolutil/errors.go` — implementation

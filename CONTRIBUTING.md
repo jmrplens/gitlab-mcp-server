@@ -21,7 +21,7 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ## Getting Started
 
 1. Clone the repository
-2. Create a `.env` file with your GitLab credentials (see [Configuration](docs/reference/configuration.md))
+2. Create a `.env` file with your GitLab credentials (see [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/))
 3. Run `make build` to verify the setup
 4. Run `make test` to ensure all tests pass
 

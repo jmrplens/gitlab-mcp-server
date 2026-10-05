@@ -130,7 +130,7 @@ graph TD
 7. **Capabilities** provide completions, progress, elicitation, and resource subscriptions
 8. **Server** runs over stdio (default) or HTTP (`--http`, or `--transport auto`, which serves HTTP only when stdin is `/dev/null`)
 
-See [Architecture Overview](../concepts/architecture.md) for detailed diagrams and component descriptions.
+See [Architecture Overview](https://jmrp.io/docs/gitlab-mcp-server/architecture/) for detailed diagrams and component descriptions.
 
 ## Version Management
 
@@ -391,7 +391,7 @@ A hint names an action by its canonical ID, never by a tool name, and so does ev
 - `ContainsAny(err, substrs...)` — checks if `err.Error()` contains any of the given substrings
 - `ExtractGitLabMessage(err)` — extracts the specific message from `gl.ErrorResponse.Message`
 
-See [Error Handling](../concepts/error-handling.md) for the full architecture.
+See [Error Handling](https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/) for the full architecture.
 
 ## Adding a New Tool
 

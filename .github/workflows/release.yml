@@ -382,7 +382,7 @@ jobs:
             index:org.opencontainers.image.description=MCP server exposing GitLab REST API v4 and GraphQL operations as Model Context Protocol tools
             index:org.opencontainers.image.source=https://github.com/jmrplens/gitlab-mcp-server
             index:org.opencontainers.image.url=https://github.com/jmrplens/gitlab-mcp-server
-            index:org.opencontainers.image.documentation=https://github.com/jmrplens/gitlab-mcp-server/tree/main/docs
+            index:org.opencontainers.image.documentation=https://jmrp.io/docs/gitlab-mcp-server
             index:org.opencontainers.image.version=${{ steps.version.outputs.version }}
             index:org.opencontainers.image.revision=${{ github.sha }}
             index:org.opencontainers.image.created=${{ steps.build-date.outputs.date }}

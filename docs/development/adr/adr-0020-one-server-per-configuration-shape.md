@@ -8,7 +8,7 @@ Accepted (2026-09-05).
 
 In HTTP mode the pool built one `mcp.Server` per credential, so the resident
 set of the process was a straight line in the number of pooled credentials.
-The [resource benchmark](../../reference/resource-benchmark.md) measured the slope
+The [resource benchmark](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/) measured the slope
 at 130.9 MiB per credential on the dynamic surface, 63.5 on meta and 90.8 on
 individual, and the series ran out of a 16 GiB budget at 100 to 200
 credentials.
@@ -433,7 +433,7 @@ writing.
   the client as `io.github.jmrplens/watch-end` in the completion result of its
   `subscriptions/listen`, from a closed vocabulary published on the server card
   and documented in
-  [Resource subscriptions](../../reference/capabilities/subscriptions.md#why-a-subscription-ended).
+  [Resource subscriptions](https://jmrp.io/docs/gitlab-mcp-server/capabilities/subscriptions/#why-a-subscription-ended).
   What the reason carries about the deployment is one bit, to one recipient, and
   it is written down here rather than claimed away. No count, no other
   credential's URIs and no configuration travel in it, and `/health` still

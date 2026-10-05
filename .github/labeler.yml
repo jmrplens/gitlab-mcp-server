@@ -174,7 +174,8 @@ telemetry:
       - any-glob-to-any-file:
           - internal/telemetry/**
           - internal/mcpotel/**
-          - docs/guides/telemetry.md
+          - site/src/content/docs/operations/telemetry.mdx
+          - site/src/content/docs/es/operations/telemetry.mdx
 
 # The site's machinery, not its content: content is documentation and sits on
 # the other side of the docs-only line drawn at the top. A change here is a

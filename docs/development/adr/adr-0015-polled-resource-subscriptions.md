@@ -286,4 +286,4 @@ make the worst case something an operator can predict.
 - [MCP Specification — Subscriptions (2026-07-28)](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/subscriptions)
 - [SEP-2575 — Stateless MCP](https://modelcontextprotocol.io/seps/2575-stateless-mcp)
 - ADR-0010: No Resource Subscribe Capability (superseded by this ADR)
-- [Resource subscriptions](../../reference/capabilities/subscriptions.md)
+- [Resource subscriptions](https://jmrp.io/docs/gitlab-mcp-server/capabilities/subscriptions/)
