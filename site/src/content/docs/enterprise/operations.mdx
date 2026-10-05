@@ -8,7 +8,7 @@ faq:
   - q: "Can a balancer read a 200 from /health as GitLab being up?"
     a: "No. `/health` performs no GitLab round trip and deliberately does not test reachability, and there is no separate readiness endpoint. It answers `200` while serving and `503` once shutdown was requested, with `status`, `version`, `commit`, `build`, `config_digest`, `started_at` and `uptime_seconds`, and it needs no credential."
   - q: "Which monitoring signal bites hardest at scale?"
-    a: "Authentication failures per address. Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's failures are charged to the balancer's address, so ten bad tokens a minute from anywhere in the population answers `429` to the entire deployment for a minute. Configure both flags on any instance behind a proxy."
+    a: "Authentication failures per address. Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's failures are charged to the balancer's address, so ten bad tokens a minute from anywhere in the population block it for a minute: every credential the deployment does not already hold is answered `429`, whoever sends it, and only the callers it is already serving stay served. Configure both flags on any instance behind a proxy."
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -109,26 +109,32 @@ carry the last four characters of a token and nothing more.
 
 ## What to monitor
 
-| Signal                                                          | Where         | Why it matters                                                                                                                  |
-| --------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `config_digest` equality across instances                       | `/health`     | The only detector of an instance serving a different catalog                                                                    |
-| `status` and the HTTP code                                      | `/health`     | `503 draining` is the balancer's cue, not a failure                                                                             |
-| `build` per instance                                            | `/health`     | Which version each instance is actually running                                                                                 |
-| Peak resident set                                               | Host metrics  | The term that sizes the process is calls in flight, not credentials                                                             |
-| Processor time per call                                         | Telemetry     | The ceiling is threads divided by this                                                                                          |
-| Pool evictions                                                  | Logs          | Frequent eviction means `--max-http-clients` is below the population                                                            |
-| `server pool: evicted an entry that was serving a subscription` | Logs          | A `WARN` with `in_use=true` and the `max_size` to raise. A signal, not an error: it fires only when every pooled entry was busy |
-| `gitlab_mcp.credential_pool.entries` against `.capacity`        | Telemetry     | How close the pool runs to its bound                                                                                            |
-| `gitlab_mcp.credential_pool.evictions` by reason                | Telemetry     | `size_pressure_busy` is the one to alert on                                                                                     |
-| `429` rate                                                      | Balancer logs | Distinguish the per-credential limiter from the authentication budget                                                           |
-| Authentication failures per address                             | Logs          | Ten a minute blocks an address                                                                                                  |
+| Signal                                                          | Where         | Why it matters                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `config_digest` equality across instances                       | `/health`     | The only detector of an instance serving a different catalog                                                                                                                                                                                                                                                                   |
+| `status` and the HTTP code                                      | `/health`     | `503 draining` is the balancer's cue, not a failure                                                                                                                                                                                                                                                                            |
+| `build` per instance                                            | `/health`     | Which version each instance is actually running                                                                                                                                                                                                                                                                                |
+| Peak resident set                                               | Host metrics  | The term that sizes the process is calls in flight, not credentials                                                                                                                                                                                                                                                            |
+| Processor time per call                                         | Telemetry     | The ceiling is threads divided by this                                                                                                                                                                                                                                                                                         |
+| Pool evictions                                                  | Logs          | Frequent eviction means `--max-http-clients` is below the population                                                                                                                                                                                                                                                           |
+| `server pool: evicted an entry that was serving a subscription` | Logs          | A `WARN` carrying `in_use=true` and the `max_size` to raise. It is a signal, not an error: it fires only when every pooled entry was busy, so the pool had nothing quiet to take and a subscriber's watch was ended                                                                                                            |
+| `gitlab_mcp.credential_pool.entries` against `.capacity`        | Telemetry     | How close the pool runs to its bound, without the flag's value typed into the query                                                                                                                                                                                                                                            |
+| `gitlab_mcp.credential_pool.evictions` by reason                | Telemetry     | `size_pressure_busy` is the one to alert on: it is the pool taking a subscriber's entry for want of room. The eight reasons are listed under [Metrics](/gitlab-mcp-server/operations/telemetry/#metrics)                                                                                                                       |
+| `subscription refused: this process is at its watcher ceiling`  | Logs          | A `WARN` naming the 512 watchers already running. Nothing to raise, since the ceiling is not configurable: it says this instance is saturated for subscriptions and callers are being refused                                                                                                                                  |
+| `429` rate                                                      | Balancer logs | Every HTTP `429` this server answers is the authentication budget. The per-credential rate limiter never answers one: its refusals travel inside the response, as a tool result flagged `isError` or a JSON-RPC error `-42900` ([behaviour on exhaustion](/gitlab-mcp-server/operations/http-server/#behaviour-on-exhaustion)) |
+| Authentication failures per address                             | Logs          | Ten a minute blocks an address for every credential the deployment does not already hold; behind a proxy without `--trusted-proxy-header` and `--trusted-proxies` that address is the balancer's, whoever sent the failures                                                                                                    |
 
 <Aside type="danger" title="The trap that bites hardest at scale">
 
 Without `--trusted-proxy-header` and `--trusted-proxies`, every caller's
 authentication failures are charged to the balancer's address, so ten bad tokens
-a minute from anywhere in the population answers `429` to the entire deployment
-for a minute. Configure both flags on any instance behind a proxy.
+a minute from anywhere in the population block it for a minute. The callers the
+deployment is already serving stay served, and every credential it does not
+already hold is answered `429` until the window ends, which is every new
+colleague, every rotated token and every caller a balancer has just moved to
+that instance
+([the exemption](/gitlab-mcp-server/operations/http-server/#rejection-status-codes)).
+Configure both flags on any instance behind a proxy.
 
 </Aside>
 

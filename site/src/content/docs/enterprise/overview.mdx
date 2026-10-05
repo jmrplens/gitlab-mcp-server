@@ -6,9 +6,9 @@ faq:
   - q: "Do I still need token affinity across instances?"
     a: "For ordinary calls it is an optimisation rather than a requirement: an instance a caller moves to already has the catalog built, so the move costs a credential probe, a licensing lookup and a client. Affinity still keeps one rate-limit bucket and one identity probe per caller instead of one per instance. It is mandatory for two things: legacy stateful sessions, which live in the process that minted the session id, and resource subscriptions, whose watchers are held by one process."
   - q: "What is the one setting people forget behind a proxy?"
-    a: "`--trusted-proxy-header` together with `--trusted-proxies`. Without them every caller's authentication failures are charged to the balancer's address, and ten bad tokens a minute from anywhere in the population answers `429` to the entire deployment for a minute. Each flag is refused without the other."
+    a: "`--trusted-proxy-header` together with `--trusted-proxies`. Without them every caller's authentication failures are charged to the balancer's address, and ten bad tokens a minute from anywhere in the population block that address for a minute: every credential the deployment does not already hold is answered `429` until the window ends, whoever sends it, while callers it is already serving stay served. Each flag is refused without the other."
   - q: "Why does HAProxy mark every instance DOWN?"
-    a: "`option httpchk` sends no `Host` header unless one is configured, and a server bound to a specific host used to refuse such a request with 403. Version 2.8.0 serves it, because a request naming no host is not the DNS-rebinding attack that check exists for. On an older server, add `hdr Host your.host.name` to the `http-check send` line, which is good practice either way."
+    a: "`option httpchk` sends no `Host` header unless one is configured, and a server bound to a specific host used to refuse such a request with 403. Version 3.0.0 serves it, because a request naming no host is not the DNS-rebinding attack that check exists for. On an older server, add `hdr Host your.host.name` to the `http-check send` line, which is good practice either way."
 ---
 
 import { Aside, CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,8 @@ familiar.
   paths; the next handshake presents it.
 - **Behind any proxy, set `--trusted-proxy-header` and `--trusted-proxies`.**
   Without them every caller's authentication failures are charged to the
-  balancer's address, and ten a minute answers `429` to the whole deployment.
+  balancer's address, and ten a minute answers `429` to every credential the
+  deployment does not already hold.
 
 </Aside>
 
@@ -88,6 +89,23 @@ invariants are recorded in
 CORS preflights, its own 404s and its own security headers, terminates TLS, and
 listens on a unix socket. A proxy is for what a proxy is good at: many clients,
 one certificate, one address.
+
+## Further reading
+
+- [Remote Deployment](/gitlab-mcp-server/operations/remote-deployment/) for
+  service units, containers, the individual proxies and the first pass at
+  several instances.
+- [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for every flag,
+  the pool, the instance allow-list, the authentication modes and the ceilings
+  on calls held open and sessions kept.
+- [Resource Benchmark](/gitlab-mcp-server/performance/resource-benchmark/) for
+  the measurements this section sizes from, and the host they were taken on.
+- [Compatibility](/gitlab-mcp-server/compatibility/#mcp-gateway-validators) for
+  gateway validators and per-client limits.
+- [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/) for what an
+  instance reports about itself and its callers.
+- [Security](/gitlab-mcp-server/operations/security/) for the threat model, the
+  authentication budgets and the recommendations for HTTP mode.
 
 <FAQ />
 

@@ -6,9 +6,9 @@ faq:
   - q: "¿Sigue haciendo falta afinidad por token entre instancias?"
     a: "Para las llamadas ordinarias es una optimización, no un requisito: la instancia a la que se mueve un cliente ya tiene el catálogo construido, así que el movimiento cuesta un sondeo de credencial, una consulta de licencia y un cliente. La afinidad sigue manteniendo un solo cubo de límite y un solo sondeo de identidad por cliente en lugar de uno por instancia. Es obligatoria para dos cosas: las sesiones con estado, que viven en el proceso que acuñó el identificador de sesión, y las suscripciones a recursos, cuyos watchers los mantiene un proceso."
   - q: "¿Cuál es el ajuste que más se olvida detrás de un proxy?"
-    a: "`--trusted-proxy-header` junto con `--trusted-proxies`. Sin ellos, los fallos de autenticación de todos los clientes se cargan a la dirección del balanceador, y diez tokens malos por minuto desde cualquier punto de la población responden `429` a todo el despliegue durante un minuto. Cada flag se rechaza sin el otro."
+    a: "`--trusted-proxy-header` junto con `--trusted-proxies`. Sin ellos, los fallos de autenticación de todos los clientes se cargan a la dirección del balanceador, y diez tokens malos por minuto desde cualquier punto de la población bloquean esa dirección durante un minuto: toda credencial que el despliegue no tenga ya recibe `429` hasta que termina la ventana, la envíe quien la envíe, mientras que los clientes a los que ya está sirviendo siguen atendidos. Cada flag se rechaza sin el otro."
   - q: "¿Por qué HAProxy marca todas las instancias como DOWN?"
-    a: "`option httpchk` no envía cabecera `Host` salvo que se configure una, y un servidor enlazado a un host concreto rechazaba esa petición con 403. La versión 2.8.0 la sirve, porque una petición que no nombra ningún host no es el ataque de DNS rebinding contra el que existe esa comprobación. En un servidor anterior, añade `hdr Host tu.nombre.host` a la línea `http-check send`, que además es buena práctica en cualquier caso."
+    a: "`option httpchk` no envía cabecera `Host` salvo que se configure una, y un servidor enlazado a un host concreto rechazaba esa petición con 403. La versión 3.0.0 la sirve, porque una petición que no nombra ningún host no es el ataque de DNS rebinding contra el que existe esa comprobación. En un servidor anterior, añade `hdr Host tu.nombre.host` a la línea `http-check send`, que además es buena práctica en cualquier caso."
 ---
 
 import { Aside, CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -35,7 +35,7 @@ familiares.
 - **Detrás de cualquier proxy, define `--trusted-proxy-header` y
   `--trusted-proxies`.** Sin ellos, los fallos de autenticación de todos los
   clientes se cargan a la dirección del balanceador, y diez por minuto responden
-  `429` a todo el despliegue.
+  `429` a toda credencial que el despliegue no tenga ya.
 
 </Aside>
 
@@ -90,6 +90,25 @@ sus invariantes están en
 responde a sus propios preflights CORS, a sus propios 404 y a sus propias
 cabeceras de seguridad, termina TLS y escucha en un socket unix. El proxy es
 para lo que un proxy hace bien: muchos clientes, un certificado, una dirección.
+
+## Para seguir leyendo
+
+- [Despliegue remoto](/gitlab-mcp-server/es/operations/remote-deployment/) para
+  las unidades de servicio, los contenedores, cada proxy y la primera
+  aproximación a varias instancias.
+- [Servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para cada flag,
+  el pool, la lista de instancias permitidas, los modos de autenticación y los
+  techos de llamadas retenidas y de sesiones mantenidas.
+- [Consumo de recursos](/gitlab-mcp-server/es/performance/resource-benchmark/)
+  para las mediciones con las que esta sección dimensiona, y la máquina en la
+  que se tomaron.
+- [Compatibilidad](/gitlab-mcp-server/es/compatibility/#validadores-de-pasarelas-mcp)
+  para los validadores de las pasarelas y los límites de cada cliente.
+- [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/) para lo que una
+  instancia informa sobre sí misma y sobre quienes la llaman.
+- [Seguridad](/gitlab-mcp-server/es/operations/security/) para el modelo de
+  amenazas, los presupuestos de autenticación y las recomendaciones para el
+  modo HTTP.
 
 <FAQ />
 

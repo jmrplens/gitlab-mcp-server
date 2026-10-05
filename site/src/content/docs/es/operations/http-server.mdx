@@ -874,7 +874,7 @@ docker run -d \
   --tmpfs /tmp:rw,size=64m \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
@@ -892,7 +892,7 @@ docker run -d \
   --tmpfs /tmp:rw,size=64m \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
@@ -901,6 +901,8 @@ docker run -d \
 
 </TabItem>
 </Tabs>
+
+Los dos publican el puerto en loopback, para un proxy inverso en la misma máquina. `-p 8080:8080` lo publicaría en todas las interfaces y, con la integración de iptables que Docker trae por defecto, saltándose el cortafuegos del host; la forma del despliegue está en [Despliegue remoto](/gitlab-mcp-server/es/operations/remote-deployment/#ejecutarlo-con-docker).
 
 :::tip
 Fija la imagen a una etiqueta de release específica (por ejemplo `ghcr.io/jmrplens/gitlab-mcp-server:<version>`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
@@ -913,7 +915,7 @@ services:
   gitlab-mcp:
     image: ghcr.io/jmrplens/gitlab-mcp-server:latest
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     command:
       # Modo instancia única (URL fija de GitLab.com para todos los clientes; reemplázala para GitLab autogestionado):
       - "--http"
@@ -997,7 +999,7 @@ Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas 
 
 ## ¿Cuánta memoria necesita?
 
-Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario, y hazlo **por credencial que llama a la vez**, que no es lo mismo que por token dado de alta. Estas cifras vienen del [consumo de recursos](/gitlab-mcp-server/es/performance/resource-benchmark/), que mide el binario real en ambos transportes e indica la máquina en la que se ejecutó: un Intel i5-14400 con 16 CPU lógicas y 62 GiB de RAM, kernel 6.12, Go 1.27.1. Se vuelven a medir en esa máquina en cada versión.
+Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario, y hazlo **por credencial que llama a la vez**, que no es lo mismo que por token dado de alta. Estas cifras vienen del [consumo de recursos](/gitlab-mcp-server/es/performance/resource-benchmark/), que mide el binario real en ambos transportes e indica la máquina en la que se ejecutó: un Intel i5-14400 con 16 CPU lógicas y 62 GiB de RAM, kernel 6.12, Go 1.27.1. El registro indica la compilación y la fecha de la medición, y una medición nueva sustituye sus cifras por completo.
 
 | Modo                                      | Conjunto residente | Notas                                                                  |
 | ----------------------------------------- | -----------------: | ---------------------------------------------------------------------- |
@@ -1072,12 +1074,12 @@ curl -s http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "2.8.0",
-  "commit": "a6561ff7",
-  "build": "2.8.0+a6561ff",
+  "version": "3.1.0",
+  "commit": "6cf683bb1",
+  "build": "3.1.0+6cf683b",
   "config_digest": "9f2a7c41e0b3",
-  "started_at": "2026-08-22T09:14:03Z",
-  "uptime_seconds": 1209600
+  "started_at": "2026-10-01T09:14:03Z",
+  "uptime_seconds": 259200
 }
 ```
 

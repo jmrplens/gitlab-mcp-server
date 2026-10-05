@@ -98,6 +98,9 @@ server {
     listen 443 ssl;
     server_name mcp.example.com;
 
+    ssl_certificate     /etc/letsencrypt/live/mcp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mcp.example.com/privkey.pem;
+
     location / {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
@@ -116,9 +119,13 @@ server {
         proxy_next_upstream_tries 2;
     }
 
-    location /.well-known/oauth-protected-resource {
+    # The exact derived metadata path, never a prefix. location / already
+    # reaches it; this keeps it reached if / is narrowed to a path prefix.
+    location = /.well-known/oauth-protected-resource {
         proxy_pass http://gitlab_mcp;
         proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host       $host;
     }
 }
 ```
@@ -175,11 +182,11 @@ backend mcp_servers
 
 `option httpchk` sends no `Host` header unless one is configured, and a server
 bound to a specific host with `--http-addr` used to answer such a request with
-`403`, which marked every instance permanently down. It is now served: a request
-naming no host is not the DNS-rebinding attack that check exists for, since a
-browser always sends one. Adding `hdr Host mcp.example.com` to the
-`http-check send` line is still good practice and is required against an older
-server.
+`403`, which marked every instance permanently down. Version 3.0.0 serves it: a
+request naming no host is not the DNS-rebinding attack that check exists for,
+since a browser always sends one. Adding `hdr Host mcp.example.com` to the
+`http-check send` line is still good practice and is required against a server
+older than 3.0.0.
 
 `retries 1` with no `option redispatch` is the deliberate half of this. HAProxy
 retries a connection failure and never a request it already delivered, so a
@@ -211,8 +218,9 @@ balancer that retries a delivered POST on a second instance turns one mutating
 call into two, and neither the client nor the server can tell.
 
 - **nginx**: `proxy_next_upstream error timeout` and nothing else. Never add
-  `non_idempotent`, and never add `http_500`: both make nginx replay a request
-  that was delivered and answered.
+  `non_idempotent`: with it, any condition, `http_500` included, makes nginx
+  replay a `POST` that was delivered and answered. Without it nginx never passes
+  on a `POST` it has already sent, whatever the conditions say.
 - **HAProxy**: leave `option redispatch` off and `retry-on` at its default of
   connection failures.
 - **Anything else**: the rule is that a retry is safe only when the request

@@ -873,7 +873,7 @@ docker run -d \
   --tmpfs /tmp:rw,size=64m \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
@@ -891,7 +891,7 @@ docker run -d \
   --tmpfs /tmp:rw,size=64m \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
@@ -900,6 +900,8 @@ docker run -d \
 
 </TabItem>
 </Tabs>
+
+Both publish the port on loopback, for a reverse proxy on the same host. `-p 8080:8080` would publish it on every interface and, with Docker's default iptables integration, around the host firewall; the deployment shape is in [Remote Deployment](/gitlab-mcp-server/operations/remote-deployment/#run-it-with-docker).
 
 :::tip
 Pin the image to a specific release tag (for example `ghcr.io/jmrplens/gitlab-mcp-server:<version>`) in production. The `latest` tag tracks the newest release and may shift unexpectedly.
@@ -912,7 +914,7 @@ services:
   gitlab-mcp:
     image: ghcr.io/jmrplens/gitlab-mcp-server:latest
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     command:
       # Single instance mode (fixed GitLab.com URL for all clients; replace for self-managed GitLab):
       - "--http"
@@ -996,7 +998,7 @@ Use a token scoped to what you actually need. A hosted endpoint sees every reque
 
 ## How much memory does it need?
 
-Size the host from the HTTP server's resident set, not from the binary, and size it **per credential calling at once**, which is not the same as per token on the books. These figures come from the [resource benchmark](/gitlab-mcp-server/performance/resource-benchmark/), which measures the real binary on both transports and states the machine it ran on: an Intel i5-14400 with 16 logical CPUs and 62 GiB of RAM, kernel 6.12, Go 1.27.1. They are re-measured on that host for every release.
+Size the host from the HTTP server's resident set, not from the binary, and size it **per credential calling at once**, which is not the same as per token on the books. These figures come from the [resource benchmark](/gitlab-mcp-server/performance/resource-benchmark/), which measures the real binary on both transports and states the machine it ran on: an Intel i5-14400 with 16 logical CPUs and 62 GiB of RAM, kernel 6.12, Go 1.27.1. The record names the build and the date it was measured on, and a new measurement replaces its figures wholesale.
 
 | Mode                                     |     Resident set | Notes                                                             |
 | ---------------------------------------- | ---------------: | ----------------------------------------------------------------- |
@@ -1071,12 +1073,12 @@ curl -s http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "2.8.0",
-  "commit": "a6561ff7",
-  "build": "2.8.0+a6561ff",
+  "version": "3.1.0",
+  "commit": "6cf683bb1",
+  "build": "3.1.0+6cf683b",
   "config_digest": "9f2a7c41e0b3",
-  "started_at": "2026-08-22T09:14:03Z",
-  "uptime_seconds": 1209600
+  "started_at": "2026-10-01T09:14:03Z",
+  "uptime_seconds": 259200
 }
 ```
 
