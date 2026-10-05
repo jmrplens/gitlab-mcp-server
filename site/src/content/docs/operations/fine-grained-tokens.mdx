@@ -144,7 +144,7 @@ request (`issue.note_create`, `mr_review.note_create`) is created with Work Item
 Create, and a merge request discussion (`mr_review.discussion_create`) with Merge
 Request: Create, because that is what the routes declare at GitLab 19.4.1.
 
-The [fine-grained permissions reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md)
+The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
 lists what every action needs, and `gitlab://tools/{id}` serves the same for one action
 in its `fine_grained` block.
 
@@ -256,7 +256,7 @@ action, `group.epic_list`, runs over REST and is served; with an input that make
 send its GraphQL request instead, GitLab answers that request empty, and the answer
 carries a note saying so.
 
-The [fine-grained permissions reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md)
+The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
 names the reason for each. Making GitLab declare the missing permissions is
 [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), and serving
 over REST what GraphQL cannot reach is
@@ -394,7 +394,7 @@ exactly as it would be without the flag.
 
 ## Further reading
 
-- [Fine-grained permissions reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md):
+- [Fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/):
   what every action needs, generated from the handlers and from GitLab 19.4.1
 - [Troubleshooting](/gitlab-mcp-server/operations/troubleshooting/#fine-grained-tokens):
   GitLab's four refusal texts and what each means

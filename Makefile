@@ -2208,8 +2208,9 @@ endef
 ## gen-action-grants: derive what every catalog action sends from its handlers,
 ## join it to what the live GitLab record declares for a fine-grained token,
 ## and rewrite docs/development/action-requests.json,
-## internal/tools/actiongrants/table_gen.go and
-## docs/reference/fine-grained-permissions.md. It writes nothing while the
+## internal/tools/actiongrants/table_gen.go and the reference page,
+## site/src/content/docs/reference/fine-grained-permissions.mdx with its
+## Spanish twin under site/src/content/docs/es/. It writes nothing while the
 ## derivation has a finding.
 gen-action-grants:
 	$(call action_grants,)

@@ -194,16 +194,21 @@ func fixtureSources(t *testing.T, names ...string) sources {
 	}
 }
 
-// artifactPaths are the three files a run writes, under a root.
+// artifactPaths are the files a run writes, under a root: the request record,
+// the table, and the reference page in English and in Spanish, the last two
+// pages of the documentation site.
 func artifactPaths(root string) []string {
 	return []string{
-		filepath.Join(root, requestsPath), filepath.Join(root, filepath.FromSlash(tablePath)), filepath.Join(root, referencePath),
+		filepath.Join(root, requestsPath), filepath.Join(root, filepath.FromSlash(tablePath)),
+		filepath.Join(root, filepath.FromSlash("site/src/content/docs/reference/fine-grained-permissions.mdx")),
+		filepath.Join(root, filepath.FromSlash("site/src/content/docs/es/reference/fine-grained-permissions.mdx")),
 	}
 }
 
 // TestRun_WritesTheArtifactsThenHoldsThemCurrent verifies a clean run writes
-// the three artifacts, a check of them passes, and a check after one of them
-// changed names it stale and the command that refreshes it.
+// the artifacts, the reference page once per language of the site, a check of
+// them passes, and a check after either page changed names that page stale
+// and the command that refreshes it.
 func TestRun_WritesTheArtifactsThenHoldsThemCurrent(t *testing.T) {
 	root := t.TempDir()
 	in := fixtureSources(t, "get")
@@ -219,6 +224,7 @@ func TestRun_WritesTheArtifactsThenHoldsThemCurrent(t *testing.T) {
 		artifactPaths(root)[0]: `"route": "GET /projects/:id"`,
 		artifactPaths(root)[1]: `{ID: "fixture.get", Paths: [][]uint32{{0}}}`,
 		artifactPaths(root)[2]: "| `fixture.get` | Project: Read at project |",
+		artifactPaths(root)[3]: "| `fixture.get` | Project: Read en proyecto |",
 	} {
 		t.Run(path, func(t *testing.T) {
 			data, err := os.ReadFile(path)
@@ -230,12 +236,23 @@ func TestRun_WritesTheArtifactsThenHoldsThemCurrent(t *testing.T) {
 	if err := run(&progress, root, options{check: true}, in); err != nil {
 		t.Errorf("a check of what the run wrote = %v", err)
 	}
-	if err := os.WriteFile(artifactPaths(root)[2], []byte("edited\n"), 0o600); err != nil {
-		t.Fatalf("edit the reference page: %v", err)
-	}
-	err := run(&progress, root, options{check: true}, in)
-	if err == nil || !strings.Contains(err.Error(), "is stale; run "+regenerate) {
-		t.Errorf("a check of an edited page = %v, want it named stale", err)
+	for i, language := range []string{"English", "Spanish"} {
+		t.Run(language+" page edited", func(t *testing.T) {
+			// Each edit is made in a tree of its own, so the check that follows
+			// has one stale page to name.
+			tree := t.TempDir()
+			if err := run(&bytes.Buffer{}, tree, options{}, in); err != nil {
+				t.Fatalf("run = %v", err)
+			}
+			page := artifactPaths(tree)[2+i]
+			if err := os.WriteFile(page, []byte("edited\n"), 0o600); err != nil {
+				t.Fatalf("edit the reference page: %v", err)
+			}
+			err := run(&bytes.Buffer{}, tree, options{check: true}, in)
+			if err == nil || err.Error() != page+" is stale; run "+regenerate {
+				t.Errorf("a check of an edited page = %v, want %s alone named stale", err, page)
+			}
+		})
 	}
 }
 

@@ -148,7 +148,7 @@ o en un merge request (`issue.note_create`, `mr_review.note_create`) se crea con
 Item: Create, y una discusión de merge request (`mr_review.discussion_create`) con
 Merge Request: Create, porque es lo que declaran las rutas en GitLab 19.4.1.
 
-La [referencia de permisos de grano fino](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md)
+La [referencia de permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/)
 enumera lo que necesita cada acción, y `gitlab://tools/{id}` sirve lo mismo para una
 acción en su bloque `fine_grained`.
 
@@ -264,7 +264,7 @@ más, `group.epic_list`, va por REST y se sirve; con una entrada que le hace env
 petición GraphQL, GitLab responde esa petición vacía, y la respuesta lleva una nota que
 lo dice.
 
-La [referencia de permisos de grano fino](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md)
+La [referencia de permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/)
 nombra el motivo de cada una. Conseguir que GitLab declare los permisos que faltan es el
 [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), y servir por
 REST lo que GraphQL no alcanza es el
@@ -410,7 +410,7 @@ como sería sin el flag.
 
 ## Lectura adicional
 
-- [Referencia de permisos de grano fino](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md):
+- [Referencia de permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/):
   lo que necesita cada acción, generado a partir de los handlers y de GitLab 19.4.1
 - [Solución de problemas](/gitlab-mcp-server/es/operations/troubleshooting/#tokens-de-grano-fino):
   los cuatro textos de rechazo de GitLab y lo que significa cada uno
