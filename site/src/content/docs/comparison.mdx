@@ -59,6 +59,6 @@ So "works without paying" is **not** a reason to choose this project over the of
 
 ## On tool count
 
-A larger catalog is only useful if it does not swamp the model. Registering {stats.tools.gitlab_com} tools individually costs {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("en-US")} tokens of startup schema; the default dynamic surface costs {footprint.dynamic.tool_schema_tokens.toLocaleString("en-US")} — a {footprint.individual.ultimate.reduction_factor_vs_dynamic}× reduction — because the client sees two tools that resolve the rest on demand. That is what makes full-surface coverage practical rather than merely large. The measurement and its methodology are on the [dynamic toolset page](/gitlab-mcp-server/tools/dynamic-tools/).
+A larger catalog is only useful if it does not swamp the model. Registering the {footprint.individual.ultimate.visible_tools.toLocaleString("en-US")} tools of a self-managed Ultimate instance individually costs {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("en-US")} tokens of startup schema; the default dynamic surface costs {footprint.dynamic.tool_schema_tokens.toLocaleString("en-US")}, a {footprint.individual.ultimate.reduction_factor_vs_dynamic}× reduction, because the client sees two tools that resolve the rest on demand. That is what makes full-surface coverage practical rather than merely large. The measurement and its methodology are on the [dynamic toolset page](/gitlab-mcp-server/tools/dynamic-tools/).
 
 <FAQ />

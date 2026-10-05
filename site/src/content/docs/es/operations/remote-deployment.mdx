@@ -1028,7 +1028,7 @@ produce uno, y njs hace lo mismo en unas pocas líneas. El endpoint alojado en
 
 Sin él, nginx reintenta un `POST` en otra instancia solo cuando la petición no
 llegó a enviarse, que es exactamente la garantía que se quiere aquí: un
-`tools/call` que creó una incidencia y luego perdió su respuesta no debe
+`tools/call` que creó un issue y luego perdió su respuesta no debe
 repetirse en una segunda instancia. `error timeout` por sí solo es a nivel de
 conexión, y sin `non_idempotent` ninguna condición, `http_500` incluida, pasa a
 otra instancia un `POST` que ya se envió. Añadir `non_idempotent`, con cualquier

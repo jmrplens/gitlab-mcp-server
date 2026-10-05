@@ -167,7 +167,7 @@ A stdio server that refuses to start (a flag only HTTP mode reads, a retired var
 | Sessions expiring unexpectedly                                                                                                                  | MCP idle timeout too short                                                                                                                                                                                                                                                                                                                                 | Increase `--session-timeout` (default: 30m); it applies to `--stateless=false` only, the default stateless transport has no session to expire                                                                                                                                                                                                                                                                                                                                                                   |
 | MCP sessions drop every ~2 min (older builds also logged `keepalive ping failed; closing session`; the SDK's ping is now off for HTTP sessions) | A low `--http-idle-timeout` (or a proxy timeout) is closing long-lived SSE streams                                                                                                                                                                                                                                                                         | Default `--http-idle-timeout=0` disables HTTP-layer idle closure; if you set a low value, raise it or use `0`. Behind a reverse proxy, also raise its read and idle timeouts to at least a few minutes, well above the server's 25-second SSE keep-alive                                                                                                                                                                                                                                                        |
 
-See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for the architecture, every status code and the configuration.
+See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for the architecture, every status code and the configuration. Every flag, with its default and its bounds, is in the [CLI reference](/gitlab-mcp-server/reference/cli/), and the variable each one falls back to is in the [environment variable reference](/gitlab-mcp-server/reference/environment/).
 
 ## OAuth mode (`--auth-mode=oauth`)
 
@@ -215,10 +215,16 @@ A list can name a permission the token creation page does not offer: for sixteen
 
 ## Pagination
 
-| Symptom                                      | Cause                    | Solution                                                    |
-| -------------------------------------------- | ------------------------ | ----------------------------------------------------------- |
-| List results truncated                       | Default `per_page` limit | Pass `per_page` (max 100) and `page` parameters to paginate |
-| `next_page` is `0` and `has_more` is `false` | Last page reached        | No more results: this is expected behavior                  |
+A list's pagination line and its `pagination` object are described field by field in [Output Format](/gitlab-mcp-server/reference/output-format/).
+
+| Symptom                                                                     | Cause                                                                                                                      | Solution                                                                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| List results truncated                                                      | Default `per_page` limit                                                                                                   | Pass `per_page` (max 100) and `page` parameters to paginate                          |
+| `next_page` is `0` and `has_more` is `false`                                | Last page reached                                                                                                          | No more results: this is expected behavior                                           |
+| A list answers with `has_next_page` and `end_cursor` instead of `next_page` | The action reads GitLab over GraphQL, which pages by cursor                                                                | Pass `end_cursor` as `after` for the next page; `first` sets the page size (max 100) |
+| `total_items` and `total_pages` are `0` on a list that has rows             | GitLab sent no total for this list                                                                                         | Page on `has_more` and `next_page`, which do not depend on the total                 |
+| A search reports a `total_items` no larger than the page                    | GitLab's search API sends no totals, so they are inferred from the page that arrived, a lower bound                        | Page on `has_more` and `next_page`                                                   |
+| `has_more` is `false` on a list asked for with `pagination: "keyset"`       | The continuation GitLab sends is not carried yet ([issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165)) | Leave `pagination` at its default and page with `page`                               |
 
 ## Resource subscriptions
 
@@ -235,12 +241,15 @@ A subscription that "succeeded" but never fires is often one that was refused. *
 
 ## Output format
 
-| Symptom                                        | Cause                                                                                              | Solution                                                                                                                                                                         |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Links are not clickable in the IDE             | The client does not render Markdown links in tool results                                          | The links are in the result's Markdown, and a list result asks the assistant to keep them as `[text](url)` links when it presents the results, so ask the assistant for the link |
-| Raw Markdown shown beside the formatted output | The client shows both `content` and `structuredContent`                                            | A tool result marks its Markdown `audience: ["assistant"]`, so a client that honours annotations does not show it to the user; update the client to its latest version           |
-| No `next_steps` in the structured result       | The action's output type declares no `next_steps` field, or the action has no next step to suggest | The hints are in the Markdown under its **Next steps** heading, on every surface; the structured result carries `next_steps` only where the output type declares it              |
-| The error message suggests no fix              | Not every error has a known corrective action                                                      | An error with a known fix carries `Suggestion:` followed by the action to take, named by its canonical ID. See [Error handling](/gitlab-mcp-server/operations/error-handling/)   |
+What each part of a tool result carries, and which client reads which part, is in [Output Format](/gitlab-mcp-server/reference/output-format/).
+
+| Symptom                                           | Cause                                                                                                               | Solution                                                                                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Links are not clickable in the IDE                | The client does not render Markdown links in tool results                                                           | The links are in the result's Markdown, and a list result asks the assistant to keep them as `[text](url)` links when it presents the results, so ask the assistant for the link |
+| Raw Markdown shown beside the formatted output    | The client shows both `content` and `structuredContent`                                                             | A tool result marks its Markdown `audience: ["assistant"]`, so a client that honours annotations does not show it to the user; update the client to its latest version           |
+| No `next_steps` in the structured result          | The action's output type declares no `next_steps` field, or the action has no next step to suggest                  | The hints are in the Markdown under its **Next steps** heading, on every surface; the structured result carries `next_steps` only where the output type declares it              |
+| A get result shows the object twice, once as JSON | The result embeds the object's canonical `gitlab://` resource as a second content block, which some clients display | Set `GITLAB_MCP_EMBEDDED_RESOURCES=false`, or pass `--embedded-resources=false` in HTTP mode                                                                                     |
+| The error message suggests no fix                 | Not every error has a known corrective action                                                                       | An error with a known fix carries `Suggestion:` followed by the action to take, named by its canonical ID. See [Error handling](/gitlab-mcp-server/operations/error-handling/)   |
 
 ## IDE-specific issues
 
@@ -300,6 +309,8 @@ Enable verbose logging to diagnose issues:
 :::tip
 Logs go to **stderr**, JSON-RPC messages go to **stdout**. Always redirect stderr when capturing debug logs to avoid mixing with MCP protocol messages.
 :::
+
+`--log-level` sets the same thing as `GITLAB_MCP_LOG_LEVEL` on either transport; the [CLI reference](/gitlab-mcp-server/reference/cli/) and the [environment variable reference](/gitlab-mcp-server/reference/environment/) list the other settings worth checking while you debug.
 
 ## Diagnostic commands
 

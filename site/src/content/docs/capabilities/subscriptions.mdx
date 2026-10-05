@@ -4,22 +4,33 @@ description: MCP resource subscriptions that deliver live change notifications f
 datePublished: "2026-08-25"
 faq:
   - q: "What are MCP resource subscriptions?"
-    a: "A client asks the server to watch a resource with `resources/subscribe`, and the server sends `notifications/resources/updated` when its content changes. GitLab MCP Server honors this by **polling**: a watcher re-reads the subscribed URI through the same handler `resources/read` uses and notifies only when the content actually changed. GitLab offers no push channel a local server could consume, so polling under explicit bounds is the honest implementation."
+    a: "A client asks the server to watch a resource, with `resources/subscribe` on protocol `2025-11-25` and earlier or with `subscriptions/listen` from `2026-07-28`, and the server sends `notifications/resources/updated` when its content changes. GitLab MCP Server honors this by **polling**: a watcher re-reads the subscribed URI through the same handler `resources/read` uses and notifies only when the content actually changed. GitLab offers no push channel a local server could consume, so polling under explicit bounds is the honest implementation."
   - q: "Which resources can be subscribed to?"
     a: "26 resource kinds, single objects plus three single-parent lists: a project or group; a pipeline, its job list, the latest pipeline, a single job; a merge request with its discussions and notes; an issue; a deployment, environment, or feature flag; a release, tag, or branch; a milestone or label (project or group); a board; a deploy key; a snippet; a wiki page; and a repository file. **Collections are refused** — subscribing to an issue list would notify on changes the subscriber never asked about."
   - q: "How fast do notifications arrive?"
-    a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** by default, **60 seconds** once settled, and **10 minutes** after a watch lease-demotes from 30 minutes of session inactivity. Any request on the session restores full speed. The `_meta` on each notification reports the watch state and its current cadence."
+    a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** for a resource with no state to read, **60 seconds** once settled, and **10 minutes** after a watch is slowed by 30 minutes without a request on its session. Any request on the session restores full speed, and an open `subscriptions/listen` keeps its own watches at full speed for as long as it stays open. The `_meta` on each notification reports the watch state and its current cadence."
   - q: "What does watching cost against my GitLab rate limit?"
-    a: "Watchers use the subscriber's own token, capped at **10 watchers per credential**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
+    a: "Watchers poll with the subscriber's own token, capped at **10 watchers per credential**. All ten at the 5-second floor make 120 requests a minute, which is the whole budget of a self-managed instance whose administrator turned on GitLab's authenticated API rate limit at its default of 7,200 requests an hour. At the 15-second base the same ten make 40 a minute, and ten slowed watches make one. A 429 from GitLab pauses every watcher of that credential with exponential back-off."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
 
-Resource subscriptions let a client say **"tell me when this changes"** instead of re-reading a resource on a hunch. The client sends `resources/subscribe` for a URI such as `gitlab://project/42/pipelines/latest`, and GitLab MCP Server sends `notifications/resources/updated` whenever that resource's content changes.
+Resource subscriptions let a client say **"tell me when this changes"** instead of re-reading a resource on a hunch. The client subscribes to a URI such as `gitlab://project/42/pipelines/latest`, and GitLab MCP Server sends `notifications/resources/updated` whenever that resource's content changes.
 
 The server honors subscriptions by **polling**: a watcher re-reads the subscribed URI through the very handler `resources/read` dispatches to, compares a SHA-256 of the content, and notifies only on a real change. "The content changed" therefore means exactly "what you would read changed" — never a guess. The decision and its bounds are recorded in [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
 
 Subscriptions are advertised on `GITLAB_MCP_CAPABILITY_SURFACE=full` (the default). The `minimal` surface does not register the GitLab data resources a subscription applies to, so it does not advertise the capability either.
+
+## Which method does a client use?
+
+| Client protocol          | How a client subscribes                                                       | What it gets                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `2025-11-25` and earlier | `resources/subscribe` and `resources/unsubscribe`                             | `notifications/resources/updated`                                                              |
+| `2026-07-28`             | `subscriptions/listen`, naming the URIs in `resourceSubscriptions` (SEP-2575) | The same notification, plus a result on the open request when the server ends the subscription |
+
+The server answers both. Which one a client sends follows the protocol version its session negotiated, and which ones a deployment can serve depends on its transport ([Transport notes](#transport-notes)).
+
+On `2026-07-28` the subscription **is** the listen request: the client leaves it open, and it ends when the client cancels it or the server answers it. One listen may carry several URIs, and list-changed subscriptions besides. The server answers it only once every URI it carries has stopped, and never while it also carries a list-changed subscription, so the rest of what a client batched into one request is not lost with one resource.
 
 ## What can be watched?
 
@@ -34,7 +45,66 @@ Subscriptions are advertised on `GITLAB_MCP_CAPABILITY_SURFACE=full` (the defaul
 | Content           | Wiki page, repository file, snippet (project or personal)                         |
 | Containers        | Project, group, deploy key                                                        |
 
-**Collections are deliberately excluded.** Subscribing to `gitlab://project/42/issues` would fire on every change to any issue in the project and cost a full page read per poll — a subscription to a collection is refused. The full machine-readable list ships in the `gitlab://tools` manifest under `subscriptions.subscribable_uri_templates`.
+**Collections are deliberately excluded.** Subscribing to `gitlab://project/42/issues` would fire on every change to any issue in the project, most of them nothing the subscriber asked about, and cost a full page read per poll, so a subscription to a top-level collection is refused.
+
+### Why are three lists allowed?
+
+A pipeline's job list and a merge request's discussions and notes are lists, and subscribable on purpose: each is bounded by one parent object whose lifecycle the subscriber is already following, so "did this change?" is exactly the question a watch on that parent answers.
+
+A watch on one of them sees the first page only, 100 items, which holds every ordinary pipeline and merge request; a change past it raises no notification. Every read of a list says how complete it is under the `io.github.jmrplens/pageInfo` key of its `_meta` (`returned`, `total` when GitLab sends it, and `complete`), so a subscriber can tell when what it watches is partial.
+
+### Where is the list published?
+
+In four places, all built from the whitelist that enforces it, so none can drift from the others:
+
+1. The **description** of every subscribable resource template ends with the sentence `Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.`, appended at registration and never written by hand. It is two sentences rather than one with a semicolon because the served surface carries none of the characters strict gateway validators reject.
+2. The same templates carry the **`_meta` key** `io.github.jmrplens/subscribable: true`, for a generic client that filters without knowing this server's manifest. MCP has no per-resource subscribable field, only the server-wide `resources.subscribe` capability.
+3. The **`gitlab://tools` manifest** lists every template under `subscriptions.subscribable_uri_templates`.
+4. In HTTP mode, the **enumerating server card** at `/.well-known/mcp/server-card.json` carries a top-level `subscriptions` block, beside a `capabilities` object that mirrors the handshake, so a directory can learn all of it without connecting. The card at `/server-card` is a different document and states no capabilities ([Server card](/gitlab-mcp-server/operations/http-server/#server-card)).
+
+The card's block says, per method, whether this deployment answers it:
+
+```json
+"subscriptions": {
+  "supported": true,
+  "methods": {
+    "subscriptions/listen": {
+      "available": true,
+      "requires": "stateless sessions (--stateless, the default)",
+      "since_protocol": "2026-07-28"
+    },
+    "resources/subscribe": {
+      "available": false,
+      "requires": "stateful sessions (--stateless=false)"
+    }
+  },
+  "subscribable_uri_templates": ["gitlab://group/{group_id}", "..."],
+  "notification": "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+  "end_reasons": [
+    "credential_evicted",
+    "credential_reset",
+    "credential_revoked",
+    "credential_insufficient",
+    "resource_gone",
+    "lifetime_reached",
+    "watcher_evicted",
+    "shutdown"
+  ],
+  "end_reason_meta_key": "io.github.jmrplens/watch-end"
+}
+```
+
+That is a stateless deployment. Under `--stateless=false` the two `available` values swap, and on the `minimal` capability surface the block is absent.
+
+### What does a refused subscription cost?
+
+A refused subscription starts no watcher. One refused for its kind, like a top-level collection, costs no GitLab call; one refused because the resource could not be read has spent that one read. On `2026-07-28` the refusal is the JSON-RPC error that answers the `subscriptions/listen` itself, sent before any acknowledgment, so a client that reads the listen's response sees it. The Go SDK client (v1.8.0) never does, because it sends the listen without waiting for its response ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal)); the refusal takes effect all the same.
+
+## How is a change detected?
+
+A watcher re-reads the resource through the same handler `resources/read` uses and compares a SHA-256 of what it returns. The first read happens synchronously when the subscription is accepted, before the client is told it is subscribed, so a subscriber is never notified about a change that predates it.
+
+That first read is also the **authorization check**: it runs with the subscriber's own token, so a URI the token cannot read is refused up front rather than accepted and then silently never firing. A watcher is per URI and per credential, so a second session watching the same URI with the same token joins the existing watcher, waits for that same first read, and costs nothing more. The check has a far side too: a token that loses access keeps being used until the next poll answers 401, 403 or 404, which is at most one interval, and up to ten minutes for a slowed watch; that answer is what stops the watch.
 
 ## How fast, and at what cost?
 
@@ -47,15 +117,62 @@ The polling cadence adapts to the resource:
 | No lifecycle field | 15s        | a wiki page, a file, a label                    |
 | Lease-demoted      | 10min      | 30 minutes without any request on the session   |
 
-Watchers use the subscriber's own GitLab token, capped at **10 watchers per credential** (one pool entry per token+URL in HTTP mode) and at **512 per process**. The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes). The process ceiling refuses rather than stopping anyone's watch, and it refuses before a credential at its own cap spends a demoted watch making room, so a refusal never costs you a subscription you already had.
+Work in flight means a pipeline or job in `created`, `waiting_for_resource`, `preparing`, `pending` or `running` (a job list is busy while any job in it is), or a merge request or issue that is `opened` or `locked`. Every other status counts as settled, `manual` and `scheduled` included: both wait on something outside CI, a person or a clock, so polling them at the floor would spend budget on a resource that cannot change until that happens. Wikis, files, branches, labels, boards and the other kinds have no state to read, so they poll at the 15-second base.
 
-The process ceiling exists because a credential is one API call to mint, so a per-credential number multiplies by however many a caller holds. It refuses rather than making room: stopping one credential's watch to start another's is a trade this server does not make. Neither ceiling is configurable, and both refusals say which one was reached.
+Nothing retires itself for being finished. GitLab has no terminal state: a retried pipeline reuses its ID and runs again, a closed issue reopens, a merged merge request can still be edited, so a watcher that stopped at `success` would go blind to a real change its subscriber asked about.
 
-Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, it is evicted to make room at the watcher cap, or the pool drops the credential's entry under `--max-http-clients` pressure. That last one prefers an entry that is not serving a subscription and takes a busy one only when every pooled entry is busy; when it happens the watchers stop, the open `subscriptions/listen` requests are completed, and reconnecting is enough, because nothing is wrong with the credential.
+Latency is bounded by the cadence by design. The pull-safe event channels GitLab offers today (the Events API, GraphQL subscriptions over ActionCable, and conditional requests) were each probed live and declined, as [ADR-0017](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0017-pull-safe-event-sources-surveyed.md) records.
+
+### What are the limits?
+
+| Limit                   | Value                      | Why                                                                                                                                          |
+| ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling                                          |
+| Watchers per process    | 512                        | A credential is one API call to mint, so a per-credential number multiplies by however many a caller holds; only this one bounds the process |
+| Floor interval          | 5s                         | Ten watchers at the floor already make 120 requests a minute                                                                                 |
+| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces its limits per user, so one 429 pauses every watcher of that credential                                                      |
+
+A credential is one pool entry, one token and GitLab URL pair, in HTTP mode. On stdio the process serves one credential, so its ten watchers are the bound and the process ceiling never binds.
+
+**The request arithmetic.** Ten watchers make 120 requests a minute at the floor, 40 at the 15-second base, 10 once settled, and one once slowed. Across a process, 512 watchers are about 102 requests a second at the floor and about 34 at the base. On a self-managed instance GitLab's authenticated API rate limit defaults to 7,200 requests an hour per user, which is 120 a minute, and is off until an administrator enables it ([GitLab documentation](https://docs.gitlab.com/administration/settings/user_and_ip_rate_limits/)). Ten watchers at the floor would spend all of it while the same user makes tool calls, which is why the floor is not lower. GitLab.com publishes its limits per plan on its [rate limits page](https://docs.gitlab.com/user/gitlab_com/rate_limits/).
+
+**At the per-credential cap, the longest-slowed watch makes room.** A new subscription evicts that credential's watch that has been slowed the longest rather than being refused: a subscriber that is waiting now wins the slot over one whose own inactivity already slowed it, and the evicted watch's listen is answered with `watcher_evicted`. If none of the ten is slowed, the new subscription is refused.
+
+**The process ceiling only refuses.** Making room there would mean stopping another credential's watch to start this one, and nothing about the arriving subscription makes it worth more than the one already running. It refuses **before** anything is evicted, so a credential at its own cap keeps its slowed watch when the process is full and is told the server-wide ceiling was reached: a refusal never costs you a subscription you already had.
+
+Neither ceiling is configurable, and both refusals say which one was met: the process one says `server-wide` in as many words, and the per-credential one carries that credential's own count and limit, so an operator reading the error knows whether to look at the caller or the deployment. The lever an operator does have is `--max-http-clients`, which decides how many credentials the pool serves at once ([The lever, and what it costs](/gitlab-mcp-server/operations/http-server/#the-lever-and-what-it-costs)).
+
+What the process ceiling costs is worth knowing before you meet it. Fifty-one credentials at the per-credential cap fill 510 of the 512 slots, and they keep them for as long as their watches live, up to 24 hours each, while every other subscribe is refused. That is accepted deliberately: the alternative is unbounded polling from one process, and a share per credential would bound nothing, since a credential is one API call to mint. A saturated deployment says so in its own log, one WARN line per refusal.
 
 ## Lifetime and renewal
 
-A watch that goes unrenewed does not silently die — it slows down. After 30 minutes without traffic on the subscribing session, the watch drops to a 10-minute poll; any tool call or resource read on that session restores full speed automatically. Every notification carries the watch state in `_meta` under `io.github.jmrplens/watch`:
+A watch that goes unrenewed does not silently die: it slows down. After 30 minutes without a request on the subscribing session, it drops to a 10-minute poll, and any request on that session restores full speed. A watch ends, or slows, for these reasons and no others:
+
+| Event                                          | Effect                                | Told to the client?                                                                                                                                                   |
+| ---------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The client unsubscribes or cancels its listen  | Stops when the last subscriber leaves | It asked for it                                                                                                                                                       |
+| The session disconnects                        | Stops                                 | It is gone                                                                                                                                                            |
+| 30 minutes with no request on the session      | **Slows to a 10-minute poll**         | `_meta` on the next notification                                                                                                                                      |
+| Any request on the session                     | Restores full speed                   | Nothing to tell                                                                                                                                                       |
+| The resource answers 401, 403 or 404           | Stops                                 | Listen answered with `resource_gone`                                                                                                                                  |
+| 24 hours, renewals included                    | Stops                                 | Listen answered with `lifetime_reached`                                                                                                                               |
+| Evicted to make room at the per-credential cap | Stops                                 | Listen answered with `watcher_evicted`                                                                                                                                |
+| The pool drops this credential's entry         | Stops                                 | Listen answered with `credential_evicted`, `credential_reset`, `credential_revoked` or `credential_insufficient`; under `--stateless=false` the session is terminated |
+| The server shuts down                          | Stops                                 | Listen answered with `shutdown` (HTTP)                                                                                                                                |
+
+A legacy `resources/subscribe` gets none of those answers, because it holds no open request; see [Why a subscription ended](#why-a-subscription-ended).
+
+**The lease slows a watch down; it does not end it.** MCP defines no lease, no expiry and no expiry message, and its one notification means "this changed, read it again". A watch that retired at a deadline would go silent in a way no client could tell apart from "nothing has happened yet", so slowing down is the one claim a server can make honestly.
+
+**What renews it.** Any request that reaches the server on the session: a tool call, a resource read, a prompt, a completion, a listing. A `ping` and the `initialize` handshake do not, deliberately, because a ping proves a socket is open and not that anyone is waiting on the other end of it; notifications do not either. From `2026-07-28` a client may answer `tools/list`, `prompts/list` or a repeated `resources/read` from its own cache, and then nothing arrives here to renew anything, which is correct: a client serving itself from cache is not evidence that anyone is waiting.
+
+**An open `subscriptions/listen` renews its own watches**, every ten minutes for as long as it stays open. On the default stateless transport a listen's session sees no request but the listen itself, so nothing else would renew it, and an open listen is better evidence of a waiting subscriber than traffic is. The lease therefore governs the legacy `resources/subscribe`, and the 24-hour cap applies to every watch.
+
+**A watch can also end because the pool dropped its credential.** In HTTP mode the watchers belong to a pool entry, and `--max-http-clients` bounds how many entries a process holds. Size pressure prefers an entry that is not serving a subscription, and takes one that is only when every pooled entry is serving one; then the credential's watchers stop, its open `subscriptions/listen` requests are answered, and under `--stateless=false` the sessions no listen ended are terminated. Nothing is wrong with the credential: reconnect and subscribe again.
+
+### What does a notification carry?
+
+Every notification carries the state of the watch that produced it in `_meta`, under `io.github.jmrplens/watch`. MCP registers no key for a subscription's lifetime, so this one is namespaced to this project:
 
 ```json
 {
@@ -73,6 +190,15 @@ A watch that goes unrenewed does not silently die — it slows down. After 30 mi
   }
 }
 ```
+
+| Field               | Meaning                                                                          |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `state`             | `active` at full speed, `slow` once the watch has been slowed                    |
+| `renewBy`           | When the lease runs out and the watch slows (on a slowed watch, when it ran out) |
+| `pollIntervalMs`    | The cadence the watch is polling at now, in milliseconds                         |
+| `renewedByActivity` | Always `true`: any request on the session pushes `renewBy` out again             |
+
+No client is obliged to read any of it, and no client known today does. It is there because a subscriber has no other way to learn that its watch slowed down, and everything it says is true whether or not anyone looks.
 
 ## Why a subscription ended
 
@@ -105,29 +231,43 @@ On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the cl
 | `watcher_evicted`         | A demoted watch of yours was stopped at the watcher cap                   | Subscribe again, and keep the session busy                          |
 | `shutdown`                | The server is stopping                                                    | Reconnect; behind a balancer another instance will take you         |
 
-`detail` is a sentence of advice, so a client that does not recognize the reason word can still act on it. A `status` field appears only on `resource_gone`, and it is relayed rather than interpreted: GitLab answers 404 for a resource you may not see, so a 404 here does not mean deleted. The vocabulary is closed and published in the server card's `subscriptions.end_reasons`, which is served in HTTP mode only: on stdio there is no endpoint to read it from, and the four reasons reachable there (`resource_gone`, `lifetime_reached`, `watcher_evicted` and `shutdown`) are documented on this page instead. Treat an unrecognized value as "an ending this client does not know", never as "any ending".
+`detail` is a sentence of advice, so a client that does not recognize the reason word can still act on it. A `status` field appears only on `resource_gone`, and only when the failed read carried an HTTP status; it is relayed rather than interpreted. GitLab answers 404 for a resource you may not see, precisely so that it cannot be told apart from one that does not exist, so a 404 here does not mean deleted. A 401 does not mean the token is dead either: GitLab answers some missing permissions with 401. Only `credential_revoked` says GitLab refused the credential itself, and in HTTP mode it is sent only once GitLab has said so or the credential probe has confirmed it ([Refused calls](/gitlab-mcp-server/operations/http-server/#refused-calls)).
 
-An ending **you** caused carries no reason, because you caused it. Neither does a session-era `resources/subscribe` under `--stateless=false`: it holds no open request, so there is nothing to answer, and terminating the session is the only ending the protocol offers it. Use `subscriptions/listen` if you want the reason.
+The vocabulary is closed and published as `subscriptions.end_reasons` in the enumerating server card at `/.well-known/mcp/server-card.json`, which is served in HTTP mode only (the card at `/server-card` carries no capabilities). On stdio there is no endpoint to read it from, and three of the reasons can reach a client there: `resource_gone`, `lifetime_reached` and `watcher_evicted`. A stdio process that stops answers an open listen with nothing at all, as [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md) records. Treat an unrecognized value as "an ending this client does not know", never as "any ending".
+
+The server sends no `notifications/cancelled` for a listen it ends, although `2026-07-28` asks for one: the Go SDK offers no way to send it for a request the client made ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#application-code-cannot-send-notificationscancelled-for-a-listen-stream)). The result on the listen is what tells a client the stream is over.
+
+An ending **you** caused carries no reason, because you caused it, and the result may never reach you anyway. Neither does a session-era `resources/subscribe` under `--stateless=false`: it holds no open request, so there is nothing to answer, and terminating the session is the only ending the protocol offers it. Such a client sees its standalone SSE stream end and its next request answered as a new session. The `logging` capability would be the one place left to carry an advisory sentence, and this server deliberately does not declare it, because SEP-2577 deprecated it. Use `subscriptions/listen` if you want the reason.
 
 ## Transport notes
 
-- **stdio**: works as-is on both protocol generations.
-- **HTTP, stateless mode (the default)**: the legacy `resources/subscribe` request is refused with an explanatory error — each stateless POST gets its own session that closes with the response, so a subscription it accepted could never be notified. Clients on protocol 2026-07-28 are unaffected: `subscriptions/listen` holds the request open, which stateless mode supports. Legacy subscribers need `--stateless=false`.
-- **Client quirks**: VS Code subscribes to every resource it reads and routes updates into its file-change pipeline; Cursor sends `resources/subscribe` even to servers that advertise `subscribe: false`; the Go SDK client (v1.8.0) fires `subscriptions/listen` without awaiting the response, so it never sees a refusal, which any other client reads as the JSON-RPC error answering the listen, nor the result that ends a subscription.
+- **stdio**: both methods work, on both protocol generations.
+- **HTTP, stateless mode (the default)**: only `subscriptions/listen` works. The legacy `resources/subscribe` is refused with an explanatory error, because each stateless POST gets its own session that closes with the response, so a subscription it accepted could never be notified. `subscriptions/listen` holds its request open, which stateless mode supports.
+- **HTTP, `--stateless=false`**: only `resources/subscribe` works. The deployment does not offer protocol `2026-07-28`, so a request naming it is answered `400` with the revisions it does negotiate ([Protocol revisions this server negotiates](/gitlab-mcp-server/operations/http-server/#protocol-revisions-this-server-negotiates)), and the server card marks `subscriptions/listen` unavailable.
+
+### How do clients behave?
+
+| Client                 | Protocol                | Notes                                                                                                                                                                                                      |
+| ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code                | `2025-11-25`            | Subscribes to every resource it reads, and routes updates into its file-change pipeline rather than into chat                                                                                              |
+| Cursor                 | `2025-11-25` or earlier | Sends `resources/subscribe` even to servers that advertise `subscribe: false`                                                                                                                              |
+| Go SDK client (v1.8.0) | `2026-07-28`            | Sends `subscriptions/listen` without awaiting the response, so it never sees a refusal or the result that ends a subscription, and a second `Subscribe` to a refused URI sends nothing until `Unsubscribe` |
+| Your own integration   | any                     | The `_meta` described above is there for you; the notification alone is enough without it                                                                                                                  |
 
 ## Error codes
 
-A refused legacy `resources/subscribe` carries a deliberate JSON-RPC code — never the accidental `code: 0` a plain error would marshal as:
+A refused legacy `resources/subscribe` carries a deliberate JSON-RPC code, never the accidental `code: 0` a plain error would marshal as:
 
-| Refusal                                                     | Code                                                                      |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| URI deliberately not subscribable                           | `-32602` (invalid params)                                                 |
-| Resource unreadable on the authorization read (401/403/404) | `-32602` — the same code the SDK answers an unknown `resources/read` with |
-| Rate limited, watcher cap full, or server shutting down     | `-32000` (server busy — transient, retry later)                           |
-| Watchers per process at 512                                 | `-32000`, with `server-wide` in the message                               |
-| Transient GitLab failure on the first read                  | `-32603` (internal error)                                                 |
-| `resources/subscribe` on stateless HTTP                     | `-32600` — use `subscriptions/listen` instead                             |
+| Refusal                                                                                          | Code                                                                     | Retry later?                                      |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------- |
+| URI deliberately not subscribable                                                                | `-32602` (invalid params)                                                | No: pick a subscribable URI                       |
+| Resource unreadable on the authorization read (401/403/404)                                      | `-32602`, the same code the SDK answers an unknown `resources/read` with | Only if the resource appears or access is granted |
+| GitLab rate-limited the first read, watcher cap with no evictable watch, or server shutting down | `-32000` (server busy)                                                   | Yes: the condition is transient                   |
+| This server's own rate limit, before any watcher is asked                                        | `-42900`                                                                 | Yes: after a short backoff                        |
+| Watchers per process at 512                                                                      | `-32000`, with `server-wide` in the message                              | Yes: the condition is transient                   |
+| Transient GitLab failure on the first read                                                       | `-32603` (internal error)                                                | Yes                                               |
+| `resources/subscribe` on stateless HTTP                                                          | `-32600` (invalid request for this session state)                        | No: use `subscriptions/listen`                    |
 
-On protocol 2026-07-28 a refused `subscriptions/listen` carries the same codes, as the JSON-RPC error answering the listen itself, sent before any acknowledgment; the last row never applies to one, since stateless HTTP serves a listen. A listen also has refusals of its own: the ceilings on open listen streams, `GITLAB_MCP_MAX_LISTEN_STREAMS` per credential (64 by default) and 512 per process, each answered `-32000`. This server's own per-credential rate limit (`--rate-limit-rps` in HTTP mode, `GITLAB_MCP_RATE_LIMIT_RPS` on stdio), which is not the GitLab rate limit the table means, refuses either method earlier still, with `-42900`. The Go SDK client (v1.8.0) sees none of them on a listen, and a second `Subscribe` it makes to a refused URI sends nothing until `Unsubscribe`.
+The message beside the code carries GitLab's failure detail verbatim; the code alone says whether a retry can succeed. On protocol 2026-07-28 a refused `subscriptions/listen` carries the same codes, as the JSON-RPC error answering the listen itself, sent before any acknowledgment; the last row never applies to one, since stateless HTTP serves a listen. A listen also has refusals of its own: the ceilings on open listen streams, `GITLAB_MCP_MAX_LISTEN_STREAMS` per credential (64 by default) and 512 per process, each answered `-32000` and transient. This server's own per-credential rate limit (`--rate-limit-rps` in HTTP mode, `GITLAB_MCP_RATE_LIMIT_RPS` on stdio), which is not GitLab's, refuses either method earlier still, with the `-42900` of the table, before a watcher is asked. The Go SDK client (v1.8.0) sees none of them on a listen, and a second `Subscribe` it makes to a refused URI sends nothing until `Unsubscribe`.
 
 <FAQ />

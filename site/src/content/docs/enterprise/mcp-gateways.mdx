@@ -4,7 +4,7 @@ description: "What an MCP gateway in front of this server changes: catalog valid
 datePublished: "2026-09-06"
 faq:
   - q: "Will a gateway reject this server's catalog?"
-    a: "Nothing in it should trip a validator. Everything the server lists on any surface (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) is pure ASCII prose with no semicolons, descriptions, titles and schema-embedded descriptions included, and `make check-gateway-chars` gates that in CI. For a rule of your own, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out without touching names, URIs, patterns, constants, enum values or tool-call payloads."
+    a: "Nothing in it should trip a validator. Everything the server lists on any surface (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) is pure ASCII prose with no semicolons, descriptions, titles and schema-embedded descriptions included, and a check in the project's own build fails any change that would serve one. For a rule of your own, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out without touching names, URIs, patterns, constants, enum values or tool-call payloads."
   - q: "Should the gateway hold one credential for everyone?"
     a: "Only if you accept what it costs. A gateway holding one shared credential collapses the whole population onto a single pool entry, a single rate-limit bucket and a single GitLab identity: every action is attributed to that one user in GitLab's audit log, and `--rate-limit-rps` becomes a limit for the entire deployment rather than per caller. Forwarding the caller's own credential is the only arrangement that preserves per-user identity, tiering and rate limiting."
   - q: "Do my tool names survive the gateway?"
@@ -27,7 +27,7 @@ semicolon.
 Everything this server lists (`tools/list` on any surface, `prompts/list`,
 `resources/list`, `resources/templates/list`) is pure ASCII prose with no
 semicolons, descriptions, titles and schema-embedded descriptions included.
-`make check-gateway-chars` gates it in CI.
+A check in the project's own build fails any change that would serve one.
 
 For the next rule, which is yours and not ours,
 `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` rewrites listed text on the way out:

@@ -6,7 +6,7 @@ faq:
   - q: "¿Cuál debe ser la clave de afinidad?"
     a: "Un digest con sal de la credencial, nunca la credencial. Una clave de afinidad acaba en la memoria del balanceador, en su registro de acceso si el formato nombra la variable, y en la selección de upstream que gobierna; un token bearer en bruto en cualquiera de esos sitios es una fuga de credencial con pasos extra. La sal es lo que hace el trabajo de seguridad: sin ella la clave es una huella del token que cualquiera con un token candidato podría confirmar."
   - q: "¿Es seguro que el balanceador reintente una petición fallida?"
-    a: "Solo cuando se puede demostrar que la petición nunca llegó a una instancia. Un `tools/call` de MCP puede crear una incidencia, fusionar una petición o borrar una rama, así que un balanceador que reintenta un POST ya entregado convierte una llamada mutadora en dos y ninguno de los dos lados puede notarlo. En nginx eso significa `proxy_next_upstream error timeout` y nada más; en HAProxy, `option redispatch` desactivado y `retry-on` en su valor por defecto."
+    a: "Solo cuando se puede demostrar que la petición nunca llegó a una instancia. Un `tools/call` de MCP puede crear un issue, fusionar una merge request o borrar una rama, así que un balanceador que reintenta un POST ya entregado convierte una llamada mutadora en dos y ninguno de los dos lados puede notarlo. En nginx eso significa `proxy_next_upstream error timeout` y nada más; en HAProxy, `option redispatch` desactivado y `retry-on` en su valor por defecto."
   - q: "¿Por qué mi ventana de drenaje no parece hacer nada en nginx?"
     a: "nginx open source no tiene comprobación activa de salud. `max_fails` y `fail_timeout` son pasivos: una instancia sale de rotación solo después de que fallen peticiones reales contra ella, así que las peticiones que descubren el fallo son las que fallaron. Nada consulta `/health`, así que nadie observa el cambio a `503 draining`. Usa un balanceador que consulte, o quita la instancia del upstream y recarga antes de señalarla."
 ---
@@ -29,10 +29,15 @@ licencia e identidad por cliente en lugar de uno por instancia, y una entrada de
 pool que se mantiene caliente en vez de reconstruirse en cada instancia por turno
 y desalojarse de cada una por turno.
 
-Dos cosas no son preferencias. Una sesión con estado (`--stateless=false`) vive
+Tres cosas no son preferencias. Una sesión con estado (`--stateless=false`) vive
 en el proceso que acuñó su `Mcp-Session-Id`, y otra instancia responde a ese
 identificador con `404`. Las suscripciones a recursos son watchers que mantiene
-un proceso. Si usas cualquiera de las dos, la afinidad es un requisito.
+un proceso. Y las rondas de una
+[elicitación](/gitlab-mcp-server/es/capabilities/elicitation/#cómo-se-protege-la-entrada)
+de varias idas y vueltas (un flujo guiado de creación, o una confirmación antes
+de un cambio destructivo) llevan un estado firmado con una clave que creó el
+proceso que preguntó, así que otra instancia rechaza la respuesta. Si usas
+cualquiera de las tres, la afinidad es un requisito.
 
 ## Hash consistente sobre un conjunto de instancias cambiante
 
@@ -150,7 +155,7 @@ HAProxy calcula el digest en su propia configuración, así que no hay que confi
 en nadie para mantener la credencial en bruto fuera de una clave de enrutado, y
 consulta `/health`, que es lo que hace que la ventana de drenaje signifique algo.
 
-```haproxy
+```text
 global
   daemon
 defaults
@@ -193,7 +198,7 @@ servidor anterior a la 3.0.0.
 
 `retries 1` sin `option redispatch` es la mitad deliberada: HAProxy reintenta un
 fallo de conexión y nunca una petición que ya entregó, así que un `tools/call`
-que creó una incidencia y luego perdió su respuesta no se repite en otra
+que creó un issue y luego perdió su respuesta no se repite en otra
 instancia.
 
 ## Expulsión por salud y ventana de drenaje
@@ -217,7 +222,7 @@ listener que mantener abierto.
 
 ## Reintentos que nunca repiten una petición entregada
 
-Un `tools/call` de MCP puede crear una incidencia, fusionar una petición o
+Un `tools/call` de MCP puede crear un issue, fusionar una merge request o
 borrar una rama. Un balanceador que reintenta un POST ya entregado en una segunda
 instancia convierte una llamada mutadora en dos, y ni el cliente ni el servidor
 pueden notarlo.
@@ -241,8 +246,9 @@ ve el balanceador viene de la pasarela y la credencial puede haberse sustituido.
   pasarela termina la autenticación y emite su propia credencial aguas abajo, haz
   hash de esa; si reenvía la original, de la original; si no hace ninguna de las
   dos, no tienes clave y el round robin es la opción honesta.
-- **Hay que decirle al limitador cuál es la dirección real**, o cargará los
-  fallos de todos los clientes a la pasarela. Define `--trusted-proxy-header` con
+- **Hay que decirles a los presupuestos de autenticación cuál es la dirección
+  real**, o cargarán los fallos de todos los clientes a la pasarela. El limitador
+  de tasa no necesita ninguna dirección, porque se indexa por credencial. Define `--trusted-proxy-header` con
   la cabecera que ponga tu pasarela y `--trusted-proxies` con sus direcciones; la
   cabecera solo se cree en una conexión desde una dirección de la lista, y cada
   flag se rechaza sin el otro. Para `X-Forwarded-For` el valor se lee desde la

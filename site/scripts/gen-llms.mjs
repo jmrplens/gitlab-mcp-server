@@ -168,6 +168,15 @@ const SECTIONS = [
 		],
 	},
 	{
+		label: "Reference",
+		labelEs: "Referencia",
+		slugs: [
+			"reference/cli",
+			"reference/environment",
+			"reference/output-format",
+		],
+	},
+	{
 		label: "Operations",
 		labelEs: "Operaciones",
 		slugs: [
@@ -180,7 +189,6 @@ const SECTIONS = [
 			"operations/remote-deployment",
 			"operations/error-handling",
 			"operations/ci-cd",
-			"operations/docker-testing",
 			"operations/troubleshooting",
 		],
 	},

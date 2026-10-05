@@ -45,8 +45,16 @@ const report = (file, msg) =>
 	);
 
 let pages = 0;
+let redirects = 0;
 for (const file of htmlFiles(DIST)) {
 	const html = readFileSync(file, "utf8");
+	// The page Astro writes for an entry of `redirects` in astro.config.mjs
+	// carries no content, no landmarks and no outline: it only sends the reader
+	// on. Holding it to a content page's structure would fail every redirect.
+	if (/<meta http-equiv="refresh"/.test(html)) {
+		redirects++;
+		continue;
+	}
 	pages++;
 
 	for (const [tag, expected] of [
@@ -111,5 +119,5 @@ if (problems.length) {
 	process.exit(1);
 }
 console.log(
-	`[check-headings-labels] OK: ${pages} pages, headings and accessible names clean.`,
+	`[check-headings-labels] OK: ${pages} pages, headings and accessible names clean (${redirects} redirect page(s) skipped).`,
 );

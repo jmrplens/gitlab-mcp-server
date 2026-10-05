@@ -31,7 +31,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#action-catalog",
             "name": "Canonical action catalog",
-            "description": "The single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification and licensing tier. Every visible tool surface is generated from this catalog, which is why behaviour and safety are identical no matter which surface a client uses.",
+            "description": "The single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification and licensing tier. Every visible tool surface is generated from this catalog, which is why every surface applies the same classification, filters and formatting. Only how a destructive call is confirmed differs: the default dynamic surface always needs confirm: true.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -66,14 +66,14 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#safe-mode",
             "name": "Safe mode",
-            "description": "A deployment setting, GITLAB_MCP_SAFE_MODE=true, that intercepts every mutating tool call and returns a JSON preview of what would happen instead of performing it. Distinct from read-only mode, which removes mutating operations from the catalog entirely rather than previewing them.",
+            "description": "A deployment setting, GITLAB_MCP_SAFE_MODE=true, that intercepts every mutating action and returns a preview card naming the action, with the arguments it would have sent in a JSON block, instead of performing it. Distinct from read-only mode, which removes mutating operations from the catalog entirely rather than previewing them.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#read-only-mode",
             "name": "Read-only mode",
-            "description": "A deployment setting, GITLAB_MCP_READ_ONLY=true, that omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list, which is a stronger guarantee than declining the call at execution time.",
+            "description": "A deployment setting, GITLAB_MCP_READ_ONLY=true, that removes every mutating action from the catalog. On the dynamic and meta surfaces the action is gone from the tool that served it, and on the individual surface its tool is not registered; asking for one is refused before anything reaches GitLab.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -115,7 +115,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#http-transport",
             "name": "HTTP transport",
-            "description": "A multi-user mode in which one process serves many clients over the network, each authenticating with its own GitLab token. Sessions are isolated in a bounded LRU pool keyed by a hash of token and GitLab URL, so no state is shared between clients.",
+            "description": "A multi-user mode in which one process serves many clients over the network, each authenticating with its own GitLab token. Each credential's GitLab client, rate-limit bucket and watchers are isolated in its own entry of a bounded LRU pool keyed by a hash of token and GitLab URL; the tool catalog is shared, and nothing is written to disk.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -149,7 +149,7 @@ All three are projections of the same [action catalog](#canonical-action-catalog
 
 ## Canonical action catalog
 
-The **canonical action catalog** is the single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification, and licensing tier. Every visible tool surface is generated from this catalog, which is why behaviour and safety are identical no matter which surface a client uses.
+The **canonical action catalog** is the single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification, and licensing tier. Every visible tool surface is generated from this catalog, which is why every surface applies the same classification, filters and formatting. Only how a destructive call is confirmed differs: the default dynamic surface always needs `confirm: true` ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 ## Canonical action ID
 
@@ -169,11 +169,11 @@ A **meta-tool** is a domain-level MCP tool that groups related operations behind
 
 ## Safe mode
 
-**Safe mode** (`GITLAB_MCP_SAFE_MODE=true`) intercepts every mutating tool call and returns a JSON preview of what would happen, instead of performing it. It is distinct from read-only mode, which removes the operations altogether rather than previewing them.
+**Safe mode** (`GITLAB_MCP_SAFE_MODE=true`) intercepts every mutating action and returns a preview card naming the action, with the arguments it would have sent in a JSON block, instead of performing it. It is distinct from read-only mode, which removes the operations altogether rather than previewing them.
 
 ## Read-only mode
 
-**Read-only mode** (`GITLAB_MCP_READ_ONLY=true`) omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list — a stronger guarantee than declining the call at execution time.
+**Read-only mode** (`GITLAB_MCP_READ_ONLY=true`) removes every mutating action from the catalog. On the dynamic and meta surfaces the action is gone from the tool that served it, and on the individual surface its tool is not registered; asking for one is refused before anything reaches GitLab.
 
 ## Elicitation
 
@@ -197,7 +197,7 @@ A **destructive action** is one the catalog classifies as irreversible or data-l
 
 ## HTTP transport
 
-**HTTP transport** is the multi-user mode: one process serves many clients over the network, each authenticating with its own GitLab token. Sessions are isolated in a bounded LRU pool keyed by a hash of token and GitLab URL, so no state is shared between clients. See [HTTP server mode](/gitlab-mcp-server/operations/http-server/).
+**HTTP transport** is the multi-user mode: one process serves many clients over the network, each authenticating with its own GitLab token. Each credential's GitLab client, rate-limit bucket and watchers are isolated in its own entry of a bounded LRU pool keyed by a hash of token and GitLab URL; the tool catalog is shared, and nothing is written to disk. See [HTTP server mode](/gitlab-mcp-server/operations/http-server/).
 
 ## Tool schema tokens
 

@@ -4,7 +4,7 @@ description: "Qué cambia una pasarela MCP delante de este servidor: validación
 datePublished: "2026-09-06"
 faq:
   - q: "¿Rechazará una pasarela el catálogo de este servidor?"
-    a: "No debería haber nada en él que haga saltar un validador. Todo lo que el servidor lista en cualquier superficie (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) es prosa ASCII pura sin punto y coma, incluidas descripciones, títulos y las descripciones incrustadas en los esquemas, y `make check-gateway-chars` lo verifica en la integración continua. Para una regla propia, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` reescribe el texto listado a la salida sin tocar nombres, URI, patrones, constantes, valores de enumeración ni cargas de llamadas a herramientas."
+    a: "No debería haber nada en él que haga saltar un validador. Todo lo que el servidor lista en cualquier superficie (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`) es prosa ASCII pura sin punto y coma, incluidas descripciones, títulos y las descripciones incrustadas en los esquemas, y una comprobación de la propia compilación del proyecto hace fallar cualquier cambio que sirviera uno. Para una regla propia, `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` reescribe el texto listado a la salida sin tocar nombres, URI, patrones, constantes, valores de enumeración ni cargas de llamadas a herramientas."
   - q: "¿Debe la pasarela tener una sola credencial para todo el mundo?"
     a: "Solo si aceptas lo que cuesta. Una pasarela con una única credencial compartida colapsa a toda la población en una sola entrada de pool, un solo cubo de límite y una sola identidad de GitLab: cada acción se atribuye a ese usuario en el registro de auditoría de GitLab, y `--rate-limit-rps` pasa a ser un límite para todo el despliegue en lugar de por cliente. Reenviar la credencial de quien llama es la única disposición que conserva identidad, tier y límite de peticiones por usuario."
   - q: "¿Sobreviven mis nombres de herramienta a la pasarela?"
@@ -27,8 +27,8 @@ descripción contuviera un punto y coma.
 Todo lo que este servidor lista (`tools/list` en cualquier superficie,
 `prompts/list`, `resources/list`, `resources/templates/list`) es prosa ASCII
 pura sin punto y coma, incluidas descripciones, títulos y las descripciones
-incrustadas en los esquemas. `make check-gateway-chars` lo verifica en la
-integración continua.
+incrustadas en los esquemas. Una comprobación de la propia compilación del
+proyecto hace fallar cualquier cambio que sirviera uno.
 
 Para la siguiente regla, que es tuya y no nuestra,
 `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` reescribe el texto listado a la salida:

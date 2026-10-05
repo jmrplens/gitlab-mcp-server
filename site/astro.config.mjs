@@ -381,6 +381,16 @@ const jsonLd = JSON.stringify({
 export default defineConfig({
 	site: siteUrl,
 	base: basePath,
+	// A page that moved out of the site keeps its published URL answering, so a
+	// bookmark or an inbound link lands where the content went instead of on 404.
+	// The Docker end-to-end guide was contributor material and lives beside the
+	// suite it describes.
+	redirects: {
+		"/operations/docker-testing":
+			"https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md",
+		"/es/operations/docker-testing":
+			"https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md",
+	},
 	experimental: {
 		clientPrerender: true,
 		contentIntellisense: true,
@@ -756,6 +766,27 @@ export default defineConfig({
 					],
 				},
 				{
+					label: "Reference",
+					translations: { es: "Referencia" },
+					items: [
+						{
+							slug: "reference/cli",
+							label: "Command line",
+							translations: { es: "Línea de comandos" },
+						},
+						{
+							slug: "reference/environment",
+							label: "Environment variables",
+							translations: { es: "Variables de entorno" },
+						},
+						{
+							slug: "reference/output-format",
+							label: "Output format",
+							translations: { es: "Formato de salida" },
+						},
+					],
+				},
+				{
 					label: "Operations",
 					translations: { es: "Operaciones" },
 					items: [
@@ -797,17 +828,12 @@ export default defineConfig({
 						{
 							slug: "operations/error-handling",
 							label: "Error Handling",
-							translations: { es: "Errores y formato" },
+							translations: { es: "Gestión de errores" },
 						},
 						{
 							slug: "operations/ci-cd",
 							label: "CI/CD Usage",
 							translations: { es: "Uso en CI/CD" },
-						},
-						{
-							slug: "operations/docker-testing",
-							label: "Docker E2E Testing",
-							translations: { es: "Pruebas E2E con Docker" },
 						},
 						{
 							slug: "operations/troubleshooting",

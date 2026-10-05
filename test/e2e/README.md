@@ -4,13 +4,13 @@ E2E tests validate the full MCP server against a real GitLab instance by driving
 
 There are five modules, answering different questions:
 
-| Module               | Build tag      | Needs GitLab | What it covers                                                                       |
-| -------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
+| Module               | Build tag      | Needs GitLab | What it covers                                                                                                                                |
+| -------------------- | -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test/e2e/gitlab`    | `e2e`          | yes          | Tool behaviour: the real binary over stdio, one package per runtime (`common`, `ce`, `ee`), coverage recorded from what the server dispatched |
-| `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy  |
-| `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration  |
-| `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                  |
-| `test/e2e/collector` | `collectore2e` | no           | That a real OpenTelemetry Collector accepts and parses what this server exports (Docker) |
+| `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy                                                          |
+| `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration                                                          |
+| `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                                                                          |
+| `test/e2e/collector` | `collectore2e` | no           | That a real OpenTelemetry Collector accepts and parses what this server exports (Docker)                                                      |
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 
@@ -312,15 +312,45 @@ Tests that talk to external services read the repository root `.env` (loaded
 as a fallback in Docker mode; `.env.docker` values keep precedence) and skip
 when unset:
 
-| Variable | Used by |
-| --- | --- |
-| `GH_TOKEN` | `import_github` / `import_cancel_github` / `import_gists` (a repository owned by the token's user is resolved via the GitHub API) |
-| `BITBUCKET_USERNAME`, `BITBUCKET_API_TOKEN`, `BITBUCKET_EMAIL`, `BITBUCKET_REPO_PATH` | Bitbucket Cloud imports (Atlassian API token created **with Bitbucket scopes**, paired with the account email) |
-| `BITBUCKET_SERVER_URL`, `BITBUCKET_SERVER_USERNAME`, `BITBUCKET_SERVER_TOKEN`, `BITBUCKET_SERVER_PROJECT_KEY`, `BITBUCKET_SERVER_REPO_SLUG` | `import_bitbucket_server` against a self-hosted Bitbucket Server (auto-provisioned by the Docker fixture; set manually only for self-hosted mode) |
-| `E2E_DB_MIGRATION_VERSION` | The mutating `db_migration_mark` path (auto-seeded by setup-gitlab.sh in Docker mode; set manually only when debugging a genuinely stuck migration on a self-hosted instance — the error path always runs) |
+| Variable                                                                                                                                    | Used by                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GH_TOKEN`                                                                                                                                  | `import_github` / `import_cancel_github` / `import_gists` (a repository owned by the token's user is resolved via the GitHub API)                                                                         |
+| `BITBUCKET_USERNAME`, `BITBUCKET_API_TOKEN`, `BITBUCKET_EMAIL`, `BITBUCKET_REPO_PATH`                                                       | Bitbucket Cloud imports (Atlassian API token created **with Bitbucket scopes**, paired with the account email)                                                                                            |
+| `BITBUCKET_SERVER_URL`, `BITBUCKET_SERVER_USERNAME`, `BITBUCKET_SERVER_TOKEN`, `BITBUCKET_SERVER_PROJECT_KEY`, `BITBUCKET_SERVER_REPO_SLUG` | `import_bitbucket_server` against a self-hosted Bitbucket Server (auto-provisioned by the Docker fixture; set manually only for self-hosted mode)                                                         |
+| `E2E_DB_MIGRATION_VERSION`                                                                                                                  | The mutating `db_migration_mark` path (auto-seeded by setup-gitlab.sh in Docker mode; set manually only when debugging a genuinely stuck migration on a self-hosted instance; the error path always runs) |
 
 Imported projects are registered for permanent deletion in the per-test
 resource ledger.
+
+### When to run a Docker run
+
+Run one when a change touches tool registration, catalog projection or the
+schemas a surface serves, or the pipeline, job, webhook, custom emoji or
+mirror behaviour that only a runner and the fixture service exercise. A change
+to a documentation page, or to a unit test against mocked GitLab responses,
+does not need one. It is slower than the unit suite, and it is the check to
+reach for in an architecture migration, because it drives the real GitLab API,
+the MCP transport and every tool surface together.
+
+### Reports, keeping the stack, and what to check
+
+`run-docker-e2e.sh` writes three files per run under `dist/e2e-reports/`
+(`E2E_REPORT_DIR`), named after the runtime unless `E2E_REPORT_NAME` says
+otherwise: `e2e-<runtime>-junit.xml`, the `go test -json` stream
+`e2e-<runtime>-log.json` that the skip gate and `cmd/audit_e2e_coverage` read,
+and the console output `e2e-<runtime>-output.txt`, beside the copy of GitLab's
+exceptions log. The stack is torn down with its volumes whatever the run
+ended with; `E2E_KEEP_STACK=true` leaves it up, so GitLab's data and the
+runner's logs can be read after a failure. Remove it afterwards with
+`docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v`.
+
+| Symptom                                             | What to check                                                                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GitLab never becomes ready                          | The memory and CPU Docker gives the containers (see [Docker Mode](#docker-mode))                                                 |
+| The `ee` package refuses the instance as unlicensed | `ENTERPRISE_LICENSE` or the cached `test/e2e/.enterprise-license`; for a manual setup, the EE image and `GITLAB_ENTERPRISE=true` |
+| Pipeline or job scenarios fail or skip              | The output of `register-runner.sh` and the values it left in `test/e2e/.env.docker`                                              |
+| Webhook, custom emoji or mirror scenarios fail      | The health of the `e2e-fixture` container and the compose network URLs in `test/e2e/.env.docker`                                 |
+| A rerun meets data from an earlier one              | The earlier stack was not removed with `down -v`: remove it and start again                                                      |
 
 ## Architecture
 

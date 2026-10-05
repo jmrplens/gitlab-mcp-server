@@ -6,13 +6,13 @@ faq:
   - q: "What is the difference between resources, prompts, and tools?"
     a: "GitLab MCP Server exposes three MCP primitives. **Tools** perform actions, such as creating an issue or merging a request. **Resources** provide read-only context data — a project's metadata or members, for example — that a client can request at any time without invoking a tool, and 26 resource kinds (single objects plus three single-parent lists) can also be [watched for changes](/gitlab-mcp-server/capabilities/subscriptions/). **Prompts** are reusable templates that collect GitLab data and return structured context to guide a workflow. In short, resources and prompts add context, while tools change state."
   - q: "What is the difference between a static resource and a resource template?"
-    a: "A **static resource** is a fixed URI that always points to the same thing, such as `gitlab://user/current`. A **resource template** contains placeholders like `{project_id}` or `{group_id}` that the client fills in at request time to read a specific project, group, issue, or merge request. MCP lists fixed resources through `resources/list` and templates through `resources/templates/list`, so a client that inspects only `resources/list` sees the {{resources}} resources as 8 fixed URIs plus 37 templates."
+    a: "A **static resource** is a fixed URI that always points to the same thing, such as `gitlab://user/current`. A **resource template** contains placeholders like `{project_id}` or `{group_id}` that the client fills in at request time to read a specific project, group, issue, or merge request. MCP lists fixed resources through `resources/list` and templates through `resources/templates/list`, so of the {{resources}} resources a client that inspects only `resources/list` sees the 8 fixed URIs, and finds the other 37, the templates, only through `resources/templates/list`."
   - q: "Can I disable resources and prompts?"
     a: "Yes. The `GITLAB_MCP_CAPABILITY_SURFACE` setting controls which capabilities are registered. The default `full` registers resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest. Setting `GITLAB_MCP_CAPABILITY_SURFACE=minimal` keeps only the `gitlab://tools` manifest — useful when a client does not consume resources or prompts and you want a smaller capability surface."
   - q: "How many resources and prompts are available?"
     a: "The server exposes **{{resources}} resources** (8 fixed URIs plus 37 URI templates) and **{{prompts}} prompt templates** organized into categories such as core MR analysis, cross-project dashboards, team reports, analytics, and audits. The exact counts are generated from the server's live capability registration, so this page stays in sync with the running server."
   - q: "How do I read an MCP resource from GitLab MCP Server?"
-    a: "A client reads a resource with the MCP resources/read method, passing the resource URI in the params. For a static resource the URI is used as-is, for example gitlab://user/current. For a template, the client substitutes the actual identifier or URL-encoded path first, for example gitlab://project/my-group%2Fmy-project/issues. The server returns the resource content as structured JSON."
+    a: "A client reads a resource with the MCP resources/read method, passing the resource URI in the params. For a static resource the URI is used as-is, for example gitlab://user/current. For a template, the client substitutes the actual identifier or URL-encoded path first, for example gitlab://project/my-group%2Fmy-project/issues. The server returns the content as JSON, or as Markdown for the five workflow guides."
 ---
 
 import stats from "../../../data/stats.json";
@@ -30,19 +30,21 @@ The server exposes **{stats.resources} resources** across several categories:
 MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 8 fixed URIs: current user, groups, the tool manifest, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
 :::
 
+The GitLab data resources and the two tool manifest resources return `application/json`; the five workflow guides return `text/markdown`. The **Name** column is the name a resource is listed under in `resources/list` or `resources/templates/list`, and each description below says what the server's handler returns.
+
 ### Static resources (3)
 
-| Resource                | Description                                                               |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `gitlab://user/current` | Current authenticated user profile (username, email, state, admin status) |
-| `gitlab://groups`       | All GitLab groups accessible to the authenticated user                    |
-| `gitlab://tools`        | Surface-aware manifest of visible tools and executable entries            |
+| Resource                | Name            | Description                                                                                                                                |
+| ----------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab://user/current` | `current_user`  | The authenticated user's profile: username, display name, email, state (active/blocked), admin status and web URL                          |
+| `gitlab://groups`       | `groups`        | Groups the authenticated user can access, up to one page (100): each group's ID, name, full path, description, visibility and web URL      |
+| `gitlab://tools`        | `tool_manifest` | Surface-aware manifest of the tools and executable actions this server instance offers; `gitlab://tools/{id}` gives one entry's call shape |
 
 ### Tool manifest resource template (1)
 
-| Resource              | Description                                                              |
-| --------------------- | ------------------------------------------------------------------------ |
-| `gitlab://tools/{id}` | Accepted call shape and input schema for one entry from `gitlab://tools` |
+| Resource              | Name          | Description                                                              |
+| --------------------- | ------------- | ------------------------------------------------------------------------ |
+| `gitlab://tools/{id}` | `tool_detail` | Accepted call shape and input schema for one entry from `gitlab://tools` |
 
 Use the tool manifest resources when a client needs the exact parameter shape for an entry on any surface without expanding every schema in `tools/list`: canonical `domain.action` IDs on the default dynamic surface, `gitlab_<domain>.<action>` entries with `GITLAB_MCP_TOOL_SURFACE=meta`, and tool names with `GITLAB_MCP_TOOL_SURFACE=individual`.
 
@@ -52,84 +54,179 @@ Use the tool manifest resources when a client needs the exact parameter shape fo
 
 For example, `gitlab://tools/merge_request.create` returns the parameter schema and call shape for `merge_request.create` on the default surface; with `GITLAB_MCP_TOOL_SURFACE=meta` the same action is `gitlab://tools/gitlab_merge_request.create`. These manifest resources are available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal`, regardless of `GITLAB_MCP_META_PARAM_SCHEMA` mode. `gitlab_find_action` returns the same schema inline on the dynamic surface, with ranked discovery on top.
 
+The canonical action ID resolves on **every** surface, not only on the dynamic one where it is the entry's key: `gitlab://tools/project.get` also answers with `GITLAB_MCP_TOOL_SURFACE=meta` and with `GITLAB_MCP_TOOL_SURFACE=individual`, and the entry it returns names the call that surface really takes (`gitlab_project.get` on meta, the tool `gitlab_project_get` on individual). An ID taken from a hint, a cross-link or this documentation can therefore be looked up whatever surface is served.
+
+#### What an entry's detail carries
+
+| Field                                       | What it holds                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `kind`, `tool`, `action`              | The entry's key on this surface; its kind (`dynamic_action`, `meta_action`, `individual_tool` or `visible_tool`); the tool to call; and, on the dynamic and meta surfaces, the action to name                                                                                                                                       |
+| `title`, `description`, `domain`            | What the entry does and the catalog domain it belongs to                                                                                                                                                                                                                                                                            |
+| `destructive`, `read_only`                  | Whether the action is destructive, and whether it only reads                                                                                                                                                                                                                                                                        |
+| `required_params`, `required_params_any_of` | The parameters every call needs, each with its JSON Schema type, and the alternative groups of which a call must satisfy at least one                                                                                                                                                                                               |
+| `alias_of`                                  | The primary entry, when this ID is a deliberate alias of another action kept for discovery                                                                                                                                                                                                                                          |
+| `call`                                      | The tool to call and where each part goes: on dynamic the action in `action`, the parameters in `params` and the confirmation in a top-level `confirm`; on meta the action in `action`, and the parameters and the `confirm` flag both in `params`; on individual the parameters are the tool's own arguments, `confirm` among them |
+| `input_schema`                              | The JSON Schema of the parameters the entry accepts                                                                                                                                                                                                                                                                                 |
+| `fine_grained`                              | What a fine-grained personal access token needs to run the action (below)                                                                                                                                                                                                                                                           |
+| `withheld`                                  | Why a fine-grained session may not run the action, only for such a session (below)                                                                                                                                                                                                                                                  |
+
+`call` names a confirmation location only for a destructive entry. On the individual surface the arguments go to the tool directly, with no `action` or `params` wrapper.
+
+#### The `fine_grained` block
+
+The detail of a catalog action carries a `fine_grained` block in every session, classic tokens included, since the detail is where a model looks up what an action needs. It says what a fine-grained personal access token needs to run the action, as the GitLab release named in `gitlab_version` declares it, in the words GitLab's token creation page uses. A classic token is not judged by it: its scopes decide what it can do.
+
+| Field                 | Meaning                                                                                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab_version`      | The GitLab release the requirement was recorded at                                                                                                                                                                                                           |
+| `any_of`              | The ways of running the action, any one of which is enough, since the action sends a different request depending on its input. Each way lists its `needs`: the permissions GitLab checks, every permission of one need held at one of the boundaries in `at` |
+| `not_judged_by_grant` | Set on a way that sends a request GitLab leaves to the token's other properties rather than to its grant                                                                                                                                                     |
+| `denied_ways`         | The ways no fine-grained token runs at that release, each with the `cause`, `element` and `effect` of its denial: the action runs, except with an input that makes it send one of those requests                                                             |
+| `always_empty`        | Parts of the answer GitLab serves empty to every fine-grained token, each written as the GraphQL selection that reaches it from the field the action asks for                                                                                                |
+| `empty_without`       | Parts of the answer GitLab serves empty unless the grant also holds what each entry's `needs` names, the part written in `selection`                                                                                                                         |
+| `denied`              | Present instead of the rest when no fine-grained token can run the action at that release: the `cause`, the `element` that decides it (a route, a GraphQL type or a mutation) and the `effect` GitLab has on the request                                     |
+
+The block is derived from the action's handlers and from a record of what a booted GitLab declares, by `cmd/gen_action_grants`, and it is the same table that decides what a [fine-grained session is shown](/gitlab-mcp-server/operations/fine-grained-tokens/#what-a-session-is-shown). The standalone tools that the meta and individual surfaces register beside their catalog, the guided flows among them, carry the block of the action each one is; an entry that names no action, such as the dynamic surface's two tools or a meta dispatcher, carries none.
+
+#### A withheld action
+
+A session on a fine-grained token reads both manifest resources narrowed to what it may run. `gitlab://tools` leaves out the entries and visible tools its `tools/list` leaves out. `gitlab://tools/{id}` of an action left out is served rather than answered not found, with a `withheld` block carrying the `cause` (`not-granted` when the token's grant does not reach the action, or one of the denial causes when no fine-grained token does) and the `message` a call to the action is refused with. When the action is left out of the listing but a call to it is still passed to GitLab (a read GitLab serves on a public project or group, or, on the prerelease after the recorded release, a call not withheld from every fine-grained token), the message says so. On the meta surface the detail of a tool every action of which is withheld carries the block too, with no cause of its own and an `actions` list giving each action's `id`, `cause` and `message`, since the actions of one group need not share a reason. A classic token's reads are never narrowed. [Reading a withheld answer](/gitlab-mcp-server/operations/fine-grained-tokens/#reading-a-withheld-answer) quotes both refusal texts.
+
 ### Project resource templates (23)
 
-| Resource                                                     | Description                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}`                              | Project metadata (name, namespace, visibility, default branch)                     |
-| `gitlab://project/{project_id}/members`                      | Project members with access levels (guest, reporter, developer, maintainer, owner) |
-| `gitlab://project/{project_id}/labels`                       | Project labels with colors, descriptions, and issue/MR counts                      |
-| `gitlab://project/{project_id}/milestones`                   | Project milestones with state, due dates, and web URLs                             |
-| `gitlab://project/{project_id}/branches`                     | Branches with protection status, merge status, and default flag                    |
-| `gitlab://project/{project_id}/branch/{branch}`              | Single branch by name                                                              |
-| `gitlab://project/{project_id}/issues`                       | Open issues with labels, assignees, author, and creation date                      |
-| `gitlab://project/{project_id}/releases`                     | All releases with tag names, descriptions, and dates                               |
-| `gitlab://project/{project_id}/release/{tag_name}`           | Single release by tag                                                              |
-| `gitlab://project/{project_id}/tags`                         | Repository tags with messages, commit SHAs, and protection status                  |
-| `gitlab://project/{project_id}/tag/{tag_name}`               | Single tag by name                                                                 |
-| `gitlab://project/{project_id}/commit/{sha}`                 | Single commit by SHA (stats, message, author)                                      |
-| `gitlab://project/{project_id}/file/{ref}/{+path}`           | File contents at a ref (branch, tag, or SHA)                                       |
-| `gitlab://project/{project_id}/wiki/{slug}`                  | Wiki page by slug                                                                  |
-| `gitlab://project/{project_id}/label/{label_id}`             | Single project label                                                               |
-| `gitlab://project/{project_id}/milestone/{milestone_iid}`    | Single project milestone                                                           |
-| `gitlab://project/{project_id}/board/{board_id}`             | Single issue board                                                                 |
-| `gitlab://project/{project_id}/deployment/{deployment_id}`   | Single deployment                                                                  |
-| `gitlab://project/{project_id}/environment/{environment_id}` | Single environment                                                                 |
-| `gitlab://project/{project_id}/job/{job_id}`                 | Single CI/CD job                                                                   |
-| `gitlab://project/{project_id}/feature_flag/{name}`          | Single feature flag                                                                |
-| `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`   | Single deploy key                                                                  |
-| `gitlab://project/{project_id}/snippet/{snippet_id}`         | Project-scoped snippet                                                             |
+| Resource                                                     | Name                 | Description                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}`                              | `project`            | Project metadata, by numeric ID or URL-encoded path: name, namespace path, visibility, web URL, description and default branch                                                                                                                                 |
+| `gitlab://project/{project_id}/members`                      | `project_members`    | Project members, up to one page (100), with access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner), including members inherited from parent groups                                                                                       |
+| `gitlab://project/{project_id}/labels`                       | `project_labels`     | Project labels, up to one page (100): name, color, description, and open issue and merge request count fields, which read `0` today because the server does not ask GitLab for counts ([#1174](https://github.com/jmrplens/gitlab-mcp-server/issues/1174))     |
+| `gitlab://project/{project_id}/milestones`                   | `project_milestones` | Project milestones, up to one page (100): title, description, state (active/closed), due date and web URL                                                                                                                                                      |
+| `gitlab://project/{project_id}/branches`                     | `project_branches`   | Branches, up to one page (100): name, protection status, merge status, default flag and web URL                                                                                                                                                                |
+| `gitlab://project/{project_id}/branch/{branch}`              | `branch`             | One branch by name: protection status, merge status, default flag and web URL                                                                                                                                                                                  |
+| `gitlab://project/{project_id}/issues`                       | `project_issues`     | Open issues, up to one page (100): IID, title, state, labels, assignees, author, web URL and creation date                                                                                                                                                     |
+| `gitlab://project/{project_id}/releases`                     | `project_releases`   | Releases, up to one page (100): tag name, name, description, author, and creation and release dates                                                                                                                                                            |
+| `gitlab://project/{project_id}/release/{tag_name}`           | `release`            | One release by tag name: tag name, name, description, author, and creation and release dates                                                                                                                                                                   |
+| `gitlab://project/{project_id}/tags`                         | `project_tags`       | Repository tags, up to one page (100): name, message, target commit SHA, protection status and creation date                                                                                                                                                   |
+| `gitlab://project/{project_id}/tag/{tag_name}`               | `tag`                | One tag by name: target commit SHA, annotation message and protection status                                                                                                                                                                                   |
+| `gitlab://project/{project_id}/commit/{sha}`                 | `commit`             | One commit by SHA: full and short ID, title, message, author name and email, authored and committed dates, parent commits, web URL, and stats (additions, deletions, total)                                                                                    |
+| `gitlab://project/{project_id}/file/{ref}/{+path}`           | `file_blob`          | A file's contents at a ref (branch, tag or SHA); the path may include slashes. Over 1 MiB, metadata only with `truncated=true`; a binary file, metadata with empty content                                                                                     |
+| `gitlab://project/{project_id}/wiki/{slug}`                  | `wiki_page`          | A wiki page by slug: title, slug, format (markdown, rdoc, asciidoc or org) and raw content. Slugs are case-sensitive and use hyphens for spaces                                                                                                                |
+| `gitlab://project/{project_id}/label/{label_id}`             | `label`              | One project label by numeric ID or name: ID, name, color and description. Its open issue and merge request count fields always read `0`, since GitLab sends counts only with a label list ([#1174](https://github.com/jmrplens/gitlab-mcp-server/issues/1174)) |
+| `gitlab://project/{project_id}/milestone/{milestone_iid}`    | `milestone`          | One project milestone by IID: ID, IID, title, description, state, due date and web URL                                                                                                                                                                         |
+| `gitlab://project/{project_id}/board/{board_id}`             | `board`              | One issue board by numeric ID: ID and name                                                                                                                                                                                                                     |
+| `gitlab://project/{project_id}/deployment/{deployment_id}`   | `deployment`         | One deployment by numeric ID: ID, IID, ref, SHA, status and environment name                                                                                                                                                                                   |
+| `gitlab://project/{project_id}/environment/{environment_id}` | `environment`        | One environment by numeric ID: ID, name, slug, state and tier                                                                                                                                                                                                  |
+| `gitlab://project/{project_id}/job/{job_id}`                 | `job`                | One CI/CD job by numeric ID: ID, name, stage, status, ref, duration and web URL                                                                                                                                                                                |
+| `gitlab://project/{project_id}/feature_flag/{name}`          | `feature_flag`       | One feature flag by name: name, description, active flag and version                                                                                                                                                                                           |
+| `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`   | `deploy_key`         | One project deploy key by numeric ID: ID, title, key and fingerprint                                                                                                                                                                                           |
+| `gitlab://project/{project_id}/snippet/{snippet_id}`         | `project_snippet`    | One project snippet by numeric ID: ID, title, file name, description, visibility and web URL                                                                                                                                                                   |
 
 ### Issue & merge request templates (4)
 
-| Resource                                                           | Description                                                                 |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}/issue/{issue_iid}`                  | Single issue details (title, state, labels, assignees, web URL)             |
-| `gitlab://project/{project_id}/mr/{merge_request_iid}`             | Single merge request details (title, state, branches, author, merge status) |
-| `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`       | Notes on a merge request                                                    |
-| `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | Discussion threads on a merge request                                       |
+| Resource                                                           | Name                        | Description                                                                                                                                                                        |
+| ------------------------------------------------------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}/issue/{issue_iid}`                  | `issue`                     | One issue by its IID (project-scoped ID): title, state, labels, assignees, author, web URL and creation date                                                                       |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}`             | `merge_request`             | One merge request by its IID: title, state, source and target branches, author, merge status and web URL                                                                           |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`       | `merge_request_notes`       | Notes (comments) on a merge request, up to one page of 100 in the order GitLab returns them: ID, author username, body, system flag, resolvable and resolved flags, timestamps     |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | `merge_request_discussions` | Discussion threads on a merge request, up to one page of 100: ID, `individual_note` flag, and the notes of each (ID, author, body, system, resolved and resolvable, creation time) |
 
 ### CI/CD resource templates (3)
 
-| Resource                                                    | Description                                                             |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `gitlab://project/{project_id}/pipelines/latest`            | Most recent pipeline (status, ref, SHA, source, web URL)                |
-| `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | Specific pipeline details by numeric ID                                 |
-| `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | All jobs for a pipeline (name, stage, status, duration, failure reason) |
+| Resource                                                    | Name              | Description                                                                                                                                      |
+| ----------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab://project/{project_id}/pipelines/latest`            | `latest_pipeline` | The most recent pipeline of the project's default branch: ID, status (running, pending, success, failed, canceled), ref, SHA, source and web URL |
+| `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | `pipeline`        | One pipeline by its numeric ID: status, ref, SHA, source and web URL                                                                             |
+| `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | `pipeline_jobs`   | A pipeline's jobs, up to one page (100): each job's name, stage, status, duration, failure reason (when it failed) and web URL                   |
 
 ### Group resource templates (5)
 
-| Resource                                              | Description                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------------- |
-| `gitlab://group/{group_id}`                           | Group details (name, path, description, visibility)           |
-| `gitlab://group/{group_id}/members`                   | Group members with access levels, including inherited members |
-| `gitlab://group/{group_id}/projects`                  | Projects within a group (ID, name, namespace, visibility)     |
-| `gitlab://group/{group_id}/label/{label_id}`          | Single group label                                            |
-| `gitlab://group/{group_id}/milestone/{milestone_iid}` | Single group milestone                                        |
+| Resource                                              | Name              | Description                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab://group/{group_id}`                           | `group`           | Group details, by numeric ID or URL-encoded path: name, full path, description, visibility and web URL                                                                                                                                                       |
+| `gitlab://group/{group_id}/members`                   | `group_members`   | Group members, up to one page (100), with access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner), inherited members included                                                                                                           |
+| `gitlab://group/{group_id}/projects`                  | `group_projects`  | Projects in the group, up to one page (100): ID, name, namespace path, visibility, web URL, description and default branch                                                                                                                                   |
+| `gitlab://group/{group_id}/label/{label_id}`          | `group_label`     | One group label by numeric ID or name: ID, name, color and description. Its open issue and merge request count fields always read `0`, since GitLab sends counts only with a label list ([#1174](https://github.com/jmrplens/gitlab-mcp-server/issues/1174)) |
+| `gitlab://group/{group_id}/milestone/{milestone_iid}` | `group_milestone` | One group milestone by IID: ID, IID, title, description, state and due date. Its `web_url` field is always empty ([#1169](https://github.com/jmrplens/gitlab-mcp-server/issues/1169))                                                                        |
 
 ### Personal snippet template (1)
 
-| Resource                        | Description             |
-| ------------------------------- | ----------------------- |
-| `gitlab://snippet/{snippet_id}` | Personal (user) snippet |
+| Resource                        | Name      | Description                                                                                                 |
+| ------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `gitlab://snippet/{snippet_id}` | `snippet` | One personal (user-scoped) snippet by numeric ID: ID, title, file name, description, visibility and web URL |
 
 ### Workflow guide resources (5)
 
-Static best-practice guides for AI assistants — no API calls required.
+Static best-practice guides for AI assistants, written into the server: reading one makes no GitLab request, and each declares its size in bytes in the listing, so a client can budget context for it before reading. A guide names a call by its canonical action ID (`pipeline.get`), which reads the same whatever surface is served.
 
-| Resource                                   | Description                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------ |
-| `gitlab://guides/git-workflow`             | Git branching strategy, commit hygiene, and merge best practices   |
-| `gitlab://guides/merge-request-hygiene`    | MR sizing, descriptions, review workflow, and merge strategies     |
-| `gitlab://guides/conventional-commits`     | Conventional Commits specification with GitLab-specific examples   |
-| `gitlab://guides/code-review`              | Structured code review checklist (quality, security, testing)      |
-| `gitlab://guides/pipeline-troubleshooting` | CI/CD debugging guide: common failures, job logs, retry strategies |
+| Resource                                   | Name                       | Title                          | Description                                                                                          |
+| ------------------------------------------ | -------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `gitlab://guides/git-workflow`             | `git_workflow`             | Git Workflow Guide             | Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow) |
+| `gitlab://guides/merge-request-hygiene`    | `merge_request_hygiene`    | Merge Request Hygiene Guide    | Guidelines for creating and reviewing high-quality merge requests                                    |
+| `gitlab://guides/conventional-commits`     | `conventional_commits`     | Conventional Commits Guide     | Conventional commit message format and examples for consistent Git history                           |
+| `gitlab://guides/code-review`              | `code_review`              | Code Review Guide              | Code review checklist and best practices for GitLab merge request reviews                            |
+| `gitlab://guides/pipeline-troubleshooting` | `pipeline_troubleshooting` | Pipeline Troubleshooting Guide | Common GitLab CI/CD pipeline issues and how to diagnose and fix them                                 |
 
-:::note
-Resource URIs with `{project_id}`, `{group_id}`, etc. are **resource templates**. The client substitutes the actual ID or URL-encoded path when requesting the resource.
+### Collections return one page
 
-Each variable fills one path segment, so a value carrying a slash, a space or any other character outside `A-Z a-z 0-9 - . _ ~` is percent-encoded once, as RFC 6570 expands it: the branch `feature/login` is written `feature%2Flogin` and the scoped label `priority::high` is `priority%3A%3Ahigh`. The server decodes it once before asking GitLab. Only the file template's `{+path}` keeps its slashes.
-:::
+`resources/read` has no continuation. MCP scopes pagination to the list methods (`resources/list`, `resources/templates/list`, `tools/list`, `prompts/list`) and defines neither a cursor nor a partial-result shape for a read, so a collection resource cannot hand back a page token and a client cannot ask for the next page.
+
+The 13 collection resources (`gitlab://groups` and every template above whose description says "up to one page") therefore ask GitLab for one page of 100, GitLab's maximum, and state their own completeness in `_meta`, under the vendor-namespaced key `io.github.jmrplens/pageInfo`:
+
+```json
+{
+  "_meta": {
+    "io.github.jmrplens/pageInfo": { "returned": 100, "total": 137, "complete": false }
+  },
+  "contents": [{ "mimeType": "application/json", "text": "[…]" }]
+}
+```
+
+`returned` is how many items the body holds. `total` is how many exist, and is omitted when GitLab sends no total, which is the case on keyset-paginated endpoints. `complete` is the field to branch on: it is `false` whenever GitLab reports a next page. When it is `false`, read the same data through the tool surface, whose list actions paginate and return `total_items`, `next_page` and `has_more`.
+
+This also bounds what a watch can see: a subscription to one of the three subscribable lists is notified about changes inside the page it reads, and not about changes past it ([ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md), NEG-005).
+
+### Which resources can be watched?
+
+26 templates accept a subscription: every single-object GitLab template above except the commit, which never changes, plus the three lists that belong to one parent (a pipeline's jobs, a merge request's notes and its discussions). The static resources, the other collections, the two tool manifest resources and the guides do not.
+
+Each subscribable template says so in `resources/templates/list`, twice. Its description ends with the sentence `Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.`, which a model reads, and its `_meta` carries `"io.github.jmrplens/subscribable": true`, which a generic client can filter on without knowing this server. The machine-readable list is published in two more places, both only on the full capability surface:
+
+- the `subscriptions` section of `gitlab://tools`: `supported`, `subscribable_uri_templates` and the `notification` a change sends;
+- the `subscriptions` block of the enumerating [server card](/gitlab-mcp-server/operations/http-server/#server-card) that HTTP mode serves at `/.well-known/mcp/server-card.json`, beside a `capabilities` object copied from the handshake. It also says which method this deployment answers (`subscriptions/listen` on the default stateless transport, `resources/subscribe` with `--stateless=false`) and lists the reasons a watch can end. The SEP-2127 card at `/server-card` carries identity and connection details only, none of this.
+
+[Resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) covers polling cadence, cost and lifetime.
+
+### URI parameters
+
+Resource URIs with `{project_id}`, `{group_id}` and the other variables are **resource templates**: the client substitutes the actual value when requesting the resource.
+
+| Parameter                                                                              | Type    | Description                                                                        |
+| -------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `project_id`                                                                           | string  | Numeric project ID or URL-encoded path (`group%2Fproject`)                         |
+| `group_id`                                                                             | string  | Numeric group ID or URL-encoded path                                               |
+| `pipeline_id`                                                                          | integer | Numeric pipeline ID                                                                |
+| `merge_request_iid`                                                                    | integer | Merge request IID (project-scoped number, shown as `!N` in GitLab)                 |
+| `issue_iid`                                                                            | integer | Issue IID (project-scoped number, shown as `#N` in GitLab)                         |
+| `milestone_iid`                                                                        | integer | Milestone IID within the project or group                                          |
+| `board_id`, `deployment_id`, `environment_id`, `job_id`, `deploy_key_id`, `snippet_id` | integer | Numeric ID of the object                                                           |
+| `sha`                                                                                  | string  | Commit SHA                                                                         |
+| `ref`                                                                                  | string  | Branch name, tag name or commit SHA (`feature%2Flogin` for `feature/login`)        |
+| `branch`                                                                               | string  | Branch name (`feature%2Flogin` for `feature/login`)                                |
+| `tag_name`                                                                             | string  | Tag name (`v1.0.0%2Bbuild` for `v1.0.0+build`)                                     |
+| `label_id`                                                                             | string  | Numeric label ID or label name (`priority%3A%3Ahigh` for `priority::high`)         |
+| `path`                                                                                 | string  | Repository file path; may contain slashes (RFC 6570 reserved expansion, `{+path}`) |
+| `slug`                                                                                 | string  | Wiki page slug (case-sensitive, hyphens for spaces)                                |
+| `name`                                                                                 | string  | Feature flag name                                                                  |
+| `id`                                                                                   | string  | An entry ID from `gitlab://tools`, or a canonical action ID                        |
+
+### Encoding a value into a URI
+
+Every variable except `{+path}` is an RFC 6570 simple expansion, and each one fills exactly one path segment. A value carrying any character outside `A-Z a-z 0-9 - . _ ~` is therefore percent-encoded once before it goes into the URI: `group/project` is written `group%2Fproject`, the branch `feature/login` is `feature%2Flogin`, and the scoped label `priority::high` is `priority%3A%3Ahigh`. The server decodes each variable exactly once before it asks GitLab, so the value GitLab receives is the one you encoded. A raw slash in such a variable either matches no template, and the read answers resource-not-found, or is read as a separator, as the file template's `{ref}` is before `{+path}`, so a different object is asked for. Encode it. The resource blocks that tool results embed are already spelled this way, so their URIs can be handed to `resources/read` unchanged.
+
+`{+path}` is a reserved expansion: its slashes stay as they are, and every segment is decoded once like any other variable. Reserved expansion passes an existing percent-escape through, so a file whose name literally contains one (`a%20b.txt`) must have its `%` encoded as `%25` (`a%2520b.txt`), or it is read as `a b.txt`. The same holds for a name sent unencoded that happens to contain a valid escape, such as a branch `fix-%41`: it is decoded, and names `fix-A`.
+
+### Autocomplete for URI parameters
+
+Through `completion/complete`, the server suggests `project_id` and `group_id` values as they are typed, and `merge_request_iid` and `issue_iid` from the project's open merge requests and issues once `project_id` is filled in the same request. No other URI parameter gets suggestions, and neither does one whose data an operator excluded with `GITLAB_MCP_EXCLUDE_TOOLS`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
 
 ### How do I read a resource?
 
@@ -144,7 +241,7 @@ MCP clients can request resources at any time using the `resources/read` method:
 }
 ```
 
-The server returns the resource content as structured JSON data.
+The server returns the resource content as JSON, or as Markdown for a workflow guide; a collection adds its page information in `_meta`.
 
 To inspect accepted call shapes, read the surface-aware tool manifest first and then the action schema:
 
@@ -172,100 +269,150 @@ With `GITLAB_MCP_TOOL_SURFACE=meta` the entry is `gitlab://tools/gitlab_merge_re
 
 MCP prompts are **reusable templates** that guide AI assistants through common workflows. When a client requests a prompt, the server collects the relevant data from GitLab and returns structured context that the LLM uses to produce a high-quality output — a code review, a release-notes draft, or a team report — without the user re-explaining the task each time.
 
-The server provides **{stats.prompts} prompt templates** organized into categories:
+The server provides **{stats.prompts} prompt templates** organized into categories. Each table lists a prompt's arguments, read from the server's own registration: an argument marked \* is required, and every other one may be left out, with the defaults given under [Common arguments](#common-arguments). Every prompt argument is a string, as MCP defines them. A prompt reads one page of each paginated list it gathers, so on a busy project or group its report covers part of the data; the matching list actions on the tool surface paginate. The page holds 100 items for most lists of the category prompts, 50 group members for `team_overview` and `reviewer_workload`, 20 merge requests for `mr_discussion_health`, and GitLab's default of 20 wherever a prompt names no page size: every list of the core prompts, and the changed files `mr_description_quality` reads. `review_mr` and `summarize_mr_changes` therefore see at most 20 changed files ([#1169](https://github.com/jmrplens/gitlab-mcp-server/issues/1169)).
 
 ### Core prompts (12)
 
 Merge request analysis, project overview, and personal productivity.
 
-| Prompt                      | Description                                                                                  |
-| --------------------------- | -------------------------------------------------------------------------------------------- |
-| `summarize_mr_changes`      | Summarize changed files and modifications in a merge request                                 |
-| `review_mr`                 | Structured code review with risk categorization and per-file metrics                         |
-| `suggest_mr_reviewers`      | Suggest reviewers based on changed files and active project members                          |
-| `mr_risk_assessment`        | Assess MR risk level (LOW/MEDIUM/HIGH/CRITICAL) based on size, files, and sensitive patterns |
-| `summarize_pipeline_status` | Latest CI/CD pipeline status with failure reasons                                            |
-| `summarize_open_mrs`        | All open MRs with age and merge status, highlighting stale MRs                               |
-| `project_health_check`      | Comprehensive health assessment (pipeline, MRs, branch hygiene)                              |
-| `generate_release_notes`    | Release notes from commits between two Git refs                                              |
-| `compare_branches`          | Compare two branches showing commit differences and file changes                             |
-| `daily_standup`             | Daily standup summary from GitLab activity (done/planned/blockers)                           |
-| `team_member_workload`      | Workload summary for a team member over configurable time period                             |
-| `user_stats`                | User statistics with contribution events, MR/issue stats, and activity chart                 |
+#### Merge request analysis
+
+| Prompt                 | Arguments                             | Description                                                                                                                                                                                          |
+| ---------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `summarize_mr_changes` | `project_id`\*, `merge_request_iid`\* | The changed files and key modifications in a merge request, each file with its change type (new, modified, deleted, renamed)                                                                         |
+| `review_mr`            | `project_id`\*, `merge_request_iid`\* | A structured code review: files grouped by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context and a review plan; full diffs, not truncated                 |
+| `suggest_mr_reviewers` | `project_id`\*, `merge_request_iid`\* | Reviewers suggested from the changed files and the active project members, excluding the author: the prompt lists both and asks the model to suggest the most suitable reviewers and say why         |
+| `mr_risk_assessment`   | `project_id`\*, `merge_request_iid`\* | Risk level (LOW, MEDIUM, HIGH, CRITICAL) from size (lines added and removed), changed files, new and deleted files, sensitive file patterns (env, auth, migration, CI, security) and conflict status |
+
+#### Project overview
+
+| Prompt                      | Arguments                        | Description                                                                                                                                                                        |
+| --------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `summarize_pipeline_status` | `project_id`\*                   | The latest pipeline's jobs grouped by outcome (failed, passed, other), with failure reasons for debugging                                                                          |
+| `summarize_open_mrs`        | `project_id`\*                   | Open merge requests with title, author, branches, age in days and merge status, highlighting stale ones (over 7 days) and blockers; for one target branch, use `branch_mr_summary` |
+| `project_health_check`      | `project_id`\*                   | Health assessment combining the latest pipeline, open merge requests and branch hygiene (merged and stale branch counts), with recommendations for maintenance                     |
+| `generate_release_notes`    | `project_id`\*, `from`\*, `to`   | Release notes from the commits, merge requests and file changes between two refs (tags, branches or SHAs): commits, merged MRs with labels, contributors and statistics            |
+| `compare_branches`          | `project_id`\*, `from`\*, `to`\* | Commit and file differences between two refs, for release branch preparation, divergence analysis, or deciding whether a merge or backport needs a deeper review                   |
+
+#### Personal productivity
+
+| Prompt                 | Arguments                            | Description                                                                                                                                                                                                                           |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `daily_standup`        | `project_id`\*, `username`           | A standup summary for a user: contribution events from the last 24 hours, plus the user's open MRs in the project (authored, assigned and reviewing) and open issues (assigned and created), with done, planned and blockers sections |
+| `team_member_workload` | `project_id`\*, `username`\*, `days` | One team member's workload over a period: contribution events, authored and assigned MRs, MRs under review, authored and assigned issues; for team management and capacity planning                                                   |
+| `user_stats`           | `project_id`\*, `username`, `days`   | User statistics: contribution events, MR stats (authored, assigned and reviewed, by state), issue stats (authored and assigned, by state), daily trends and a Mermaid activity chart                                                  |
 
 ### Cross-project prompts (4)
 
-Personal dashboards that aggregate across all accessible projects.
+Personal dashboards that take no project or group argument.
 
-| Prompt                | Description                                          |
-| --------------------- | ---------------------------------------------------- |
-| `my_open_mrs`         | All open MRs where you are author or assignee        |
-| `my_pending_reviews`  | All open MRs assigned to you as reviewer             |
-| `my_issues`           | All issues assigned to you with overdue detection    |
-| `my_activity_summary` | Personal activity summary across projects for N days |
+| Prompt                | Arguments           | Description                                                                                                                                                           |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `my_open_mrs`         | `username`          | Open merge requests across all projects where you are author or assignee, grouped by project: a personal MR dashboard without naming a project                        |
+| `my_pending_reviews`  | `username`          | Open merge requests across all projects where you are assigned as reviewer, grouped by project, to track which are waiting for your review                            |
+| `my_issues`           | `username`, `state` | Issues assigned to you across all projects, grouped by project, with overdue detection                                                                                |
+| `my_activity_summary` | `username`, `days`  | Personal activity over a period, aggregated across all projects: contribution events by action, the counts of MRs merged and MRs reviewed, and a daily activity chart |
 
 ### Team prompts (4)
 
 Group-level team management prompts.
 
-| Prompt                 | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `user_activity_report` | Detailed activity report for a specific user (for managers)  |
-| `team_overview`        | Team dashboard with open MR counts and workload pie chart    |
-| `group_mr_dashboard`   | All MRs for a group with state and target branch filters     |
-| `reviewer_workload`    | Review distribution analysis to identify workload imbalances |
+| Prompt                 | Arguments                              | Description                                                                                                                                                                        |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_activity_report` | `username`\*, `days`                   | An activity report for one user (contribution events, merged MRs, open MRs under their review, daily activity chart), designed for managers reviewing a team member's productivity |
+| `team_overview`        | `group_id`\*, `days`                   | A team dashboard of the group's members with their open MR counts and recently merged MRs, and a workload distribution pie chart                                                   |
+| `group_mr_dashboard`   | `group_id`\*, `state`, `target_branch` | Merge requests across a group, filtered by state and target branch, grouped by project with blocker and readiness statistics                                                       |
+| `reviewer_workload`    | `group_id`\*                           | Review distribution across the group's members: how many open MRs each is reviewing, and where the load is uneven                                                                  |
 
 ### Project report prompts (5)
 
 Project-level analysis and reporting.
 
-| Prompt                    | Description                                                      |
-| ------------------------- | ---------------------------------------------------------------- |
-| `branch_mr_summary`       | All MRs targeting a branch with readiness summary                |
-| `project_activity_report` | Project activity report with events, merged MRs, and open issues |
-| `mr_discussion_health`    | Discussion health of open MRs (unresolved thread counts)         |
-| `unassigned_items`        | Find open MRs and issues without assignees                       |
-| `stale_items_report`      | MRs and issues not updated for N days (default: 14)              |
+| Prompt                    | Arguments                                  | Description                                                                                                                  |
+| ------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `branch_mr_summary`       | `project_id`\*, `target_branch`\*, `state` | Merge requests targeting one branch, with a readiness summary of draft and conflict counts; suited to release branch reviews |
+| `project_activity_report` | `project_id`\*, `days`                     | Recent events, merged MRs and open issues, with a daily activity chart and a contributor breakdown                           |
+| `mr_discussion_health`    | `project_id`\*                             | Unresolved discussion threads across open MRs, for review follow-up and merge-readiness cleanup, not approval-rule status    |
+| `unassigned_items`        | `project_id`\*                             | Open MRs and issues with no assignee, to find ownership gaps and items needing attention                                     |
+| `stale_items_report`      | `project_id`\*, `stale_days`               | MRs and issues not updated for a number of days (14 unless `stale_days` says otherwise), to find forgotten or blocked items  |
 
 ### Analytics prompts (4)
 
 Velocity and release analytics.
 
-| Prompt              | Description                                              |
-| ------------------- | -------------------------------------------------------- |
-| `merge_velocity`    | MR throughput, average time-to-merge, and daily chart    |
-| `release_readiness` | Release branch readiness (open MRs, conflicts, drafts)   |
-| `release_cadence`   | Release frequency analysis with cadence chart            |
-| `weekly_team_recap` | Comprehensive weekly recap combining MRs, issues, events |
+| Prompt              | Arguments                | Description                                                                                                                               |
+| ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_velocity`    | `project_id`\*, `days`   | MR throughput: merge rate, average time to merge and a daily merged-count chart                                                           |
+| `release_readiness` | `project_id`\*, `branch` | Readiness of a release branch: open MRs targeting it, draft and conflict counts, and unresolved discussion threads                        |
+| `release_cadence`   | `project_id`\*, `days`   | Release frequency: time between releases, average cadence and a release history table                                                     |
+| `weekly_team_recap` | `group_id`\*, `days`     | A weekly recap for a team: merged MRs by project, open MR and open issue counts, and open MR health (drafts and conflicts), all as tables |
 
 ### Milestone & label prompts (4)
 
 Milestone tracking and label analysis.
 
-| Prompt                     | Description                                                       |
-| -------------------------- | ----------------------------------------------------------------- |
-| `milestone_progress`       | Milestone progress with completion percentage and due date risk   |
-| `label_distribution`       | Label usage distribution (open/closed issues, open MRs per label) |
-| `group_milestone_progress` | Milestone progress across all projects in a group                 |
-| `project_contributors`     | Rank contributors by commits, additions, and deletions            |
+| Prompt                     | Arguments                   | Description                                                                                                                                                                                                                                                                                          |
+| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `milestone_progress`       | `project_id`\*, `milestone` | Milestone progress: issue and MR completion, a progress bar and due-date risk; without `milestone`, every active milestone                                                                                                                                                                           |
+| `label_distribution`       | `project_id`\*              | Label usage per label (open and closed issues, open MRs), read from the label list alone. GitLab sends those counts only when asked and the prompt does not ask, so today every label reads as unused and the table has no rows ([#1174](https://github.com/jmrplens/gitlab-mcp-server/issues/1174)) |
+| `group_milestone_progress` | `group_id`\*                | Milestone progress across the group's projects: issue and MR completion per milestone, with progress bars                                                                                                                                                                                            |
+| `project_contributors`     | `project_id`\*              | Contributors ranked by commits, additions and deletions, from the repository contributors API                                                                                                                                                                                                        |
 
 ### Git workflow prompts (2)
 
 Commit history and MR authoring quality.
 
-| Prompt                   | Description                                                           |
-| ------------------------ | --------------------------------------------------------------------- |
-| `audit_commit_hygiene`   | Commit message and history quality between two Git refs               |
-| `mr_description_quality` | MR description readiness: context, linked work, tests, and risk notes |
+| Prompt                   | Arguments                             | Description                                                                                                                                                                                              |
+| ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audit_commit_hygiene`   | `project_id`\*, `from`\*, `to`        | Commit message quality between two refs: Conventional Commit usage, merge commits, breaking-change markers, body quality and linked work references, for release and contribution readiness              |
+| `mr_description_quality` | `project_id`\*, `merge_request_iid`\* | A score of an MR description's reviewer readiness: context, linked work, test evidence, rollout and risk notes, checklists, and whether the changed files suggest missing screenshots or migration notes |
 
 ### Audit prompts (2)
 
 Project configuration audit prompts.
 
-| Prompt                   | Description                                                   |
-| ------------------------ | ------------------------------------------------------------- |
-| `audit_project_workflow` | Audit labels, milestones, issue/MR templates                  |
-| `audit_project_full`     | Comprehensive audit combining all categories with a scorecard |
+| Prompt                   | Arguments      | Description                                                                                                                                                                                                                         |
+| ------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audit_project_workflow` | `project_id`\* | Workflow configuration: labels (names, colors, descriptions), milestones (open or closed, due dates) and issue and MR templates, naming gaps such as labels without descriptions, milestones without due dates or missing templates |
+| `audit_project_full`     | `project_id`\* | One report auditing settings, branch protection, access management, labels, milestones and templates, with actionable recommendations                                                                                               |
+
+### Common arguments
+
+| Argument            | What it is                                                                                                     | When omitted                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `project_id`        | Numeric project ID or path (`my-group/my-project`)                                                             | Required wherever a prompt takes it                                                                            |
+| `merge_request_iid` | Merge request IID (project-scoped number, shown as `!N` in GitLab)                                             | Required wherever a prompt takes it                                                                            |
+| `group_id`          | Numeric group ID or path (`my-group`, `parent/child`)                                                          | Required wherever a prompt takes it                                                                            |
+| `username`          | A GitLab username                                                                                              | The authenticated user; required in `team_member_workload` and `user_activity_report`                          |
+| `days`              | Days to look back, a positive integer                                                                          | 7, 30 or 90 depending on the prompt (below)                                                                    |
+| `from`, `to`        | Git refs: a tag name, a branch name or a commit SHA                                                            | `to` is `HEAD` in `generate_release_notes` and `audit_commit_hygiene`; both are required in `compare_branches` |
+| `branch`            | The release branch `release_readiness` checks                                                                  | `main`                                                                                                         |
+| `target_branch`     | The branch the listed merge requests target                                                                    | Required in `branch_mr_summary`; in `group_mr_dashboard`, no branch filter                                     |
+| `state`             | `opened`, `closed`, `merged` or `all` for merge requests; `opened`, `closed` or `all` for issues (`my_issues`) | `opened`                                                                                                       |
+| `milestone`         | A milestone title, looked up among the active milestones                                                       | Every active milestone                                                                                         |
+| `stale_days`        | Days without an update after which an item counts as stale                                                     | 14                                                                                                             |
+
+`days` defaults to 7 in `team_member_workload`, `my_activity_summary`, `user_activity_report`, `team_overview`, `project_activity_report` and `weekly_team_recap`; to 30 in `user_stats` and `merge_velocity`; and to 90 in `release_cadence`. A `days` or `stale_days` value that is not a positive integer falls back to its default, except in `team_member_workload` and `user_stats`, which refuse it. A missing required argument is refused with JSON-RPC error `-32602` (Invalid params).
+
+### Which prompt should I use?
+
+| Goal                                                   | Prompt                   |
+| ------------------------------------------------------ | ------------------------ |
+| Review code changes in depth                           | `review_mr`              |
+| Check whether an MR description is ready for reviewers | `mr_description_quality` |
+| Find suitable reviewers                                | `suggest_mr_reviewers`   |
+| Follow up unresolved review threads                    | `mr_discussion_health`   |
+| Summarize a project's open MRs                         | `summarize_open_mrs`     |
+| Summarize the MRs that target one branch               | `branch_mr_summary`      |
+| Review MR status across a group                        | `group_mr_dashboard`     |
+| Draft release notes                                    | `generate_release_notes` |
+| Check commit messages and history before a release     | `audit_commit_hygiene`   |
+| Audit a project's governance as a whole                | `audit_project_full`     |
+| Audit labels, milestones and templates only            | `audit_project_workflow` |
+
+### Autocomplete for prompt arguments
+
+Through `completion/complete`, the server suggests `project_id`, `group_id` and `username` values as they are typed. `merge_request_iid` (from the project's open merge requests), `from` and `to` (branch and tag names), `branch` and `target_branch` (branch names) and `milestone` (milestone titles) are suggested once `project_id` is filled in the same request. `days`, `stale_days` and `state` get no suggestions. A completion naming a prompt this server does not serve is refused with `-32602`. [Completions](/gitlab-mcp-server/capabilities/completions/) describes the mechanism.
 
 ### How do I use a prompt?
 
@@ -292,8 +439,10 @@ The server returns a structured prompt with context-aware content that the LLM u
 | ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
 | `GITLAB_MCP_CAPABILITY_SURFACE` | `full`  | `full` registers resources, workflow guides, prompts, and `gitlab://tools`; `minimal` keeps `gitlab://tools` |
 
+`GITLAB_MCP_EXCLUDE_TOOLS` narrows this page's surfaces as well as the tools: a resource that returns the same GitLab data as an excluded action is not registered, nor is a prompt that reads such data, and completions backed by it answer nothing. See [Configuration](/gitlab-mcp-server/configuration/).
+
 :::tip
-Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
+Resources are particularly useful for providing project context at the start of a conversation. The project resource tells the LLM the repository's purpose, location and default branch; `project_members` adds the team and `latest_pipeline` the state of the default branch.
 :::
 
 <FAQ />

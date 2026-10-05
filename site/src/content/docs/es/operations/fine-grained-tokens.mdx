@@ -135,15 +135,15 @@ instancia real con Admin Mode activado.
 Cada fila es lo que necesitan en el ámbito del proyecto las acciones que nombra, además
 de los permisos de arranque de arriba.
 
-| Quieres que el asistente                            | Concede en el proyecto                                                   | Acciones que cubre, por ejemplo                                                            |
-| --------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Lea las incidencias y merge requests de un proyecto | Project: Read, Work Item: Read, Merge Request: Read                      | `project.get`, `issue.list`, `issue.get`, `merge_request.list`                             |
-| Clasifique y comente incidencias                    | la fila anterior, más Work Item: Create y Work Item: Update              | `issue.create`, `issue.update`, `issue.note_create`                                        |
-| Revise merge requests                               | Merge Request: Read, Merge Request: Create, Merge Request: Approve       | `mr_review.changes_get`, `mr_review.discussion_create`, `merge_request.approve`            |
-| Siga la CI                                          | Pipeline: Read, Job: Read                                                | `pipeline.list`, `pipeline.get`, `job.list`, `job.trace`                                   |
-| Edite ficheros en una rama nueva                    | Repository: Read, Repository: Create, Repository: Update, Branch: Create | `repository.file_get`, `repository.file_create`, `repository.file_update`, `branch.create` |
+| Quieres que el asistente                       | Concede en el proyecto                                                   | Acciones que cubre, por ejemplo                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Lea los issues y merge requests de un proyecto | Project: Read, Work Item: Read, Merge Request: Read                      | `project.get`, `issue.list`, `issue.get`, `merge_request.list`                             |
+| Clasifique y comente issues                    | la fila anterior, más Work Item: Create y Work Item: Update              | `issue.create`, `issue.update`, `issue.note_create`                                        |
+| Revise merge requests                          | Merge Request: Read, Merge Request: Create, Merge Request: Approve       | `mr_review.changes_get`, `mr_review.discussion_create`, `merge_request.approve`            |
+| Siga la CI                                     | Pipeline: Read, Job: Read                                                | `pipeline.list`, `pipeline.get`, `job.list`, `job.trace`                                   |
+| Edite ficheros en una rama nueva               | Repository: Read, Repository: Create, Repository: Update, Branch: Create | `repository.file_get`, `repository.file_create`, `repository.file_update`, `branch.create` |
 
-Algunos emparejamientos son de GitLab y no de este servidor: una nota en una incidencia
+Algunos emparejamientos son de GitLab y no de este servidor: una nota en un issue
 o en un merge request (`issue.note_create`, `mr_review.note_create`) se crea con Work
 Item: Create, y una discusión de merge request (`mr_review.discussion_create`) con
 Merge Request: Create, porque es lo que declaran las rutas en GitLab 19.4.1.
