@@ -456,12 +456,19 @@ variable set, and none refused without it.
 implementations "SHOULD NOT use them to change the behavior of the client or server, and
 SHOULD NOT rely on them for security decisions". The second half is met: identity comes
 from the credential (`INV-001`). The first is departed from on purpose: `IDN-013` writes
-annotation priorities as 0 or 1 for a session whose `clientInfo` names Codex. Its key is
-the session, so it reaches only a session that knows its client: stdio in either
-protocol era, HTTP with `--stateless=false`, and any session at 2026-07-28, since go-sdk
-fills `ClientInfo` from each request's `_meta` there. A client on 2025-11-25 or earlier
-over the default stateless HTTP transport has no session that saw `initialize`, so the
-profile never applies to it (`test/e2e/http` pins that as the profile's limit).
+annotation priorities as 0 or 1 for a session whose `clientInfo` names Codex, matched to
+Codex's own two spellings (a `codex-mcp-client` name prefix, or a `title` of exactly
+`Codex`). Its key is the session, and the session's `clientInfo` decides wherever it has
+one: stdio in either protocol era, HTTP with `--stateless=false`, and any session at
+2026-07-28, since go-sdk fills `ClientInfo` from each request's `_meta` there. A client on
+2025-11-25 or earlier over the default stateless HTTP transport has no session that saw
+`initialize`, so its session has no `clientInfo`; for that case issue 1043 decided that
+the profile falls back to a `codex-mcp-client/` prefix of the request's User-Agent, which
+Codex's MCP client sends on every Streamable HTTP request. That widens the departure to a
+second self-reported label, read only where the first is absent and for the same one
+number, and `IDN-013` records it beside issue 959; over stateless HTTP the session is the
+POST whose header is read, so the key is unchanged (`test/e2e/http` holds the fallback
+and its negatives against the binary).
 It is the workaround for a Codex build that rejects a fractional priority, it changes how
 one number is written and nothing a model reads, it never decides who a caller is or what
 it may do, `GITLAB_MCP_CLIENT_COMPAT=off` removes it, and it retires only once a Codex
