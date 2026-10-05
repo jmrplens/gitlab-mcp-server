@@ -8,7 +8,7 @@ faq:
   - q: "¿Qué permisos necesita un token de grano fino para que el servidor arranque?"
     a: "User: Read, Namespace: Read y Personal Access Token: Read en el ámbito del usuario, y Metadata: Read en el de la instancia. Sin Personal Access Token: Read o Metadata: Read el servidor arranca igualmente, pero no puede juzgar la concesión, así que retiene solo lo que ningún token de grano fino alcanza y deja el resto a GitLab. En modo HTTP, un token sin User: Read se rechaza en la puerta con 403."
   - q: "¿Por qué una acción dice que no está disponible para un token de grano fino?"
-    a: "Algunas acciones pasan por tipos o mutaciones GraphQL de GitLab que no declaran ningún permiso de grano fino en GitLab 19.4.1, y GitLab los rechaza o los vacía para todo token de grano fino sea cual sea su concesión: 58 acciones de 1098, entre ellas las de épicas, work items y logros. La respuesta nombra el tipo y la versión, y la salida es un token clásico."
+    a: "En GitLab 19.4.1, 58 acciones de 1098 se rechazan o se vacían para todo token de grano fino sea cual sea su concesión, todas por GraphQL: 57 pasan por tipos o mutaciones que no declaran ningún permiso de grano fino, y una, group.epic_create, escribe un objeto que GitLab nunca resuelve al límite que declara. Entre ellas están las de épicas, work items y logros. La respuesta nombra el tipo y la versión, y la salida es un token clásico."
   - q: "Me falta un permiso. ¿Puedo añadírselo a mi token?"
     a: "No. GitLab fija la concesión de un token de grano fino al crearlo, y rotar un token le da al token nuevo la misma concesión, como documenta la [API de rotación](https://docs.gitlab.com/api/personal_access_tokens/#rotate-a-personal-access-token) de GitLab. Crea un token nuevo que conceda lo que nombra la respuesta."
 ---
@@ -245,9 +245,10 @@ endpoint self, al construirse y en cada revalidación aceptada, como hace el mod
 ### Lo que ningún token de grano fino alcanza
 
 Parte de lo que ofrece este servidor pasa por tipos o mutaciones GraphQL de GitLab que
-no declaran ningún permiso de grano fino en GitLab 19.4.1, y GitLab los rechaza o los
-vacía para todo token de grano fino, sea cual sea su concesión. En 19.4.1 son 58
-acciones de 1098, todas por GraphQL, cada una de una de estas cuatro formas:
+no declaran ningún permiso de grano fino en GitLab 19.4.1, o escribe un objeto que
+GitLab nunca resuelve al límite que declara, y GitLab los rechaza o los vacía para todo
+token de grano fino, sea cual sea su concesión. En 19.4.1 son 58 acciones de 1098,
+todas por GraphQL, cada una de una de estas cuatro formas:
 
 | Cómo responde GitLab                                                                                       | Acciones | Ejemplos                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------------------------- | -------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

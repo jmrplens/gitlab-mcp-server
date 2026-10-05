@@ -8,7 +8,7 @@ faq:
   - q: "Which permissions does a fine-grained token need for the server to start?"
     a: "User: Read and Namespace: Read and Personal Access Token: Read at the user boundary, and Metadata: Read at the instance. Without Personal Access Token: Read or Metadata: Read the server still starts, but it cannot judge the grant, so it withholds only what no fine-grained token can reach and leaves the rest to GitLab. In HTTP mode a token without User: Read is refused at the door with 403."
   - q: "Why does an action say it is not available to a fine-grained token?"
-    a: "Some actions go through GitLab GraphQL types or mutations that declare no fine-grained permission at GitLab 19.4.1, and GitLab refuses or empties those for every fine-grained token whatever its grant: 58 actions of 1098, among them the epic, work item and achievement actions. The answer names the type and the release, and the way out is a classic token."
+    a: "At GitLab 19.4.1, 58 actions of 1098 are refused or emptied for every fine-grained token whatever its grant, all of them over GraphQL: 57 go through types or mutations that declare no fine-grained permission, and one, group.epic_create, writes an object GitLab never resolves to the boundary it declares. Among them are the epic, work item and achievement actions. The answer names the type and the release, and the way out is a classic token."
   - q: "I am missing a permission. Can I add it to my token?"
     a: "No. GitLab fixes a fine-grained token's grant when the token is created, and rotating a token gives the new token the same grant, as GitLab's [rotation API](https://docs.gitlab.com/api/personal_access_tokens/#rotate-a-personal-access-token) documents. Create a new token that grants what the answer names."
 ---
@@ -237,9 +237,10 @@ and on each accepted revalidation, as legacy mode does.
 ### What no fine-grained token can reach
 
 Some of what this server offers goes through GitLab GraphQL types or mutations that
-declare no fine-grained permission at GitLab 19.4.1, and GitLab refuses or empties
-those for every fine-grained token, whatever its grant. At 19.4.1 that is 58 actions of
-1098, all through GraphQL, each in one of four ways:
+declare no fine-grained permission at GitLab 19.4.1, or writes an object GitLab never
+resolves to the boundary it declares, and GitLab refuses or empties those for every
+fine-grained token, whatever its grant. At 19.4.1 that is 58 actions of 1098, all
+through GraphQL, each in one of four ways:
 
 | How GitLab answers                                                                                   | Actions | Examples                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
