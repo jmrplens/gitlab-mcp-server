@@ -4579,12 +4579,17 @@ The test hung instead of failing, which is how the header-flush half surfaced.
   new pull request. Read on 2026-10-05 it has stalled by that measure: the
   issue has had no answer from a maintainer, no label and no type in the 37
   days since it was opened, and the pull request has had no review at all
-  since it was opened on 2026-08-29 and still conflicts with `main`. Whether
-  the evidence goes on the thread now is the maintainer's decision, and
-  nothing has been posted. Holding back stays defensible: the comment of
+  since it was opened on 2026-08-29 and still conflicts with `main`. The
+  maintainer decided on 2026-10-05 to hold: go-sdk's one reviewer already has
+  three pull requests and three proposals of ours waiting, the comment of
   2026-09-27 already confirms the defect on a recent pre-release and names
-  what the pull request leaves open, which is most of what the evidence here
-  would add.
+  what the pull request leaves open, and the workaround below makes nothing
+  here urgent. Once that reviewer has reviewed our open pull requests, the
+  missing cases (the doubled `-32700`, a valid JSON frame that is not a
+  JSON-RPC message) go on the pull request's thread as tests offered to its
+  author; if the author does not answer within about two weeks, a pull request
+  of ours that covers every case, credits the original one and closes the
+  issue replaces it.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
