@@ -285,7 +285,7 @@ func main() {
 	flag.DurationVar(&hcfg.drainDelay, "drain-delay", config.DefaultDrainDelay, "After SIGTERM, keep the listener open and answer /health with 503 draining for this long before closing it, so a balancer takes the instance out of rotation first (0 closes at once)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
-	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's HTTP server mode page")
+	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth application page")
 	flag.StringVar(&hcfg.resourcePolicyURI, "resource-policy-uri", "", "https URL published as RFC 9728 resource_policy_uri; point it at your own page describing what this deployment does with the data reached through it. Empty publishes no policy link")
 	flag.StringVar(&hcfg.resourceTermsURI, "resource-tos-uri", "", "https URL published as RFC 9728 resource_tos_uri; point it at your own terms of service. Empty publishes no terms link")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
@@ -534,7 +534,8 @@ FLAGS
                             refused
   -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
   -ignore-scopes            Skip the scope filter and read-only narrowing; read_api is still the minimum (default false)
-  -upload-max-file-size n   Maximum size in bytes for upload and file-read tools (default 2GB)
+  -upload-max-file-size s   Largest local file the upload and file-read tools accept: a byte count, or one
+                            with a KB, MB or GB suffix (default 2GB, at most 1024GB)
 
   The GitLab token has no flag, on purpose: a token on a command line is
   visible to every user on the machine through ps and lands in shell history.
@@ -566,7 +567,7 @@ FLAGS
                             periodic check, but an entry whose credential is older than %s is still rebuilt,
                             which ends any stateful session on it)
   -resource-documentation string
-                            https URL published as RFC 9728 resource_documentation (default: this project's HTTP server mode page)
+                            https URL published as RFC 9728 resource_documentation (default: this project's OAuth application page)
   -resource-policy-uri string
                             https URL published as RFC 9728 resource_policy_uri (default: omitted)
   -resource-tos-uri string  https URL published as RFC 9728 resource_tos_uri (default: omitted)
@@ -612,12 +613,14 @@ FLAGS
   Off by default, and it goes to a collector you configure through the
   standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere
   else. OTEL_SDK_DISABLED=true vetoes it regardless of the flag. See
-  docs/guides/telemetry.md.
+  https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/.
 
 ENVIRONMENT VARIABLES (stdio mode)
-  Settings this project defines are read as GITLAB_MCP_<NAME>. The unprefixed
-  spelling of a renamed variable still works and is removed in 3.1.0; when both
-  are set the prefixed one wins and a warning names the one being ignored.
+  Settings this project defines are read as GITLAB_MCP_<NAME> and under no
+  other spelling. The unprefixed spellings were removed in 3.1.0 and are no
+  longer read: one still set is named at startup with the variable to rename
+  it to, and GITLAB_READ_ONLY, GITLAB_SAFE_MODE or EXCLUDE_TOOLS refuses the
+  start, since ignoring it would serve what it withholds.
   GITLAB_URL and GITLAB_TOKEN keep their bare names, and so does every OTEL_*
   variable, which the OpenTelemetry exporters read themselves.
 
@@ -635,7 +638,8 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     to exclude, on every surface (default empty)
   GITLAB_MCP_IGNORE_SCOPES          Skip the scope filter and read-only narrowing; read_api is still
                                     the minimum (default false)
-  GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Maximum upload/file size for upload tools (default 2GB)
+  GITLAB_MCP_UPLOAD_MAX_FILE_SIZE   Largest local file the upload and file-read tools accept: a byte
+                                    count, or one with a KB, MB or GB suffix (default 2GB, at most 1024GB)
   GITLAB_MCP_RATE_LIMIT_RPS         Per-credential rate limit on every call that reaches GitLab, plus
                                     tools/list on a bucket refilled a tenth as fast and on the one the
                                     whole process shares (default 0, disabled)
@@ -722,18 +726,22 @@ JSON CONFIGURATION EXAMPLES
     }
   }
 
-  OpenCode (MCP configuration):
+  OpenCode (opencode.json):
   {
-    "mcpServers": {
+    "mcp": {
       "gitlab": {
-        "command": "/usr/local/bin/gitlab-mcp-server",
-        "env": {
+        "type": "local",
+        "command": ["/usr/local/bin/gitlab-mcp-server"],
+        "enabled": true,
+        "environment": {
           "GITLAB_URL": "https://gitlab.example.com",
           "GITLAB_TOKEN": "glpat-your-token"
         }
       }
     }
   }
+
+  Every other client: https://jmrp.io/docs/gitlab-mcp-server/install/clients/
 
   HTTP mode (single GitLab instance):
   gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080

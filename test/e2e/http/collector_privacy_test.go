@@ -331,8 +331,9 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 // failure as "METHOD scheme://host/path: CODE body", so the exported record
 // carried the URL-encoded project path, the query string and GitLab's own
 // response text — under every identity policy, including the default that
-// records nobody. docs/guides/telemetry.md promises the opposite, twice, and
-// names a test as proof; this is that test.
+// records nobody. The telemetry page
+// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
+// promises the opposite, twice, and names a test as proof; this is that test.
 //
 // Two failure shapes, because they leak through different types: an API error
 // carries the path and the response body, and a transport failure is a

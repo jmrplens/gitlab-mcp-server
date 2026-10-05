@@ -1338,8 +1338,10 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 // the card directly and contacts no GitLab.
 //
 // The next step is pinned as the whole line toolutil.HintAction writes,
-// because docs/reference/output-format.md and docs/concepts/error-handling.md
-// quote this formatter as their worked example of one.
+// because the output format and error handling pages of the documentation
+// site (https://jmrp.io/docs/gitlab-mcp-server/reference/output-format/#not-found
+// and https://jmrp.io/docs/gitlab-mcp-server/operations/error-handling/#not-found-answers) quote
+// this formatter as their worked example of one.
 func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})
 	if result == nil {

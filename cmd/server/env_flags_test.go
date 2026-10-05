@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -131,6 +133,35 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 	}
 	if len(got) != len(want) {
 		t.Errorf("%d env-backed flags declared, expected %d; a new one needs a case here", len(got), len(want))
+	}
+}
+
+// TestEnvBackedFlags_UploadLimitUsage_NamesTheSuffixes verifies that the
+// usage of -upload-max-file-size says what the value is written as. It used to
+// call it a size in bytes, which a reader takes to mean a plain number, while
+// the parser takes a KB, MB or GB suffix and the documented default is 2GB.
+func TestEnvBackedFlags_UploadLimitUsage_NamesTheSuffixes(t *testing.T) {
+	var usage string
+	for _, entry := range envBackedFlags {
+		if entry.flagName == "upload-max-file-size" {
+			usage = entry.usage
+		}
+	}
+	if usage == "" {
+		t.Fatal("-upload-max-file-size is not an env-backed flag with a usage")
+	}
+	if strings.Contains(usage, "in bytes") {
+		t.Errorf("usage %q calls the limit a size in bytes, but it takes a KB, MB or GB suffix", usage)
+	}
+	for _, want := range []string{
+		"KB, MB or GB suffix",
+		fmt.Sprintf("default %dGB, at most %dGB", config.DefaultMaxFileSize>>30, config.MaxFileSize>>30),
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(usage, want) {
+				t.Errorf("usage %q does not carry %q", usage, want)
+			}
+		})
 	}
 }
 

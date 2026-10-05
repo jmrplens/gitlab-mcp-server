@@ -4812,8 +4812,9 @@ claims `2026-07-28` in its handshake, and ignores `inputRequests` to be harmed.
 stdio: `initialize -> protocolVersion='2025-11-25'`, and the next `tools/call`
 answered `resultType: 'input_required'`.
 
-**Documented in**: `docs/reference/capabilities/elicitation.md`, so the
-behaviour is stated where someone writing a client would look.
+**Documented in**: the site's
+[elicitation page](https://jmrp.io/docs/gitlab-mcp-server/capabilities/elicitation/#which-protocol-version-decides),
+so the behaviour is stated where someone writing a client would look.
 
 ### Three methods are served on a legacy session before the initialize handshake
 

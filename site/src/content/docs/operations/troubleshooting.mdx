@@ -199,7 +199,7 @@ A fine-grained token's grant is fixed when the token is created, so every way ou
 | `Access denied: Fine-grained personal access tokens are not yet supported.`                                                            | Fine-grained tokens are not enabled for the token's user (GitLab's `granular_personal_access_tokens` feature flag), so every call the token makes is refused                                                                               | Use a classic token, or ask the instance's administrator to enable them                                  |
 | `404 Not Found`, as a GraphQL `errors[]` entry (over REST, a plain `404`)                                                              | What the call names was not found, or sits outside what the token may see                                                                                                                                                                  | Check the ID or path, and that the grant covers its project or group                                     |
 
-A list can name a permission the token creation page does not offer: for sixteen raw permissions GitLab's lookup prefers the label of a deprecated definition (`[Webhook: Test]` where the page offers Webhook: Trigger). That is read from GitLab's source and not yet seen on a running instance ([upstream-bugs row 85](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)). The [fine-grained permissions reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/fine-grained-permissions.md) names the permission the page offers for every action this server runs.
+A list can name a permission the token creation page does not offer: for sixteen raw permissions GitLab's lookup prefers the label of a deprecated definition (`[Webhook: Test]` where the page offers Webhook: Trigger). That is read from GitLab's source and not yet seen on a running instance ([upstream-bugs row 85](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)). The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/) names the permission the page offers for every action this server runs.
 
 **The server's own answers.**
 
@@ -354,7 +354,7 @@ The `WWW-Authenticate: Bearer` header carries a `resource_metadata` URL. Fetch i
 curl -s https://mcp.example.com/.well-known/oauth-protected-resource/mcp | jq .
 ```
 
-Read the fields rather than hard-coding them: `resource` is the identifier this deployment is known by, `authorization_servers` names the GitLab instances to authorize against, `scopes_supported` names the one scope a client should ask for (`api`, or `read_api` on a deployment started with `--read-only` or `--safe-mode`), and `resource_documentation` links a page about the deployment (this project's HTTP server page unless the operator sets `--resource-documentation`). A client that never fetches that document does not implement RFC 9728 discovery: send it a personal access token as `Authorization: Bearer glpat-...` instead, which is verified the same way. [The 401 challenge](/gitlab-mcp-server/operations/oauth-app/#the-401-challenge) explains the `scope` parameter the challenge carries.
+Read the fields rather than hard-coding them: `resource` is the identifier this deployment is known by, `authorization_servers` names the GitLab instances to authorize against, `scopes_supported` names the one scope a client should ask for (`api`, or `read_api` on a deployment started with `--read-only` or `--safe-mode`), and `resource_documentation` links a page about the deployment (this project's [OAuth application](/gitlab-mcp-server/operations/oauth-app/) page unless the operator sets `--resource-documentation`). A client that never fetches that document does not implement RFC 9728 discovery: send it a personal access token as `Authorization: Bearer glpat-...` instead, which is verified the same way. [The 401 challenge](/gitlab-mcp-server/operations/oauth-app/#the-401-challenge) explains the `scope` parameter the challenge carries.
 
 The public instance at `https://mcp.jmrp.io/gitlab` answers exactly this way, so it is a working reference to compare a deployment against; its metadata is at `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`.
 
@@ -376,9 +376,3 @@ If you cannot resolve an issue:
 </Steps>
 
 <FAQ />
-
-## Source reference
-
-:::note[Developer Documentation]
-For the complete technical reference, see [`docs/guides/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md) in the repository.
-:::

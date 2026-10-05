@@ -162,12 +162,12 @@ curl -s http://localhost:8080/.well-known/oauth-protected-resource/mcp | jq .
   "scopes_supported": ["api"],
   "bearer_methods_supported": ["header"],
   "resource_name": "GitLab MCP Server",
-  "resource_documentation": "https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/"
+  "resource_documentation": "https://jmrp.io/docs/gitlab-mcp-server/operations/oauth-app/"
 }
 ```
 
 - `authorization_servers` lists every instance `--gitlab-url` publishes, and `scopes_supported` reads `read_api` under `--read-only` or `--safe-mode`.
-- `resource_documentation` is always published, and defaults to this site's HTTP server page. RFC 9728 has no field for a client ID, so the closest a resource server can come to telling a client which application to use is a page that says so: point `--resource-documentation` at one of your own that names your Application ID and its redirect URIs.
+- `resource_documentation` is always published, and defaults to this page. RFC 9728 has no field for a client ID, so the closest a resource server can come to telling a client which application to use is a page that says so: point `--resource-documentation` at one of your own that names your Application ID and its redirect URIs.
 - `--resource-policy-uri` and `--resource-tos-uri` add `resource_policy_uri` and `resource_tos_uri`, and are omitted while empty. All three take an https URL.
 
 ### Behind a reverse proxy

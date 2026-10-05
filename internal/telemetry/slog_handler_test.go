@@ -703,8 +703,10 @@ func bothLegs(t *testing.T, identity *Redactor, write func(*slog.Logger)) (expor
 // "METHOD scheme://host/path: CODE body", so the collector received the
 // URL-encoded project path, the query string and GitLab's own response text —
 // under every identity policy, including the default one that records nobody.
-// docs/guides/telemetry.md states the opposite twice: "GitLab response bodies,
-// and GitLab error messages... never the text" and "Full URLs of GitLab calls".
+// The telemetry page
+// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#what-is-never-recorded)
+// states the opposite twice: "GitLab response bodies and error messages ...
+// never the text" and "Full URLs of GitLab calls".
 //
 // What is exported instead is the error's type, which is a compile-time
 // constant and therefore carries no request data, and it is enough to tell a

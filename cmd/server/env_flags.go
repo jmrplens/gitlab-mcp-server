@@ -61,7 +61,7 @@ var envBackedFlags = []struct {
 	{
 		flagName: "upload-max-file-size",
 		envName:  config.EnvPrefix + "UPLOAD_MAX_FILE_SIZE",
-		usage:    "Maximum size in bytes for upload and file-read tools",
+		usage:    "Largest local file the upload and file-read tools accept: a byte count, or one with a KB, MB or GB suffix (default 2GB, at most 1024GB)",
 	},
 	{
 		flagName: "yolo-mode",

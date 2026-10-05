@@ -57,18 +57,29 @@ const (
 	llmsFullIndividualFileName = "llms-full-individual-tools.txt"
 	llmsFullCapabilityFileName = "llms-full-resources-prompts.txt"
 
-	// repoBlobBaseURL prefixes every repository-relative documentation target in
-	// llms.txt. The file is published at the docs domain
-	// (https://jmrp.io/docs/gitlab-mcp-server/llms.txt), where a relative
-	// path such as "docs/getting-started.md" resolves against that host and 404s
-	// because docs/** is not part of the built site. Absolute blob URLs resolve
-	// from anywhere — the docs domain, the repository, or an AI crawler that
-	// fetched llms.txt with no base context.
+	// repoBlobBaseURL prefixes every repository-relative target in llms.txt.
+	// Only what the documentation site does not carry is linked that way:
+	// PRIVACY.md and the contributor documents under docs/development.
+	// The file is published at the docs domain
+	// (https://jmrp.io/docs/gitlab-mcp-server/llms.txt), where a relative path
+	// such as "PRIVACY.md" resolves against that host and 404s because the
+	// repository is not part of the built site. Absolute blob URLs resolve from
+	// anywhere: the docs domain, the repository, or an AI crawler that fetched
+	// llms.txt with no base context.
 	repoBlobBaseURL = "https://github.com/jmrplens/gitlab-mcp-server/blob/main/"
 
-	// siteBaseURL prefixes AI-facing artifacts that are published as part of the
-	// site rather than living only in the repository.
+	// siteBaseURL prefixes every user documentation page and every AI-facing
+	// artifact published as part of the site. The site is the one home of the
+	// user documentation, so a page is linked there by its slug with a
+	// trailing slash, the address the site serves it at, and never as a copy
+	// in the repository.
 	siteBaseURL = "https://jmrp.io/docs/gitlab-mcp-server/"
+
+	// clientsPage is the site page holding each MCP client's configuration,
+	// named twice in llms.txt: once where the install instructions send an
+	// assistant for the client it is configuring, and once in the list of
+	// setup pages.
+	clientsPage = "install/clients/"
 
 	llmsSummaryItemFormat = "- %s: %s\n"
 	llmsBoldTitleFormat   = "**%s**\n\n"
@@ -292,7 +303,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 
 	b.WriteString("Installing for an AI assistant:\n\n")
 	fmt.Fprintf(&b, "If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `%s`).\n\n", config.DefaultGitLabURL)
-	b.WriteString("The config schema differs by client. Most use a `mcpServers` key: Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Kiro, opencode, Cline, Gemini CLI, and the GitLab Duo Agent Platform. VS Code and GitHub Copilot use a `servers` key, with `\"type\": \"stdio\"` on each entry. Zed uses `context_servers`, and OpenAI Codex uses TOML `[mcp_servers.gitlab]` in `~/.codex/config.toml`. The `mcpServers` form with Docker:\n\n")
+	b.WriteString("The config schema differs by client. Most use a `mcpServers` key: Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Kiro, Cline, Gemini CLI, LM Studio, and the GitLab Duo Agent Platform. VS Code and GitHub Copilot use a `servers` key, with `\"type\": \"stdio\"` on each entry. OpenCode uses `mcp` in `opencode.json`, where each entry carries `\"type\": \"local\"`, takes `command` as an array holding the program and its arguments, and names its variables `environment` rather than `env`. Zed uses `context_servers`, and OpenAI Codex uses TOML `[mcp_servers.gitlab]` in `~/.codex/config.toml`. The `mcpServers` form with Docker:\n\n")
 	b.WriteString("```json\n")
 	b.WriteString("{\n")
 	b.WriteString("  \"mcpServers\": {\n")
@@ -309,8 +320,8 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("Claude Code (CLI): the registration command never carries the token. Docker: export `GITLAB_TOKEN` in the shell that launches the client, then `claude mcp add gitlab --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest`, where `-e GITLAB_TOKEN` with no value forwards the variable from the environment Claude Code hands `docker`. Native binary: write `GITLAB_TOKEN=<token>` to `~/.gitlab-mcp-server.env`, which the server reads for values its environment does not already carry, then `claude mcp add gitlab -- gitlab-mcp-server`. Do not suggest `--env GITLAB_TOKEN=<token>`: a shell expands before exec, so the value lands in the process arguments either way, and `claude mcp add` persists whatever it is given into its own configuration file.\n\n")
 	b.WriteString("One Docker caveat, for images tagged v2.7.5 or earlier only: those default to HTTP and hang at `initialize` when a client speaks stdio to them. Append `--http=false` after the image name for such a tag. Later images infer the transport from stdin, so `docker run -i` is enough and no extra argument is needed.\n\n")
 	b.WriteString("Nothing installed at all: https://mcp.jmrp.io/gitlab is a public instance of this server, fixed to https://gitlab.com and serving the default dynamic surface over stateless streamable HTTP. An OAuth-capable client needs no header and discovers the authorization server from the RFC 9728 challenge; any other client sends a GitLab.com token as `Authorization: Bearer <token>`, verified per request and never stored. It is one person's personal service with no SLA, so deploy your own for anything that matters.\n\n")
-	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
-		absoluteLLMSTarget("docs/guides/ide-configuration.md"))
+	fmt.Fprintf(&b, "The exact config-file path and entry for each client (VS Code with GitHub Copilot, Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Gemini CLI, LM Studio, mcp-remote, GitLab Duo Agent Platform, Windsurf, JetBrains, Zed, Kiro, OpenCode, Cline, Continue; stdio / HTTP / OAuth) are on [the MCP clients page](%s).\n\n",
+		sitePage(clientsPage))
 
 	b.WriteString("Running the binary by hand:\n\n")
 	b.WriteString("- Without both `GITLAB_URL` and `GITLAB_TOKEN`, and with a terminal attached, the server prints what it needs on stderr and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.\n")
@@ -376,22 +387,23 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("## Documentation\n\n")
 	writeLLMSLink(&b, "Documentation site index", siteBaseURL+llmsFileName, "Index of every published documentation page, which is what the documentation domain serves at /llms.txt")
 	writeLLMSLink(&b, "Spanish documentation index", siteBaseURL+"es/"+llmsFileName, "The same documentation in Spanish, page for page")
-	writeLLMSLink(&b, "Getting started", "docs/getting-started.md", "Installation and first-run guide")
-	writeLLMSLink(&b, "Installation", "docs/guides/installation.md", "Every install channel with its exact command, and how each one upgrades")
-	writeLLMSLink(&b, "Claude Desktop extension", "docs/guides/claude-desktop-extension.md", "One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)")
-	writeLLMSLink(&b, "Configuration", "docs/reference/configuration.md", "Full configuration reference")
-	writeLLMSLink(&b, "Environment variables", "docs/reference/env.md", "Environment variable reference")
-	writeLLMSLink(&b, "HTTP server mode", "docs/guides/http-server-mode.md", "Remote MCP transport setup")
-	writeLLMSLink(&b, "Security model", "docs/concepts/security.md", "Authentication, read-only mode, safe mode, and security controls")
-	writeLLMSLink(&b, "Resource subscriptions", "docs/reference/capabilities/subscriptions.md", "resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits")
+	writeLLMSLink(&b, "Getting started", sitePage("getting-started/"), "Installation and first-run guide")
+	writeLLMSLink(&b, "Installation", sitePage("install/overview/"), "Every install channel with its exact command, and how each one upgrades")
+	writeLLMSLink(&b, "MCP clients", sitePage(clientsPage), "Config-file path and entry for each MCP client, over stdio, HTTP and OAuth")
+	writeLLMSLink(&b, "Claude Desktop extension", sitePage("claude-desktop/"), "One-click .mcpb install for Claude Desktop (macOS universal, Windows x64, Linux x64 and arm64)")
+	writeLLMSLink(&b, "Configuration", sitePage("configuration/"), "Full configuration reference")
+	writeLLMSLink(&b, "Environment variables", sitePage("reference/environment/"), "Environment variable reference")
+	writeLLMSLink(&b, "HTTP server mode", sitePage("operations/http-server/"), "Remote MCP transport setup")
+	writeLLMSLink(&b, "Security model", sitePage("operations/security/"), "Authentication, read-only mode, safe mode, and security controls")
+	writeLLMSLink(&b, "Resource subscriptions", sitePage("capabilities/subscriptions/"), "resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits")
 	writeLLMSLink(&b, "Privacy policy", "PRIVACY.md", "No telemetry; data flows only to the configured GitLab instance")
 
 	b.WriteString("\n## Tool References\n\n")
-	writeLLMSLink(&b, "Dynamic tools", "docs/concepts/dynamic-tools.md", "Low-token find/execute mode and usage pattern")
-	writeLLMSLink(&b, "Meta-tools", "docs/concepts/meta-tools.md", "Consolidated domain meta-tool action reference")
-	writeLLMSLink(&b, "All tools", "docs/reference/tools/README.md", "Complete per-domain tool reference")
-	writeLLMSLink(&b, "Resources", "docs/reference/resources.md", "Read-only MCP resource reference")
-	writeLLMSLink(&b, "Prompts", "docs/reference/prompts.md", "Reusable MCP prompt templates")
+	writeLLMSLink(&b, "Dynamic tools", sitePage("tools/dynamic-tools/"), "Low-token find/execute mode and usage pattern")
+	writeLLMSLink(&b, "Meta-tools", sitePage("tools/meta-tools/"), "Consolidated domain meta-tool action reference")
+	writeLLMSLink(&b, "All tools", sitePage("reference/tools/"), "Per-domain tool reference generated from the action catalog, one page per catalog group")
+	writeLLMSLink(&b, "Resources", sitePage("tools/resources-prompts/#what-are-mcp-resources"), "Read-only MCP resource reference")
+	writeLLMSLink(&b, "Prompts", sitePage("tools/resources-prompts/#what-are-mcp-prompts"), "Reusable MCP prompt templates")
 
 	b.WriteString("\n## Optional\n\n")
 	sized := func(name, note string) string {
@@ -407,9 +419,9 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 		sized(llmsFullCapabilityFileName, "MCP resource and prompt definitions only"))
 	writeLLMSLink(&b, "Full LLM reference", siteBaseURL+llmsFullFileName,
 		sized(llmsFullFileName, "The three splits above concatenated. Past every current context window, so search or retrieve inside it rather than loading it; if you want one surface, take its split instead"))
-	writeLLMSLink(&b, "Architecture", "docs/concepts/architecture.md", "Internal architecture and catalog-first runtime overview")
-	writeLLMSLink(&b, "Output format", "docs/reference/output-format.md", "Markdown and structured output conventions")
-	writeLLMSLink(&b, "Troubleshooting", "docs/guides/troubleshooting.md", "Common setup and runtime issues")
+	writeLLMSLink(&b, "Architecture", sitePage("architecture/"), "Internal architecture and catalog-first runtime overview")
+	writeLLMSLink(&b, "Output format", sitePage("reference/output-format/"), "Markdown and structured output conventions")
+	writeLLMSLink(&b, "Troubleshooting", sitePage("operations/troubleshooting/"), "Common setup and runtime issues")
 	writeLLMSLink(&b, "Evaluation results", "docs/development/testing/model-results.md", "Surface evaluation summaries for model behavior")
 
 	content := b.String()
@@ -450,6 +462,13 @@ func describeSize(bytes int) string {
 		return fmt.Sprintf("%s, ~%.1fM tokens", size, tokens/1_000_000)
 	}
 	return fmt.Sprintf("%s, ~%dk tokens", size, int(tokens+500)/1000)
+}
+
+// sitePage is the address of a documentation site page. path is the page's
+// slug with the trailing slash the site serves it at, followed by an anchor
+// when the link means one section of the page.
+func sitePage(path string) string {
+	return siteBaseURL + path
 }
 
 // absoluteLLMSTarget resolves a llms.txt link target to an absolute URL.

@@ -51,9 +51,9 @@ const sessionEraProtocol = "2025-11-25"
 // client does with this server's 404.
 const sessionNotFoundFix = "Update row 68 of docs/development/upstream-bugs.md and its section, the comment on " +
 	"checkSessionOwnership in cmd/server/auth_gate.go, F-22 on row ADM-007 in internal/tenancy/decisions_admit.go " +
-	"if the client now recovers, the statements of what a client does once its session is gone (the Session Timeout " +
-	"steps and the pool eviction bullet of docs/guides/http-server-mode.md, the session lifecycle list of " +
-	"site/src/content/docs/operations/http-server.mdx and its es copy, and ADR-0020's eviction section and NEG-005), " +
+	"if the client now recovers, the statements of what a client does once its session is gone (the idle timeout " +
+	"and pool eviction steps of the session lifecycle list in site/src/content/docs/operations/http-server.mdx and " +
+	"its es copy, and ADR-0020's eviction section and NEG-005), " +
 	"and these tests, in this same pull request."
 
 // gateRefusalFix is what a failure about the refusal's own code or words asks

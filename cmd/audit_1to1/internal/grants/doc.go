@@ -37,7 +37,8 @@
 // # What it reports and never gates
 //
 // Per action, the permissions in GitLab's words, worded by the same
-// finegrained.Table.Describe the reference page and gitlab://tools/{id} use,
+// finegrained.Table.Describe the site's fine-grained permissions page and
+// gitlab://tools/{id} use,
 // with the directive or declaration that shaped each request; the actions no
 // fine-grained token reaches at the recorded release, by cause (the set a
 // fine-grained session is withheld, and issue 1054's inventory where the cause

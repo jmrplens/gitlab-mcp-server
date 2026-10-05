@@ -34,6 +34,7 @@ the full testing reference live in subfolders here.
 | [Repository Settings](repository-settings.md)                             | Release-pipeline settings that live on GitHub rather than in the tree              |
 
 **Looking for something else?**
-[Concepts](../concepts/README.md) for design rationale ·
-[Reference](../reference/README.md) for tool/flag details ·
+[Architecture](https://jmrp.io/docs/gitlab-mcp-server/architecture/) for design rationale ·
+[Tool reference](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/) and
+[CLI reference](https://jmrp.io/docs/gitlab-mcp-server/reference/cli/) for tool/flag details ·
 [../../CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution mechanics.

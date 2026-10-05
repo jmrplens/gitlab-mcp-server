@@ -2144,7 +2144,7 @@ go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ -check
 
 # Format explicit paths
-go run ./cmd/format_md_tables/ README.md docs/reference/tools/issues.md
+go run ./cmd/format_md_tables/ README.md site/src/content/docs/reference/cli.mdx
 ```
 
 #### Flags
@@ -2342,7 +2342,7 @@ go run ./cmd/gen_model_results/ -check                                    # the 
 
 ### server
 
-The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [CLI Reference](../reference/cli.md) for the full CLI reference and [configuration.md](../reference/configuration.md) for environment and configuration details.
+The main `gitlab-mcp-server` MCP binary: the runtime entry point and the only `cmd/` binary that ships to users. See the [CLI reference](https://jmrp.io/docs/gitlab-mcp-server/reference/cli/) for every flag and [Configuration](https://jmrp.io/docs/gitlab-mcp-server/configuration/) for environment and configuration details.
 
 **Make targets:** `make build` (builds `./dist/gitlab-mcp-server`), `make run` (builds and runs locally).
 

@@ -6,7 +6,7 @@
 What a pooled credential used to cost, where the memory went, what was
 changed so that most of it is now shared between credentials, and what is
 left. The numbers come from the concurrency series of the
-[resource benchmark](../reference/resource-benchmark.md), which steps one HTTP
+[resource benchmark](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/), which steps one HTTP
 process through credential counts and writes a CPU and a heap profile at each
 step; this page reads those profiles.
 
