@@ -22,9 +22,7 @@ import (
 // analysis rather than committed.
 const (
 	defaultRecord     = "site/src/data/resource-benchmark.json"
-	defaultDocCharts  = "docs/reference/benchmarks"
 	defaultSiteCharts = "site/public/benchmarks"
-	defaultDocPage    = "docs/reference/resource-benchmark.md"
 	defaultSitePageEN = "site/src/content/docs/performance/resource-benchmark.mdx"
 	defaultSitePageES = "site/src/content/docs/es/performance/resource-benchmark.mdx"
 	defaultProfiles   = "bench/profiles"
@@ -38,9 +36,7 @@ const (
 type options struct {
 	binary         string
 	record         string
-	docCharts      string
 	siteCharts     string
-	docPage        string
 	sitePageEN     string
 	sitePageES     string
 	scenarios      string
@@ -118,9 +114,7 @@ func parseFlags() options {
 	var opts options
 	flag.StringVar(&opts.binary, "binary", "", "server binary to measure; empty builds ./cmd/server into a temporary directory")
 	flag.StringVar(&opts.record, "json", defaultRecord, "measurement record to write, and to render from")
-	flag.StringVar(&opts.docCharts, "doc-charts", defaultDocCharts, "directory for the Markdown documentation's SVG charts")
 	flag.StringVar(&opts.siteCharts, "site-charts", defaultSiteCharts, "directory for the site's SVG charts")
-	flag.StringVar(&opts.docPage, "doc-page", defaultDocPage, "Markdown page whose generated block is rewritten")
 	flag.StringVar(&opts.sitePageEN, "site-page", defaultSitePageEN, "English site page whose generated block is rewritten")
 	flag.StringVar(&opts.sitePageES, "site-page-es", defaultSitePageES, "Spanish site page whose generated block is rewritten")
 	flag.StringVar(&opts.scenarios, "scenarios", "", "comma-separated scenario ids to measure; empty runs the whole matrix")

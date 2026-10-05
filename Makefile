@@ -1586,8 +1586,8 @@ check-site-stats:
 ## GitLab, so it needs no instance and no credentials. Takes several minutes:
 ## every scenario builds a tool catalog per client, which is the cost being
 ## measured. Writes site/src/data/resource-benchmark.json, the SVG pairs under
-## docs/reference/benchmarks and site/public/benchmarks, and the generated
-## blocks in the three documentation pages.
+## site/public/benchmarks (one directory per language), and the generated block
+## in the English and Spanish performance/resource-benchmark pages of the site.
 bench-resources:
 	go run ./cmd/bench_resources/
 

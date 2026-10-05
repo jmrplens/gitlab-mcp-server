@@ -107,9 +107,7 @@ func TestExecute_RenderAndCheck_NeverMeasure(t *testing.T) {
 		record:     record,
 		recordSet:  true,
 		binary:     filepath.Join(t.TempDir(), "no-such-server"),
-		docCharts:  filepath.Join(root, filepath.FromSlash(tree.docCharts)),
 		siteCharts: filepath.Join(root, filepath.FromSlash(tree.siteCharts)),
-		docPage:    filepath.Join(root, filepath.FromSlash(tree.docPage)),
 		sitePageEN: filepath.Join(root, filepath.FromSlash(tree.sitePageEN)),
 		sitePageES: filepath.Join(root, filepath.FromSlash(tree.sitePageES)),
 	}
@@ -406,11 +404,11 @@ func TestMatrixFor_UnknownScenario_ReportsIt(t *testing.T) {
 func TestResolveAndRel_RoundTrip(t *testing.T) {
 	root := t.TempDir()
 
-	absolute := resolve(root, "docs/reference/benchmarks")
+	absolute := resolve(root, defaultSiteCharts)
 	if !strings.HasPrefix(absolute, root) {
 		t.Errorf("resolve = %q, want it under %q", absolute, root)
 	}
-	if got := rel(root, absolute); got != "docs/reference/benchmarks" {
+	if got := rel(root, absolute); got != defaultSiteCharts {
 		t.Errorf("rel = %q, want the relative path back", got)
 	}
 
@@ -685,9 +683,7 @@ func TestExecute_MeasureRenderCheck_AgreeWithEachOther(t *testing.T) {
 	opts := quickOptions(t, root)
 	// execute resolves relative paths against the real module root, so the
 	// temporary tree's paths go in absolute.
-	opts.docCharts = filepath.Join(root, filepath.FromSlash(tree.docCharts))
 	opts.siteCharts = filepath.Join(root, filepath.FromSlash(tree.siteCharts))
-	opts.docPage = filepath.Join(root, filepath.FromSlash(tree.docPage))
 	opts.sitePageEN = filepath.Join(root, filepath.FromSlash(tree.sitePageEN))
 	opts.sitePageES = filepath.Join(root, filepath.FromSlash(tree.sitePageES))
 
@@ -907,7 +903,9 @@ func TestExecute_MeasureOnly_WritesTheRecordAndNothingElse(t *testing.T) {
 	t.Chdir(root)
 	opts := quickOptions(t, root)
 	opts.noRender = true
-	opts.docPage = filepath.Join(root, "doc.md")
+	// The chart directory is the first thing a render creates, so its absence
+	// afterwards says none was attempted.
+	opts.siteCharts = filepath.Join(root, "charts")
 
 	if err := execute(opts); err != nil {
 		t.Fatalf("execute -no-render: %v", err)
@@ -919,8 +917,8 @@ func TestExecute_MeasureOnly_WritesTheRecordAndNothingElse(t *testing.T) {
 	if len(run.Series) != 1 || run.Series[0].Steps[0].Profiles.CPU == "" {
 		t.Errorf("record %+v, want the series with its profiles", run.Series)
 	}
-	if _, statErr := os.Stat(opts.docPage); statErr == nil {
-		t.Error("a page was written by a run asked not to render")
+	if _, statErr := os.Stat(opts.siteCharts); statErr == nil {
+		t.Error("a chart directory was created by a run asked not to render")
 	}
 }
 

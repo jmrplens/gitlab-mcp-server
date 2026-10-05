@@ -1,6 +1,5 @@
-// render.go writes everything the record implies: the SVG pairs, the block of
-// tables in the Markdown reference, and the same block in each language of the
-// documentation site.
+// render.go writes everything the record implies: the SVG pairs and the block
+// of tables, in each language of the documentation site.
 //
 // Rendering is separated from measuring so the drawing can be verified. -check
 // re-renders from the committed record and compares, which turns "the chart
@@ -21,16 +20,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
-// Markers for the generated block. The Markdown page uses HTML comments, the
-// way every other managed section in this repository does; the site pages use
-// an MDX expression comment, because MDX parses an HTML comment as markup and
-// refuses the file.
+// Markers for the generated block. The site pages use an MDX expression
+// comment rather than the HTML comment other managed sections in this
+// repository use, because MDX parses an HTML comment as markup and refuses the
+// file. The comment carries no spaces inside its delimiters on purpose:
+// markdownlint reads "/* " as an emphasis marker followed by a space and fails
+// the page on MD037.
 const (
-	docStartMark = "<!-- START BENCHMARK -->"
-	docEndMark   = "<!-- END BENCHMARK -->"
-	// The MDX comment carries no spaces inside its delimiters on purpose:
-	// markdownlint reads "/* " as an emphasis marker followed by a space and
-	// fails the page on MD037.
 	siteStartMark = "{/*START BENCHMARK*/}"
 	siteEndMark   = "{/*END BENCHMARK*/}"
 )
@@ -53,8 +49,8 @@ func renderAll(opts options, root string, run *Run) error {
 	english, spanish := englishLabels(), spanishLabels()
 	var changed []string
 
-	// The Markdown reference is English only, and reads its charts from a
-	// directory beside it so a GitHub reader gets them without the site.
+	// Each language reads its charts from a directory of its own, since the
+	// labels drawn into them are translated.
 	for _, l := range []labels{english, spanish} {
 		dir := filepath.Join(resolve(root, opts.siteCharts), l.Code)
 		written, chartErr := writeCharts(dir, run, l, palettes, opts.check)
@@ -63,23 +59,16 @@ func renderAll(opts options, root string, run *Run) error {
 		}
 		changed = append(changed, relAll(root, written)...)
 	}
-	written, err := writeCharts(resolve(root, opts.docCharts), run, english, palettes, opts.check)
-	if err != nil {
-		return fmt.Errorf("documentation charts: %w", err)
-	}
-	changed = append(changed, relAll(root, written)...)
 
 	sections := []struct {
-		path       string
-		start, end string
-		content    string
+		path    string
+		content string
 	}{
-		{resolve(root, opts.docPage), docStartMark, docEndMark, docBlock(run, english)},
-		{resolve(root, opts.sitePageEN), siteStartMark, siteEndMark, siteBlock(run, english)},
-		{resolve(root, opts.sitePageES), siteStartMark, siteEndMark, siteBlock(run, spanish)},
+		{resolve(root, opts.sitePageEN), siteBlock(run, english)},
+		{resolve(root, opts.sitePageES), siteBlock(run, spanish)},
 	}
 	for _, section := range sections {
-		sectionChanged, sectionErr := writeSection(section.path, section.start, section.end, section.content, opts.check)
+		sectionChanged, sectionErr := writeSection(section.path, section.content, opts.check)
 		if sectionErr != nil {
 			return fmt.Errorf("generated section in %s: %w", rel(root, section.path), sectionErr)
 		}
@@ -154,13 +143,14 @@ func writeFile(path string, content []byte, check bool) (bool, error) {
 	return true, nil
 }
 
-// writeSection rewrites one generated block, or reports that it would change.
-func writeSection(path, start, end, content string, check bool) (bool, error) {
+// writeSection rewrites the generated block of one site page, or reports that
+// it would change.
+func writeSection(path, content string, check bool) (bool, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- generated output paths, from this command's flags
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", path, err)
 	}
-	updated, err := docgen.ComputeReplacedSection(string(data), start, end, content)
+	updated, err := docgen.ComputeReplacedSection(string(data), siteStartMark, siteEndMark, content)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
@@ -177,21 +167,6 @@ func writeSection(path, start, end, content string, check bool) (bool, error) {
 	return true, nil
 }
 
-// docBlock is the generated body of the Markdown reference page.
-func docBlock(run *Run, l labels) string {
-	var b strings.Builder
-	b.WriteString(measuredOn(run, l) + "\n")
-	for _, fig := range buildFigures(run, l) {
-		b.WriteString("\n<picture>\n")
-		fmt.Fprintf(&b, "  <source media=\"(prefers-color-scheme: dark)\" srcset=\"benchmarks/%s.dark.svg\">\n", fig.Name)
-		fmt.Fprintf(&b, "  <img alt=\"%s\" src=\"benchmarks/%s.light.svg\">\n", l.FigureAlt[fig.Name], fig.Name)
-		b.WriteString("</picture>\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(tableBlocks(run, l, "###"))
-	return strings.TrimRight(b.String(), "\n") + "\n"
-}
-
 // siteBlock is the generated body of one language's site page.
 func siteBlock(run *Run, l labels) string {
 	var b strings.Builder
@@ -199,7 +174,7 @@ func siteBlock(run *Run, l labels) string {
 	for _, fig := range buildFigures(run, l) {
 		fmt.Fprintf(&b, "<ChartPair name=\"%s\" lang=\"%s\" alt=\"%s\" />\n\n", fig.Name, l.Code, l.FigureAlt[fig.Name])
 	}
-	b.WriteString(tableBlocks(run, l, "###"))
+	b.WriteString(tableBlocks(run, l))
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
@@ -233,10 +208,13 @@ func shortCommit(commit string) string {
 	return commit
 }
 
-// tableBlocks renders the three tables with headings at the given level, so
-// the same content fits under a Markdown page's H3 and a site page's H2,
-// followed by the concurrency series when the record holds one.
-func tableBlocks(run *Run, l labels, heading string) string {
+// tableHeading is the level the generated tables sit at: under the site page's
+// "Measurements" H2.
+const tableHeading = "###"
+
+// tableBlocks renders the three tables under their headings, followed by the
+// concurrency series when the record holds one.
+func tableBlocks(run *Run, l labels) string {
 	var b strings.Builder
 	tables := []struct {
 		key   string
@@ -247,9 +225,9 @@ func tableBlocks(run *Run, l labels, heading string) string {
 		{"latency", latencyTable(run, l)},
 	}
 	for _, entry := range tables {
-		fmt.Fprintf(&b, "%s %s\n\n%s\n\n", heading, l.TableCaption[entry.key], strings.TrimRight(entry.table, "\n"))
+		fmt.Fprintf(&b, "%s %s\n\n%s\n\n", tableHeading, l.TableCaption[entry.key], strings.TrimRight(entry.table, "\n"))
 	}
-	b.WriteString(seriesBlocks(run, l, heading))
+	b.WriteString(seriesBlocks(run, l))
 	return b.String()
 }
 
@@ -263,15 +241,15 @@ func tableBlocks(run *Run, l labels, heading string) string {
 // it is a number the reader has nothing to do with; the one series it does
 // explain is one that stopped on it, and the sentence under the table names
 // it there.
-func seriesBlocks(run *Run, l labels, heading string) string {
+func seriesBlocks(run *Run, l labels) string {
 	series := orderedSeries(run)
 	if len(series) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n\n", heading, l.TableCaption["series"])
+	fmt.Fprintf(&b, "%s %s\n\n", tableHeading, l.TableCaption["series"])
 	for _, s := range series {
-		fmt.Fprintf(&b, "%s# %s\n\n", heading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds))
+		fmt.Fprintf(&b, "%s# %s\n\n", tableHeading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds))
 		fmt.Fprintf(&b, "%s\n\n", strings.TrimRight(seriesTable(s, l), "\n"))
 		fmt.Fprintf(&b, "%s\n\n", joinNonEmpty(" ", seriesSlopeSentence(s, l), seriesSentence(s, l)))
 	}

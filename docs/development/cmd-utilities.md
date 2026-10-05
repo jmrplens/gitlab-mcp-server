@@ -2200,9 +2200,7 @@ go run ./cmd/bench_resources/ -fairness tools-call-rps
 | ------------------ | ---------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-binary`          | `string`   | `""`                                                          | Server binary to measure; empty builds `./cmd/server` into a temporary directory                                                              |
 | `-json`            | `string`   | `site/src/data/resource-benchmark.json`                       | Measurement record to write, and to render from                                                                                               |
-| `-doc-charts`      | `string`   | `docs/reference/benchmarks`                                   | Directory for the Markdown documentation's SVG charts                                                                                         |
 | `-site-charts`     | `string`   | `site/public/benchmarks`                                      | Directory for the site's SVG charts                                                                                                           |
-| `-doc-page`        | `string`   | `docs/reference/resource-benchmark.md`                        | Markdown page whose generated block is rewritten                                                                                              |
 | `-site-page`       | `string`   | `site/src/content/docs/performance/resource-benchmark.mdx`    | English site page whose generated block is rewritten                                                                                          |
 | `-site-page-es`    | `string`   | `site/src/content/docs/es/performance/resource-benchmark.mdx` | Spanish site page whose generated block is rewritten                                                                                          |
 | `-scenarios`       | `string`   | `""`                                                          | Comma-separated scenario ids to measure; empty runs the whole matrix                                                                          |
@@ -2264,11 +2262,36 @@ With `-no-render` and `-binary` the driver reads nothing from a checkout, so a p
 
 #### The held and sessions modes
 
-`-held <counts>` and `-sessions <counts>` are two more modes of their own, each the measurement a process ceiling was sized from, and both are documented with their flags in the resource benchmark's [held mode](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/#the-held-mode) and [sessions mode](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/#the-sessions-mode) sections. `-held` holds a ladder of `tools/call` open at once against a stand-in GitLab that holds every project read, and samples at each step the server's descriptors (from `/proc/<pid>/fd`), goroutines, live heap, resident set and whether `/health` still answers, then how every call ended once released; it is register row `HLD-011`'s measurement. `-sessions` does the same for the `--stateless=false` transport with a ladder of sessions, each an `initialize` on 2025-11-25, optionally holding its standalone stream (`-sessions-stream`), counting the sessions the server still holds by pinging each; it is register row `HLD-010`'s. `-held-nofile` and `-sessions-nofile` start the server under a hard descriptor limit through `/bin/sh` and `ulimit -n`, since Go raises its soft limit to the hard one at startup. They write `bench/held.json` and `bench/sessions.json`, which are not committed, and draw nothing.
+`-held <counts>` and `-sessions <counts>` are two more modes of their own, each the measurement a process ceiling was sized from. Their flags are below; how each step is settled, sampled and priced is in the resource benchmark's [held mode](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/#the-held-mode) and [sessions mode](https://jmrp.io/docs/gitlab-mcp-server/performance/resource-benchmark/#the-sessions-mode) sections. `-held` holds a ladder of `tools/call` open at once against a stand-in GitLab that holds every project read, and samples at each step the server's descriptors (from `/proc/<pid>/fd`), goroutines, live heap, resident set and whether `/health` still answers, then how every call ended once released; it is register row `HLD-011`'s measurement. `-sessions` does the same for the `--stateless=false` transport with a ladder of sessions, each an `initialize` on 2025-11-25, optionally holding its standalone stream (`-sessions-stream`), counting the sessions the server still holds by pinging each; it is register row `HLD-010`'s. `-held-nofile` and `-sessions-nofile` start the server under a hard descriptor limit through `/bin/sh` and `ulimit -n`, since Go raises its soft limit to the hard one at startup. They write `bench/held.json` and `bench/sessions.json`, which are not committed, and draw nothing.
+
+Each mode is refused together with `-render` and `-check`, and with `-fairness`; `-sessions` is refused together with `-held` as well. The counts must be positive and ascend, and a document path that names the published record is refused before the server starts. `make bench-held` and `make bench-sessions` run the ladders the two ceilings were measured with, under a limit of 1024 (`HELD_CREDENTIALS` and `SESSIONS_CREDENTIALS` spread them).
+
+| Flag                | Type     | Default           | Description                                                                                                                      |
+| ------------------- | -------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `-held`             | `string` | `""`              | Comma-separated counts of `tools/call` held open at once, ascending; empty runs the matrix instead                               |
+| `-held-credentials` | `int`    | `1`               | Credentials the calls are spread across, round robin; must be positive                                                           |
+| `-held-nofile`      | `int`    | `0`               | Descriptor limit the server is started under, through `/bin/sh` and `ulimit -n`; `0` inherits this process's; refused on Windows |
+| `-held-json`        | `string` | `bench/held.json` | Document to write; refused if it names the published record                                                                      |
+
+| Flag                    | Type     | Default               | Description                                                                                                              |
+| ----------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-sessions`             | `string` | `""`                  | Comma-separated counts of stateful sessions open at once, ascending; empty runs the matrix instead                       |
+| `-sessions-credentials` | `int`    | `1`                   | Credentials the sessions are spread across, round robin; must be positive                                                |
+| `-sessions-nofile`      | `int`    | `0`                   | Descriptor limit the server is started under, as `-held-nofile` sets it; `0` inherits this process's; refused on Windows |
+| `-sessions-stream`      | `bool`   | `false`               | Open each session's standalone stream and hold it open for the step                                                      |
+| `-sessions-json`        | `string` | `bench/sessions.json` | Document to write; refused if it names the published record                                                              |
+
+```bash
+# What a held call costs, and what the process does past a descriptor limit
+go run ./cmd/bench_resources/ -held 100,192,250,500,1000,2000,4000 -held-nofile 1024
+
+# What a stateful session costs, with every session's standalone stream open
+go run ./cmd/bench_resources/ -sessions 50,96,100,500,1000,2000,4000 -sessions-nofile 1024 -sessions-stream
+```
 
 #### Output
 
-The measurement record, the SVG chart pairs under the two chart directories, and the generated blocks of the three documentation pages; and, for the series, one CPU and one heap profile per step under the profiles directory, which git ignores. A full run takes several minutes for the point scenarios, since every one builds a tool catalog per client, and then as long as the host's memory lets the series run.
+The measurement record, the SVG chart pairs under the site chart directory (one subdirectory per language), and the generated blocks of the English and Spanish site pages; and, for the series, one CPU and one heap profile per step under the profiles directory, which git ignores. A full run takes several minutes for the point scenarios, since every one builds a tool catalog per client, and then as long as the host's memory lets the series run.
 
 #### Make targets
 
