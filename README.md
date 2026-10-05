@@ -475,20 +475,20 @@ and the workaround this server carries until it ships.
 
 | Category                 |     Files |         Lines |
 | ------------------------ | --------: | ------------: |
-| Source (`.go`, non-test) |     1,467 |       347,953 |
-| Unit tests (`_test.go`)  |     1,016 |       664,168 |
+| Source (`.go`, non-test) |     1,467 |       348,036 |
+| Unit tests (`_test.go`)  |     1,016 |       664,332 |
 | End-to-end tests         |       520 |       113,234 |
-| **Total**                | **3,003** | **1,125,355** |
+| **Total**                | **3,003** | **1,125,602** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 11,731 |
+| Source functions                | 11,733 |
 | . Exported (public)             |  3,474 |
-| . Unexported (private)          |  8,257 |
-| Unit test functions (`TestXxx`) | 19,306 |
-| Subtests (`t.Run(...)`)         |  7,292 |
+| . Unexported (private)          |  8,259 |
+| Unit test functions (`TestXxx`) | 19,310 |
+| Subtests (`t.Run(...)`)         |  7,294 |
 | End-to-end test functions       |  1,461 |
 
 ### Ratios worth noting
@@ -498,14 +498,14 @@ and the workaround this server carries until it ships.
 | Test lines vs source lines         | 1.91× more tests than code |
 | Average source file length         |                 ~237 lines |
 | Average test file length           |                 ~654 lines |
-| Comment lines in source            |  85,353 (~24.5% of source) |
+| Comment lines in source            |  85,424 (~24.5% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            |  Count |
 | ---------------------------------- | -----: |
-| `if err != nil` checks             | 10,208 |
+| `if err != nil` checks             | 10,209 |
 | `defer` statements                 |  1,375 |
 | `struct` types defined             |  3,735 |
 | `//nolint` suppressions            |    248 |
@@ -530,8 +530,8 @@ and the workaround this server carries until it ships.
 
 | Fact                                 | Value                                                                                                            |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~6,326 pages of A4                                                                                               |
-| Source lines mentioning `"gitlab"`   | 15,885 (impossible to avoid)                                                                                     |
+| Source code printed at 55 lines/page | ~6,327 pages of A4                                                                                               |
+| Source lines mentioning `"gitlab"`   | 15,887 (impossible to avoid)                                                                                     |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                                 |
 | Longest test function name           | `TestPrepareStdioCatalog_AnUnansweredVersionAndATokenBelowTheMinimum_RefusesWithoutCallingItDegraded` (99 chars) |
 
