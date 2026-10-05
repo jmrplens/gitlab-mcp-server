@@ -12,9 +12,9 @@ faq:
   - q: "¿Orbit es de solo lectura?"
     a: "Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos."
   - q: "¿Cuáles son las cuatro variantes de query_type de Orbit?"
-    a: "La acción `query` acepta un objeto JSON de consulta cuyo `query_type` selecciona una de cuatro variantes: **traversal** (recorrer nodos por entity, `node_ids`, `filters` o `id_range`), **aggregation** (agrupar y agregar sobre nodos), **neighbors** (expandir los vecinos de un nodo acotado) y **path_finding** (encontrar caminos entre dos o más nodos acotados, con `max_depth` de 1 a 3). Las cuatro comparten el único discriminador `query_type` y solo divergen en sus claves hermanas."
+    a: "La acción `query` recibe una consulta en la versión 12 del DSL de consultas de Orbit, en la que toda consulta lleva un `query_type` y una lista `nodes`, aunque tenga un solo nodo. **traversal** lee un nodo, o varios unidos por `relationships`. **aggregation** cuenta, suma o promedia sobre nodos, con o sin agrupar. **neighbors** devuelve las relaciones de su único nodo, salientes salvo que `neighbors.direction` diga `incoming` o `both`. **path_finding** busca el camino más corto entre dos nodos, con `max_depth` de 1 a 3, por los `rel_types` que nombra. GitLab compila cada consulta y responde a la que no puede ejecutar con un mensaje que nombra el fallo, y el servidor lo transmite."
   - q: "¿Cómo conozco los parámetros exactos de una acción Orbit?"
-    a: 'En la superficie dinámica predeterminada, `gitlab_find_action` con una consulta como "orbit query" devuelve el schema exacto de `params` inline; el mismo schema se puede leer como el recurso `gitlab://tools/orbit.query` (`gitlab://tools/gitlab_orbit.query` con `GITLAB_MCP_TOOL_SURFACE=meta`). Estos recursos siguen disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `GITLAB_MCP_META_PARAM_SCHEMA`. También puedes ejecutar la acción `tools` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
+    a: 'En la superficie dinámica predeterminada, `gitlab_find_action` con una consulta como "orbit query" devuelve el schema exacto de `params` inline; el mismo schema se puede leer como el recurso `gitlab://tools/orbit.query` (`gitlab://tools/gitlab_orbit.query` con `GITLAB_MCP_TOOL_SURFACE=meta`). Estos recursos siguen disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `GITLAB_MCP_META_PARAM_SCHEMA`. Antes de construir una consulta, ejecuta la acción `dsl` para obtener el lenguaje de consulta contra el que GitLab.com la compila y la acción `schema` para las entidades y los tipos de relación que puede nombrar.'
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -46,7 +46,7 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso en u
 | -------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
 | `status`       | `orbit.status`       | `gitlab_orbit_status`       | Comprobar la salud del servicio Orbit y el estado de sus componentes           |
 | `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspeccionar la ontología del grafo y ampliar definiciones de nodos            |
-| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | Descubrir el manifiesto vivo de consultas Orbit                                |
+| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | Listar el manifiesto de herramientas MCP que sirve Orbit                       |
 | `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Obtener el esquema DSL o gramática LLM de Orbit                                |
 | `query`        | `orbit.query`        | `gitlab_orbit_query`        | Ejecutar un objeto de consulta de solo lectura sobre el Knowledge Graph        |
 | `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspeccionar el estado de indexación de un namespace, proyecto o ruta completa |
@@ -55,30 +55,49 @@ El nombre de la acción es lo que la meta-herramienta `gitlab_orbit` recibe en `
 
 ## ¿Cuál es el flujo típico?
 
-El flujo típico de Orbit descubre primero el esquema vivo y luego ejecuta una consulta tipada —nunca al revés—, porque la ontología y el DSL que sirve GitLab.com pueden cambiar. Confirma que el servicio está activo con `status`, inspecciona el grafo con `schema`, obtén el manifiesto vivo de consultas con `tools`, opcionalmente recupera la gramática DSL con `dsl`, y luego envía un objeto de consulta a `query`.
+El flujo típico de Orbit aprende primero el lenguaje de consulta y el grafo, y consulta después, porque el DSL y la ontología que sirve GitLab.com cambian durante la beta. Confirma que el servicio está activo con `status`, lee el lenguaje de consulta con `dsl` y el grafo con `schema`, y luego envía un objeto de consulta a `query`.
 
 1. Ejecuta la acción `status` (`gitlab_execute_action` con `action: "orbit.status"` en la superficie predeterminada; `gitlab_orbit` con `action: "status"` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) para confirmar que el servicio está disponible.
-2. Ejecuta `schema` para inspeccionar dominios, nodos y relaciones del grafo.
-3. Ejecuta `tools` antes de `query` para obtener el schema vivo de consultas servido por GitLab.com.
-4. (Opcional) Ejecuta `dsl` para obtener el esquema DSL o gramática LLM de Orbit.
+2. Ejecuta `dsl` para obtener el lenguaje de consulta, como JSON Schema (`raw`) o como gramática compacta (`llm`).
+3. Ejecuta `schema` para obtener las entidades, sus propiedades y los tipos de relación entre ellas.
+4. (Opcional) Ejecuta `tools` para obtener el manifiesto de herramientas MCP que sirve Orbit, con el esquema de parámetros de cada una de sus herramientas.
 5. Pasa un objeto JSON de consulta a `query` con `response_format` en `raw` o `llm`.
 
 ### Variantes del DSL de consulta
 
-El parámetro `query` de la acción `query` es un objeto JSON cuyo `query_type` selecciona una de cuatro variantes. El siguiente diagrama resume la forma mínima aceptada para cada variante. Un `graph TD` de Mermaid es la herramienta adecuada porque las cuatro variantes comparten un único discriminador `query_type` y solo divergen en las claves hermanas; un árbol hace que los discriminantes y campos requeridos sean legibles de un vistazo.
+El parámetro `query` de la acción `query` es una consulta en la versión 12 del DSL de consultas de Orbit (`graph_query/v12`, el esquema que devuelve `dsl`). Toda consulta lleva un `query_type` y una lista `nodes`, aunque tenga un solo nodo, y el `query_type` decide qué más necesita. El diagrama resume la forma mínima que GitLab.com ejecuta para cada tipo. Un `graph TD` de Mermaid encaja porque los cuatro tipos comparten un único discriminador y solo difieren en las claves que lo acompañan.
 
 ```mermaid
 graph TD
-    Q["QueryInput<br/>(gitlab_orbit_query)"] --> QT{"query_type"}
-    QT -->|"traversal"| TR["node OR nodes<br/>+ entity, node_ids/filters/id_range<br/>+ relationships?, columns?, order_by?, limit?, cursor?"]
-    QT -->|"aggregation"| AG["nodes[]<br/>+ aggregations[] (function, target, alias)<br/>+ group_by?, aggregation_sort?"]
-    QT -->|"neighbors"| NB["node (bounded)<br/>+ neighbors.node<br/>+ direction?, rel_types?"]
-    QT -->|"path_finding"| PF["nodes[] (>=2, bounded)<br/>+ path {type, from, to, max_depth: 1..3, rel_types?}"]
+    Q["query"] --> QT{"query_type"}
+    QT -->|"traversal"| TR["nodes: 1 nodo, o de 2 a 5 unidos por relationships<br/>+ node_ids o filters en un nodo<br/>+ columns?, order_by?, limit?, cursor?"]
+    QT -->|"aggregation"| AG["nodes + node_ids o filters en un nodo<br/>+ aggregations: count, sum, avg, min, max, collect<br/>+ relationships?, group_by?, aggregation_sort?"]
+    QT -->|"neighbors"| NB["nodes: exactamente 1, el centro, acotado<br/>+ neighbors: direction?, rel_types?"]
+    QT -->|"path_finding"| PF["nodes: 2<br/>+ path: type shortest, from, to,<br/>max_depth de 1 a 3, rel_types"]
 ```
+
+Las reglas en las que más se equivoca un modelo. Las tres primeras rechazan una forma anterior del DSL, la que también enseñaba este servidor antes de pasar a la versión 12, y la agregación con su función como clave es nueva en la versión 12:
+
+- **Sin `node` en el primer nivel.** Los selectores de nodo van en `nodes`, que GitLab exige, y un `node` en el primer nivel se rechaza.
+- **Un filtro es un valor sin más o un objeto con operadores como claves.** `{"full_path": "gitlab-org/gitlab"}` coincide con un valor, y `{"full_path": {"starts_with": "gitlab-org/"}}` o `{"star_count": {"gte": 1, "lt": 9}}` aplican operadores. Los operadores son `eq`, `ne`, `gt`, `lt`, `gte`, `lte`, `in`, `contains`, `starts_with`, `ends_with`, `is_null`, `is_not_null`, `token_match`, `all_tokens` y `any_tokens`. Un objeto `{"op": ..., "value": ...}` se rechaza.
+- **Una consulta neighbors no nombra ningún nodo dentro de `neighbors`.** Su centro es su único nodo, y `neighbors` solo contiene `direction` y `rel_types`. La dirección por defecto es `outgoing`, así que una consulta que quiera todas las relaciones del centro pasa `"both"`: el grupo, el creador y las etiquetas de un proyecto se alcanzan por relaciones entrantes.
+- **Una consulta de camino nombra sus tipos de relación.** `rel_types` es obligatorio, `["*"]` para cualquier tipo, cada relación se recorre solo en su dirección definida, y `shortest` es el único tipo de camino.
+- **Las agregaciones, la agrupación y el orden son compactos.** Una agregación lleva su función como clave, `{"count": "mr", "as": "mr_count"}`. Una entrada de `group_by` es el id de un nodo, o el id de un nodo y una propiedad unidos por un punto. `order_by` y `aggregation_sort` son cadenas, con un `-` delante para orden descendente.
+- **Un traversal o una aggregation está acotado.** Al menos un nodo lleva `node_ids` o `filters`, y una consulta neighbors acota su centro del mismo modo. GitLab rechaza una consulta sin acotar en lugar de recorrer todas las aristas.
+
+### Cuando GitLab rechaza una consulta
+
+El servidor solo comprueba que se haya dado una consulta y que se codifique como JSON; del resto juzga GitLab. A una consulta que no puede compilar responde con `400` y un mensaje que nombra el fallo, que llega al modelo en el texto del error junto con una sugerencia para corregir la consulta a partir de `dsl` y `schema`:
+
+```text
+orbit_query: bad request: check your input parameters ({code: compile_error}, {message: schema violation: "nodes" is a required property at ; Additional properties are not allowed ('node' was unexpected) at }). Suggestion: correct the query where GitLab's message points. orbit.dsl serves the query language and orbit.schema the entities, properties and relationship types it accepts: POST https://gitlab.com/api/v4/orbit/query: 400 ...
+```
+
+A un nombre que GitLab no conoce responde con todos los que sí conoce, como la lista completa de tipos de relación ante un `IN_PROJECT` mal escrito, así que la corrección suele estar en el propio mensaje.
 
 ### Flujo descubrir → consultar
 
-El patrón recomendado es descubrir primero el esquema vivo (`schema`, y opcionalmente `dsl`) y luego ejecutar una consulta tipada mediante `query`. Un `sequenceDiagram` es la herramienta adecuada porque los pasos involucran a cuatro actores distintos (cliente de IA, servidor MCP, GitLab.com e indexer de Orbit) y los límites de respuesta importan: el LLM no debe asumir que el esquema devuelto por `dsl` es estable.
+El patrón recomendado es leer primero el grafo con `schema` y el lenguaje de consulta con `dsl`, y luego ejecutar una consulta mediante `query`. Un `sequenceDiagram` encaja porque los pasos involucran a cuatro actores distintos (cliente de IA, servidor MCP, GitLab.com e indexer de Orbit) y los límites de respuesta importan: el LLM no debe asumir que el DSL que devuelve `dsl` es estable, y una consulta que GitLab no puede compilar vuelve con la explicación del propio GitLab.
 
 ```mermaid
 sequenceDiagram
@@ -97,12 +116,17 @@ sequenceDiagram
     GL-->>MCP: DSL de consulta / gramática LLM
     MCP-->>LLM: texto del DSL
 
-    LLM->>MCP: gitlab_orbit_query (query={query_type, ...})
+    LLM->>MCP: gitlab_orbit_query (query={query_type, nodes, ...})
     MCP->>GL: POST /api/v4/orbit/query
-    GL->>IDX: resolver node_ids / filters
-    IDX-->>GL: filas indexadas
-    GL-->>MCP: filas / agregaciones / caminos
-    MCP-->>LLM: resultado + markdown
+    alt GitLab compila la consulta
+        GL->>IDX: resolver node_ids / filters
+        IDX-->>GL: filas indexadas
+        GL-->>MCP: filas / agregaciones / caminos
+        MCP-->>LLM: resultado + markdown
+    else GitLab no puede compilarla
+        GL-->>MCP: 400 compile_error + mensaje
+        MCP-->>LLM: error con el mensaje de GitLab
+    end
 ```
 
 Los ejemplos siguientes usan la superficie dinámica predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` llama a `gitlab_orbit` en lugar de `gitlab_execute_action` y quita el prefijo `orbit.` de `action`.
@@ -170,16 +194,99 @@ Los ejemplos siguientes usan la superficie dinámica predeterminada; con `GITLAB
     "params": {
       "query": {
         "query_type": "traversal",
-        "node": {
-          "id": "p",
-          "entity": "Project",
-          "filters": {
-            "full_path": { "op": "starts_with", "value": "gitlab-org/" }
-          },
-          "columns": ["id", "full_path"]
-        }
+        "nodes": [
+          {
+            "id": "p",
+            "entity": "Project",
+            "filters": {
+              "full_path": { "starts_with": "gitlab-org/" }
+            },
+            "columns": ["id", "full_path"]
+          }
+        ],
+        "limit": 20
       },
       "response_format": "llm"
+    }
+  }
+}
+```
+
+### Ejemplo: Contar merge requests por proyecto
+
+```json
+{
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "orbit.query",
+    "params": {
+      "query": {
+        "query_type": "aggregation",
+        "nodes": [
+          {
+            "id": "p",
+            "entity": "Project",
+            "filters": { "full_path": { "starts_with": "gitlab-org/" } }
+          },
+          { "id": "mr", "entity": "MergeRequest" }
+        ],
+        "relationships": [{ "type": "IN_PROJECT", "from": "mr", "to": "p" }],
+        "group_by": ["p"],
+        "aggregations": [{ "count": "mr", "as": "mr_count" }],
+        "aggregation_sort": "-mr_count"
+      }
+    }
+  }
+}
+```
+
+### Ejemplo: Todo aquello con lo que se relaciona un proyecto
+
+```json
+{
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "orbit.query",
+    "params": {
+      "query": {
+        "query_type": "neighbors",
+        "nodes": [
+          {
+            "id": "p",
+            "entity": "Project",
+            "filters": { "full_path": "gitlab-org/gitlab" }
+          }
+        ],
+        "neighbors": { "direction": "both" },
+        "limit": 50
+      }
+    }
+  }
+}
+```
+
+### Ejemplo: Un camino de un usuario a un proyecto
+
+```json
+{
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "orbit.query",
+    "params": {
+      "query": {
+        "query_type": "path_finding",
+        "nodes": [
+          { "id": "u", "entity": "User", "node_ids": [1] },
+          { "id": "p", "entity": "Project", "node_ids": [278964] }
+        ],
+        "path": {
+          "type": "shortest",
+          "from": "u",
+          "to": "p",
+          "max_depth": 3,
+          "rel_types": ["*"]
+        }
+      }
     }
   }
 }
@@ -216,7 +323,7 @@ Devuelve la ontología del grafo Orbit, incluyendo versión, dominios, nodos y a
 
 ### `tools` — Descubrir el manifiesto de herramientas Orbit
 
-Devuelve el manifiesto MCP Orbit vivo. Úsalo antes de `query` para descubrir los esquemas de consulta y parámetros soportados.
+Devuelve el manifiesto de herramientas MCP que sirve Orbit, con el esquema de parámetros de cada una de sus herramientas. El lenguaje de consulta en sí es lo que devuelve `dsl`.
 
 **Ejemplo:** Ver arriba.
 
@@ -228,7 +335,7 @@ Devuelve el DSL de consultas Orbit como JSON Schema (`raw`) o gramática LLM (`l
 
 ### `query` — Ejecutar una consulta Knowledge Graph
 
-Ejecuta una consulta de solo lectura sobre el Knowledge Graph. El parámetro `query` debe ajustarse al esquema de `tools`. Soporta `response_format` (`raw` o `llm`).
+Ejecuta una consulta de solo lectura sobre el Knowledge Graph. El parámetro `query` es una consulta en el DSL que devuelve `dsl`, hoy la versión 12, que nombra entidades, propiedades y tipos de relación que lista `schema`. GitLab juzga la consulta y responde a la que no puede ejecutar con un mensaje que nombra el fallo, y el servidor lo transmite. Soporta `response_format` (`raw` o `llm`).
 
 **Ejemplo:** Ver arriba.
 
