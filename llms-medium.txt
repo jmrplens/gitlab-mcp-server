@@ -1174,7 +1174,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_notification_project_update: Update the authenticated user's notification settings for a project.
 - gitlab_orbit_dsl: Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 - gitlab_orbit_graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
-- gitlab_orbit_query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+- gitlab_orbit_query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding) in the version 12 query DSL, which lists every nod...
 - gitlab_orbit_schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
 - gitlab_orbit_status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 - gitlab_orbit_tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
