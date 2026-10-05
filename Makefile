@@ -7,7 +7,7 @@
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck check-binary-vulns sonar sonar-status \
-	mdlint mdlint-fix audit-docs check-doc-links \
+	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-catalog-first \
@@ -970,10 +970,15 @@ mdlint-fix:
 	@echo === markdownlint --fix ===
 	npx markdownlint-cli2 --fix "**/*.md" "#plan"
 
-## check-doc-links: verify tracked Markdown/MDX local links resolve, anchor included.
+## check-doc-links: verify tracked Markdown/MDX local links resolve, anchor included,
+## and links to the documentation site resolve to a page and an anchor it has.
 check-doc-links:
 	@echo === documentation local links ===
 	node scripts/check-doc-links.mjs
+
+## check-md-tables: verify the pipe tables of README.md, docs/ and the site are formatted.
+check-md-tables:
+	go run ./cmd/format_md_tables/ --check
 
 ## audit-docs: run the complete documentation quality gate.
 audit-docs:
