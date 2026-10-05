@@ -16,7 +16,7 @@ faq:
   - q: "¿Funciona GitLab MCP Server con OpenAI Codex?"
     a: 'Sí. El servidor detecta las sesiones de Codex automáticamente y aplica un perfil de compatibilidad: las prioridades de las anotaciones de contenido se redondean a valores enteros, que es lo que exigen las builds de Codex incluidas en ChatGPT.app, mientras que el resto de campos se entrega sin cambios. Configura el servidor en ~/.codex/config.toml con default_tools_approval_mode = "approve" para que las ejecuciones no interactivas puedan usar herramientas de escritura, y mantén la superficie de herramientas dynamic por defecto. Usa GITLAB_MCP_CLIENT_COMPAT=off para desactivar la reescritura por cliente.'
   - q: "¿Qué clientes MCP son compatibles con GitLab MCP Server?"
-    a: "Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed y Kiro. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP ({{resources}}), prompts ({{prompts}}), completions ({{completions}} tipos de argumento), elicitation, notificaciones de progreso y suscripciones a recursos (notificaciones de cambio en vivo para 26 tipos de recurso)."
+    a: "Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed, Kiro, OpenAI Codex y Cline. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP ({{resources}}), prompts ({{prompts}}), completions ({{completions}} tipos de argumento), elicitation, notificaciones de progreso y suscripciones a recursos (notificaciones de cambio en vivo para 26 tipos de recurso)."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -75,6 +75,7 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 | Zed                               | stdio      |   ✅    |
 | Kiro                              | stdio      |   ✅    |
 | OpenAI Codex                      | stdio      |   ✅    |
+| Cline (VS Code)                   | stdio      |   ✅    |
 | Cualquier cliente Streamable HTTP | HTTP       |   ✅    |
 
 ### Perfiles de compatibilidad por cliente

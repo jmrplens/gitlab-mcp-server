@@ -1057,98 +1057,19 @@ func TestWriteTokenAuditJSON_DistinctMeasurements_KeysEveryFigure(t *testing.T) 
 	}
 }
 
-// TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier verifies the README footprint
-// table keeps only the dynamic surface (default configuration) across all
-// tiers and links to the detailed reference, without the meta/individual rows.
-func TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier(t *testing.T) {
-	rows := []tokenFootprintRow{
-		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
-		{Tier: "Free/CE", Configuration: "`dynamic` / `minimal`", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
-		{Tier: "Free/CE", Configuration: "`meta` / `full` (opaque)", MetaParamSchema: "opaque", VisibleTools: 33, ToolSchemaTokens: 136890, SharedTokens: 31758},
-		{Tier: "Ultimate", Configuration: "`individual` / `full`", VisibleTools: 1061, ToolSchemaTokens: 964044, SharedTokens: 31758},
-	}
-	got := renderReadmeFootprint(rows)
-	for _, want := range []string{
-		"`dynamic` / `full` (default)",
-		"Free/CE",
-		"Token Footprint Reference",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("renderReadmeFootprint() missing %q", want)
-			}
-		})
-	}
-	if strings.Contains(got, "`meta`") {
-		t.Fatal("renderReadmeFootprint() should not include meta rows")
-	}
-	if strings.Contains(got, "`individual`") {
-		t.Fatal("renderReadmeFootprint() should not include individual rows")
-	}
-}
-
-// TestRenderReadmeFootprint_FullMatrix_RendersEachDynamicRowWhole verifies
-// every dynamic row of a full matrix appears whole, each figure under its own
-// column, and that nothing else does. The fixture's visible tools, reachable
-// actions, schema tokens, shared tokens and totals all differ, so two columns
-// printed in each other's place fail here rather than only against the
-// committed README, whose comparison a stacked layer defers.
-func TestRenderReadmeFootprint_FullMatrix_RendersEachDynamicRowWhole(t *testing.T) {
-	got := renderReadmeFootprint(fullMatrixFootprintRows())
-
-	want := map[string][]string{
-		"Free/CE default":  {dynamicDefaultConfiguration, "Free/CE", "2", "851", "n/a", "1,501", "8,832", "10,333"},
-		"Free/CE minimal":  {dynamicMinimalConfiguration, "Free/CE", "2", "851", "n/a", "1,501", "170", "1,671"},
-		"Premium default":  {dynamicDefaultConfiguration, "Premium", "2", "1,003", "n/a", "1,501", "8,832", "10,333"},
-		"Premium minimal":  {dynamicMinimalConfiguration, "Premium", "2", "1,003", "n/a", "1,501", "170", "1,671"},
-		"Ultimate default": {dynamicDefaultConfiguration, ultimateTierLabel, "2", "1,069", "n/a", "1,501", "8,832", "10,333"},
-		"Ultimate minimal": {dynamicMinimalConfiguration, ultimateTierLabel, "2", "1,069", "n/a", "1,501", "170", "1,671"},
-	}
-	for name, cells := range want {
-		t.Run(name, func(t *testing.T) {
-			if !containsTableRow(got, cells) {
-				t.Fatalf("renderReadmeFootprint() lacks the row %v:\n%s", cells, got)
-			}
-		})
-	}
-	if rows := strings.Count(got, "\n| `"); rows != len(want) {
-		t.Fatalf("renderReadmeFootprint() rendered %d configuration rows, want %d", rows, len(want))
-	}
-}
-
-// TestRenderReadmeFootprint_DynamicRowWithSchemaMode_RendersSchemaCell
-// verifies a dynamic row that carries a META_PARAM_SCHEMA value renders it in
-// the schema column instead of "n/a", so the column never hides a mode a
-// future measurement records.
-func TestRenderReadmeFootprint_DynamicRowWithSchemaMode_RendersSchemaCell(t *testing.T) {
-	rows := []tokenFootprintRow{
-		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", MetaParamSchema: "compact", VisibleTools: 2, ReachableActions: 851, ToolSchemaTokens: 1501, SharedTokens: 8832},
-	}
-	got := renderReadmeFootprint(rows)
-	if !strings.Contains(got, "| `compact`") {
-		t.Fatalf("renderReadmeFootprint() lacks the schema cell:\n%s", got)
-	}
-	if strings.Contains(got, "| n/a") {
-		t.Fatalf("renderReadmeFootprint() rendered n/a for a row with a schema mode:\n%s", got)
-	}
-}
-
 // TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile verifies
 // the drift detector backing -footprint -check: it reports no stale targets
-// when both README blocks, the detailed doc and the site data match the
+// when the README's token claim, the detailed doc and the site data match the
 // rendered content, and names exactly the target that diverges otherwise. A
-// README that lacks the token-claim markers is a stale target, not an error,
-// while missing footprint markers still abort the check.
+// README that lacks the token-claim markers is a stale target, not an error.
 func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testing.T) {
 	rows := completeFootprintRows()
 	claim, claimErr := renderReadmeTokenClaim(rows)
 	if claimErr != nil {
 		t.Fatalf("renderReadmeTokenClaim() error: %v", claimErr)
 	}
-	claimBlock := claimStartMarker + "\n\n" + claim + "\n" + claimEndMarker + "\n"
-	footprintBlock := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
-	// A README whose two managed blocks already hold the rendered content.
-	readme := claimBlock + "\n" + footprintBlock
+	// A README whose managed block already holds the rendered claim.
+	readme := "# Fixture\n\n" + claimStartMarker + "\n\n" + claim + "\n" + claimEndMarker + "\n"
 	detailed := renderDetailedFootprint(rows)
 	siteJSON, renderErr := renderSiteFootprintJSON(rows)
 	if renderErr != nil {
@@ -1161,27 +1082,18 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 		readme    string
 		detailed  string
 		site      string
-		wantErr   bool
 		wantStale string // the single stale target expected; "" means none
 	}{
 		{name: "current content reports no stale targets", readme: readme, detailed: detailed, site: site},
-		{name: "README footprint drift reports only the footprint section", readme: strings.Replace(readme, "Rows use the base", "Rows use the stale", 1), detailed: detailed, site: site, wantStale: readmePath + " token-footprint section"},
 		{name: "README claim drift reports only the claim block", readme: strings.Replace(readme, "Two tools reach", "Three tools reach", 1), detailed: detailed, site: site, wantStale: readmePath + " token-claim block"},
-		{name: "missing claim markers reports the claim block as stale", readme: footprintBlock, detailed: detailed, site: site, wantStale: readmePath + " token-claim block (markers missing)"},
+		{name: "missing claim markers reports the claim block as stale", readme: "# Fixture\n", detailed: detailed, site: site, wantStale: readmePath + " token-claim block (markers missing)"},
 		{name: "detailed-doc drift reports only the detailed doc", readme: readme, detailed: detailed + "\nextra drift\n", site: site, wantStale: detailedFootprintPath},
 		{name: "site JSON drift reports only the site data file", readme: readme, detailed: detailed, site: `{"tokenizer":"stale"}`, wantStale: siteFootprintPath},
-		{name: "missing footprint markers returns an error", readme: claimBlock, detailed: detailed, site: site, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stale, err := footprintStaleTargets(tt.readme, tt.detailed, tt.site, rows)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("footprintStaleTargets() error = nil, want error")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("footprintStaleTargets() error: %v", err)
 			}
@@ -1203,7 +1115,7 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 // token claim (no dynamic rows) or the site data (an individual tier
 // missing), since a comparison against nothing would mislabel the README.
 func TestFootprintStaleTargets_UnrenderableRows_ReturnsError(t *testing.T) {
-	readme := claimStartMarker + "\n" + claimEndMarker + "\n" + footprintStartMarker + "\n" + footprintEndMarker + "\n"
+	readme := claimStartMarker + "\n" + claimEndMarker + "\n"
 	tests := []struct {
 		name string
 		rows []tokenFootprintRow
@@ -1235,7 +1147,8 @@ func TestFootprintStaleTargets_UnrenderableRows_ReturnsError(t *testing.T) {
 // TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure verifies the README
 // headline claim quotes one startup total when every tier's dynamic rows cost
 // the same, says that the tiers agree, quotes the minimal capability surface
-// beside it, and points at the footprint section that backs it.
+// beside it, sets the individual surface's per-tier totals against it, and
+// points at the site section that backs it.
 func TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure(t *testing.T) {
 	got, err := renderReadmeTokenClaim(completeFootprintRows())
 	if err != nil {
@@ -1246,14 +1159,19 @@ func TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure(t *testing.T) {
 	if !strings.HasPrefix(got, wantPrefix) {
 		t.Fatalf("renderReadmeTokenClaim() = %q, want prefix %q", got, wantPrefix)
 	}
-	for _, want := range []string{"cl100k_base", "[How it is measured](#token-footprint)"} {
+	for _, want := range []string{
+		// 767,793 + 31,758 on Free/CE to 966,698 + 31,758 on Ultimate.
+		"Two tools reach the whole catalog, where listing every tool as its own costs from 799,551 to 998,456 tokens.",
+		"cl100k_base",
+		"[How it is measured](" + claimMeasuredURL + ")",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(got, want) {
 				t.Errorf("renderReadmeTokenClaim() missing %q in %q", want, got)
 			}
 		})
 	}
-	if strings.Contains(got, "from ") || strings.Contains(got, "From ") {
+	if strings.Contains(got, "From ") || strings.Contains(got, "(from ") {
 		t.Errorf("renderReadmeTokenClaim() = %q, must not render a span when the tiers agree", got)
 	}
 	// One trailing newline: ComputeReplacedSection adds the blank line before
@@ -1284,6 +1202,10 @@ func TestRenderReadmeTokenClaim_TiersDiffer_StatesTheSpan(t *testing.T) {
 			name: "minimal total differs", tier: "Free/CE", configuration: dynamicMinimalConfiguration, sharedDelta: 7,
 			wantPrefix: "**33,938 tokens of startup context by default, the same on every GitLab tier (from 3,268 to 3,275 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).**",
 		},
+		{
+			name: "individual span is drawn from the individual rows alone", tier: "Free/CE", configuration: individualConfiguration, sharedDelta: 198905,
+			wantPrefix: "**33,938 tokens of startup context by default, the same on every GitLab tier (3,268 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 949,383 to 998,456 tokens.",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1305,31 +1227,35 @@ func TestRenderReadmeTokenClaim_TiersDiffer_StatesTheSpan(t *testing.T) {
 	}
 }
 
-// TestRenderReadmeTokenClaim_MissingDynamicRows_ReturnsError verifies the claim
-// refuses to render, rather than quoting zero tokens, when either dynamic
-// configuration has no measured row to draw on.
-func TestRenderReadmeTokenClaim_MissingDynamicRows_ReturnsError(t *testing.T) {
+// TestRenderReadmeTokenClaim_MissingRows_ReturnsError verifies the claim
+// refuses to render, rather than quoting zero tokens, when any configuration
+// it quotes has no measured row to draw on, and names that configuration.
+func TestRenderReadmeTokenClaim_MissingRows_ReturnsError(t *testing.T) {
+	without := func(configuration string) []tokenFootprintRow {
+		return slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
+			return r.Configuration == configuration
+		})
+	}
 	tests := []struct {
 		name string
 		rows []tokenFootprintRow
+		want string
 	}{
-		{name: "no rows at all", rows: nil},
+		{name: "no rows at all", rows: nil, want: dynamicDefaultConfiguration},
 		{
 			name: "only the individual surface",
 			rows: []tokenFootprintRow{{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758}},
+			want: dynamicDefaultConfiguration,
 		},
-		{
-			name: "minimal capability surface missing",
-			rows: slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
-				return r.Configuration == dynamicMinimalConfiguration
-			}),
-		},
+		{name: "minimal capability surface missing", rows: without(dynamicMinimalConfiguration), want: dynamicMinimalConfiguration},
+		{name: "individual surface missing", rows: without(individualConfiguration), want: individualConfiguration},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := renderReadmeTokenClaim(tt.rows); err == nil {
-				t.Fatal("renderReadmeTokenClaim() error = nil, want error")
+			_, err := renderReadmeTokenClaim(tt.rows)
+			if want := "token claim: no " + tt.want + " row to quote"; err == nil || err.Error() != want {
+				t.Fatalf("renderReadmeTokenClaim() error = %v, want %q", err, want)
 			}
 		})
 	}
@@ -2046,11 +1972,11 @@ func stubFootprintRows(t *testing.T, rows []tokenFootprintRow) {
 	t.Cleanup(func() { measureFootprintRows = original })
 }
 
-// footprintSkeleton is a README whose two managed blocks are empty.
-const footprintSkeleton = "# Fixture\n\n" + claimStartMarker + "\n" + claimEndMarker + "\n\n## Token Footprint\n\n" + footprintStartMarker + "\n" + footprintEndMarker + "\n"
+// footprintSkeleton is a README whose token-claim block is empty.
+const footprintSkeleton = "# Fixture\n\n" + claimStartMarker + "\n" + claimEndMarker + "\n\n## Install\n"
 
-// renderedReadme returns the skeleton README with both managed blocks holding
-// the content rendered from rows.
+// renderedReadme returns the skeleton README with its token-claim block
+// holding the claim rendered from rows.
 func renderedReadme(t *testing.T, rows []tokenFootprintRow) string {
 	t.Helper()
 	claim, err := renderReadmeTokenClaim(rows)
@@ -2060,10 +1986,6 @@ func renderedReadme(t *testing.T, rows []tokenFootprintRow) string {
 	readme, err := docgen.ComputeReplacedSection(footprintSkeleton, claimStartMarker, claimEndMarker, claim)
 	if err != nil {
 		t.Fatalf("replace claim block: %v", err)
-	}
-	readme, err = docgen.ComputeReplacedSection(readme, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
-	if err != nil {
-		t.Fatalf("replace footprint block: %v", err)
 	}
 	return readme
 }
@@ -2186,10 +2108,10 @@ func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
 
 // TestRunFootprintCheck_Failures_NameTheCause verifies each way the check can
 // fail is reported by name: each target that cannot be read, a README without
-// footprint markers, and every stale target listed together with the command
-// that refreshes them. The measurement itself is not among them — it reads
-// nothing but the catalog compiled into this binary and panics rather than
-// returning.
+// the token-claim markers, and every stale target listed together with the
+// command that refreshes them. The measurement itself is not among them: it
+// reads nothing but the catalog compiled into this binary and panics rather
+// than returning.
 func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 	rows := fullMatrixFootprintRows()
 	readme := renderedReadme(t, rows)
@@ -2202,21 +2124,27 @@ func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 
 	tests := []struct {
 		name     string
+		rows     []tokenFootprintRow // nil measures the full matrix
 		readme   string
 		detailed string
 		site     string
 		want     string
 	}{
+		{name: "rows the claim cannot be rendered from", rows: rows[8:9], readme: readme, detailed: detailed, site: site, want: "token claim: no `dynamic` / `full` (default) row to quote"},
 		{name: "README missing", detailed: detailed, site: site, want: "reading README.md: "},
 		{name: "detailed doc missing", readme: readme, site: site, want: "reading docs/development/token-footprint.md: "},
 		{name: "site data missing", readme: readme, detailed: detailed, want: "reading site/src/data/token-footprint.json: "},
-		{name: "README without footprint markers", readme: "# Fixture\n" + claimStartMarker + "\n" + claimEndMarker + "\n", detailed: detailed, site: site, want: "start marker " + footprintStartMarker + " not found"},
-		{name: "every target stale", readme: footprintSkeleton, detailed: "old reference\n", site: "{}\n", want: "token footprint is stale (README.md token-footprint section; README.md token-claim block; docs/development/token-footprint.md; site/src/data/token-footprint.json); run: go run ./cmd/audit_tokens/ -footprint"},
+		{name: "README without claim markers", readme: "# Fixture\n", detailed: detailed, site: site, want: "token footprint is stale (README.md token-claim block (markers missing)); run: go run ./cmd/audit_tokens/ -footprint"},
+		{name: "every target stale", readme: footprintSkeleton, detailed: "old reference\n", site: "{}\n", want: "token footprint is stale (README.md token-claim block; docs/development/token-footprint.md; site/src/data/token-footprint.json); run: go run ./cmd/audit_tokens/ -footprint"},
 		{name: "only the site data stale", readme: readme, detailed: detailed, site: "{}\n", want: "token footprint is stale (site/src/data/token-footprint.json); run: go run ./cmd/audit_tokens/ -footprint"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stubFootprintRows(t, rows)
+			measured := rows
+			if tt.rows != nil {
+				measured = tt.rows
+			}
+			stubFootprintRows(t, measured)
 			footprintReplica(t, tt.readme, tt.detailed, tt.site)
 
 			checkErr := runFootprintCheck(newAuditTokensClient(t))
@@ -2228,7 +2156,7 @@ func TestRunFootprintCheck_Failures_NameTheCause(t *testing.T) {
 }
 
 // TestRunFootprint_EmptyReplica_WritesEveryTarget verifies the write mode
-// fills both README blocks, writes the reference doc and the site data from
+// fills the README's token claim, writes the reference doc and the site data from
 // the rows it measured, reports what it updated, and leaves the tree in the
 // state the check mode then accepts.
 func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
@@ -2243,7 +2171,7 @@ func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
 	if runErr != nil {
 		t.Fatalf("runFootprint() error: %v", runErr)
 	}
-	if output != "Updated README.md token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json (27 rows across all tiers/surfaces/modes)\n" {
+	if output != "Updated README.md token-claim block, docs/development/token-footprint.md and site/src/data/token-footprint.json (27 rows across all tiers/surfaces/modes)\n" {
 		t.Fatalf("runFootprint() output = %q", output)
 	}
 
@@ -2268,7 +2196,7 @@ func TestRunFootprint_EmptyReplica_WritesEveryTarget(t *testing.T) {
 // TestRunFootprint_Failures_ReturnErrors verifies each failure of the write
 // mode is returned rather than half-applied silently: rows the claim or the
 // site data cannot be rendered from, a README that is missing or lacks the
-// footprint markers, and target directories that do not exist.
+// token-claim markers, and target directories that do not exist.
 func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 	rows := fullMatrixFootprintRows()
 	tests := []struct {
@@ -2280,7 +2208,7 @@ func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 	}{
 		{name: "rows without a dynamic surface", rows: rows[8:9], readme: footprintSkeleton, want: "token claim: no `dynamic` / `full` (default) row to quote"},
 		{name: "README missing", rows: rows, want: "reading README.md: "},
-		{name: "README without footprint markers", rows: rows, readme: "# Fixture\n" + claimStartMarker + "\n" + claimEndMarker + "\n", want: "start marker " + footprintStartMarker + " not found"},
+		{name: "README without claim markers", rows: rows, readme: "# Fixture\n", want: "start marker " + claimStartMarker + " not found"},
 		{name: "reference doc directory missing", rows: rows, readme: footprintSkeleton, removeDir: filepath.Dir(detailedFootprintPath), want: "writing docs/development/token-footprint.md: "},
 		{name: "rows missing an individual tier", rows: rows[:26], readme: footprintSkeleton, want: "expected 3 individual-surface rows, found 2"},
 		{name: "site data directory missing", rows: rows, readme: footprintSkeleton, removeDir: filepath.Dir(siteFootprintPath), want: "writing site/src/data/token-footprint.json: "},

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -190,6 +191,71 @@ func TestSurfaceKey_String_NamesTheModelAndThePin(t *testing.T) {
 		t.Run(present, func(t *testing.T) {
 			if !strings.Contains(got, present) {
 				t.Errorf("the note %q does not name %q", got, present)
+			}
+		})
+	}
+}
+
+// TestSurfaceKey_String_NamesTheCoverageOnlyWhenTheRowsRecordedIt is the same
+// silence the cross-vendor caption keeps, in the note a cross-surface
+// comparison prints. A row recording no cases has no coverage to agree on, and
+// the note must neither claim one nor leave an empty entry where it would have
+// stood; a row that did record them has its coverage named between the corpus
+// and the contract, which is where a reader reads what was asked.
+func TestSurfaceKey_String_NamesTheCoverageOnlyWhenTheRowsRecordedIt(t *testing.T) {
+	head := "model `" + fixtureModel + "`, mode `default`, tier `ultimate`, corpus `corpus-1`, "
+	tail := "contract `" + fixtureContract + "`, repeat 1"
+	measured := withCases(oneRow(), "MT-002", "MT-003")
+
+	for _, testCase := range []struct {
+		name string
+		one  row
+		want string
+	}{
+		{name: "a row recording no cases", one: oneRow(), want: head + tail},
+		{name: "a row measured on named cases", one: measured, want: head + coverageOf(measured).String() + ", " + tail},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := crossSurfaceKey(testCase.one).String(); got != testCase.want {
+				t.Errorf("the note reads\n %q\nwant\n %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestGroupBySurface_RowsSharingASurface_KeepTheRecordsOrder covers the one
+// arrangement the ordering by surface cannot settle on its own: one model
+// measured twice on meta, in two schema modes, is one cross-surface comparison
+// with two meta rows in it. Those two read alike to the ordering, and a re-render
+// of one record has to put them where the record did rather than wherever an
+// ordering that swapped equals would leave them. Both arrivals are asked, so the
+// order kept is the record's and not one the rows happen to share.
+func TestGroupBySurface_RowsSharingASurface_KeepTheRecordsOrder(t *testing.T) {
+	dynamic := oneRow()
+	opaque := oneRow()
+	opaque.Key.Surface, opaque.Key.MetaParamSchema = "meta", opaqueSchema
+	compact := oneRow()
+	compact.Key.Surface, compact.Key.MetaParamSchema = "meta", "compact"
+
+	for _, testCase := range []struct {
+		name string
+		rows []row
+		want []string
+	}{
+		{name: "opaque first", rows: []row{opaque, dynamic, compact}, want: []string{"", opaqueSchema, "compact"}},
+		{name: "compact first", rows: []row{compact, dynamic, opaque}, want: []string{"", "compact", opaqueSchema}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			groups := groupBySurface(testCase.rows)
+			if len(groups) != 1 {
+				t.Fatalf("got %d comparisons, want the three rows of one model in one", len(groups))
+			}
+			got := make([]string, 0, len(groups[0].Rows))
+			for _, one := range groups[0].Rows {
+				got = append(got, one.Key.MetaParamSchema)
+			}
+			if !slices.Equal(got, testCase.want) {
+				t.Errorf("the comparison reads the schema modes %q, want %q", got, testCase.want)
 			}
 		})
 	}

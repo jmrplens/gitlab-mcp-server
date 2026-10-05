@@ -191,3 +191,15 @@ Add `GITLAB_URL=https://gitlab.example.com` to the same file for self-managed Gi
 The binary never updates itself. To upgrade, run the install script again, which replaces the file in place after verifying the new checksum, or download the newer asset and overwrite the old one. `VERSION=v2.7.5` (or `$env:VERSION` on Windows) pins a specific release when you need to stay put.
 
 To uninstall, delete the file: `rm ~/.local/bin/gitlab-mcp-server` (or wherever you placed it) on Linux and macOS; on Windows, delete `%LOCALAPPDATA%\Programs\gitlab-mcp-server` and remove that folder from your user PATH, which the script appended and never removes. Then drop the `gitlab` entry from your client's configuration.
+
+## Build from source
+
+The source builds with the Go toolchain the `go.mod` file names (1.27 today) and nothing else:
+
+```bash
+git clone https://github.com/jmrplens/gitlab-mcp-server.git
+cd gitlab-mcp-server
+make build
+```
+
+`make build` writes `dist/gitlab-mcp-server` (`.exe` on Windows) for the machine it runs on, and `make build-all` cross-compiles the six release targets into the same directory. A binary built this way carries no signature and no provenance attestation, since those are made by the release workflow. The [development guide](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/development.md) covers the tests, the analysis gates and the rest of the contributor workflow.

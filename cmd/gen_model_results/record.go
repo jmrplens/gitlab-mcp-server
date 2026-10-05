@@ -13,9 +13,10 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,13 +28,12 @@ import (
 
 // The committed artifacts, relative to the repository root.
 //
-// The JSON is the record and the two Markdown files are renderings of it, which
-// is why they are redrawn from the committed document rather than from a run: a
-// reader on any checkout can redraw them, and a gate can compare the bytes.
+// The JSON is the record and the Markdown page is a rendering of it, which is
+// why it is redrawn from the committed document rather than from a run: a
+// reader on any checkout can redraw it, and a gate can compare the bytes.
 const (
 	recordRelPath = "docs/development/testing/model-results.json"
 	pageRelPath   = "docs/development/testing/model-results.md"
-	readmeRelPath = "README.md"
 )
 
 // regenerate is the sentence a stale artifact is reported with.
@@ -55,15 +55,7 @@ const recordSchemaVersion = 1
 // which is not the same as the terms the shard record offers: a shard carries
 // no verdict and can be scored again by any rule, and the columns below are one
 // such scoring, made when the run was folded in. Redrawing a page re-reads them.
-const recordNote = "What the model evaluation measured, one row per configuration, written by " +
-	"`make model-results-record` from the shards of a run and scored, at that moment, against the corpus at HEAD. " +
-	"The columns here are that scoring: redrawing a page re-reads them and scores nothing, so a scoring rule " +
-	"corrected later reaches a published row only by re-folding the run's retained shards with " +
-	"`make model-results-refold`, which drops the rows those shards publish and folds them again, naming each. " +
-	"The pages at README.md and docs/development/testing/model-results.md are rendered from this " +
-	"file, and `make check-model-results` compares all three without a GitLab and without a network. " +
-	"Every figure is a numerator over a denominator: a rate with nothing behind it is what the tables " +
-	"this replaces published."
+const recordNote = "What the model evaluation measured, one row per configuration, written by `make model-results-record` from the shards of a run and scored, at that moment, against the corpus at HEAD. The columns here are that scoring: redrawing a page re-reads them and scores nothing, so a scoring rule corrected later reaches a published row only by re-folding the run's retained shards with `make model-results-refold`, which drops the rows those shards publish and folds them again, naming each. The page at docs/development/testing/model-results.md is rendered from this file, and `make check-model-results` compares the two without a GitLab and without a network. Every figure is a numerator over a denominator: a rate with nothing behind it is what the tables this replaces published."
 
 // fakeProvider is the adapter that talks to nobody.
 //
@@ -309,24 +301,28 @@ func (s shown) String() string {
 // zero, and a span of nothing would read as attempts shown no tools at all,
 // which is a claim no record made. Nil is the reading that says the run did
 // not answer.
+//
+// The span opens at the first count an attempt recorded rather than at a
+// sentinel floor. A sentinel had to be told apart from a real count by
+// comparisons against zero that no count could ever land on, since a count of
+// zero is skipped before it is compared.
 func shownOf(attempts []modelscore.Attempt) *shown {
-	span := shown{Min: -1}
+	var span *shown
 	for _, attempt := range attempts {
-		if attempt.Line.ShownTools <= 0 {
+		count := attempt.Line.ShownTools
+		if count <= 0 {
 			continue
 		}
-		if span.Min < 0 || attempt.Line.ShownTools < span.Min {
-			span.Min = attempt.Line.ShownTools
+		if span == nil {
+			span = &shown{Min: count, Max: count}
 		}
-		span.Max = max(span.Max, attempt.Line.ShownTools)
+		span.Min = min(span.Min, count)
+		span.Max = max(span.Max, count)
 		if attempt.Line.Overflowed {
 			span.Overflowed++
 		}
 	}
-	if span.Min < 0 {
-		return nil
-	}
-	return &span
+	return span
 }
 
 // ratio is one published column: what happened over what could have.
@@ -825,15 +821,18 @@ func tokensOf(attempts []modelscore.Attempt) tokens {
 func (d document) marshal() ([]byte, error) {
 	sorted := d
 	sorted.Rows = append([]row(nil), d.Rows...)
-	sort.Slice(sorted.Rows, func(i, j int) bool {
-		return sorted.Rows[i].Key.String() < sorted.Rows[j].Key.String()
-	})
-	body, err := json.MarshalIndent(sorted, "", " ")
+	slices.SortFunc(sorted.Rows, func(a, b row) int { return cmp.Compare(a.Key.String(), b.Key.String()) })
+	body, err := marshalIndent(sorted, "", " ")
 	if err != nil {
 		return nil, fmt.Errorf("render the record: %w", err)
 	}
 	return body, nil
 }
+
+// marshalIndent is json.MarshalIndent behind a variable. A document holds
+// strings, integers and nested structs and nothing encoding/json refuses, so
+// its failure is reachable only through this seam.
+var marshalIndent = json.MarshalIndent
 
 // unmarshalDocument reads a committed record, refusing one written under
 // another schema version.

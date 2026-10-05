@@ -191,3 +191,15 @@ Añade `GITLAB_URL=https://gitlab.example.com` al mismo archivo para GitLab auto
 El binario nunca se actualiza a sí mismo. Para actualizar, vuelve a ejecutar el script de instalación, que reemplaza el archivo in situ tras verificar el checksum nuevo, o descarga el archivo más nuevo y sobrescribe el antiguo. `VERSION=v2.7.5` (o `$env:VERSION` en Windows) fija una release concreta cuando necesitas quedarte en ella.
 
 Para desinstalar, borra el archivo: `rm ~/.local/bin/gitlab-mcp-server` (o donde lo hayas colocado) en Linux y macOS; en Windows, borra `%LOCALAPPDATA%\Programs\gitlab-mcp-server` y quita esa carpeta de tu PATH de usuario, que el script añadió y nunca elimina. Después quita la entrada `gitlab` de la configuración de tu cliente.
+
+## Compilar desde el código fuente
+
+El código se compila con la versión de Go que indica el archivo `go.mod` (hoy la 1.27) y nada más:
+
+```bash
+git clone https://github.com/jmrplens/gitlab-mcp-server.git
+cd gitlab-mcp-server
+make build
+```
+
+`make build` genera `dist/gitlab-mcp-server` (`.exe` en Windows) para la máquina en la que se ejecuta, y `make build-all` compila de forma cruzada los seis destinos de la release en el mismo directorio. Un binario compilado así no lleva firma ni atestación de procedencia, porque las genera el workflow de release. La [guía de desarrollo](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/development.md) cubre los tests, las comprobaciones de análisis y el resto del flujo para contribuir.

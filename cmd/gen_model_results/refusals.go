@@ -80,8 +80,7 @@ var requiredProvenance = []struct {
 	{"contract_digest", "nothing fingerprints how it was framed", func(p provenance) bool { return p.ContractDigest == "" }},
 	{
 		"tool_schema_digest",
-		"nothing fingerprints the tool list this provider was served, and two rows whose runs both failed to note one " +
-			"agree on the empty string, which seats them in one cross-vendor table captioned with tool schemas neither recorded",
+		"nothing fingerprints the tool list this provider was served, and two rows whose runs both failed to note one agree on the empty string, which seats them in one cross-vendor table captioned with tool schemas neither recorded",
 		func(p provenance) bool { return p.ToolSchemaDigest == "" },
 	},
 }

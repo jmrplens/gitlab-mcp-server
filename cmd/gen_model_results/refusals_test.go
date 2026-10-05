@@ -354,6 +354,55 @@ func TestReviewRows_TwoRowsOfOneKey_AreRefusedByName(t *testing.T) {
 	}
 }
 
+// TestComparisonSummary_CountsTheComparisonsARecordSupports is the sentence a
+// maintainer reads after folding a run in, and the only place the second
+// comparison key is counted rather than rendered.
+//
+// A cross-surface comparison is a group of more than one surface. In the third
+// record below as many groups qualify as do not, so a count of the wrong half
+// reads the same as the right one there; the first two are the records where
+// the halves differ in size, and they are what tells the two counts apart.
+func TestComparisonSummary_CountsTheComparisonsARecordSupports(t *testing.T) {
+	dynamic := oneRow()
+	meta := oneRow()
+	meta.Key.Surface = "meta"
+	meta.Key.ToolSchemaDigest = "tools-meta"
+	alone := oneRow()
+	alone.Key.Model = "openai:only-here"
+
+	for _, testCase := range []struct {
+		name string
+		rows []row
+		want string
+	}{
+		{
+			name: "one model on two surfaces and nothing else",
+			rows: []row{dynamic, meta},
+			want: "2 row(s), 2 cross-vendor table(s), 1 cross-surface comparison(s)",
+		},
+		{
+			name: "two models on one surface each",
+			rows: []row{dynamic, alone},
+			want: "2 row(s), 1 cross-vendor table(s), 0 cross-surface comparison(s)",
+		},
+		{
+			name: "one model on two surfaces beside a model on one",
+			rows: []row{dynamic, meta, alone},
+			want: "3 row(s), 2 cross-vendor table(s), 1 cross-surface comparison(s)",
+		},
+		{
+			name: "an empty record",
+			want: "0 row(s), 0 cross-vendor table(s), 0 cross-surface comparison(s)",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := comparisonSummary(testCase.rows); got != testCase.want {
+				t.Errorf("summary = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestRuleNames_AreSortedAndComplete covers the sentence a run prints to say
 // what judged it, which is the only place a reader learns the rules exist.
 func TestRuleNames_AreSortedAndComplete(t *testing.T) {

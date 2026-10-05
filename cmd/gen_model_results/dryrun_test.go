@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -138,6 +139,19 @@ func TestBannerDryRun_NamesThePageItCouldNotRead(t *testing.T) {
 	first := pagePaths()[0]
 	if !strings.Contains(err.Error(), first) {
 		t.Errorf("bannerDryRun error = %q, want it to name %q", err, first)
+	}
+}
+
+// TestPrepareDryRun_NamesThePageItCouldNotCopy holds the refusal when the copy
+// of a published page cannot be written into the rehearsal: a rehearsal drawn
+// without it would draw no page at all.
+func TestPrepareDryRun_NamesThePageItCouldNotCopy(t *testing.T) {
+	root := rehearsalRoot(t)
+	stubWriteFile(t, func(string, []byte) error { return errors.New("disk full") })
+
+	_, err := prepareDryRun(root, io.Discard)
+	if want := "copy " + pagePaths()[0] + " into the dry run: disk full"; err == nil || err.Error() != want {
+		t.Fatalf("prepareDryRun() error = %v, want %q", err, want)
 	}
 }
 

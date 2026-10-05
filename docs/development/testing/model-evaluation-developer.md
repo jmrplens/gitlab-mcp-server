@@ -202,7 +202,7 @@ measurement into a restatement of the answer.
 - Cases, worlds or the corpus shape change: `make gen-model-corpus`, then
   update [AI Model Evaluation](model-evaluation.md) if what is measured moved.
 - A run is folded in: `make model-results-record`, which redraws
-  [AI Model Evaluation Results](model-results.md) and the README blocks.
+  [AI Model Evaluation Results](model-results.md).
 - Tests added or moved: `go run ./cmd/gen_testing_docs/`.
 - Never hand-write a figure into a page. What a page says comes from the
   record, and the provenance beside it is what makes it a measurement.

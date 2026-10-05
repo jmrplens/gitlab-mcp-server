@@ -102,8 +102,13 @@ func scoreRatio(r ratio) modelscore.Ratio {
 //
 // Neither argument is modified: a merge that wrote into the committed row's map
 // would leave the record edited even on a path that then refuses the fold.
+//
+// The map is sized for the held row alone. A re-run mostly names cases the row
+// already holds, and a size hint decides nothing a reader of the result can
+// see, which is why a sum of the two sizes here was a figure no test could
+// tell from their difference.
 func mergeCases(held, incoming map[string]caseFigures) map[string]caseFigures {
-	merged := make(map[string]caseFigures, len(held)+len(incoming))
+	merged := make(map[string]caseFigures, len(held))
 	maps.Copy(merged, held)
 	maps.Copy(merged, incoming)
 	return merged

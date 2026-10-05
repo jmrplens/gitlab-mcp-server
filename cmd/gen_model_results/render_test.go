@@ -90,24 +90,6 @@ func TestRenderBlock_ADetailedTable_MatchesTheGoldenPage(t *testing.T) {
 	}
 }
 
-// TestRenderBlock_ASummaryTable_CarriesTheColumnsAndNothingElse holds the split
-// between the two files: the README says how it went, and the reference page
-// says what it was measured on.
-func TestRenderBlock_ASummaryTable_CarriesTheColumnsAndNothingElse(t *testing.T) {
-	got := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->"), twoModels())
-
-	if !strings.Contains(got, "18 / 20") {
-		t.Error("the summary does not carry the reached column with both its halves")
-	}
-	for _, absent := range []string{"Token scopes", "Cache created", "What the columns leave out"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(got, absent) {
-				t.Errorf("the summary carries %q, which belongs on the reference page", absent)
-			}
-		})
-	}
-}
-
 // TestRenderBlock_NoRows_SaysWhereTheWithdrawnTableWent is the state this step
 // leaves the repository in, and it is generated rather than left in the file by
 // hand: a hand-written block between generated markers is one the gate cannot
@@ -140,15 +122,15 @@ func TestRenderBlock_SelectsBySurfaceAndLicence(t *testing.T) {
 	free.Key.Tier = "free"
 	free.Provenance.Tier = "free"
 
-	licensedBlock := blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->")
+	licensedBlock := blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->")
 	if renderBlock(licensedBlock, []row{free}) != licensedBlock.Empty {
 		t.Error("a Free row was published in the Enterprise block")
 	}
-	freeBlock := blockNamed(t, "<!-- START MODEL EVAL DYNAMIC SUMMARY -->")
+	freeBlock := blockNamed(t, "<!-- START MODEL EVAL DYNAMIC RESULTS -->")
 	if renderBlock(freeBlock, []row{free}) == freeBlock.Empty {
 		t.Error("a Free row was not published in the CE block")
 	}
-	metaBlock := blockNamed(t, "<!-- START MODEL EVAL META SUMMARY -->")
+	metaBlock := blockNamed(t, "<!-- START MODEL EVAL META RESULTS -->")
 	if renderBlock(metaBlock, []row{free}) != metaBlock.Empty {
 		t.Error("a dynamic row was published in the meta block")
 	}
@@ -181,7 +163,7 @@ func TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith(t *testing
 	meta.Provenance.Surface = "meta"
 	meta.Provenance.MetaParamSchema = opaqueSchema
 
-	got := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE META SUMMARY -->"), []row{meta})
+	got := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE META RESULTS -->"), []row{meta})
 	if !strings.Contains(got, "withholds parameter") {
 		t.Errorf("an opaque meta table does not say what its argument fidelity means:\n%s", got)
 	}
@@ -189,7 +171,7 @@ func TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith(t *testing
 	compact := meta
 	compact.Key.MetaParamSchema = "compact"
 	compact.Provenance.MetaParamSchema = "compact"
-	if drawn := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE META SUMMARY -->"), []row{compact}); strings.Contains(drawn, "withholds parameter") {
+	if drawn := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE META RESULTS -->"), []row{compact}); strings.Contains(drawn, "withholds parameter") {
 		t.Error("a compact meta table carries the opaque sentence, which is not true of it")
 	}
 }
@@ -204,7 +186,7 @@ func TestRenderBlock_TwoConfigurations_AreTwoCaptionedTables(t *testing.T) {
 	readOnly.Key.Mode = "read-only"
 	readOnly.Provenance.Mode = "read-only"
 
-	got := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->"), append(rows, readOnly))
+	got := renderBlock(blockNamed(t, "<!-- START MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->"), append(rows, readOnly))
 	if captions := strings.Count(got, "Compared as one table"); captions != 2 {
 		t.Errorf("rendered %d captioned table(s), want one per configuration:\n%s", captions, got)
 	}

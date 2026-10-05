@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -704,26 +705,6 @@ func TestRunDate_ARunThatNeverStarted_LeavesTheDateEmpty(t *testing.T) {
 	}
 }
 
-// TestComparisonSummary_CountsTheComparisonsARecordSupports is the sentence a
-// maintainer reads after folding a run in, and the only place the second
-// comparison key is counted rather than rendered.
-func TestComparisonSummary_CountsTheComparisonsARecordSupports(t *testing.T) {
-	dynamic := oneRow()
-	meta := oneRow()
-	meta.Key.Surface = "meta"
-	meta.Key.ToolSchemaDigest = "tools-meta"
-	alone := oneRow()
-	alone.Key.Model = "openai:only-here"
-
-	got := comparisonSummary([]row{dynamic, meta, alone})
-	if got != "3 row(s), 2 cross-vendor table(s), 1 cross-surface comparison(s)" {
-		t.Errorf("summary = %q", got)
-	}
-	if empty := comparisonSummary(nil); empty != "0 row(s), 0 cross-vendor table(s), 0 cross-surface comparison(s)" {
-		t.Errorf("an empty record summarized as %q", empty)
-	}
-}
-
 // TestRowLines_RoundTrip_RebuildTheThreeLinesARuleReads is what lets the
 // refusal table judge a committed record with the same rules that judged the
 // shards it came from.
@@ -967,5 +948,66 @@ func TestPlaceSessionless_ASkipSeveralMeasurementsCouldBelongTo_KeepsItsOwnRow(t
 	}
 	if again[4].claimedBy != "an-earlier-shard.jsonl" {
 		t.Errorf("the re-folded skips read as claimed by %q, want the shard that already published the key", again[4].claimedBy)
+	}
+}
+
+// TestPlaceSessionless_AHomeAgreesOnTheModelAndTheSurfaceBoth holds the two
+// halves of a skip's home to each other.
+//
+// A row of the same model on another surface and a row of another model on the
+// same surface each agree with a skip on one half of what it names. Counted as
+// homes they do one of two wrong things: beside the one real home they make it
+// look like one of several, so the skip is refused rather than counted; and
+// alone they take the skip themselves, crediting a row with an attempt made on
+// a surface or by a model it never measured. Each line below is one candidate:
+// its model, its session and how many attempts it holds.
+func TestPlaceSessionless_AHomeAgreesOnTheModelAndTheSurfaceBoth(t *testing.T) {
+	const other = "openai:other-model"
+	for _, testCase := range []struct {
+		name     string
+		attempts []modelscore.Attempt
+		want     []string
+	}{
+		{
+			name: "the one measurement of its pair, beside rows sharing only half of it",
+			attempts: []modelscore.Attempt{
+				measuredOn(fixtureModel, "dynamic", "dynamic-default", "default"),
+				measuredOn(fixtureModel, "meta", "meta-default", "default"),
+				measuredOn(other, "meta", "meta-default", "default"),
+				skippedOn(fixtureModel, "meta", "MT-017"),
+			},
+			want: []string{
+				fixtureModel + ` "dynamic-default" 1`,
+				fixtureModel + ` "meta-default" 2`,
+				other + ` "meta-default" 1`,
+			},
+		},
+		{
+			name: "a row sharing only the model is no home",
+			attempts: []modelscore.Attempt{
+				measuredOn(fixtureModel, "dynamic", "dynamic-default", "default"),
+				skippedOn(fixtureModel, "meta", "MT-017"),
+			},
+			want: []string{fixtureModel + ` "dynamic-default" 1`, fixtureModel + ` "" 1`},
+		},
+		{
+			name: "a row sharing only the surface is no home",
+			attempts: []modelscore.Attempt{
+				measuredOn(other, "meta", "meta-default", "default"),
+				skippedOn(fixtureModel, "meta", "MT-017"),
+			},
+			want: []string{other + ` "meta-default" 1`, fixtureModel + ` "" 1`},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidates := groupShard("modeleval-halves.jsonl", testCase.attempts, map[string]string{})
+			got := make([]string, 0, len(candidates))
+			for _, one := range candidates {
+				got = append(got, fmt.Sprintf("%s %q %d", one.key.Model, one.session.Label, len(one.attempts)))
+			}
+			if !slices.Equal(got, testCase.want) {
+				t.Errorf("the shard grouped into\n %q\nwant\n %q", got, testCase.want)
+			}
+		})
 	}
 }
