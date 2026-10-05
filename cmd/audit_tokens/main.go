@@ -83,8 +83,12 @@ func main() {
 	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
 
-	os.Exit(run(opts, os.Stdout, os.Stderr))
+	exitProcess(run(opts, os.Stdout, os.Stderr))
 }
+
+// exitProcess is os.Exit behind a variable, so a test can drive main and read
+// the code it hands the process instead of ending the test binary.
+var exitProcess = os.Exit
 
 // newAuditClient builds the offline GitLab client every mode measures
 // against. One invocation of the command runs one mode, so the three modes
@@ -575,9 +579,7 @@ func totalBytes(infos []toolTokenInfo) int {
 // printTopTools writes the n most expensive tool definitions to stdout in a
 // stable tabular format.
 func printTopTools(infos []toolTokenInfo, n int) {
-	if n > len(infos) {
-		n = len(infos)
-	}
+	n = min(n, len(infos))
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  #\tTokens\tBytes\tTool Name\n")
 	fmt.Fprintf(tw, "  -\t------\t-----\t---------\n")
@@ -613,9 +615,7 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 		return cmp.Or(cmp.Compare(b.Tokens, a.Tokens), strings.Compare(a.Domain, b.Domain))
 	})
 
-	if n > len(entries) {
-		n = len(entries)
-	}
+	n = min(n, len(entries))
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  #\tDomain\tTools\tTokens\n")
@@ -628,11 +628,10 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 }
 
 // fmtNum formats integers with comma thousands separators for report tables.
+// A figure of three digits or fewer passes through the loop unchanged, since
+// no position in it is a multiple of three from the end.
 func fmtNum(n int) string {
 	s := strconv.Itoa(n)
-	if len(s) <= 3 {
-		return s
-	}
 	var result []byte
 	for i, c := range []byte(s) {
 		if i > 0 && (len(s)-i)%3 == 0 {
@@ -694,7 +693,9 @@ func runMetaSchemaSizing(client *gitlabclient.Client) {
 		totalCompact += r.compact
 	}
 
-	sort.Slice(rows, func(i, j int) bool { return rows[i].full > rows[j].full })
+	// Stable, so two tools with the same full size keep the name order the
+	// rows were built in rather than an order the sort happened to leave.
+	slices.SortStableFunc(rows, func(a, b row) int { return cmp.Compare(b.full, a.full) })
 
 	fmt.Println("============================================================")
 	fmt.Println(" Meta-tool InputSchema sizing spike")
@@ -742,15 +743,18 @@ func servedMetaSchemaSizes(client *gitlabclient.Client, mode string) map[string]
 
 // humanBytes formats a byte count using compact B, KB, or MB units for the
 // schema sizing table.
+//
+// It is written as early returns rather than a tagless switch because a case
+// expression carries no statement counter, so gremlins reads its mutants as
+// unreached and never runs them, whatever the tests do.
 func humanBytes(n int) string {
-	switch {
-	case n >= 1024*1024:
+	if n >= 1024*1024 {
 		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
-	case n >= 1024:
-		return fmt.Sprintf("%.1f KB", float64(n)/1024)
-	default:
-		return fmt.Sprintf("%d B", n)
 	}
+	if n >= 1024 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%d B", n)
 }
 
 // --- Token footprint mode (-footprint) ----------------------------------------
@@ -956,8 +960,21 @@ func runFootprint(client *gitlabclient.Client) error {
 type siteFootprint struct {
 	Tokenizer  string                             `json:"tokenizer"`
 	Shared     siteFootprintShared                `json:"shared"`
-	Dynamic    siteFootprintSurface               `json:"dynamic"`
+	Dynamic    siteFootprintDynamic               `json:"dynamic"`
 	Individual map[string]siteFootprintIndividual `json:"individual"`
+}
+
+// siteFootprintDynamic is the default surface's row of the site data: what its
+// two tools cost, what a client pays at startup once the shared resources and
+// prompts are added, under either capability surface, and how many catalog
+// actions those two tools reach on each tier. The README used to be the one
+// place the totals and the reachable actions were published; issue 1163 moves
+// the table to the site, which renders it from these fields.
+type siteFootprintDynamic struct {
+	VisibleTools     int                 `json:"visible_tools"`
+	ToolSchemaTokens int                 `json:"tool_schema_tokens"`
+	TotalTokens      siteFootprintShared `json:"total_tokens"`
+	ReachableActions map[string]int      `json:"reachable_actions"`
 }
 
 // siteFootprintShared is the resource + prompt cost that every surface pays on
@@ -967,13 +984,6 @@ type siteFootprint struct {
 type siteFootprintShared struct {
 	Full    int `json:"full"`
 	Minimal int `json:"minimal"`
-}
-
-// siteFootprintSurface is one measured surface: how many tool definitions the
-// client receives at startup and what they cost.
-type siteFootprintSurface struct {
-	VisibleTools     int `json:"visible_tools"`
-	ToolSchemaTokens int `json:"tool_schema_tokens"`
 }
 
 // siteFootprintIndividual adds the reduction factor against the dynamic surface, so the
@@ -989,15 +999,19 @@ type siteFootprintIndividual struct {
 func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 	tierKeys := map[string]string{"Free/CE": "free", "Premium": "premium", ultimateTierLabel: "ultimate"}
 
-	var dynamic siteFootprintSurface
+	dynamic := siteFootprintDynamic{ReachableActions: make(map[string]int, len(tierKeys))}
 	var shared siteFootprintShared
 	for _, r := range rows {
+		if key, ok := tierKeys[r.Tier]; ok && r.Configuration == dynamicDefaultConfiguration {
+			dynamic.ReachableActions[key] = r.ReachableActions
+		}
 		if r.Tier != ultimateTierLabel {
 			continue
 		}
 		switch r.Configuration {
 		case dynamicDefaultConfiguration:
-			dynamic = siteFootprintSurface{VisibleTools: r.VisibleTools, ToolSchemaTokens: r.ToolSchemaTokens}
+			dynamic.VisibleTools = r.VisibleTools
+			dynamic.ToolSchemaTokens = r.ToolSchemaTokens
 			shared.Full = r.SharedTokens
 		case dynamicMinimalConfiguration:
 			shared.Minimal = r.SharedTokens
@@ -1015,6 +1029,17 @@ func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 	// true rather than let one tier's numbers stand for all of them.
 	if err := requireTierInvariantDynamic(rows, dynamic.ToolSchemaTokens, shared); err != nil {
 		return nil, err
+	}
+	// A tier with no reachable count would publish a zero, which reads as a
+	// tier on which the two tools reach nothing rather than as missing data.
+	for _, key := range []string{"free", "premium", "ultimate"} {
+		if dynamic.ReachableActions[key] == 0 {
+			return nil, fmt.Errorf("no reachable-action count for the %s tier's %s row", key, dynamicDefaultConfiguration)
+		}
+	}
+	dynamic.TotalTokens = siteFootprintShared{
+		Full:    dynamic.ToolSchemaTokens + shared.Full,
+		Minimal: dynamic.ToolSchemaTokens + shared.Minimal,
 	}
 
 	individual := make(map[string]siteFootprintIndividual, len(tierKeys))

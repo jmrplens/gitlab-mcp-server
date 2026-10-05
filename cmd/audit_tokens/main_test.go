@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"maps"
 	"os"
@@ -1339,14 +1340,14 @@ func TestRenderReadmeTokenClaim_MissingDynamicRows_ReturnsError(t *testing.T) {
 // per tier.
 func completeFootprintRows() []tokenFootprintRow {
 	return []tokenFootprintRow{
-		{Tier: "Free/CE", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
-		{Tier: "Free/CE", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
+		{Tier: "Free/CE", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ReachableActions: 851, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Free/CE", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ReachableActions: 851, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: "Free/CE", Configuration: individualConfiguration, VisibleTools: 847, ToolSchemaTokens: 767793, SharedTokens: 31758},
-		{Tier: "Premium", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
-		{Tier: "Premium", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
+		{Tier: "Premium", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ReachableActions: 1003, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Premium", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ReachableActions: 1003, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: "Premium", Configuration: individualConfiguration, VisibleTools: 999, ToolSchemaTokens: 917625, SharedTokens: 31758},
-		{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
-		{Tier: ultimateTierLabel, Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
+		{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ReachableActions: 1069, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: ultimateTierLabel, Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ReachableActions: 1069, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758},
 	}
 }
@@ -1459,7 +1460,16 @@ func TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor(t *testin
 		t.Errorf("Tokenizer = %q, want cl100k_base", got.Tokenizer)
 	}
 	if got.Dynamic.VisibleTools != 2 || got.Dynamic.ToolSchemaTokens != 2180 {
-		t.Errorf("Dynamic = %+v, want {2 2180}", got.Dynamic)
+		t.Errorf("Dynamic = %+v, want 2 tools and 2180 schema tokens", got.Dynamic)
+	}
+	// The startup totals the site's table publishes, each the schema plus the
+	// shared resources and prompts of its capability surface, and the actions
+	// the two tools reach per tier, each from its own tier's default row.
+	if want := (siteFootprintShared{Full: 2180 + 31758, Minimal: 2180 + 1088}); got.Dynamic.TotalTokens != want {
+		t.Errorf("Dynamic.TotalTokens = %+v, want %+v", got.Dynamic.TotalTokens, want)
+	}
+	if want := map[string]int{"free": 851, "premium": 1003, "ultimate": 1069}; !maps.Equal(got.Dynamic.ReachableActions, want) {
+		t.Errorf("Dynamic.ReachableActions = %v, want %v", got.Dynamic.ReachableActions, want)
 	}
 	// The site quotes these two in prose; publishing a zero would read as
 	// "resources and prompts are free" rather than as missing data.
@@ -1568,6 +1578,19 @@ func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 				return r.Tier == "Free/CE" && r.Configuration == individualConfiguration
 			}),
 			want: "expected 3 individual-surface rows, found 2",
+		},
+		{
+			name: "a tier with no reachable-action count",
+			rows: func() []tokenFootprintRow {
+				rows := completeFootprintRows()
+				for i := range rows {
+					if rows[i].Tier == "Premium" {
+						rows[i].ReachableActions = 0
+					}
+				}
+				return rows
+			}(),
+			want: "no reachable-action count for the premium tier's `dynamic` / `full` (default) row",
 		},
 	}
 
@@ -1979,16 +2002,9 @@ func parseHumanBytes(t *testing.T, s string) float64 {
 // TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix verifies the humanBytes byte formatter emits
 // expected B/KB/MB suffixes for the three supported magnitude ranges.
 //
-// The cases sit on the two thresholds on purpose, because the five mutants
-// gremlins reports as "not covered" at main.go:732 and main.go:734 all live in
-// this function's case expressions: a `switch { case … }` expression carries no
-// statement counter, so gremlins reads the position as unreached and never runs
-// the mutant, whatever the tests do. Each of the five was applied by hand and
-// each fails here (`>=` widened to `>` at either threshold, `>=` negated to `<`
-// at either, and `1024*1024` turned into `1024/1024`), so the survivors are a
-// coverage-profile artifact rather than a gap. Keep the 0, 512, 1024 and
-// 1024*1024 cases: drop any of them and the artifact becomes a real hole that
-// nothing would report.
+// The cases sit on the two thresholds on purpose: `>=` widened to `>` at
+// either threshold, negated to `<` at either, and `1024*1024` turned into
+// `1024/1024` each fail here. Keep the 0, 512, 1024 and 1024*1024 cases.
 func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2433,6 +2449,46 @@ func TestRun_JSONMode_EncoderFails_ReportsAndStillExitsZero(t *testing.T) {
 	}
 	if got := stderr.String(); got != "encode json: disk full\n" {
 		t.Fatalf("stderr = %q, want the encode failure named", got)
+	}
+}
+
+// TestNewAuditClient_Default_BuildsTheOfflineStubClient verifies the client
+// main measures against, which every other test replaces with the shared
+// one: it is a client, and its cleanup can be called.
+func TestNewAuditClient_Default_BuildsTheOfflineStubClient(t *testing.T) {
+	client, cleanup := newAuditClient()
+	t.Cleanup(cleanup)
+
+	if client == nil {
+		t.Fatal("newAuditClient() returned a nil client")
+	}
+}
+
+// TestMain_ExitsWithTheCodeRunDecided verifies main reads the process's own
+// command line and hands the process the code run returns, once: -json is
+// parsed into the options, so the summary of the measurement the seam hands
+// run reaches os.Stdout, and the exit code is run's 0.
+func TestMain_ExitsWithTheCodeRunDecided(t *testing.T) {
+	useSharedAuditClient(t)
+	stubTokenAudit(t, tokenAudit{baseReachableActions: 7, promptTokens: 3})
+	previousExit, previousArgs, previousFlags := exitProcess, os.Args, flag.CommandLine
+	t.Cleanup(func() { exitProcess, os.Args, flag.CommandLine = previousExit, previousArgs, previousFlags })
+	var codes []int
+	exitProcess = func(code int) { codes = append(codes, code) }
+	os.Args = []string{"audit_tokens", "-json"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+
+	output := captureStdoutAudit(t, main)
+
+	if len(codes) != 1 || codes[0] != 0 {
+		t.Errorf("exit codes = %v, want exactly [0]", codes)
+	}
+	var summary map[string]int
+	if err := json.Unmarshal([]byte(output), &summary); err != nil {
+		t.Fatalf("decode main's -json output %q: %v", output, err)
+	}
+	if summary["base_reachable_actions"] != 7 || summary["prompt_tokens"] != 3 {
+		t.Errorf("summary = %v, want the stubbed measurement", summary)
 	}
 }
 
