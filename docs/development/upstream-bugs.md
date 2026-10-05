@@ -69,6 +69,7 @@ for the fork, branch, fix, test and MR workflow.
   - [GroupRelationStatus does not model the object count, and a relation's status does not decode](#grouprelationstatus-does-not-model-the-object-count-and-a-relations-status-does-not-decode)
   - [Commit declares extended_trailers a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)
   - [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled)
+  - [OrbitGraphStatusProjects does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
   - [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -294,6 +295,7 @@ readable without opening the tracker:
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | No | No | No | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
+| 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -4118,6 +4120,45 @@ structs name it, and keep `Format` as a deprecated alias encoded under the
 right name; add `FormattedText string` with `json:"formatted_text,omitempty"`
 to `OrbitSchema`; correct the option's doc comment, which names `format` as
 the parameter.
+
+### OrbitGraphStatusProjects does not model the projects the indexer gave up on
+
+- **Reported**: no. It joins the gaps held for the next joint client-go merge
+  request, the one [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, and like every item here it waits on the maintainer's approval.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. `orbit.GraphStatus` (`internal/tools/orbit/orbit.go`)
+  reads `projects.gaps` from the captured response
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
+  into `GraphStatusProjects.Gaps`, and the graph status card shows it as the
+  projects out of indexing attempts. R-PATH holds the field to the Orbit
+  response record, which carries the key. `TestGraphStatus_Success_ByFullPath` holds the read and
+  `TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError` its failure.
+  It retires when the SDK models the field.
+
+**Where**: `OrbitGraphStatusProjects` in client-go v3.15.0's `orbit.go`, which
+models `indexed` and `total_known`.
+
+**What**: GitLab's graph status answer carries a third count, `gaps`, on every
+structured answer. `map_projects_status` in
+`ee/lib/analytics/knowledge_graph/grpc_client.rb` sends
+`{ indexed:, total_known:, gaps: }`, zeros included when the service sends no
+projects; GitLab master gained the key with `9a5ee3ee` ("Add Orbit indexing
+status and item counts endpoints", 2026-10-01). The Knowledge Graph service
+defines it as the projects that used every indexing attempt without producing
+an index (the `gaps` field of the `ProjectsStatus` message in the service's
+protobuf contract under `crates/orbit-server/proto/`, v0.137.0). GitLab.com
+sent it on 2026-10-05, as `0` for the fixture namespace.
+
+**How we found it**: re-recording the Orbit response record for
+[issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031). Its
+`orbit.graph_status (raw)` call gained `projects.gaps`, which R-PATH then
+reported as a key GitLab sends that the output did not publish.
+
+**Effort**: small. Add `Gaps int64` with `json:"gaps"` to
+`OrbitGraphStatusProjects`, and the key to the graph status decode test.
 
 ### No client-go helper returns the RFC 6750 fields of a token refusal
 

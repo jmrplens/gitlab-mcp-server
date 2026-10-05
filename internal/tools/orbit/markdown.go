@@ -305,6 +305,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	if out.Projects != nil {
 		c.Int("Indexed projects", out.Projects.Indexed)
 		c.Int("Total known projects", out.Projects.TotalKnown)
+		c.Int("Projects out of indexing attempts", out.Projects.Gaps)
 	}
 	if out.Indexing != nil {
 		c.Field("Indexing state", out.Indexing.State)

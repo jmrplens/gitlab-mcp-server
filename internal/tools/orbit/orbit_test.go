@@ -843,7 +843,7 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/graph_status")
 		testutil.AssertQueryParam(t, r, "full_path", "gitlab-org/gitlab")
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"projects": {"indexed": 3, "total_known": 4},
+			"projects": {"indexed": 3, "total_known": 4, "gaps": 1},
 			"domains": [{"name": "SDLC", "items": [{"name": "MergeRequest", "count": 42}]}],
 			"indexing": {"state": "indexed", "last_duration_ms": 99}
 		}`)
@@ -854,7 +854,7 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 		t.Fatalf("GraphStatus() error: %v", err)
 	}
 	want := GraphStatusOutput{
-		Projects: &GraphStatusProjects{Indexed: 3, TotalKnown: 4},
+		Projects: &GraphStatusProjects{Indexed: 3, TotalKnown: 4, Gaps: 1},
 		Domains:  []GraphStatusDomain{{Name: "SDLC", Items: []GraphStatusDomainItem{{Name: "MergeRequest", Count: 42}}}},
 		Indexing: &GraphStatusIndexing{State: "indexed", LastDurationMs: 99},
 	}
@@ -918,6 +918,42 @@ func TestGraphStatus_WithoutIndexing_LeavesIndexingNil(t *testing.T) {
 	want := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 1, TotalKnown: 2}, Domains: []GraphStatusDomain{}}
 	if !reflect.DeepEqual(out, want) {
 		t.Fatalf("GraphStatus() = %+v, want %+v", out, want)
+	}
+}
+
+// TestGraphStatus_LLMFormat_HasNoProjectsToCountGapsIn verifies that the llm
+// answer, formatted_text and nothing else, publishes the text and no project
+// counts: the captured body carries no projects object, so there is no gaps
+// count to read and no counts object to write it into.
+func TestGraphStatus_LLMFormat_HasNoProjectsToCountGapsIn(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "response_format", "llm")
+		testutil.RespondJSON(w, http.StatusOK, `{"formatted_text":"indexed: 2 of 2"}`)
+	}))
+
+	out, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "plens1", ResponseFormat: "llm"})
+	if err != nil {
+		t.Fatalf("GraphStatus() error: %v", err)
+	}
+	want := GraphStatusOutput{FormattedText: "indexed: 2 of 2", Domains: []GraphStatusDomain{}}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("GraphStatus() = %+v, want %+v", out, want)
+	}
+}
+
+// TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError verifies that a
+// gaps count the captured body carries as something other than a number is an
+// error the handler reports, rather than a zero published as if GitLab had
+// counted none: client-go ignores the key, so its own decode succeeds and
+// only the read of the capture can notice.
+func TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":2,"gaps":"many"}}`)
+	}))
+
+	_, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "plens1"})
+	if err == nil || !strings.Contains(err.Error(), "orbit_graph_status") || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Fatalf("GraphStatus() error = %v, want the captured body's decode failure under the operation", err)
 	}
 }
 

@@ -357,6 +357,13 @@ type GraphStatusProjects struct {
 	Indexed int64 `json:"indexed"`
 	// TotalKnown is the total number of projects eligible for indexing.
 	TotalKnown int64 `json:"total_known"`
+	// Gaps is the number of projects the indexer gave up on: every attempt
+	// it is allowed was used and none produced an index (ProjectsStatus.gaps
+	// in crates/orbit-server/proto/orbit.proto of
+	// gitlab-org/orbit/knowledge-graph). client-go's OrbitGraphStatusProjects
+	// does not model it, so [GraphStatus] reads it from the captured response
+	// (register row 93 of docs/development/upstream-bugs.md).
+	Gaps int64 `json:"gaps"`
 }
 
 // GraphStatusDomainItem describes a count for one Orbit graph node type.
@@ -678,6 +685,10 @@ func wrapQueryErr(err error) error {
 // Endpoint: GET /api/v4/orbit/graph_status. Exactly one of namespace_id,
 // project_id, or full_path must be set. Useful for verifying that the
 // indexer has caught up before running Query.
+//
+// The count of projects the indexer gave up on, projects.gaps, is read from
+// the captured response ([gitlabclient.WithResponseCapture]), since client-go
+// does not model it; see [GraphStatusProjects.Gaps].
 func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GraphStatusOutput{}, err
@@ -686,13 +697,33 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 	if err != nil {
 		return GraphStatusOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 
 	status, _, err := client.GL().Orbit.GetGraphStatus(opts, gl.WithContext(ctx))
 	if err != nil {
-		return GraphStatusOutput{}, wrapOrbitErr("orbit_graph_status", err)
+		return GraphStatusOutput{}, wrapOrbitErr(orbitGraphStatusOp, err)
 	}
-	return convertGraphStatus(status), nil
+	var unmodeled struct {
+		Projects *struct {
+			Gaps int64 `json:"gaps"`
+		} `json:"projects"`
+	}
+	if err = captured.Decode(&unmodeled); err != nil {
+		return GraphStatusOutput{}, toolutil.WrapErr(orbitGraphStatusOp, err)
+	}
+	out := convertGraphStatus(status)
+	// The llm answer carries formatted_text alone, and the structured one
+	// carries projects whenever client-go decoded them, so the two are nil
+	// together and only the second needs asking.
+	if unmodeled.Projects != nil {
+		out.Projects.Gaps = unmodeled.Projects.Gaps
+	}
+	return out, nil
 }
+
+// orbitGraphStatusOp is the operation a [GraphStatus] failure is reported
+// under.
+const orbitGraphStatusOp = "orbit_graph_status"
 
 // schemaResponseFormat normalizes the SchemaInput format fields. The
 // input accepts both Format and ResponseFormat, the name GitLab declares;

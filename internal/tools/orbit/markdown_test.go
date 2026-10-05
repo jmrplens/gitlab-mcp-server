@@ -340,7 +340,7 @@ func TestFormatQueryMarkdown_BacktickRuns_WidenEveryFence(t *testing.T) {
 // that a duration GitLab did not send writes no row.
 func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 	out := GraphStatusOutput{
-		Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3},
+		Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3, Gaps: 1},
 		Indexing: &GraphStatusIndexing{
 			State:           "indexed",
 			LastStartedAt:   "2026-03-20T15:45:00Z",
@@ -357,6 +357,7 @@ func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 	want := "## Orbit Graph Status\n\n" +
 		"- **Indexed projects**: 2\n" +
 		"- **Total known projects**: 3\n" +
+		"- **Projects out of indexing attempts**: 1\n" +
 		"- **Indexing state**: indexed\n" +
 		"- **Last started at**: 20 Mar 2026 15:45 UTC\n" +
 		"- **Last completed at**: 20 Mar 2026 15:50 UTC\n" +
@@ -376,13 +377,16 @@ func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 
 // TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable verifies that an
 // indexing status carrying no per-domain counts renders its project rows and
-// no Domains section, rather than a heading over an empty table.
+// no Domains section, rather than a heading over an empty table. A count of
+// zero projects out of indexing attempts is written too, since GitLab always
+// sends the count and zero is the answer a healthy namespace gives.
 func TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable(t *testing.T) {
 	out := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3}}
 
 	want := "## Orbit Graph Status\n\n" +
 		"- **Indexed projects**: 2\n" +
 		"- **Total known projects**: 3\n" +
+		"- **Projects out of indexing attempts**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
 		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
