@@ -213,7 +213,7 @@ func writeButtonsIn(t *testing.T, rel string, links ...string) string {
 // would report every button twice and make a real disagreement harder to see
 // rather than easier.
 func TestCollectRoot_WalksDirectoriesAndSkipsGeneratedTrees(t *testing.T) {
-	dir := writeButtonsIn(t, "docs/getting-started.md", base64Link("cursor.com", dockerEntry))
+	dir := writeButtonsIn(t, "docs/development/install.md", base64Link("cursor.com", dockerEntry))
 
 	generated := filepath.Join(dir, "docs", "node_modules")
 	if err := os.MkdirAll(generated, 0o750); err != nil {
@@ -231,7 +231,7 @@ func TestCollectRoot_WalksDirectoriesAndSkipsGeneratedTrees(t *testing.T) {
 	if len(buttons) != 1 {
 		t.Fatalf("collect() found %d buttons, want only the one outside the generated tree: %+v", len(buttons), buttons)
 	}
-	if buttons[0].File != "docs/getting-started.md" {
+	if buttons[0].File != "docs/development/install.md" {
 		t.Errorf("collect() reported %q, want the documented page", buttons[0].File)
 	}
 }
@@ -527,14 +527,14 @@ func TestCollect_ARootThatCannotBeStatted_FailsRatherThanPassingAsAbsent(t *test
 // has to carry its error back out through filepath.WalkDir, and a walk that
 // returned nil there would report a clean audit over a broken button.
 func TestCollect_AnUndecodablePayloadBelowADirectoryRoot_StopsTheWalkAndNamesThePage(t *testing.T) {
-	dir := writeButtonsIn(t, "docs/guides/install.md",
+	dir := writeButtonsIn(t, "docs/development/install.md",
 		base64Link("cursor.com", "this is not JSON at all, but it is long enough to match"))
 
 	_, err := collect(dir)
 	if err == nil {
 		t.Fatal("collect() walked past a page whose button does not decode")
 	}
-	if want := filepath.Join("docs", "guides", "install.md"); !strings.Contains(err.Error(), want) {
+	if want := filepath.Join("docs", "development", "install.md"); !strings.Contains(err.Error(), want) {
 		t.Errorf("collect() error = %v, want it to name %s", err, want)
 	}
 }

@@ -6,8 +6,10 @@ import (
 )
 
 // Description is one action's requirement in GitLab's words: what the detail
-// of an action serves a model and what the reference page prints, built here
-// once so the two never word a requirement differently.
+// of an action serves a model and what the documentation site's fine-grained
+// permissions page prints
+// (https://jmrp.io/docs/gitlab-mcp-server/reference/fine-grained-permissions/),
+// built here once so the two never word a requirement differently.
 type Description struct {
 	// GitLabVersion is the release the requirement was recorded at.
 	GitLabVersion string `json:"gitlab_version"`
@@ -59,7 +61,7 @@ type Position struct {
 // this package hands out: a dotted path reads as a canonical action ID
 // wherever its first field shares a domain's name, as `vulnerability.project`
 // does, to a model reading the detail and to the documentation's name check
-// reading the reference page alike.
+// reading the fine-grained permissions page alike.
 func Selection(path string) string {
 	fields := strings.Split(path, ".")
 	return strings.Join(fields, " { ") + strings.Repeat(" }", len(fields)-1)

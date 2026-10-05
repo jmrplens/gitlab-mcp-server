@@ -183,9 +183,11 @@ func TestProxy_ServerAndProxyCORSCollide(t *testing.T) {
 	// is asserted, not merely logged: the collision is the whole point of the
 	// case, and if a regression dropped the server's own header the response
 	// would carry one and a `> 1` log would silently stop verifying anything.
-	// The collision itself is the deployment's bug to fix — drop the proxy's
-	// CORS block for the MCP location, see docs/concepts/security.md — but the
-	// server must reproduce it here so that fix has something to point at.
+	// The collision itself is the deployment's bug to fix (drop the proxy's
+	// CORS block for the MCP location, as the security page says at
+	// https://jmrp.io/docs/gitlab-mcp-server/operations/security/#cross-origin-protection),
+	// but the server must reproduce it here so that fix has something to
+	// point at.
 	got = proxied.do(t, mcpPOST(headers))
 	if n := len(got.header.Values("Access-Control-Allow-Origin")); n <= 1 {
 		t.Errorf("through the CORS-advertising proxy: %d Access-Control-Allow-Origin headers, want more than 1 — a browser rejects a response with two, and this case exists to demonstrate it", n)

@@ -216,9 +216,11 @@ func TestSDKVerbosityHandler_ADerivedHandlerKeepsTheClamp(t *testing.T) {
 // TestSetDiagnosticSinks_AMalformedHeaderVariableIsNotPrinted is the regression
 // for a guarantee the guide states and a test could not fail on.
 //
-// docs/guides/telemetry.md says "This server never reads, logs or transforms
-// that variable ... a test asserts the credential never appears in this
-// server's own log output, including when an export fails". The server does not
+// The telemetry page
+// (https://jmrp.io/docs/gitlab-mcp-server/operations/telemetry/#authenticating-to-your-collector)
+// says of that variable "it is never logged: a test asserts the credential
+// never appears in this server's own log output, including when an export
+// fails". The server does not
 // print it; the SDK does, through the sinks this file installs. Its header
 // parser logs the raw pair when one has no "=", logs the raw value when
 // percent-decoding fails, and the log exporter hands otel.Handle the entire

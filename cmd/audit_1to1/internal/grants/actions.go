@@ -12,8 +12,8 @@ import (
 // ActionGrant is one action's requirement in GitLab's words, and what shaped
 // the requests it was derived from. It is the 1:1 view: one row per action,
 // the requirement worded by [finegrained.Table.Describe], which is what the
-// reference page and the fine_grained block of gitlab://tools/{id} word it
-// with, so the three never disagree.
+// site's fine-grained permissions page and the fine_grained block of
+// gitlab://tools/{id} word it with, so the three never disagree.
 type ActionGrant struct {
 	ID    string `json:"id"`
 	Owner string `json:"owner,omitempty"`
