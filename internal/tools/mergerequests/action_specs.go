@@ -40,6 +40,7 @@ const (
 // commit is read through the repository domain, not a commit domain: there is
 // no such domain, which is what "commit.get" was.
 const (
+	actionApprovalState  = "merge_request.approval_state"
 	actionChangesGet     = "mr_review.changes_get"
 	actionDiscussionList = "mr_review.discussion_list"
 	actionNoteCreate     = "mr_review.note_create"

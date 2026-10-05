@@ -2662,10 +2662,62 @@ func TestFormatApproveMarkdown_Empty(t *testing.T) {
 		"- **You Approved**: ❌\n" +
 		"- **You Can Approve**: ❌\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'merge_request.merge' to merge this merge request\n" +
+		"- Use action 'merge_request.approval_state' to see each approval rule and whether it is satisfied\n" +
 		"- Use action 'merge_request.get' to see its full details\n"
 	if got := FormatApproveMarkdown(ApproveOutput{}); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatApproveMarkdown_NextSteps verifies that the next steps follow the
+// approval state rather than the action that produced it, since one card
+// answers both the approve and the unapprove: a merge is offered only while
+// the merge request reads approved, the rules otherwise, and an approval only
+// to a caller who may give one and has not.
+func TestFormatApproveMarkdown_NextSteps(t *testing.T) {
+	const (
+		merge   = "- Use action 'merge_request.merge' to merge this merge request\n"
+		rules   = "- Use action 'merge_request.approval_state' to see each approval rule and whether it is satisfied\n"
+		approve = "- Use action 'merge_request.approve' to approve this merge request\n"
+		details = "- Use action 'merge_request.get' to see its full details\n"
+	)
+	cases := []struct {
+		name string
+		in   ApproveOutput
+		want string
+	}{
+		{
+			name: "withdrawn and approved by nobody, offers the rules and the approval back",
+			in:   ApproveOutput{UserCanApprove: true},
+			want: rules + approve + details,
+		},
+		{
+			name: "withdrawn while another approval still holds, offers the merge and the approval back",
+			in:   ApproveOutput{Approved: true, ApprovedBy: 1, UserCanApprove: true},
+			want: merge + approve + details,
+		},
+		{
+			name: "given and still short of the rules, offers the rules and no second approval",
+			in:   ApproveOutput{ApprovedBy: 1, UserHasApproved: true, UserCanApprove: true},
+			want: rules + details,
+		},
+		{
+			name: "given and enough, offers the merge and no second approval",
+			in:   ApproveOutput{Approved: true, ApprovedBy: 1, UserHasApproved: true, UserCanApprove: true},
+			want: merge + details,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatApproveMarkdown(tc.in)
+			_, steps, found := strings.Cut(got, "💡 **Next steps:**\n")
+			if !found {
+				t.Fatalf("rendered %q carries no next steps", got)
+			}
+			if steps != tc.want {
+				t.Errorf("next steps =\n%q\nwant\n%q", steps, tc.want)
+			}
+		})
 	}
 }
 

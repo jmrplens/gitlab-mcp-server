@@ -266,11 +266,28 @@ func FormatApproveMarkdown(a ApproveOutput) string {
 	c.Bool("You Can Approve", a.UserCanApprove)
 	c.Markdown("Approved By", approverList(a.ApprovedByUsers))
 	mrapprovals.WriteEnterpriseRows(c, a.EnterpriseApprovalState)
-	c.End(
-		toolutil.HintAction(actionMRMerge, "merge this merge request"),
-		toolutil.HintAction(actionMRGet, "see its full details"),
-	)
+	c.End(approveHints(a)...)
 	return b.String()
+}
+
+// approveHints chooses the next steps the approval state leaves open. The
+// card answers an unapprove as well as an approve, so a merge is offered only
+// while the merge request reads approved: an unapprove can leave it approved
+// by nobody, and an approve can leave an Enterprise build's rules wanting
+// more. Otherwise the hint points at the rules still to satisfy. An approval
+// is offered to a caller who may give one and has not, which is where an
+// unapprove leaves the caller who withdrew theirs.
+func approveHints(a ApproveOutput) []string {
+	hints := make([]string, 0, 3)
+	if a.Approved {
+		hints = append(hints, toolutil.HintAction(actionMRMerge, "merge this merge request"))
+	} else {
+		hints = append(hints, toolutil.HintAction(actionApprovalState, "see each approval rule and whether it is satisfied"))
+	}
+	if a.UserCanApprove && !a.UserHasApproved {
+		hints = append(hints, toolutil.HintAction(actionMRApprove, "approve this merge request"))
+	}
+	return append(hints, toolutil.HintAction(actionMRGet, "see its full details"))
 }
 
 // FormatCommitsMarkdown renders the commits of a merge request as a Markdown
