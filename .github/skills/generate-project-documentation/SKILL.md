@@ -94,6 +94,7 @@ The user documentation needs no index file of its own: the site's sidebar is the
 | [Internal Architecture](architecture.md) | The packages, what each owns, the path a call takes, and the handler patterns |
 | [Tool Surfaces & Canonical Action Core](tool-surfaces-and-action-core.md) | How individual, meta, and dynamic surfaces project from the shared catalog |
 | [Error Handling](error-handling.md) | Classification, the wrapping functions, not-found results, and testing errors |
+| [GraphQL Integration](graphql.md) | When a domain uses GraphQL, the shared helpers, and the pinned schema it is held to |
 | [Capabilities and Icons](capabilities.md) | The progress, elicitation and completion APIs, and how the icons are built |
 | [Command-Line Utilities](cmd-utilities.md) | The `cmd/` developer tools (generators and auditors) |
 | [Distribution](distribution.md) | How the Claude Desktop bundles and the package channels are built and published |

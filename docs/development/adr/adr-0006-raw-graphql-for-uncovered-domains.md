@@ -101,7 +101,7 @@ Shared GraphQL utilities live in `internal/toolutil/graphql.go`:
 | `GraphQLDefaultFirst`              | Default page size (20)                                                 |
 | `GraphQLMaxFirst`                  | Maximum page size (100)                                                |
 
-Which pagination input a domain embeds is the statement of what its connection can do, and it is checked rather than trusted: `Variables()` takes the document it is about to run and refuses one that does not declare, or does not pass on, every variable the input can send. See [GraphQL concepts](../../concepts/graphql.md) for the three ways that check fails.
+Which pagination input a domain embeds is the statement of what its connection can do, and it is checked rather than trusted: `Variables()` takes the document it is about to run and refuses one that does not declare, or does not pass on, every variable the input can send. See [GraphQL Integration](../graphql.md) for the three ways that check fails.
 
 ### Testing approach
 
@@ -153,6 +153,6 @@ This decision admits raw GraphQL **for a domain without a wrapper**, so the wrap
 ## References
 
 - [ADR-0004: Modular tools sub-packages](adr-0004-modular-tools-subpackages.md)
-- [GraphQL Integration Architecture](../../concepts/graphql.md)
+- [GraphQL Integration Architecture](../graphql.md)
 - [GitLab GraphQL API](https://docs.gitlab.com/api/graphql/)
 - [client-go GraphQL service](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3#GraphQLService)

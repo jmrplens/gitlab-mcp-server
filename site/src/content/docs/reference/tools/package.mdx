@@ -13,6 +13,10 @@ The package registry of a project or a group: list packages of any format and th
 
 Protection rules restrict who may push or delete packages and container images: package protection rules, container repository protection rules and container image tag protection rules, each listed, created, updated and deleted here.
 
+`package.get` reads only a package whose status is `default` or `deprecated`: GitLab answers 404 for any other, so a `package_id` that `package.list` shows in `error` status, or in `hidden`, `processing` or `pending_destruction` when asked for by status, answers 404 while the package still exists, as a deleted version does. The action then returns a not-found result naming both reasons rather than an error.
+
+`package.download` writes to the disk of the machine the server runs on, so it is classified as a write, which read-only mode removes and safe mode previews. `output_path` must resolve under the working directory, the OS temporary directory or a directory named in `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`, and a server reached over HTTP refuses every local path. The file is written beside `output_path` under a temporary name and renamed over it once complete, so the server needs write permission on that directory, not only on an existing file, and on Unix the new file is readable and writable by its owner alone (mode 0600), whatever the file it replaces allowed.
+
 ## Sample questions
 
 - "List the packages of project 42"

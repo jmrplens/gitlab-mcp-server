@@ -20,6 +20,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // realRegistry memoizes the registered name set: building it registers the
@@ -873,9 +874,12 @@ func TestRun_RepositoryDocs_NameOnlyRegisteredTools(t *testing.T) {
 // used MCP method names as `gitlab_*` tokens was deleted, and nothing here
 // noticed, which is what this test is for.
 //
-// It walks the same roots the scan walks and skips the same historical
-// documents, because an entry excusing a token only a historical document
-// carries is excusing something the scan never sees.
+// It walks the same roots the scan walks, prunes the same directories, reads
+// only the Markdown and MDX files the scan reads, and skips the same
+// historical documents, because an entry excusing a token only an unscanned
+// file carries (a historical document, or one of the JSON records under
+// docs/development, several of which spell gitlab_* keys) is excusing
+// something the scan never sees.
 func TestAllowed_EveryEntryStillExcusesSomething(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
@@ -885,21 +889,7 @@ func TestAllowed_EveryEntryStillExcusesSomething(t *testing.T) {
 
 	mentioned := make(map[string]struct{})
 	for _, docRoot := range docRoots {
-		walkErr := filepath.WalkDir(docRoot, func(path string, entry fs.DirEntry, walkErr error) error {
-			switch {
-			case walkErr != nil:
-				return walkErr
-			case entry.IsDir():
-				return nil
-			}
-			for _, prefix := range historicalDocs {
-				if strings.HasPrefix(filepath.ToSlash(path), prefix) {
-					return nil
-				}
-			}
-			return collectTokens(path, mentioned)
-		})
-		if walkErr != nil && !os.IsNotExist(walkErr) {
+		if walkErr := collectScannedTokens(docRoot, mentioned); walkErr != nil && !os.IsNotExist(walkErr) {
 			t.Fatalf("walking %s: %v", docRoot, walkErr)
 		}
 	}
@@ -1036,6 +1026,70 @@ func inOrder(text string, tokens ...string) bool {
 		at = next
 	}
 	return true
+}
+
+// collectScannedTokens adds to mentioned every tool-name-shaped token the
+// files under one entry of docRoots carry, reading the files scanRoot reads
+// and no others: the directories it prunes are pruned here, only Markdown and
+// MDX files are read, and the historical documents are skipped.
+func collectScannedTokens(docRoot string, mentioned map[string]struct{}) error {
+	return filepath.WalkDir(docRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		switch {
+		case walkErr != nil:
+			return walkErr
+		case entry.IsDir():
+			if path != docRoot && (entry.Name() == "node_modules" || sourcewalk.SkipDirBelowRoot(path)) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
+			return nil
+		}
+		for _, prefix := range historicalDocs {
+			if strings.HasPrefix(filepath.ToSlash(path), prefix) {
+				return nil
+			}
+		}
+		return collectTokens(path, mentioned)
+	})
+}
+
+// TestCollectScannedTokens_FilesTheScanSkips_AreNotRead holds the allow-list
+// test's walk to the scan's: a token spelled only in a JSON record, under a
+// pruned directory or in a historical document keeps no allow-list entry
+// alive, since the scan never reads any of them.
+func TestCollectScannedTokens_FilesTheScanSkips_AreNotRead(t *testing.T) {
+	t.Chdir(t.TempDir())
+	files := map[string]string{
+		"docs/page.md":                         "gitlab_in_markdown",
+		"docs/page.mdx":                        "gitlab_in_mdx",
+		"docs/record.json":                     `{"gitlab_in_json": 1}`,
+		"docs/node_modules/pkg/README.md":      "gitlab_in_node_modules",
+		"docs/.hidden/page.md":                 "gitlab_in_dot_directory",
+		"docs/development/adr/adr-0001-old.md": "gitlab_in_history",
+	}
+	var setupErr error
+	for path, text := range files {
+		setupErr = errors.Join(setupErr, os.MkdirAll(filepath.Dir(path), 0o750), os.WriteFile(path, []byte(text), 0o600))
+	}
+	if setupErr != nil {
+		t.Fatalf("writing the fixture tree: %v", setupErr)
+	}
+
+	mentioned := make(map[string]struct{})
+	if err := collectScannedTokens("docs", mentioned); err != nil {
+		t.Fatalf("collectScannedTokens: %v", err)
+	}
+	want := []string{"gitlab_in_markdown", "gitlab_in_mdx"}
+	got := make([]string, 0, len(mentioned))
+	for token := range mentioned {
+		got = append(got, token)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("tokens collected = %v, want %v", got, want)
+	}
 }
 
 // collectTokens adds every tool-name-shaped token one file carries to
