@@ -39,7 +39,7 @@
 // oldest GitLab it works on. A field GitLab removes leaves gitlab.com first, so
 // the pin refuses a document that stopped working there while it still works
 // on every self-managed instance, and nothing lets a document declare why;
-// docs/concepts/graphql.md records that as deliberate.
+// docs/development/graphql.md records that as deliberate.
 //
 // # Cost
 //

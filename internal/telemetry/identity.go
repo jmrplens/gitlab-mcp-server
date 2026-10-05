@@ -28,7 +28,7 @@ import (
 // stderr is unchanged for every existing deployment, and identity does not
 // cross to a collector until somebody asks for it.
 //
-// [ADR-0008]: https://jmrp.io/docs/gitlab-mcp-server/development/adr/adr-0008-universal-identity/
+// [ADR-0008]: https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0008-universal-identity.md
 type IdentityPolicy string
 
 const (

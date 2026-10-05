@@ -13,6 +13,10 @@ Everything done to a project: create (for the user or for someone else), read, l
 
 From Premium the project also carries approval rules and approval settings, push rules, pull mirroring, target branch rules and the dependency firewall's package evaluation; from Ultimate, its security settings. Repository content, branches, issues and merge requests have pages of their own.
 
+`project.transfer` needs the Owner role on the project and permission to create projects in the target namespace. Since GitLab 19.4 GitLab applies a transfer in the background (GitLab 18.11 to 19.3 do so when the `groups_and_projects_async_transfer` feature flag is enabled): it answers with the project where it still is, and a worker moves it and checks there that the name and path are free in the target namespace. The action reads the project back every 2 seconds for up to 45 seconds. GitLab reports a failed move only as a pending to-do item of action `transfer_failed` for the user who asked for it, which the action turns into an error; a move that has neither landed nor failed by then is answered with `transfer_queued` set. Read the project back later with `project.get`, look for that item with `user.todo_list`, and do not send the transfer again, since GitLab runs a second transfer as well while the first is queued.
+
+`project.dependency_firewall_evaluate` is an experiment GitLab 19.4 introduced behind the `dependency_firewall_phase1` feature flag, which is disabled by default, and while it is off every project on the instance answers 404; the action answers that 404 by naming the flag first. With the flag on, GitLab evaluates a package only for a project the Dependency Firewall is turned on for, and answers 422 (`dependency_firewall_not_enforced`) for any other: on a self-managed instance an administrator turns it on under Admin > Settings > Security and compliance > Dependency firewall, which no API sets, and on GitLab.com an Owner turns it on in the top-level group's security settings. Until a verdict arrives, treat the package as not evaluated rather than as allowed.
+
 ## Sample questions
 
 - "List my GitLab projects"

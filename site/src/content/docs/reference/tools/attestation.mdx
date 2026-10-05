@@ -11,6 +11,8 @@ tableOfContents:
 
 Build attestations record how an artifact was built: GitLab stores them per project as SLSA provenance, keyed by the digest of the artifact they describe. `attestation.list` finds the attestations of one subject digest, and `attestation.download` fetches one of them by its IID.
 
+GitLab serves both routes only where the `slsa_provenance_statement` feature flag is enabled for the project, and the flag ships disabled, so on an instance where nobody enabled it every project answers 404 whatever the digest or IID. `attestation.list` reads such a 404 on a project that exists as the API being unavailable and says so, naming the flag and `admin.feature_set` as the way an administrator enables it, rather than answering an empty list.
+
 ## Sample questions
 
 - "Which attestations does project 42 hold for this sha256 digest?"

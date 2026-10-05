@@ -13,6 +13,8 @@ Toda la vida de un issue: crearlo, leerlo, listarlo (en un proyecto, en un grupo
 
 Los work items, el modelo GraphQL que hay detrás de issues, épicas y tareas, son también acciones de este grupo, con sus tipos y sus vistas guardadas. Los eventos de iteración y de peso, y listar las iteraciones de un proyecto o de un grupo, se sirven a partir de Premium.
 
+En GitLab 19.4, `issue.work_item_saved_view_create` e `issue.work_item_saved_view_subscribe` hechos con un token responden casi siempre 500: suscribir a un usuario a una vista bloquea la fila del usuario mientras el registro de inicios de sesión de GitLab ha dejado cambios sin guardar en ella, y GitLab lo rechaza. La creación lo encuentra después de guardar la vista, así que la vista existe y su creador no queda suscrito; el error lo dice y nombra `issue.work_item_saved_view_list`, porque crear la vista otra vez añade un duplicado. La suscripción falla antes de registrar nada. Las demás acciones de vistas guardadas no se ven afectadas.
+
 ## Preguntas de ejemplo
 
 - "Lista los issues abiertos del proyecto 42"

@@ -188,7 +188,11 @@ The gates that hold this layout are listed under [Compliance](#compliance).
   published.
 - **The hand-written per-domain tool pages under `docs/reference/tools`.** They are replaced by
   the pages `cmd/gen_tool_reference` writes from the catalog, so what a page says about an
-  action is what the server serves.
+  action is what the server serves. What an operator has to know before an action works and
+  the quoted description does not say (a feature flag that ships disabled, a minimum GitLab
+  release, a role, a transfer GitLab applies in the background, the directory a download needs
+  to write in) goes in its group's overview in `domains.json`, which is where the caveats of
+  the retired pages were carried.
 - **`cmd/audit_doc_coverage` and `doc-ownership.json`.** They held the hand-written tool pages
   to the catalog. A page generated from the catalog cannot miss an action or name one the
   catalog lacks, so there was nothing left for them to hold.
@@ -249,6 +253,14 @@ This record supersedes ADR-0013 whole, so the parts of it that still hold are re
   `site/.node-version` pins and pnpm at the version `site/package.json` pins, and a Playwright
   Chromium for the Mermaid render of a full build. A page under `docs/` needed markdownlint
   alone.
+- **NEG-006**: A link anyone took to a page under `docs/guides`, `docs/reference` or
+  `docs/concepts`, or to `docs/getting-started.md`, on `main` now answers 404, and GitHub does
+  not redirect a deleted file. Such links were published: the `llms.txt` of 3.1.0, which the
+  documentation domain republished as `/llms-server.txt`, carried 17 absolute `blob/main` links
+  into those trees, and the README of 3.1.0 carried 28 relative ones, which a reader browsing
+  `main` copies as `main` addresses. The regenerated `llms.txt` points at the site, but a copy
+  taken earlier does not. The page is found on the site by its slug, or in the repository at a
+  release tag.
 
 ## Alternatives Considered
 

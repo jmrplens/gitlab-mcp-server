@@ -58,7 +58,7 @@ var allowedIDs = map[string]string{
 	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in upstream-bugs.md",
 	"mcp.schema":               "the middle of the Agent Plugins schema file name, mcp.schema.json",
 	"project.security_setting": "GitLab's own entity name, quoted in upstream-bugs.md as the thing the endpoint answers with",
-	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the enterprise guide quotes",
+	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
 	"result.content":           "a jq path into a JSON-RPC response, in the CI/CD examples",
 	"server.name":              "the io.modelcontextprotocol.server.name image label the registry validates ownership through",
 	"server.type":              "a key of the .mcpb manifest, whose value says the bundle carries a binary",

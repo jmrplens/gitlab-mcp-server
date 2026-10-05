@@ -147,11 +147,13 @@ cmd_diff() {
   # Explicit prefixes and no external diff driver: a developer with
   # diff.noprefix, diff.mnemonicPrefix or a textconv filter configured would
   # otherwise hand this parser a shape it cannot read, and a gate that reads
-  # nothing passes everything.
+  # nothing passes everything. Rename detection is stated for the same reason:
+  # under diff.renames=false a moved file reads as one deleted and one added,
+  # and every em dash it already carried would be reported as written here.
   local findings
   findings=$(
     git -c core.quotePath=false diff --no-color --no-ext-diff --no-textconv \
-      -U0 --src-prefix=a/ --dst-prefix=b/ "$base...HEAD" -- "${pathspecs[@]}" \
+      --find-renames -U0 --src-prefix=a/ --dst-prefix=b/ "$base...HEAD" -- "${pathspecs[@]}" \
       | LC_ALL=C EM_DASH="$EM_DASH" awk '
         BEGIN { OFS = ":"; dash = ENVIRON["EM_DASH"]; path = ""; lineno = 0; inhunk = 0 }
         # A file header only ever precedes the first hunk of its file, so the

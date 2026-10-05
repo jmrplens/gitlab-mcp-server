@@ -13,6 +13,8 @@ Todo lo que se hace con un grupo: crearlo, leerlo, listarlo, buscarlo, actualiza
 
 A partir de Premium el grupo trae también webhooks, reglas de push, ramas y entornos protegidos, épicas con sus notas, discusiones, issues y tableros, wikis de grupo, vínculos de grupo LDAP y SAML, certificados SSH, miembros facturables y recuentos de actividad; a partir de Ultimate, el inventario de credenciales y los ajustes de seguridad.
 
+`group.transfer` necesita el rol Owner tanto en el grupo que se mueve como en su nuevo padre; `group.transfer_locations` lista los padres bajo los que puede ir. Desde GitLab 19.4 GitLab aplica la transferencia en segundo plano (GitLab 18.11 a 19.3 lo hacen cuando está activada la feature flag `groups_and_projects_async_transfer`) y responde con el grupo donde aún está, y la acción vuelve a leer el grupo cada 2 segundos durante un máximo de 45 segundos. Un traslado fallido se informa solo con una tarea pendiente (to-do) de acción `transfer_failed` para el usuario que lo pidió, que la acción convierte en un error; un traslado que para entonces ni se ha completado ni ha fallado se responde con `transfer_queued` activado. Vuelve a leer el grupo más tarde con `group.get`, busca esa tarea con `user.todo_list` y no envíes la transferencia otra vez, porque GitLab ejecuta también una segunda transferencia mientras la primera está en cola.
+
 ## Preguntas de ejemplo
 
 - "Lista mis grupos de GitLab"

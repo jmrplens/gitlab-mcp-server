@@ -90,5 +90,5 @@ Current priority queue based on known deprecation timelines:
 ## References
 
 - [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md) — raw GraphQL.Do() pattern
-- [GraphQL Integration](../../concepts/graphql.md) — current GraphQL patterns and utilities
+- [GraphQL Integration](../graphql.md): current GraphQL patterns and utilities
 - [GitLab REST API Deprecations](https://docs.gitlab.com/ee/api/rest/deprecations.html) — deprecation tracker

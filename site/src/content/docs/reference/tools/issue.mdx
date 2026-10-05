@@ -13,6 +13,8 @@ The whole life of an issue: create, read, list (in a project, a group or everywh
 
 Work items, the GraphQL model behind issues, epics and tasks, are actions here too, with their types and saved views. Iteration and weight events, and listing a project's or a group's iterations, are served from Premium.
 
+On GitLab 19.4, `issue.work_item_saved_view_create` and `issue.work_item_saved_view_subscribe` made with a token nearly always answer 500: subscribing a user to a view locks the user's row while GitLab's sign-in tracking has left unsaved changes on it, which GitLab refuses. The create meets it after the view is saved, so the view exists and its creator is not subscribed; the error says so and names `issue.work_item_saved_view_list`, since creating the view again adds a duplicate. The subscribe fails before recording anything. The other saved view actions are not affected.
+
 ## Sample questions
 
 - "List the open issues of project 42"

@@ -11,6 +11,8 @@ tableOfContents:
 
 Las atestaciones de compilación registran cómo se construyó un artefacto: GitLab las guarda por proyecto como procedencia SLSA, indexadas por el digest del artefacto que describen. `attestation.list` encuentra las atestaciones de un digest y `attestation.download` descarga una de ellas por su IID.
 
+GitLab sirve las dos rutas solo donde la feature flag `slsa_provenance_statement` está activada para el proyecto, y la flag viene desactivada, así que en una instancia donde nadie la activó cada proyecto responde 404 sea cual sea el digest o el IID. `attestation.list` lee ese 404 en un proyecto que existe como la API no disponible y lo dice, nombrando la flag y `admin.feature_set` como la forma en que un administrador la activa, en lugar de responder con una lista vacía.
+
 ## Preguntas de ejemplo
 
 - "¿Qué atestaciones tiene el proyecto 42 para este digest sha256?"

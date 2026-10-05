@@ -13,6 +13,10 @@ El registro de paquetes de un proyecto o de un grupo: listar paquetes de cualqui
 
 Las reglas de protección limitan quién puede subir o borrar paquetes e imágenes de contenedor: reglas de protección de paquetes, de repositorios de contenedores y de tags de imagen, que aquí se listan, crean, actualizan y borran.
 
+`package.get` solo lee un paquete cuyo estado es `default` o `deprecated`: GitLab responde 404 para cualquier otro, así que un `package_id` que `package.list` muestra en estado `error`, o en `hidden`, `processing` o `pending_destruction` cuando se pide por estado, responde 404 aunque el paquete siga existiendo, igual que una versión borrada. La acción devuelve entonces un resultado de no encontrado que nombra las dos causas en lugar de un error.
+
+`package.download` escribe en el disco de la máquina donde corre el servidor, así que se clasifica como escritura, que el modo de solo lectura retira y el modo seguro previsualiza. `output_path` tiene que resolverse bajo el directorio de trabajo, el directorio temporal del sistema o un directorio nombrado en `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`, y un servidor al que se llega por HTTP rechaza cualquier ruta local. El archivo se escribe junto a `output_path` con un nombre temporal y se renombra sobre él cuando está completo, así que el servidor necesita permiso de escritura en ese directorio, no solo en un archivo ya existente, y en Unix el archivo nuevo solo lo puede leer y escribir su propietario (modo 0600), permitiera lo que permitiera el archivo al que sustituye.
+
 ## Preguntas de ejemplo
 
 - "Lista los paquetes del proyecto 42"

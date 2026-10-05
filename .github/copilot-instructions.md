@@ -89,7 +89,7 @@ gitlab-mcp-server/
 │   ├── progress/           # MCP progress notifications
 │   └── elicitation/        # MCP elicitation capability
 ├── docs/                   # Contributor documentation only: development/ and a README pointing users at the site (ADR-0025)
-│   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities, tool surfaces, and the internal architecture, error handling, capability APIs and distribution pages (architecture.md, error-handling.md, capabilities.md, distribution.md)
+│   └── development/        # adr/ (Architectural Decision Records), testing/ (generated), static analysis, cmd utilities, tool surfaces, and the internal architecture, error handling, GraphQL integration, capability APIs and distribution pages (architecture.md, error-handling.md, graphql.md, capabilities.md, distribution.md)
 ├── site/                   # The user documentation: an Astro Starlight site, published at https://jmrp.io/docs/gitlab-mcp-server/
 │   ├── src/content/docs/   # One .mdx page per slug, its Spanish twin under es/; reference/tools/ (make gen-tool-reference) and reference/fine-grained-permissions.mdx (make gen-action-grants) are generated
 │   ├── src/data/           # Generated figures the pages read: stats.json (audit_metrics), token-footprint.json (audit_tokens), resource-benchmark.json (bench_resources); home.ts, the landing data, is hand-written

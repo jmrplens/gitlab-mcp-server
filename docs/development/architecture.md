@@ -457,6 +457,26 @@ meta-tool in `llms-full.txt` and `llms-full-meta-tools.txt`, or the
 `go run ./cmd/audit_surface_quality/ -view=output` reports a route without one
 (category `route-output-schema`).
 
+### Embedded resources per action
+
+An action whose entity has a `gitlab://` resource declares it on its spec:
+`ActionSpec.EmbeddedResourcePolicy` (`none`, `optional` or `always`, the
+`toolutil.ActionSpecEmbedded*` constants) and `ActionSpec.EmbeddedResource`,
+the URI template written with the action's own parameter names, for instance
+`gitlab://project/{project_id}/issue/{issue_iid}`. Every declaration today goes
+through `ActionSpec.WithEmbeddedResource(template)`, which sets the policy to
+`always`. The spec validator (`validateEmbeddedResource` in
+`internal/toolutil/embed_template.go`) refuses a template with no policy that
+embeds, an `always` policy with no template, a template that is not a
+`gitlab://` URI, and a template naming a parameter the action does not accept.
+`FinishToolResult` embeds the block last, on a successful result only, through
+`EmbedCanonicalResource`: it expands the template from the call's parameters
+with the documented aliases resolved, the way the handler read them, and embeds
+nothing when a variable is missing or embedding is off
+(`GITLAB_MCP_EMBEDDED_RESOURCES`, `--embedded-resources` in HTTP mode). `TestEmbeddedResource_EveryGetThatHasAResourceDeclaresIt` in
+`internal/tools/individual_catalog_test.go` pins the list, 22 actions today, so
+a new get action with a resource cannot ship without declaring it.
+
 ### Capability interaction
 
 ```mermaid
