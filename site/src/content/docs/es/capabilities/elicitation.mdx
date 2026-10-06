@@ -221,7 +221,7 @@ La elicitación también se utiliza para **solicitudes de confirmación** antes 
 
 A un cliente que no admite elicitación se le rechaza la llamada con un mensaje que le pide volver a enviarla con `confirm: true` solo después de que el usuario la apruebe, y nada llega a GitLab. En una sesión de `2026-07-28` la pregunta viaja como una petición de entrada multi-ronda.
 
-La superficie dinámica por defecto nunca pregunta: `gitlab_execute_action` rechaza una acción clasificada como destructiva salvo que la llamada lleve `confirm: true`, y ni `GITLAB_MCP_YOLO_MODE` ni `AUTOPILOT` omiten ese paso. Allí solo las dos protecciones que dependen de los argumentos usan también la elicitación. [Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas) enumera qué acciones cuentan como destructivas y describe las dos protecciones.
+La superficie dinámica por defecto nunca pregunta: `gitlab_execute_action` rechaza una acción clasificada como destructiva salvo que la llamada lleve `confirm: true` o que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) omita la confirmación, como hace el paso 1 en las otras dos superficies. Allí solo las dos protecciones que dependen de los argumentos usan también la elicitación. [Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas) enumera qué acciones cuentan como destructivas y describe las dos protecciones.
 
 ## ¿Cómo se protege la entrada?
 

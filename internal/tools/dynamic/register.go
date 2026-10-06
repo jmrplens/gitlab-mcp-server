@@ -1,6 +1,7 @@
 package dynamic
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -702,7 +703,7 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 		results = append(results, result)
 	}
 
-	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results)}
+	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results, toolutil.IsYOLOMode())}
 	if len(results) == 0 {
 		output.Suggestions = r.suggestSearchTokens(query, noMatchSuggestionLimit)
 	}
@@ -865,7 +866,17 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if input.Confirm {
 		params["confirm"] = true
 	}
-	if entry.Destructive && !hasExplicitConfirm(params) {
+	// GITLAB_MCP_YOLO_MODE, or AUTOPILOT while it is unset, passes the gate
+	// the way [toolutil.ConfirmDestructiveAction] lets the same action
+	// through on the meta and individual surfaces, so the switch an unattended
+	// run sets means the same thing on every surface (issue 1166). It is the
+	// last thing asked, after the fine-grained refusal and the parameter
+	// check, and read-only and safe mode are settled before any call arrives:
+	// the first leaves the action out of the catalog and the second clears
+	// its destructive flag and answers with a preview, so neither reaches
+	// this line. The meta handler the call goes on to applies the same
+	// switch, so it does not ask again.
+	if entry.Destructive && !hasExplicitConfirm(params) && !toolutil.IsYOLOMode() {
 		// A refusal like the surface-tool one, and recorded like it: this is
 		// the default surface, so leaving it out meant the most common
 		// needs_confirmation refusals never reached the refusal metric at all.
@@ -1173,22 +1184,28 @@ func wordizeSearchDocument(document *searchDocument) {
 func inferCapability(domain, action string) string {
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	action = strings.ToLower(strings.TrimSpace(action))
-	switch {
-	case domain == "merge_request" || domain == "mr_review" || strings.HasPrefix(domain, "mr_"):
+	// A chain of returns rather than a tagless switch, as in the taggers
+	// below: a case expression carries no statement counter, so the mutation
+	// gate reports every operator in one as not covered whatever the tests do.
+	if domain == "merge_request" || domain == "mr_review" || strings.HasPrefix(domain, "mr_") {
 		return "code_review"
-	case domain == "issue" || strings.Contains(action, "issue"):
-		return "work_item"
-	case domain == "pipeline" || domain == "job" || strings.HasPrefix(domain, "ci_"):
-		return "ci_cd"
-	case domain == "repository" || domain == "branch" || domain == "tag" || domain == "commit":
-		return "source_control"
-	case domain == "release" || domain == "package":
-		return "delivery"
-	case domain == "project" || domain == "group" || domain == "user":
-		return "collaboration"
-	default:
-		return domain
 	}
+	if domain == "issue" || strings.Contains(action, "issue") {
+		return "work_item"
+	}
+	if domain == "pipeline" || domain == "job" || strings.HasPrefix(domain, "ci_") {
+		return "ci_cd"
+	}
+	if domain == "repository" || domain == "branch" || domain == "tag" || domain == "commit" {
+		return "source_control"
+	}
+	if domain == "release" || domain == "package" {
+		return "delivery"
+	}
+	if domain == "project" || domain == "group" || domain == "user" {
+		return "collaboration"
+	}
+	return domain
 }
 
 func inferActionScope(domain string, schema map[string]any) string {
@@ -1356,8 +1373,8 @@ func (r *Registry) suggestSearchTokens(query string, limit int) []string {
 		bestDistance := 4
 		for _, term := range terms {
 			distance, ok := boundedLevenshtein(term.Raw, candidate, 3)
-			if ok && distance < bestDistance {
-				bestDistance = distance
+			if ok {
+				bestDistance = min(bestDistance, distance)
 			}
 		}
 		if bestDistance <= 2 {
@@ -1582,33 +1599,54 @@ func tagAppender(tags *[]string) tagCollector {
 	}
 }
 
+// addIDPatternTags and the other taggers below are chains of returns rather
+// than tagless switches: a case expression carries no statement counter, so
+// the mutation gate reports every operator in one as not covered whatever the
+// tests do. Each answers true when it tagged the action, which ends the walk
+// over actionTaggers.
 func addIDPatternTags(add tagCollector, id, domain, action string) bool {
-	switch {
-	case strings.Contains(id, "hook_"):
+	if strings.Contains(id, "hook_") {
 		add("webhook", "web hook", "project webhook", "webhook create", "webhook add", "project hook add", "hook add")
-	case strings.Contains(id, "deploy_key"):
+		return true
+	}
+	if strings.Contains(id, "deploy_key") {
 		add("deploy key", "ssh key", "access key")
-	case strings.Contains(id, "deploy_token"):
+		return true
+	}
+	if strings.Contains(id, "deploy_token") {
 		add("deploy token", "deploy tokens", "project deploy token", "project deploy tokens", "deployment token", "credential", "credentials", "token list", "deploy token list")
-	case strings.Contains(id, "member_") && domain == "project":
+		return true
+	}
+	if strings.Contains(id, "member_") && domain == "project" {
 		add("project member", "project membership")
-	case strings.Contains(id, "member_") && domain == "group":
+		return true
+	}
+	if strings.Contains(id, "member_") && domain == "group" {
 		add("group member", "group membership")
-	case strings.Contains(id, "service_account_pat"):
+		return true
+	}
+	if strings.Contains(id, "service_account_pat") {
 		addServiceAccountPATActionTags(add, domain, action)
-	case strings.Contains(id, "service_account") && (domain == "project" || domain == "group"):
+		return true
+	}
+	if strings.Contains(id, "service_account") && (domain == "project" || domain == "group") {
 		addServiceAccountActionTags(add, domain, action)
-	case domain == "discover_project":
+		return true
+	}
+	if domain == "discover_project" {
 		add("discover", "project", "remote", "url", "lookup", "resolve", "project discovery", "git remote", "remote url", "resolve project")
-	case domain == "interactive":
+		return true
+	}
+	if domain == "interactive" {
 		add("guided", "elicitation", "wizard", strings.ReplaceAll(action, "_", " "))
 		addInteractiveActionTags(add, action)
-	case strings.Contains(id, "token_project") || strings.Contains(id, "token_group") || strings.Contains(id, "token_personal"):
-		add("access token", "project access token", "personal access token")
-	default:
-		return false
+		return true
 	}
-	return true
+	if strings.Contains(id, "token_project") || strings.Contains(id, "token_group") || strings.Contains(id, "token_personal") {
+		add("access token", "project access token", "personal access token")
+		return true
+	}
+	return false
 }
 
 func addServiceAccountActionTags(add tagCollector, domain, action string) {
@@ -1652,32 +1690,48 @@ func addInteractiveActionTags(add tagCollector, action string) {
 }
 
 func addCoreDomainTags(add tagCollector, _, domain, action string) bool {
-	switch {
-	case domain == "user" && action == "current":
+	if domain == "user" && action == "current" {
 		add("current", "authenticated", "me", "whoami", "profile", "current user", "authenticated user", "current authenticated user", "show current user", "my profile")
-	case domain == "project":
+		return true
+	}
+	if domain == "project" {
 		addProjectActionTags(add, action)
-	case domain == "repository" && strings.HasPrefix(action, "file_"):
+		return true
+	}
+	if domain == "repository" && strings.HasPrefix(action, "file_") {
 		add("repository file", "repo file", "file content")
-	case domain == "repository" && action == "tree":
+		return true
+	}
+	if domain == "repository" && action == "tree" {
 		add("repository tree", "repository tree list", "repo tree", "list repository tree", "browse repository tree", "repository_tree", "tree list", "ref", "main")
-	case domain == "search":
+		return true
+	}
+	if domain == "search" {
 		addSearchActionTags(add, action)
-	case domain == "server":
+		return true
+	}
+	if domain == "server" {
 		addServerActionTags(add, action)
-	case domain == "ci_catalog":
+		return true
+	}
+	if domain == "ci_catalog" {
 		addCICatalogActionTags(add, action)
-	case domain == "merge_request":
+		return true
+	}
+	if domain == "merge_request" {
 		add("mr", aliasMergeRequest)
-	case domain == "mr_review":
+		return true
+	}
+	if domain == "mr_review" {
 		addMRReviewActionTags(add, action)
-	case domain == "ci_variable":
+		return true
+	}
+	if domain == "ci_variable" {
 		add("ci variable", "ci secret", "secret", "environment variable")
 		addCIVariableActionTags(add, action)
-	default:
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 func addProjectActionTags(add tagCollector, action string) {
@@ -1732,22 +1786,26 @@ func addCIVariableActionTags(add tagCollector, action string) {
 }
 
 func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
-	switch {
-	case domain == "environment":
+	if domain == "environment" {
 		add("env", "deployment")
 		addEnvironmentActionTags(add, action)
-	case domain == "feature_flags" && strings.HasPrefix(action, "ff_user_list_"):
+		return true
+	}
+	if domain == "feature_flags" && strings.HasPrefix(action, "ff_user_list_") {
 		add("feature flag user list", "user list", "user_list_iid", "feature flag users")
-	case domain == "job":
+		return true
+	}
+	if domain == "job" {
 		add("ci job", "pipeline job")
 		addJobActionTags(add, action)
-	case domain == "pipeline":
+		return true
+	}
+	if domain == "pipeline" {
 		add("ci pipeline")
 		addPipelineActionTags(add, action)
-	default:
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 func addEnvironmentActionTags(add tagCollector, action string) {
@@ -1801,21 +1859,25 @@ func addPipelineActionTags(add tagCollector, action string) {
 }
 
 func addAdminReleaseTags(add tagCollector, _, domain, action string) bool {
-	switch {
-	case domain == "admin":
+	if domain == "admin" {
 		addAdminActionTags(add, action)
-	case domain == "tag":
+		return true
+	}
+	if domain == "tag" {
 		if action == "get" {
 			add("verify tag", "tag exists", "tag lookup", "release cleanup first step")
 		}
-	case domain == "release":
-		addReleaseActionTags(add, action)
-	case domain == "repository" && action == "compare":
-		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
-	default:
-		return false
+		return true
 	}
-	return true
+	if domain == "release" {
+		addReleaseActionTags(add, action)
+		return true
+	}
+	if domain == "repository" && action == "compare" {
+		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
+		return true
+	}
+	return false
 }
 
 func addAdminActionTags(add tagCollector, action string) {
@@ -1916,26 +1978,32 @@ func addIssueActionTags(add tagCollector, action string) {
 }
 
 func addProtectionTags(add tagCollector, id, domain, action string) bool {
-	switch {
-	case domain == "group" && strings.Contains(id, "protected_branch"):
+	if domain == "group" && strings.Contains(id, "protected_branch") {
 		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
 		addGroupProtectedBranchActionTags(add, action)
-	case domain == "group" && strings.Contains(id, "protected_env"):
+		return true
+	}
+	if domain == "group" && strings.Contains(id, "protected_env") {
 		add("group protected environment", "group environment protection", "group deployment gate", aliasProtectedEnvironment, aliasEnvironmentProtection)
 		addGroupProtectedEnvironmentActionTags(add, action)
-	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
+		return true
+	}
+	if domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect") {
 		add("protected branch", "branch protection")
-	// "protected_environment" needs no case of its own: every ID carrying it
+		return true
+	}
+	// "protected_environment" needs no test of its own: every ID carrying it
 	// carries "protected_env" as its prefix, so a second test for the longer
 	// spelling can never be the one that decides.
-	case strings.Contains(id, "protected_env"):
+	if strings.Contains(id, "protected_env") {
 		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
-	case strings.Contains(id, "member_role"):
-		add("custom role", "member role")
-	default:
-		return false
+		return true
 	}
-	return true
+	if strings.Contains(id, "member_role") {
+		add("custom role", "member role")
+		return true
+	}
+	return false
 }
 
 func addGroupProtectedBranchActionTags(add tagCollector, action string) {
@@ -2024,9 +2092,10 @@ func (r *Registry) searchMatches(ctx context.Context, query string, limit int, e
 	if segmentedErr != nil {
 		return nil, segmentedErr
 	}
-	if len(segmented) > 0 {
-		matches = mergeBestMatches(matches, segmented)
-	}
+	// Merged whatever segmented search found: merging nothing keeps every
+	// match, and the order mergeBestMatches loses is restored by the sort
+	// below, so a guard on the count decided nothing a caller could see.
+	matches = mergeBestMatches(matches, segmented)
 	matches = adjustServiceAccountVerbScores(matches, terms)
 	matches = listedMatches(ctx, matches)
 	matches = sortAndLimitMatches(matches, limit)
@@ -2198,7 +2267,8 @@ func adjustServiceAccountVerbScores(matches []scoredActionEntry, terms []searchT
 		return matches
 	}
 	for index := range matches {
-		document := documentForEntry(matches[index].entry)
+		match := &matches[index]
+		document := documentForEntry(match.entry)
 		if !strings.Contains(document.CanonicalID, "service_account") {
 			continue
 		}
@@ -2207,15 +2277,14 @@ func adjustServiceAccountVerbScores(matches []scoredActionEntry, terms []searchT
 			continue
 		}
 		if actionVerb == queryVerb {
-			matches[index].score += scoreServiceAccountBoost
+			match.score += scoreServiceAccountBoost
 		} else {
-			matches[index].score -= scoreServiceAccountBoost * 2
-			if matches[index].score < 0 {
-				matches[index].score = 0
-			}
+			// Clamped at zero rather than tested for a negative score, since
+			// at zero both branches of that test kept the same score.
+			match.score = max(match.score-scoreServiceAccountBoost*2, 0)
 		}
-		if matches[index].explanation.TotalScore != 0 {
-			matches[index].explanation.TotalScore = matches[index].score
+		if match.explanation.TotalScore != 0 {
+			match.explanation.TotalScore = match.score
 		}
 	}
 	return matches
@@ -2286,17 +2355,19 @@ func listedMatches(ctx context.Context, matches []scoredActionEntry) []scoredAct
 	})
 }
 
+// sortAndLimitMatches orders matches by score, highest first, then by action
+// ID, and keeps the first limit of them.
+//
+// The order and the cut are written as comparisons that return a value rather
+// than as `>`, `<` and a length test. Every ID is unique and two matches only
+// reach the ID comparison when their scores are equal, so a strict and a loose
+// operator there sorted alike; cutting a slice to its own length changes
+// nothing. Each operator was therefore a mutant no test could kill.
 func sortAndLimitMatches(matches []scoredActionEntry, limit int) []scoredActionEntry {
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
-		}
-		return matches[i].entry.ID < matches[j].entry.ID
+	slices.SortFunc(matches, func(a, b scoredActionEntry) int {
+		return cmp.Or(cmp.Compare(b.score, a.score), strings.Compare(a.entry.ID, b.entry.ID))
 	})
-	if len(matches) > limit {
-		matches = matches[:limit]
-	}
-	return matches
+	return matches[:min(len(matches), limit)]
 }
 
 func mergeBestMatches(groups ...[]scoredActionEntry) []scoredActionEntry {
@@ -2320,10 +2391,9 @@ func normalizedLimit(limit int) int {
 	if limit <= 0 {
 		return defaultLimit
 	}
-	if limit > maxLimit {
-		return maxLimit
-	}
-	return limit
+	// A clamp rather than `> maxLimit`, which returned the same value at the
+	// limit either way and so carried a boundary no test could tell apart.
+	return min(limit, maxLimit)
 }
 
 // describeEntry renders one action as a find or describe result.
@@ -2365,18 +2435,28 @@ func (r *Registry) describeEntry(entry actionEntry) ActionDescription {
 // moved out to gitlab_execute_action's own argument. For an entry of a shared
 // catalog it is derived once for the process (see [toolutil.DeriveSchema])
 // and served to every caller, which must not mutate it.
+//
+// The confirmation switch is in the transform name because the marker of a
+// destructive entry says what the execute gate will do (issue 1166). The
+// switch is fixed for the life of a server process, so in production one
+// state is ever derived; naming it keeps a schema derived in one state from
+// being served in the other wherever the environment does change.
 func dynamicInputSchema(entry actionEntry) map[string]any {
-	transform := "dynamic-input|destructive=" + strconv.FormatBool(entry.Destructive) + "|guidance=" + toolutil.ParameterGuidanceIdentity(entry.Route.ParameterGuidance)
+	confirmationSkipped := toolutil.IsYOLOMode()
+	transform := "dynamic-input|destructive=" + strconv.FormatBool(entry.Destructive) + "|confirmation-skipped=" + strconv.FormatBool(confirmationSkipped) + "|guidance=" + toolutil.ParameterGuidanceIdentity(entry.Route.ParameterGuidance)
 	derived := toolutil.DeriveSchema(entry.Route.InputSchema, transform, func() any {
-		return buildDynamicInputSchema(entry)
+		return buildDynamicInputSchema(entry, confirmationSkipped)
 	})
 	schema, _ := derived.(map[string]any)
 	return schema
 }
 
 // buildDynamicInputSchema builds what [dynamicInputSchema] serves, on a copy
-// of the meta-action schema, which may itself be shared.
-func buildDynamicInputSchema(entry actionEntry) map[string]any {
+// of the meta-action schema, which may itself be shared. confirmationSkipped
+// chooses what the x_confirmation marker of a destructive entry says, in the
+// words [toolutil.DynamicConfirmationDescription] keeps for this schema and
+// for the one gitlab://tools/{id} serves, which find links every result to.
+func buildDynamicInputSchema(entry actionEntry, confirmationSkipped bool) map[string]any {
 	schema := toolutil.CloneSchemaMap(toolutil.MetaActionSchema(entry.Route))
 	if entry.Route.InputSchema == nil {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
@@ -2394,7 +2474,7 @@ func buildDynamicInputSchema(entry actionEntry) map[string]any {
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_action.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+			"description": toolutil.DynamicConfirmationDescription(confirmationSkipped),
 		}
 	}
 	return schema
@@ -2780,15 +2860,11 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 			scored = append(scored, scoredEntry{id: entry.ID, score: score})
 		}
 	}
-	sort.Slice(scored, func(i, j int) bool {
-		if scored[i].score != scored[j].score {
-			return scored[i].score > scored[j].score
-		}
-		return scored[i].id < scored[j].id
+	// Ordered and cut as sortAndLimitMatches is, and for its reason.
+	slices.SortFunc(scored, func(a, b scoredEntry) int {
+		return cmp.Or(cmp.Compare(b.score, a.score), strings.Compare(a.id, b.id))
 	})
-	if len(scored) > limit {
-		scored = scored[:limit]
-	}
+	scored = scored[:min(len(scored), limit)]
 	suggestions := make([]string, 0, len(scored))
 	for _, entry := range scored {
 		suggestions = append(suggestions, backtickString(entry.id))
@@ -2982,10 +3058,9 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreSearchCodeIntentValue(entry, terms)
 	score += scoreCurrentUserIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
-	if score <= 0 {
-		return 0
-	}
-	return score
+	// A clamp: `score <= 0` returned zero for a zero score as `< 0` would
+	// have returned the score, so the boundary decided nothing.
+	return max(score, 0)
 }
 
 func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, ScoringExplanation) {
@@ -3084,10 +3159,8 @@ func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
 	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 {
 		minRequired = len(terms) - 2
 	}
-	if minRequired < 1 {
-		return 1
-	}
-	return minRequired
+	// A clamp, since `< 1` and `<= 1` both answer 1 at 1.
+	return max(minRequired, 1)
 }
 
 func matchedCompoundTagCount(entry actionEntry, terms []searchTerm) int {
@@ -3674,15 +3747,34 @@ func searchTermAlternativeSet(terms []searchTerm) map[string]struct{} {
 	return termSet
 }
 
+// verbIntentPrecedence lists the verb intents from the one that wins a query
+// naming several to the one that loses to every other.
+var verbIntentPrecedence = []verbIntent{
+	verbIntentDestructive,
+	verbIntentDiagnostic,
+	verbIntentWorkflow,
+	verbIntentWrite,
+	verbIntentRead,
+}
+
+// queryVerbIntent returns the intent of the query's verbs that comes first in
+// [verbIntentPrecedence], or none when no term is a verb.
+//
+// It looks the intents up in their order rather than comparing ranks as it
+// meets them: every intent has its own rank, so a strict and a loose
+// comparison picked the same one, and the operator was a mutant no test could
+// kill.
 func queryVerbIntent(terms []searchTerm) verbIntent {
-	selected := verbIntent("")
+	present := make(map[verbIntent]bool, len(terms))
 	for _, term := range terms {
-		intent := classifyVerbIntent(term.Raw)
-		if intentPrecedence(intent) > intentPrecedence(selected) {
-			selected = intent
+		present[classifyVerbIntent(term.Raw)] = true
+	}
+	for _, intent := range verbIntentPrecedence {
+		if present[intent] {
+			return intent
 		}
 	}
-	return selected
+	return ""
 }
 
 func classifyVerbIntent(term string) verbIntent {
@@ -3699,23 +3791,6 @@ func classifyVerbIntent(term string) verbIntent {
 		return verbIntentDiagnostic
 	default:
 		return ""
-	}
-}
-
-func intentPrecedence(intent verbIntent) int {
-	switch intent {
-	case verbIntentDestructive:
-		return 5
-	case verbIntentDiagnostic:
-		return 4
-	case verbIntentWorkflow:
-		return 3
-	case verbIntentWrite:
-		return 2
-	case verbIntentRead:
-		return 1
-	default:
-		return 0
 	}
 }
 
@@ -3748,43 +3823,60 @@ func isDiagnosticAction(action string) bool {
 	return strings.Contains(action, "status") || strings.Contains(action, "log") || strings.Contains(action, "trace") || strings.Contains(action, "lint") || strings.Contains(action, "test") || strings.Contains(action, "health")
 }
 
+// scoreSearchAlternative scores one spelling of a query term against an
+// action: the first field it matches, from the canonical ID down to the flat
+// text, decides the score.
+//
+// It is a chain of returns rather than a tagless switch, as the taggers are,
+// so that the mutation gate can see the operators in its tests.
 func scoreSearchAlternative(entry actionEntry, raw, alternative string) int {
 	document := documentForEntry(entry)
-	switch {
-	case document.CanonicalID == alternative:
+	if document.CanonicalID == alternative {
 		return scoreCanonicalExact
-	case stringInSlice(document.Aliases, alternative):
+	}
+	if stringInSlice(document.Aliases, alternative) {
 		return scoreAliasExact
-	case stringInSlice(document.Tags, alternative):
+	}
+	if stringInSlice(document.Tags, alternative) {
 		return scoreTagExact
-	case document.Action == alternative || document.Domain == alternative:
+	}
+	if document.Action == alternative || document.Domain == alternative {
 		return scoreDomainActionExact
-	case slices.Contains(document.ActionWords, alternative) || slices.Contains(document.DomainWords, alternative):
+	}
+	if slices.Contains(document.ActionWords, alternative) || slices.Contains(document.DomainWords, alternative) {
 		return scoreDomainActionWord
-	case strings.Contains(document.CanonicalID, alternative):
+	}
+	if strings.Contains(document.CanonicalID, alternative) {
 		return scoreIDContains
-	case containsAnySearchValue(document.WordizedValues, document.DomainWords, alternative) || containsAnySearchValue(document.WordizedValues, document.ActionWords, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.DomainWords, alternative) || containsAnySearchValue(document.WordizedValues, document.ActionWords, alternative) {
 		return scoreDomainActionContains
-	case strings.Contains(document.Tool, alternative):
+	}
+	if strings.Contains(document.Tool, alternative) {
 		return scoreFieldContainsFor(raw, alternative)
-	case containsAnySearchValue(document.WordizedValues, document.RequiredParams, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.RequiredParams, alternative) {
 		return scoreParamContainsFor(raw, alternative, scoreRequiredParamMatch)
-	case containsAnySearchValue(document.WordizedValues, document.OptionalParams, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.OptionalParams, alternative) {
 		return scoreParamContainsFor(raw, alternative, scoreOptionalParamMatch)
-	case containsAnySearchValue(document.WordizedValues, document.SchemaEnums, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.SchemaEnums, alternative) {
 		return scoreParamContainsFor(raw, alternative, scoreSchemaEnumMatch)
-	case containsAnySearchValue(document.WordizedValues, document.SchemaDescTerms, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.SchemaDescTerms, alternative) {
 		return scoreParamContainsFor(raw, alternative, scoreSchemaDescMatch)
-	case containsAnySearchValue(document.WordizedValues, document.SchemaProperties, alternative):
+	}
+	if containsAnySearchValue(document.WordizedValues, document.SchemaProperties, alternative) {
 		return scoreFieldContainsFor(raw, alternative)
-	case strings.Contains(document.FlatText, alternative):
+	}
+	if strings.Contains(document.FlatText, alternative) {
 		if raw == alternative {
 			return scoreFieldContains
 		}
 		return scoreSynonymContains
-	default:
-		return 0
 	}
+	return 0
 }
 
 func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string) (int, MatchReason) {
@@ -3834,32 +3926,36 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 	}
 }
 
+// scoreExactSearchAlternativeWithReason is the exact-match half of
+// scoreSearchAlternativeWithReason, a chain of returns for the reason
+// scoreSearchAlternative is one.
 func scoreExactSearchAlternativeWithReason(document searchDocument, alternative string, reason func(string, string, int) (int, MatchReason)) (int, MatchReason, bool) {
-	switch {
-	case document.CanonicalID == alternative:
-		score, match := reason(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
+	exact := func(field, matched string, points int) (int, MatchReason, bool) {
+		score, match := reason(field, matched, points)
 		return score, match, true
-	case stringInSlice(document.Aliases, alternative):
-		score, match := reason(searchFieldAlias, alternative, scoreAliasExact)
-		return score, match, true
-	case stringInSlice(document.Tags, alternative):
-		score, match := reason(searchFieldTag, alternative, scoreTagExact)
-		return score, match, true
-	case document.Action == alternative:
-		score, match := reason(searchFieldAction, document.Action, scoreDomainActionExact)
-		return score, match, true
-	case document.Domain == alternative:
-		score, match := reason(searchFieldDomain, document.Domain, scoreDomainActionExact)
-		return score, match, true
-	case slices.Contains(document.ActionWords, alternative):
-		score, match := reason(searchFieldAction, alternative, scoreDomainActionWord)
-		return score, match, true
-	case slices.Contains(document.DomainWords, alternative):
-		score, match := reason(searchFieldDomain, alternative, scoreDomainActionWord)
-		return score, match, true
-	default:
-		return 0, MatchReason{}, false
 	}
+	if document.CanonicalID == alternative {
+		return exact(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
+	}
+	if stringInSlice(document.Aliases, alternative) {
+		return exact(searchFieldAlias, alternative, scoreAliasExact)
+	}
+	if stringInSlice(document.Tags, alternative) {
+		return exact(searchFieldTag, alternative, scoreTagExact)
+	}
+	if document.Action == alternative {
+		return exact(searchFieldAction, document.Action, scoreDomainActionExact)
+	}
+	if document.Domain == alternative {
+		return exact(searchFieldDomain, document.Domain, scoreDomainActionExact)
+	}
+	if slices.Contains(document.ActionWords, alternative) {
+		return exact(searchFieldAction, alternative, scoreDomainActionWord)
+	}
+	if slices.Contains(document.DomainWords, alternative) {
+		return exact(searchFieldDomain, alternative, scoreDomainActionWord)
+	}
+	return 0, MatchReason{}, false
 }
 
 func documentForEntry(entry actionEntry) searchDocument {
@@ -3921,10 +4017,10 @@ func scoreParamContainsFor(raw, alternative string, exactScore int) int {
 	if raw == alternative {
 		return exactScore
 	}
-	if exactScore <= scoreSynonymContains {
-		return exactScore
-	}
-	return scoreSynonymContains
+	// The lower of the two: a synonym never scores above the exact match it
+	// stands in for. A clamp, since at equal scores both branches of a test
+	// returned the same number.
+	return min(exactScore, scoreSynonymContains)
 }
 
 func stringInSlice(values []string, needle string) bool {
@@ -4014,7 +4110,13 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 	}
 }
 
-func searchNextStep(results []SearchResult) string {
+// searchNextStep is the next step a search publishes for its top result.
+// confirmationSkipped is the switch the execute gate reads: for a destructive
+// top result it decides whether the step sends the model to the user for
+// approval before confirm=true or says the confirmation is skipped, since
+// asking for an approval execute no longer waits for would stall the
+// unattended run the switch exists for (issue 1166).
+func searchNextStep(results []SearchResult, confirmationSkipped bool) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -4029,9 +4131,18 @@ func searchNextStep(results []SearchResult) string {
 	fmt.Fprintf(&b, "Top result %s is high confidence. Use its exact parameter schema before executing", backtickString(top.ID))
 	fmt.Fprintf(&b, "; search only proves required params %s.", compactParamList(top.RequiredParams, 8))
 	if top.Destructive {
-		b.WriteString(" Because this action is destructive, execute later with top-level confirm:true only after explicit user approval.")
+		b.WriteString(destructiveNextStep(confirmationSkipped))
 	}
 	return b.String()
+}
+
+// destructiveNextStep is the sentence [searchNextStep] closes with when its
+// top result is destructive.
+func destructiveNextStep(confirmationSkipped bool) string {
+	if confirmationSkipped {
+		return " This action is destructive, and this server's configuration skips its confirmation: executing it runs it at once, with or without top-level confirm:true."
+	}
+	return " Because this action is destructive, execute later with top-level confirm:true only after explicit user approval."
 }
 
 func compactParamList(params []string, limit int) string {
@@ -4500,24 +4611,27 @@ func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, li
 	for name := range guidance {
 		names = append(names, name)
 	}
-	sort.Slice(names, func(i, j int) bool {
-		_, leftRequired := required[names[i]]
-		_, rightRequired := required[names[j]]
-		if leftRequired != rightRequired {
-			return leftRequired
+	// Required parameters first, then the ones with the most confusions,
+	// then by name. Written as comparisons that return a value, as in
+	// sortAndLimitMatches: the names are map keys and so unique, and the
+	// confusion counts only reach their operator when they differ, so a strict
+	// and a loose operator sorted alike; a cut to the slice's own length, and
+	// a count of zero names left out, change nothing either.
+	rank := func(name string) int {
+		if _, ok := required[name]; ok {
+			return 0
 		}
-		left := guidance[names[i]]
-		right := guidance[names[j]]
-		if len(left.CommonConfusions) != len(right.CommonConfusions) {
-			return len(left.CommonConfusions) > len(right.CommonConfusions)
-		}
-		return names[i] < names[j]
-	})
-	truncated := 0
-	if len(names) > limit {
-		truncated = len(names) - limit
-		names = names[:limit]
+		return 1
 	}
+	slices.SortFunc(names, func(a, b string) int {
+		return cmp.Or(
+			cmp.Compare(rank(a), rank(b)),
+			cmp.Compare(len(guidance[b].CommonConfusions), len(guidance[a].CommonConfusions)),
+			strings.Compare(a, b),
+		)
+	})
+	truncated := max(len(names)-limit, 0)
+	names = names[:min(len(names), limit)]
 	parts := make([]string, 0, len(names))
 	for _, name := range names {
 		item := guidance[name]

@@ -306,16 +306,18 @@ func boundedLevenshtein(a, b string, maxDistance int) (int, bool) {
 		return 0, false
 	}
 
-	if len(ar) > len(br) {
-		ar, br = br, ar
-	}
-	if len(br)-len(ar) > maxDistance {
+	// The difference in length is a lower bound of the distance, taken both
+	// ways round. There used to be a swap here that put the shorter string in
+	// the inner loop; the distance is symmetric and a row's minimum bounds it
+	// in either orientation, so the swap saved a few ints and decided nothing,
+	// which left its comparison a mutant no test could kill.
+	if max(len(ar)-len(br), len(br)-len(ar)) > maxDistance {
 		return 0, false
 	}
 
 	previous := make([]int, len(ar)+1)
 	current := make([]int, len(ar)+1)
-	for i := 0; i <= len(ar); i++ {
+	for i := range previous {
 		previous[i] = i
 	}
 
@@ -335,9 +337,7 @@ func boundedLevenshtein(a, b string, maxDistance int) (int, bool) {
 			best := min(deletion, insertion, substitution)
 
 			current[j] = best
-			if best < minInRow {
-				minInRow = best
-			}
+			minInRow = min(minInRow, best)
 		}
 
 		if minInRow > maxDistance {

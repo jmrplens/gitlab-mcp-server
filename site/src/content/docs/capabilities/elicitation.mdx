@@ -221,7 +221,7 @@ Elicitation is also used for **confirmation prompts** before destructive operati
 
 A client that cannot elicit is refused with a message asking it to send the call again with `confirm: true` only after the user approves, and nothing reaches GitLab. On a `2026-07-28` session the question travels as one multi-round-trip input request.
 
-The default dynamic surface never asks: `gitlab_execute_action` refuses an action classified destructive unless the call carries `confirm: true`, and neither `GITLAB_MCP_YOLO_MODE` nor `AUTOPILOT` skips that. Only the two guards that depend on the arguments elicit there too. [Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions) lists which actions count as destructive and describes both guards.
+The default dynamic surface never asks: `gitlab_execute_action` refuses an action classified destructive unless the call carries `confirm: true` or `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips the confirmation, as step 1 does on the other two surfaces. Only the two guards that depend on the arguments elicit there too. [Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions) lists which actions count as destructive and describes both guards.
 
 ## How is the input kept safe?
 

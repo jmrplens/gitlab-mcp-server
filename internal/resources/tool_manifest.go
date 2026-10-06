@@ -1105,22 +1105,25 @@ func dedupeDynamicStrings(values []string) []string {
 // returned.
 func dynamicActionSchema(action actioncatalog.Action) map[string]any {
 	route := action.Route
+	confirmationSkipped := toolutil.IsYOLOMode()
 	if route.InputSchema == nil {
 		schema := map[string]any{
 			"type":                 "object",
 			"description":          "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise.",
 			"additionalProperties": true,
 		}
-		return enrichDynamicSchema(schema, action)
+		return enrichDynamicSchema(schema, action, confirmationSkipped)
 	}
 	// Derived rather than copied and edited: for an action of a shared
 	// catalog the result is built once for the process (see
 	// [toolutil.DeriveSchema]), and the manifest of every server carries the
-	// same map. The guidance and the destructive flag are in the transform
-	// name because they are in the result.
-	transform := "manifest-dynamic|destructive=" + strconv.FormatBool(route.Destructive) + "|guidance=" + toolutil.ParameterGuidanceIdentity(route.ParameterGuidance)
+	// same map. The guidance, the destructive flag and the confirmation
+	// switch are in the transform name because they are in the result; the
+	// switch is fixed for the life of a server process, so the manifest a
+	// share key caches is built in the one state the process runs in.
+	transform := "manifest-dynamic|destructive=" + strconv.FormatBool(route.Destructive) + "|confirmation-skipped=" + strconv.FormatBool(confirmationSkipped) + "|guidance=" + toolutil.ParameterGuidanceIdentity(route.ParameterGuidance)
 	derived := toolutil.DeriveSchema(route.InputSchema, transform, func() any {
-		return enrichDynamicSchema(toolutil.CloneSchemaMap(route.InputSchema), action)
+		return enrichDynamicSchema(toolutil.CloneSchemaMap(route.InputSchema), action, confirmationSkipped)
 	})
 	schema, _ := derived.(map[string]any)
 	return schema
@@ -1147,7 +1150,16 @@ func lookupMetaActionSchema(routes map[string]toolutil.ActionMap, tool, action s
 // enrichDynamicSchema adds x_parameter_guidance and (for destructive
 // actions) x_destructive / x_confirmation fields to schema in place.
 // The map is returned for fluent use.
-func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map[string]any {
+//
+// confirmationSkipped is the switch the dynamic execute gate reads
+// (toolutil.IsYOLOMode, issue 1166), and it chooses what x_confirmation says:
+// while the gate asks for confirm, the model is sent to the user for approval
+// first, and once the switch skips the gate, the marker says so, since an
+// approval nobody gives would stall the unattended run the switch exists for.
+// The text is [toolutil.DynamicConfirmationDescription], which
+// gitlab_find_action puts in its own schemas too, and find links every result
+// here.
+func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action, confirmationSkipped bool) map[string]any {
 	if guidance := dynamicParameterGuidance(action); len(guidance) > 0 {
 		schema["x_parameter_guidance"] = guidance
 	}
@@ -1155,7 +1167,7 @@ func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_action.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+			"description": toolutil.DynamicConfirmationDescription(confirmationSkipped),
 		}
 	}
 	return schema

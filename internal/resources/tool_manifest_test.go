@@ -1430,7 +1430,7 @@ func TestEnrichDynamicSchema_GuidanceAndDestructive(t *testing.T) {
 			},
 		}
 		schema := map[string]any{"type": "object"}
-		enriched := enrichDynamicSchema(schema, action)
+		enriched := enrichDynamicSchema(schema, action, true)
 		if _, ok := enriched["x_parameter_guidance"]; ok {
 			t.Errorf("schema should not include x_parameter_guidance when no guidance declared: %+v", enriched)
 		}
@@ -2158,6 +2158,64 @@ func TestDynamicActionSchema_SharedRouteDerivesOnce(t *testing.T) {
 	secondPrivate := dynamicActionSchema(private)
 	if reflect.ValueOf(firstPrivate).UnsafePointer() == reflect.ValueOf(secondPrivate).UnsafePointer() {
 		t.Fatal("dynamicActionSchema(private action) shared a schema nobody registered")
+	}
+}
+
+// TestDynamicActionSchema_ConfirmationFollowsTheYOLOSwitch verifies that the
+// x_confirmation marker gitlab://tools/{id} serves for a destructive dynamic
+// action says what gitlab_execute_action will do with it (issue 1166). Find
+// links every result to this resource, so the two have to agree: with the
+// switch off the marker sends the model to the user for approval before it
+// sets confirm, and with GITLAB_MCP_YOLO_MODE on, or AUTOPILOT while it is
+// unset, execute runs the action without confirm and the marker says the
+// confirmation is skipped instead of stalling the unattended run on an
+// approval nobody gives. The shared route is derived once per state, so the
+// schema derived with the switch off is never served with it on, and an
+// action with no captured schema follows the switch the same way.
+func TestDynamicActionSchema_ConfirmationFollowsTheYOLOSwitch(t *testing.T) {
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "string"}}}
+	toolutil.ShareSchema(schema)
+	shared := actioncatalog.Action{ID: "project.delete", Name: "delete", Route: toolutil.ActionRoute{InputSchema: schema, Destructive: true}}
+	uncaptured := actioncatalog.Action{ID: "project.archive_remove", Name: "archive_remove", Route: toolutil.ActionRoute{Destructive: true}}
+	confirmationText := func(t *testing.T, derived map[string]any) string {
+		t.Helper()
+		confirmation, ok := derived["x_confirmation"].(map[string]any)
+		if !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
+			t.Fatalf("x_confirmation = %+v, want the top-level confirm location", derived["x_confirmation"])
+		}
+		text, _ := confirmation["description"].(string)
+		return text
+	}
+
+	cases := []struct {
+		name      string
+		yolo      string
+		autopilot string
+		want      string
+		deny      string
+	}{
+		{name: "neither set asks for approval", want: "after explicit user approval", deny: "skips"},
+		{name: "GITLAB_MCP_YOLO_MODE=true says the confirmation is skipped", yolo: "true", want: "skips the confirmation", deny: "approval"},
+		{name: "AUTOPILOT=1 with GITLAB_MCP_YOLO_MODE unset says it is skipped", autopilot: "1", want: "skips the confirmation", deny: "approval"},
+		{name: "GITLAB_MCP_YOLO_MODE=false over AUTOPILOT=true asks for approval", yolo: "false", autopilot: "true", want: "after explicit user approval", deny: "skips"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_YOLO_MODE", tc.yolo)
+			t.Setenv("AUTOPILOT", tc.autopilot)
+
+			first := dynamicActionSchema(shared)
+			if again := dynamicActionSchema(shared); reflect.ValueOf(again).UnsafePointer() != reflect.ValueOf(first).UnsafePointer() {
+				t.Fatal("dynamicActionSchema(shared action) derived twice in one switch state, want once")
+			}
+			for name, derived := range map[string]map[string]any{"shared": first, "uncaptured": dynamicActionSchema(uncaptured)} {
+				t.Run(name, func(t *testing.T) {
+					if got := confirmationText(t, derived); !strings.Contains(got, tc.want) || strings.Contains(got, tc.deny) {
+						t.Errorf("x_confirmation description = %q, want %q and no %q", got, tc.want, tc.deny)
+					}
+				})
+			}
+		})
 	}
 }
 

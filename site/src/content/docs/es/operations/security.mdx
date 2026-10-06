@@ -217,15 +217,15 @@ Esto es útil para flujos de trabajo dry-run, entornos de formación y depuraci�
 
 Una acción cuyo efecto no se puede deshacer llamando a su opuesta se clasifica como destructiva, una vez por acción en el catálogo, y las tres superficies leen ese único bit (`destructiveHint`). Borrar algo es el caso evidente pero no el único: una acción que entrega algo a alguien de fuera de la instancia también entra. `project.mirror_add` es la que merece nombrarse, porque no parece destructiva: crear un mirror de push no borra nada, y le da al host nombrado en su `url` una copia continua de todo el repositorio. Un modelo que obedeciera a la descripción de un issue que pide un «mirror de respaldo» podría, si no, enviar el repositorio fuera con una sola llamada, así que esa llamada necesita confirmación como cualquier otra destructiva.
 
-En las superficies meta e individual, una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
+En todas las superficies, una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
 
 1. `GITLAB_MCP_YOLO_MODE` tiene un valor verdadero (`1`, `true` o `yes`) o, si no está definida, lo tiene `AUTOPILOT`: para pipelines desatendidos.
-2. La llamada lleva `"confirm": true`.
-3. El cliente admite elicitación y el usuario aprueba la pregunta.
+2. La llamada lleva `"confirm": true`, que en la superficie dinámica es un `confirm: true` en el nivel superior, junto a `action` y `params`.
+3. El cliente admite elicitación y el usuario aprueba la pregunta. Solo preguntan las superficies meta e individual: la superficie dinámica por defecto nunca pregunta, así que ahí las dos primeras son las únicas vías.
 
-Si no, se rechaza por defecto (fail-closed) y nada llega a GitLab. Un cliente que no puede preguntar recibe un error que le pide repetir la llamada con `confirm: true` solo después de que el usuario lo apruebe de forma explícita. Un usuario que se niega obtiene una respuesta que le dice al modelo que no lo reintente y que pregunte qué quiere en su lugar; una pregunta cerrada sin respuesta se informa como que no cambió nada, y se puede volver a hacer.
+Si no, se rechaza por defecto (fail-closed) y nada llega a GitLab. Un cliente que no puede preguntar, y cualquier llamada de la superficie dinámica, recibe un error que le pide repetir la llamada con `confirm: true` solo después de que el usuario lo apruebe de forma explícita. Un usuario que se niega obtiene una respuesta que le dice al modelo que no lo reintente y que pregunte qué quiere en su lugar; una pregunta cerrada sin respuesta se informa como que no cambió nada, y se puede volver a hacer.
 
-La superficie dinámica por defecto no pregunta nada ni lee ninguno de los dos ajustes: `gitlab_execute_action` rechaza una acción clasificada como destructiva salvo que la llamada lleve `confirm: true` en el nivel superior, así que `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` no omiten nada ahí (el [issue 1166](https://github.com/jmrplens/gitlab-mcp-server/issues/1166) sigue esa diferencia). Las dos protecciones de [Cuando deciden los argumentos](#cuando-deciden-los-argumentos) siguen el orden anterior en todas las superficies, la dinámica incluida. [Gestión de errores](/gitlab-mcp-server/es/operations/error-handling/#acciones-destructivas-y-confirmación) cita lo que dice cada rechazo.
+Por tanto, `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` omiten el mismo paso en las tres superficies; hasta la 3.1.0 la superficie dinámica no leía ninguno de los dos y exigía `confirm: true` dijeran lo que dijeran. El modo de solo lectura y el modo seguro van antes que todo esto: un despliegue de solo lectura no tiene ninguna acción destructiva que llamar, y el modo seguro responde a una con su vista previa, diga lo que diga cualquiera de los dos ajustes. Las dos protecciones de [Cuando deciden los argumentos](#cuando-deciden-los-argumentos) siguen el mismo orden. [Gestión de errores](/gitlab-mcp-server/es/operations/error-handling/#acciones-destructivas-y-confirmación) cita lo que dice cada rechazo.
 
 ### Cuando deciden los argumentos
 

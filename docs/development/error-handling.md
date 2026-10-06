@@ -451,7 +451,8 @@ until then, do not build on them.
 ## Destructive action confirmation
 
 The flow in `confirm.go` (the YOLO switch, an explicit `confirm`, elicitation,
-then failing closed) and the dynamic surface's exception are described in
+then failing closed) and the dynamic surface's gate, which reads the same
+switch and never elicits, are described in
 [Internal Architecture](architecture.md#destructive-action-confirmation). A
 declined or cancelled confirmation is a `CancelledResult`, an error result,
 not a Go error.

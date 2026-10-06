@@ -240,11 +240,11 @@ A handler that checks a value against a fixed set names the values it accepts, s
 
 An action the catalog classifies as destructive asks for confirmation before it runs; [Security](/gitlab-mcp-server/operations/security/#destructive-actions) explains which actions those are and why. Three things are decided first: an action a fine-grained session may not run is refused, read-only mode has removed every write, and safe mode previews a write instead of running it, so it asks nothing.
 
-On the meta and individual surfaces a destructive call proceeds on the first of these that holds:
+On every surface a destructive call proceeds on the first of these that holds:
 
 1. `GITLAB_MCP_YOLO_MODE` is truthy (`1`, `true` or `yes`), or, when it is unset, `AUTOPILOT` is.
-2. The call carries `"confirm": true` (inside `params` on the meta surface).
-3. The client supports elicitation and the user approves the prompt, `Confirm gitlab_branch/delete? This action may be irreversible.` On protocol 2026-07-28 the question travels as an input request the client answers by sending the call again ([Elicitation](/gitlab-mcp-server/capabilities/elicitation/)).
+2. The call carries `"confirm": true` (inside `params` on the meta surface, at the top level of the arguments on the dynamic one).
+3. On the meta and individual surfaces, the client supports elicitation and the user approves the prompt, `Confirm gitlab_branch/delete? This action may be irreversible.` On protocol 2026-07-28 the question travels as an input request the client answers by sending the call again ([Elicitation](/gitlab-mcp-server/capabilities/elicitation/)).
 
 Otherwise it **fails closed** and nothing reaches GitLab: `Confirm gitlab_branch/delete? This action may be irreversible. The connected client cannot prompt for confirmation. Re-send with confirm=true only after the user explicitly approves this operation.`
 
@@ -259,7 +259,7 @@ When the user is asked, every answer but an approval returns an error result, si
 
 A confirmation state the server did not issue is a protocol fault rather than an answer, and is refused as a JSON-RPC invalid-params error.
 
-**The dynamic surface asks nothing.** `gitlab_execute_action` refuses a destructive action sent without a top-level `confirm: true` before it dispatches anything: `gitlab_execute_action: action "branch.delete" is destructive. Re-send with confirm=true only after the user explicitly approves this operation.` It does not read `GITLAB_MCP_YOLO_MODE` or `AUTOPILOT`, so on the default surface the confirmation is always the caller's `confirm: true`.
+**The dynamic surface asks nothing.** Unless `GITLAB_MCP_YOLO_MODE` or `AUTOPILOT` lets it through as in step 1, `gitlab_execute_action` refuses a destructive action sent without a top-level `confirm: true` before it dispatches anything: `gitlab_execute_action: action "branch.delete" is destructive. Re-send with confirm=true only after the user explicitly approves this operation.` It never prompts, so on the default surface the confirmation is the caller's `confirm: true` or the operator's setting, and a refusal recorded as `needs_confirmation` means the same on every surface. Up to 3.1.0 this surface read neither setting.
 
 ## What an error leaves out
 

@@ -161,6 +161,23 @@ func TestRenderPages_RealCatalog_TablesMeasureTheSameInBothLanguages(t *testing.
 	}
 }
 
+// TestLanguages_DestructiveNote_NamesTheSwitchThatSkipsTheConfirmation holds
+// each language's note on destructive actions to the setting that skips the
+// confirmation it describes (issue 1166): the note says an action runs only
+// once confirmed, which is false of a deployment where GITLAB_MCP_YOLO_MODE or
+// its alias AUTOPILOT is set, on every surface.
+func TestLanguages_DestructiveNote_NamesTheSwitchThatSkipsTheConfirmation(t *testing.T) {
+	for _, lang := range languages {
+		for _, name := range []string{"GITLAB_MCP_YOLO_MODE", "AUTOPILOT"} {
+			t.Run(lang.code+" names "+name, func(t *testing.T) {
+				if !strings.Contains(lang.destructiveNote, "`"+name+"`") {
+					t.Errorf("destructiveNote = %q, want it to name `%s`", lang.destructiveNote, name)
+				}
+			})
+		}
+	}
+}
+
 func TestMeasureTables_Page_ReadsEachTable(t *testing.T) {
 	page := "text\n\n| A | Bé |\n| - | -- |\n| `x` | [y z](#q) |\n| 1 | 2 |\n\nmore\n| not a table |\n"
 	got := measureTables(page)
