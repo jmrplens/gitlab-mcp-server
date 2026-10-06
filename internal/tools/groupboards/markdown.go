@@ -37,19 +37,25 @@ func boardHeading(kind string, id int64, title string) string {
 // Premium list is scoped to. A column with no scope of its own is the board's
 // backlog or closed column and renders as nothing rather than as an invented
 // scope.
+//
+// It is a chain of ifs rather than a tagless switch so that a mutation test
+// can reach every condition: Go's coverage counts a block for each case body
+// but none for the case expressions themselves, which gremlins then reports as
+// never covered whatever the tests drive.
 func boardListScope(l BoardListOutput) string {
-	switch {
-	case boardListLabelName(l) != "":
-		return toolutil.EscapeMdTableCell(boardListLabelName(l))
-	case l.Assignee != nil && l.Assignee.Username != "":
-		return toolutil.MdUserHandle(l.Assignee.Username)
-	case l.Milestone != nil && l.Milestone.Title != "":
-		return "Milestone: " + toolutil.EscapeMdTableCell(l.Milestone.Title)
-	case l.Iteration != nil && l.Iteration.Title != "":
-		return "Iteration: " + toolutil.EscapeMdTableCell(l.Iteration.Title)
-	default:
-		return ""
+	if name := boardListLabelName(l); name != "" {
+		return toolutil.EscapeMdTableCell(name)
 	}
+	if l.Assignee != nil && l.Assignee.Username != "" {
+		return toolutil.MdUserHandle(l.Assignee.Username)
+	}
+	if l.Milestone != nil && l.Milestone.Title != "" {
+		return "Milestone: " + toolutil.EscapeMdTableCell(l.Milestone.Title)
+	}
+	if l.Iteration != nil && l.Iteration.Title != "" {
+		return "Iteration: " + toolutil.EscapeMdTableCell(l.Iteration.Title)
+	}
+	return ""
 }
 
 // boardListLimit renders a column's issue or weight ceiling. Zero is GitLab
