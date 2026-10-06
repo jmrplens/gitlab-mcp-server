@@ -32,11 +32,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 2:
 - **Premium**: 0
 - **Ultimate**: 2
 
-Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 2 de las 2.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                         | Individual                    |
 | ---------------------------------------------- | ----------------------------- |
@@ -50,6 +50,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_attestation`, acción `download`
 - **Herramienta individual**: `gitlab_download_attestation`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Attestation: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo             | Requerido | Descripción                      |
@@ -64,6 +66,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_attestation`, acción `list`
 - **Herramienta individual**: `gitlab_list_attestations`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Attestation: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#attestation))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                               |

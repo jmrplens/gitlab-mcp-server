@@ -33,11 +33,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 18:
 
 Solo se lista para un token que tenga `admin_mode`: el servidor quita el grupo de todas las superficies a un token cuyos ámbitos conoce y que no lo tiene.
 
-Acciones de solo lectura: 12 de 18, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 12 de 18, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 12 de las 18.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                                                         | Nivel   | Individual                                    |
 | ------------------------------------------------------------------------------ | ------- | --------------------------------------------- |
@@ -67,6 +67,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_group`
 - **Herramienta individual**: `gitlab_get_group_storage_move`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                    |
@@ -80,6 +82,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_group_for_group`
 - **Herramienta individual**: `gitlab_get_group_storage_move_for_group`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                    |
@@ -94,6 +98,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_project`
 - **Herramienta individual**: `gitlab_get_project_storage_move`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                    |
@@ -107,6 +113,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_project_for_project`
 - **Herramienta individual**: `gitlab_get_project_storage_move_for_project`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                    |
@@ -121,6 +129,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_snippet`
 - **Herramienta individual**: `gitlab_get_snippet_storage_move`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                    |
@@ -134,6 +144,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `get_snippet_for_snippet`
 - **Herramienta individual**: `gitlab_get_snippet_storage_move_for_snippet`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                    |
@@ -148,6 +160,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_all_group`
 - **Herramienta individual**: `gitlab_retrieve_all_group_storage_moves`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -166,6 +180,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_all_project`
 - **Herramienta individual**: `gitlab_retrieve_all_project_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -184,6 +200,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_all_snippet`
 - **Herramienta individual**: `gitlab_retrieve_all_snippet_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -202,6 +220,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_group`
 - **Herramienta individual**: `gitlab_retrieve_group_storage_moves`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -221,6 +241,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_project`
 - **Herramienta individual**: `gitlab_retrieve_project_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -240,6 +262,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `retrieve_snippet`
 - **Herramienta individual**: `gitlab_retrieve_snippet_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -259,6 +283,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_all_group`
 - **Herramienta individual**: `gitlab_schedule_all_group_storage_moves`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo     | Requerido | Descripción                           |
@@ -273,6 +299,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_all_project`
 - **Herramienta individual**: `gitlab_schedule_all_project_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo     | Requerido | Descripción                           |
@@ -287,6 +315,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_all_snippet`
 - **Herramienta individual**: `gitlab_schedule_all_snippet_storage_moves`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo     | Requerido | Descripción                           |
@@ -301,6 +331,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_group`
 - **Herramienta individual**: `gitlab_schedule_group_storage_move`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo      | Requerido | Descripción                           |
@@ -315,6 +347,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_project`
 - **Herramienta individual**: `gitlab_schedule_project_storage_move`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo      | Requerido | Descripción                           |
@@ -329,6 +363,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_storage_move`, acción `schedule_snippet`
 - **Herramienta individual**: `gitlab_schedule_snippet_storage_move`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
+- **Token de grano fino**: Repository Storage Move: Create en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo      | Requerido | Descripción                           |

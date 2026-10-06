@@ -31,11 +31,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
 - **Premium**: 0
 - **Ultimate**: 4
 
-Acciones de solo lectura: 3 de 4, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 3 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 3 de las 4.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                                     | Individual                               |
 | ---------------------------------------------------------- | ---------------------------------------- |
@@ -51,6 +51,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_dependency`, acción `export_create`
 - **Herramienta individual**: `gitlab_create_dependency_list_export`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Dependency List Export: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#dependency))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo      | Requerido | Descripción                             |
@@ -65,6 +67,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_dependency`, acción `export_download`
 - **Herramienta individual**: `gitlab_download_dependency_list_export`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Dependency List Export: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#dependency))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción               |
@@ -78,6 +82,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_dependency`, acción `export_get`
 - **Herramienta individual**: `gitlab_get_dependency_list_export`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Dependency List Export: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#dependency))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción               |
@@ -91,6 +97,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_dependency`, acción `list`
 - **Herramienta individual**: `gitlab_list_project_dependencies`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Dependency: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#dependency))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro         | Tipo                                                                                                                                     | Requerido | Descripción                                                                                                                                       |

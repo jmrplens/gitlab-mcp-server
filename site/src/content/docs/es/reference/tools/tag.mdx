@@ -27,11 +27,11 @@ Gestión de tags de un proyecto: listar, leer, crear y borrar tags, leer la firm
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 5 de 9, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 5 de 9, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 5 de las 9.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                     | Individual                  |
 | ------------------------------------------ | --------------------------- |
@@ -52,6 +52,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `create`
 - **Herramienta individual**: `gitlab_tag_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Repository Tag: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                    |
@@ -68,6 +70,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `delete`
 - **Herramienta individual**: `gitlab_tag_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Repository Tag: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -82,6 +86,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `get`
 - **Herramienta individual**: `gitlab_tag_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -96,6 +102,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `get_protected`
 - **Herramienta individual**: `gitlab_tag_get_protected`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -110,6 +118,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `get_signature`
 - **Herramienta individual**: `gitlab_tag_get_signature`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                        |
@@ -124,6 +134,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `list`
 - **Herramienta individual**: `gitlab_tag_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Repository Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                    | Requerido | Descripción                                                                                                                                       |
@@ -144,6 +156,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `list_protected`
 - **Herramienta individual**: `gitlab_tag_list_protected`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Protected Tag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -163,6 +177,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `protect`
 - **Herramienta individual**: `gitlab_tag_protect`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro             | Tipo             | Requerido | Descripción                                                                  |
@@ -179,6 +195,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_tag`, acción `unprotect`
 - **Herramienta individual**: `gitlab_tag_unprotect`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Tag: Protect en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#tag))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                            |

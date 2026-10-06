@@ -1,6 +1,6 @@
 ---
 title: "Herramientas por dominio"
-description: "Cada acción de GitLab MCP Server por dominio: su ID canónico, su meta-herramienta y su herramienta individual, su nivel, sus anotaciones y sus parámetros."
+description: "Cada acción de GitLab MCP Server por dominio: su ID canónico, su meta-herramienta y su herramienta individual, su nivel, el token que necesita, sus anotaciones y sus parámetros."
 sidebar:
   order: 0
   label: "Descripción general"
@@ -8,7 +8,7 @@ sidebar:
 
 {/*Generado por cmd/gen_tool_reference a partir del catálogo de acciones y de cmd/gen_tool_reference/domains.json. Edita esos y ejecuta make gen-tool-reference.*/}
 
-Una página por grupo del catálogo, cada una con todas las acciones del grupo: su ID canónico, las herramientas que la alcanzan en cada superficie, el nivel que la sirve, sus anotaciones y sus parámetros. Las páginas se generan a partir del catálogo que construye el servidor, así que lo que dicen de una acción es lo que sirve el servidor; solo la descripción general y las preguntas de ejemplo de cada página están escritas a mano.
+Una página por grupo del catálogo, cada una con todas las acciones del grupo: su ID canónico, las herramientas que la alcanzan en cada superficie, el nivel que la sirve, el scope que necesita para ella un token clásico u OAuth y lo que necesita un token de grano fino, sus anotaciones y sus parámetros. Las páginas se generan a partir del catálogo que construye el servidor y de las peticiones que envía cada acción, así que lo que dicen de una acción es lo que sirve el servidor; solo la descripción general y las preguntas de ejemplo de cada página están escritas a mano.
 
 En GitLab.com con Ultimate el catálogo tiene 1098 acciones; una instancia autogestionada sirve 1092 con Ultimate, 1026 con Premium y 872 con Free.
 

@@ -1,7 +1,12 @@
 package main
 
+import "github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/grantwords"
+
 // language is one language the reference is written in: where its pages go,
-// and every word the generator writes in it.
+// and every word the generator writes in it. What a fine-grained token needs
+// is written in the words of cmd/internal/grantwords, which the fine-grained
+// permissions page is written in too, so a reader meets one sentence for one
+// action on both pages.
 //
 // The table headers of a language are held to the length of their English
 // twins, and a translated table cell to the length of its header, so that a
@@ -40,9 +45,10 @@ type language struct {
 	capabilities     map[string]string
 	readOnlyCount    string
 
-	actionsIntro    string
-	destructiveNote string
-	paramTierNote   string
+	actionsIntro     string
+	requirementIntro string
+	destructiveNote  string
+	paramTierNote    string
 
 	columnAction     string
 	columnTier       string
@@ -61,15 +67,39 @@ type language struct {
 	factTier           string
 	factDotcomOnly     string
 	factBehavior       string
-	readOnly           string
-	writes             string
-	destructive        string
-	idempotent         string
-	notIdempotent      string
-	noParameters       string
-	oneOf              string
-	oneOfJoin          string
-	oneOfAnd           string
+
+	// factClassic is the line of the scope a classic or OAuth token needs:
+	// classicReadAPI or classicAPI, then classicGroupScopes naming the scopes
+	// this server demands of the group's tokens before it lists the group,
+	// then classicOtherAuthentication or classicNoRequest for an action whose
+	// own requests GitLab does not judge by the token's scope, then
+	// classicOAuthRefused, or classicOAuthRefusedSome when only some inputs
+	// send them, naming the routes GitLab refuses to an OAuth token.
+	factClassic                string
+	classicReadAPI             string
+	classicAPI                 string
+	classicGroupScopes         string
+	classicOtherAuthentication string
+	classicNoRequest           string
+	classicOAuthRefused        string
+	classicOAuthRefusedSome    string
+	// factFineGrained is the line of what a fine-grained token needs, in the
+	// words' sentence, servedEmpty the clause naming the parts of the answer
+	// it may be served empty, and permissionsLink the link to the action's
+	// domain on the fine-grained permissions page.
+	factFineGrained string
+	servedEmpty     string
+	permissionsLink string
+	words           *grantwords.Words
+	readOnly        string
+	writes          string
+	destructive     string
+	idempotent      string
+	notIdempotent   string
+	noParameters    string
+	oneOf           string
+	oneOfJoin       string
+	oneOfAnd        string
 }
 
 // pagePath is where a page of this reference is linked from another page.
@@ -90,8 +120,8 @@ var english = language{
 
 	indexTitle:       "Tools by domain",
 	indexLabel:       "Overview",
-	indexDescription: "Every action of GitLab MCP Server by domain: its canonical ID, its meta-tool and individual tool, its tier, its annotations and its parameters.",
-	indexIntro:       "One page per catalog group, each listing every action of the group with its canonical ID, the tools that reach it on each surface, the tier that serves it, its annotations and its parameters. The pages are generated from the catalog the server builds, so what they say about an action is what the server serves; only the overview and the sample questions of a page are written by hand.",
+	indexDescription: "Every action of GitLab MCP Server by domain: its canonical ID, its meta-tool and individual tool, its tier, the token it needs, its annotations and its parameters.",
+	indexIntro:       "One page per catalog group, each listing every action of the group with its canonical ID, the tools that reach it on each surface, the tier that serves it, the scope a classic or OAuth token needs for it and what a fine-grained token needs, its annotations and its parameters. The pages are generated from the catalog the server builds and from the requests each action sends, so what they say about an action is what the server serves; only the overview and the sample questions of a page are written by hand.",
 	indexTotals:      "On GitLab.com at Ultimate the catalog holds %d actions; a self-managed Ultimate instance serves %d, a Premium one %d and a Free one %d.",
 
 	headingQuestions:    "Sample questions",
@@ -113,11 +143,12 @@ var english = language{
 	capabilities: map[string]string{
 		"elicitation": "Needs a client that supports MCP [elicitation](/gitlab-mcp-server/capabilities/elicitation/), which each action asks its questions through.",
 	},
-	readOnlyCount: "Read-only actions: %d of %d, the ones a deployment in read-only mode keeps.",
+	readOnlyCount: "Read-only actions: %d of %d, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served %d of the %d.",
 
-	actionsIntro:    "The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.",
-	destructiveNote: "A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).",
-	paramTierNote:   "A parameter followed by a tier in parentheses is served only from that tier on.",
+	actionsIntro:     "The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.",
+	requirementIntro: "The token lines say what GitLab %s requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.",
+	destructiveNote:  "A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).",
+	paramTierNote:    "A parameter followed by a tier in parentheses is served only from that tier on.",
 
 	columnAction:     "Action",
 	columnTier:       "Tier",
@@ -136,15 +167,29 @@ var english = language{
 	factTier:           "- **Tier**: %s",
 	factDotcomOnly:     "%s, GitLab.com only",
 	factBehavior:       "- **Behavior**: %s",
-	readOnly:           "read-only",
-	writes:             "writes",
-	destructive:        "destructive (needs confirmation)",
-	idempotent:         "idempotent",
-	notIdempotent:      "not idempotent",
-	noParameters:       "No parameters.",
-	oneOf:              "Also needs at least one of: %s.",
-	oneOfJoin:          "; ",
-	oneOfAnd:           " and ",
+
+	factClassic:                "- **Classic or OAuth token**: %s",
+	classicReadAPI:             "`read_api` (or `api`)",
+	classicAPI:                 "`api`",
+	classicGroupScopes:         "; this server lists the group only to a token that also carries %s",
+	classicOtherAuthentication: "; GitLab authenticates the token this action sends as a parameter and does not judge this one's scope",
+	classicNoRequest:           "; the action sends GitLab no request",
+	classicOAuthRefused:        "; not an OAuth token, which GitLab refuses on %s",
+	classicOAuthRefusedSome:    "; GitLab refuses an OAuth token on %s, which this action sends for some inputs",
+	factFineGrained:            "- **Fine-grained token**: %s",
+	servedEmpty:                "; served empty: %s",
+	permissionsLink:            " ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#%s))",
+	words:                      grantwords.English(),
+
+	readOnly:      "read-only",
+	writes:        "writes",
+	destructive:   "destructive (needs confirmation)",
+	idempotent:    "idempotent",
+	notIdempotent: "not idempotent",
+	noParameters:  "No parameters.",
+	oneOf:         "Also needs at least one of: %s.",
+	oneOfJoin:     "; ",
+	oneOfAnd:      " and ",
 }
 
 //nolint:dupl // the Spanish twin of english; see there.
@@ -156,8 +201,8 @@ var spanish = language{
 
 	indexTitle:       "Herramientas por dominio",
 	indexLabel:       "Descripción general",
-	indexDescription: "Cada acción de GitLab MCP Server por dominio: su ID canónico, su meta-herramienta y su herramienta individual, su nivel, sus anotaciones y sus parámetros.",
-	indexIntro:       "Una página por grupo del catálogo, cada una con todas las acciones del grupo: su ID canónico, las herramientas que la alcanzan en cada superficie, el nivel que la sirve, sus anotaciones y sus parámetros. Las páginas se generan a partir del catálogo que construye el servidor, así que lo que dicen de una acción es lo que sirve el servidor; solo la descripción general y las preguntas de ejemplo de cada página están escritas a mano.",
+	indexDescription: "Cada acción de GitLab MCP Server por dominio: su ID canónico, su meta-herramienta y su herramienta individual, su nivel, el token que necesita, sus anotaciones y sus parámetros.",
+	indexIntro:       "Una página por grupo del catálogo, cada una con todas las acciones del grupo: su ID canónico, las herramientas que la alcanzan en cada superficie, el nivel que la sirve, el scope que necesita para ella un token clásico u OAuth y lo que necesita un token de grano fino, sus anotaciones y sus parámetros. Las páginas se generan a partir del catálogo que construye el servidor y de las peticiones que envía cada acción, así que lo que dicen de una acción es lo que sirve el servidor; solo la descripción general y las preguntas de ejemplo de cada página están escritas a mano.",
 	indexTotals:      "En GitLab.com con Ultimate el catálogo tiene %d acciones; una instancia autogestionada sirve %d con Ultimate, %d con Premium y %d con Free.",
 
 	headingQuestions:    "Preguntas de ejemplo",
@@ -179,11 +224,12 @@ var spanish = language{
 	capabilities: map[string]string{
 		"elicitation": "Necesita un cliente que admita la [elicitación](/gitlab-mcp-server/capabilities/elicitation/) de MCP, por la que cada acción hace sus preguntas.",
 	},
-	readOnlyCount: "Acciones de solo lectura: %d de %d, las que conserva un despliegue en modo de solo lectura.",
+	readOnlyCount: "Acciones de solo lectura: %d de %d, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven %d de las %d.",
 
-	actionsIntro:    "La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.",
-	destructiveNote: "Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).",
-	paramTierNote:   "Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.",
+	actionsIntro:     "La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.",
+	requirementIntro: "Las líneas de token dicen lo que exige GitLab %s a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.",
+	destructiveNote:  "Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).",
+	paramTierNote:    "Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.",
 
 	columnAction:     "Acción",
 	columnTier:       "Nivel",
@@ -202,13 +248,27 @@ var spanish = language{
 	factTier:           "- **Nivel**: %s",
 	factDotcomOnly:     "%s, solo GitLab.com",
 	factBehavior:       "- **Comportamiento**: %s",
-	readOnly:           "solo lectura",
-	writes:             "escribe",
-	destructive:        "destructiva (necesita confirmación)",
-	idempotent:         "idempotente",
-	notIdempotent:      "no idempotente",
-	noParameters:       "Sin parámetros.",
-	oneOf:              "Además necesita al menos uno de estos: %s.",
-	oneOfJoin:          "; ",
-	oneOfAnd:           " y ",
+
+	factClassic:                "- **Token clásico u OAuth**: %s",
+	classicReadAPI:             "`read_api` (o `api`)",
+	classicAPI:                 "`api`",
+	classicGroupScopes:         "; este servidor solo lista el grupo a un token que lleve además %s",
+	classicOtherAuthentication: "; GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este",
+	classicNoRequest:           "; la acción no envía ninguna petición a GitLab",
+	classicOAuthRefused:        "; no un token OAuth, que GitLab rechaza en %s",
+	classicOAuthRefusedSome:    "; GitLab rechaza un token OAuth en %s, que esta acción envía con algunas entradas",
+	factFineGrained:            "- **Token de grano fino**: %s",
+	servedEmpty:                "; se sirve vacío: %s",
+	permissionsLink:            " ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#%s))",
+	words:                      grantwords.Spanish(),
+
+	readOnly:      "solo lectura",
+	writes:        "escribe",
+	destructive:   "destructiva (necesita confirmación)",
+	idempotent:    "idempotente",
+	notIdempotent: "no idempotente",
+	noParameters:  "Sin parámetros.",
+	oneOf:         "Además necesita al menos uno de estos: %s.",
+	oneOfJoin:     "; ",
+	oneOfAnd:      " y ",
 }

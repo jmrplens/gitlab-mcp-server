@@ -34,11 +34,11 @@ How many of these actions an instance serves at each tier, out of a total of 34:
 - **Premium**: 19
 - **Ultimate**: 34
 
-Read-only actions: 13 of 34, the ones a deployment in read-only mode keeps.
+Read-only actions: 13 of 34, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 15 of the 34.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                               | Tier     | Individual                                       |
 | ------------------------------------------------------------------------------------ | -------- | ------------------------------------------------ |
@@ -84,6 +84,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_create`
 - **Individual tool**: `gitlab_runner_controller_create`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type                                        | Mandatory | Description                          |
@@ -98,6 +100,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_delete`
 - **Individual tool**: `gitlab_runner_controller_delete`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Delete at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -111,6 +115,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_get`
 - **Individual tool**: `gitlab_runner_controller_get`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner Controller: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -124,6 +130,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_list`
 - **Individual tool**: `gitlab_runner_controller_list`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner Controller: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -142,6 +150,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_scope_add_instance`
 - **Individual tool**: `gitlab_runner_controller_scope_add_instance`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -155,6 +165,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_scope_add_runner`
 - **Individual tool**: `gitlab_runner_controller_scope_add_runner`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type      | Mandatory | Description                       |
@@ -169,6 +181,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_scope_list`
 - **Individual tool**: `gitlab_runner_controller_scope_list`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner Controller: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -182,6 +196,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_scope_remove_instance`
 - **Individual tool**: `gitlab_runner_controller_scope_remove_instance`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -195,6 +211,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_scope_remove_runner`
 - **Individual tool**: `gitlab_runner_controller_scope_remove_runner`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description                    |
@@ -209,6 +227,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_token_create`
 - **Individual tool**: `gitlab_runner_controller_token_create`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller Token: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type      | Mandatory | Description              |
@@ -223,6 +243,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_token_get`
 - **Individual tool**: `gitlab_runner_controller_token_get`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner Controller Token: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -237,6 +259,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_token_list`
 - **Individual tool**: `gitlab_runner_controller_token_list`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner Controller Token: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type                     | Mandatory | Description                                                                                                                                       |
@@ -256,6 +280,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_token_revoke`
 - **Individual tool**: `gitlab_runner_controller_token_revoke`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller Token: Revoke at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -270,6 +296,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_token_rotate`
 - **Individual tool**: `gitlab_runner_controller_token_rotate`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller Token: Rotate at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type      | Mandatory | Description          |
@@ -284,6 +312,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `controller_update`
 - **Individual tool**: `gitlab_runner_controller_update`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Controller: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type                                        | Mandatory | Description                              |
@@ -299,6 +329,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `delete_by_token`
 - **Individual tool**: `gitlab_runner_delete_by_token`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter | Type     | Mandatory | Description                 |
@@ -312,6 +344,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `delete_registered`
 - **Individual tool**: `gitlab_runner_delete_registered`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Delete at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter   | Type      | Mandatory | Description         |
@@ -325,6 +359,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `disable_project`
 - **Individual tool**: `gitlab_runner_disable_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Assign at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                      |
@@ -339,6 +375,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `enable_project`
 - **Individual tool**: `gitlab_runner_enable_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Assign at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -353,6 +391,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `get`
 - **Individual tool**: `gitlab_runner_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter   | Type      | Mandatory | Description |
@@ -366,6 +406,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `jobs`
 - **Individual tool**: `gitlab_runner_jobs`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                                                                                                                                                    | Mandatory | Description                                                                                                                                                              |
@@ -386,6 +428,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `list`
 - **Individual tool**: `gitlab_runner_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                       | Mandatory | Description                                                                                                                                       |
@@ -409,6 +453,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `list_all`
 - **Individual tool**: `gitlab_runner_list_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                                     | Mandatory | Description                                                                                                                                       |
@@ -432,6 +478,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `list_group`
 - **Individual tool**: `gitlab_runner_list_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                       | Mandatory | Description                                                                                                                                       |
@@ -454,6 +502,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `list_managers`
 - **Individual tool**: `gitlab_runner_list_managers`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter   | Type      | Mandatory | Description |
@@ -467,6 +517,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `list_project`
 - **Individual tool**: `gitlab_runner_list_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Runner: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                                       | Mandatory | Description                                                                                                                                       |
@@ -491,6 +543,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `register`
 - **Individual tool**: `gitlab_runner_register`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, not idempotent
 
 | Parameter          | Type       | Mandatory | Description                                                                   |
@@ -514,6 +568,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `remove`
 - **Individual tool**: `gitlab_runner_remove`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Delete at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter   | Type      | Mandatory | Description         |
@@ -527,6 +583,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `reset_group_reg_token`
 - **Individual tool**: `gitlab_runner_reset_group_reg_token`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Registration Token: Reset at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter  | Type             | Mandatory | Description                  |
@@ -540,6 +598,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_runner`, action `reset_instance_reg_token`
 - **Individual tool**: `gitlab_runner_reset_instance_reg_token`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Registration Token: Reset at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 No parameters.
@@ -551,6 +611,8 @@ No parameters.
 - **Meta-tool**: `gitlab_runner`, action `reset_project_reg_token`
 - **Individual tool**: `gitlab_runner_reset_project_reg_token`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner Registration Token: Reset at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -564,6 +626,8 @@ No parameters.
 - **Meta-tool**: `gitlab_runner`, action `reset_token`
 - **Individual tool**: `gitlab_runner_reset_token`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Update at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter   | Type      | Mandatory | Description |
@@ -577,6 +641,8 @@ No parameters.
 - **Meta-tool**: `gitlab_runner`, action `update`
 - **Individual tool**: `gitlab_runner_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Runner: Update at project or group or instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: writes, idempotent
 
 | Parameter          | Type       | Mandatory | Description                                            |
@@ -599,6 +665,8 @@ No parameters.
 - **Meta-tool**: `gitlab_runner`, action `verify`
 - **Individual tool**: `gitlab_runner_verify`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); GitLab authenticates the token this action sends as a parameter and does not judge this one's scope
+- **Fine-grained token**: a request GitLab does not judge by the grant ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#runner))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type     | Mandatory | Description                           |

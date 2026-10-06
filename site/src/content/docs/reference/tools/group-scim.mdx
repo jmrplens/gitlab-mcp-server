@@ -31,11 +31,11 @@ How many of these actions an instance serves at each tier, out of a total of 4:
 - **Premium**: 4
 - **Ultimate**: 4
 
-Read-only actions: 2 of 4, the ones a deployment in read-only mode keeps.
+Read-only actions: 2 of 4, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 2 of the 4.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                   | Individual                          |
 | ---------------------------------------- | ----------------------------------- |
@@ -51,6 +51,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_group_scim`, action `delete`
 - **Individual tool**: `gitlab_delete_group_scim_identity`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: SCIM Identity: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter  | Type             | Mandatory | Description                   |
@@ -65,6 +67,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_group_scim`, action `get`
 - **Individual tool**: `gitlab_get_group_scim_identity`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: SCIM Identity: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type             | Mandatory | Description                   |
@@ -79,6 +83,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_group_scim`, action `list`
 - **Individual tool**: `gitlab_list_group_scim_identities`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: SCIM Identity: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type             | Mandatory | Description                  |
@@ -92,6 +98,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_group_scim`, action `update`
 - **Individual tool**: `gitlab_update_group_scim_identity`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: SCIM Identity: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group_scim))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                   |

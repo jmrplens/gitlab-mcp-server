@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
@@ -92,6 +93,9 @@ type reference struct {
 	// served counts every action each build serves, indexed like
 	// refGroup.served.
 	served [2][3]int
+	// version is the GitLab release the token requirements were recorded
+	// from, as the fine-grained table names it.
+	version string
 }
 
 // actionCount is how many distinct actions any build serves.
@@ -140,6 +144,21 @@ type refAction struct {
 	// at least one, beside the parameters it always requires.
 	oneOf [][]string
 
+	// domain is the action ID's prefix, which is also the heading the
+	// fine-grained permissions page files the action under.
+	domain string
+	// classic is the scope a classic or OAuth token needs for the requests
+	// the action sends, and scopes the ones its group demands beside it.
+	classic finegrained.ClassicScope
+	scopes  []string
+	// oauthRefused are the routes the action sends that GitLab refuses to an
+	// OAuth token, and oauthRefusedEveryWay is set when no input lets the
+	// action run without one.
+	oauthRefused         []string
+	oauthRefusedEveryWay bool
+	// fineGrained is what a fine-grained token needs for it.
+	fineGrained *finegrained.Description
+
 	// latest is the widest build's copy of the action, and paramTiers the
 	// lowest tier at which each of its parameters is served. Both are read
 	// once every build has been seen.
@@ -163,10 +182,17 @@ type assembly struct {
 	actions map[string]*refAction
 }
 
-// assemble folds the builds into the groups the pages describe, and holds
-// every tool name a page will print to the surface that registers it.
-func assemble(builds []build, surfaces surfaceNames, scopes map[string][]string) (reference, error) {
-	a := &assembly{scopes: scopes, groups: map[string]*refGroup{}, actions: map[string]*refAction{}}
+// assemble folds the builds into the groups the pages describe, holds every
+// tool name a page will print to the surface that registers it, and reads
+// what each action needs of a token from grants, the table its catalog rows
+// point into, with oauthRefused naming the routes of that table GitLab
+// refuses to an OAuth token.
+func assemble(builds []build, surfaces surfaceNames, scopes map[string][]string, grants *finegrained.Table, oauthRefused []oauthRefusedRoute) (reference, error) {
+	refused, refusedErr := oauthRefusedSet(grants, oauthRefused)
+	if refusedErr != nil {
+		return reference{}, refusedErr
+	}
+	a := &assembly{ref: reference{version: grants.DisplayVersion()}, scopes: scopes, groups: map[string]*refGroup{}, actions: map[string]*refAction{}}
 	for _, b := range builds {
 		for _, group := range b.catalog.Groups() {
 			a.fold(b, group)
@@ -178,7 +204,7 @@ func assemble(builds []build, surfaces surfaceNames, scopes map[string][]string)
 	for _, rg := range ref.groups {
 		slices.SortFunc(rg.actions, func(x, y *refAction) int { return cmp.Compare(x.id, y.id) })
 		for _, ra := range rg.actions {
-			if err := ra.finish(rg, surfaces, index); err != nil {
+			if err := ra.finish(rg, surfaces, index, grants, refused); err != nil {
 				return reference{}, err
 			}
 		}
@@ -222,9 +248,20 @@ func (a *assembly) fold(b build, group actioncatalog.Group) {
 
 // finish fills in what an action's page entry needs from its widest build,
 // and names the tools it is reached through, refusing a name the surface it
-// belongs to does not register.
-func (ra *refAction) finish(group *refGroup, surfaces surfaceNames, index map[string]string) error {
+// belongs to does not register, and an action the fine-grained table holds no
+// classic scope for, since its token lines would be a guess. refused are the
+// routes of the table GitLab refuses to an OAuth token.
+func (ra *refAction) finish(group *refGroup, surfaces surfaceNames, index map[string]string, grants *finegrained.Table, refused map[string]bool) error {
 	action := ra.latest
+	row := action.FineGrained
+	if row == nil || row.Classic == finegrained.ClassicUnknown {
+		return fmt.Errorf("%s: the action grants table holds no classic scope for it; run make gen-action-grants first", ra.id)
+	}
+	ra.domain, _, _ = strings.Cut(ra.id, ".")
+	ra.classic = row.Classic
+	ra.scopes = group.scopes
+	ra.oauthRefused, ra.oauthRefusedEveryWay = oauthRefusal(grants, row, refused)
+	ra.fineGrained = grants.Describe(row)
 	ra.name = action.Name
 	ra.readOnly = action.ReadOnly
 	ra.destructive = action.Destructive

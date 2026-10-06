@@ -33,11 +33,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 3:
 - **Premium**: 0
 - **Ultimate**: 3
 
-Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 1 de las 3.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                                       | Individual                                  |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -52,6 +52,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `attach`
 - **Herramienta individual**: `gitlab_attach_security_scan_profile`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileAttach`, y la rechaza ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -69,6 +71,8 @@ Además necesita al menos uno de estos: `project_ids`; `group_ids`.
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `detach`
 - **Herramienta individual**: `gitlab_detach_security_scan_profile`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para la mutación `securityScanProfileDetach`, y la rechaza ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro                  | Tipo        | Requerido | Descripción                                                                                                                                                                                                                              |
@@ -86,6 +90,8 @@ Además necesita al menos uno de estos: `project_ids`; `group_ids`.
 - **Meta-herramienta**: `gitlab_security_scan_profile`, acción `list_project_statuses`
 - **Herramienta individual**: `gitlab_list_project_scan_profile_statuses`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `ScanProfileProjectStatus`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#security_scan_profile))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo     | Requerido | Descripción                                                                                                         |

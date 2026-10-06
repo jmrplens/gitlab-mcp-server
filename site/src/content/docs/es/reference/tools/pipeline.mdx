@@ -30,11 +30,11 @@ Las programaciones de pipelines (con sus variables, ejecutar una ahora y quedars
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 15 de 33, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 15 de 33, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 16 de las 33.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                                     | Individual                                          |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
@@ -79,6 +79,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `cancel`
 - **Herramienta individual**: `gitlab_pipeline_cancel`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -93,6 +95,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `create`
 - **Herramienta individual**: `gitlab_pipeline_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                            |
@@ -109,6 +113,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `delete`
 - **Herramienta individual**: `gitlab_pipeline_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -123,6 +129,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `get`
 - **Herramienta individual**: `gitlab_pipeline_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -137,6 +145,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `latest`
 - **Herramienta individual**: `gitlab_pipeline_latest`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                                                                                                                                                                                                                                                         | Requerido | Descripción                                                                                                                                                                                                                                                                    |
@@ -168,6 +178,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `list`
 - **Herramienta individual**: `gitlab_pipeline_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                                                                                                                                                                                                                                                         | Requerido | Descripción                                                                                                                                                                                                                                     |
@@ -199,6 +211,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `resource_group_edit`
 - **Herramienta individual**: `gitlab_edit_resource_group`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Resource Group: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro      | Tipo                                                                         | Requerido | Descripción                                                                |
@@ -214,6 +228,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `resource_group_get`
 - **Herramienta individual**: `gitlab_get_resource_group`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Resource Group: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -228,6 +244,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `resource_group_list`
 - **Herramienta individual**: `gitlab_list_resource_groups`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Resource Group: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                           |
@@ -243,6 +261,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `resource_group_upcoming_jobs`
 - **Herramienta individual**: `gitlab_list_resource_group_upcoming_jobs`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Job: Read, Resource Group: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                           |
@@ -259,6 +279,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `retry`
 - **Herramienta individual**: `gitlab_pipeline_retry`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -273,6 +295,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_create`
 - **Herramienta individual**: `gitlab_pipeline_schedule_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                            |
@@ -292,6 +316,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_create_variable`
 - **Herramienta individual**: `gitlab_pipeline_schedule_create_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo                         | Requerido | Descripción                                                |
@@ -309,6 +335,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_delete`
 - **Herramienta individual**: `gitlab_pipeline_schedule_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -323,6 +351,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_delete_variable`
 - **Herramienta individual**: `gitlab_pipeline_schedule_delete_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -338,6 +368,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_edit_variable`
 - **Herramienta individual**: `gitlab_pipeline_schedule_edit_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                         | Requerido | Descripción                                                   |
@@ -355,6 +387,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_get`
 - **Herramienta individual**: `gitlab_pipeline_schedule_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline Schedule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -369,6 +403,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_list`
 - **Herramienta individual**: `gitlab_pipeline_schedule_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline Schedule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                            | Requerido | Descripción                                                                                                                                       |
@@ -389,6 +425,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_list_triggered_pipelines`
 - **Herramienta individual**: `gitlab_pipeline_schedule_list_triggered_pipelines`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read, Pipeline Schedule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -409,6 +447,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_run`
 - **Herramienta individual**: `gitlab_pipeline_schedule_run`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Read en proyecto; Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -423,6 +463,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_take_ownership`
 - **Herramienta individual**: `gitlab_pipeline_schedule_take_ownership`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -437,6 +479,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_update`
 - **Herramienta individual**: `gitlab_pipeline_schedule_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                              |
@@ -457,6 +501,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `test_report`
 - **Herramienta individual**: `gitlab_pipeline_test_report`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -471,6 +517,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `test_report_summary`
 - **Herramienta individual**: `gitlab_pipeline_test_report_summary`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -485,6 +533,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_create`
 - **Herramienta individual**: `gitlab_pipeline_trigger_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Trigger: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción               |
@@ -499,6 +549,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_delete`
 - **Herramienta individual**: `gitlab_pipeline_trigger_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Trigger: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción         |
@@ -513,6 +565,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_get`
 - **Herramienta individual**: `gitlab_pipeline_trigger_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Trigger: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción         |
@@ -527,6 +581,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_list`
 - **Herramienta individual**: `gitlab_pipeline_trigger_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Trigger: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -546,6 +602,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_run`
 - **Herramienta individual**: `gitlab_pipeline_trigger_run`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`); GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                  |
@@ -563,6 +621,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `trigger_update`
 - **Herramienta individual**: `gitlab_pipeline_trigger_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Trigger: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                   |
@@ -578,6 +638,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `update_metadata`
 - **Herramienta individual**: `gitlab_pipeline_update_metadata`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pipeline: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -593,6 +655,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `variables`
 - **Herramienta individual**: `gitlab_pipeline_variables`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -607,6 +671,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_pipeline`, acción `wait`
 - **Herramienta individual**: `gitlab_pipeline_wait`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pipeline: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro          | Tipo             | Requerido | Descripción                                                                                                                     |

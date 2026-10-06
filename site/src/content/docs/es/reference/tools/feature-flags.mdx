@@ -27,11 +27,11 @@ Feature flags que lee la aplicación de un proyecto para activar una función de
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 4 de 10, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 4 de 10, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 4 de las 10.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                   | Individual                   |
 | ------------------------------------------------------------------------ | ---------------------------- |
@@ -53,6 +53,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_create`
 - **Herramienta individual**: `gitlab_feature_flag_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                               |
@@ -71,6 +73,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_delete`
 - **Herramienta individual**: `gitlab_feature_flag_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -85,6 +89,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_get`
 - **Herramienta individual**: `gitlab_feature_flag_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Feature Flag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -99,6 +105,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_list`
 - **Herramienta individual**: `gitlab_feature_flag_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Feature Flag: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                             | Requerido | Descripción                                                                                                                                       |
@@ -119,6 +127,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `feature_flag_update`
 - **Herramienta individual**: `gitlab_feature_flag_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                                                                                                                                   |
@@ -137,6 +147,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_create`
 - **Herramienta individual**: `gitlab_ff_user_list_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag User List: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                               |
@@ -152,6 +164,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_delete`
 - **Herramienta individual**: `gitlab_ff_user_list_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag User List: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
@@ -166,6 +180,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_get`
 - **Herramienta individual**: `gitlab_ff_user_list_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Feature Flag User List: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
@@ -180,6 +196,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_list`
 - **Herramienta individual**: `gitlab_ff_user_list_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Feature Flag User List: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -200,6 +218,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_feature_flags`, acción `ff_user_list_update`
 - **Herramienta individual**: `gitlab_ff_user_list_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Feature Flag User List: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                                  |

@@ -30,11 +30,11 @@ Approving, merging and the rest of the merge request's lifecycle are on [Merge r
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 10 of 23, the ones a deployment in read-only mode keeps.
+Read-only actions: 10 of 23, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 10 of the 23.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                 | Individual                         |
 | ---------------------------------------------------------------------- | ---------------------------------- |
@@ -69,6 +69,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `changes_get`
 - **Individual tool**: `gitlab_mr_changes_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                     | Mandatory | Description                                                                                                                                       |
@@ -90,6 +92,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `diff_version_get`
 - **Individual tool**: `gitlab_mr_diff_version_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                          |
@@ -106,6 +110,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `diff_versions_list`
 - **Individual tool**: `gitlab_mr_diff_versions_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                     | Mandatory | Description                                                                                                                                       |
@@ -126,6 +132,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_create`
 - **Individual tool**: `gitlab_mr_discussion_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                                 |
@@ -144,6 +152,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_get`
 - **Individual tool**: `gitlab_mr_discussion_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -159,6 +169,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_list`
 - **Individual tool**: `gitlab_mr_discussion_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                     | Mandatory | Description                                                                                                                                       |
@@ -179,6 +191,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_note_delete`
 - **Individual tool**: `gitlab_mr_discussion_note_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -195,6 +209,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_note_update`
 - **Individual tool**: `gitlab_mr_discussion_note_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                           |
@@ -214,6 +230,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_reply`
 - **Individual tool**: `gitlab_mr_discussion_reply`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                           |
@@ -231,6 +249,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `discussion_resolve`
 - **Individual tool**: `gitlab_mr_discussion_resolve`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -247,6 +267,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_create`
 - **Individual tool**: `gitlab_mr_draft_note_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter                   | Type             | Mandatory | Description                                                                        |
@@ -266,6 +288,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_delete`
 - **Individual tool**: `gitlab_mr_draft_note_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                    |
@@ -281,6 +305,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_get`
 - **Individual tool**: `gitlab_mr_draft_note_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                    |
@@ -296,6 +322,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_list`
 - **Individual tool**: `gitlab_mr_draft_note_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                     | Mandatory | Description                                                                                                                                       |
@@ -316,6 +344,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_publish`
 - **Individual tool**: `gitlab_mr_draft_note_publish`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                    |
@@ -331,6 +361,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_publish_all`
 - **Individual tool**: `gitlab_mr_draft_note_publish_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type                                       | Mandatory | Description                                                                                                                                     |
@@ -348,6 +380,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_update`
 - **Individual tool**: `gitlab_mr_draft_note_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Merge Request: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                               |
@@ -365,6 +399,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `note_create`
 - **Individual tool**: `gitlab_mr_note_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
 | Parameter                     | Type             | Mandatory | Description                                                                                                                                             |
@@ -383,6 +419,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `note_delete`
 - **Individual tool**: `gitlab_mr_note_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -398,6 +436,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `note_get`
 - **Individual tool**: `gitlab_mr_note_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -413,6 +453,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `note_list`
 - **Individual tool**: `gitlab_mr_notes_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type                                  | Mandatory | Description                                                                                                                                       |
@@ -433,6 +475,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `note_update`
 - **Individual tool**: `gitlab_mr_note_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                |
@@ -449,6 +493,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_mr_review`, action `raw_diffs`
 - **Individual tool**: `gitlab_mr_raw_diffs`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                    |

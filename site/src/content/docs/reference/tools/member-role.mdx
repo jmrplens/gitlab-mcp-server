@@ -31,11 +31,11 @@ How many of these actions an instance serves at each tier, out of a total of 6:
 - **Premium**: 0
 - **Ultimate**: 6
 
-Read-only actions: 2 of 6, the ones a deployment in read-only mode keeps.
+Read-only actions: 2 of 6, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 2 of the 6.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                       | Individual                           |
 | ------------------------------------------------------------ | ------------------------------------ |
@@ -53,6 +53,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `create_group`
 - **Individual tool**: `gitlab_create_group_member_role`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Member Role: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: writes, not idempotent
 
 | Parameter                       | Type             | Mandatory | Description                                                                                                                                  |
@@ -89,6 +91,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `create_instance`
 - **Individual tool**: `gitlab_create_instance_member_role`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Member Role: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: writes, not idempotent
 
 | Parameter                       | Type      | Mandatory | Description                                                                                                                                  |
@@ -124,6 +128,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `delete_group`
 - **Individual tool**: `gitlab_delete_group_member_role`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Member Role: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type             | Mandatory | Description                  |
@@ -138,6 +144,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `delete_instance`
 - **Individual tool**: `gitlab_delete_instance_member_role`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Member Role: Delete at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type      | Mandatory | Description              |
@@ -151,6 +159,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `list_group`
 - **Individual tool**: `gitlab_list_group_member_roles`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Member Role: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type             | Mandatory | Description                  |
@@ -164,6 +174,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_member_role`, action `list_instance`
 - **Individual tool**: `gitlab_list_instance_member_roles`
 - **Tier**: Ultimate
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Member Role: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#member_role))
 - **Behavior**: read-only, idempotent
 
 No parameters.

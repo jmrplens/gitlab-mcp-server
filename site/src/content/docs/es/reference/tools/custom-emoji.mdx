@@ -27,11 +27,11 @@ Los emoji personalizados de un grupo son imágenes que añade a los emoji con lo
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 1 de 3, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 1 de las 3.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                       | Individual                   |
 | -------------------------------------------- | ---------------------------- |
@@ -46,6 +46,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_custom_emoji`, acción `create`
 - **Herramienta individual**: `gitlab_create_custom_emoji`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo     | Requerido | Descripción                                              |
@@ -61,6 +63,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_custom_emoji`, acción `delete`
 - **Herramienta individual**: `gitlab_delete_custom_emoji`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                                                   |
@@ -74,6 +78,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_custom_emoji`, acción `list`
 - **Herramienta individual**: `gitlab_list_custom_emoji`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `CustomEmoji`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#custom_emoji))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                                                                                                                             |

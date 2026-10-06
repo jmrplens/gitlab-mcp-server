@@ -27,11 +27,11 @@ Full-text search, one action per kind of result: code, merge requests, issues, c
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 10 of 10, the ones a deployment in read-only mode keeps.
+Read-only actions: 10 of 10, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 10 of the 10.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                           | Individual                     |
 | ------------------------------------------------ | ------------------------------ |
@@ -53,6 +53,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `code`
 - **Individual tool**: `gitlab_search_code`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -72,6 +74,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `commits`
 - **Individual tool**: `gitlab_search_commits`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -90,6 +94,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `issues`
 - **Individual tool**: `gitlab_search_issues`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -108,6 +114,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `merge_requests`
 - **Individual tool**: `gitlab_search_merge_requests`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -126,6 +134,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `milestones`
 - **Individual tool**: `gitlab_search_milestones`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -144,6 +154,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `notes`
 - **Individual tool**: `gitlab_search_notes`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Global Search: Use at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -161,6 +173,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `projects`
 - **Individual tool**: `gitlab_search_projects`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -178,6 +192,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `snippets`
 - **Individual tool**: `gitlab_search_snippets`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -194,6 +210,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `users`
 - **Individual tool**: `gitlab_search_users`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |
@@ -212,6 +230,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_search`, action `wiki`
 - **Individual tool**: `gitlab_search_wiki`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: one of: Global Search: Use at project **or** Global Search: Use at group **or** Global Search: Use at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#search))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type                                    | Mandatory | Description                                                                                                                                                                                                                 |

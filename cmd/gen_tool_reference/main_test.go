@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
 // testSource is a source over the synthetic builds and data file, rooted in a
@@ -23,6 +24,7 @@ func testSource(t *testing.T) source {
 		builds:   func() ([]build, error) { return testBuilds(t), nil },
 		surfaces: testSurfaces,
 		scopes:   map[string][]string{"gitlab_widget": {"admin_mode"}},
+		grants:   testGrants(),
 		domains:  encode(t, testDomains()),
 	}
 }
@@ -259,6 +261,9 @@ func TestDefaultSource_RealInputs_ReadTheRepository(t *testing.T) {
 	}
 	if src.builds == nil || src.surfaces == nil {
 		t.Error("defaultSource() has no builds or surfaces")
+	}
+	if src.grants != actiongrants.Table() {
+		t.Error("defaultSource() does not read the action grants table compiled into the binary")
 	}
 }
 

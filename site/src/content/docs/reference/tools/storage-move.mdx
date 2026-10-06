@@ -33,11 +33,11 @@ How many of these actions an instance serves at each tier, out of a total of 18:
 
 Listed only for a token that carries `admin_mode`: the server removes the group from every surface for a token whose scopes it knows and that lacks it.
 
-Read-only actions: 12 of 18, the ones a deployment in read-only mode keeps.
+Read-only actions: 12 of 18, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 12 of the 18.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                                                         | Tier    | Individual                                    |
 | ------------------------------------------------------------------------------ | ------- | --------------------------------------------- |
@@ -67,6 +67,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_group`
 - **Individual tool**: `gitlab_get_group_storage_move`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type      | Mandatory | Description                    |
@@ -80,6 +82,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_group_for_group`
 - **Individual tool**: `gitlab_get_group_storage_move_for_group`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter  | Type      | Mandatory | Description                    |
@@ -94,6 +98,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_project`
 - **Individual tool**: `gitlab_get_project_storage_move`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type      | Mandatory | Description                    |
@@ -107,6 +113,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_project_for_project`
 - **Individual tool**: `gitlab_get_project_storage_move_for_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type      | Mandatory | Description                    |
@@ -121,6 +129,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_snippet`
 - **Individual tool**: `gitlab_get_snippet_storage_move`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type      | Mandatory | Description                    |
@@ -134,6 +144,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `get_snippet_for_snippet`
 - **Individual tool**: `gitlab_get_snippet_storage_move_for_snippet`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type      | Mandatory | Description                    |
@@ -148,6 +160,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_all_group`
 - **Individual tool**: `gitlab_retrieve_all_group_storage_moves`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -166,6 +180,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_all_project`
 - **Individual tool**: `gitlab_retrieve_all_project_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -184,6 +200,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_all_snippet`
 - **Individual tool**: `gitlab_retrieve_all_snippet_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -202,6 +220,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_group`
 - **Individual tool**: `gitlab_retrieve_group_storage_moves`
 - **Tier**: Premium
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -221,6 +241,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_project`
 - **Individual tool**: `gitlab_retrieve_project_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -240,6 +262,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `retrieve_snippet`
 - **Individual tool**: `gitlab_retrieve_snippet_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`); this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -259,6 +283,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_all_group`
 - **Individual tool**: `gitlab_schedule_all_group_storage_moves`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type     | Mandatory | Description                           |
@@ -273,6 +299,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_all_project`
 - **Individual tool**: `gitlab_schedule_all_project_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type     | Mandatory | Description                           |
@@ -287,6 +315,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_all_snippet`
 - **Individual tool**: `gitlab_schedule_all_snippet_storage_moves`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type     | Mandatory | Description                           |
@@ -301,6 +331,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_group`
 - **Individual tool**: `gitlab_schedule_group_storage_move`
 - **Tier**: Premium
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type      | Mandatory | Description                           |
@@ -315,6 +347,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_project`
 - **Individual tool**: `gitlab_schedule_project_storage_move`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type      | Mandatory | Description                           |
@@ -329,6 +363,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_storage_move`, action `schedule_snippet`
 - **Individual tool**: `gitlab_schedule_snippet_storage_move`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
+- **Fine-grained token**: Repository Storage Move: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#storage_move))
 - **Behavior**: writes, not idempotent
 
 | Parameter                  | Type      | Mandatory | Description                           |

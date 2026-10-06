@@ -38,11 +38,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 144
 - **Premium**: 142
 - **Ultimate**: 144
 
-Acciones de solo lectura: 59 de 144, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 59 de 144, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 58 de las 144.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                                                                 | Nivel    | Individual                                     |
 | -------------------------------------------------------------------------------------- | -------- | ---------------------------------------------- |
@@ -198,6 +198,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_config_change`
 - **Herramienta individual**: `gitlab_project_approval_config_change`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Approval Configuration: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                        | Tipo             | Requerido | Descripción                                                                                      |
@@ -219,6 +221,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_config_get`
 - **Herramienta individual**: `gitlab_project_approval_config_get`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Approval Configuration: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -232,6 +236,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_rule_create`
 - **Herramienta individual**: `gitlab_project_approval_rule_create`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Approval Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                           | Tipo                                                    | Requerido | Descripción                                                                                                                                                                                                                           |
@@ -254,6 +260,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_rule_delete`
 - **Herramienta individual**: `gitlab_project_approval_rule_delete`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Approval Rule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -268,6 +276,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_rule_get`
 - **Herramienta individual**: `gitlab_project_approval_rule_get`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Approval Rule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -282,6 +292,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_rule_list`
 - **Herramienta individual**: `gitlab_project_approval_rule_list`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Approval Rule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -301,6 +313,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `approval_rule_update`
 - **Herramienta individual**: `gitlab_project_approval_rule_update`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Approval Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                           | Tipo             | Requerido | Descripción                               |
@@ -322,6 +336,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `archive`
 - **Herramienta individual**: `gitlab_project_archive`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Archive en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -335,6 +351,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_add`
 - **Herramienta individual**: `gitlab_add_project_badge`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Badge: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                             |
@@ -351,6 +369,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_delete`
 - **Herramienta individual**: `gitlab_delete_project_badge`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Badge: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -365,6 +385,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_edit`
 - **Herramienta individual**: `gitlab_edit_project_badge`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Badge: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                            |
@@ -382,6 +404,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_get`
 - **Herramienta individual**: `gitlab_get_project_badge`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Badge: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -396,6 +420,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_list`
 - **Herramienta individual**: `gitlab_list_project_badges`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Badge: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -416,6 +442,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `badge_preview`
 - **Herramienta individual**: `gitlab_preview_project_badge`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Badge: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                       |
@@ -431,6 +459,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_create`
 - **Herramienta individual**: `gitlab_board_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -445,6 +475,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_delete`
 - **Herramienta individual**: `gitlab_board_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -459,6 +491,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_get`
 - **Herramienta individual**: `gitlab_board_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -473,6 +507,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list`
 - **Herramienta individual**: `gitlab_board_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -492,6 +528,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_create`
 - **Herramienta individual**: `gitlab_board_list_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                              |
@@ -510,6 +548,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_delete`
 - **Herramienta individual**: `gitlab_board_list_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -525,6 +565,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_get`
 - **Herramienta individual**: `gitlab_board_list_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción        |
@@ -540,6 +582,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_list`
 - **Herramienta individual**: `gitlab_board_list_lists`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -560,6 +604,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_list_update`
 - **Herramienta individual**: `gitlab_board_list_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción              |
@@ -576,6 +622,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `board_update`
 - **Herramienta individual**: `gitlab_board_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción             |
@@ -597,6 +645,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `create`
 - **Herramienta individual**: `gitlab_project_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                                                 | Tipo                                                                         | Requerido | Descripción                                                                                                                                                                                                          |
@@ -700,6 +750,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `create_for_user`
 - **Herramienta individual**: `gitlab_project_create_for_user`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                                                 | Tipo                                                                         | Requerido | Descripción                                                                                                                                                                                                          |
@@ -804,6 +856,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `create_fork_relation`
 - **Herramienta individual**: `gitlab_project_create_fork_relation`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Fork en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                          |
@@ -818,6 +872,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `delete`
 - **Herramienta individual**: `gitlab_project_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                                                                                                                              |
@@ -833,6 +889,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `delete_fork_relation`
 - **Herramienta individual**: `gitlab_project_delete_fork_relation`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Fork en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -846,6 +904,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `delete_shared_group`
 - **Herramienta individual**: `gitlab_project_delete_shared_group`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Share en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                             |
@@ -860,6 +920,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `dependency_firewall_evaluate`
 - **Herramienta individual**: `gitlab_project_dependency_firewall_evaluate`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Dependency Firewall Evaluation: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                                                                                                      | Requerido | Descripción                                                                                                                                                             |
@@ -876,6 +938,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `download_avatar`
 - **Herramienta individual**: `gitlab_project_download_avatar`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Avatar: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -889,6 +953,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `export_download`
 - **Herramienta individual**: `gitlab_download_project_export`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Export: Download en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -902,6 +968,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `export_schedule`
 - **Herramienta individual**: `gitlab_schedule_project_export`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Export: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro            | Tipo                     | Requerido | Descripción                                                                                          |
@@ -919,6 +987,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `export_status`
 - **Herramienta individual**: `gitlab_get_project_export_status`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Export: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -932,6 +1002,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `fork`
 - **Herramienta individual**: `gitlab_project_fork`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Fork en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                | Tipo                                       | Requerido | Descripción                                                                        |
@@ -954,6 +1026,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `get`
 - **Herramienta individual**: `gitlab_project_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                | Tipo             | Requerido | Descripción                                              |
@@ -970,6 +1044,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_add`
 - **Herramienta individual**: `gitlab_project_hook_add`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                      | Tipo             | Requerido | Descripción                                                          |
@@ -1011,6 +1087,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_delete`
 - **Herramienta individual**: `gitlab_project_hook_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1025,6 +1103,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_delete_custom_header`
 - **Herramienta individual**: `gitlab_project_hook_delete_custom_header`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                      |
@@ -1040,6 +1120,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_delete_url_variable`
 - **Herramienta individual**: `gitlab_project_hook_delete_url_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                     |
@@ -1055,6 +1137,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_edit`
 - **Herramienta individual**: `gitlab_project_hook_edit`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                      | Tipo             | Requerido | Descripción                                                          |
@@ -1097,6 +1181,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_get`
 - **Herramienta individual**: `gitlab_project_hook_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Webhook: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1111,6 +1197,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_list`
 - **Herramienta individual**: `gitlab_project_hook_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Webhook: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1130,6 +1218,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_set_custom_header`
 - **Herramienta individual**: `gitlab_project_hook_set_custom_header`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1146,6 +1236,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_set_url_variable`
 - **Herramienta individual**: `gitlab_project_hook_set_url_variable`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                |
@@ -1162,6 +1254,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `hook_test`
 - **Herramienta individual**: `gitlab_project_hook_test`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Webhook: Trigger en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo                                                                                                                                                                                                                                                                                                           | Requerido | Descripción                                                                                                                                                                                                                                                                                       |
@@ -1177,6 +1271,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `import_from_file`
 - **Herramienta individual**: `gitlab_import_project_from_file`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Import: Create en grupo o usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro         | Tipo      | Requerido | Descripción                                                                                                                                                                                                                                               |
@@ -1196,6 +1292,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `import_status`
 - **Herramienta individual**: `gitlab_get_project_import_status`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Import: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1213,6 +1311,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_delete`
 - **Herramienta individual**: `gitlab_delete_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Delete en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                       |
@@ -1231,6 +1331,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_delete_group`
 - **Herramienta individual**: `gitlab_delete_group_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Delete en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                                            |
@@ -1249,6 +1351,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_delete_group_datadog`
 - **Herramienta individual**: `gitlab_delete_group_datadog_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Delete en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -1266,6 +1370,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_get`
 - **Herramienta individual**: `gitlab_get_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Integration: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                       |
@@ -1284,6 +1390,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_get_group`
 - **Herramienta individual**: `gitlab_get_group_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Integration: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                                                                                                   |
@@ -1302,6 +1410,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_get_group_datadog`
 - **Herramienta individual**: `gitlab_get_group_datadog_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Integration: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -1319,6 +1429,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_list`
 - **Herramienta individual**: `gitlab_list_integrations`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Integration: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1336,6 +1448,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_list_group`
 - **Herramienta individual**: `gitlab_list_group_integrations`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Integration: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
@@ -1357,6 +1471,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_set`
 - **Herramienta individual**: `gitlab_set_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                   |
@@ -1378,6 +1494,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_set_group`
 - **Herramienta individual**: `gitlab_set_group_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                                                                                                                                             |
@@ -1397,6 +1515,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_set_group_datadog`
 - **Herramienta individual**: `gitlab_set_group_datadog_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                | Tipo             | Requerido | Descripción                                                                                                                  |
@@ -1423,6 +1543,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `integration_set_jira`
 - **Herramienta individual**: `gitlab_set_jira_integration`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                         | Tipo             | Requerido | Descripción                                                                                     |
@@ -1461,6 +1583,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_create`
 - **Herramienta individual**: `gitlab_label_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                    |
@@ -1479,6 +1603,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_delete`
 - **Herramienta individual**: `gitlab_label_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                    |
@@ -1494,6 +1620,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_get`
 - **Herramienta individual**: `gitlab_label_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Label: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1508,6 +1636,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_list`
 - **Herramienta individual**: `gitlab_label_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Label: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                 | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1530,6 +1660,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_promote`
 - **Herramienta individual**: `gitlab_label_promote`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Promote en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1544,6 +1676,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_subscribe`
 - **Herramienta individual**: `gitlab_label_subscribe`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Subscribe en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1558,6 +1692,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_unsubscribe`
 - **Herramienta individual**: `gitlab_label_unsubscribe`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Subscribe en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1572,6 +1708,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `label_update`
 - **Herramienta individual**: `gitlab_label_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Label: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                                                                    |
@@ -1592,6 +1730,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `languages`
 - **Herramienta individual**: `gitlab_project_languages`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1605,6 +1745,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list`
 - **Herramienta individual**: `gitlab_project_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                     | Tipo                                                                                                        | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1650,6 +1792,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_forks`
 - **Herramienta individual**: `gitlab_project_list_forks`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                     | Tipo                                                                                                        | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1696,6 +1840,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_groups`
 - **Herramienta individual**: `gitlab_project_list_groups`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                 | Tipo                     | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1720,6 +1866,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_invited_groups`
 - **Herramienta individual**: `gitlab_project_list_invited_groups`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                | Tipo                     | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1743,6 +1891,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_starrers`
 - **Herramienta individual**: `gitlab_project_list_starrers`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1763,6 +1913,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_user_contributed`
 - **Herramienta individual**: `gitlab_project_list_user_contributed`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                     | Tipo                                                                                                        | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1809,6 +1961,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_user_projects`
 - **Herramienta individual**: `gitlab_project_list_user_projects`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                     | Tipo                                                                                                        | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1855,6 +2009,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_user_starred`
 - **Herramienta individual**: `gitlab_project_list_user_starred`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                     | Tipo                                                                                                        | Requerido | Descripción                                                                                                                                                                                                      |
@@ -1901,6 +2057,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `list_users`
 - **Herramienta individual**: `gitlab_project_list_users`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -1921,6 +2079,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `member_add`
 - **Herramienta individual**: `gitlab_project_member_add`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Member: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                          |
@@ -1939,6 +2099,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `member_delete`
 - **Herramienta individual**: `gitlab_project_member_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Member: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                     |
@@ -1953,6 +2115,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `member_edit`
 - **Herramienta individual**: `gitlab_project_member_edit`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Member: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                              |
@@ -1970,6 +2134,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `member_get`
 - **Herramienta individual**: `gitlab_project_member_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Member: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1984,6 +2150,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `member_inherited`
 - **Herramienta individual**: `gitlab_project_member_get_inherited`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Member: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -1998,6 +2166,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `members`
 - **Herramienta individual**: `gitlab_project_members_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Member: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2020,6 +2190,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_create`
 - **Herramienta individual**: `gitlab_milestone_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
@@ -2037,6 +2209,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_delete`
 - **Herramienta individual**: `gitlab_milestone_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Read en proyecto; Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                             |
@@ -2051,6 +2225,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_get`
 - **Herramienta individual**: `gitlab_milestone_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                             |
@@ -2065,6 +2241,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_issues`
 - **Herramienta individual**: `gitlab_milestone_issues`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2085,6 +2263,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_list`
 - **Herramienta individual**: `gitlab_milestone_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                   | Tipo                          | Requerido | Descripción                                                                                                                                       |
@@ -2110,6 +2290,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_merge_requests`
 - **Herramienta individual**: `gitlab_milestone_merge_requests`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2130,6 +2312,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `milestone_update`
 - **Herramienta individual**: `gitlab_milestone_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Read en proyecto; Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo                           | Requerido | Descripción                                                             |
@@ -2149,6 +2333,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_add`
 - **Herramienta individual**: `gitlab_add_project_mirror`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Remote Mirror: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro                 | Tipo                                    | Requerido | Descripción                                                                                                                                                                                                                                                                           |
@@ -2169,6 +2355,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_delete`
 - **Herramienta individual**: `gitlab_delete_project_mirror`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Remote Mirror: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2183,6 +2371,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_edit`
 - **Herramienta individual**: `gitlab_edit_project_mirror`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Remote Mirror: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                 | Tipo                                    | Requerido | Descripción                                        |
@@ -2203,6 +2393,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_force_push`
 - **Herramienta individual**: `gitlab_force_push_mirror_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Remote Mirror: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2217,6 +2409,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_get`
 - **Herramienta individual**: `gitlab_get_project_mirror`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Remote Mirror: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2231,6 +2425,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_get_public_key`
 - **Herramienta individual**: `gitlab_get_project_mirror_public_key`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Remote Mirror Public Key: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2245,6 +2441,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `mirror_list`
 - **Herramienta individual**: `gitlab_list_project_mirrors`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Remote Mirror: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2264,6 +2462,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_create`
 - **Herramienta individual**: `gitlab_pages_domain_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pages Domain: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo             | Requerido | Descripción                                   |
@@ -2281,6 +2481,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_delete`
 - **Herramienta individual**: `gitlab_pages_domain_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pages Domain: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                     |
@@ -2295,6 +2497,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_get`
 - **Herramienta individual**: `gitlab_pages_domain_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pages Domain: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2309,6 +2513,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_list`
 - **Herramienta individual**: `gitlab_pages_domain_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pages Domain: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2328,6 +2534,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_list_all`
 - **Herramienta individual**: `gitlab_pages_domain_list_all`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pages Domain: Read en instancia ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo      | Requerido | Descripción                                                                                                           |
@@ -2342,6 +2550,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_domain_update`
 - **Herramienta individual**: `gitlab_pages_domain_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pages Domain: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo             | Requerido | Descripción                                   |
@@ -2359,6 +2569,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_get`
 - **Herramienta individual**: `gitlab_pages_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Page: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2372,6 +2584,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_unpublish`
 - **Herramienta individual**: `gitlab_pages_unpublish`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Page: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2385,6 +2599,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pages_update`
 - **Herramienta individual**: `gitlab_pages_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Page: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                     | Tipo             | Requerido | Descripción                    |
@@ -2401,6 +2617,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pull_mirror_configure`
 - **Herramienta individual**: `gitlab_project_pull_mirror_configure`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pull Mirror: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                             | Tipo             | Requerido | Descripción                                                                                                                                                                                        |
@@ -2423,6 +2641,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `pull_mirror_get`
 - **Herramienta individual**: `gitlab_project_pull_mirror_get`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Pull Mirror: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2436,6 +2656,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `push_rule_add`
 - **Herramienta individual**: `gitlab_project_add_push_rule`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Push Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                       | Tipo             | Requerido | Descripción                                                  |
@@ -2462,6 +2684,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `push_rule_delete`
 - **Herramienta individual**: `gitlab_project_delete_push_rule`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Push Rule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2475,6 +2699,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `push_rule_edit`
 - **Herramienta individual**: `gitlab_project_edit_push_rule`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Push Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                       | Tipo             | Requerido | Descripción                                                  |
@@ -2501,6 +2727,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `push_rule_get`
 - **Herramienta individual**: `gitlab_project_get_push_rules`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Push Rule: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2514,6 +2742,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `repository_storage_get`
 - **Herramienta individual**: `gitlab_project_repository_storage_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2527,6 +2757,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `restore`
 - **Herramienta individual**: `gitlab_project_restore`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                       |
@@ -2540,6 +2772,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `security_settings_get`
 - **Herramienta individual**: `gitlab_get_project_security_settings`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Security Setting: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2553,6 +2787,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `security_settings_update`
 - **Herramienta individual**: `gitlab_update_project_secret_push_protection`
 - **Nivel**: Ultimate
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Security Setting: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                        | Tipo             | Requerido | Descripción                              |
@@ -2567,6 +2803,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_create`
 - **Herramienta individual**: `gitlab_project_service_account_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2583,6 +2821,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_delete`
 - **Herramienta individual**: `gitlab_project_service_account_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                     |
@@ -2598,6 +2838,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_get`
 - **Herramienta individual**: `gitlab_project_service_account_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Service Account: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                    |
@@ -2612,6 +2854,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_list`
 - **Herramienta individual**: `gitlab_project_service_account_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Service Account: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -2631,6 +2875,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_pat_create`
 - **Herramienta individual**: `gitlab_project_service_account_pat_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account Personal Access Token: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                                  |
@@ -2649,6 +2895,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_pat_list`
 - **Herramienta individual**: `gitlab_project_service_account_pat_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Service Account Personal Access Token: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro            | Tipo                            | Requerido | Descripción                                                                                                                                       |
@@ -2679,6 +2927,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_pat_revoke`
 - **Herramienta individual**: `gitlab_project_service_account_pat_revoke`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account Personal Access Token: Revoke en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                        |
@@ -2694,6 +2944,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_pat_rotate`
 - **Herramienta individual**: `gitlab_project_service_account_pat_rotate`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account Personal Access Token: Rotate en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                              |
@@ -2710,6 +2962,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `service_account_update`
 - **Herramienta individual**: `gitlab_project_service_account_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Service Account: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro            | Tipo             | Requerido | Descripción                    |
@@ -2727,6 +2981,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `share_with_group`
 - **Herramienta individual**: `gitlab_project_share_with_group`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Share en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                                                                                                                                                                 |
@@ -2743,6 +2999,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `star`
 - **Herramienta individual**: `gitlab_project_star`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2756,6 +3014,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `start_housekeeping`
 - **Herramienta individual**: `gitlab_project_start_housekeeping`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2769,6 +3029,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `start_mirroring`
 - **Herramienta individual**: `gitlab_project_start_mirroring`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Pull Mirror: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2782,6 +3044,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `statistics_get`
 - **Herramienta individual**: `gitlab_get_project_statistics`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Statistic: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2795,6 +3059,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `target_branch_rule_create`
 - **Herramienta individual**: `gitlab_project_create_target_branch_rule`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `ProjectTargetBranchRule` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro       | Tipo             | Requerido | Descripción                                                                           |
@@ -2810,6 +3076,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `target_branch_rule_delete`
 - **Herramienta individual**: `gitlab_project_delete_target_branch_rule`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Target Branch Rule: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo      | Requerido | Descripción                                            |
@@ -2823,6 +3091,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `target_branch_rule_list`
 - **Herramienta individual**: `gitlab_project_list_target_branch_rules`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `ProjectTargetBranchRule`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                  |
@@ -2836,6 +3106,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `transfer`
 - **Herramienta individual**: `gitlab_project_transfer`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Transfer en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2850,6 +3122,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `unarchive`
 - **Herramienta individual**: `gitlab_project_unarchive`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Archive en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2863,6 +3137,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `unstar`
 - **Herramienta individual**: `gitlab_project_unstar`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -2876,6 +3152,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `update`
 - **Herramienta individual**: `gitlab_project_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                                                 | Tipo                                                                         | Requerido | Descripción                                                                                                                                                                                                          |
@@ -2995,6 +3273,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `upload`
 - **Herramienta individual**: `gitlab_project_upload`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Markdown Upload: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                                 |
@@ -3011,6 +3291,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `upload_avatar`
 - **Herramienta individual**: `gitlab_project_upload_avatar`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                                       |
@@ -3027,6 +3309,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `upload_delete`
 - **Herramienta individual**: `gitlab_project_upload_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Markdown Upload: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
@@ -3041,6 +3325,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `upload_delete_by_secret`
 - **Herramienta individual**: `gitlab_project_upload_delete_by_secret`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Markdown Upload: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                       |
@@ -3056,6 +3342,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_project`, acción `upload_list`
 - **Herramienta individual**: `gitlab_project_upload_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Markdown Upload: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |

@@ -28,11 +28,11 @@ Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas 
 
 Necesita un cliente que admita la [elicitación](/gitlab-mcp-server/capabilities/elicitation/) de MCP, por la que cada acción hace sus preguntas.
 
-Acciones de solo lectura: 0 de 4, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 0 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 0 de las 4.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                                     | Individual                          |
 | ---------------------------------------------------------- | ----------------------------------- |
@@ -68,6 +68,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_interactive_issue_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_issue_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                    |
@@ -104,6 +106,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_interactive_mr_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_mr_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                 |
@@ -138,6 +142,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_interactive_project_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_project_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Create en usuario ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 Sin parámetros.
@@ -168,6 +174,8 @@ Sin parámetros.
 - **Meta-herramienta**: `gitlab_interactive_release_create`, una herramienta propia
 - **Herramienta individual**: `gitlab_interactive_release_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Release: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#interactive))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                      |

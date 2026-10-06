@@ -27,11 +27,11 @@ Las plantillas que trae GitLab: YAML de CI/CD, Dockerfiles, archivos `.gitignore
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 12 de 12, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 12 de 12, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 11 de las 12.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                                             | Individual                         |
 | ------------------------------------------------------------------ | ---------------------------------- |
@@ -55,6 +55,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `ci_yml_get`
 - **Herramienta individual**: `gitlab_get_ci_yml_template`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                    |
@@ -68,6 +70,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `ci_yml_list`
 - **Herramienta individual**: `gitlab_list_ci_yml_templates`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -86,6 +90,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `dockerfile_get`
 - **Herramienta individual**: `gitlab_get_dockerfile_template`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción  |
@@ -99,6 +105,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `dockerfile_list`
 - **Herramienta individual**: `gitlab_list_dockerfile_templates`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -117,6 +125,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `gitignore_get`
 - **Herramienta individual**: `gitlab_get_gitignore_template`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                          |
@@ -130,6 +140,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `gitignore_list`
 - **Herramienta individual**: `gitlab_list_gitignore_templates`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -148,6 +160,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `license_get`
 - **Herramienta individual**: `gitlab_get_license_template`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo     | Requerido | Descripción                                 |
@@ -163,6 +177,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `license_list`
 - **Herramienta individual**: `gitlab_list_license_templates`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -182,6 +198,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `lint`
 - **Herramienta individual**: `gitlab_ci_lint`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: CI Config: Validate en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                                        |
@@ -199,6 +217,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `lint_project`
 - **Herramienta individual**: `gitlab_ci_lint_project`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: CI Config: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro      | Tipo             | Requerido | Descripción                                           |
@@ -217,6 +237,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `project_template_get`
 - **Herramienta individual**: `gitlab_get_project_template`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                    |
@@ -232,6 +254,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_template`, acción `project_template_list`
 - **Herramienta individual**: `gitlab_list_project_templates`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Template: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#template))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                                                                                             | Requerido | Descripción                                                                                                                                       |

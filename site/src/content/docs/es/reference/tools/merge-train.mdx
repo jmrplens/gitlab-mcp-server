@@ -31,11 +31,11 @@ Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 4:
 - **Premium**: 4
 - **Ultimate**: 4
 
-Acciones de solo lectura: 3 de 4, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 3 de 4, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 3 de las 4.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                                 | Individual                                 |
 | ------------------------------------------------------ | ------------------------------------------ |
@@ -51,6 +51,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_merge_train`, acción `add`
 - **Herramienta individual**: `gitlab_add_merge_request_to_merge_train`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Train Merge Request: Add en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_train))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                | Tipo             | Requerido | Descripción                                                                        |
@@ -69,6 +71,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_merge_train`, acción `get`
 - **Herramienta individual**: `gitlab_get_merge_request_on_merge_train`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Train: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_train))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -83,6 +87,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_merge_train`, acción `list_branch`
 - **Herramienta individual**: `gitlab_list_merge_request_in_merge_train`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Train: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_train))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo                            | Requerido | Descripción                                                                                                                                       |
@@ -104,6 +110,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_merge_train`, acción `list_project`
 - **Herramienta individual**: `gitlab_list_project_merge_trains`
 - **Nivel**: Premium
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Train: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_train))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                            | Requerido | Descripción                                                                                                                                       |

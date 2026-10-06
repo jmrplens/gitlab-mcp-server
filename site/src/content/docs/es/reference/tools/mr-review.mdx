@@ -30,11 +30,11 @@ Aprobar, fusionar y el resto del ciclo de vida del merge request están en [Merg
 
 Todos los niveles sirven el grupo completo, tanto en instancias autogestionadas como en GitLab.com.
 
-Acciones de solo lectura: 10 de 23, las que conserva un despliegue en modo de solo lectura.
+Acciones de solo lectura: 10 de 23, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 10 de las 23.
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.4.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).
 
 | Acción                                                                 | Individual                         |
 | ---------------------------------------------------------------------- | ---------------------------------- |
@@ -69,6 +69,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `changes_get`
 - **Herramienta individual**: `gitlab_mr_changes_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -90,6 +92,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `diff_version_get`
 - **Herramienta individual**: `gitlab_mr_diff_version_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                          |
@@ -106,6 +110,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `diff_versions_list`
 - **Herramienta individual**: `gitlab_mr_diff_versions_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -126,6 +132,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_create`
 - **Herramienta individual**: `gitlab_mr_discussion_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                                 |
@@ -144,6 +152,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_get`
 - **Herramienta individual**: `gitlab_mr_discussion_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -159,6 +169,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_list`
 - **Herramienta individual**: `gitlab_mr_discussion_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -179,6 +191,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_note_delete`
 - **Herramienta individual**: `gitlab_mr_discussion_note_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -195,6 +209,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_note_update`
 - **Herramienta individual**: `gitlab_mr_discussion_note_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                           |
@@ -214,6 +230,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_reply`
 - **Herramienta individual**: `gitlab_mr_discussion_reply`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                                                           |
@@ -231,6 +249,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `discussion_resolve`
 - **Herramienta individual**: `gitlab_mr_discussion_resolve`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -247,6 +267,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_create`
 - **Herramienta individual**: `gitlab_mr_draft_note_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                   | Tipo             | Requerido | Descripción                                                                        |
@@ -266,6 +288,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_delete`
 - **Herramienta individual**: `gitlab_mr_draft_note_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -281,6 +305,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_get`
 - **Herramienta individual**: `gitlab_mr_draft_note_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -296,6 +322,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_list`
 - **Herramienta individual**: `gitlab_mr_draft_note_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                     | Requerido | Descripción                                                                                                                                       |
@@ -316,6 +344,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_publish`
 - **Herramienta individual**: `gitlab_mr_draft_note_publish`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |
@@ -331,6 +361,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_publish_all`
 - **Herramienta individual**: `gitlab_mr_draft_note_publish_all`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo                                       | Requerido | Descripción                                                                                                                                     |
@@ -348,6 +380,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `draft_note_update`
 - **Herramienta individual**: `gitlab_mr_draft_note_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Merge Request: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                               |
@@ -365,6 +399,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `note_create`
 - **Herramienta individual**: `gitlab_mr_note_create`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Create en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                     | Tipo             | Requerido | Descripción                                                                                                                                             |
@@ -383,6 +419,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `note_delete`
 - **Herramienta individual**: `gitlab_mr_note_delete`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Delete en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -398,6 +436,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `note_get`
 - **Herramienta individual**: `gitlab_mr_note_get`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -413,6 +453,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `note_list`
 - **Herramienta individual**: `gitlab_mr_notes_list`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Work Item: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo                                  | Requerido | Descripción                                                                                                                                       |
@@ -433,6 +475,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `note_update`
 - **Herramienta individual**: `gitlab_mr_note_update`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Work Item: Update en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                                                |
@@ -449,6 +493,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_mr_review`, acción `raw_diffs`
 - **Herramienta individual**: `gitlab_mr_raw_diffs`
 - **Nivel**: Free
+- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token de grano fino**: Merge Request: Read en proyecto ([página de permisos](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro           | Tipo             | Requerido | Descripción                    |

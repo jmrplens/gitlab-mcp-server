@@ -30,11 +30,11 @@ Branch management in one project: read and list branches, create one from a bran
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 5 of 11, the ones a deployment in read-only mode keeps.
+Read-only actions: 5 of 11, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 5 of the 11.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
 
 | Action                                               | Individual                       |
 | ---------------------------------------------------- | -------------------------------- |
@@ -57,6 +57,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `create`
 - **Individual tool**: `gitlab_branch_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Branch: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type             | Mandatory | Description                                                  |
@@ -72,6 +74,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `delete`
 - **Individual tool**: `gitlab_branch_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Branch: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -86,6 +90,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `delete_merged`
 - **Individual tool**: `gitlab_branch_delete_merged`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Branch: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -99,6 +105,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `get`
 - **Individual tool**: `gitlab_branch_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Branch: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                                                |
@@ -113,6 +121,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `get_protected`
 - **Individual tool**: `gitlab_protected_branch_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Branch: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: read-only, idempotent
 
 | Parameter     | Type             | Mandatory | Description                    |
@@ -127,6 +137,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `list`
 - **Individual tool**: `gitlab_branch_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Branch: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -148,6 +160,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `list_protected`
 - **Individual tool**: `gitlab_protected_branches_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Protected Branch: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -168,6 +182,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `protect`
 - **Individual tool**: `gitlab_branch_protect`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Branch: Protect at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, idempotent
 
 | Parameter                                | Type                              | Mandatory | Description                                                                                                                                           |
@@ -190,6 +206,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `rule_list`
 - **Individual tool**: `gitlab_list_branch_rules`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `BranchRule`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: read-only, idempotent
 
 | Parameter      | Type      | Mandatory | Description                                                       |
@@ -205,6 +223,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `unprotect`
 - **Individual tool**: `gitlab_branch_unprotect`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Branch: Protect at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter     | Type             | Mandatory | Description                            |
@@ -219,6 +239,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_branch`, action `update_protected`
 - **Individual tool**: `gitlab_protected_branch_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Protected Branch: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#branch))
 - **Behavior**: writes, idempotent
 
 | Parameter                                | Type             | Mandatory | Description                                                                         |

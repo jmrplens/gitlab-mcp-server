@@ -27,11 +27,11 @@ Snippets are pieces of code or text kept outside a repository. Personal snippets
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 17 of 34, the ones a deployment in read-only mode keeps.
+Read-only actions: 17 of 34, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 17 of the 34.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)). A parameter followed by a tier in parentheses is served only from that tier on.
 
 | Action                                                                   | Individual                              |
 | ------------------------------------------------------------------------ | --------------------------------------- |
@@ -77,6 +77,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_snippet`, action `content`
 - **Individual tool**: `gitlab_snippet_content`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type      | Mandatory | Description |
@@ -90,6 +92,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_snippet`, action `create`
 - **Individual tool**: `gitlab_snippet_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Create at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type                                       | Mandatory | Description                                                                |
@@ -110,6 +114,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `delete`
 - **Individual tool**: `gitlab_snippet_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Delete at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type      | Mandatory | Description |
@@ -123,6 +129,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_add_note`
 - **Individual tool**: `gitlab_add_snippet_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -140,6 +148,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_create`
 - **Individual tool**: `gitlab_create_snippet_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                 |
@@ -156,6 +166,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_delete_note`
 - **Individual tool**: `gitlab_delete_snippet_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -172,6 +184,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_get`
 - **Individual tool**: `gitlab_get_snippet_discussion`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description                    |
@@ -187,6 +201,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_list`
 - **Individual tool**: `gitlab_list_snippet_discussions`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -207,6 +223,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `discussion_update_note`
 - **Individual tool**: `gitlab_update_snippet_discussion_note`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type             | Mandatory | Description                                                                                           |
@@ -225,6 +243,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_create`
 - **Individual tool**: `gitlab_snippet_emoji_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                               |
@@ -240,6 +260,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_delete`
 - **Individual tool**: `gitlab_snippet_emoji_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -255,6 +277,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_get`
 - **Individual tool**: `gitlab_snippet_emoji_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -270,6 +294,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_list`
 - **Individual tool**: `gitlab_snippet_emoji_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -290,6 +316,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_note_create`
 - **Individual tool**: `gitlab_snippet_note_emoji_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                               |
@@ -306,6 +334,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_note_delete`
 - **Individual tool**: `gitlab_snippet_note_emoji_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -322,6 +352,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_note_get`
 - **Individual tool**: `gitlab_snippet_note_emoji_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -338,6 +370,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `emoji_snippet_note_list`
 - **Individual tool**: `gitlab_snippet_note_emoji_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -359,6 +393,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `explore`
 - **Individual tool**: `gitlab_snippet_explore`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -377,6 +413,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `file_content`
 - **Individual tool**: `gitlab_snippet_file_content`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type      | Mandatory | Description                          |
@@ -392,6 +430,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `get`
 - **Individual tool**: `gitlab_snippet_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type      | Mandatory | Description |
@@ -405,6 +445,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `list`
 - **Individual tool**: `gitlab_snippet_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -423,6 +465,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `list_all`
 - **Individual tool**: `gitlab_snippet_list_all`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter                      | Type                     | Mandatory | Description                                                                                                                                       |
@@ -444,6 +488,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `note_create`
 - **Individual tool**: `gitlab_snippet_note_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                                                             |
@@ -460,6 +506,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `note_delete`
 - **Individual tool**: `gitlab_snippet_note_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -475,6 +523,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `note_get`
 - **Individual tool**: `gitlab_snippet_note_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -490,6 +540,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `note_list`
 - **Individual tool**: `gitlab_snippet_note_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Work Item: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                  | Mandatory | Description                                                                                                                                       |
@@ -510,6 +562,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `note_update`
 - **Individual tool**: `gitlab_snippet_note_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, idempotent
 
 | Parameter    | Type             | Mandatory | Description                            |
@@ -526,6 +580,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_content`
 - **Individual tool**: `gitlab_project_snippet_content`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -540,6 +596,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_create`
 - **Individual tool**: `gitlab_project_snippet_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, not idempotent
 
 | Parameter     | Type                                       | Mandatory | Description                                                                |
@@ -561,6 +619,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_delete`
 - **Individual tool**: `gitlab_project_snippet_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -575,6 +635,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_get`
 - **Individual tool**: `gitlab_project_snippet_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -589,6 +651,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_list`
 - **Individual tool**: `gitlab_project_snippet_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Snippet: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -608,6 +672,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `project_update`
 - **Individual tool**: `gitlab_project_snippet_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type                                       | Mandatory | Description                                               |
@@ -628,6 +694,8 @@ Also needs at least one of: `file_name` and `content`; `files`.
 - **Meta-tool**: `gitlab_snippet`, action `update`
 - **Individual tool**: `gitlab_snippet_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Snippet: Update at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#snippet))
 - **Behavior**: writes, idempotent
 
 | Parameter     | Type                                       | Mandatory | Description                                               |

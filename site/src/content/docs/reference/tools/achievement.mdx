@@ -30,11 +30,11 @@ Revoking an award keeps it on record and marks it revoked, `achievement.user_ach
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 4 of 12, the ones a deployment in read-only mode keeps.
+Read-only actions: 4 of 12, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 4 of the 12.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                         | Individual                                    |
 | ------------------------------------------------------------------------------ | --------------------------------------------- |
@@ -58,6 +58,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `award`
 - **Individual tool**: `gitlab_achievement_award`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, not idempotent
 
 | Parameter        | Type      | Mandatory | Description                                          |
@@ -73,6 +75,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `create`
 - **Individual tool**: `gitlab_achievement_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Achievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, not idempotent
 
 | Parameter               | Type      | Mandatory | Description                                                                                                                                                                                                                                |
@@ -92,6 +96,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `delete`
 - **Individual tool**: `gitlab_achievement_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Achievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                          |
@@ -105,6 +111,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `list`
 - **Individual tool**: `gitlab_achievement_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: read-only, idempotent
 
 | Parameter   | Type        | Mandatory | Description                                                                                                                             |
@@ -123,6 +131,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `recipients`
 - **Individual tool**: `gitlab_achievement_recipients`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                                                                             |
@@ -141,6 +151,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `revoke`
 - **Individual tool**: `gitlab_achievement_revoke`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter             | Type      | Mandatory | Description                                                                    |
@@ -154,6 +166,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `unique_users`
 - **Individual tool**: `gitlab_achievement_unique_users`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                                                                             |
@@ -172,6 +186,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `update`
 - **Individual tool**: `gitlab_achievement_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `Achievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, idempotent
 
 | Parameter               | Type      | Mandatory | Description                                                                                                                                                                                                                                |
@@ -191,6 +207,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `user_achievement_delete`
 - **Individual tool**: `gitlab_achievement_user_achievement_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter             | Type      | Mandatory | Description                                                                                  |
@@ -204,6 +222,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `user_achievement_reorder`
 - **Individual tool**: `gitlab_achievement_user_achievement_reorder`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, idempotent
 
 | Parameter              | Type        | Mandatory | Description                                                                                                          |
@@ -217,6 +237,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `user_achievement_update`
 - **Individual tool**: `gitlab_achievement_user_achievement_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement` in the answer, so the write commits and its answer is lost ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: writes, idempotent
 
 | Parameter             | Type      | Mandatory | Description                                                                                         |
@@ -231,6 +253,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_achievement`, action `user_list`
 - **Individual tool**: `gitlab_achievement_user_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Not reachable at this release: GitLab declares no fine-grained permission for `UserAchievement`, which the answer is made of ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#achievement))
 - **Behavior**: read-only, idempotent
 
 | Parameter        | Type      | Mandatory | Description                                                                                                                             |

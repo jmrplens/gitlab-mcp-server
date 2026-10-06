@@ -9,9 +9,11 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -25,8 +27,23 @@ func schemaOf(required []string, names ...string) map[string]any {
 	return map[string]any{"type": "object", "properties": props, "required": required}
 }
 
+// testGrants is the table the synthetic actions' rows point into: one read
+// of a widget, granted at project, as GitLab 19.4.1 records it.
+func testGrants() *finegrained.Table {
+	return &finegrained.Table{
+		Version:     "19.4.1-ee",
+		Permissions: []string{"read_widget"},
+		Displays:    []string{"", "Widget: Read"},
+		Display:     []uint16{1},
+		Groups:      []finegrained.Group{{Perms: []uint16{0}, Any: finegrained.BoundaryProject}},
+		Operations:  []finegrained.Operation{{Name: "GET /widgets", Groups: []uint32{0}, Classic: finegrained.ClassicReadAPI}},
+	}
+}
+
 // testAction is an action named name whose individual tool is tool, with the
-// changes edit makes.
+// changes edit makes. Unless edit gives it a row of its own, its row in the
+// grants table reads a widget and needs read_api when the action reads and
+// api when it writes, which is what the generator derives for most actions.
 func testAction(name, tool string, edit func(*actioncatalog.Action)) actioncatalog.Action {
 	action := actioncatalog.Action{
 		Name:           name,
@@ -35,6 +52,13 @@ func testAction(name, tool string, edit func(*actioncatalog.Action)) actioncatal
 	}
 	if edit != nil {
 		edit(&action)
+	}
+	if action.FineGrained == nil {
+		classic := finegrained.ClassicAPI
+		if action.ReadOnly {
+			classic = finegrained.ClassicReadAPI
+		}
+		action.FineGrained = &finegrained.Requirement{Classic: classic, Paths: [][]uint32{{0}}}
 	}
 	return action
 }
@@ -133,7 +157,7 @@ func testSurfaces() surfaceNames {
 // testReference assembles the synthetic builds, failing the test on an error.
 func testReference(t *testing.T) reference {
 	t.Helper()
-	ref, err := assemble(testBuilds(t), testSurfaces(), map[string][]string{"gitlab_widget": {"admin_mode"}})
+	ref, err := assemble(testBuilds(t), testSurfaces(), map[string][]string{"gitlab_widget": {"admin_mode"}}, testGrants(), nil)
 	if err != nil {
 		t.Fatalf("assemble() error = %v", err)
 	}
@@ -269,7 +293,7 @@ func TestAssemble_UnregisteredTool_IsRefused(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			surfaces := testSurfaces()
 			tt.surface(surfaces)
-			_, err := assemble(testBuilds(t), surfaces, nil)
+			_, err := assemble(testBuilds(t), surfaces, nil, testGrants(), nil)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("assemble() error = %v, want it to say %s", err, tt.want)
 			}
@@ -280,12 +304,76 @@ func TestAssemble_UnregisteredTool_IsRefused(t *testing.T) {
 func TestAssemble_ActionWithoutIndividualTool_IsServedOnTheOtherSurfaces(t *testing.T) {
 	probe := testAction("probe", "", nil)
 	catalog := testCatalog(t, testGroup("gitlab_widget", actioncatalog.SurfaceKindMetaGroup, nil, probe))
-	ref, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaceNames{meta: map[string]bool{"gitlab_widget": true}}, nil)
+	ref, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaceNames{meta: map[string]bool{"gitlab_widget": true}}, nil, testGrants(), nil)
 	if err != nil {
 		t.Fatalf("assemble() error = %v", err)
 	}
 	if got := ref.groups[0].actions[0].individual; got != "" {
 		t.Errorf("individual = %q, want none", got)
+	}
+}
+
+// TestAssemble_ActionTheGrantsTableHoldsNoClassicScopeFor_IsRefused verifies
+// an action whose row is missing, or holds no classic scope, stops the run
+// and says which command fills it in, rather than printing a token line that
+// would be a guess: the catalog gains an action before the table is
+// regenerated for it, and the pages are generated from both.
+func TestAssemble_ActionTheGrantsTableHoldsNoClassicScopeFor_IsRefused(t *testing.T) {
+	cases := []struct {
+		name string
+		row  *finegrained.Requirement
+	}{
+		{name: "no row"},
+		{name: "unknown scope", row: &finegrained.Requirement{Paths: [][]uint32{{0}}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := actioncatalog.Action{
+				Name:           "probe",
+				Route:          toolutil.ActionRoute{InputSchema: schemaOf(nil)},
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_probe"},
+				FineGrained:    tc.row,
+			}
+			catalog := testCatalog(t, testGroup("gitlab_widget", actioncatalog.SurfaceKindMetaGroup, nil, probe))
+			surfaces := surfaceNames{meta: map[string]bool{"gitlab_widget": true}, individual: map[string]bool{"gitlab_widget_probe": true}}
+			_, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaces, nil, testGrants(), nil)
+			if err == nil || !strings.Contains(err.Error(), "widget.probe: the action grants table holds no classic scope for it; run make gen-action-grants first") {
+				t.Errorf("assemble() error = %v, want the action named and the generator to run", err)
+			}
+		})
+	}
+}
+
+// TestAssemble_SyntheticBuilds_ReadsEachActionsTokenRequirements verifies an
+// action carries what its row says a token needs: the classic scope, the
+// scopes its group demands beside it, the fine-grained description of its
+// row in the table, and the domain it is filed under on the permissions page,
+// and the reference carries the release the table was recorded from.
+func TestAssemble_SyntheticBuilds_ReadsEachActionsTokenRequirements(t *testing.T) {
+	ref := testReference(t)
+	if ref.version != "19.4.1" {
+		t.Errorf("version = %q, want the table's release without its edition", ref.version)
+	}
+	tests := []struct {
+		id      string
+		classic finegrained.ClassicScope
+		scopes  []string
+		domain  string
+	}{
+		{id: "widget.list", classic: finegrained.ClassicReadAPI, scopes: []string{"admin_mode"}, domain: "widget"},
+		{id: "widget.create", classic: finegrained.ClassicAPI, scopes: []string{"admin_mode"}, domain: "widget"},
+		{id: "helper.resolve", classic: finegrained.ClassicReadAPI, domain: "helper"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			action := actionByID(t, ref, tt.id)
+			if action.classic != tt.classic || !slices.Equal(action.scopes, tt.scopes) || action.domain != tt.domain {
+				t.Errorf("classic, scopes, domain = %s, %v, %q, want %s, %v, %q", action.classic, action.scopes, action.domain, tt.classic, tt.scopes, tt.domain)
+			}
+			if action.fineGrained == nil || len(action.fineGrained.AnyOf) != 1 || action.fineGrained.AnyOf[0].Needs[0].Permissions[0] != "Widget: Read" {
+				t.Errorf("fineGrained = %+v, want the widget read the row names", action.fineGrained)
+			}
+		})
 	}
 }
 
@@ -314,7 +402,7 @@ var realReference = sync.OnceValues(func() (reference, error) {
 	if err != nil {
 		return reference{}, err
 	}
-	return assemble(builds, defaultSurfaces(), gitlabtools.MetaToolScopes)
+	return assemble(builds, defaultSurfaces(), gitlabtools.MetaToolScopes, actiongrants.Table(), oauthRefusedRoutes)
 })
 
 // mustRealReference is realReference, failing the test on an error.

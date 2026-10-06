@@ -34,11 +34,11 @@ Protection rules restrict who may push or delete packages and container images: 
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 12 of 30, the ones a deployment in read-only mode keeps.
+Read-only actions: 12 of 30, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 13 of the 30.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                                 | Individual                              |
 | ---------------------------------------------------------------------- | --------------------------------------- |
@@ -80,6 +80,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `delete`
 - **Individual tool**: `gitlab_package_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -94,6 +96,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `download`
 - **Individual tool**: `gitlab_package_download`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, idempotent
 
 | Parameter         | Type             | Mandatory | Description                                                                                                                                                                                                                                                              |
@@ -111,6 +115,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `file_delete`
 - **Individual tool**: `gitlab_package_file_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter         | Type             | Mandatory | Description                    |
@@ -126,6 +132,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `file_list`
 - **Individual tool**: `gitlab_package_file_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                                       | Mandatory | Description                                                                                                                                       |
@@ -146,6 +154,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `get`
 - **Individual tool**: `gitlab_package_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                  |
@@ -160,6 +170,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `group_list`
 - **Individual tool**: `gitlab_list_group_packages`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter             | Type                                                                                                             | Mandatory | Description                                                                                                                                       |
@@ -184,6 +196,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `list`
 - **Individual tool**: `gitlab_package_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter             | Type                                                                                                             | Mandatory | Description                                                                                                                                       |
@@ -208,6 +222,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `protection_rule_create`
 - **Individual tool**: `gitlab_create_package_protection_rule`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                                                                                       |
@@ -225,6 +241,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `protection_rule_delete`
 - **Individual tool**: `gitlab_delete_package_protection_rule`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                    |
@@ -239,6 +257,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `protection_rule_list`
 - **Individual tool**: `gitlab_list_package_protection_rules`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Package: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -258,6 +278,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `protection_rule_update`
 - **Individual tool**: `gitlab_update_package_protection_rule`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                                                                                       |
@@ -276,6 +298,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `publish`
 - **Individual tool**: `gitlab_package_publish`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter         | Type                           | Mandatory | Description                                                                                                                  |
@@ -296,6 +320,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `publish_and_link`
 - **Individual tool**: `gitlab_package_publish_and_link`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Create at project; Release Link: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter         | Type                                              | Mandatory | Description                                                                                                                     |
@@ -318,6 +344,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `publish_directory`
 - **Individual tool**: `gitlab_package_publish_directory`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Package: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter         | Type                           | Mandatory | Description                                                                                                                                                             |
@@ -336,6 +364,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_delete`
 - **Individual tool**: `gitlab_registry_delete_repository`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description            |
@@ -350,6 +380,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_get`
 - **Individual tool**: `gitlab_registry_get_repository`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type      | Mandatory | Description                    |
@@ -365,6 +397,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_list_group`
 - **Individual tool**: `gitlab_registry_list_group`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -384,6 +418,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_list_project`
 - **Individual tool**: `gitlab_registry_list_project`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -405,6 +441,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_rule_create`
 - **Individual tool**: `gitlab_registry_protection_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository Protection Rule: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                |
@@ -421,6 +459,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_rule_delete`
 - **Individual tool**: `gitlab_registry_protection_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository Protection Rule: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -435,6 +475,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_rule_list`
 - **Individual tool**: `gitlab_registry_protection_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository Protection Rule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -448,6 +490,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_rule_update`
 - **Individual tool**: `gitlab_registry_protection_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository Protection Rule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                |
@@ -465,6 +509,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_delete`
 - **Individual tool**: `gitlab_registry_delete_tag`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description            |
@@ -480,6 +526,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_delete_bulk`
 - **Individual tool**: `gitlab_registry_delete_tags_bulk`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Repository: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                     |
@@ -499,6 +547,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_get`
 - **Individual tool**: `gitlab_registry_get_tag`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type             | Mandatory | Description            |
@@ -514,6 +564,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_list`
 - **Individual tool**: `gitlab_registry_list_tags`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter       | Type                     | Mandatory | Description                                                                                                                                       |
@@ -534,6 +586,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_rule_create`
 - **Individual tool**: `gitlab_registry_tag_protection_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Registry Protection Tag Rule: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, not idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                                                                                               |
@@ -550,6 +604,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_rule_delete`
 - **Individual tool**: `gitlab_registry_tag_protection_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Registry Protection Tag Rule: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description            |
@@ -564,6 +620,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_rule_list`
 - **Individual tool**: `gitlab_registry_tag_protection_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Container Registry Protection Tag Rule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type             | Mandatory | Description        |
@@ -577,6 +635,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_package`, action `registry_tag_rule_update`
 - **Individual tool**: `gitlab_registry_tag_protection_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Container Registry Protection Tag Rule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, idempotent
 
 | Parameter                         | Type             | Mandatory | Description                                                             |

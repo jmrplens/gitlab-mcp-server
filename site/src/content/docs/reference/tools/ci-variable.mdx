@@ -27,11 +27,11 @@ CI/CD variables at the three scopes GitLab keeps them: a project, a group and th
 
 Every tier serves the whole group, on self-managed instances and on GitLab.com alike.
 
-Read-only actions: 6 of 15, the ones a deployment in read-only mode keeps.
+Read-only actions: 6 of 15, the ones a deployment in read-only mode keeps. A token with `read_api` and not `api` is served 6 of the 15.
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.4.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                       | Individual                        |
 | ------------------------------------------------------------ | --------------------------------- |
@@ -58,6 +58,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `create`
 - **Individual tool**: `gitlab_ci_variable_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type                         | Mandatory | Description                            |
@@ -80,6 +82,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `delete`
 - **Individual tool**: `gitlab_ci_variable_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Delete at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                   |
@@ -96,6 +100,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `get`
 - **Individual tool**: `gitlab_ci_variable_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                   |
@@ -112,6 +118,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `group_create`
 - **Individual tool**: `gitlab_group_variable_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Create at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, not idempotent
 
 | Parameter           | Type                         | Mandatory | Description                            |
@@ -134,6 +142,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `group_delete`
 - **Individual tool**: `gitlab_group_variable_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Delete at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                   |
@@ -150,6 +160,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `group_get`
 - **Individual tool**: `gitlab_group_variable_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter           | Type             | Mandatory | Description                                                                                   |
@@ -166,6 +178,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `group_list`
 - **Individual tool**: `gitlab_group_variable_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -185,6 +199,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `group_update`
 - **Individual tool**: `gitlab_group_variable_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type                         | Mandatory | Description                                                                                   |
@@ -207,6 +223,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `instance_create`
 - **Individual tool**: `gitlab_instance_variable_create`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, not idempotent
 
 | Parameter       | Type                         | Mandatory | Description                            |
@@ -226,6 +244,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `instance_delete`
 - **Individual tool**: `gitlab_instance_variable_delete`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Delete at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter | Type     | Mandatory | Description       |
@@ -239,6 +259,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `instance_get`
 - **Individual tool**: `gitlab_instance_variable_get`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter | Type     | Mandatory | Description       |
@@ -252,6 +274,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `instance_list`
 - **Individual tool**: `gitlab_instance_variable_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -270,6 +294,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `instance_update`
 - **Individual tool**: `gitlab_instance_variable_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
 | Parameter       | Type                         | Mandatory | Description                            |
@@ -289,6 +315,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `list`
 - **Individual tool**: `gitlab_ci_variable_list`
 - **Tier**: Free
+- **Classic or OAuth token**: `read_api` (or `api`)
+- **Fine-grained token**: Variable: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: read-only, idempotent
 
 | Parameter    | Type                     | Mandatory | Description                                                                                                                                       |
@@ -308,6 +336,8 @@ The description of each action, and of each of its parameters, is the text the s
 - **Meta-tool**: `gitlab_ci_variable`, action `update`
 - **Individual tool**: `gitlab_ci_variable_update`
 - **Tier**: Free
+- **Classic or OAuth token**: `api`
+- **Fine-grained token**: Variable: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#ci_variable))
 - **Behavior**: writes, idempotent
 
 | Parameter           | Type                         | Mandatory | Description                                                                                   |
