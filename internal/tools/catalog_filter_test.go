@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -82,22 +83,53 @@ func mustFilterCatalog(t *testing.T, catalog *actioncatalog.Catalog, cfg *config
 	return filtered, withheld
 }
 
+// readAPIConfig is the configuration a credential carrying read_api and not
+// api is served with, after NarrowToTokenScope.
+func readAPIConfig() *config.ServerConfig {
+	return &config.ServerConfig{ReadAPIOnly: true, TokenScopes: []string{"read_api"}}
+}
+
+// scopeWithheldIDs lists the keys of the token-scope bookkeeping.
+func scopeWithheldIDs(withheld []actioncatalog.ScopeWithheld) []string {
+	ids := make([]string, 0, len(withheld))
+	for _, entry := range withheld {
+		ids = append(ids, entry.ID)
+	}
+	return ids
+}
+
+// scopeMissing is what the token-scope bookkeeping says the credential lacks
+// for one key, both halves together, and whether it names the key at all.
+func scopeMissing(withheld []actioncatalog.ScopeWithheld, id string) ([]string, bool) {
+	entry, ok := scopeEntry(withheld, id)
+	return entry.Missing(), ok
+}
+
+// scopeEntry is the token-scope bookkeeping's entry for one key, and whether
+// it names the key at all.
+func scopeEntry(withheld []actioncatalog.ScopeWithheld, id string) (actioncatalog.ScopeWithheld, bool) {
+	for _, entry := range withheld {
+		if entry.ID == id {
+			return entry, true
+		}
+	}
+	return actioncatalog.ScopeWithheld{}, false
+}
+
 func assertWithheldByTokenScope(t *testing.T, catalog *actioncatalog.Catalog) {
 	t.Helper()
-	filtered, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
-		ReadOnly:               true,
-		ReadOnlyFromTokenScope: true,
-	})
+	filtered, withheld := mustFilterCatalog(t, catalog, readAPIConfig())
 	if _, ok := filtered.Action(withheldWriteAction); ok {
-		t.Fatalf("FilterActionCatalog() kept %q in a read-only catalog", withheldWriteAction)
+		t.Fatalf("FilterActionCatalog() kept %q for a read_api token", withheldWriteAction)
 	}
-	if !slices.Contains(withheld.ByTokenScope, withheldWriteAction) {
-		t.Errorf("withheld.ByTokenScope does not name %q; a narrowed credential would be reported as a missing capability", withheldWriteAction)
+	if missing, ok := scopeMissing(withheld.ByTokenScope, withheldWriteAction); !ok || !slices.Equal(missing, []string{"api"}) {
+		t.Errorf("withheld.ByTokenScope gives %q missing %v (named %t); want api, or a narrowed credential would be reported as a missing capability",
+			withheldWriteAction, missing, ok)
 	}
 	if slices.Contains(withheld.ByOperator, withheldWriteAction) {
 		t.Errorf("withheld.ByOperator names %q, but the token is the cause here", withheldWriteAction)
 	}
-	if slices.Contains(withheld.ByTokenScope, withheldReadAction) {
+	if slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), withheldReadAction) {
 		t.Errorf("withheld.ByTokenScope names %q, which is still reachable", withheldReadAction)
 	}
 }
@@ -108,21 +140,226 @@ func assertWithheldByOperator(t *testing.T, catalog *actioncatalog.Catalog) {
 	if !slices.Contains(withheld.ByOperator, withheldWriteAction) {
 		t.Errorf("withheld.ByOperator does not name %q", withheldWriteAction)
 	}
-	if slices.Contains(withheld.ByTokenScope, withheldWriteAction) {
+	if slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), withheldWriteAction) {
 		t.Errorf("withheld.ByTokenScope names %q, but no credential narrowed this deployment", withheldWriteAction)
 	}
 }
 
 func assertExcludedToolIsNotWithheld(t *testing.T, catalog *actioncatalog.Catalog) {
 	t.Helper()
-	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
-		ReadOnly:     true,
-		ExcludeTools: []string{"gitlab_issue"},
-	})
-	for _, keys := range [][]string{withheld.ByTokenScope, withheld.ByOperator} {
+	cfg := readAPIConfig()
+	cfg.ReadOnly = true
+	cfg.ExcludeTools = []string{"gitlab_issue"}
+	_, withheld := mustFilterCatalog(t, catalog, cfg)
+	for _, keys := range [][]string{scopeWithheldIDs(withheld.ByTokenScope), withheld.ByOperator} {
 		if slices.Contains(keys, withheldWriteAction) {
 			t.Errorf("an excluded tool's action %q was reported as withheld; exclusion means it does not exist here", withheldWriteAction)
 		}
+	}
+}
+
+// TestFilterActionCatalog_ReadAPI_ServesWhatGitLabAcceptsFromIt pins the
+// reach of a credential carrying read_api and not api, decided per action
+// from what it sends rather than by its classification: a read GitLab
+// refuses read_api (template.lint posts to the CI lint route) is withheld for
+// want of api, a write it accepts (package.download sends GETs and writes a
+// file on the server's machine; pipeline.trigger_run is authenticated by the
+// trigger token the caller passes) is served, and a group keeping one such
+// write is not annotated read-only.
+func TestFilterActionCatalog_ReadAPI_ServesWhatGitLabAcceptsFromIt(t *testing.T) {
+	t.Parallel()
+	filtered, withheld := mustFilterCatalog(t, freeCatalogWithMCP(t), readAPIConfig())
+	for _, id := range []actioncatalog.ActionID{"package.download", "pipeline.trigger_run", "repository.markdown_render", "issue.list"} {
+		t.Run(string(id), func(t *testing.T) {
+			t.Parallel()
+			if _, ok := filtered.Action(id); !ok {
+				t.Errorf("a read_api token is not served %s, which GitLab accepts from read_api", id)
+			}
+		})
+	}
+	if missing, ok := scopeMissing(withheld.ByTokenScope, "template.lint"); !ok || !slices.Equal(missing, []string{"api"}) {
+		t.Errorf("template.lint is withheld from read_api with %v missing (named %t), want api", missing, ok)
+	}
+	if group, ok := filtered.Group("gitlab_package"); !ok || group.ReadOnly {
+		t.Errorf("gitlab_package keeps package.download for read_api and is annotated read-only %t (present %t)", group.ReadOnly, ok)
+	}
+	if group, ok := filtered.Group("gitlab_issue"); !ok || !group.ReadOnly {
+		t.Errorf("gitlab_issue keeps only reads for read_api and is annotated read-only %t (present %t)", group.ReadOnly, ok)
+	}
+}
+
+// TestFilterActionCatalog_ReadAPIUnderReadOnly_FilesEveryWriteUnderTheOperator
+// pins the two narrowings together: with the operator's read-only mode on as
+// well as a read_api token, every write is filed under the operator, which
+// runs first, the writes GitLab would accept from read_api included, and the
+// read GitLab refuses read_api is still filed under the token.
+func TestFilterActionCatalog_ReadAPIUnderReadOnly_FilesEveryWriteUnderTheOperator(t *testing.T) {
+	t.Parallel()
+	cfg := readAPIConfig()
+	cfg.ReadOnly = true
+	filtered, withheld := mustFilterCatalog(t, freeCatalogWithMCP(t), cfg)
+	for _, id := range []string{"package.download", "pipeline.trigger_run", withheldWriteAction} {
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			if !slices.Contains(withheld.ByOperator, id) || slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), id) {
+				t.Errorf("%s is not withheld by the operator alone", id)
+			}
+		})
+	}
+	if _, ok := scopeMissing(withheld.ByTokenScope, "template.lint"); !ok {
+		t.Error("template.lint, a read GitLab refuses read_api, is not withheld by the token's scope")
+	}
+	if _, ok := filtered.Action("issue.list"); !ok {
+		t.Error("issue.list is not served")
+	}
+}
+
+// readAPIWrites are the five actions the catalog classifies as writes that a
+// credential carrying read_api and not api is served, because GitLab accepts
+// each of them from read_api (ADR-0026).
+var readAPIWrites = []actioncatalog.ActionID{
+	"package.download",
+	"access.token_personal_revoke_self",
+	"pipeline.trigger_run",
+	"runner.register",
+	"runner.delete_by_token",
+}
+
+// TestFilterActionCatalog_ReadAPIUnderSafeMode_PreviewsTheWritesReadAPIReaches
+// pins safe mode over the read_api narrowing on the catalog the meta surface
+// registers, for both instance classes. Each of the five writes a read_api
+// credential is served keeps its write classification, which is what safe
+// mode keys on, answers with a preview, and carries no destructive flag any
+// more, since the preview replaced the handler there was something to confirm
+// for. They are real writes such a session reaches, the revocation and the
+// runner deletion destructive among them, so a narrowing that ran after the
+// previews, or one that rebuilt the actions it kept, would run them in a
+// safe-mode session with nothing else failing.
+func TestFilterActionCatalog_ReadAPIUnderSafeMode_PreviewsTheWritesReadAPIReaches(t *testing.T) {
+	t.Parallel()
+	for _, instance := range []struct {
+		name   string
+		dotcom bool
+	}{{name: "self-managed"}, {name: "GitLab.com", dotcom: true}} {
+		t.Run(instance.name, func(t *testing.T) {
+			t.Parallel()
+			base, err := SharedBaseCatalog(instance.dotcom, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("SharedBaseCatalog() error = %v", err)
+			}
+			cfg := readAPIConfig()
+			cfg.SafeMode = true
+			filtered, _ := mustFilterCatalog(t, base, cfg)
+			for _, id := range readAPIWrites {
+				t.Run(string(id), func(t *testing.T) {
+					assertPreviewedWrite(t, filtered, id)
+				})
+			}
+		})
+	}
+}
+
+// assertPreviewedWrite asserts a catalog serves the action as a write whose
+// handler answers with a safe-mode preview and that asks for no confirmation.
+func assertPreviewedWrite(t *testing.T, catalog *actioncatalog.Catalog, id actioncatalog.ActionID) {
+	t.Helper()
+	action, ok := catalog.Action(id)
+	if !ok {
+		t.Fatalf("%s is not served to a read_api credential", id)
+	}
+	if action.ReadOnly || action.Destructive || action.Route.Destructive {
+		t.Errorf("%s is read-only %t and destructive %t (route %t); want a write whose preview asks for no confirmation",
+			id, action.ReadOnly, action.Destructive, action.Route.Destructive)
+	}
+	result, err := action.Route.Handler(t.Context(), map[string]any{})
+	if _, isPreview := result.(toolutil.SafeModePreview); err != nil || !isPreview {
+		t.Errorf("%s in safe mode answered %T (error %v), want a preview", id, result, err)
+	}
+}
+
+// freeCatalogWithMCP is the Free catalog with the MCP-only actions, the one
+// the read_api narrowing tests filter.
+func freeCatalogWithMCP(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	return catalog
+}
+
+// TestFilterActionCatalog_AdminMode_NamesEveryScopeTheTokenLacks pins what a
+// credential without admin_mode is told it lacks for an action of an
+// admin_mode group, and who asks for each: admin_mode, which this server
+// demands before it serves the group, alone for a read; api beside it for a
+// write when the token carries read_api, which GitLab requires for what the
+// write sends; and admin_mode alone again for a write when the token carries
+// api, which is what it used to be told to reauthorize with. admin_mode is
+// never put on GitLab, which serves admin.metadata_get to any authenticated
+// token.
+func TestFilterActionCatalog_AdminMode_NamesEveryScopeTheTokenLacks(t *testing.T) {
+	t.Parallel()
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	admin := []string{"admin_mode"}
+	cases := []struct {
+		name       string
+		cfg        *config.ServerConfig
+		action     string
+		wantGitLab []string
+		wantServer []string
+	}{
+		{name: "a read and read_api", cfg: readAPIConfig(), action: "admin.metadata_get", wantServer: admin},
+		{name: "a write and read_api", cfg: readAPIConfig(), action: "admin.settings_update", wantGitLab: []string{"api"}, wantServer: admin},
+		{name: "a write and api", cfg: &config.ServerConfig{TokenScopes: []string{"api"}}, action: "admin.settings_update", wantServer: admin},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, withheld := mustFilterCatalog(t, catalog, tc.cfg)
+			entry, ok := scopeEntry(withheld.ByTokenScope, tc.action)
+			if !ok || !slices.Equal(entry.ByGitLab, tc.wantGitLab) || !slices.Equal(entry.ByServer, tc.wantServer) {
+				t.Errorf("%s is withheld with %v by GitLab and %v by this server (named %t), want %v and %v",
+					tc.action, entry.ByGitLab, entry.ByServer, ok, tc.wantGitLab, tc.wantServer)
+			}
+		})
+	}
+}
+
+// TestFilterActionCatalog_AdminModeUnderReadOnly_FilesEveryWriteUnderTheOperator
+// verifies a write of an admin_mode group in a read-only deployment is filed
+// under the operator, whatever scope the credential lacks besides, for a
+// read_api token and an api token alike: the group step removes it before
+// read-only mode runs, and filed under the token it would send the caller to
+// reauthorize for an action the deployment withholds anyway. A read of the
+// group is still the token's, and names admin_mode alone.
+func TestFilterActionCatalog_AdminModeUnderReadOnly_FilesEveryWriteUnderTheOperator(t *testing.T) {
+	t.Parallel()
+	catalog := freeCatalogWithMCP(t)
+	cases := []struct {
+		name string
+		cfg  *config.ServerConfig
+	}{
+		{name: "read_api", cfg: &config.ServerConfig{ReadOnly: true, ReadAPIOnly: true, TokenScopes: []string{"read_api"}}},
+		{name: "api", cfg: &config.ServerConfig{ReadOnly: true, TokenScopes: []string{"api"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, withheld := mustFilterCatalog(t, catalog, tc.cfg)
+			if missing, byScope := scopeMissing(withheld.ByTokenScope, "admin.settings_update"); byScope || !slices.Contains(withheld.ByOperator, "admin.settings_update") {
+				t.Errorf("admin.settings_update is withheld by the operator %t, by the token's scope %t with %v missing; want the operator alone",
+					slices.Contains(withheld.ByOperator, "admin.settings_update"), byScope, missing)
+			}
+			if missing, ok := scopeMissing(withheld.ByTokenScope, "admin.metadata_get"); !ok || !slices.Equal(missing, []string{"admin_mode"}) {
+				t.Errorf("admin.metadata_get is withheld with %v missing (named %t), want [admin_mode]", missing, ok)
+			}
+			if slices.Contains(withheld.ByOperator, "admin.metadata_get") {
+				t.Error("admin.metadata_get, a read, is withheld by the operator")
+			}
+		})
 	}
 }
 
@@ -156,7 +393,7 @@ func TestRemovedActionKeys_CoverCompatibilityAliases(t *testing.T) {
 	var wantAlias string
 	var wantAction string
 	for _, action := range catalog.Actions() {
-		if action.ReadOnly || len(action.Compatibility.ActionAliases) == 0 {
+		if action.ClassicNeed() != finegrained.ClassicAPI || len(action.Compatibility.ActionAliases) == 0 {
 			continue
 		}
 		wantAlias = action.Compatibility.ActionAliases[0].Alias
@@ -171,11 +408,8 @@ func TestRemovedActionKeys_CoverCompatibilityAliases(t *testing.T) {
 		t.Fatal("no mutating action in the Free catalog declares a compatibility alias, so the withheld-alias report this test exists for is not exercised")
 	}
 
-	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
-		ReadOnly:               true,
-		ReadOnlyFromTokenScope: true,
-	})
-	if !slices.Contains(withheld.ByTokenScope, wantAlias) {
+	_, withheld := mustFilterCatalog(t, catalog, readAPIConfig())
+	if !slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), wantAlias) {
 		t.Errorf("withheld.ByTokenScope omits %q, the compatibility alias of the withheld action %q; a caller using it would be told the action does not exist",
 			wantAlias, wantAction)
 	}

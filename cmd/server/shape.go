@@ -33,10 +33,10 @@ import (
 //     output schemas per field, so it changes the catalog itself.
 //   - Whether the instance is GitLab.com: it decides whether the Orbit group
 //     exists at all.
-//   - Read-only, including read-only derived from the token's scope, safe mode,
-//     the excluded tools and the token scopes: these are the narrowing
-//     [gitlabtools.FilterActionCatalog] applies, and two credentials narrowed
-//     differently are served different catalogs.
+//   - Read-only, the narrowing a token carrying read_api and not api causes,
+//     safe mode, the excluded tools and the token scopes: these are the
+//     narrowing [gitlabtools.FilterActionCatalog] applies, and two credentials
+//     narrowed differently are served different catalogs.
 //
 // # What is deliberately not in it
 //
@@ -137,6 +137,7 @@ func (s *shapeServers) get(cfg *config.ServerConfig, dotcom bool) (*serverShape,
 		"capability_surface", config.EffectiveCapabilitySurface(cfg.CapabilitySurface),
 		"tier", cfg.Tier.String(),
 		"read_only", cfg.ReadOnly,
+		"read_api_only", cfg.ReadAPIOnly,
 		"safe_mode", cfg.SafeMode,
 	)
 	return shape, nil

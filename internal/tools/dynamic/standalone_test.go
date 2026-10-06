@@ -10,12 +10,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies
-// that read-only mode drops the interactive group and an explicit exclusion
-// drops project discovery, so the two together leave the route map empty.
-func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.T) {
+// TestStandalone_AddStandaloneRoutes_ExcludesWhatTheOperatorNamedAndNothingElse
+// verifies that an explicit exclusion drops project discovery and that the
+// interactive group stays: read-only mode and a token's scope are applied to
+// the standalone actions after they join the catalog, where what they remove
+// is filed as withheld, so this builder removes nothing on their account.
+func TestStandalone_AddStandaloneRoutes_ExcludesWhatTheOperatorNamedAndNothingElse(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
-		ReadOnly:     true,
 		ExcludeTools: []string{"gitlab_discover_project"},
 	})
 	if err != nil {
@@ -25,11 +26,8 @@ func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.
 	if _, ok := routes["gitlab_discover_project"]; ok {
 		t.Fatal("routes include gitlab_discover_project despite explicit exclusion")
 	}
-	if _, ok := routes["gitlab_interactive"]; ok {
-		t.Fatal("routes include gitlab_interactive in read-only mode")
-	}
-	if len(routes) != 0 {
-		t.Fatalf("routes = %v, want empty map for read-only + excluded discover", routes)
+	if _, ok := routes["gitlab_interactive"]; !ok || len(routes) != 1 {
+		t.Fatalf("routes = %v, want gitlab_interactive alone", routes)
 	}
 }
 

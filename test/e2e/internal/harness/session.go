@@ -486,6 +486,11 @@ func (s *Session) Surface() Surface { return s.conn.cfg.Surface }
 // Mode returns the protective mode this session runs in.
 func (s *Session) Mode() Mode { return s.conn.cfg.Mode }
 
+// ReadAPIOnly reports whether the session's credential carries read_api and
+// not api, so the binary serves it only the actions GitLab accepts from
+// read_api (ADR-0026), whatever mode the session runs in.
+func (s *Session) ReadAPIOnly() bool { return s.conn.readAPIOnly }
+
 // Capabilities returns the resource and prompt surface this session serves.
 func (s *Session) Capabilities() CapabilitySurface { return s.conn.cfg.Capabilities }
 
@@ -688,6 +693,9 @@ func (s *Session) Actions() []ActionID {
 type sessionConn struct {
 	label string
 	cfg   ServerConfig
+	// readAPIOnly is set when the session's credential carries read_api and
+	// not api, which the binary narrows to what read_api reaches.
+	readAPIOnly bool
 	// tier is the tier the server detected with this session's credential,
 	// which is the run's own unless the session was given another token.
 	tier edition.Tier
@@ -915,10 +923,11 @@ func (e *Env) session(cfg ServerConfig) (*sessionConn, error) {
 // startSession launches one server and checks what it serves.
 //
 // The credential's scopes are resolved before the child is launched, because
-// they decide what the session is: a token that cannot write is served a
-// read-only surface by the binary whatever the configuration asked for, and
-// the session is recorded as read-only so that the refusals its tests see are
-// filed under the mode that produced them rather than under the default one.
+// they decide what the session is served: a token carrying read_api and not
+// api is narrowed by the binary to what read_api reaches whatever the
+// configuration asked for (ADR-0026), and the session records that beside its
+// mode rather than as a mode, since the narrowing is the credential's and
+// serves some writes the operator's read-only mode withholds.
 func startSession(inst *instance, cfg ServerConfig, token, key string) (*sessionConn, error) {
 	lifetime := sessionLifetime()
 	ctx, cancel := context.WithTimeout(lifetime, sessionStartTimeout)
@@ -934,10 +943,8 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		return nil, err
 	}
 	// The child is given what was asked for and narrows itself from the
-	// same scopes; only what the session is recorded as moves.
-	recorded := cfg.narrowedBy(serverCfg)
-
-	label := recorded.label(privateSessionNumber(key))
+	// same scopes; the session only records that it did.
+	label := cfg.label(privateSessionNumber(key))
 	proc, childVars, err := newChild(inst, cfg, token, label)
 	if err != nil {
 		return nil, err
@@ -945,8 +952,9 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 
 	conn := &sessionConn{
 		label:       label,
-		cfg:         recorded,
-		tier:        recorded.resolvedTier(cred.tier),
+		cfg:         cfg,
+		readAPIOnly: serverCfg.ReadAPIOnly,
+		tier:        cfg.resolvedTier(cred.tier),
 		authority:   cred.authority,
 		inst:        inst,
 		proc:        proc,
@@ -1015,17 +1023,6 @@ func newChild(inst *instance, cfg ServerConfig, token, label string) (*serverPro
 	}
 	maps.Copy(childVars, coverage)
 	return newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)), childVars, nil
-}
-
-// narrowedBy returns the configuration as the binary will actually serve it:
-// read-only when the credential's scopes made it so, whatever mode was asked
-// for. It is applied to what the session is recorded as and never to the
-// child's environment, so the narrowing under test stays the binary's own.
-func (c ServerConfig) narrowedBy(serverCfg *config.ServerConfig) ServerConfig {
-	if serverCfg.ReadOnlyFromTokenScope && c.Mode == ModeDefault {
-		c.Mode = ModeReadOnly
-	}
-	return c
 }
 
 // privateSessionNumber reads back the number a private key carries, so the

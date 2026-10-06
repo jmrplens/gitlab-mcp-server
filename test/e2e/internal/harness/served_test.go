@@ -381,33 +381,32 @@ func TestIndividualRegistrations_ReadOnlyMode_KeepsOnlyTheReads(t *testing.T) {
 	}
 }
 
-// TestServerConfigFor_ReadOnlyCredential_NarrowsTheSurface checks that the
+// TestServerConfigFor_ReadAPICredential_NarrowsTheSurface checks that the
 // expectation is built through the same narrowing the binary applies.
 //
-// A token that cannot write is served a read-only surface whatever the
-// deployment asked for. An expectation built without that call would name
-// every write tool, and every session using such a credential would abort with
-// a difference that is not the server's.
-func TestServerConfigFor_ReadOnlyCredential_NarrowsTheSurface(t *testing.T) {
+// A token carrying read_api and not api is served what read_api reaches
+// whatever the deployment asked for, and the operator's read-only switch is
+// left as the session asked for it. An expectation built without that call
+// would name every tool GitLab refuses read_api, and every session using such
+// a credential would abort with a difference that is not the server's.
+func TestServerConfigFor_ReadAPICredential_NarrowsTheSurface(t *testing.T) {
 	inst := stubInstance(t)
 
 	cases := []struct {
-		name         string
-		scopes       []string
-		wantReadOnly bool
+		name     string
+		scopes   []string
+		narrowed bool
 	}{
-		{name: "read_api only", scopes: []string{"read_api"}, wantReadOnly: true},
-		{name: "api", scopes: []string{"api"}, wantReadOnly: false},
-		{name: "undetected", scopes: nil, wantReadOnly: false},
+		{name: "read_api only", scopes: []string{"read_api"}, narrowed: true},
+		{name: "api", scopes: []string{"api"}, narrowed: false},
+		{name: "undetected", scopes: nil, narrowed: false},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			serverCfg := serverConfigFor(inst, ServerConfig{}.normalized(), credentialFacts{scopes: testCase.scopes, tier: inst.facts.Tier})
-			if serverCfg.ReadOnly != testCase.wantReadOnly {
-				t.Errorf("ReadOnly = %t, want %t for scopes %v", serverCfg.ReadOnly, testCase.wantReadOnly, testCase.scopes)
-			}
-			if testCase.wantReadOnly && !serverCfg.ReadOnlyFromTokenScope {
-				t.Error("the narrowing did not record that the credential caused it")
+			if serverCfg.ReadAPIOnly != testCase.narrowed || serverCfg.ReadOnly {
+				t.Errorf("ReadAPIOnly = %t and ReadOnly = %t, want %t and false for scopes %v",
+					serverCfg.ReadAPIOnly, serverCfg.ReadOnly, testCase.narrowed, testCase.scopes)
 			}
 		})
 	}
@@ -572,6 +571,10 @@ func TestStandaloneActions_EachConfiguration_FollowTheVisibilityPass(t *testing.
 		{name: "safe mode previews and removes nothing", serverCfg: config.ServerConfig{SafeMode: true}, want: everything},
 		{
 			name: "read-only keeps the one that reads", serverCfg: config.ServerConfig{ReadOnly: true},
+			want: []ActionID{"discover_project.resolve"},
+		},
+		{
+			name: "a read_api token keeps the one GitLab serves it", serverCfg: config.ServerConfig{ReadAPIOnly: true},
 			want: []ActionID{"discover_project.resolve"},
 		},
 		{

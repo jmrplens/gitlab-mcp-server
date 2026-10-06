@@ -439,9 +439,10 @@ func TestCatalogRelevantScopes_EqualComponentsFilterIdentically(t *testing.T) {
 			// Compared field by field and reported by count: the withheld
 			// lists carry every alias of every removed action, and a failure
 			// naming them all would be unreadable.
-			if !slices.Equal(leftWithheld.ByTokenScope, rightWithheld.ByTokenScope) {
-				t.Errorf("withheld by token scope = %d and %d keys (%s), want the same narrowing reported to both",
-					len(leftWithheld.ByTokenScope), len(rightWithheld.ByTokenScope), firstDifference(leftWithheld.ByTokenScope, rightWithheld.ByTokenScope))
+			if !slices.EqualFunc(leftWithheld.ByTokenScope, rightWithheld.ByTokenScope, sameScopeWithheld) {
+				left, right := scopeWithheldIDs(leftWithheld.ByTokenScope), scopeWithheldIDs(rightWithheld.ByTokenScope)
+				t.Errorf("withheld by token scope = %d and %d keys (%s), want the same narrowing and the same missing scopes reported to both",
+					len(left), len(right), firstDifference(left, right))
 			}
 			if !slices.Equal(leftWithheld.ByOperator, rightWithheld.ByOperator) || !slices.Equal(leftWithheld.ExcludedByName, rightWithheld.ExcludedByName) {
 				t.Errorf("withheld by operator = %d and %d keys, excluded by name = %d and %d keys; want the same for both",
@@ -528,6 +529,12 @@ func firstDifference(left, right []string) string {
 		}
 	}
 	return fmt.Sprintf("one is a prefix of the other, %d entries longer", max(len(left), len(right))-min(len(left), len(right)))
+}
+
+// sameScopeWithheld reports whether two token-scope entries name one key and
+// the same missing scopes on each side, GitLab's and this server's.
+func sameScopeWithheld(a, b actioncatalog.ScopeWithheld) bool {
+	return a.ID == b.ID && slices.Equal(a.ByGitLab, b.ByGitLab) && slices.Equal(a.ByServer, b.ByServer)
 }
 
 // filterByTokenScopes narrows a catalog for a token carrying scopes and

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -42,18 +44,36 @@ func TestBuild_ReadOnlyWithholdsWritesAndSaysWhose(t *testing.T) {
 	if !slices.Contains(withheld.ByOperator, "issue.create") {
 		t.Errorf("withheld.ByOperator = %v, want it to name issue.create", withheld.ByOperator)
 	}
+	// The guided flows join after the filter, and read-only mode is applied
+	// to them there, so asking for one is answered with its cause too.
+	if !slices.Contains(withheld.ByOperator, "interactive.issue_create") {
+		t.Errorf("withheld.ByOperator = %v, want it to name the guided issue creation flow", withheld.ByOperator)
+	}
+	if _, ok := catalog.Action("discover_project.resolve"); !ok {
+		t.Error("discover_project.resolve, which reads, did not survive read-only mode")
+	}
 	if len(withheld.ByTokenScope) != 0 {
 		t.Errorf("withheld.ByTokenScope = %v, want nothing: no credential narrowed this catalog", withheld.ByTokenScope)
 	}
 }
 
+// scopeKeys lists the keys of the token-scope bookkeeping.
+func scopeKeys(withheld []actioncatalog.ScopeWithheld) []string {
+	keys := make([]string, 0, len(withheld))
+	for _, entry := range withheld {
+		keys = append(keys, entry.ID)
+	}
+	return keys
+}
+
 // TestBuild_ACacheHitStillCarriesTheScopeCause verifies the bookkeeping a
-// second pool entry receives. A read_api credential is admitted and served a
-// read-only surface, and the dynamic surface answers a request for one of the
-// removed actions with the cause instead of "unknown action, did you mean":
-// the older message listed real read-only actions, from which a model
+// second pool entry receives. A read_api credential is admitted and served
+// what read_api reaches, and the dynamic surface answers a request for one of
+// the removed actions with the cause instead of "unknown action, did you
+// mean": the older message listed real read-only actions, from which a model
 // concluded the server lacked the capability rather than that the credential
-// was narrow.
+// was narrow. A guided flow, which joins after the filter, is withheld with
+// its cause too, and a write read_api reaches is kept.
 //
 // The second Build is the point. It is a cache hit, and the withheld lists
 // come back beside the cached catalog rather than from the build that filled
@@ -64,11 +84,10 @@ func TestBuild_ACacheHitStillCarriesTheScopeCause(t *testing.T) {
 
 	narrowed := func() *config.ServerConfig {
 		return &config.ServerConfig{
-			Tier:                   edition.Free,
-			ReadOnly:               true,
-			ReadOnlyFromTokenScope: true,
-			TokenScopes:            []string{"read_api"},
-			ExcludeTools:           []string{"scope-" + t.Name()},
+			Tier:         edition.Free,
+			ReadAPIOnly:  true,
+			TokenScopes:  []string{"read_api"},
+			ExcludeTools: []string{"scope-" + t.Name()},
 		}
 	}
 	first, firstWithheld, err := Build(nil, narrowed())
@@ -85,22 +104,27 @@ func TestBuild_ACacheHitStillCarriesTheScopeCause(t *testing.T) {
 	for name, withheld := range map[string]gitlabtools.WithheldActions{"first build": firstWithheld, "cache hit": secondWithheld} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if !slices.Contains(withheld.ByTokenScope, "issue.create") {
-				t.Errorf("withheld.ByTokenScope = %v, want it to name issue.create as removed by the credential", withheld.ByTokenScope)
+			keys := scopeKeys(withheld.ByTokenScope)
+			if !slices.Contains(keys, "issue.create") || !slices.Contains(keys, "interactive.issue_create") {
+				t.Errorf("withheld.ByTokenScope = %v, want it to name issue.create and interactive.issue_create as removed by the credential", keys)
 			}
 			if len(withheld.ByOperator) != 0 {
 				t.Errorf("withheld.ByOperator = %v, want nothing: the credential narrowed this catalog, not the operator", withheld.ByOperator)
 			}
-			if slices.Contains(withheld.ByTokenScope, "issue.list") {
-				t.Errorf("withheld.ByTokenScope = %v, want the reads kept rather than withheld", withheld.ByTokenScope)
+			if slices.Contains(keys, "issue.list") || slices.Contains(keys, "package.download") {
+				t.Errorf("withheld.ByTokenScope = %v, want what read_api reaches kept rather than withheld", keys)
 			}
 		})
 	}
-	if _, ok := second.Action("issue.list"); !ok {
-		t.Error("issue.list is missing from the cached read-only catalog")
+	for _, kept := range []actioncatalog.ActionID{"issue.list", "package.download"} {
+		t.Run(string(kept), func(t *testing.T) {
+			if _, ok := second.Action(kept); !ok {
+				t.Errorf("%s is missing from the cached read_api catalog", kept)
+			}
+		})
 	}
 	if _, ok := second.Action("issue.create"); ok {
-		t.Error("issue.create survived in the cached read-only catalog")
+		t.Error("issue.create survived in the cached read_api catalog")
 	}
 }
 
@@ -192,6 +216,103 @@ func TestBuild_SafeModeIsAppliedOverTheCompleteCatalogRatherThanInsideTheFilter(
 	}
 	if surviving := destructiveActionIDs(built); len(surviving) != 0 {
 		t.Errorf("the built catalog still marks %v destructive, so the final safe-mode pass did not reach every write", surviving)
+	}
+}
+
+// TestBuild_SafeModeOverReadAPI_PreviewsTheWritesReadAPIReaches verifies safe
+// mode and the read_api narrowing together on the dynamic catalog, for both
+// instance classes. The five actions the catalog classifies as writes that a
+// read_api credential is served (ADR-0026) are kept, keep their write
+// classification, answer with a preview, and carry no destructive flag, so
+// execute asks no confirmation for a call that changes nothing. They are real
+// writes such a session reaches, the revocation and the runner deletion
+// destructive among them, so a narrowing applied after the previews, or one
+// that rebuilt the actions it kept, would run them in safe mode with nothing
+// else failing.
+func TestBuild_SafeModeOverReadAPI_PreviewsTheWritesReadAPIReaches(t *testing.T) {
+	t.Parallel()
+	writes := []actioncatalog.ActionID{
+		"package.download", "access.token_personal_revoke_self", "pipeline.trigger_run", "runner.register", "runner.delete_by_token",
+	}
+	for _, instance := range []struct {
+		name   string
+		dotcom bool
+	}{{name: "self-managed"}, {name: "GitLab.com", dotcom: true}} {
+		t.Run(instance.name, func(t *testing.T) {
+			t.Parallel()
+			built, _, err := Build(gitlabtools.UnboundClient(instance.dotcom), &config.ServerConfig{
+				Tier: edition.Free, SafeMode: true, ReadAPIOnly: true, TokenScopes: []string{"read_api"},
+			})
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			for _, id := range writes {
+				t.Run(string(id), func(t *testing.T) {
+					action, ok := built.Action(id)
+					if !ok {
+						t.Fatalf("%s is not served to a read_api credential", id)
+					}
+					if action.ReadOnly || action.Destructive || action.Route.Destructive {
+						t.Errorf("%s is read-only %t and destructive %t (route %t); want a write whose preview asks for no confirmation",
+							id, action.ReadOnly, action.Destructive, action.Route.Destructive)
+					}
+					result, callErr := action.Route.Handler(t.Context(), map[string]any{})
+					if _, isPreview := result.(toolutil.SafeModePreview); callErr != nil || !isPreview {
+						t.Errorf("%s in safe mode answered %T (error %v), want a preview", id, result, callErr)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestBuild_ReadAPICatalog_AnnotatesExecuteAsAWrite pins the annotation
+// change ADR-0026 records as NEG-005 on the default surface: a read_api
+// credential is served five actions the catalog classifies as writes, so the
+// execute tool registered over its catalog is annotated neither read-only nor
+// non-destructive, and a client that approves read-only tools without asking
+// asks before every call of such a session. The same credential in a
+// read-only deployment is served reads alone, and its execute tool is
+// read-only again.
+func TestBuild_ReadAPICatalog_AnnotatesExecuteAsAWrite(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		readOnly     bool
+		wantReadOnly bool
+	}{
+		{name: "read_api", wantReadOnly: false},
+		{name: "read_api in a read-only deployment", readOnly: true, wantReadOnly: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			built, withheld, err := Build(nil, &config.ServerConfig{
+				Tier: edition.Free, ReadOnly: tc.readOnly, ReadAPIOnly: true, TokenScopes: []string{"read_api"},
+			})
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			server := mcp.NewServer(&mcp.Implementation{Name: "dynamiccatalog-test", Version: "0"}, nil)
+			dynamictools.RegisterCatalogFindExecuteTools(server, built,
+				dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
+			tools, err := toolutil.ListRegisteredTools(t.Context(), server, "dynamiccatalog-test")
+			if err != nil {
+				t.Fatalf("ListRegisteredTools() error = %v", err)
+			}
+			index := slices.IndexFunc(tools, func(tool *mcp.Tool) bool { return tool.Name == dynamictools.ExecuteActionToolName })
+			if index < 0 {
+				t.Fatalf("%s is not registered", dynamictools.ExecuteActionToolName)
+			}
+			annotations := tools[index].Annotations
+			if annotations == nil || annotations.DestructiveHint == nil {
+				t.Fatalf("%s annotations = %+v, want both hints set", dynamictools.ExecuteActionToolName, annotations)
+			}
+			if annotations.ReadOnlyHint != tc.wantReadOnly || *annotations.DestructiveHint == tc.wantReadOnly {
+				t.Errorf("%s is read-only %t and destructive %t, want read-only %t and destructive %t",
+					dynamictools.ExecuteActionToolName, annotations.ReadOnlyHint, *annotations.DestructiveHint, tc.wantReadOnly, !tc.wantReadOnly)
+			}
+		})
 	}
 }
 

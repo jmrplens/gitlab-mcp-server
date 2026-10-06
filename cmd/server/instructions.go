@@ -151,11 +151,14 @@ func buildInstructions(toolSurface, capabilitySurface, transport string, statele
 	// tools/list does not offer is worse than silence, which is the rule the
 	// capability and transport branches below already follow.
 	//
-	// The narrowing that matters most here needs no flag at all: a read_api
-	// credential is served a read-only surface per pool entry (ADR-0018), so
-	// this was reached by an ordinary deployment rather than by an operator
-	// choice. Safe mode is deliberately not included, since it wraps rather
-	// than removes and the actions still exist, answering with a preview.
+	// The narrowing that matters most here needs no flag at all: a credential
+	// carrying read_api and not api is served what read_api reaches per pool
+	// entry (ADR-0018, ADR-0026), and every call these sections teach posts,
+	// so GitLab refuses each of them to read_api and the narrowing removes
+	// them; this was reached by an ordinary deployment rather than by an
+	// operator choice. Safe mode is deliberately not included, since it wraps
+	// rather than removes and the actions still exist, answering with a
+	// preview.
 	//
 	// What this does not cover is --exclude-tools naming one of them: that
 	// resolves group names, tool names and action IDs against a catalog which

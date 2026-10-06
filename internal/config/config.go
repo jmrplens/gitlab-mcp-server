@@ -316,7 +316,7 @@ type Config struct {
 	// met for every origin not on the list.
 	TrustedOrigins []string
 	ExcludeTools   []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
-	IgnoreScopes   bool     // When true, skip the scope filter and the read-only narrowing; the scopes are still read, for the read_api minimum
+	IgnoreScopes   bool     // When true, skip the scope filter and the read_api narrowing; the scopes are still read, for the read_api minimum
 
 	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
 	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0
@@ -380,20 +380,25 @@ type ServerConfig struct {
 	// TierExplicit mirrors Config.TierExplicit: when true the tier is used
 	// verbatim and the pool performs no per-instance license detection.
 	TierExplicit bool
-	ReadOnly     bool
-	// ReadOnlyFromTokenScope records that ReadOnly was not asked for by the
-	// operator but derived from the credential: this token cannot write, so a
-	// read-only surface was built for it. The two causes need different words
-	// when a withheld action is asked for — "reauthorize with a wider scope"
-	// versus "this deployment does not write" — and only the first is
-	// something the caller can act on.
-	ReadOnlyFromTokenScope bool
-	SafeMode               bool
-	ExcludeTools           []string
-	TokenScopes            []string
-	RateLimitRPS           float64
-	RateLimitBurst         int
-	MetaParamSchema        string
+	// ReadOnly is the operator's read-only switch and nothing else: every
+	// action the catalog does not classify as a read is withheld, whatever
+	// the credential carries.
+	ReadOnly bool
+	// ReadAPIOnly records that the credential's scopes are known, classic,
+	// and carry read_api without api, so the surface is narrowed to the
+	// actions GitLab accepts from read_api, derived per action from what it
+	// sends (ADR-0026). It is the credential's narrowing, kept apart from
+	// ReadOnly because the two need different words when a withheld action is
+	// asked for, "reauthorize with a wider scope" versus "this deployment does
+	// not write", and only the first is something the caller can act on, and
+	// because read_api reaches some actions the catalog classifies as writes.
+	ReadAPIOnly     bool
+	SafeMode        bool
+	ExcludeTools    []string
+	TokenScopes     []string
+	RateLimitRPS    float64
+	RateLimitBurst  int
+	MetaParamSchema string
 	// Stateless mirrors Config.Stateless. It reaches the server because a
 	// sessionless transport cannot carry a server-initiated notification
 	// outside an open request, which decides whether the legacy

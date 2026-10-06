@@ -3,10 +3,12 @@ package toolvisibility
 import (
 	"context"
 	"log/slog"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -14,11 +16,13 @@ import (
 )
 
 // Apply narrows the tools registered on server to what cfg says the
-// deployment serves, in three steps: the tools cfg.ExcludeTools names are
-// removed, then read-only mode removes every tool without a read-only hint,
-// or safe mode wraps every mutating tool that the catalog does not already
-// preview per action. Read-only mode wins over safe mode, since nothing is
-// left for safe mode to wrap.
+// deployment serves, in four steps: the tools cfg.ExcludeTools names are
+// removed, then, for a credential carrying read_api and not api, the
+// standalone utilities whose action GitLab refuses read_api, then read-only
+// mode removes every tool without a read-only hint, or safe mode wraps every
+// mutating tool that the catalog does not already preview per action.
+// Read-only mode wins over safe mode, since nothing is left for safe mode to
+// wrap.
 //
 // It runs after registration, over every tool the server holds, which is what
 // reaches the tools registered outside the catalog: the catalog filter has
@@ -31,12 +35,15 @@ import (
 // whose exclusions were applied to the catalog legitimately has nothing left
 // for the first step to remove.
 //
-// The token-scope filter is deliberately absent. It is applied to the
-// catalog, before registration, by the three catalog assemblers, which is the
-// only place it can reach the individual surface: its keys are meta-tool
-// group names and that surface registers one tool per action, so a pass over
-// registered names here matched nothing and left every admin tool listed for
-// a token with no admin_mode. See [gitlabtools.MetaToolScopes].
+// The token-scope filter is deliberately absent, the standalone share of the
+// read_api narrowing aside. It is applied to the catalog, before
+// registration, by the three catalog assemblers, which is the only place it
+// can reach the individual surface: its keys are meta-tool group names and
+// that surface registers one tool per action, so a pass over registered names
+// here matched nothing and left every admin tool listed for a token with no
+// admin_mode. See [gitlabtools.MetaToolScopes]. The read_api step here names
+// tools by the rule the catalog applies ([gitlabtools.StandaloneToolsBeyond]),
+// never by their annotation, which is the operator's read-only rule.
 func Apply(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcluded(ctx, server, cfg.ExcludeTools)
@@ -45,6 +52,15 @@ func Apply(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, to
 		// legitimately removes nothing, and a bare "excluded" reading zero
 		// there said the opposite of what had happened.
 		slog.InfoContext(ctx, "excluded tools by configuration", "excluded_registered_tools", removed, "patterns", cfg.ExcludeTools)
+	}
+	if cfg.ReadAPIOnly {
+		// The catalog assemblers already narrowed the catalog-backed tools to
+		// what read_api reaches; the standalone utilities are registered
+		// outside the catalog on the meta and individual surfaces, so their
+		// share of the narrowing is applied here, by the same per-action rule.
+		// The dynamic surface registers none of them and removes nothing.
+		removed := removeRegistered(ctx, server, "read-api", gitlabtools.StandaloneToolsBeyond(finegrained.ClassicReadAPI))
+		slog.InfoContext(ctx, "read_api token: removed the standalone tools GitLab refuses read_api", "removed", removed)
 	}
 	if cfg.ReadOnly {
 		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
@@ -103,22 +119,23 @@ func catalogBackedToolNames(surfaceCatalog *actioncatalog.Catalog, toolSurface s
 // no guided flow on the meta and individual surfaces while the documentation
 // offered all three.
 func removeExcluded(ctx context.Context, server *mcp.Server, exclude []string) int {
-	registered, err := toolutil.ListRegisteredTools(ctx, server, "exclude-filter")
-	if err != nil {
-		slog.ErrorContext(ctx, "exclude-tools: list registered tools failed", "error", err)
-		return 0
-	}
 	standalone, _ := gitlabtools.ExcludedStandaloneTools(exclude)
-	excludeSet := make(map[string]struct{}, len(exclude))
-	for _, name := range exclude {
-		excludeSet[name] = struct{}{}
-	}
-	for _, name := range standalone {
-		excludeSet[name] = struct{}{}
+	return removeRegistered(ctx, server, "exclude-tools", append(slices.Clone(exclude), standalone...))
+}
+
+// removeRegistered removes every registered tool names holds and returns how
+// many it removed, which a name no tool is registered under adds nothing to.
+// A server that cannot be listed has nothing removed and the failure logged
+// under the pass's label.
+func removeRegistered(ctx context.Context, server *mcp.Server, label string, names []string) int {
+	registered, err := toolutil.ListRegisteredTools(ctx, server, label)
+	if err != nil {
+		slog.ErrorContext(ctx, label+": list registered tools failed", "error", err)
+		return 0
 	}
 	var toRemove []string
 	for _, tool := range registered {
-		if _, ok := excludeSet[tool.Name]; ok {
+		if slices.Contains(names, tool.Name) {
 			toRemove = append(toRemove, tool.Name)
 		}
 	}

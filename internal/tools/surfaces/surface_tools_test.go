@@ -481,23 +481,6 @@ func TestAddToolCatalog_PopulatedCatalog_KeepsWhatItAlreadyHeld(t *testing.T) {
 	}
 }
 
-// TestAddToolCatalog_ReadOnlyOnly_DropsTheMutatingSurfaces asserts that the
-// read-only projection keeps project discovery and drops the interactive
-// creation flows entirely, group and all: a read-only deployment must not
-// publish a tool whose only purpose is to create something.
-func TestAddToolCatalog_ReadOnlyOnly_DropsTheMutatingSurfaces(t *testing.T) {
-	catalog, err := AddToolCatalog(nil, StandaloneToolSpecs(newProjectionClient(t)), CatalogOptions{ReadOnlyOnly: true})
-	if err != nil {
-		t.Fatalf("AddToolCatalog() error = %v", err)
-	}
-	if got := catalogActionIDs(catalog); !slices.Equal(got, []string{"discover_project.resolve"}) {
-		t.Fatalf("catalog actions = %v, want only discover_project.resolve", got)
-	}
-	if _, ok := catalog.Group("gitlab_interactive"); ok {
-		t.Error("catalog still holds gitlab_interactive in read-only mode")
-	}
-}
-
 // TestAddToolCatalog_ExcludedToolNames_RemoveWhatTheOperatorNamed asserts that
 // --exclude-tools is honored by every spelling the operator can write: the
 // group tool name removes the whole dispatcher, and an individual tool name
@@ -750,8 +733,8 @@ func TestAddToolCatalog_PaddedSpecName_IsExcludedByTheNameItRegistersUnder(t *te
 // The pass over registered tools sees the two dynamic tools there, never a
 // standalone utility, so its count reads zero whatever the exclusion did; a
 // working exclusion was indistinguishable from a dead one until this line
-// existed. The count is of what the exclusion names, judged before read-only
-// mode removes anything, and nothing is logged when it names nothing.
+// existed. The count is of what the exclusion names, and nothing is logged
+// when it names nothing.
 //
 // Sequential: the logger it captures is process-wide.
 func TestAddToolCatalog_StandaloneExclusion_LogsWhatItRemoved(t *testing.T) {
@@ -762,11 +745,6 @@ func TestAddToolCatalog_StandaloneExclusion_LogsWhatItRemoved(t *testing.T) {
 	}{
 		{name: "the group name counts every flow", opts: CatalogOptions{ExcludeToolNames: []string{"gitlab_interactive"}}, wantLine: `"excluded":4`},
 		{name: "one canonical ID counts one", opts: CatalogOptions{ExcludeToolNames: []string{"discover_project.resolve"}}, wantLine: `"excluded":1`},
-		{
-			name:     "read-only mode does not hide what the exclusion named",
-			opts:     CatalogOptions{ReadOnlyOnly: true, ExcludeToolNames: []string{"gitlab_interactive"}},
-			wantLine: `"excluded":4`,
-		},
 		{name: "an entry naming nothing logs nothing", opts: CatalogOptions{ExcludeToolNames: []string{"gitlab_nope"}}},
 		{name: "no exclusion logs nothing", opts: CatalogOptions{}},
 	}

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // TestDetectToken_SelfAnswers_ReadsTheTokensKindAndID verifies what the self
@@ -295,25 +296,27 @@ func TestScopeSatisfied_Scenarios_CorrectResult(t *testing.T) {
 }
 
 // TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite verifies the one
-// decision both transports share: a token without the api scope makes the
-// configuration read-only and marks the narrowing as the token's, unknown
-// scopes narrow nothing, and a configuration already read-only is left as the
-// operator set it.
+// decision both transports share: a token without the api scope marks the
+// configuration as built for read_api, whatever the operator's read-only
+// switch says, and leaves that switch as the operator set it; unknown scopes
+// and a fine-grained token narrow nothing.
 func TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name          string
-		cfg           *config.ServerConfig
-		wantNarrowed  bool
-		wantReadOnly  bool
-		wantFromScope bool
+		name         string
+		cfg          *config.ServerConfig
+		wantNarrowed bool
+		wantReadOnly bool
 	}{
-		{name: "read_api narrows", cfg: &config.ServerConfig{TokenScopes: []string{"read_api"}}, wantNarrowed: true, wantReadOnly: true, wantFromScope: true},
+		{name: "read_api narrows", cfg: &config.ServerConfig{TokenScopes: []string{"read_api"}}, wantNarrowed: true},
 		{name: "api stays writable", cfg: &config.ServerConfig{TokenScopes: []string{"api", "read_user"}}},
 		{name: "unknown scopes stay writable", cfg: &config.ServerConfig{}},
-		{name: "empty scopes narrow", cfg: &config.ServerConfig{TokenScopes: []string{}}, wantNarrowed: true, wantReadOnly: true, wantFromScope: true},
-		{name: "a fine-grained token is not read-only", cfg: &config.ServerConfig{TokenScopes: []string{ScopeGranular}}},
-		{name: "the operator's read-only is not the token's", cfg: &config.ServerConfig{ReadOnly: true, TokenScopes: []string{"read_api"}}, wantReadOnly: true},
+		{name: "empty scopes narrow", cfg: &config.ServerConfig{TokenScopes: []string{}}, wantNarrowed: true},
+		{name: "a fine-grained token is not narrowed", cfg: &config.ServerConfig{TokenScopes: []string{ScopeGranular}}},
+		{
+			name: "the operator's read-only is kept beside the token's narrowing",
+			cfg:  &config.ServerConfig{ReadOnly: true, TokenScopes: []string{"read_api"}}, wantNarrowed: true, wantReadOnly: true,
+		},
 		{name: "nil configuration", cfg: nil},
 	}
 	for _, tt := range tests {
@@ -325,8 +328,88 @@ func TestNarrowToTokenScope_NarrowsOnlyATokenThatCannotWrite(t *testing.T) {
 			if tt.cfg == nil {
 				return
 			}
-			if tt.cfg.ReadOnly != tt.wantReadOnly || tt.cfg.ReadOnlyFromTokenScope != tt.wantFromScope {
-				t.Errorf("ReadOnly = %v (from scope %v), want %v (from scope %v)", tt.cfg.ReadOnly, tt.cfg.ReadOnlyFromTokenScope, tt.wantReadOnly, tt.wantFromScope)
+			if tt.cfg.ReadAPIOnly != tt.wantNarrowed || tt.cfg.ReadOnly != tt.wantReadOnly {
+				t.Errorf("ReadAPIOnly = %v and ReadOnly = %v, want %v and %v", tt.cfg.ReadAPIOnly, tt.cfg.ReadOnly, tt.wantNarrowed, tt.wantReadOnly)
+			}
+		})
+	}
+}
+
+// TestNarrowToTokenScope_LogNamesTheOperatorsReadOnlyBesideTheNarrowing
+// verifies the line a narrowed start logs: what GitLab accepts from read_api
+// when the operator left writes on, and the reads alone, with read-only mode
+// named, when the operator's switch withholds the writes read_api reaches, so
+// the log never contradicts the setting.
+func TestNarrowToTokenScope_LogNamesTheOperatorsReadOnlyBesideTheNarrowing(t *testing.T) {
+	cases := []struct {
+		name     string
+		readOnly bool
+		want     string
+		absent   string
+	}{
+		{
+			name: "writes on",
+			want: `"msg":"token carries read_api without api; serving the actions GitLab accepts from read_api"`, absent: "read-only mode",
+		},
+		{
+			name: "read-only mode", readOnly: true,
+			want: `"msg":"token carries read_api without api; read-only mode is on, so serving the reads GitLab accepts from read_api"`, absent: "serving the actions",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			NarrowToTokenScope(&config.ServerConfig{ReadOnly: tc.readOnly, TokenScopes: []string{"read_api"}})
+			if text := logged.String(); !strings.Contains(text, tc.want) || strings.Contains(text, tc.absent) {
+				t.Errorf("a read_api start logged %s; want %s and not %q", text, tc.want, tc.absent)
+			}
+		})
+	}
+}
+
+// TestMissingClassicScopes_NamesWhatTheTokenLacks verifies the scopes a token
+// is told it lacks for an action, in two halves: GitLab's, api when the action
+// needs it and the token was narrowed to read_api, and this server's, the
+// group's scopes the token does not carry, sorted and each once; and nothing
+// for a token whose scopes are unknown, a fine-grained one, or an action
+// read_api reaches.
+func TestMissingClassicScopes_NamesWhatTheTokenLacks(t *testing.T) {
+	t.Parallel()
+	admin := []string{"admin_mode"}
+	readAPI := []string{"read_api"}
+	tests := []struct {
+		name       string
+		need       finegrained.ClassicScope
+		group      []string
+		scopes     []string
+		narrowed   bool
+		wantGitLab []string
+		wantServer []string
+	}{
+		{name: "a write and read_api", need: finegrained.ClassicAPI, scopes: readAPI, narrowed: true, wantGitLab: []string{"api"}},
+		{name: "a write and api", need: finegrained.ClassicAPI, scopes: []string{"api"}},
+		{name: "a read and read_api", need: finegrained.ClassicReadAPI, scopes: readAPI, narrowed: true},
+		{name: "another credential and read_api", need: finegrained.ClassicOtherCredential, scopes: readAPI, narrowed: true},
+		{name: "an unknown need and read_api", need: finegrained.ClassicUnknown, scopes: readAPI, narrowed: true, wantGitLab: []string{"api"}},
+		{name: "an admin write and read_api", need: finegrained.ClassicAPI, group: admin, scopes: readAPI, narrowed: true, wantGitLab: []string{"api"}, wantServer: admin},
+		{name: "an admin read and api", need: finegrained.ClassicReadAPI, group: admin, scopes: []string{"api"}, wantServer: admin},
+		{name: "an admin read and admin_mode", need: finegrained.ClassicReadAPI, group: admin, scopes: []string{"read_api", "admin_mode"}, narrowed: true},
+		{name: "a group scope named twice", need: finegrained.ClassicReadAPI, group: []string{"admin_mode", "admin_mode"}, scopes: []string{"api"}, wantServer: admin},
+		{name: "two group scopes, sorted", need: finegrained.ClassicReadAPI, group: []string{"sudo", "admin_mode"}, scopes: []string{"api"}, wantServer: []string{"admin_mode", "sudo"}},
+		{name: "unknown scopes", need: finegrained.ClassicAPI, group: admin, narrowed: true},
+		{name: "a fine-grained token", need: finegrained.ClassicAPI, group: admin, scopes: []string{ScopeGranular}, narrowed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			byGitLab, byServer := MissingClassicScopes(tt.need, tt.group, tt.scopes, tt.narrowed)
+			if !slices.Equal(byGitLab, tt.wantGitLab) || !slices.Equal(byServer, tt.wantServer) {
+				t.Errorf("MissingClassicScopes(%v, %v, %v, %t) = %v, %v, want %v, %v",
+					tt.need, tt.group, tt.scopes, tt.narrowed, byGitLab, byServer, tt.wantGitLab, tt.wantServer)
 			}
 		})
 	}

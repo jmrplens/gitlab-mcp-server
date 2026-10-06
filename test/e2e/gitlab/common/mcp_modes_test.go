@@ -165,8 +165,13 @@ func assertInteractiveWithdrawn(e *harness.Env, s *harness.Session, f modeFixtur
 		if err != nil {
 			e.T.Fatalf("calling %s through %s: %v", interactiveIssueAction, executeActionTool, err)
 		}
-		if !result.IsError || !strings.Contains(rawText(result), "unknown action") {
-			e.T.Errorf("read-only mode left %s reachable through %s: %q", interactiveIssueAction, executeActionTool, rawText(result))
+		// Withheld rather than unknown: the flow exists, and the answer names
+		// the deployment's decision that removed it, as it does for a write
+		// of the catalog, so a model does not record the capability as
+		// missing.
+		if !result.IsError || !strings.Contains(rawText(result), "configured to withhold") {
+			e.T.Errorf("read-only mode left %s reachable through %s, or declined it without naming the deployment's decision: %q",
+				interactiveIssueAction, executeActionTool, rawText(result))
 		}
 		return
 	}

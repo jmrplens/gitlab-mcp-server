@@ -1,14 +1,16 @@
 // Command audit_readonly_graphql fails when an action the canonical catalog
 // classifies ReadOnly can reach a GraphQL mutation.
 //
-// --read-only removes actions through FilterReadOnlyActions, and the surface
-// served to a read_api OAuth token is narrowed the same way. Both key on the
+// --read-only removes actions through FilterReadOnlyActions, which keys on the
 // action's catalog classification, not on what its handler does. An action
 // classified ReadOnly whose handler issues a GraphQL mutation therefore
-// survives both filters and executes a write precisely where a write is
+// survives the filter and executes a write precisely where a write is
 // supposed to be impossible, with nothing anywhere reporting it: GitLab
 // performs the write, because the credential's scope is whatever the caller's
-// token actually carries.
+// token actually carries. The surface served to a read_api token used to be
+// narrowed the same way; it is now derived from what each handler sends
+// (register row AUT-001), and a mutation needs api, so that narrowing
+// withholds such an action and the operator's flag is the one left exposed.
 //
 // The HTTP method cannot be the test. client-go sends every GraphQL request as
 // a POST, so around twenty read-only actions legitimately POST and the verb

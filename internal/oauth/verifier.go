@@ -60,8 +60,9 @@ func decodeInstanceJSON(r io.Reader, out any) error {
 }
 
 // GitLab API scopes this server can operate under. api permits reads and
-// writes; read_api is enough for a deployment that never mutates, and is
-// what such a deployment asks for so users are not made to grant more.
+// writes; read_api is what a deployment that never mutates asks for so users
+// are not made to grant more, although GitLab answers two of its reads only
+// from api, because they are sent as a POST (ADR-0026).
 const (
 	ScopeAPI     = "api"
 	ScopeReadAPI = "read_api"
@@ -79,10 +80,17 @@ const (
 // to match the authority its token actually carries.
 const MinimumScope = ScopeReadAPI
 
-// RequiredScope reports the scope a client should ask for to get this
-// deployment's full surface: read_api when no request can reach GitLab as a
-// write, api otherwise. Safe mode counts as read-only here because it answers
-// mutating calls with a preview instead of forwarding them.
+// RequiredScope reports the scope a client should ask for: read_api when no
+// request can reach GitLab as a write, api otherwise. Safe mode counts as
+// read-only here because it answers mutating calls with a preview instead of
+// forwarding them.
+//
+// Under read-only or safe mode it is the least the deployment recommends,
+// not what buys its whole surface: a read_api token is served the actions
+// GitLab accepts from read_api (ADR-0026), which leaves out the two reads
+// GitLab answers only from api, template.lint and
+// project.dependency_firewall_evaluate. Recommending api there would ask
+// every user of a deployment that never writes for a scope that can.
 //
 // It is a recommendation, published in the challenge and as the first entry
 // of [SupportedScopes] — not an admission requirement. A client that asks for
@@ -136,8 +144,8 @@ func SatisfiesMinimum(granted []string, minimum string) bool {
 // checked, or only read_api, answers with invalid_scope.
 //
 // This is what the deployment asks for, not what it admits. A read_api token
-// is admitted by a deployment that can write and served its read-only surface
-// (see [MinimumScope]); a client that wants such a credential names read_api
+// is admitted by a deployment that can write and served the actions GitLab
+// accepts from read_api (see [MinimumScope]); a client that wants such a credential names read_api
 // itself, as a browser-based inspector does, from an application that has it.
 func SupportedScopes(readOnly, safeMode bool) []string {
 	if readOnly || safeMode {

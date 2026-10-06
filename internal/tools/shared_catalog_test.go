@@ -215,28 +215,28 @@ func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: "exclude=|scopes=|scopesKnown=false|readonly=false|readonlyFromScope=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=false|readonly=false|readAPIOnly=false|safe=false",
 		},
 		{
 			name: "detected empty scopes are told apart from unknown",
 			cfg:  config.ServerConfig{TokenScopes: []string{}},
-			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readonlyFromScope=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|safe=false",
 		},
 		{
 			name: "scopes the filter cannot act on leave no trace",
 			cfg:  config.ServerConfig{TokenScopes: []string{"read_api", "api", "k8s_proxy", "ai_features"}},
-			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readonlyFromScope=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|safe=false",
 		},
 		{
 			name: "the scopes that shape the catalog are kept, sorted and deduplicated, and the switches named",
 			cfg: config.ServerConfig{
-				ExcludeTools:           []string{"gitlab_admin", "issue.delete"},
-				TokenScopes:            []string{"sudo", "api", "admin_mode", "read_api", "admin_mode"},
-				ReadOnly:               true,
-				ReadOnlyFromTokenScope: true,
-				SafeMode:               true,
+				ExcludeTools: []string{"gitlab_admin", "issue.delete"},
+				TokenScopes:  []string{"sudo", "api", "admin_mode", "read_api", "admin_mode"},
+				ReadOnly:     true,
+				ReadAPIOnly:  true,
+				SafeMode:     true,
 			},
-			want: "exclude=gitlab_admin,issue.delete|scopes=admin_mode|scopesKnown=true|readonly=true|readonlyFromScope=true|safe=true",
+			want: "exclude=gitlab_admin,issue.delete|scopes=admin_mode|scopesKnown=true|readonly=true|readAPIOnly=true|safe=true",
 		},
 	}
 	for _, tc := range cases {
@@ -407,6 +407,42 @@ func TestSharedIndividualCatalog_ScopesNarrowTheCatalogAndKeyIt(t *testing.T) {
 	}
 	if fineGrained.SharedOrigin() == empty.SharedOrigin() {
 		t.Error("a fine-grained token shared the catalog of a token with no scope")
+	}
+}
+
+// TestSharedIndividualCatalog_ReadAPI_KeepsWhatReadAPIReachesAndKeysIt
+// verifies the individual surface applies the reach of a credential carrying
+// read_api and not api to its catalog, which is the only place that surface
+// can apply it: read_api keeps package.download, which the catalog classifies
+// as a write and GitLab serves to read_api, and loses template.lint, a read
+// GitLab refuses it, and the catalog is keyed apart from the same scopes
+// unnarrowed.
+func TestSharedIndividualCatalog_ReadAPI_KeepsWhatReadAPIReachesAndKeysIt(t *testing.T) {
+	client := testutil.NewTestClient(t, healthyGitLab())
+	cfg := func(readAPIOnly bool) *config.ServerConfig {
+		return &config.ServerConfig{
+			Tier: edition.Free, ExcludeTools: []string{"reach-" + t.Name()}, TokenScopes: []string{"read_api"}, ReadAPIOnly: readAPIOnly,
+		}
+	}
+	narrowed, _, err := SharedIndividualCatalog(client, cfg(true))
+	if err != nil {
+		t.Fatalf("SharedIndividualCatalog(read_api) error = %v", err)
+	}
+	whole, _, err := SharedIndividualCatalog(client, cfg(false))
+	if err != nil {
+		t.Fatalf("SharedIndividualCatalog(unnarrowed) error = %v", err)
+	}
+	if _, kept := narrowed.Action("package.download"); !kept {
+		t.Error("the read_api catalog lost package.download, which GitLab serves to read_api")
+	}
+	if _, kept := narrowed.Action("template.lint"); kept {
+		t.Error("the read_api catalog kept template.lint, which GitLab refuses read_api")
+	}
+	if _, kept := whole.Action("template.lint"); !kept {
+		t.Error("the unnarrowed catalog lost template.lint, so the narrowing above proves nothing")
+	}
+	if narrowed.SharedOrigin() == whole.SharedOrigin() {
+		t.Error("a read_api catalog shared the cache entry of the unnarrowed one")
 	}
 }
 

@@ -834,9 +834,9 @@ func TestLimit_RateLimitRefusalIsVisible(t *testing.T) {
 // TestLimit_IgnoreScopesReadsTheScopesAndSkipsTheNarrowing verifies what
 // --ignore-scopes does since issue 952. The token's scopes are still read,
 // because the admission minimum is judged on them and the flag never lifts it;
-// what it skips is the scope filter and the read-only narrowing. A read_api
+// what it skips is the scope filter and the read_api narrowing. A read_api
 // token is therefore served a surface that finds a write under the flag, and
-// the read-only surface without it, both after its scopes were read. The
+// what read_api reaches without it, both after its scopes were read. The
 // surface is asked rather than a log line read, since a line written after the
 // response can still be in the pipe when the response is read.
 func TestLimit_IgnoreScopesReadsTheScopesAndSkipsTheNarrowing(t *testing.T) {

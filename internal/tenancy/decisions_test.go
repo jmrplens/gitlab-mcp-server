@@ -522,7 +522,7 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // verification, F-31 did when issue 951 bounded the stateful sessions, F-20
 // did when the tool-call refusal was given its resultType under issue 961,
 // F-17 did when issue 952 stopped misreading a fine-grained token, at the
-// read-only narrowing and at both doors, F-09 did when issue 952 recorded
+// read_api narrowing and at both doors, F-09 did when issue 952 recorded
 // the tier's Free fallback as INV-008's exception, and F-08 did when issue 952
 // set the read_api minimum at the legacy door as well as the OAuth one.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {

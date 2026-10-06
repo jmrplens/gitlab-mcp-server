@@ -23,8 +23,13 @@ const (
 
 // CatalogOptions controls projection of standalone surface tools into an action
 // catalog.
+//
+// It carries the operator's exclusions and nothing about read-only mode: the
+// dynamic surface applies read-only mode and a token's scope to the standalone
+// actions once they have joined the catalog (tools.NarrowForReading), which
+// files what each removed as withheld, and a projection that dropped the
+// writes first left those flows answered as unknown.
 type CatalogOptions struct {
-	ReadOnlyOnly     bool
 	ExcludeToolNames []string
 }
 
@@ -253,14 +258,12 @@ func surfaceActionSpecGroup(opts surfaceToolGroupOptions, specs []toolutil.Actio
 }
 
 // filterToolSpecs returns the specs a deployment serves: without the ones the
-// operator excluded and, in read-only mode, without the ones that write.
+// operator excluded.
 //
-// The exclusion is judged over every spec, before read-only mode removes any,
-// which is the order the catalog filter applies the two in. The count it logs
-// is the only line an operator gets about a standalone exclusion on the
-// dynamic surface: the pass over registered tools sees two tools there and
-// neither is ever a standalone utility, so without it a working exclusion read
-// the same as one that named nothing.
+// The count it logs is the only line an operator gets about a standalone
+// exclusion on the dynamic surface: the pass over registered tools sees two
+// tools there and neither is ever a standalone utility, so without it a
+// working exclusion read the same as one that named nothing.
 func filterToolSpecs(specs []actioncatalog.SurfaceToolSpec, opts CatalogOptions) ([]actioncatalog.SurfaceToolSpec, error) {
 	excluded, _, err := ExcludedToolSpecs(specs, opts.ExcludeToolNames)
 	if err != nil {
@@ -271,9 +274,6 @@ func filterToolSpecs(specs []actioncatalog.SurfaceToolSpec, opts CatalogOptions)
 	}
 	out := make([]actioncatalog.SurfaceToolSpec, 0, len(specs))
 	for _, spec := range specs {
-		if opts.ReadOnlyOnly && !spec.ReadOnly {
-			continue
-		}
 		// Trimmed as registration trims it, since the names resolved above
 		// are the ones the specs register under.
 		if _, ok := excluded[strings.TrimSpace(spec.Name)]; ok {

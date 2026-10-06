@@ -65,11 +65,11 @@ func TestServerShapeKey_TheInstanceIsNotPartOfTheShape(t *testing.T) {
 // direction: each field that decides which tools exist, what shape they are
 // listed in, or how the catalog is narrowed must produce a different server.
 //
-// A field missing here is a tenant served somebody else's surface. Read-only
-// derived from the token's scope is in the list on purpose: it is set per pool
-// entry by NarrowToTokenScope rather than by configuration, so a read_api token
-// and a full one must not share a catalog even though the operator configured
-// neither.
+// A field missing here is a tenant served somebody else's surface. The read_api
+// reach derived from the token's scope is in the list on purpose: it is set
+// per pool entry by NarrowToTokenScope rather than by configuration, so a
+// read_api token and a full one must not share a catalog even though the
+// operator configured neither.
 func TestServerShapeKey_EveryCatalogDecidingFieldChangesTheShape(t *testing.T) {
 	base := shapeTestConfig()
 	baseKey := serverShapeKey(base, false)
@@ -88,8 +88,8 @@ func TestServerShapeKey_EveryCatalogDecidingFieldChangesTheShape(t *testing.T) {
 		{name: "whether the tier was pinned", change: func(c *config.ServerConfig) { c.TierExplicit = false }},
 		{name: "gitlab.com rather than self-managed", dotcom: true},
 		{name: "read only", change: func(c *config.ServerConfig) { c.ReadOnly = true }},
-		{name: "read only derived from the token scope", change: func(c *config.ServerConfig) {
-			c.ReadOnlyFromTokenScope = true
+		{name: "the read_api reach derived from the token scope", change: func(c *config.ServerConfig) {
+			c.ReadAPIOnly = true
 		}},
 		{name: "safe mode", change: func(c *config.ServerConfig) { c.SafeMode = true }},
 		{name: "excluded tools", change: func(c *config.ServerConfig) { c.ExcludeTools = []string{"gitlab_project"} }},

@@ -10,6 +10,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
 
 // TokenFacts is what the personal access token self endpoint says about the
@@ -253,26 +254,71 @@ func CatalogScopes(scopes []string) []string {
 	return scopes
 }
 
-// NarrowToTokenScope marks a server configuration read-only when the token
-// it was built for cannot write, and reports whether it did. Both transports
+// NarrowToTokenScope marks a server configuration as built for a token
+// carrying read_api without api, and reports whether it did. Both transports
 // call it once the scopes are known: the HTTP pool per entry, since an entry
 // is per token, and stdio once at startup for its single token. The catalog
-// built from the configuration then withholds every write action and reports
-// it as withheld by the token scope, rather than listing actions GitLab would
-// refuse one by one with its own 403 (ADR-0018).
+// built from the configuration then withholds every action GitLab refuses
+// read_api, which the requests each action sends decide
+// ([finegrained.ClassicScope]), and reports it as withheld by the token
+// scope, rather than listing actions GitLab would refuse one by one with its
+// own 403 (ADR-0018, ADR-0026).
 //
-// A configuration already read-only is left alone, so the operator's setting
-// and the token's limit never contradict each other in the log, and unknown
-// scopes narrow nothing, for the reason WriteCapable gives.
+// It marks the configuration whatever the operator set: read-only mode is a
+// second narrowing on top of this one, applied first and reported as the
+// operator's, so a write both remove is never blamed on the credential, and a
+// read GitLab refuses read_api is still withheld from such a token in a
+// read-only deployment. The line it logs names both narrowings then
+// ([readAPINarrowingMessage]). Unknown scopes narrow nothing, and neither
+// does a fine-grained token, for the reason WriteCapable gives.
 func NarrowToTokenScope(cfg *config.ServerConfig) bool {
-	if cfg == nil || cfg.ReadOnly || WriteCapable(cfg.TokenScopes) {
+	if cfg == nil || WriteCapable(cfg.TokenScopes) {
 		return false
 	}
-	cfg.ReadOnly = true
-	cfg.ReadOnlyFromTokenScope = true
-	slog.Info("token cannot write; serving a read-only tool surface for it",
-		"scopes", cfg.TokenScopes)
+	cfg.ReadAPIOnly = true
+	slog.Info(readAPINarrowingMessage(cfg.ReadOnly), "scopes", cfg.TokenScopes)
 	return true
+}
+
+// readAPINarrowingMessage is the line [NarrowToTokenScope] logs. In a
+// read-only deployment it names the operator's switch beside the token's
+// reach, because the switch withholds the writes GitLab accepts from read_api
+// and a line saying the token is served what GitLab accepts from read_api
+// would contradict the setting the operator made.
+func readAPINarrowingMessage(readOnly bool) string {
+	if readOnly {
+		return "token carries read_api without api; read-only mode is on, so serving the reads GitLab accepts from read_api"
+	}
+	return "token carries read_api without api; serving the actions GitLab accepts from read_api"
+}
+
+// MissingClassicScopes names the scopes a token lacks for an action, in the
+// two halves the answer to a withheld action words apart, since only the
+// first is GitLab's rule. byGitLab is api when GitLab requires it for what the
+// action sends and the token was narrowed to what read_api reaches
+// (readAPIOnly, which [NarrowToTokenScope] sets). byServer is the scopes of
+// groupScopes the token does not carry, sorted and each once: admin_mode,
+// which this server demands before it serves a catalog group, whatever GitLab
+// asks of each action in it. The API half is read from the narrowing rather
+// than from the list, so the answer depends only on what keys the shared
+// catalog it is cached beside (internal/tools.CatalogFilterKey). A token whose
+// scopes are unknown, or a fine-grained one, lacks nothing it can be told
+// about, since GitLab judges it per call.
+func MissingClassicScopes(need finegrained.ClassicScope, groupScopes, tokenScopes []string, readAPIOnly bool) (byGitLab, byServer []string) {
+	tokenScopes = CatalogScopes(tokenScopes)
+	if tokenScopes == nil {
+		return nil, nil
+	}
+	if readAPIOnly && !need.ReachableWith(finegrained.ClassicReadAPI) {
+		byGitLab = []string{ScopeAPI}
+	}
+	for _, scope := range groupScopes {
+		if !slices.Contains(tokenScopes, scope) {
+			byServer = append(byServer, scope)
+		}
+	}
+	slices.Sort(byServer)
+	return byGitLab, slices.Compact(byServer)
 }
 
 // ScopeSatisfied checks whether requiredScopes are all present in the
