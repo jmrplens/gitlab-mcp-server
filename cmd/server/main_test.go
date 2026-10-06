@@ -5850,28 +5850,6 @@ func TestHealthHandler_ExposesLivenessFields(t *testing.T) {
 	}
 }
 
-// TestSafeTokenSuffix verifies short tokens are fully masked and longer
-// tokens expose only the suffix used for non-sensitive diagnostics.
-func TestSafeTokenSuffix(t *testing.T) {
-	tests := []struct {
-		name  string
-		token string
-		want  string
-	}{
-		{name: "empty", token: "", want: "****"},
-		{name: "short", token: "abc", want: "****"},
-		{name: "four", token: "abcd", want: "****"},
-		{name: "long", token: "glpat-123456", want: "...3456"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := safeTokenSuffix(tt.token); got != tt.want {
-				t.Errorf("safeTokenSuffix(%q) = %q, want %q", tt.token, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestLogIgnoredRequestOptions verifies ignored per-request MCP options are
 // logged without panicking and skipped when no options were ignored.
 func TestLogIgnoredRequestOptions(t *testing.T) {
@@ -13861,20 +13839,25 @@ func TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed(t *testing.T)
 // for a configuration that is already current, so the lines only appear when
 // they apply to something.
 func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
+	// A tail no hex digest can contain, so its absence from the line is proof
+	// that none of the token was written rather than luck.
+	const ignoringToken = "glpat-ignored-opts-ZZZ9"
 	tests := []struct {
 		name     string
 		log      func()
 		want     []string
+		unwanted []string
 		wantNone bool
 	}{
 		{
 			name: "request options this deployment ignores",
 			log: func() {
-				logIgnoredRequestOptions("glpat-0123456789", serverpool.RequestOptions{
+				logIgnoredRequestOptions(ignoringToken, serverpool.RequestOptions{
 					IgnoredOptions: []string{"TOOL_SURFACE"},
 				})
 			},
-			want: []string{"TOOL_SURFACE"},
+			want:     []string{"TOOL_SURFACE", telemetry.LogFieldCredentialHash + "=" + serverpool.CredentialHash(ignoringToken)},
+			unwanted: []string{"ZZZ9"},
 		},
 		{
 			name:     "a request that carried none says nothing",
@@ -13902,6 +13885,11 @@ func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
 			for _, want := range tt.want {
 				if !strings.Contains(logged, want) {
 					t.Errorf("log %q is missing %q", logged, want)
+				}
+			}
+			for _, unwanted := range tt.unwanted {
+				if strings.Contains(logged, unwanted) {
+					t.Errorf("log %q carries %q, part of the credential", logged, unwanted)
 				}
 			}
 		})

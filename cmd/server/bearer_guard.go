@@ -42,6 +42,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -250,7 +251,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			switch kind {
 			case oauth.RejectionUnaccepted:
 				refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known not to be issued to an admitted OAuth application",
-					"token_suffix", safeTokenSuffix(token))
+					telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 				return g.unacceptedRecipientFailure()
 			case oauth.RejectionPermissionMissing:
 				// GitLab accepted this token and refused it the permission
@@ -267,11 +268,12 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 				// Answered from memory and uncharged, as the fresh refusal is,
 				// since a token's scopes cannot change.
 				refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to carry neither read_api nor api",
-					"token_suffix", safeTokenSuffix(token))
+					telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 				return g.insufficientScopeFailure()
 			}
 			g.recordFailure(ip, source, token)
-			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token already known to be invalid",
+				telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 			return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 		}
 	}
@@ -286,7 +288,8 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		// caller is who they say they are. Counting it would let a client
 		// holding a valid but under-scoped token lock its own address out.
 		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: token cannot read the API",
-			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "))
+			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "),
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return &gateFailure{
 			status:  http.StatusForbidden,
 			code:    errCodeForbidden,
@@ -348,7 +351,7 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 			g.rejected.RecordBelowMinimum(instance, token)
 		}
 		slog.Info("request rejected: gitlab says the token lacks the required scope",
-			"minimum", g.minimumScope, "token_suffix", safeTokenSuffix(token))
+			"minimum", g.minimumScope, telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return g.insufficientScopeFailure()
 	}
 
@@ -379,7 +382,7 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 	// telling its holder the token belongs to somebody else.
 	if errors.Is(err, oauth.ErrRecipientUnverifiable) {
 		slog.Warn("token recipient could not be verified: introspection did not answer",
-			"token_suffix", safeTokenSuffix(token))
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return &gateFailure{
 			status:  http.StatusServiceUnavailable,
 			code:    errCodeUpstreamUnavailable,
@@ -404,7 +407,7 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 			g.rejected.RecordKind(instance, token, oauth.RejectionUnaccepted)
 		}
 		slog.Info("request rejected: token was not issued to an admitted OAuth application",
-			"token_suffix", safeTokenSuffix(token))
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return g.unacceptedRecipientFailure()
 	}
 
@@ -413,7 +416,8 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 			g.rejected.Record(instance, token)
 		}
 		g.recordFailure(ip, source, token)
-		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		slog.Info("request rejected: gitlab rejected the supplied token",
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 	}
 

@@ -112,8 +112,8 @@ despliegue:
 Los tokens del pool viven en memoria mientras dura su entrada, porque un cliente
 no puede llamar a GitLab sin uno, y el pool se indexa por digest para que
 recorrer sus estructuras de búsqueda no dé ninguna credencial. No se escribe
-nada en disco. Los registros llevan los últimos cuatro caracteres de un token y
-nada más.
+nada en disco. Los registros nombran un token por un resumen con clave que
+cambia en cada reinicio, y no llevan ninguno de sus caracteres.
 
 ## Qué vigilar
 

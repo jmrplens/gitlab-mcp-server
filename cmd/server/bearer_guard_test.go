@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 const testMetadataURL = "https://mcp.example.com/.well-known/oauth-protected-resource"
@@ -2179,6 +2180,137 @@ func TestLogUnverified_EachCause_WritesItsOwnLine(t *testing.T) {
 			if line.Level != tc.level || line.Msg != tc.msg {
 				t.Errorf("logged %s %q, want %s %q", line.Level, line.Msg, tc.level, tc.msg)
 			}
+		})
+	}
+}
+
+// loggedTokenTail is the tail of every token the handle tests below send. No
+// hex digest can contain it, so its absence from a line proves none of the
+// token was written rather than a lucky draw of the process key.
+const loggedTokenTail = "ZZZ9"
+
+// captureJSONLog installs a JSON handler at debug as the default logger for the
+// length of the test, with the refusal throttle cleared, and returns what it
+// writes.
+func captureJSONLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	forgetRefusalLines()
+	return &logged
+}
+
+// assertNamesTheTokenByItsHandle fails unless the line logged with msg names
+// token by its keyed handle under the field the telemetry export strips, and
+// unless nothing logged carries any of the token's characters or the field the
+// handle replaced.
+func assertNamesTheTokenByItsHandle(t *testing.T, logged *bytes.Buffer, msg, token string) {
+	t.Helper()
+	text := logged.String()
+	if strings.Contains(text, loggedTokenTail) || strings.Contains(text, "token_suffix") {
+		t.Errorf("the log carries part of the token or the suffix field it replaced:\n%s", text)
+	}
+	for raw := range strings.Lines(text) {
+		var line map[string]any
+		if err := json.Unmarshal([]byte(raw), &line); err != nil {
+			t.Fatalf("a log line is not JSON: %q: %v", raw, err)
+		}
+		if line["msg"] != msg {
+			continue
+		}
+		if got, want := line[telemetry.LogFieldCredentialHash], serverpool.CredentialHash(token); got != want {
+			t.Errorf("%q names the token as %s=%v, want %q", msg, telemetry.LogFieldCredentialHash, got, want)
+		}
+		return
+	}
+	t.Errorf("no line %q was logged:\n%s", msg, text)
+}
+
+// TestBearerGuard_ALineAboutAToken_NamesItByItsHandleAndNoneOfIt covers every
+// line the bearer guard writes about a credential it was handed, the refusals
+// answered from memory and the verdicts it reaches by asking, the refusal of a
+// fine-grained token's missing permission aside, which names nothing about the
+// caller.
+//
+// Most used to carry the token's last four characters: of a working token on
+// the scope, recipient and introspection lines, and of whatever was pasted
+// where a token belongs on the rejected ones, which for a short secret was
+// most of it. The line for verified scopes below the minimum carried nothing,
+// so it could not be tied to a credential at all. Each now carries the keyed
+// handle the pool's own line carries, so an operator ties a refusal to the
+// credential that drew it.
+func TestBearerGuard_ALineAboutAToken_NamesItByItsHandleAndNoneOfIt(t *testing.T) {
+	const token = "gloas-logged-token-" + loggedTokenTail
+	failing := func(err error) func() *bearerGuard {
+		return func() *bearerGuard {
+			return newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) { return nil, err })
+		}
+	}
+	remembered := func(record func(*oauth.RejectedTokens)) func() *bearerGuard {
+		return func() *bearerGuard {
+			g := newTestGuard(okVerifier(oauth.ScopeAPI))
+			record(g.rejected)
+			return g
+		}
+	}
+
+	cases := []struct {
+		name  string
+		guard func() *bearerGuard
+		msg   string
+	}{
+		{
+			name:  "a token remembered as not issued to an admitted application",
+			guard: remembered(func(r *oauth.RejectedTokens) { r.RecordKind("", token, oauth.RejectionUnaccepted) }),
+			msg:   "request rejected: token already known not to be issued to an admitted OAuth application",
+		},
+		{
+			name:  "a token remembered as below the minimum",
+			guard: remembered(func(r *oauth.RejectedTokens) { r.RecordBelowMinimum("", token) }),
+			msg:   "request rejected: token already known to carry neither read_api nor api",
+		},
+		{
+			name:  "a token remembered as invalid",
+			guard: remembered(func(r *oauth.RejectedTokens) { r.Record("", token) }),
+			msg:   "request rejected: token already known to be invalid",
+		},
+		{
+			name:  "gitlab says the token lacks the scope",
+			guard: failing(oauth.ErrInsufficientScope),
+			msg:   "request rejected: gitlab says the token lacks the required scope",
+		},
+		{
+			name:  "the verified scopes are below the minimum",
+			guard: func() *bearerGuard { return newTestGuard(okVerifier("read_user")) },
+			msg:   "request rejected: token cannot read the API",
+		},
+		{
+			name:  "the recipient could not be verified",
+			guard: failing(fmt.Errorf("introspection did not answer: %w", oauth.ErrRecipientUnverifiable)),
+			msg:   "token recipient could not be verified: introspection did not answer",
+		},
+		{
+			name:  "the token belongs to another application",
+			guard: failing(fmt.Errorf("token was issued to another OAuth application: %w", oauth.ErrUnacceptedRecipient)),
+			msg:   "request rejected: token was not issued to an admitted OAuth application",
+		},
+		{
+			name:  "gitlab rejected the token",
+			guard: failing(auth.ErrInvalidToken),
+			msg:   "request rejected: gitlab rejected the supplied token",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureJSONLog(t)
+
+			if tc.guard().check(guardRequest(t, token)) == nil {
+				t.Fatal("the request was admitted, so no refusal line was written")
+			}
+
+			assertNamesTheTokenByItsHandle(t, logged, tc.msg, token)
 		})
 	}
 }

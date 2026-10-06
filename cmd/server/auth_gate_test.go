@@ -2933,3 +2933,71 @@ func TestSentencePermissions_CountsTheListAndNamesAtMostThree(t *testing.T) {
 		})
 	}
 }
+
+// TestMCPServerGate_ARefusedToken_IsLoggedByItsHandleAndNoneOfIt covers the
+// legacy gate's lines about a credential it refuses, the refusal of a
+// fine-grained token's missing permission aside, which names nothing about the
+// caller: GitLab's rejection, and a token carrying neither read_api nor api,
+// remembered or learned from the pool.
+//
+// The rejection used to carry the last four characters of whatever was sent,
+// often a mistyped or expired token and sometimes not a token at all, and the
+// two below the minimum carried nothing, while the bearer guard's lines for
+// the same verdict named the token. All three carry the keyed handle the
+// bearer guard's lines and the pool's own line carry.
+func TestMCPServerGate_ARefusedToken_IsLoggedByItsHandleAndNoneOfIt(t *testing.T) {
+	const (
+		token    = "glpat-rejected-token-" + loggedTokenTail
+		instance = "https://gitlab.example.com"
+		address  = "192.0.2.10"
+	)
+	tests := []struct {
+		name       string
+		refuse     func(ctx context.Context, gate *mcpServerGate) *gateFailure
+		wantStatus int
+		msg        string
+	}{
+		{
+			name: "gitlab rejected the token",
+			refuse: func(ctx context.Context, gate *mcpServerGate) *gateFailure {
+				return gate.classify(ctx, serverpool.ErrInvalidCredential, address, address, instance, token)
+			},
+			wantStatus: http.StatusUnauthorized,
+			msg:        "request rejected: gitlab rejected the supplied token",
+		},
+		{
+			name: "the pool learned the token is below the minimum",
+			refuse: func(ctx context.Context, gate *mcpServerGate) *gateFailure {
+				return gate.classify(ctx, serverpool.ErrCredentialBelowMinimum, address, address, instance, token)
+			},
+			wantStatus: http.StatusForbidden,
+			msg:        "request rejected at the gate: gitlab accepted the token, which carries neither read_api nor api",
+		},
+		{
+			name: "the token is remembered as below the minimum",
+			refuse: func(ctx context.Context, gate *mcpServerGate) *gateFailure {
+				gate.rejected.RecordBelowMinimum(instance, token)
+				req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", http.NoBody)
+				req.Header.Set("PRIVATE-TOKEN", token)
+				_, failure := gate.resolve(req)
+				return failure
+			},
+			wantStatus: http.StatusForbidden,
+			msg:        "request rejected at the gate: token already known to carry neither read_api nor api",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logged := captureJSONLog(t)
+			gate := newGateAgainst(t, okFactory, instance)
+			gate.rejected = oauth.NewRejectedTokens(8, time.Minute)
+
+			failure := tt.refuse(t.Context(), gate)
+
+			if failure == nil || failure.status != tt.wantStatus {
+				t.Fatalf("failure = %+v, want status %d", failure, tt.wantStatus)
+			}
+			assertNamesTheTokenByItsHandle(t, logged, tt.msg, token)
+		})
+	}
+}

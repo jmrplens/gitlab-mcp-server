@@ -146,7 +146,7 @@ Lo que significa `GITLAB-URL` depende de cuántas instancias publique el desplie
 
 Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, `--trusted-proxy-header` y `--trusted-proxies` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
 
-Si un cliente envía una cabecera con el nombre de un ajuste del servidor, como `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT` o `GITLAB-SAFE-MODE`, el servidor la ignora y registra el nombre del ajuste en `ignored_options` sin registrar su valor, en una línea `WARN` que lleva los cuatro últimos caracteres del token y nada más de él. Una cabecera que no lleva el nombre de ningún ajuste se ignora sin decir nada.
+Si un cliente envía una cabecera con el nombre de un ajuste del servidor, como `TOOL-SURFACE`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT` o `GITLAB-SAFE-MODE`, el servidor la ignora y registra el nombre del ajuste en `ignored_options` sin registrar su valor, en una línea `WARN` que nombra el token por un resumen con clave (`credential_hash`) y no lleva ninguno de sus caracteres. Una cabecera que no lleva el nombre de ningún ajuste se ignora sin decir nada.
 
 La configuración del servidor se resuelve en tres capas, de mayor a menor prioridad: un flag de CLI pasado explícitamente, después la variable de entorno correspondiente y por último el valor por defecto. Pasar un flag cuyo valor coincide con el de por defecto cuenta igualmente como elegirlo, así que una variable de entorno olvidada no puede desplazar una línea de comandos deliberada. Las tres capas son del lado del proceso; ningún cliente puede alcanzarlas, así que un usuario nunca puede cambiar el comportamiento ni para sí mismo ni para los demás. La [referencia de variables de entorno](/gitlab-mcp-server/es/reference/environment/) enumera cada variable con el flag que la sustituye y los transportes que la leen.
 
@@ -623,7 +623,7 @@ La clave del pool es `SHA-256(token + "\x00" + gitlabURL)`, nunca los valores en
 - Ninguna estructura de búsqueda guarda un token en claro: el mapa del pool, la caché de tokens rechazados y, en modo OAuth, la caché de identidades se indexan por resumen, así que recorrer esas estructuras no revela ninguna credencial
 - El cliente de GitLab de la entrada guarda necesariamente la credencial con la que se autentica, mientras la entrada vive, algo que acotan `--pool-idle-timeout`, el límite de antigüedad de credencial de una hora y el desalojo LRU. Nada se escribe en disco
 - El mismo token contra instancias de GitLab distintas produce entradas del pool distintas
-- Las líneas de log muestran solo los cuatro últimos caracteres de un token (`...a1b2`)
+- Las líneas de log nombran un token por `credential_hash`, dieciséis caracteres hexadecimales de un HMAC-SHA-256 bajo una clave que se genera al arrancar el proceso, y no muestran ninguno de sus caracteres (`3f9a0c17be52d8e4`). Dentro de un proceso una credencial tiene el mismo identificador en todas las líneas que la nombran, y el identificador cambia en cada reinicio y entre réplicas
 
 ### Ciclo de vida de la sesión
 
@@ -1076,9 +1076,9 @@ El servidor registra en stderr en formato JSON. Las duraciones son la forma en q
 
 ```json
 {"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"held_requests_per_process":229120,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"detected","scopes_detected":true,"token_suffix":"...c3d4"}
-{"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"credential_hash":"3f9a0c17be52d8e4"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"detected","scopes_detected":true,"credential_hash":"a61d4e09c3b7f285"}
+{"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"credential_hash":"3f9a0c17be52d8e4"}
 {"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
 {"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}

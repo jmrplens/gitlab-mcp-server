@@ -761,19 +761,21 @@ func TestSlogHandler_AnErrorValueExportsItsTypeAndNotItsText(t *testing.T) {
 	}
 }
 
-// TestSlogHandler_TheTokenSuffixIsNotExported closes the second instance of the
-// shape the identity policy exists to prevent.
+// TestSlogHandler_TheCredentialHashIsNotExported closes the second instance of
+// the shape the identity policy exists to prevent.
 //
-// The pool and the refusal paths log token_suffix, the last four characters of
-// the caller's credential behind an ellipsis. Four characters authenticate
-// nothing, so this is not a credential leak; what it is is a stable per-caller
-// handle that survives both the none and the pseudonymous policies untouched,
-// in a store the policy says records nobody. The guide's line is unconditional:
-// "Your GitLab token, or any header a client sent" is never recorded.
+// The pool and the refusal paths log credential_hash, a keyed per-process
+// digest of the caller's credential. It authenticates nothing, so this is not a
+// credential leak; what it is is a stable per-caller handle that would survive
+// both the none and the pseudonymous policies untouched, in a store the policy
+// says records nobody. The guide's line is unconditional: "Your GitLab token,
+// or any header a client sent" is never recorded. Its predecessor, the token's
+// last four characters, did reach the collector until it was named here.
 //
 // Grouped as well as flat, because slog.Group is an ordinary value a caller can
 // pass and a flat key check is how the identity fields escaped the first time.
-func TestSlogHandler_TheTokenSuffixIsNotExported(t *testing.T) {
+func TestSlogHandler_TheCredentialHashIsNotExported(t *testing.T) {
+	const handle = "6a1f0c9e2b7d4e85"
 	tests := []struct {
 		name  string
 		write func(*slog.Logger)
@@ -781,13 +783,13 @@ func TestSlogHandler_TheTokenSuffixIsNotExported(t *testing.T) {
 		{
 			name: "flat",
 			write: func(logger *slog.Logger) {
-				logger.Info("server pool: created new entry", slog.String(LogFieldTokenSuffix, "...ZZZ9"))
+				logger.Info("server pool: created new entry", slog.String(LogFieldCredentialHash, handle))
 			},
 		},
 		{
 			name: "inside a group",
 			write: func(logger *slog.Logger) {
-				logger.Info("request rejected", slog.Group("client", slog.String(LogFieldTokenSuffix, "...ZZZ9")))
+				logger.Info("request rejected", slog.Group("client", slog.String(LogFieldCredentialHash, handle)))
 			},
 		},
 	}
@@ -796,11 +798,11 @@ func TestSlogHandler_TheTokenSuffixIsNotExported(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			exported, terminal := bothLegs(t, newRedactor(t, IdentityNone), tt.write)
 
-			if strings.Contains(exported, "ZZZ9") {
-				t.Errorf("the masked token suffix reached the collector under the policy that records nobody: %s", exported)
+			if strings.Contains(exported, handle) || strings.Contains(exported, LogFieldCredentialHash) {
+				t.Errorf("the credential handle reached the collector under the policy that records nobody: %s", exported)
 			}
-			if !strings.Contains(terminal, "ZZZ9") {
-				t.Errorf("stderr lost the suffix, which is what an operator correlates a refusal by: %s", terminal)
+			if !strings.Contains(terminal, handle) {
+				t.Errorf("stderr lost the handle, which is what an operator correlates a refusal by: %s", terminal)
 			}
 		})
 	}

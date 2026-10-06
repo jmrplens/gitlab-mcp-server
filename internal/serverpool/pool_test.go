@@ -3,6 +3,8 @@ package serverpool
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
@@ -1324,28 +1327,85 @@ func TestTokenHash(t *testing.T) {
 	}
 }
 
-// TestTokenSuffix covers TokenSuffix with table-driven subtests.
-func TestTokenSuffix(t *testing.T) {
-	tests := []struct {
-		name     string
-		token    string
-		expected string
-	}{
-		{"normal token", "glpat-abc123xyz", "...3xyz"},
-		{"short token", "abc", "****"},
-		{"exactly 4 chars", "abcd", "****"},
-		{"5 chars", "abcde", "...bcde"},
-		{"empty token", "", "****"},
+// TestCredentialHash_NamesATokenByAHandleThatCarriesNoneOfIt covers the handle
+// every log line about a client credential carries.
+//
+// It is the same for one token and different for another, which is all an
+// operator correlates by. It is sixteen lowercase hex characters whatever the
+// token is, short, empty or long, so no character of a token whose tail is not
+// hex can appear in it, which is the property the token's last four
+// characters lacked. And it is keyed: the plain SHA-256 of the token, which
+// anyone holding a candidate token could compute and compare, is not it.
+func TestCredentialHash_NamesATokenByAHandleThatCarriesNoneOfIt(t *testing.T) {
+	const token = "glpat-handle-token-ZZZ9"
+	handle := CredentialHash(token)
+
+	if again := CredentialHash(token); again != handle {
+		t.Errorf("CredentialHash is not stable for one token: %q then %q", handle, again)
+	}
+	if CredentialHash("glpat-handle-token-ZZZ8") == handle {
+		t.Errorf("two tokens share the handle %q", handle)
+	}
+	plain := sha256.Sum256([]byte(token))
+	if hex.EncodeToString(plain[:credentialHashBytes]) == handle {
+		t.Errorf("the handle %q is the unkeyed digest of the token, which a guess can be checked against", handle)
 	}
 
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{name: "an ordinary token", token: token},
+		{name: "an empty token", token: ""},
+		{name: "a token of four characters or fewer", token: "ZZZ9"},
+		{name: "a long token", token: strings.Repeat("Z", 4096) + "ZZZ9"},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tokenSuffix(tt.token)
-			if got != tt.expected {
-				t.Errorf("tokenSuffix(%q) = %q, want %q", tt.token, got, tt.expected)
+			got := CredentialHash(tt.token)
+			if len(got) != 2*credentialHashBytes {
+				t.Errorf("CredentialHash(%d characters) has %d characters, want %d", len(tt.token), len(got), 2*credentialHashBytes)
+			}
+			if strings.Trim(got, "0123456789abcdef") != "" {
+				t.Errorf("CredentialHash(%d characters) = %q, not lowercase hex", len(tt.token), got)
+			}
+			if strings.Contains(got, "ZZZ9") {
+				t.Errorf("CredentialHash(%d characters) = %q carries the token's tail", len(tt.token), got)
 			}
 		})
 	}
+}
+
+// TestInsertEntry_TheCreatedEntryLine_NamesTheTokenByItsHandle verifies the
+// line written for every credential the pool accepts names it by the handle
+// the gates' refusal lines use, under the field name the telemetry export
+// strips, and carries no character of the token, which is what it used to
+// carry four of.
+func TestInsertEntry_TheCreatedEntryLine_NamesTheTokenByItsHandle(t *testing.T) {
+	const token = "glpat-pooled-token-ZZZ9"
+	captured := captureLogs(t)
+
+	if _, err := New(testConfig(stubGitLabBase), testFactory()).GetOrCreate(token, stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate(): %v", err)
+	}
+
+	record, found := captured.find("server pool: created new entry")
+	if !found {
+		t.Fatal("no created-entry record was logged")
+	}
+	handle, ok := logAttr(record, telemetry.LogFieldCredentialHash)
+	if !ok {
+		t.Fatalf("the created-entry line carries no %s field", telemetry.LogFieldCredentialHash)
+	}
+	if handle.String() != CredentialHash(token) {
+		t.Errorf("%s = %q, want CredentialHash of the token, %q", telemetry.LogFieldCredentialHash, handle.String(), CredentialHash(token))
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		if strings.Contains(attr.Value.String(), "ZZZ9") {
+			t.Errorf("the created-entry line carries the token's tail in %s = %q", attr.Key, attr.Value.String())
+		}
+		return true
+	})
 }
 
 // TestWithMaxSize verifies WithMaxSize.

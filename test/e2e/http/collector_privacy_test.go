@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // protocolMeta is the _meta block protocol 2026-07-28 requires on every
@@ -81,16 +84,52 @@ func readResource(id int, uri string) request {
 
 // privacyClientToken is the caller credential these tests send.
 //
-// The final four characters are distinctive on purpose. The server logs a
-// masked "..."+last four as token_suffix, so a token ending in a common word
-// (the previous value ended "alue") makes the assertion that the credential
-// does not leave the process unable to fail even when a masked form does.
+// The final four characters are distinctive on purpose. The server used to log
+// a masked "..."+last four as token_suffix, and a token ending in a common word
+// (the previous value ended "alue") made the assertion that no part of the
+// credential leaves the process unable to fail even when that masked form did.
 const privacyClientToken = "glpat-client-private-token-ZZZ9"
 
-// maskedTokenSuffix is what the server logs instead of the token: the last four
-// characters behind an ellipsis. It is a stable per-credential handle, so it
-// belongs in the forbidden list beside the token itself.
+// maskedTokenSuffix is the form the server used to log the token in: the last
+// four characters behind an ellipsis. It names a credential by none of its
+// characters now, and the masked form stays forbidden so that it cannot come
+// back through the export unnoticed.
 const maskedTokenSuffix = "...ZZZ9"
+
+// credentialHashInLog reads, out of the server's own stderr, the handle it
+// names the client credential by. The handle is keyed per process, so no test
+// can compute it; it is read back instead, so that the export can be held to
+// carrying neither the field nor its value.
+var credentialHashInLog = regexp.MustCompile(`"` + telemetry.LogFieldCredentialHash + `":"([0-9a-f]+)"`)
+
+// loggedCredentialHash returns the handle the server logged for a credential,
+// or fails: a run that logged none has nothing to hold the export to.
+func loggedCredentialHash(t *testing.T, logs string) string {
+	t.Helper()
+	match := credentialHashInLog.FindStringSubmatch(logs)
+	if match == nil {
+		t.Fatalf("the server logged no %s on stderr, so there is no handle to look for in the export:\n%s",
+			telemetry.LogFieldCredentialHash, logs)
+	}
+	return match[1]
+}
+
+// awaitExportedLog waits until a log payload carrying msg reaches the
+// collector, or fails. A record that never arrived cannot show what the export
+// strips from it.
+func awaitExportedLog(t *testing.T, c *collector, msg string, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		for _, e := range c.received() {
+			if e.path == "/v1/logs" && strings.Contains(string(e.body), msg) {
+				return
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("no exported log record carried %q within %s, so nothing about its fields was verified", msg, within)
+}
 
 // assertReached fails when a call never got past the transport or the schema.
 //
@@ -267,6 +306,7 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 	c := startCollector(t)
 	env := collectorEnv(c)
 	env["OTEL_EXPORTER_OTLP_HEADERS"] = "Authorization=Bearer%20" + collectorPwd
+	env["OTEL_BLRP_SCHEDULE_DELAY"] = "100"
 	srv := startServer(t, env, "--gitlab-url="+gitlab.url)
 
 	// Calls carrying every category, each one reaching a handler and GitLab.
@@ -308,6 +348,10 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 	}
 
 	c.awaitExport(t, 20*time.Second)
+	// The pool's line for the client credential is the record carrying its
+	// handle; waiting for it is what makes the handle's absence below mean
+	// something.
+	awaitExportedLog(t, c, "server pool: created new entry", 20*time.Second)
 	// A moment more, so later batches are included rather than only the first.
 	time.Sleep(700 * time.Millisecond)
 
@@ -319,6 +363,9 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 		searchQuery,
 		privacyClientToken,
 		maskedTokenSuffix,
+		// The handle stays on the operator's stderr; the export strips it.
+		telemetry.LogFieldCredentialHash,
+		loggedCredentialHash(t, srv.logs()),
 		collectorPwd,
 	)
 }

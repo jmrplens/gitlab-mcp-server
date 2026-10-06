@@ -59,5 +59,6 @@
 // passed. Tool names, action ids, outcome, duration and the identity already in
 // the log line are in; parameters, queries, tokens and response bodies are out.
 // The existing code is the precedent: the dynamic surface logs `query_len` and
-// not the query, and the pool logs a token suffix and not the token.
+// not the query, and the pool logs a keyed digest of the token and not the
+// token.
 package telemetry

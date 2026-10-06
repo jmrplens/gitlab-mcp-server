@@ -10,7 +10,7 @@ faq:
   - q: "¿Por qué faltan las herramientas Enterprise?"
     a: "El **catálogo Enterprise/Premium está desactivado**. En modo stdio, establece `GITLAB_MCP_TIER=premium` o `GITLAB_MCP_TIER=ultimate`. En modo HTTP, establece `--tier=premium` o `--tier=ultimate` para forzar el catálogo, o deja que la detección lo habilite cuando la licencia de la instancia, o un namespace que administra el token, esté en un plan Premium o Ultimate. `GITLAB_ENTERPRISE` se eliminó en 3.0.0 y se ignora; no existe ningún flag `--enterprise`, usa `--tier`. Las herramientas Enterprise también requieren una licencia Premium o Ultimate en la instancia conectada."
   - q: "¿Cómo habilito el registro de depuración?"
-    a: "Establece `GITLAB_MCP_LOG_LEVEL=debug` y redirige stderr a un archivo, por ejemplo `GITLAB_MCP_LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log`, y luego reproduce la operación fallida. Cada llamada a herramienta se registra con el nombre de la herramienta, su duración y su error, nunca con sus argumentos, y las peticiones y respuestas de GitLab que hay detrás no se registran en absoluto. El log lleva además eventos de validación de token (solo los últimos 4 caracteres) y operaciones del pool de sesiones HTTP, y `debug` añade detalle como la detección del nivel de licencia, las confirmaciones de acciones destructivas y las decisiones de grano fino. Los logs van a **stderr** y los mensajes JSON-RPC van a **stdout**, así que redirige siempre stderr para no mezclar ambos."
+    a: "Establece `GITLAB_MCP_LOG_LEVEL=debug` y redirige stderr a un archivo, por ejemplo `GITLAB_MCP_LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log`, y luego reproduce la operación fallida. Cada llamada a herramienta se registra con el nombre de la herramienta, su duración y su error, nunca con sus argumentos, y las peticiones y respuestas de GitLab que hay detrás no se registran en absoluto. El log lleva además eventos de validación de token (el token nombrado por un resumen con clave, nunca por sus caracteres) y operaciones del pool de sesiones HTTP, y `debug` añade detalle como la detección del nivel de licencia, las confirmaciones de acciones destructivas y las decisiones de grano fino. Los logs van a **stderr** y los mensajes JSON-RPC van a **stdout**, así que redirige siempre stderr para no mezclar ambos."
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
@@ -299,7 +299,7 @@ Habilita el registro detallado para diagnosticar problemas:
 3. **Examina los logs** — los logs de depuración incluyen:
    - Cada llamada a herramienta con el nombre de la herramienta, su duración y su error, nunca sus argumentos
    - La detección del nivel de licencia, las confirmaciones de acciones destructivas y las decisiones de grano fino
-   - Eventos de validación de token (solo los últimos 4 caracteres)
+   - Eventos de validación de token (el token nombrado por un resumen con clave, nunca por sus caracteres)
    - Operaciones del pool de sesiones (modo HTTP)
 
    Las peticiones y respuestas de la API de GitLab no se registran.

@@ -451,11 +451,14 @@ Not by default and not by any setting, because there is no setting:
   the status and, where the server's table holds it, the route template, which
   names the endpoint with placeholders where the URL would carry project paths,
   identifiers and query values. The parent span already names the action.
-- **`token_suffix`**, the last four characters of an HTTP client's credential.
-  It keeps being written to stderr, where it is what an operator correlates a
-  refusal by on their own terminal, and it is stripped from the exported copy
-  of every log record at any depth: it authenticates nothing and correlates
-  everything, which is not a distinction a telemetry backend can make for you.
+- **`credential_hash`**, the handle an HTTP client's credential is logged by: a
+  keyed digest of it, under a key drawn when the process starts and never
+  written anywhere, so it carries none of the token's characters. It keeps
+  being written to stderr, where it is what an operator correlates a refusal
+  by on their own terminal, and it is stripped from the exported copy of every
+  log record at any depth: it authenticates nothing and correlates everything
+  one caller does, which is not a distinction a telemetry backend can make for
+  you.
 - **The `Host` header of a request the host guard refused.** It stays on
   stderr, where it is what you read to find out which host a misconfigured
   proxy is forwarding, and it is stripped from the exported copy the same way:
