@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,829 |
-| Unit test functions                                   | 19,365 |
+| Total test functions                                  | 20,835 |
+| Unit test functions                                   | 19,371 |
 | E2E test functions                                    |  1,464 |
 | cmd test functions                                    |  4,622 |
 | Test files (internal/)                                |    697 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,209 | 63.4% |
+| `TestFunc_Scenario` (2-part)           | 13,206 | 63.4% |
 | `TestFunc` (no underscore)             |    911 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,709 | 32.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,718 | 32.2% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,810 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            386 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,547 |        456 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (180) |         10,553 |        456 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,464 |        408 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,622 |        319 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,829** |  **1,424** |                                                                                                 |
+| **Total**               |     **20,835** |  **1,424** |                                                                                                 |
 
 ### Core Packages
 
@@ -145,7 +145,7 @@
 | avatar                  |         11 |          1 |   100.0% |         1 |
 | awardemoji              |        130 |          3 |   100.0% |        24 |
 | badges                  |         64 |          3 |   100.0% |        12 |
-| boards                  |         78 |          2 |    99.4% |        10 |
+| boards                  |         81 |          2 |   100.0% |        10 |
 | branches                |        110 |          1 |   100.0% |        10 |
 | branchrules             |         35 |          1 |   100.0% |         1 |
 | broadcastmessages       |         36 |          1 |   100.0% |         5 |
@@ -192,7 +192,7 @@
 | geo                     |         62 |          3 |   100.0% |         8 |
 | gitignoretemplates      |         24 |          2 |   100.0% |         2 |
 | groupanalytics          |         10 |          2 |   100.0% |         3 |
-| groupboards             |         70 |          2 |   100.0% |        10 |
+| groupboards             |         73 |          2 |   100.0% |        10 |
 | groupcredentials        |         46 |          3 |   100.0% |         4 |
 | groupepicboards         |         19 |          3 |    98.4% |         2 |
 | groupimportexport       |         28 |          4 |   100.0% |         3 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,547** |    **456** |          | **1,190** |
+| **Total**               | **10,553** |    **456** |          | **1,190** |
 
 </details>
 
@@ -452,7 +452,7 @@
 | avatar                  |   100.0% |
 | awardemoji              |   100.0% |
 | badges                  |   100.0% |
-| boards                  |    99.4% |
+| boards                  |   100.0% |
 | branches                |   100.0% |
 | branchrules             |   100.0% |
 | broadcastmessages       |   100.0% |

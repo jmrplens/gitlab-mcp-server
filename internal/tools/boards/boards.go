@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -96,12 +97,21 @@ type issueBoardAPI struct {
 	Group *toolutil.BasicGroupDetailsOutput `json:"group"`
 }
 
+// newRawRequest builds a raw API request for the two reads that decode the
+// documented limit_metric client-go's gl.BoardList omits. It is a package
+// variable so tests can exercise the request-construction failure branches,
+// which no valid input reaches at runtime (PathEscape sanitizes everything
+// interpolated into the path).
+var newRawRequest = func(ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (*retryablehttp.Request, error) {
+	return client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+}
+
 // rawGetBoard issues a raw REST GET for a single issue board, decoding the full
 // documented response (including each list's SDK-missing limit_metric) into an
 // [issueBoardAPI].
 func rawGetBoard(ctx context.Context, client *gitlabclient.Client, projectID string, boardID int64) (*issueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("projects/%s/boards/%d", gl.PathEscape(projectID), boardID)
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -117,7 +127,7 @@ func rawGetBoard(ctx context.Context, client *gitlabclient.Client, projectID str
 // [toolutil.PaginationFromResponse].
 func rawListBoardLists(ctx context.Context, client *gitlabclient.Client, projectID string, boardID int64, opts *gl.GetIssueBoardListsOptions) ([]*boardListAPI, *gl.Response, error) {
 	path := fmt.Sprintf("projects/%s/boards/%d/lists", gl.PathEscape(projectID), boardID)
-	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -208,6 +218,72 @@ func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 }
 
 // ---------------------------------------------------------------------------
+// Refusals
+// ---------------------------------------------------------------------------.
+
+// The hints a refusal of a project board route carries, written from what
+// GitLab answers at v19.4.1-ee (lib/api/boards.rb, lib/api/boards_responses.rb,
+// the EE list create service and the roles under config/authz/roles).
+const (
+	// boardsAccessHint follows a permission refusal of a read. The four reads
+	// are authorized on read_issue_board, which every role from Guest holds and
+	// which ProjectPolicy withholds while the project's issues feature is
+	// disabled, or limited to project members and the caller is not one.
+	boardsAccessHint = "a project's issue boards follow its issues feature, which GitLab refuses while issues are disabled in the project, or limited to project members and the caller is not one"
+
+	// boardsManageHint follows a permission refusal of a write. Board writes
+	// are authorized on admin_issue_board and list writes on
+	// admin_issue_board_list, which config/authz/roles/planner.yml grants, and
+	// which ProjectPolicy withholds from every role while the issues feature
+	// is disabled or the project or an ancestor group is archived. No license
+	// is checked on any of them: a project may have several boards on every
+	// tier (Project#multiple_issue_boards_available? is true), and GitLab
+	// deletes a project's last board like any other.
+	boardsManageHint = "managing a project's issue boards and their lists needs at least the Planner role on the project, and GitLab refuses it to every role while the project's issues feature is disabled or the project or one of its parent groups is archived"
+
+	// listTypeLicenseHint follows the 400 an Enterprise instance answers a
+	// list type its license or the project's plan lacks with
+	// (EE::Boards::Lists::CreateService#license_validation_error).
+	listTypeLicenseHint = "assignee, milestone and iteration lists need GitLab Premium or Ultimate, which the license or plan this project is on does not include, so only a label list (label_id) can be created on its boards"
+
+	// listScopeHint follows every other 400 of a list creation: Grape's own
+	// parameter rules (a Community Edition route requires label_id, an
+	// Enterprise one takes exactly one of the four), a target the project
+	// cannot use ("Label not found") and a second list for one the board
+	// already has ("Label has already been taken").
+	listScopeHint = "exactly one of label_id, assignee_id, milestone_id or iteration_id must be set, and a Community Edition instance takes label_id alone. The id must name a label, milestone or iteration this project can use (its own or a parent group's, see project.label_list and project.milestone_list) or an existing user, and a board holds one list per label, assignee, milestone or iteration, so GitLab answers that it has already been taken when this board has that list already (project.board_list_list shows them)"
+
+	// listTypeLicenseClause follows listScopeHint on a 400 refusing an
+	// assignee, milestone or iteration list in words other than the English
+	// license refusal. GitLab writes that refusal in the caller's preferred
+	// language (API::Helpers#current_user sets Gitlab::I18n.locale from it,
+	// and the message is built with _()), so listTypeLicenseRefusal matches
+	// it only for a caller whose GitLab speaks English, and a licensed list
+	// type refused in any other language is told about the license here.
+	listTypeLicenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences, and only a label list (label_id) can be created there"
+)
+
+// listTypeLicenseRefusal is the fixed part of the message GitLab refuses a
+// list type the license lacks with ("Assignee lists not available with your
+// current license", and the same for milestone, iteration and status lists)
+// when the caller's preferred language is English.
+const listTypeLicenseRefusal = "lists not available with your current license"
+
+// boardRefusal wraps GitLab's refusal of a project board route: a permission
+// refusal, the plain 401 or 403 [toolutil.IsPermissionRefusal] recognizes,
+// carries permissionHint, a 404 carries notFoundHint, and anything else
+// GitLab's own message. The permission hint is keyed on the refusal rather
+// than on a status, since a 403 naming an RFC 6750 code refuses the token's
+// scope rather than the caller's role, and some routes answer a missing
+// permission with 401.
+func boardRefusal(operation string, err error, permissionHint, notFoundHint string) error {
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint(operation, err, permissionHint)
+	}
+	return toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+}
+
+// ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------.
 
@@ -237,8 +313,8 @@ func ListBoards(ctx context.Context, client *gitlabclient.Client, input ListBoar
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	boards, resp, err := client.GL().Boards.ListIssueBoards(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListBoardsOutput{}, toolutil.WrapErrWithStatusHint("board_list", err, http.StatusNotFound,
-			"verify the project exists with project.get. Issue boards must be enabled in project settings")
+		return ListBoardsOutput{}, boardRefusal("board_list", err, boardsAccessHint,
+			"verify the project exists with project.get")
 	}
 	extras, err := toolutil.CapturedBoards(captured, len(boards))
 	if err != nil {
@@ -269,7 +345,7 @@ func GetBoard(ctx context.Context, client *gitlabclient.Client, input GetBoardIn
 	// client-go's gl.BoardList) is surfaced.
 	board, _, err := rawGetBoard(ctx, client, string(input.ProjectID), input.BoardID)
 	if err != nil {
-		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_get", err, http.StatusNotFound,
+		return BoardOutput{}, boardRefusal("board_get", err, boardsAccessHint,
 			"verify board_id with project.board_list. board_id is the global board ID, not an IID")
 	}
 	return convertBoardAPI(board), nil
@@ -295,12 +371,8 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	board, _, err := client.GL().Boards.CreateIssueBoard(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return BoardOutput{}, toolutil.WrapErrWithHint("board_create", err,
-				"creating multiple boards per project requires GitLab Premium or Ultimate; on Free tier each project supports a single board")
-		}
-		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_create", err, http.StatusNotFound,
-			"verify the project exists with project.get and that you have Reporter+ role")
+		return BoardOutput{}, boardRefusal("board_create", err, boardsManageHint,
+			"verify the project exists with project.get")
 	}
 	extra, err := toolutil.CapturedBoard(captured)
 	if err != nil {
@@ -356,11 +428,7 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	board, _, err := client.GL().Boards.UpdateIssueBoard(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return BoardOutput{}, toolutil.WrapErrWithHint("board_update", err,
-				"board scope (assignee/milestone/labels/weight) requires GitLab Premium or Ultimate; on Free tier only name and hide_*_list are mutable")
-		}
-		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_update", err, http.StatusNotFound,
+		return BoardOutput{}, boardRefusal("board_update", err, boardsManageHint,
 			"verify board_id with project.board_list")
 	}
 	extra, err := toolutil.CapturedBoard(captured)
@@ -386,11 +454,7 @@ func DeleteBoard(ctx context.Context, client *gitlabclient.Client, input DeleteB
 	}
 	_, err := client.GL().Boards.DeleteIssueBoard(string(input.ProjectID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("board_delete", err,
-				"deleting boards requires Maintainer+ role; the default board cannot be deleted on Free tier")
-		}
-		return toolutil.WrapErrWithStatusHint("board_delete", err, http.StatusNotFound,
+		return boardRefusal("board_delete", err, boardsManageHint,
 			"verify board_id with project.board_list")
 	}
 	return nil
@@ -427,7 +491,7 @@ func ListBoardLists(ctx context.Context, client *gitlabclient.Client, input List
 	// client-go's gl.BoardList) is surfaced.
 	lists, resp, err := rawListBoardLists(ctx, client, string(input.ProjectID), input.BoardID, opts)
 	if err != nil {
-		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("board_list_list", err, http.StatusNotFound,
+		return ListBoardListsOutput{}, boardRefusal("board_list_list", err, boardsAccessHint,
 			"verify project_id and board_id with project.board_list")
 	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -457,7 +521,7 @@ func GetBoardList(ctx context.Context, client *gitlabclient.Client, input GetBoa
 	}
 	list, _, err := client.GL().Boards.GetIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_get", err, http.StatusNotFound,
+		return BoardListOutput{}, boardRefusal("board_list_get", err, boardsAccessHint,
 			"verify board_id and list_id with project.board_list_list")
 	}
 	return convertBoardList(list), nil
@@ -496,18 +560,35 @@ func CreateBoardList(ctx context.Context, client *gitlabclient.Client, input Cre
 	}
 	list, _, err := client.GL().Boards.CreateIssueBoardList(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return BoardListOutput{}, toolutil.WrapErrWithHint("board_list_create", err,
-				"assignee_id, milestone_id, and iteration_id lists require GitLab Premium or Ultimate; on Free tier only label_id lists are supported")
-		}
-		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return BoardListOutput{}, toolutil.WrapErrWithHint("board_list_create", err,
-				"exactly one of label_id, assignee_id, milestone_id, or iteration_id must be set; verify the referenced ID exists in this project's scope")
-		}
-		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_create", err, http.StatusNotFound,
-			"verify project_id and board_id with project.board_list")
+		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0
+		return BoardListOutput{}, createBoardListError(err, licensedType)
 	}
 	return convertBoardList(list), nil
+}
+
+// createBoardListError wraps GitLab's refusal of a column creation with the
+// hint its cause calls for. Every refusal of what was sent is a 400:
+// API::BoardsResponses#create_list renders the service's first error with that
+// status, and Grape answers its own parameter rules with it. A list type the
+// license or the project's plan lacks is one of those 400s, so the license is
+// named on a 400 and never on a 403, which this route answers only for a
+// caller without admin_issue_board_list. GitLab's English message alone says
+// for certain that the license refused it; GitLab translates that message,
+// so a 400 refusing an assignee, milestone or iteration list (licensedType)
+// in any other words names the license beside the scope, and a 400 refusing
+// a label list, which no license gates, names none.
+func createBoardListError(err error, licensedType bool) error {
+	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		if toolutil.ContainsAny(err, listTypeLicenseRefusal) {
+			return toolutil.WrapErrWithHint("board_list_create", err, listTypeLicenseHint)
+		}
+		if licensedType {
+			return toolutil.WrapErrWithHint("board_list_create", err, listScopeHint+". "+listTypeLicenseClause)
+		}
+		return toolutil.WrapErrWithHint("board_list_create", err, listScopeHint)
+	}
+	return boardRefusal("board_list_create", err, boardsManageHint,
+		"verify project_id and board_id with project.board_list")
 }
 
 // UpdateBoardListInput represents input for updating (reordering) a board list.
@@ -534,7 +615,7 @@ func UpdateBoardList(ctx context.Context, client *gitlabclient.Client, input Upd
 	}
 	list, _, err := client.GL().Boards.UpdateIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_update", err, http.StatusNotFound,
+		return BoardListOutput{}, boardRefusal("board_list_update", err, boardsManageHint,
 			"verify board_id and list_id with project.board_list_list. Position is 0-based and must be within the current list count")
 	}
 	return convertBoardList(list), nil
@@ -560,7 +641,7 @@ func DeleteBoardList(ctx context.Context, client *gitlabclient.Client, input Del
 	}
 	_, err := client.GL().Boards.DeleteIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("board_list_delete", err, http.StatusNotFound,
+		return boardRefusal("board_list_delete", err, boardsManageHint,
 			"verify board_id and list_id with project.board_list_list")
 	}
 	return nil
