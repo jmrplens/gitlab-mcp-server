@@ -213,7 +213,7 @@ and GraphQL alike. It drops a message that only restates the status
 (`405 Method Not Allowed`, or the wrapped `{message: 405 Method Not Allowed}`)
 and a body that is not a GitLab message at all, flattens what is left onto one
 line, since GitLab's messages quote input an attacker may have chosen, and
-caps it at 300 characters:
+caps it at 2048 bytes (`maxGitLabMessageLen`, a site of register row RQB-010):
 
 ```go
 msg := toolutil.ExtractGitLabMessage(err)
@@ -395,7 +395,7 @@ so a value the call put in the path is repeated there; the query string and
 the request body are not copied into it. The sanitizer bounds what GitLab
 authored: a REST
 message and the `errors[].message` list client-go appends to a GraphQL error
-are each flattened onto one line and capped at 300 characters, and the list is
+are each flattened onto one line and capped at 2048 bytes, and the list is
 dropped altogether when the body carries a top-level key other than `data`,
 `errors` and `extensions`, since GitLab did not compose that body.
 
