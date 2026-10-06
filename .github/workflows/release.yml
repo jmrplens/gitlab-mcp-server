@@ -1663,7 +1663,10 @@ jobs:
   verify-published:
     name: "🔬 Verify published packages"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The comparison step waits up to 40 minutes from its start for nuget.org
+    # (--nuget-deadline 2400 below), then downloads what is left: the job
+    # must outlast both, or the runner cancels the check before it reports.
+    timeout-minutes: 50
     needs: [preflight, npm, pypi, nuget]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
@@ -1705,11 +1708,18 @@ jobs:
       # The digests arrive as a job output and are written to a file rather
       # than expanded into the command line.
       #
-      # The retry budget is the same allowance the mcp-registry publish step
-      # gives itself, and for the same reason: this runs minutes after the
-      # uploads, and a registry CDN that has not caught up answers 404. It is
-      # spent only on downloads — a digest that does not match the signed
-      # checksums fails on sight, with no second attempt.
+      # This runs minutes after the uploads, and a registry that has not
+      # finished publishing the version answers 404, so the downloads wait
+      # for it, from two allowances. npm and PyPI share a budget of 480
+      # seconds slept, which npm's lag alone spent 390 of on 3.1.0. NuGet has
+      # a deadline of its own, 40 minutes from the step's start, since
+      # nuget.org validates every push before it serves it, and does so while
+      # npm and PyPI are waited for: 3.1.0's packages were served 23 minutes
+      # after this step started, and the step, then sharing one budget with
+      # npm, failed the release. A pointer index that does not list the
+      # version yet is waited for the same way. Waiting is spent only on
+      # downloads: a digest that does not match the signed checksums fails on
+      # sight, with no second attempt.
       - name: Compare registry packages with the signed checksums
         if: env.REHEARSAL != 'true'
         env:
@@ -1718,7 +1728,7 @@ jobs:
           set -euo pipefail
           printf '%s\n' "$NUPKG_SHA256" > "$RUNNER_TEMP/nupkg.sha256"
           python3 scripts/verify_published_packages.py \
-            --retry-budget 480 --retry-delay 30 \
+            --retry-budget 480 --retry-delay 30 --nuget-deadline 2400 \
             --nuget-digests "$RUNNER_TEMP/nupkg.sha256" \
             "${RELEASE_TAG#v}" dist/checksums.txt
 

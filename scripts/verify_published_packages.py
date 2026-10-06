@@ -3,6 +3,7 @@
 
 Usage:
     python3 scripts/verify_published_packages.py <version> <checksums.txt> [--nuget-digests <file>]
+        [--retry-budget <seconds>] [--retry-delay <seconds>] [--nuget-deadline <seconds>]
 
 <checksums.txt> is the release's own manifest, after its cosign signature has
 been verified — in CI that is what scripts/fetch-release-assets.sh leaves
@@ -49,11 +50,31 @@ out-of-band check to run days later.
 
 Retries. This job gates the ones that advertise the release, so it is the
 strictest gate in the pipeline, and it runs minutes after the uploads it reads
-back. A version that has not propagated to a registry CDN yet answers 404 —
-the same not-yet-visible state the mcp-registry job already waits out at 60s
-intervals. Every download therefore draws on a shared retry budget
-(--retry-budget, --retry-delay; pass 0 for the out-of-band run, where there is
-no lag left to wait for).
+back. A version a registry has not finished publishing answers 404, the same
+not-yet-visible state the mcp-registry job already waits out at 60s
+intervals, so it is waited for rather than reported, from one of two
+allowances (--retry-delay is the pause between attempts under both).
+
+npm and PyPI share a retry budget (--retry-budget), counted in the seconds
+slept between attempts. Both make a version visible within minutes, and
+either a registry has the version or it does not, so a slow one is absorbed by
+the first download that waits for it and an absent one spends the budget once
+and fails the rest promptly.
+
+NuGet has a deadline of its own (--nuget-deadline), counted in wall-clock
+seconds from the start of the run rather than in sleep granted when its check
+begins, because nuget.org validates every push before it serves it and does
+so while npm and PyPI are being waited for. On 3.1.0 that took 23 minutes from
+this step's start: the seven packages were pushed at 19:29 UTC, committed to
+nuget.org's catalog between 19:48 and 19:52 and all served by 19:53, while
+npm's lag had already spent 13 of the 16 waits of the one budget the run then
+had, and the step failed. Until the version is served, the pointer's
+flat-container index answers with the versions published before it, so an
+index that does not list this version yet is waited for from the deadline
+like a 404, and reported only once the deadline is spent.
+
+--retry-budget 0 disables every wait, NuGet's included: that is the
+out-of-band run, days later, where there is no lag left to wait for.
 
 What is never retried is a mismatch. Retrying lives strictly inside fetch(),
 so by the time a digest is compared the bytes are already in hand and a failed
@@ -132,15 +153,31 @@ ZIP_CENTRAL_HEADER_SIZE = 46
 
 TIMEOUT = 120
 
-# Seconds of retry sleep the whole run may spend, and the pause between
-# attempts. The budget is shared rather than granted per URL because the
-# failure modes here are correlated: either a registry has this version or it
-# does not, and letting each of six npm packages wait out a budget of its own
-# would turn one unpublished release into an hour of CI. A slow registry is
-# absorbed by the first download that waits for it; a genuinely absent version
-# exhausts the budget once and then fails the remaining checks promptly.
+# Seconds of retry sleep the npm and PyPI checks may spend between them, and
+# the pause between attempts, which the NuGet deadline below uses too. The
+# budget is shared rather than granted per URL because the failure modes here
+# are correlated: either a registry has this version or it does not, and
+# letting each of six npm packages wait out a budget of its own would turn one
+# unpublished release into an hour of CI. A slow registry is absorbed by the
+# first download that waits for it; a genuinely absent version exhausts the
+# budget once and then fails the remaining checks promptly. NuGet does not
+# draw on it: npm's lag alone spent 390 of the 480 seconds the release job
+# gives this budget on 3.1.0.
 RETRY_BUDGET = 600.0
 RETRY_DELAY = 20.0
+
+# How long, in seconds from the start of the run, the NuGet checks may keep
+# waiting for nuget.org to serve the version. Sized on 3.1.0, whose last
+# package was served 23 minutes after this step started (20 to 25 after the
+# push), with margin; 3.0.0's was served about nine minutes after its push.
+# One allowance serves all seven packages for the correlation the budget above
+# rests on, and it ends at an instant rather than after an amount of sleep
+# because nuget.org validates while npm and PyPI are being waited for: their
+# time is time nuget.org spent validating, and an allowance granted only when
+# NuGet's check began would make how long the step can run depend on how long
+# npm lagged, so no job timeout could be sized against it. The release job's
+# timeout has to exceed this by the downloads that follow its end.
+NUGET_DEADLINE = 2400.0
 
 
 def describe(exc):
@@ -191,13 +228,45 @@ class RetryBudget:
         return True
 
 
+class RetryDeadline:
+    """An allowance of waiting between attempts that ends at an instant.
+
+    The instant is fixed when the deadline is made, so time spent before its
+    first wait counts against it. A wait is allowed only when it would end by
+    the deadline, which is RetryBudget's rule read on a clock. clock and sleep
+    are injected so a test can drive a deadline of forty minutes in no time.
+    """
+
+    def __init__(self, seconds=NUGET_DEADLINE, delay=RETRY_DELAY, clock=time.monotonic, sleep=time.sleep):
+        self.seconds = float(seconds)
+        self.delay = float(delay)
+        self.waits = 0
+        self._clock = clock
+        self._sleep = sleep
+        self.end = clock() + self.seconds
+
+    @property
+    def remaining(self):
+        """Seconds left until the deadline, never negative."""
+        return max(0.0, self.end - self._clock())
+
+    def wait(self):
+        """Pause before another attempt, and report whether one was allowed."""
+        if self.delay <= 0 or self.remaining < self.delay:
+            return False
+        self.waits += 1
+        self._sleep(self.delay)
+        return True
+
+
 def fetch(url, budget=None):
-    """GET url, spending the shared budget on anything that fails in transit.
+    """GET url, spending budget, a RetryBudget or a RetryDeadline, on anything
+    that fails in transit.
 
     A 404 is retried like any other failure: minutes after an upload it is
-    indistinguishable from propagation lag. It is not forgiven — once the
-    budget is spent the FetchError becomes a reported problem and the job
-    fails — it is only waited for.
+    indistinguishable from propagation lag. It is not forgiven (once the
+    allowance is spent the FetchError becomes a reported problem and the job
+    fails); it is only waited for.
     """
     request = urllib.request.Request(url, headers={"User-Agent": "gitlab-mcp-server-release-audit"})
     attempts = 0
@@ -473,21 +542,44 @@ def check_pypi(version, digests, problems, budget=None):
         problems.append(f"pypi: no wheel published for {', '.join(missing)}")
 
 
+def check_nuget_listing(version, problems, budget=None):
+    """Check the pointer's flat-container index lists version, waiting from
+    budget for an index that does not list it yet.
+
+    While nuget.org validates a push, the index answers 200 with the versions
+    it already serves, so an index without this one is the lag a 404 is and is
+    waited for the same way; it becomes a finding only once budget is spent. An
+    index that cannot be read at all is reported at once, beyond what fetch()
+    already waited for: a body that is not JSON is an answer, not lag.
+    """
+    attempts = 0
+    while True:
+        attempts += 1
+        try:
+            versions = nuget_versions(NUGET_ID, budget)
+        except (urllib.error.URLError, ValueError) as exc:
+            problems.append(f"nuget {NUGET_ID}: could not list the published versions: {exc}")
+            return
+        if version.lower() in versions:
+            print(f"  ok  nuget {NUGET_ID:<32} lists {version}")
+            return
+        if budget is None or not budget.wait():
+            problems.append(f"nuget {NUGET_ID}: version {version} is not listed on nuget.org "
+                            f"(still unlisted after {attempts} attempt(s))")
+            return
+        print(f"  .. nuget {NUGET_ID}: version {version} is not listed yet; retrying (attempt {attempts + 1})",
+              flush=True)
+
+
 def check_nuget(version, digests, problems, budget=None, attested=None):
     """Check the pointer is listed and each runtime package carries the signed
-    binary; with attested digests, hold all seven packages to them as well."""
+    binary; with attested digests, hold all seven packages to them as well.
+    budget is the NuGet deadline in a run of main(), which every download here
+    and the listing draw on."""
     # The pointer carries no binary, so its check is that the version is
     # listed at all: a runtime package nobody points at is not installable,
     # and a pointer published without its runtime packages installs nothing.
-    try:
-        versions = nuget_versions(NUGET_ID, budget)
-    except (urllib.error.URLError, ValueError) as exc:
-        problems.append(f"nuget {NUGET_ID}: could not list the published versions: {exc}")
-    else:
-        if version.lower() not in versions:
-            problems.append(f"nuget {NUGET_ID}: version {version} is not listed on nuget.org")
-        else:
-            print(f"  ok  nuget {NUGET_ID:<32} lists {version}")
+    check_nuget_listing(version, problems, budget)
     if attested is not None and not attested:
         problems.append("nuget: the attested digests name no package, so nothing the nuget job attested "
                         "can be compared; its nupkg_sha256 output did not reach this run")
@@ -530,7 +622,10 @@ def check_nuget(version, digests, problems, budget=None, attested=None):
                                  problems)
 
 
-def main():
+def main(argv=None, clock=time.monotonic, sleep=time.sleep):
+    """Run the comparison over argv (the process arguments when None). clock
+    and sleep are injected so a test can drive both allowances without
+    spending the time they describe."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version", help="release version without the leading v, e.g. 2.7.6")
     parser.add_argument("checksums", help="path to the release's checksums.txt (or a directory holding it)")
@@ -548,16 +643,32 @@ def main():
         type=float,
         default=RETRY_BUDGET,
         metavar="SECONDS",
-        help="total seconds this run may spend waiting for a registry to catch up (0 disables retrying)",
+        help="total seconds the npm and PyPI checks may spend waiting for a registry to catch up "
+        "(0 disables every wait, NuGet's included)",
     )
     parser.add_argument(
         "--retry-delay",
         type=float,
         default=RETRY_DELAY,
         metavar="SECONDS",
-        help="pause between download attempts",
+        help="pause between download attempts, for npm and PyPI and for NuGet",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--nuget-deadline",
+        type=float,
+        default=NUGET_DEADLINE,
+        metavar="SECONDS",
+        help="seconds from the start of the run until which the NuGet checks may keep waiting for nuget.org "
+        "to serve the version (ignored when --retry-budget is 0)",
+    )
+    args = parser.parse_args(argv)
+
+    # Made before anything is read, because the deadline is counted from the
+    # start: nuget.org validates while npm and PyPI are being waited for.
+    # --retry-budget 0 is the out-of-band run, and it waits for nothing.
+    nuget_seconds = args.nuget_deadline if args.retry_budget > 0 else 0
+    deadline = RetryDeadline(nuget_seconds, args.retry_delay, clock=clock, sleep=sleep)
+    budget = RetryBudget(args.retry_budget, args.retry_delay, sleep=sleep)
 
     checksums = args.checksums
     if os.path.isdir(checksums):
@@ -570,7 +681,6 @@ def main():
     if NOTICES not in digests:
         print(f"  ..  {checksums} names no {NOTICES}, a release from before they were generated, "
               "so the packages' notices are not compared")
-    budget = RetryBudget(args.retry_budget, args.retry_delay)
     problems = []
     if not args.skip_npm:
         check_npm(args.version, digests, problems, budget)
@@ -582,18 +692,24 @@ def main():
             attested = attested_nupkg_digests(args.nuget_digests)
         else:
             print("  ..  nuget: no --nuget-digests given, so the packages are checked by the binaries they carry only")
-        check_nuget(args.version, digests, problems, budget, attested)
+        check_nuget(args.version, digests, problems, deadline, attested)
 
     if problems:
         print(f"\nFAILED ({len(problems)}):")
         for problem in problems:
             print(f"  x {problem}")
+        if budget.waits or deadline.waits:
+            print()
         if budget.waits:
-            print(
-                f"\nRetried {budget.waits} time(s); {int(budget.remaining)}s of the retry budget was left unspent. "
-                "A budget spent to zero means a download never came back at all, "
-                "which reads differently from a digest that did not match."
-            )
+            print(f"npm and PyPI retried {budget.waits} time(s); {int(budget.remaining)}s of their "
+                  f"{int(args.retry_budget)}s retry budget was left unspent.")
+        if deadline.waits:
+            print(f"NuGet retried {deadline.waits} time(s); {int(deadline.remaining)}s of its "
+                  f"{int(deadline.seconds)}s deadline, counted from the start of this run, was left.")
+        if budget.waits or deadline.waits:
+            print("An allowance spent to zero means a registry never served the version "
+                  "(a download never came back, or the pointer's index never listed it), "
+                  "which reads differently from a digest that did not match.")
         sys.exit(1)
     print("\nEvery published package carries the binary the release signed.")
     if attested:
