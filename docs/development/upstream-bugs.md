@@ -273,7 +273,7 @@ readable without opening the tracker:
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
-| 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | No | No | No | No | Yes |
+| 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), open | No | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, unreleased** | Yes | Partial |
 | 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), merged | **Yes, unreleased**: in milestone 19.5 | No | Yes, `orbit.query`'s own guidance and the site's Orbit page teach version 12, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031) |
@@ -6966,8 +6966,19 @@ a fix we carry upstream in our name.
 
 ### The transfer API pages do not say the answer precedes the move, or how a failure is reported
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, by the merge request below; a documentation-only change
+  needs no issue first.
+- **In review**: yes,
+  [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143),
+  opened on 2026-10-06 from the community fork, against `master` after the
+  change below merged: both transfer sections say the move runs in the
+  background, what the request returns (`200 OK` for a project, `201 Created`
+  for a group, the object before the move), how to confirm the move, which
+  checks refuse with `400` before it and which can only fail in the worker,
+  how a failure is reported and where its reason is readable, and what a
+  resend does, and the to-do page's `action` and `type` lists gain every
+  value the route accepts. It suggests the stages' technical writers without
+  mentioning them, and has not been readied for review.
 - **Merged**: no.
 - **Blocking**: no. The transfer is accepted and applied; what misleads is the
   answer and the pages that describe it: the object in the answer (a 200 for
@@ -7116,10 +7127,10 @@ started it a to-do item with the reason, and the GraphQL reference; it did
 not touch `lib/api/entities/todo.rb`, `doc/api/projects.md`,
 `doc/api/groups.md` or `doc/api/todos.md`, so the REST to-do item still
 carries no reason and every gap of the three API pages above stands. The
-proposal no longer waits: the docs merge request is being prepared, against
-19.5's behaviour (the project collision refused before the answer, and the
-reason on the to-do item over GraphQL), and has not been opened, so this
-entry still reads Reported no. Reading the reason on our side is
+proposal no longer waits: the docs merge request was opened the same day as
+gitlab-org/gitlab!260143 (In review, above), written against 19.5's behaviour
+(the project collision refused before the answer, and the reason on the to-do
+item over GraphQL). Reading the reason on our side is
 [issue 1222](https://github.com/jmrplens/gitlab-mcp-server/issues/1222),
 opened on 2026-10-06.
 
