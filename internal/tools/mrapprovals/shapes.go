@@ -1,8 +1,11 @@
 package mrapprovals
 
 import (
+	"time"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -12,9 +15,10 @@ import (
 // sibling packages to preserve the zero-import-cycle constraint (C-IMPORTS).
 //
 // This file covers the merge-request approval sub-objects: approver users
-// (approved_by, approvers), approver groups (approver_groups), basic users
-// (suggested_approvers, eligible_approvers, users, approved_by on rules),
-// rule groups (groups), and the project-level source rule (source_rule). The
+// (approved_by), basic users (eligible_approvers, users, approved_by on rules),
+// rule groups (groups), the project-level source rule (source_rule), and the
+// Enterprise Edition approval state with its approvers, approver groups and
+// short rule references, which is read off the captured answer. The
 // compact-mirror depth follows the project norm established by
 // internal/tools/groups Output (curated identifying fields rather than the full
 // gl.Group / gl.ProjectApprovalRule surface, which embeds large nested
@@ -103,12 +107,111 @@ func approverUserOutputs(users []*gl.MergeRequestApproverUser) []*MergeRequestAp
 	return out
 }
 
-// The approver-group output types stood here, mirroring
-// gl.MergeRequestApproverGroup and its nested group. Nothing publishes them any
-// more: their only reader was ConfigOutput.ApproverGroups, which GitLab answers
-// only at the deprecated POST this package does not call. They are removed
-// rather than kept for a future caller, because a type nothing reaches is a
-// second definition of a group shape that would drift from the one in use.
+// EnterpriseApprovalState is what an Enterprise Edition instance adds to the
+// approvals of a merge request: twenty keys a Community Edition instance never
+// sends.
+//
+// GitLab answers GET .../approvals, POST .../approve and POST .../unapprove
+// through one helper, present_approval. Community Edition presents
+// Entities::MergeRequestApprovals, which is approved, approved_by,
+// user_has_approved and user_can_approve
+// (lib/api/entities/merge_request_approvals.rb).
+// ee/lib/ee/api/merge_request_approvals.rb overrides that helper in its
+// prepended block, with no license check, so every Enterprise Edition build,
+// licensed or not and GitLab.com included, presents the merge request's
+// approval state with Entities::ApprovalState instead
+// (ee/lib/api/entities/approval_state.rb): the same four, the merge request's
+// own identity, the approval counts, the rules still to satisfy and the flags
+// below. The routes keep the Community Edition annotation, so GitLab's
+// generated OpenAPI document lists the four alone for all three.
+//
+// Every field is read off the captured answer (ADR-0021) and is absent when
+// GitLab did not send it: a Community Edition answer publishes none of them,
+// while an Enterprise one keeps its zeros, since approvals_left 0 says no
+// approval is missing and has_approval_rules false says no rule exists. That is
+// why the scalars are pointers, save the two timestamps, which are strings left
+// empty when GitLab sent none, and the lists are omitted only when GitLab sent
+// no list. client-go's MergeRequestApprovals cannot carry that difference: its
+// fields read zero either way. It also has no invalid_approvers_rules, types
+// approval_rules_left with the whole approval rule where GitLab sends the short
+// reference, and declares approvals_before_merge, which no edition sends here
+// and which is not published.
+type EnterpriseApprovalState struct {
+	ID                             *int64                     `json:"id,omitempty"                                jsonschema:"Merge request ID (Enterprise Edition only)"`
+	IID                            *int64                     `json:"iid,omitempty"                               jsonschema:"Merge request IID (Enterprise Edition only)"`
+	ProjectID                      *int64                     `json:"project_id,omitempty"                        jsonschema:"Project ID (Enterprise Edition only)"`
+	Title                          *string                    `json:"title,omitempty"                             jsonschema:"Merge request title (Enterprise Edition only)"`
+	Description                    *string                    `json:"description,omitempty"                       jsonschema:"Merge request description (Enterprise Edition only)"`
+	State                          *string                    `json:"state,omitempty"                             jsonschema:"Merge request state (Enterprise Edition only)"`
+	CreatedAt                      string                     `json:"created_at,omitempty"                        jsonschema:"When the merge request was created (Enterprise Edition only)"`
+	UpdatedAt                      string                     `json:"updated_at,omitempty"                        jsonschema:"When the merge request was last updated (Enterprise Edition only)"`
+	MergeStatus                    *string                    `json:"merge_status,omitempty"                      jsonschema:"Deprecated mergeability status (Enterprise Edition only)"`
+	ApprovalsRequired              *int64                     `json:"approvals_required,omitempty"                jsonschema:"Approvals the merge request requires (Enterprise Edition only)"`
+	ApprovalsLeft                  *int64                     `json:"approvals_left,omitempty"                    jsonschema:"Approvals still missing, 0 when none are (Enterprise Edition only)"`
+	RequirePasswordToApprove       *bool                      `json:"require_password_to_approve,omitempty"       jsonschema:"Deprecated: whether approving asks for the password (Enterprise Edition only)"`
+	SuggestedApprovers             []toolutil.UserBasicOutput `json:"suggested_approvers,omitzero"                jsonschema:"Users suggested as approvers (Enterprise Edition only)"`
+	Approvers                      []ApproverOutput           `json:"approvers,omitzero"                          jsonschema:"Deprecated: the users of the first regular rule (Enterprise Edition only)"`
+	ApproverGroups                 []ApproverGroupOutput      `json:"approver_groups,omitzero"                    jsonschema:"Deprecated: the groups of the first regular rule (Enterprise Edition only)"`
+	ApprovalRulesLeft              []ApprovalRuleShortOutput  `json:"approval_rules_left,omitzero"                jsonschema:"Rules not yet satisfied (Enterprise Edition only)"`
+	HasApprovalRules               *bool                      `json:"has_approval_rules,omitempty"                jsonschema:"Whether any user-defined approval rule applies (Enterprise Edition only)"`
+	MergeRequestApproversAvailable *bool                      `json:"merge_request_approvers_available,omitempty" jsonschema:"Whether the license includes approval rules (Enterprise Edition only)"`
+	MultipleApprovalRulesAvailable *bool                      `json:"multiple_approval_rules_available,omitempty" jsonschema:"Whether the license allows several approval rules (Enterprise Edition only)"`
+	InvalidApproversRules          []ApprovalRuleShortOutput  `json:"invalid_approvers_rules,omitzero"            jsonschema:"Rules no eligible user can satisfy (Enterprise Edition only)"`
+}
+
+// ApproverOutput is one entry of the deprecated approvers list of an
+// Enterprise Edition approval state: a user of the merge request's first
+// regular rule, under user, which is how ee/lib/api/entities/approval_state.rb
+// builds it. Unlike an entry of approved_by it carries no approval time.
+type ApproverOutput struct {
+	User *toolutil.UserBasicOutput `json:"user,omitempty"`
+}
+
+// ApproverGroupOutput is one entry of the deprecated approver_groups list of an
+// Enterprise Edition approval state: a group of the merge request's first
+// regular rule, under group. The group is the documented reference subset
+// [GroupOutput] keeps of Entities::Group.
+type ApproverGroupOutput struct {
+	Group *GroupOutput `json:"group,omitempty"`
+}
+
+// ApprovalRuleShortOutput mirrors ee/lib/api/entities/approval_rule_short.rb,
+// the reference an Enterprise Edition approval state gives each rule it names
+// in approval_rules_left and invalid_approvers_rules: the rule's ID, name and
+// type, and nothing else.
+type ApprovalRuleShortOutput struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	RuleType string `json:"rule_type"`
+}
+
+// enterpriseApprovalCapture is the decoding of a captured approvals answer
+// into [EnterpriseApprovalState]. The two timestamps are read as times, so
+// they are published in the RFC 3339 form every other timestamp here takes
+// rather than in whatever precision GitLab wrote; each shadows the string
+// field of the same name in the embedded state, which encoding/json leaves
+// alone because the shallower field wins.
+type enterpriseApprovalCapture struct {
+	EnterpriseApprovalState
+	CreatedAt *time.Time `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
+}
+
+// CapturedEnterpriseState reads the Enterprise Edition approval state off the
+// captured answer to an approvals, approve or unapprove request. A Community
+// Edition answer carries none of its keys and yields the zero value, which
+// publishes nothing. A body that does not decode is an error, since the fault
+// is then in the type rather than in the answer.
+func CapturedEnterpriseState(capture *gitlabclient.ResponseCapture) (EnterpriseApprovalState, error) {
+	var decoded enterpriseApprovalCapture
+	if err := capture.Decode(&decoded); err != nil {
+		return EnterpriseApprovalState{}, err
+	}
+	state := decoded.EnterpriseApprovalState
+	state.CreatedAt = toolutil.RFC3339Ptr(decoded.CreatedAt)
+	state.UpdatedAt = toolutil.RFC3339Ptr(decoded.UpdatedAt)
+	return state, nil
+}
 
 // GroupOutput is the documented reference subset of the group object embedded
 // in an approval rule's groups list.

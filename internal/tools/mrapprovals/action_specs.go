@@ -156,14 +156,14 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule, with pagination metadata. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
 	},
 	"gitlab_mr_approval_config": {
-		Usage:   "Read who has approved a merge request and whether the calling user can and has. Available on every tier. For how many approvals are required and left, use the approval state instead.",
+		Usage:   "Read who has approved a merge request and whether the calling user can and has. Available on every tier. An Enterprise Edition instance, GitLab.com included and licensed or not, also answers with the approvals required and left, the rules left to satisfy, the suggested approvers and the merge request's identity. Community Edition sends none of those keys, and they are then absent rather than zero. For each rule and whether it is satisfied, use the approval state.",
 		Aliases: []string{"who has approved this mr", "mr approvals", "merge request approved by"},
 		Related: []string{actionApprovalState, actionApprovalRules, actionMRApprove},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		Description: "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
+		Description: "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve, and on an Enterprise Edition instance also the approvals required and left, the rules left to satisfy and the suggested approvers, which Community Edition does not send. For each rule's status, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_reset": {
 		Usage:   "Reset (clear) all existing approvals on a merge request. Only a bot user that may approve it can: a project or group access token, or a service account's token. A person's token is refused, and so is a merge request that is already merged. Use when approvals must be re-collected after changes.",

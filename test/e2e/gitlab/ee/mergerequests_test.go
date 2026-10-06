@@ -123,6 +123,13 @@ func TestMRApprovalRules_Lifecycle_ReadsStateAndManagesARule(t *testing.T) {
 		if len(config.ApprovedBy) != 0 || config.UserHasApproved {
 			e.T.Errorf("a fresh request reports %d approver(s) and user_has_approved=%t, want none", len(config.ApprovedBy), config.UserHasApproved)
 		}
+		// A licensed instance answers with the request's whole approval
+		// state, and the license includes the approval rules this scenario
+		// goes on to create.
+		if config.IID == nil || *config.IID != f.mr.IID || config.MergeRequestApproversAvailable == nil || !*config.MergeRequestApproversAvailable {
+			e.T.Errorf("approval_config published iid %v and merge_request_approvers_available %v, want %d and true on a licensed instance",
+				config.IID, config.MergeRequestApproversAvailable, f.mr.IID)
+		}
 
 		name := e.Name("rule")
 		created := harness.Do[mrapprovals.RuleOutput](s, actionMRApprovalRuleCreate, withParams(params, map[string]any{"name": name, "approvals_required": 1}))
@@ -198,6 +205,11 @@ func TestMRApprovalReset_GroupBot_ClearsTheApproval(t *testing.T) {
 		config := harness.Do[mrapprovals.ConfigOutput](s, actionMRApprovalConfig, params)
 		if len(config.ApprovedBy) != 0 {
 			e.T.Errorf("the request still lists %d approver(s) after the reset: %+v", len(config.ApprovedBy), config.ApprovedBy)
+		}
+		// The reset leaves the bot's rule unsatisfied, which only the
+		// Enterprise approval state can say: an approval is missing again.
+		if config.ApprovalsLeft == nil || *config.ApprovalsLeft < 1 {
+			e.T.Errorf("approval_config after the reset published approvals_left %v, want at least the bot's one", config.ApprovalsLeft)
 		}
 	})
 }

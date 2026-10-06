@@ -7,11 +7,44 @@ package mrapprovals
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
+
+// TestCapturedEnterpriseState_NothingCaptured_IsAnError verifies that a read
+// with no answer behind it is reported rather than taken for a Community
+// Edition answer, which would publish no approval state where one was never
+// asked for.
+func TestCapturedEnterpriseState_NothingCaptured_IsAnError(t *testing.T) {
+	_, err := CapturedEnterpriseState(&gitlabclient.ResponseCapture{})
+	if !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Fatalf("CapturedEnterpriseState() error = %v, want ErrNoResponseCaptured", err)
+	}
+}
+
+// TestCapturedEnterpriseState_ACommunityEditionAnswer_IsTheZeroValue verifies
+// that the four keys every edition sends leave the Enterprise state empty, so
+// it publishes nothing.
+func TestCapturedEnterpriseState_ACommunityEditionAnswer_IsTheZeroValue(t *testing.T) {
+	state, err := CapturedEnterpriseState(gitlabclient.CapturedBody([]byte(
+		`{"approved": true, "approved_by": [], "user_has_approved": false, "user_can_approve": true}`,
+	)))
+	if err != nil {
+		t.Fatalf("CapturedEnterpriseState() unexpected error: %v", err)
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal the state: %v", err)
+	}
+	if string(encoded) != "{}" {
+		t.Errorf("state = %s, want {} for a Community Edition answer", encoded)
+	}
+}
 
 // TestBasicUserOutput_NilAndFull verifies basicUserOutput maps every field and
 // returns nil for a nil input.
@@ -269,11 +302,13 @@ func TestRuleToOutput_NilSourceRule(t *testing.T) {
 //
 // Its predecessor asserted the opposite, field by field: that configToOutput
 // surfaced every member of gl.MergeRequestApprovals. That is what held the
-// defect in place. The SDK type models the response of the POST at this path,
-// deprecated in GitLab 16.0, and a test demanding SDK fidelity from a converter
-// reading a GET's answer demands that twenty fields be published which GitLab
-// never sends. Filling every SDK field here and asserting only four come out is
-// the shape that catches a re-widening.
+// first defect in place. The SDK's fields are values, so they read zero on a
+// Community Edition answer that never sent them, and a test demanding SDK
+// fidelity demands that those zeros be published. The twenty keys an
+// Enterprise Edition answer adds come from the captured answer instead, with
+// their presence, so filling every SDK field here with no captured state and
+// asserting only four come out is the shape that catches a converter reading
+// them off the SDK again.
 func TestConfigToOutput_TakesTheFourFieldsTheGETAnswersWith(t *testing.T) {
 	created := time.Date(2026, 1, 1, 8, 0, 0, 0, time.UTC)
 	updated := time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC)
@@ -294,7 +329,7 @@ func TestConfigToOutput_TakesTheFourFieldsTheGETAnswersWith(t *testing.T) {
 		},
 	}
 
-	out := configToOutput(&c)
+	out := configToOutput(&c, EnterpriseApprovalState{})
 
 	if !out.Approved || !out.UserHasApproved || !out.UserCanApprove {
 		t.Errorf("configToOutput scalars = %+v, want the three booleans the GET answers with", out)

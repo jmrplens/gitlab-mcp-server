@@ -11,12 +11,14 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -441,31 +443,37 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 // Config (GetConfiguration) tests
 // ---------------------------------------------------------------------------.
 
-// configResponse is what GitLab answers at
-// GET /projects/:id/merge_requests/:merge_request_iid/approvals: four fields, on
-// every tier.
+// configResponse is what a Community Edition instance answers at
+// GET /projects/:id/merge_requests/:merge_request_iid/approvals: the four keys
+// of Entities::MergeRequestApprovals.
 //
-// It used to carry ten more, invented here, and that is how the phantom fields
-// survived a green test for as long as they did: the fixture was written from
-// the SDK struct rather than from a response, so the assertions proved our
-// converter agreed with our own invention. The extra keys are kept below on
-// purpose, to prove they are dropped rather than merely absent.
+// The fixture was once written from the SDK struct rather than from a
+// response, which is how fields no Community Edition answer carries survived a
+// green test: the assertions proved the converter agreed with the fixture.
 const configResponse = `{
 	"approved": true,
 	"user_has_approved": true, "user_can_approve": false,
 	"approved_by": [{"user": {"name": "Alice"}, "approved_at": "2026-01-15T10:30:00Z"}]
 }`
 
-// configResponseWithPOSTFields is the same answer with the deprecated POST's
-// twenty extra fields bolted on, which is what an old GitLab or a proxy might
-// send. Nothing in ConfigOutput may pick them up.
-const configResponseWithPOSTFields = `{
-	"id": 1, "iid": 10, "project_id": 42, "title": "Test MR", "state": "opened",
-	"approved": true, "approvals_required": 2, "approvals_left": 0,
-	"approvals_before_merge": 2, "has_approval_rules": true,
-	"user_has_approved": true, "user_can_approve": false,
+// configEnterpriseResponse is what an Enterprise Edition instance answers at
+// the same path, licensed or not: Entities::ApprovalState, all twenty-four
+// keys in the order GitLab exposes them, taken from a read of GitLab.com with
+// the values replaced. The zeros, the false flags and the empty lists are on
+// purpose, since each is an answer the output must keep.
+const configEnterpriseResponse = `{
+	"id": 542, "iid": 10, "project_id": 42, "title": "Test MR", "description": null,
+	"state": "opened", "created_at": "2026-10-02T10:32:16.589Z", "updated_at": "2026-10-05T04:28:05.548Z",
+	"merge_status": "can_be_merged", "approved": true,
+	"approvals_required": 0, "approvals_left": 0, "require_password_to_approve": false,
 	"approved_by": [{"user": {"name": "Alice"}, "approved_at": "2026-01-15T10:30:00Z"}],
-	"suggested_approvers": [{"name": "Bob"}]
+	"suggested_approvers": [{"id": 7, "username": "bob", "public_email": "", "name": "Bob", "state": "active",
+		"locked": false, "avatar_url": "https://gitlab.example.com/a/7", "web_url": "https://gitlab.example.com/bob"}],
+	"approvers": [], "approver_groups": [],
+	"user_has_approved": false, "user_can_approve": false,
+	"approval_rules_left": [], "has_approval_rules": false,
+	"merge_request_approvers_available": true, "multiple_approval_rules_available": true,
+	"invalid_approvers_rules": []
 }`
 
 // TestMRApprovalConfig_Success verifies MRApprovalConfig when success.
@@ -499,41 +507,156 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	}
 }
 
-// TestMRApprovalConfig_TheDeprecatedPOSTsFields_AreNotPublished pins the repair.
-// The twenty extra fields this output used to carry are the response of the POST
-// at the same path, deprecated in GitLab 16.0 and never called here, so an
-// answer that carries them anyway must still publish four keys and no more. A
-// field test asserts the shape rather than one value, because the defect was
-// that the shape was somebody else's.
-func TestMRApprovalConfig_TheDeprecatedPOSTsFields_AreNotPublished(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// configAnswering returns a client whose approvals GET answers body, and
+// refuses every other request.
+func configAnswering(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/10/approvals" {
-			testutil.RespondJSON(w, http.StatusOK, configResponseWithPOSTFields)
+			testutil.RespondJSON(w, http.StatusOK, body)
 			return
 		}
 		http.NotFound(w, r)
 	}))
+}
 
-	out, err := Config(context.Background(), client, ConfigInput{ProjectID: "42", MRIID: 10})
-	if err != nil {
-		t.Fatalf("Config() unexpected error: %v", err)
-	}
-
+// publishedKeys marshals an output the way the server does and returns the
+// keys it publishes, sorted.
+func publishedKeys(t *testing.T, out any) []string {
+	t.Helper()
 	encoded, err := json.Marshal(out)
 	if err != nil {
 		t.Fatalf("marshal the output: %v", err)
 	}
 	var keys map[string]json.RawMessage
-	if unmarshalErr := json.Unmarshal(encoded, &keys); unmarshalErr != nil {
-		t.Fatalf("read the output back: %v", unmarshalErr)
+	if err = json.Unmarshal(encoded, &keys); err != nil {
+		t.Fatalf("read the output back: %v", err)
 	}
-	published := slices.Sorted(maps.Keys(keys))
+	return slices.Sorted(maps.Keys(keys))
+}
+
+// TestMRApprovalConfig_ACommunityEditionAnswer_PublishesItsFourKeysAlone pins
+// the half of the repair a Community Edition instance sees: GitLab sends four
+// keys there, and the output publishes those four and nothing else, where it
+// once published an id, a title and an approvals_required of zero.
+func TestMRApprovalConfig_ACommunityEditionAnswer_PublishesItsFourKeysAlone(t *testing.T) {
+	out, err := Config(context.Background(), configAnswering(t, configResponse), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
 	want := []string{"approved", "approved_by", "user_can_approve", "user_has_approved"}
-	if !slices.Equal(published, want) {
-		t.Errorf("published %v, want exactly %v: every other key of the SDK type belongs to the deprecated POST", published, want)
+	if published := publishedKeys(t, out); !slices.Equal(published, want) {
+		t.Errorf("published %v, want exactly %v: Community Edition sends no other key", published, want)
 	}
-	if !out.Approved || !out.UserHasApproved || len(out.ApprovedBy) != 1 {
-		t.Errorf("output = %+v, want the four real fields still read", out)
+}
+
+// TestMRApprovalConfig_AnEnterpriseEditionAnswer_PublishesEveryKeyItSent pins
+// the other half: an Enterprise Edition instance sends twenty more keys, and
+// every one of them is published, the zeros, the false flags and the empty
+// lists included, because each is an answer. approvals_left 0 is the one a
+// model most needs: it says no approval is missing.
+func TestMRApprovalConfig_AnEnterpriseEditionAnswer_PublishesEveryKeyItSent(t *testing.T) {
+	out, err := Config(context.Background(), configAnswering(t, configEnterpriseResponse), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
+	want := []string{
+		"approval_rules_left", "approvals_left", "approvals_required", "approved", "approved_by", "approver_groups",
+		"approvers", "created_at", "has_approval_rules", "id", "iid", "invalid_approvers_rules",
+		"merge_request_approvers_available", "merge_status", "multiple_approval_rules_available", "project_id",
+		"require_password_to_approve", "state", "suggested_approvers", "title", "updated_at", "user_can_approve",
+		"user_has_approved",
+	}
+	if published := publishedKeys(t, out); !slices.Equal(published, want) {
+		t.Errorf("published %v, want %v: every key GitLab sent but the null description", published, want)
+	}
+	if !out.Approved || len(out.ApprovedBy) != 1 {
+		t.Errorf("output = %+v, want the four every edition sends still read", out)
+	}
+}
+
+// TestMRApprovalConfig_AnEnterpriseEditionAnswer_KeepsItsValues verifies what
+// the same answer's keys hold: the merge request's identity, both counts at
+// zero rather than absent, the false flag, the timestamps in the RFC 3339
+// form every other one takes, and the suggested approver whole.
+func TestMRApprovalConfig_AnEnterpriseEditionAnswer_KeepsItsValues(t *testing.T) {
+	out, err := Config(context.Background(), configAnswering(t, configEnterpriseResponse), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
+	s := out.EnterpriseApprovalState
+	want := EnterpriseApprovalState{
+		ID: new(int64(542)), IID: new(int64(10)), ProjectID: new(int64(42)), Title: new("Test MR"), State: new("opened"),
+		CreatedAt: "2026-10-02T10:32:16Z", UpdatedAt: "2026-10-05T04:28:05Z", MergeStatus: new("can_be_merged"),
+		ApprovalsRequired: new(int64(0)), ApprovalsLeft: new(int64(0)), RequirePasswordToApprove: new(false),
+		SuggestedApprovers: []toolutil.UserBasicOutput{{
+			ID: 7, Username: "bob", Name: "Bob", State: "active",
+			AvatarURL: "https://gitlab.example.com/a/7", WebURL: "https://gitlab.example.com/bob",
+		}},
+		Approvers: []ApproverOutput{}, ApproverGroups: []ApproverGroupOutput{},
+		ApprovalRulesLeft: []ApprovalRuleShortOutput{}, HasApprovalRules: new(false),
+		MergeRequestApproversAvailable: new(true), MultipleApprovalRulesAvailable: new(true),
+		InvalidApproversRules: []ApprovalRuleShortOutput{},
+	}
+	if !reflect.DeepEqual(s, want) {
+		t.Errorf("state = %+v, want %+v", s, want)
+	}
+}
+
+// TestMRApprovalConfig_AKeyNoEditionSends_IsNotPublished verifies that
+// approvals_before_merge, which client-go declares and no edition sends at
+// this path, is not picked up when an answer carries it anyway, as an old
+// GitLab or a proxy might.
+func TestMRApprovalConfig_AKeyNoEditionSends_IsNotPublished(t *testing.T) {
+	body := `{"approved": false, "approvals_before_merge": 2, "user_has_approved": false, "user_can_approve": true}`
+	out, err := Config(context.Background(), configAnswering(t, body), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
+	if published := publishedKeys(t, out); slices.Contains(published, "approvals_before_merge") {
+		t.Errorf("published %v, want no approvals_before_merge", published)
+	}
+}
+
+// TestMRApprovalConfig_TheRulesGitLabNames_AreDecodedShort verifies the two
+// rule lists an Enterprise answer names, decoded as the short reference
+// GitLab sends (ID, name, type), and the deprecated approvers and approver
+// groups under their user and group keys.
+func TestMRApprovalConfig_TheRulesGitLabNames_AreDecodedShort(t *testing.T) {
+	body := `{"approved": false, "user_has_approved": false, "user_can_approve": true,
+		"approval_rules_left": [{"id": 3, "name": "Security", "rule_type": "regular"}],
+		"invalid_approvers_rules": [{"id": 4, "name": "Nobody", "rule_type": "regular"}],
+		"approvers": [{"user": {"id": 8, "username": "carol", "locked": true}}],
+		"approver_groups": [{"group": {"id": 9, "name": "Sec", "full_path": "org/sec", "lfs_enabled": true}}]}`
+	out, err := Config(context.Background(), configAnswering(t, body), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err != nil {
+		t.Fatalf("Config() unexpected error: %v", err)
+	}
+	s := out.EnterpriseApprovalState
+	if want := []ApprovalRuleShortOutput{{ID: 3, Name: "Security", RuleType: "regular"}}; !slices.Equal(s.ApprovalRulesLeft, want) {
+		t.Errorf("approval_rules_left = %+v, want %+v", s.ApprovalRulesLeft, want)
+	}
+	if want := []ApprovalRuleShortOutput{{ID: 4, Name: "Nobody", RuleType: "regular"}}; !slices.Equal(s.InvalidApproversRules, want) {
+		t.Errorf("invalid_approvers_rules = %+v, want %+v", s.InvalidApproversRules, want)
+	}
+	if len(s.Approvers) != 1 || s.Approvers[0].User == nil || s.Approvers[0].User.Username != "carol" || !s.Approvers[0].User.Locked {
+		t.Errorf("approvers = %+v, want carol whole", s.Approvers)
+	}
+	if len(s.ApproverGroups) != 1 || s.ApproverGroups[0].Group == nil || s.ApproverGroups[0].Group.FullPath != "org/sec" || !s.ApproverGroups[0].Group.LFSEnabled {
+		t.Errorf("approver_groups = %+v, want org/sec", s.ApproverGroups)
+	}
+}
+
+// TestMRApprovalConfig_AnAnswerTheCaptureCannotHold_IsAnError verifies that a
+// key client-go does not model, and so lets through, fails the call when it
+// does not have the shape GitLab gives it, rather than being dropped: the
+// fault is then in the type, and an answer read without it would say the
+// merge request has no rule nobody can satisfy.
+func TestMRApprovalConfig_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
+	body := `{"approved": true, "invalid_approvers_rules": "none"}`
+	_, err := Config(context.Background(), configAnswering(t, body), ConfigInput{ProjectID: "42", MRIID: 10})
+	if err == nil || !strings.Contains(err.Error(), "mrApprovalConfig") {
+		t.Fatalf("Config() error = %v, want the operation's error for an undecodable answer", err)
 	}
 }
 
@@ -1409,7 +1532,7 @@ func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 // TestConfig_ToOutputNilEntries verifies Config when to output nil entries.
 func TestConfig_ToOutputNilEntries(t *testing.T) {
 	c := fakeConfigNilEntries(t)
-	out := configToOutput(&c)
+	out := configToOutput(&c, EnterpriseApprovalState{})
 	// The nil *MergeRequestApproverUser element is skipped; the {User: nil}
 	// element is preserved (1:1 SDK fidelity) with a nil user object, leaving
 	// two output entries.
@@ -1568,13 +1691,13 @@ func TestFormatRulesMarkdown_Empty(t *testing.T) {
 const configHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'merge_request.approve' to approve this merge request\n" +
 	"- Use action 'merge_request.unapprove' to withdraw your approval\n" +
-	"- Use action 'merge_request.approval_state' to see how many approvals are required and left\n" +
+	"- Use action 'merge_request.approval_state' to see each approval rule and whether it is satisfied\n" +
 	"- Use action 'merge_request.approval_rules' to list the configured rules\n"
 
 // TestFormatConfigMarkdown_Full verifies the whole rendering of the approvals
-// card: four rows and the guidance. The rows that used to print here read
-// fields GitLab does not answer with at this endpoint, so each printed a zero;
-// the count and the rules live on approval_state, which the hints point at.
+// card as a Community Edition instance answers it: four rows and the
+// guidance, and no row for a key GitLab did not send, where the card once
+// printed a zero for each.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
 		Approved:        true,
@@ -1641,6 +1764,64 @@ func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
 		"- **You have approved**: ❌\n" +
 		"- **You can approve**: ❌\n" +
 		"- **Approved By**: Carol\n" + configHints
+	if got := FormatConfigMarkdown(c); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatConfigMarkdown_EnterpriseState_EveryRowGitLabSent verifies the
+// rows an Enterprise Edition answer adds, after the four every edition gets:
+// a count of zero is printed, since it is an answer there, a false flag is a
+// cross rather than nothing, a rule without a name is named by its ID, a
+// suggested approver without a username by the display name, and a user
+// with neither is left out of the list. The deprecated approvers and
+// approver groups print nothing, since they repeat the first rule's.
+func TestFormatConfigMarkdown_EnterpriseState_EveryRowGitLabSent(t *testing.T) {
+	c := ConfigOutput{
+		Approved: true,
+		Title:    new("Fix | the pipe"), State: new("opened"),
+		ApprovalsRequired: new(int64(0)), ApprovalsLeft: new(int64(0)),
+		ApprovalRulesLeft:     []ApprovalRuleShortOutput{{ID: 3, Name: "Security | review"}, {ID: 4}},
+		InvalidApproversRules: []ApprovalRuleShortOutput{{ID: 5, Name: "Nobody"}},
+		HasApprovalRules:      new(false), MergeRequestApproversAvailable: new(true),
+		RequirePasswordToApprove: new(false),
+		SuggestedApprovers: []toolutil.UserBasicOutput{
+			{Username: "dora", WebURL: "https://gitlab.example.com/dora"},
+			{Name: "Eve"},
+			{},
+		},
+		Approvers:      []ApproverOutput{{User: &toolutil.UserBasicOutput{Username: "frank"}}},
+		ApproverGroups: []ApproverGroupOutput{{Group: &GroupOutput{Name: "Sec"}}},
+	}
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ✅\n" +
+		"- **You have approved**: ❌\n" +
+		"- **You can approve**: ❌\n" +
+		"- **Title**: Fix &#124; the pipe\n" +
+		"- **State**: opened\n" +
+		"- **Approvals Required**: 0\n" +
+		"- **Approvals Left**: 0\n" +
+		"- **Rules Left**: Security &#124; review, #4\n" +
+		"- **Rules Nobody Can Satisfy**: Nobody\n" +
+		"- **Has Approval Rules**: ❌\n" +
+		"- **Approval Rules Available**: ✅\n" +
+		"- **Password Required To Approve**: ❌\n" +
+		"- **Suggested Approvers**: [@dora](https://gitlab.example.com/dora), Eve\n" + configHints
+	if got := FormatConfigMarkdown(c); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatConfigMarkdown_EnterpriseState_ABlankTitle_PrintsNoRow verifies
+// that a key GitLab sent empty prints no row, as an absent one does not:
+// the card shows what was said, and an empty title says nothing.
+func TestFormatConfigMarkdown_EnterpriseState_ABlankTitle_PrintsNoRow(t *testing.T) {
+	c := ConfigOutput{Title: new(""), ApprovalsLeft: new(int64(2))}
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ❌\n" +
+		"- **You have approved**: ❌\n" +
+		"- **You can approve**: ❌\n" +
+		"- **Approvals Left**: 2\n" + configHints
 	if got := FormatConfigMarkdown(c); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}

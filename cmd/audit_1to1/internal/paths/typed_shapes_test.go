@@ -478,8 +478,8 @@ var approvedByOperations = map[string]response{
 	},
 }
 
-// approvalConfigWithApprovers is ConfigOutput as it stands, with the nested
-// type its approved_by field carries.
+// approvalConfigWithApprovers is ConfigOutput as a Community Edition answer
+// fills it, with the nested type its approved_by field carries.
 var approvalConfigWithApprovers = publishedType{
 	Package: "internal/tools/mrapprovals",
 	Name:    "ConfigOutput",

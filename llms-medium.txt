@@ -1159,7 +1159,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_mr_state_event_list: List state events for a merge request. Returns: state events with the state value, the acting user, and pagination metadata.
 - gitlab_mr_subscribe: Subscribe the caller to a merge request's notifications.
 - gitlab_mr_time_stats: Read a merge request's time tracking totals.
-- gitlab_mr_unapprove: Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project.
+- gitlab_mr_unapprove: Remove the caller's approval from a merge request. Returns: the approval state left after the withdrawal, in the shape the approve answers with: the approved-by...
 - gitlab_mr_unsubscribe: Unsubscribe the caller from a merge request's notifications.
 - gitlab_mr_update: Update an existing merge request's fields or state.
 - gitlab_namespace_exists: Check whether a namespace path is taken.

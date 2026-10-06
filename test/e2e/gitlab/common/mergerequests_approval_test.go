@@ -28,6 +28,29 @@ const (
 	mergeWait     = 120 * time.Second
 )
 
+// assertApprovalStateByEdition holds the approval state an approvals answer
+// carried to the edition the run is on. Every Enterprise build answers the
+// approvals GET, the approve and the unapprove with the merge request's whole
+// approval state, licensed or not, because the override of present_approval
+// checks no license; a Community Edition instance sends the four keys every
+// edition sends and none of these, and the server publishes none of them
+// rather than zeros.
+func assertApprovalStateByEdition(e *harness.Env, action string, iid int64, state mrapprovals.EnterpriseApprovalState) {
+	e.T.Helper()
+	if !e.Runtime().Enterprise {
+		if state.IID != nil || state.ApprovalsRequired != nil || state.ApprovalsLeft != nil || state.HasApprovalRules != nil {
+			e.T.Errorf("%s on a Community Edition instance published Enterprise keys %+v, want none", action, state)
+		}
+		return
+	}
+	if state.IID == nil || *state.IID != iid {
+		e.T.Errorf("%s on an Enterprise instance published iid %v, want %d", action, state.IID, iid)
+	}
+	if state.ApprovalsRequired == nil || state.ApprovalsLeft == nil || state.MergeRequestApproversAvailable == nil {
+		e.T.Errorf("%s on an Enterprise instance published %+v, want approvals_required, approvals_left and merge_request_approvers_available", action, state)
+	}
+}
+
 // TestMergeRequestApproval_Lifecycle_ApproveUnapproveMerge opens a request
 // of its own on every surface, lists its pipelines, rebases it, approves it
 // and reads that one approval stands, withdraws the approval and reads that
@@ -78,12 +101,21 @@ func TestMergeRequestApproval_Lifecycle_ApproveUnapproveMerge(t *testing.T) {
 			e.T.Errorf("approve answered %+v, want the request approved by one user", approved)
 		}
 		e.T.Logf("approved by %d user(s): approved=%t", approved.ApprovedBy, approved.Approved)
+		assertApprovalStateByEdition(e, "approve", f.mr.IID, approved.EnterpriseApprovalState)
 
-		harness.DoVoid(s, actionMergeRequestUnapprove, params)
+		// The withdrawal answers with the state it left, which client-go
+		// discards and the server reads off the answer instead.
+		unapproved := harness.Do[mergerequests.ApproveOutput](s, actionMergeRequestUnapprove, params)
+		if unapproved.ApprovedBy != 0 || unapproved.UserHasApproved {
+			e.T.Errorf("unapprove answered %+v, want no approval left and user_has_approved false", unapproved)
+		}
+		assertApprovalStateByEdition(e, "unapprove", f.mr.IID, unapproved.EnterpriseApprovalState)
+
 		config := harness.Do[mrapprovals.ConfigOutput](s, actionMergeRequestApprovalConfig, params)
 		if len(config.ApprovedBy) != 0 || config.UserHasApproved {
 			e.T.Errorf("the request still lists %d approver(s) and user_has_approved=%t after the unapprove: %+v", len(config.ApprovedBy), config.UserHasApproved, config.ApprovedBy)
 		}
+		assertApprovalStateByEdition(e, "approval_config", f.mr.IID, config.EnterpriseApprovalState)
 
 		// The rebase above rewrites the source branch, and GitLab recomputes
 		// the merge status afterwards; the merge is asked for once that has

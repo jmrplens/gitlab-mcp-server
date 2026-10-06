@@ -214,15 +214,6 @@ var declaredShapeFields = []shapeDeclaration{
 			"no route sends it, and it is published so a caller can see which part of the remote was taken as the project.",
 	},
 	{
-		Package: mergeRequestsPkg, Type: "ApproveOutput", Field: "approvals_required", Category: categoryAnnotationNotPresented,
-		Reason: "lib/api/merge_request_approvals.rb describes POST /projects/:id/merge_requests/:merge_request_iid/approve with " +
-			"Entities::MergeRequestApprovals, which is what a Community Edition instance presents, and " +
-			"ee/lib/ee/api/merge_request_approvals.rb overrides present_approval to present the merge request's approval state " +
-			"with Entities::ApprovalState, which exposes approvals_required with no condition " +
-			"(ee/lib/api/entities/approval_state.rb). The record reads the annotation, so the key an Enterprise instance sends " +
-			"reads as one no response carries; on a Community Edition instance it is absent and the field reads zero.",
-	},
-	{
 		Package: mergeRequestsPkg, Type: "ApproveOutput", Field: "approved_by_count", Category: categoryServerDerived,
 		Reason: "the length of the approved_by list lib/api/entities/merge_request_approvals.rb sends, which this server counts; " +
 			"no route sends a count.",
@@ -257,6 +248,34 @@ var declaredShapeFields = []shapeDeclaration{
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "priority", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 	{Package: toolsDir + "/grouplabels", Type: "Output", Field: "is_project_label", Category: categorySharedTypeFilledElsewhere, Reason: reasonGroupLabelProjectKeys},
 
+	// The approval state an Enterprise instance answers the approvals GET and
+	// the approve with, named key by key: the four every edition sends are
+	// judged against the annotated entity, which is what a Community Edition
+	// instance does present. mergerequests.ApproveOutput publishes the same
+	// keys by embedding mrapprovals.EnterpriseApprovalState, and the type
+	// grain reads no embed of another package's type, so this table answers
+	// them here, where the type is declared.
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "id", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "iid", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "project_id", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "title", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "description", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "state", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "created_at", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "updated_at", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "merge_status", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "approvals_required", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "approvals_left", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "require_password_to_approve", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "suggested_approvers", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "approvers", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "approver_groups", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "approval_rules_left", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "has_approval_rules", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "merge_request_approvers_available", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "multiple_approval_rules_available", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+	{Package: mrApprovalsPkg, Type: "ConfigOutput", Field: "invalid_approvers_rules", Category: categoryAnnotationNotPresented, Reason: reasonApprovalStatePresented},
+
 	// The keys the context commit list presents and its annotation does not
 	// name, named one by one: the rest of the type is judged against Commit,
 	// which is what the create route does present.
@@ -269,6 +288,18 @@ var declaredShapeFields = []shapeDeclaration{
 // contextCommitsPkg is the package of the context commit row, spelled once
 // because each of its four keys is declared on its own.
 const contextCommitsPkg = toolsDir + "/mrcontextcommits"
+
+// mrApprovalsPkg is the package of the approvals output, spelled once because
+// each of the twenty Enterprise keys is declared on its own.
+const mrApprovalsPkg = toolsDir + "/mrapprovals"
+
+// reasonApprovalStatePresented answers the twenty keys of the Enterprise
+// approval state held against the approvals output.
+//
+// It is one literal rather than a concatenation, as is
+// [reasonApprovalGroupSDKRoute], because gremlins mutates the operator of a
+// constant expression and no test can execute a constant to catch it.
+const reasonApprovalStatePresented = "lib/api/merge_request_approvals.rb describes GET /projects/:id/merge_requests/:merge_request_iid/approvals and POST .../approve with Entities::MergeRequestApprovals and answers both through the present_approval helper, which presents that entity, four keys, on a Community Edition instance. ee/lib/ee/api/merge_request_approvals.rb overrides the helper in its prepended block, with no license check, to present the merge request's approval state with Entities::ApprovalState (ee/lib/api/entities/approval_state.rb): the issuable's id, iid, project_id, title, description, state, created_at and updated_at merged in, then merge_status, the approval counts, the deprecated approvers and approver_groups, the rules left, the license flags and invalid_approvers_rules, beside the same four. Every Enterprise build answers so, GitLab.com and an unlicensed one included. The record reads the annotation, so the keys an Enterprise instance sends read as keys no response carries; they are read off the captured answer and are absent from a Community Edition one rather than published as zeros. Recorded in docs/development/upstream-bugs.md."
 
 // reasonContextCommitWithLink answers the four keys of a context commit that
 // only the list sends.

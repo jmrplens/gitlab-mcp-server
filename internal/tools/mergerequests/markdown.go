@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -253,21 +254,40 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // FormatApproveMarkdown renders the approval state after an approve or
-// unapprove as the card of one object.
+// unapprove as the card of one object: the rows every edition answers with,
+// then the approval state an Enterprise Edition instance adds, each row only
+// when GitLab sent its key.
 func FormatApproveMarkdown(a ApproveOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "MR Approval Status")
 	c.Bool("Approved", a.Approved)
-	c.Int("Approvals Required", int64(a.ApprovalsRequired))
 	c.Int("Approvals Given", int64(a.ApprovedBy))
 	c.Bool("You Approved", a.UserHasApproved)
 	c.Bool("You Can Approve", a.UserCanApprove)
 	c.Markdown("Approved By", approverList(a.ApprovedByUsers))
-	c.End(
-		toolutil.HintAction(actionMRMerge, "merge this merge request"),
-		toolutil.HintAction(actionMRGet, "see its full details"),
-	)
+	mrapprovals.WriteEnterpriseRows(c, a.EnterpriseApprovalState)
+	c.End(approveHints(a)...)
 	return b.String()
+}
+
+// approveHints chooses the next steps the approval state leaves open. The
+// card answers an unapprove as well as an approve, so a merge is offered only
+// while the merge request reads approved: an unapprove can leave it approved
+// by nobody, and an approve can leave an Enterprise build's rules wanting
+// more. Otherwise the hint points at the rules still to satisfy. An approval
+// is offered to a caller who may give one and has not, which is where an
+// unapprove leaves the caller who withdrew theirs.
+func approveHints(a ApproveOutput) []string {
+	hints := make([]string, 0, 3)
+	if a.Approved {
+		hints = append(hints, toolutil.HintAction(actionMRMerge, "merge this merge request"))
+	} else {
+		hints = append(hints, toolutil.HintAction(actionApprovalState, "see each approval rule and whether it is satisfied"))
+	}
+	if a.UserCanApprove && !a.UserHasApproved {
+		hints = append(hints, toolutil.HintAction(actionMRApprove, "approve this merge request"))
+	}
+	return append(hints, toolutil.HintAction(actionMRGet, "see its full details"))
 }
 
 // FormatCommitsMarkdown renders the commits of a merge request as a Markdown

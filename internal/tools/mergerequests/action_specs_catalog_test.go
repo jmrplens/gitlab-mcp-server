@@ -91,7 +91,10 @@ func renderedWithHints() []string {
 	return []string{
 		mergerequests.FormatMarkdown(mergerequests.Output{}),
 		mergerequests.FormatListMarkdown(mergerequests.ListOutput{MergeRequests: []mergerequests.Output{{}}}),
+		// The approval card twice, since its next steps follow the state: the
+		// rules while unapproved, the merge and an approval otherwise.
 		mergerequests.FormatApproveMarkdown(mergerequests.ApproveOutput{}),
+		mergerequests.FormatApproveMarkdown(mergerequests.ApproveOutput{Approved: true, UserCanApprove: true}),
 		mergerequests.FormatCommitsMarkdown(mergerequests.CommitsOutput{Commits: []commits.Output{{}}}),
 		mergerequests.FormatPipelinesMarkdown(mergerequests.PipelinesOutput{Pipelines: []pipelines.Output{{}}}),
 		mergerequests.FormatRebaseMarkdown(mergerequests.RebaseOutput{}),

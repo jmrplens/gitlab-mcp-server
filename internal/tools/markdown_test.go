@@ -409,7 +409,7 @@ func TestFormatMR_ListMarkdown(t *testing.T) {
 
 // TestFormatMR_ApproveMarkdown verifies MR approval status fields in Markdown.
 func TestFormatMR_ApproveMarkdown(t *testing.T) {
-	a := mergerequests.ApproveOutput{ApprovalsRequired: 2, ApprovedBy: 1, Approved: false}
+	a := mergerequests.ApproveOutput{ApprovedBy: 1, Approved: false, ApprovalsRequired: new(int64(2))}
 	md := mergerequests.FormatApproveMarkdown(a)
 
 	if !strings.Contains(md, "**Approved**: ❌") {
