@@ -298,7 +298,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 
 	b.WriteString("Quick start:\n\n")
 	b.WriteString("1. Install it, or skip installing entirely. Every channel ships the same binary: `npx -y @jmrp.io/gitlab-mcp-server` (npm), `uvx jmrplens-gitlab-mcp-server` (PyPI; `pipx install` and `pip install` take the same name), `dnx gitlab-mcp-server` (NuGet, .NET 10 SDK; `dotnet tool install -g` takes the same name), `brew install jmrplens/tap/gitlab-mcp-server` (Homebrew), `winget install --id jmrplens.gitlab-mcp-server -e` (Windows), the `ghcr.io/jmrplens/gitlab-mcp-server` Docker image, the one-click `gitlab-mcp-server.mcpb` Claude Desktop extension, `/plugin install jmrplens/gitlab-mcp-server` as an Agent Plugin, or a binary from the Releases page. The hosted endpoint at https://mcp.jmrp.io/gitlab installs nothing at all\n")
-	b.WriteString("2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served a read-only surface; pair it with `GITLAB_MCP_READ_ONLY=true` when you want that explicitly\n")
+	b.WriteString("2. Create a GitLab personal access token with `api` scope. A `read_api` token is also admitted and is served the actions GitLab accepts from `read_api`, a few of which write; pair it with `GITLAB_MCP_READ_ONLY=true` for a session that writes nothing\n")
 	b.WriteString("3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`\n\n")
 
 	b.WriteString("Installing for an AI assistant:\n\n")

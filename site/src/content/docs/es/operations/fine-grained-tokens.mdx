@@ -31,8 +31,8 @@ Dos hechos sobre la concesión deciden casi todo lo que cuenta esta página:
   ningún error, donde la concesión no alcanza una parte de la respuesta.
 
 GitLab MCP Server lee un token así como **autoridad desconocida**, nunca como de solo
-lectura: su scope `granular` no dice nada de escrituras, así que no se reduce a la
-superficie de solo lectura que recibe un token `read_api`, y los cinco grupos que
+lectura: su scope `granular` no dice nada de escrituras, así que no se reduce a las
+acciones que recibe un token `read_api`, y los cinco grupos que
 necesitan el scope `admin_mode` siguen en su catálogo. Lo que se muestra a cada sesión
 lo decide en su lugar la concesión, como describe el resto de esta página
 ([ADR-0024](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0024-fine-grained-token-authority-per-action.md)
@@ -44,6 +44,26 @@ una beta desde GitLab 18.10. Los permisos que conoce este servidor son los que d
 GitLab 19.4.1, y la concesión se juzga en una instancia que informa de una versión 19.4
 ([GitLab.com y otras versiones](#gitlabcom-y-otras-versiones)).
 :::
+
+## Tokens clásicos y de grano fino, acción por acción
+
+La entrada de cada acción en la [referencia de herramientas](/gitlab-mcp-server/es/reference/tools/)
+lleva dos líneas de token junto a su nivel. **Token clásico u OAuth** nombra el scope que
+exige GitLab para las peticiones que envía la acción: `read_api`, que también lleva un
+token `api`, para una acción que solo envía `GET` de REST, consultas GraphQL y las pocas
+rutas que GitLab abre a `read_api` en todos los métodos, o cuyas peticiones GitLab
+autentica con un token de trigger, de registro o de runner que pasa quien llama; `api`
+para una que envía cualquier otra cosa. La línea nombra además `admin_mode` para los
+grupos de administración, que este servidor solo lista a un token que lo lleve, y toda ruta
+que envía la acción y que GitLab rechaza a un token OAuth lleve el scope que lleve; en una
+instancia con Admin Mode activado, GitLab exige también `admin_mode` a toda acción que solo
+puede ejecutar un administrador. A un token clásico con `read_api` y sin `api` se le sirven
+exactamente las acciones cuya línea nombra `read_api`, siempre que lleve cualquier otro
+scope que nombre la línea. **Token de grano fino** es la línea de la acción en
+la tabla de [permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/):
+los permisos que tiene que tener una concesión, en qué ámbito, y las partes de la respuesta
+que GitLab puede dejar vacías. Las dos líneas se generan a partir del mismo registro de lo
+que envía cada acción, así que un cambio en una acción mueve las dos.
 
 ## Lo que el servidor necesita al arrancar
 
@@ -398,7 +418,7 @@ El resto de la puerta está en [Servidor HTTP](/gitlab-mcp-server/es/operations/
 ## `--ignore-scopes` y un token de grano fino
 
 `--ignore-scopes` (`GITLAB_MCP_IGNORE_SCOPES=true`) se salta el filtro por scopes y la
-reducción a solo lectura. No se salta la lectura del tipo de token que tiene el
+reducción a lo que alcanza `read_api`. No se salta la lectura del tipo de token que tiene el
 servidor, ni desactiva nada de lo que describe esta página: la concesión es una
 pregunta distinta de los scopes, y saltársela serviría a una sesión de grano fino el
 catálogo entero sin decir nada de lo que su concesión deja fuera. Tampoco se salta el

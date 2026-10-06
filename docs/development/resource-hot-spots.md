@@ -463,9 +463,9 @@ code does.
 
 **The shape** is what the catalog key already named plus what the shell reads:
 tool surface, capability surface, meta parameter-schema mode, tier and whether
-it was pinned, whether the instance is GitLab.com, read-only including the
-token-scope narrowing, safe mode, the excluded tools, the token scopes and the
-transport's statelessness (`serverShapeKey` in `cmd/server/shape.go`). The
+it was pinned, whether the instance is GitLab.com, read-only, the narrowing a
+token carrying `read_api` and not `api` causes, safe mode, the excluded tools,
+the token scopes and the transport's statelessness (`serverShapeKey` in `cmd/server/shape.go`). The
 instance URL is not in it, since two instances of one tier share a catalog and
 the client is per credential either way. `shapeServers` builds each shape at
 most once, and registration runs behind that server's readiness gate, so the

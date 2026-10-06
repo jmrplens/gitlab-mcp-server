@@ -45,14 +45,14 @@
 ## Why this server
 
 - **Every tier and every instance.** Free/CE, Premium and Ultimate, self-managed or GitLab.com with its Orbit knowledge graph. The tier is detected and the catalog follows it.
-- **The token you already have.** A personal, project or group access token with `api`, or `read_api` for a read-only surface; a fine-grained token, judged action by action from its grant; OAuth in HTTP mode.
+- **The token you already have.** A personal, project or group access token with `api`, or `read_api` for the actions GitLab accepts from it; a fine-grained token, judged action by action from its grant; OAuth in HTTP mode. Each action's [tool reference](https://jmrp.io/docs/gitlab-mcp-server/reference/tools/) entry says which scope and which fine-grained permissions it needs.
 - **Guard rails.** Read-only mode, safe mode (a preview of each write instead of the write), tools excluded by name, and a confirmation before anything destructive.
 - **Three surfaces, two transports.** Two discovery tools by default, one tool per domain or one per action; stdio for a desktop client, or HTTP for a shared deployment that keeps each credential apart. 45 resources and 37 prompts besides.
 - **Releases you can verify.** Signed checksums, an SBOM per binary and build provenance for every artifact.
 
 ## Install
 
-The buttons register the Docker image, so they need [Docker](https://www.docker.com/); the Claude Desktop row downloads a native extension instead. Create a [personal access token](https://docs.gitlab.com/user/profile/personal_access_tokens/) with the `api` scope (or `read_api` for read-only use).
+The buttons register the Docker image, so they need [Docker](https://www.docker.com/); the Claude Desktop row downloads a native extension instead. Create a [personal access token](https://docs.gitlab.com/user/profile/personal_access_tokens/) with the `api` scope (or `read_api` for the actions GitLab accepts from it; add `GITLAB_MCP_READ_ONLY=true` when nothing may be written).
 
 <table>
   <tr>

@@ -42,8 +42,8 @@ gitlab-mcp-server --help
 ## Configuration
 
 `GITLAB_TOKEN` is the one required environment variable in stdio mode: a
-personal access token with the `api` scope (`read_api` serves a read-only
-surface). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a
+personal access token with the `api` scope (`read_api` is served the actions
+GitLab accepts from it). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a
 self-managed instance. Every flag and variable (HTTP mode, OAuth, read-only and
 safe modes, tool surfaces, tiers) is documented in the
 [configuration reference](https://jmrp.io/docs/gitlab-mcp-server/configuration/).

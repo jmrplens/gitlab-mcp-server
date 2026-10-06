@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,872 |
-| Unit test functions                                   | 19,408 |
-| E2E test functions                                    |  1,464 |
-| cmd test functions                                    |  4,648 |
-| Test files (internal/)                                |    697 |
-| Test files (cmd/)                                     |    319 |
-| Test files (test/e2e/)                                |    408 |
+| Total test functions                                  | 20,922 |
+| Unit test functions                                   | 19,454 |
+| E2E test functions                                    |  1,468 |
+| cmd test functions                                    |  4,672 |
+| Test files (internal/)                                |    698 |
+| Test files (cmd/)                                     |    322 |
+| Test files (test/e2e/)                                |    409 |
 | Tool sub-packages tested                              |    180 |
 | Core packages tested                                  |     32 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.9% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,211 | 63.3% |
+| `TestFunc_Scenario` (2-part)           | 13,226 | 63.2% |
 | `TestFunc` (no underscore)             |    911 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,750 | 32.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,785 | 32.4% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,820 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            387 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,553 |        456 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,464 |        408 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,648 |        319 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,872** |  **1,424** |                                                                                                 |
+| Core packages           |          3,826 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            394 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (180) |         10,562 |        457 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,468 |        409 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,672 |        322 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,922** |  **1,429** |                                                                                                 |
 
 ### Core Packages
 
@@ -66,10 +66,10 @@
 | config                   |       121 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition                  |         8 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
 | elicitation              |       149 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
-| finegrained              |        54 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
+| finegrained              |        58 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
 | gatewaycompat            |        20 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
-| gitlab                   |       202 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
+| gitlab                   |       204 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        21 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
 | mcpotel                  |       116 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
 | oauth                    |       109 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
@@ -90,7 +90,7 @@
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,226 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **3,820** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **3,826** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -99,7 +99,7 @@
 | projects          |   478 |   100.0% |    57 |
 | mergerequests     |   321 |   100.0% |    30 |
 | groups            |   314 |   100.0% |    37 |
-| dynamic           |   293 |   100.0% |     2 |
+| dynamic           |   294 |   100.0% |     2 |
 | issues            |   281 |   100.0% |    21 |
 | users             |   264 |   100.0% |    38 |
 | packages          |   177 |   100.0% |    10 |
@@ -132,7 +132,7 @@
 | accessrequests          |         58 |          4 |   100.0% |         8 |
 | accesstokens            |        108 |          2 |   100.0% |        18 |
 | achievements            |         61 |          3 |   100.0% |        12 |
-| actioncatalog           |         63 |          6 |   100.0% |         0 |
+| actioncatalog           |         67 |          7 |   100.0% |         0 |
 | actioncompat            |         60 |          3 |   100.0% |         1 |
 | actiongrants            |          5 |          1 |   100.0% |         0 |
 | adminspecs              |         17 |          1 |   100.0% |        92 |
@@ -171,8 +171,8 @@
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
 | dorametrics             |         14 |          2 |   100.0% |         2 |
-| dynamic                 |        293 |          8 |   100.0% |         2 |
-| dynamiccatalog          |          9 |          1 |   100.0% |         0 |
+| dynamic                 |        294 |          8 |   100.0% |         2 |
+| dynamiccatalog          |         11 |          1 |   100.0% |         0 |
 | elicitationtools        |         71 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
 | environments            |         74 |          2 |   100.0% |         6 |
@@ -292,12 +292,12 @@
 | snippetnotes            |         56 |          2 |   100.0% |         5 |
 | snippets                |        112 |          3 |   100.0% |        15 |
 | snippetstoragemoves     |         48 |          2 |   100.0% |         6 |
-| surfaces                |         22 |          1 |   100.0% |         0 |
+| surfaces                |         21 |          1 |   100.0% |         0 |
 | systemhooks             |         43 |          2 |   100.0% |         8 |
 | tags                    |         83 |          2 |   100.0% |         9 |
 | terraformstates         |         33 |          1 |   100.0% |         6 |
 | todos                   |         48 |          4 |   100.0% |         3 |
-| toolvisibility          |         21 |          2 |   100.0% |         0 |
+| toolvisibility          |         24 |          2 |   100.0% |         0 |
 | topics                  |         23 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
 | usagedata               |         37 |          1 |   100.0% |         6 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,553** |    **456** |          | **1,190** |
+| **Total**               | **10,562** |    **457** |          | **1,190** |
 
 </details>
 
@@ -347,7 +347,7 @@
 | cmd/audit_metrics                         |   100.0% |
 | cmd/audit_readonly_graphql                |   100.0% |
 | cmd/audit_sdk_context                     |   100.0% |
-| cmd/audit_supply_chain                    |    99.7% |
+| cmd/audit_supply_chain                    |   100.0% |
 | cmd/audit_surface_quality                 |    99.9% |
 | cmd/audit_tenancy                         |   100.0% |
 | cmd/audit_test_goroutines                 |    95.7% |
@@ -383,6 +383,7 @@
 | cmd/internal/docgen                       |   100.0% |
 | cmd/internal/golist                       |   100.0% |
 | cmd/internal/goprogram                    |   100.0% |
+| cmd/internal/grantwords                   |   100.0% |
 | cmd/internal/graphqldocs                  |   100.0% |
 | cmd/internal/graphqlintrospect            |   100.0% |
 | cmd/internal/mcpsurface                   |   100.0% |
@@ -924,17 +925,19 @@ make inspector-stop # Stop Inspector and clean up temp binary
 
 The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `test/e2e/orbit/live_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
 
-The suite is organized as five entry points, every query in version 12 of the Orbit query DSL. A query GitLab refuses to compile fails its subtest with GitLab's own reason, and no project, user or namespace id is written down: each is found by its path in the fixture namespace.
+The suite is organized as seven entry points, every query in version 12 of the Orbit query DSL. A query GitLab refuses to compile fails its subtest with GitLab's own reason, and no project, user or namespace id is written down: each is found by its path in the fixture namespace.
 
-| Entry point                              | Subtests | What it exercises                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------------- | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TestOrbitLiveGitLabCom`                 |       15 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal by node_ids and by filter, aggregation, llm format, neighbors, path_finding, and a query with a top-level node refused in GitLab's words), and graph_status (full_path/namespace_id)                                                                      |
-| `TestOrbitLiveGitLabCom_DSL`             |        1 | The query DSL GitLab.com serves is the version `orbit.query` teaches (`graph_query/v12`), so a new major version fails here first                                                                                                                                                                                                                               |
-| `TestOrbitLiveGitLabCom_ShapeDiscovery`  |        9 | Regression coverage of the smallest query of each kind GitLab.com runs (aggregation by filter and by node_ids, a neighbors query whose center is its one node, a path along any relationship type) and the schema in each format under each input name                                                                                                          |
-| `TestOrbitLiveGitLabCom_Fixtures`        |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces                                                                                                                                                                                  |
-| `TestOrbitLiveGitLabCom_FeatureCoverage` |       17 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`, `gte` with `lt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), keyset pagination, `id_range` scope, a neighbors query of one relationship type, and `options.dynamic_columns` |
+| Entry point                                                     | Subtests | What it exercises                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------- | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TestOrbitLiveGitLabCom`                                        |       15 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal by node_ids and by filter, aggregation, llm format, neighbors, path_finding, and a query with a top-level node refused in GitLab's words), and graph_status (full_path/namespace_id)                                                                      |
+| `TestOrbitLiveGitLabCom_DSL`                                    |        1 | The query DSL GitLab.com serves is the version `orbit.query` teaches (`graph_query/v12`), so a new major version fails here first                                                                                                                                                                                                                               |
+| `TestOrbitLiveGitLabCom_ShapeDiscovery`                         |        9 | Regression coverage of the smallest query of each kind GitLab.com runs (aggregation by filter and by node_ids, a neighbors query whose center is its one node, a path along any relationship type) and the schema in each format under each input name                                                                                                          |
+| `TestOrbitLiveGitLabCom_Fixtures`                               |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces                                                                                                                                                                                  |
+| `TestOrbitLiveGitLabCom_ReadAPIToken_PassesTheQueryScopeCheck`  |        0 | The query route accepts a token carrying `read_api` alone, which the classic scope derivation declares (ADR-0026); runs only with `GITLAB_COM_READ_API_TOKEN`, a token carrying `read_api` and not `api`                                                                                                                                                        |
+| `TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer` |        7 | The previous test's reading of GitLab's scope refusal, held able to fail through the query handler against a stand-in answering the way GitLab refuses a scope and the ways it refuses for other reasons; needs no network and no token                                                                                                                         |
+| `TestOrbitLiveGitLabCom_FeatureCoverage`                        |       17 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`, `gte` with `lt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), keyset pagination, `id_range` scope, a neighbors query of one relationship type, and `options.dynamic_columns` |
 
-Total: **5 suites, 49 subtests** behind the `orbitlive` build tag.
+Total: **7 suites, 56 subtests** behind the `orbitlive` build tag.
 
 The Orbit indexer is eventually consistent. Subtests that match content the indexer has not yet picked up will report `row_count=0` and pass — they are informational, not strict equality. Re-run the live test a few minutes after `make test-e2e-gitlab-com` to allow the indexer to catch up.
 

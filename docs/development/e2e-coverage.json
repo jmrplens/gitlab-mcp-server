@@ -3,7 +3,7 @@
  "note": "What the end-to-end suite asserts, per runtime, from the calls it recorded rather than from mentions in its source. Written by `make e2e-coverage-record` after a Docker run of both halves; the page at docs/development/testing/e2e-coverage.md is rendered from this file and `make check-e2e-coverage-record` compares both without a GitLab and without a network. One entry per Docker target: ce is the unlicensed instance, ee the licensed one.",
  "runtimes": {
   "ce": {
-   "retrieved_at": "2026-10-03",
+   "retrieved_at": "2026-10-07",
    "runtime": "community/free",
    "edition": "community",
    "tier": "free",
@@ -12,8 +12,8 @@
      "package": "ce",
      "requirement": "free",
      "status": "started",
-     "run_id": "20261003t141507z-a33592066a-ce",
-     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
+     "run_id": "20261007t144520z-1bcca8617e-ce",
+     "commit": "6cce9fd87f6e6c78eff2893bf7b1a7ece8da5cab",
      "gitlab_version": "19.4.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -27,8 +27,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20261003t133750z-25a47f3a98-common",
-     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
+     "run_id": "20261007t141031z-43f9ea7ba5-common",
+     "commit": "6cce9fd87f6e6c78eff2893bf7b1a7ece8da5cab",
      "gitlab_version": "19.4.1",
      "tier_confirmed": false,
      "fixtures": {
@@ -43,7 +43,7 @@
     {
      "surface": "dynamic",
      "mode": "default",
-     "sessions": 18,
+     "sessions": 19,
      "tools": 2,
      "resources": 8,
      "resource_templates": 37,
@@ -74,7 +74,7 @@
     {
      "surface": "meta",
      "mode": "default",
-     "sessions": 12,
+     "sessions": 14,
      "tools": 34,
      "resources": 8,
      "resource_templates": 37,
@@ -84,7 +84,7 @@
     {
      "surface": "meta",
      "mode": "read-only",
-     "sessions": 2,
+     "sessions": 1,
      "tools": 30,
      "resources": 8,
      "resource_templates": 37,
@@ -104,7 +104,7 @@
     {
      "surface": "individual",
      "mode": "default",
-     "sessions": 13,
+     "sessions": 15,
      "tools": 868,
      "resources": 8,
      "resource_templates": 37,
@@ -114,7 +114,7 @@
     {
      "surface": "individual",
      "mode": "read-only",
-     "sessions": 2,
+     "sessions": 1,
      "tools": 410,
      "resources": 8,
      "resource_templates": 37,
@@ -135,7 +135,7 @@
    "capability_surfaces": [
     {
      "capabilities": "full",
-     "sessions": 35,
+     "sessions": 38,
      "shapes": 9,
      "resources": 43,
      "prompts": 37,
@@ -154,29 +154,29 @@
    ],
    "summary": {
     "catalog_actions": 872,
-    "test_calls": 3530,
+    "test_calls": 3554,
     "l1": 834,
-    "l2": 730,
-    "l3": 714,
+    "l2": 732,
+    "l3": 716,
     "states": {
      "dynamic": {
-      "absent": 81,
-      "asserted": 730,
+      "absent": 79,
+      "asserted": 732,
       "error-path-only": 17,
-      "refused-only": 17,
-      "sweep-only": 27
+      "refused-only": 18,
+      "sweep-only": 26
      },
      "individual": {
       "absent": 80,
       "asserted": 733,
-      "error-path-only": 15,
-      "refused-only": 18,
+      "error-path-only": 14,
+      "refused-only": 19,
       "sweep-only": 22,
       "unservable": 4
      },
      "meta": {
-      "absent": 28,
-      "asserted": 805,
+      "absent": 26,
+      "asserted": 807,
       "error-path-only": 16,
       "refused-only": 18,
       "sweep-only": 5
@@ -1636,11 +1636,13 @@
      "repository.merge_base",
      "repository.raw_blob",
      "repository.tree",
+     "runner.delete_by_token",
      "runner.get",
      "runner.list_all",
      "runner.list_group",
      "runner.list_managers",
      "runner.list_project",
+     "runner.verify",
      "search.code",
      "search.commits",
      "search.issues",
@@ -2354,11 +2356,13 @@
      "repository.merge_base",
      "repository.raw_blob",
      "repository.tree",
+     "runner.delete_by_token",
      "runner.get",
      "runner.list_all",
      "runner.list_group",
      "runner.list_managers",
      "runner.list_project",
+     "runner.verify",
      "search.code",
      "search.commits",
      "search.issues",
@@ -2512,7 +2516,7 @@
    }
   },
   "ee": {
-   "retrieved_at": "2026-10-03",
+   "retrieved_at": "2026-10-07",
    "runtime": "enterprise/ultimate",
    "edition": "enterprise",
    "tier": "ultimate",
@@ -2521,8 +2525,8 @@
      "package": "common",
      "requirement": "any",
      "status": "started",
-     "run_id": "20261003t120430z-4a54f6c6df-common",
-     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
+     "run_id": "20261007t131028z-7a559f65e2-common",
+     "commit": "6cce9fd87f6e6c78eff2893bf7b1a7ece8da5cab",
      "gitlab_version": "19.4.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2536,8 +2540,8 @@
      "package": "ee",
      "requirement": "licensed",
      "status": "started",
-     "run_id": "20261003t130916z-bc30ec8233-ee",
-     "commit": "1ecae82fa58e625a0d5b1608e5dfb4a234ac331d",
+     "run_id": "20261007t135146z-8bca16b15a-ee",
+     "commit": "6cce9fd87f6e6c78eff2893bf7b1a7ece8da5cab",
      "gitlab_version": "19.4.1-ee",
      "tier_confirmed": true,
      "fixtures": {
@@ -2552,7 +2556,7 @@
     {
      "surface": "dynamic",
      "mode": "default",
-     "sessions": 19,
+     "sessions": 21,
      "tools": 2,
      "resources": 8,
      "resource_templates": 37,
@@ -2583,7 +2587,7 @@
     {
      "surface": "meta",
      "mode": "default",
-     "sessions": 13,
+     "sessions": 16,
      "tools": 51,
      "resources": 8,
      "resource_templates": 37,
@@ -2593,7 +2597,7 @@
     {
      "surface": "meta",
      "mode": "read-only",
-     "sessions": 2,
+     "sessions": 1,
      "tools": 45,
      "resources": 8,
      "resource_templates": 37,
@@ -2613,7 +2617,7 @@
     {
      "surface": "individual",
      "mode": "default",
-     "sessions": 14,
+     "sessions": 17,
      "tools": 1088,
      "resources": 8,
      "resource_templates": 37,
@@ -2623,7 +2627,7 @@
     {
      "surface": "individual",
      "mode": "read-only",
-     "sessions": 2,
+     "sessions": 1,
      "tools": 512,
      "resources": 8,
      "resource_templates": 37,
@@ -2644,7 +2648,7 @@
    "capability_surfaces": [
     {
      "capabilities": "full",
-     "sessions": 38,
+     "sessions": 44,
      "shapes": 9,
      "resources": 43,
      "prompts": 37,
@@ -2663,31 +2667,31 @@
    ],
    "summary": {
     "catalog_actions": 1092,
-    "test_calls": 4617,
+    "test_calls": 4621,
     "l1": 1028,
-    "l2": 924,
-    "l3": 908,
+    "l2": 926,
+    "l3": 910,
     "states": {
      "dynamic": {
-      "absent": 76,
-      "asserted": 924,
+      "absent": 74,
+      "asserted": 926,
       "error-path-only": 24,
-      "refused-only": 41,
-      "sweep-only": 27
+      "refused-only": 42,
+      "sweep-only": 26
      },
      "individual": {
-      "absent": 76,
+      "absent": 75,
       "asserted": 927,
       "error-path-only": 21,
-      "refused-only": 42,
+      "refused-only": 43,
       "sweep-only": 22,
       "unservable": 4
      },
      "meta": {
-      "absent": 24,
-      "asserted": 999,
+      "absent": 21,
+      "asserted": 1001,
       "error-path-only": 22,
-      "refused-only": 42,
+      "refused-only": 43,
       "sweep-only": 5
      }
     },
@@ -4511,11 +4515,13 @@
      "runner.controller_token_revoke",
      "runner.controller_token_rotate",
      "runner.controller_update",
+     "runner.delete_by_token",
      "runner.get",
      "runner.list_all",
      "runner.list_group",
      "runner.list_managers",
      "runner.list_project",
+     "runner.verify",
      "search.code",
      "search.commits",
      "search.issues",
@@ -5423,11 +5429,13 @@
      "runner.controller_token_revoke",
      "runner.controller_token_rotate",
      "runner.controller_update",
+     "runner.delete_by_token",
      "runner.get",
      "runner.list_all",
      "runner.list_group",
      "runner.list_managers",
      "runner.list_project",
+     "runner.verify",
      "search.code",
      "search.commits",
      "search.issues",

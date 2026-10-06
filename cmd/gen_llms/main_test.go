@@ -274,6 +274,10 @@ func TestRun_WritesLLMSTxt(t *testing.T) {
 		"2 read-only resources (26 resource kinds are subscribable",
 		"- gitlab://server/info: Server info\n- gitlab://projects/{id}: Project\n\n",
 		"1 prompts:\n\n- review_mr: Review one merge request diff.\n\n",
+		// A read_api token is served what GitLab accepts from read_api, which
+		// includes a few writes, so the quick start must not promise a
+		// read-only session to it (ADR-0026).
+		"A `read_api` token is also admitted and is served the actions GitLab accepts from `read_api`, a few of which write; pair it with `GITLAB_MCP_READ_ONLY=true` for a session that writes nothing\n",
 		"## Documentation\n\n- [Documentation site index](https://jmrp.io/docs/gitlab-mcp-server/llms.txt): ",
 		"- [Spanish documentation index](https://jmrp.io/docs/gitlab-mcp-server/es/llms.txt): ",
 		"- [Getting started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/): Installation and first-run guide\n",

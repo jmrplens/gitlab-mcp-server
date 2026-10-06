@@ -61,7 +61,7 @@ claude mcp add gitlab \
   https://mcp.jmrp.io/gitlab
 ```
 
-Every OAuth entry below works the same way with that URL and the card's ID in place of yours, and Claude Desktop adds it as a custom connector with the card's ID as its OAuth client. Without OAuth, send a GitLab.com personal access token as `Authorization: Bearer`; the endpoint runs in OAuth mode, so `PRIVATE-TOKEN` is refused there, and `GITLAB-URL` is ignored because the instance is fixed to `https://gitlab.com`. A `read_api` token, or a client pinned to the `read_api` scope, is admitted and served the read-only tool surface. The endpoint's properties and caveats are on [Hosted endpoint](/gitlab-mcp-server/install/hosted/).
+Every OAuth entry below works the same way with that URL and the card's ID in place of yours, and Claude Desktop adds it as a custom connector with the card's ID as its OAuth client. Without OAuth, send a GitLab.com personal access token as `Authorization: Bearer`; the endpoint runs in OAuth mode, so `PRIVATE-TOKEN` is refused there, and `GITLAB-URL` is ignored because the instance is fixed to `https://gitlab.com`. A `read_api` token, or a client pinned to the `read_api` scope, is admitted and served the actions GitLab accepts from `read_api`. The endpoint's properties and caveats are on [Hosted endpoint](/gitlab-mcp-server/install/hosted/).
 
 ## VS Code (GitHub Copilot)
 
@@ -207,7 +207,7 @@ Export `GITLAB_TOKEN` in the shell you start `claude` from. Against a deployment
 
 The `claude mcp add` command with `--client-id` and `--callback-port 8090` is in [Step 4: configure the clients](/gitlab-mcp-server/operations/oauth-app/#step-4-configure-the-clients). The port must match the redirect URI registered on the application, `http://localhost:8090/callback`: GitLab matches a `localhost` callback exactly, port and path included ([Step 2](/gitlab-mcp-server/operations/oauth-app/#step-2-register-the-redirect-uris)). Without `--client-id`, Claude Code falls back to dynamic client registration and gets a token this server refuses.
 
-When `oauth.scopes` is not set, Claude Code asks GitLab for the scope the server names in its `401` challenge or its RFC 9728 metadata. To take a read-only credential from a deployment that can write, pin `read_api` in `oauth.scopes`, a space-separated string that `claude mcp add` has no flag for; the application must have `read_api` checked, and the token is admitted and served the read-only tool surface:
+When `oauth.scopes` is not set, Claude Code asks GitLab for the scope the server names in its `401` challenge or its RFC 9728 metadata. To take a read-only credential from a deployment that can write, pin `read_api` in `oauth.scopes`, a space-separated string that `claude mcp add` has no flag for; the application must have `read_api` checked, and the token is admitted and served the actions GitLab accepts from `read_api`:
 
 ```bash
 claude mcp add-json gitlab '{"type":"http","url":"https://mcp.example.com/mcp","oauth":{"clientId":"YOUR_GITLAB_APPLICATION_ID","callbackPort":8090,"scopes":"read_api"}}'

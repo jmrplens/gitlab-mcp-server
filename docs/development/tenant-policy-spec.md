@@ -215,7 +215,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   not cause.
 - **INV-008 Admission at the minimum, authority per action.** A limit does not raise the
   admission minimum; authority is applied per action; unknown scopes count as
-  write-capable; a detected tier is the highest paid plan found (ADR-0018). The one
+  write-capable; a detected tier is the highest paid plan found (ADR-0018). A token
+  carrying `read_api` and not `api` is served the actions whose requests GitLab accepts
+  from `read_api`, derived per action from what each sends, which is not the operator's
+  read-only surface (`AUT-001`, ADR-0026; the operator's is `AUT-004`). The one
   exception, recorded under issue 952, is a tier neither the license nor a namespace plan
   answers for, which is Free: that is the truth on a CE build and on an unlicensed
   enterprise one, and an enterprise build that could not read its tier warns, naming
@@ -730,7 +733,8 @@ declare (below). `RTC-001` records the issue and no longer carries F-20.
 F-17, that a fine-grained personal access token was misread, is answered by issue 952
 ([ADR-0024](adr/adr-0024-fine-grained-token-authority-per-action.md)). Its scope list is
 the single value `granular`, which names no authority: read as scopes, it narrowed such a
-token to the read-only surface (`AUT-001`), and both doors misread it, the legacy gate
+token to the read-only surface `AUT-001` then served a token that cannot write, and both
+doors misread it, the legacy gate
 taking the probe's 403 for a refused credential, charged and answered 401, and the OAuth
 door refusing it for want of `read_api` (`ADM-001`, `ADM-002`). It is now unknown
 authority. The doors answer a token GitLab accepted and refused User: Read with an
