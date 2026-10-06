@@ -1,0 +1,214 @@
+# Condition coverage on demand for gitlab-mcp-server (issue 1210)
+#
+# The condition gate is gobco, run through scripts/coverage-conditions.sh, the
+# recipe behind `make coverage-conditions`. It is held on Linux before a
+# commit, and the Windows and macOS legs of ci.yml hold only the files those
+# systems alone build. Neither answers what a whole package scores on Windows
+# or macOS, and until this workflow that figure could only be taken by hand on
+# a machine of that system: the internal/toolutil figures quoted in #1206 came
+# from a Windows virtual machine, and nobody could take them on macOS at all.
+#
+# This runs the same script, through bash as ci.yml runs it, on each runner a
+# dispatch names, so every figure is the one the gate would compute there:
+# measured on that system, never inferred from another.
+#
+# Dispatch only. A push or a pull request never runs it: the answer is wanted
+# when somebody asks the question, and a package can take the better part of
+# an hour on Windows. Nothing here is a gate. No figure fails it, whatever the
+# gate mode holds; a run that cannot measure at all (a package go cannot load,
+# a failing test, a 0/0 report, a runtime crash of issue 467) still fails its
+# job, and says why.
+#
+# Shape: plan validates the inputs and, for an empty package list, finds the
+# packages carrying a GOOS- or GOARCH-constrained file; measure fans out over
+# package x system; summary joins the records the runs uploaded into one table
+# in the job summary. The plan and the table are cmd/measure_conditions, whose
+# tests hold this file to the record it reads.
+#
+# Dispatch with:
+#
+#   gh workflow run conditions.yml -f packages="./cmd/server ./internal/toolutil" \
+#     -f systems="windows-latest macos-latest ubuntu-latest" -f gate=all
+
+name: Condition Coverage
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Packages to measure, ./cmd/server style, separated by spaces or commas. Empty measures every package carrying a GOOS- or GOARCH-constrained file."
+        default: ""
+        type: string
+      gate:
+        description: "The GOBCO_GATE the script runs with. all holds every condition; beyond:linux/amd64 holds only the files linux/amd64 does not build, as ci.yml's legs do. The figures are the same under either."
+        default: all
+        type: choice
+        options:
+          - all
+          - beyond:linux/amd64
+      systems:
+        description: "Runners to measure on, separated by spaces or commas: windows-latest, macos-latest, ubuntu-latest (the comparison)."
+        default: "windows-latest macos-latest ubuntu-latest"
+        type: string
+
+# Read only. Nothing here writes to the repository, comments, or mints an
+# identity: the default token reads the checkout and the artifacts of this run.
+permissions:
+  contents: read
+
+# No concurrency group. Two dispatches ask two questions, and GitHub keeps at
+# most one pending run per group, cancelling the older one when another
+# arrives: with a measurement running, a third dispatch would cancel the
+# second one waiting behind it, and nothing would say so.
+
+jobs:
+  plan:
+    name: "📋 Plan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      # The inputs reach the command through the environment, never through
+      # the expression syntax inside the script, so a value is data whatever
+      # it holds. The command refuses a package, a runner or a gate it would
+      # not hand on, and for an empty package list lists the module under
+      # every release target to find the packages whose files differ.
+      - name: Plan the runs
+        id: plan
+        shell: bash
+        env:
+          PACKAGES: ${{ inputs.packages }}
+          SYSTEMS: ${{ inputs.systems }}
+          GATE: ${{ inputs.gate }}
+        run: go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" >> "$GITHUB_OUTPUT"
+
+  measure:
+    name: "🔬 ${{ matrix.package }} on ${{ matrix.system }}"
+    needs: plan
+    runs-on: ${{ matrix.system }}
+    # gobco's go test is bounded at 30 minutes below, the bound ci.yml gives
+    # cmd/server on Windows; the job bound leaves room for the toolchain and
+    # the staged copy around it, and ends a hang on a runner billed at a
+    # multiple of the Linux rate.
+    timeout-minutes: 60
+    strategy:
+      # Every run reports. Stopping at the first that could not measure would
+      # hide every figure the others took.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      # The script, through bash, exactly as ci.yml's legs run it and as
+      # `make coverage-conditions` runs it, with the gate the dispatch chose.
+      # Both streams go to the log and to the raw output file.
+      #
+      # The record is written outside the checkout: the script copies the
+      # module into a staged directory for a package with a platform file,
+      # and a file this step is still writing inside the tree would be copied
+      # mid-write. RUNNER_TEMP is a Windows path on Windows, written with
+      # slashes here, which Git Bash and go both read, as the script does with
+      # go list's directories.
+      #
+      # The exit status is read for one thing: 0 and 3 are a measurement (3 is
+      # the gate holding a condition, which the script uses for nothing else),
+      # and anything else means nothing was measured. That fails the job with
+      # the reason; a figure never does.
+      #
+      # setup-go registers a problem matcher, owner go, that files every line
+      # shaped like file.go:line:col: text as an error annotation, and every
+      # condition gobco names, with the copy the gate prints under its
+      # verdict, is shaped that way: a run that measured would show a column
+      # of errors, and past GitHub's ten per step the one this step writes
+      # when nothing was measured would be dropped. The matcher is removed
+      # before anything is printed, so the only annotation here is that one.
+      - name: Measure
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          SYSTEM: ${{ matrix.system }}
+          ARTIFACT: ${{ matrix.artifact }}
+          GOBCO_GATE: ${{ inputs.gate }}
+          GOBCO_TEST_FLAGS: -timeout=30m
+        run: |
+          echo "::remove-matcher owner=go::"
+          record="${RUNNER_TEMP//\\//}/$ARTIFACT"
+          mkdir -p "$record"
+          set +e
+          bash scripts/coverage-conditions.sh "$PACKAGE" 2>&1 | tee "$record/gobco.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "package=$PACKAGE"
+            echo "system=$SYSTEM"
+            echo "platform=$(go env GOOS)/$(go env GOARCH)"
+            echo "status=$status"
+          } >"$record/run.env"
+          case "$status" in
+            0|3) echo "Measured. The figure is in the summary job's table." ;;
+            *)
+              echo "::error title=Not measured::scripts/coverage-conditions.sh exited $status for $PACKAGE on $SYSTEM, so nothing was measured; the gobco: lines above say why, and the raw output is the artifact $ARTIFACT"
+              exit "$status"
+              ;;
+          esac
+      # Uploaded whatever became of the measurement, since a run that could
+      # not measure is the one whose output somebody will want to read. A run
+      # that never reached the step above has nothing to upload, which the
+      # summary reports as no record. A rerun of a failed job replaces its
+      # earlier upload.
+      - name: Upload the record and the raw gobco output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/${{ matrix.artifact }}
+          retention-days: 30
+          if-no-files-found: ignore
+          overwrite: true
+
+  summary:
+    name: "📊 Summary"
+    needs: [plan, measure]
+    # Written whatever became of the runs, measured or not; only a plan that
+    # never came leaves nothing to join.
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      # Every run's artifact, wherever the download puts it: one directory
+      # per artifact, or the directory itself when there is only one, which
+      # the command reads either way. A run that uploaded nothing is missing
+      # here and named as such in the table.
+      - name: Download the records
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: gobco-*
+          path: ${{ runner.temp }}/records
+      # The table goes to the job summary and to the log. The command exits
+      # non-zero only when a record cannot be read or disagrees with itself,
+      # never on a figure.
+      - name: Write the job summary
+        shell: bash
+        env:
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+          GATE: ${{ inputs.gate }}
+          COMMIT: ${{ github.sha }}
+        run: go run ./cmd/measure_conditions summarize -plan "$MATRIX" -records "$RUNNER_TEMP/records" -gate "$GATE" -commit "$COMMIT" | tee -a "$GITHUB_STEP_SUMMARY"

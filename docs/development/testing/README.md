@@ -124,7 +124,14 @@ any condition gobco names as never true, never false or never evaluated, which
 is the gate a touched package is held to before it is committed.
 `GOBCO_GATE=beyond:GOOS/GOARCH` fails it only on such a condition in a file
 this build compiles and the named platform does not, and prints, counts and
-passes the rest. A value it cannot read is refused before gobco runs.
+passes the rest. A value it cannot read is refused before gobco runs. A run
+the gate fails exits 3, a status no other failure of the script uses, so a
+caller can tell a figure the gate held from no figure at all: every other
+failure exits 1 or 2, never 3 (1 for a package go cannot load, a failing test
+or a `0/0` report, 2 for a gate value it cannot read, and 1 or 2 when a
+command the script runs fails on its own, as GNU tar, awk and a crashing go
+command exit 2). `make coverage-conditions` reports any failure of the script
+as its own, with status 2.
 `GOBCO_TEST_FLAGS` hands gobco's `go test` flags of its own (`-timeout=30m`),
 one word each.
 
@@ -144,6 +151,47 @@ files carry conditions, the two operands of the Windows connection-refused
 check and the Windows listen's failure; the other four carry none. macOS
 builds only `probe_other.go` beyond Linux, which carries none, so its leg holds
 nothing today and is there for the next file only it builds.
+
+**A whole package on Windows or macOS is measured on demand.** Neither the
+local gate nor the CI legs answer what a package scores on Windows or macOS as
+a whole: the figures for `internal/toolutil` quoted in pull request 1206 were
+taken by hand on a Windows virtual machine, and none could be taken on macOS.
+[`.github/workflows/conditions.yml`](../../../.github/workflows/conditions.yml)
+takes them. It runs only when dispatched, never on a push or a pull request,
+and runs `scripts/coverage-conditions.sh` through bash on each runner named,
+exactly as the CI legs and `make coverage-conditions` run it, so every figure
+in its summary is one the gate would compute on that system:
+
+```bash
+gh workflow run conditions.yml \
+  -f packages="./cmd/server ./internal/toolutil" \
+  -f systems="windows-latest macos-latest ubuntu-latest" \
+  -f gate=all
+```
+
+`packages` takes package directories separated by spaces or commas, and left
+empty measures every package carrying a `GOOS`- or `GOARCH`-constrained file:
+the ones whose built files differ between two of the platforms `.goreleaser.yml`
+builds, which today are `cmd/server`, `internal/toolutil` and
+`internal/tools/packages`. `systems` takes any of `windows-latest`,
+`macos-latest` and `ubuntu-latest`, the last for comparison. `gate` is the
+`GOBCO_GATE` the script runs with, `all` or `beyond:linux/amd64`; the figures
+are the same under either, and it decides only which of the conditions not
+evaluated both ways the summary marks as held. The job summary has one row per
+package and system with gobco's figure (outcomes evaluated of outcomes there
+are, two per condition), then every condition not evaluated both ways with its
+file and line, then, for a run that could not measure, the lines the script
+said why in. Each run's raw output and record are uploaded as an artifact named
+`gobco-<system>-<package>`. No figure fails the workflow; a run that cannot
+measure at all, such as a failing test, a package go cannot load or a Go
+runtime crash of issue 467, fails its own job and says why. The plan and the
+summary are `cmd/measure_conditions`.
+
+The figures it reports are measured, not inferred: each comes from gobco on
+the runner the row names, and a row without a measurement says so instead of
+borrowing another platform's figure. GitHub offers a workflow for dispatch only
+once its file is on the default branch, so the workflow cannot be run from the
+pull request that adds it, and the first dispatch happens after that merge.
 
 **The e2e harness stays unmeasured until gobco honours build tags.**
 `TAGS=<tag>` reaches `go list` and gobco's `go test` alike, and under

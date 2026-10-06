@@ -44,6 +44,7 @@ gitlab-mcp-server/
 │   ├── bench_resources/    # What the server costs to run, and the charts the docs publish
 │   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
+│   ├── measure_conditions/ # Plan and job summary of the on-demand condition coverage workflow (conditions.yml, dispatched by hand)
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
 │   ├── gen_brand/          # Every vector brand asset from one parametric geometry
 │   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go

@@ -98,6 +98,18 @@
 # one-way does not fail a leg for something the Linux run measures both ways.
 # Any other value is refused before gobco runs.
 #
+# A run the gate fails exits 3, and no other path does. Every other failure
+# means nothing was measured and exits 1 or 2, never 3: 2 for a gate value it
+# cannot read; 1 for a package go cannot load, a 0/0 report, and a gobco or
+# test failure, since `go run` reports any non-zero exit of the program it
+# ran as 1; and 1 or 2 for a command of its own that fails under set -e
+# (GNU tar and awk exit 2 on a fatal error, as the go command does when it
+# crashes). An interrupt ends a run with 130 or 143. Every caller that only
+# asks whether the run passed reads any non-zero status as a failure, as
+# before; the on-demand measurement (.github/workflows/conditions.yml) reads
+# 3 as a figure taken and the rest as no figure at all, which is the one
+# difference it needs.
+#
 # GOBCO_TEST_FLAGS carries go test flags for gobco's go test, separated by
 # spaces and each written in one word (-timeout=30m), since gobco runs it with
 # go test's own ten-minute timeout and cmd/server takes about three times as
@@ -391,7 +403,7 @@ fi
 if [ "${#held[@]}" -gt 0 ]; then
   echo "gobco: GOBCO_GATE=$GATE: ${#held[@]} condition(s) in $scope were not evaluated both ways:" >&2
   printf '  %s\n' "${held[@]}" >&2
-  exit 1
+  exit 3
 fi
 if [ -z "$scope" ]; then
   echo "gobco: GOBCO_GATE=$GATE: $context builds no source of $PKG that $reference does not, so the gate holds nothing here$elsewhere"

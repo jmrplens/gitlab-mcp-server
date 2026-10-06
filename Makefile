@@ -790,7 +790,11 @@ modeleval-probe:
 # is refused. GOBCO_GATE=all turns the report into the gate a touched package
 # is held to (it fails on any condition not evaluated both ways), and
 # GOBCO_GATE=beyond:linux/amd64 into the one the Windows and macOS legs of CI
-# run, which holds only the files linux/amd64 does not build.
+# run, which holds only the files linux/amd64 does not build. The script
+# exits 3 when the gate fails a run, which no other failure of it uses, so the
+# on-demand measurement (.github/workflows/conditions.yml), which runs the
+# script itself, can tell a held figure from no figure; make reports any
+# failure of this recipe as its own, with status 2.
 coverage-conditions:
 	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
 	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
