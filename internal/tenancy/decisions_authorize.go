@@ -324,7 +324,7 @@ func authorizeDecisions() []Decision {
 		},
 		{
 			ID: "IDN-013", Question: Authorize, Kind: Rule, Class: ClassQ, Disposition: Ruled,
-			Resource: "the response profile chosen from a session's self-reported clientInfo",
+			Resource: "the response profile chosen from a session's self-reported clientInfo, or a request's User-Agent where it has none",
 			Key:      KeySession, StdioKey: KeyProcess,
 			Source: Configurable, Flags: []string{"--client-compat"}, Envs: []string{"GITLAB_MCP_CLIENT_COMPAT"},
 			Malformed: AcceptsAny,
@@ -335,13 +335,25 @@ func authorizeDecisions() []Decision {
 			// how a priority is written, never who a caller is or what it may
 			// do (INV-001), GITLAB_MCP_CLIENT_COMPAT=off removes it, and it
 			// retires with the Codex defect it works around (row 17 of
-			// docs/development/upstream-bugs.md). Keyed on the session, it
-			// reaches only a session that knows its client: a request at
-			// 2025-11-25 or earlier over stateless HTTP belongs to a session
-			// that never saw initialize, so the profile does not apply to it.
-			Decided: []string{"issue 959"},
+			// docs/development/upstream-bugs.md). The match is Codex's own two
+			// spellings, a codex-mcp-client name prefix or a title of exactly
+			// Codex, so an openai-mcp client, which needs no profile, is not
+			// caught by a label that carries the word.
+			//
+			// Keyed on the session, it reads the clientInfo whenever the
+			// session has one. A request at 2025-11-25 or earlier over
+			// stateless HTTP belongs to a session that never saw initialize
+			// and so has none; issue 1043 decided that such a request falls
+			// back to a codex-mcp-client/ prefix of its User-Agent. That is a
+			// second self-reported label, read for the same one number and
+			// only where the clientInfo is absent, so the deviation widens to
+			// the request header without reaching identity or authority; the
+			// session there is the POST, so the key is unchanged. It retires
+			// with the profile.
+			Decided: []string{"issue 959", "issue 1043"},
 			Sites: []Site{
 				enforce(pkgClientCompat, "profileFromClientInfo"),
+				enforce(pkgClientCompat, "profileFromUserAgent"),
 				enforce(pkgClientCompat, "profileForRequest"),
 				enforce(pkgClientCompat, "Middleware"),
 				enforce(pkgClientCompat, "Enabled"),

@@ -354,6 +354,27 @@ func TestDecisions_TwoMCPClauses_AreDecidedByIssue959(t *testing.T) {
 	}
 }
 
+// TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043 pins what issue
+// 1043 decided on IDN-013: a request whose session knows no client, which is
+// every request at 2025-11-25 or earlier over stateless HTTP, falls back to
+// the User-Agent. The decision is recorded beside issue 959's, since it widens
+// the deviation that issue accepted rather than replacing it; the key stays
+// the session, because over stateless HTTP the session is the POST whose
+// header is read; and the function that reads the header is a declared site,
+// so the audit holds the row to it.
+func TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043(t *testing.T) {
+	d, ok := Lookup("IDN-013")
+	if !ok {
+		t.Fatal("IDN-013 names no row")
+	}
+	if !slices.Equal(d.Decided, []string{"issue 959", "issue 1043"}) || d.Key != KeySession {
+		t.Errorf("IDN-013: decided %v, key %v; want issue 959 then issue 1043 recorded and the session kept as the key", d.Decided, d.Key)
+	}
+	if !slices.Contains(d.Sites, enforce(pkgClientCompat, "profileFromUserAgent")) {
+		t.Errorf("IDN-013 declares %v, want the User-Agent reader among its sites", d.Sites)
+	}
+}
+
 // TestDecisions_TierFallback_IsINV008sRecordedException holds issue 952's
 // decision on F-09: unknown scopes resolve wide (ADM-003) and an unknown tier
 // resolves narrow, to Free with an enterprise build's warning (AUT-003, issue

@@ -5658,25 +5658,29 @@ three paths that was not kept.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
-  Codex from `clientInfo` and rounds annotation priorities to 0 or 1, which is
-  spec-legal and parseable by both. `GITLAB_MCP_CLIENT_COMPAT=off` disables it. Retire it
+  Codex and rounds annotation priorities to 0 or 1, which is spec-legal and
+  parseable by both. `GITLAB_MCP_CLIENT_COMPAT=off` disables it. Retire it
   only once a Codex built on an rmcp carrying the fix is widely deployed, not
   merely released: the affected build ships inside ChatGPT.app, so users do not
   choose their version. Choosing a response from `clientInfo` departs from MCP
   2026-07-28, which says it SHOULD NOT change behavior; that departure is kept
-  on purpose and stated in the security concepts and client compatibility
-  pages ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959),
-  register row `IDN-013`). It reaches only a session that knows its client:
-  stdio in either protocol era, HTTP with `--stateless=false`, and any session
-  at 2026-07-28, whose requests each carry `clientInfo`. A Codex client on
-  2025-11-25 or earlier against the default stateless HTTP transport is sent
-  the fraction, because each POST there is a session of its own that never saw
-  `initialize`; `test/e2e/http` pins that limit
+  on purpose and stated in the security and client compatibility pages
+  ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959),
+  register row `IDN-013`). The session's `clientInfo` decides whenever it has
+  one, matched to the two spellings Codex has used since v0.20, a
+  case-insensitive `codex-mcp-client` name prefix or a `title` of exactly
+  `Codex`; that reaches stdio in either protocol era, HTTP with
+  `--stateless=false`, and any session at 2026-07-28, whose requests each
+  carry `clientInfo`. A Codex client on 2025-11-25 or earlier against the
+  default stateless HTTP transport has none, because each POST there is a
+  session of its own that never saw `initialize`, so a session with no
+  `clientInfo` falls back to a case-insensitive `codex-mcp-client/` prefix of
+  the request's User-Agent, which Codex's MCP client sends on every Streamable
+  HTTP request (`codex-rs/rmcp-client/src/utils.rs`)
   ([issue 1043](https://github.com/jmrplens/gitlab-mcp-server/issues/1043),
-  open, is to add a `codex-mcp-client/` User-Agent fallback for it;
-  `internal/clientcompat` still matches only a `codex` substring of the
-  `clientInfo` name or title). The `openai-mcp`
-  question is settled
+  recorded on `IDN-013` beside issue 959 as a widening of the same
+  deviation). `test/e2e/http` holds the fallback and its negatives against the
+  binary. The `openai-mcp` question is settled
   ([issue 1044](https://github.com/jmrplens/gitlab-mcp-server/issues/1044),
   measured 2026-09-28): OpenAI's hosted MCP client, reached through the
   Responses API and the Realtime API, reports `clientInfo`
@@ -5684,10 +5688,10 @@ three paths that was not kept.
   `annotations.priority: 0.6` without error on every model tried, so it does
   not have this defect and needs no profile. It sends no `title`, and its tool
   calls carry only the User-Agent `openai-mcp/1.0.0 (...)`. One label stays
-  unmeasured, a ChatGPT web tool call's `openai-mcp/1.0.0 (Codex)`, which the
-  `codex` substring would match if its `clientInfo` carries the same word, so
-  issue 1043 is also to narrow the name match to a `codex-mcp-client` prefix
-  or a `title` of `Codex`.
+  unmeasured, a ChatGPT web tool call's `openai-mcp/1.0.0 (Codex)`. The
+  `codex` substring the profile matched until issue 1043 would have caught it
+  if its `clientInfo` carries the same word; neither of the two matches it
+  uses now does, and `test/e2e/http` pins both negatives.
 
 **What**: the Codex builds bundled with ChatGPT.app reject any MCP result whose
 `annotations.priority` is a non-integer float. `0.6` fails; `1` or an

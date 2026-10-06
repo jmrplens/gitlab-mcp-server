@@ -44,41 +44,91 @@ func Enabled() bool {
 	return !strings.EqualFold(config.Getenv(envDisable), "off")
 }
 
+const (
+	// codexClientName is the clientInfo name Codex has reported since v0.20.
+	// It is matched as a case-insensitive prefix.
+	codexClientName = "codex-mcp-client"
+	// codexClientTitle is the clientInfo title Codex has reported since v0.20.
+	// It is matched exactly.
+	codexClientTitle = "Codex"
+	// codexUserAgentPrefix opens the User-Agent Codex's MCP client sends on
+	// every Streamable HTTP request, followed by its version
+	// (codex-rs/rmcp-client/src/utils.rs). It is matched as a case-insensitive
+	// prefix.
+	codexUserAgentPrefix = "codex-mcp-client/"
+)
+
+// hasPrefixFold reports whether s begins with prefix, ignoring case.
+func hasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
+}
+
 // profileFromClientInfo maps the clientInfo a session reported, in initialize
-// or, at protocol 2026-07-28, in its first request's _meta, to a Profile. Codex
-// has identified itself as name "codex-mcp-client" / title "Codex" since
-// v0.20, so a case-insensitive "codex" substring over both fields is stable
-// and future-proof.
+// or, at protocol 2026-07-28, in the request's _meta, to a Profile. Codex has
+// identified itself as name "codex-mcp-client" and title "Codex" since v0.20,
+// and the match is held to those two spellings: a "codex" substring would also
+// catch an openai-mcp client whose label carries the word, which reads a
+// fractional priority without error and needs no profile (issue 1043).
 func profileFromClientInfo(impl *mcp.Implementation) Profile {
 	if impl == nil {
 		return ProfileDefault
 	}
-	name := strings.ToLower(impl.Name)
-	title := strings.ToLower(impl.Title)
-	if strings.Contains(name, "codex") || strings.Contains(title, "codex") {
+	if hasPrefixFold(impl.Name, codexClientName) || impl.Title == codexClientTitle {
 		return ProfileCodex
 	}
 	return ProfileDefault
 }
 
-// profileForRequest resolves the Profile for the session that issued req.
-// A session that knows no client falls back to ProfileDefault: over stateless
-// HTTP at protocol 2025-11-25 or earlier each POST is a session of its own,
-// whose initialize params the SDK synthesizes with a protocol version and no
-// clientInfo, so the profile never applies there.
+// profileFromUserAgent maps the User-Agent of an HTTP request to a Profile:
+// Codex's MCP client sends "codex-mcp-client/<version>". ChatGPT web's tool
+// calls send "openai-mcp/1.0.0 (Codex)", which the prefix does not match.
+func profileFromUserAgent(userAgent string) Profile {
+	if hasPrefixFold(userAgent, codexUserAgentPrefix) {
+		return ProfileCodex
+	}
+	return ProfileDefault
+}
+
+// sessionClientInfo returns the clientInfo of the session that issued req, or
+// nil when the session knows no client. Over stateless HTTP at protocol
+// 2025-11-25 or earlier each POST is a session of its own, whose initialize
+// params the SDK synthesizes with a protocol version and no clientInfo.
+func sessionClientInfo(req mcp.Request) *mcp.Implementation {
+	ss, ok := req.GetSession().(*mcp.ServerSession)
+	if !ok || ss == nil {
+		return nil
+	}
+	params := ss.InitializeParams()
+	if params == nil {
+		return nil
+	}
+	return params.ClientInfo
+}
+
+// requestUserAgent returns the User-Agent of the HTTP request that carried
+// req, or "" when it came over stdio or carried none.
+func requestUserAgent(req mcp.Request) string {
+	extra := req.GetExtra()
+	if extra == nil {
+		return ""
+	}
+	return extra.Header.Get("User-Agent")
+}
+
+// profileForRequest resolves the Profile for req. The clientInfo of its
+// session decides whenever the session has one; only a session that knows no
+// client falls back to the request's User-Agent (issue 1043), which is how a
+// Codex client on protocol 2025-11-25 or earlier is recognized over the
+// default stateless HTTP transport. Both are self-reported, and neither ever
+// decides who a caller is or what it may do (register row IDN-013).
 func profileForRequest(req mcp.Request) Profile {
 	if req == nil {
 		return ProfileDefault
 	}
-	ss, ok := req.GetSession().(*mcp.ServerSession)
-	if !ok || ss == nil {
-		return ProfileDefault
+	if impl := sessionClientInfo(req); impl != nil {
+		return profileFromClientInfo(impl)
 	}
-	params := ss.InitializeParams()
-	if params == nil {
-		return ProfileDefault
-	}
-	return profileFromClientInfo(params.ClientInfo)
+	return profileFromUserAgent(requestUserAgent(req))
 }
 
 // Middleware returns a receiving middleware that rewrites results according

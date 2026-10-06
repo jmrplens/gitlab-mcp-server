@@ -406,6 +406,19 @@ func TestClient_DistinctCredentialsGetDistinctServers(t *testing.T) {
 // in a 2026-07-28 request's _meta alike.
 const codexClientInfo = `{"name":"codex-mcp-client","title":"Codex","version":"0.148.0"}`
 
+// codexUserAgent is the User-Agent Codex's MCP client sends on every
+// Streamable HTTP request, its version after the slash.
+const codexUserAgent = "codex-mcp-client/0.148.0"
+
+// openAIClientInfo is how OpenAI's hosted MCP client names itself: no title,
+// and a label in parentheses after openai-mcp.
+const openAIClientInfo = `{"name":"openai-mcp (Codex)","version":"1.0.0"}`
+
+// chatGPTWebUserAgent is the User-Agent a ChatGPT web tool call carries. Its
+// clientInfo is the one OpenAI label nobody has measured, and the word Codex
+// in it is why the profile matches Codex's own spellings and not a substring.
+const chatGPTWebUserAgent = "openai-mcp/1.0.0 (Codex)"
+
 // codexCurrentUserArguments asks for the caller's own user, a tool call whose
 // result carries annotated content for the profile to act on.
 const codexCurrentUserArguments = `{"name":"gitlab_execute_action","arguments":{"action":"user.current","params":{}}`
@@ -414,31 +427,41 @@ const codexCurrentUserArguments = `{"name":"gitlab_execute_action","arguments":{
 // wrote it, so 1 and 1.0 stay two different answers.
 var priorityOnTheWire = regexp.MustCompile(`"priority":([^,}\]]+)`)
 
-// TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient pins how far the
-// Codex profile reaches over HTTP, which is less far than on stdio.
+// TestClient_CodexProfile_ReachesCodexAlone_ByClientInfoOrUserAgent pins how
+// far the Codex profile reaches over HTTP, and that it reaches only Codex.
 //
 // The profile reads the clientInfo of the session a request belongs to. At
 // protocol 2026-07-28 every request carries it in its _meta, so the default
 // stateless transport knows it on each call. At 2025-11-25 and before, a
 // client reports it once, in initialize: a stateful session keeps it for the
 // calls that follow, but the stateless transport gives each later POST a
-// session of its own that never saw initialize, so there is nothing for the
-// profile to read and a Codex client on that protocol is sent the fraction the
-// profile exists to round. That last case is pinned as it stands, because the
-// client compatibility guide and the security page state it as the profile's
-// limit: the day it changes, this fails and the statement goes with it.
-func TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient(t *testing.T) {
+// session of its own that never saw initialize, so there is no clientInfo to
+// read. For that case the profile falls back to the User-Agent, and Codex's
+// MCP client sends codex-mcp-client/<version> on every request (issue 1043),
+// so a Codex client on that protocol is rounded too.
+//
+// The negative cases hold the profile to Codex. ChatGPT web's tool calls carry
+// the User-Agent openai-mcp/1.0.0 (Codex), and OpenAI's hosted client reads a
+// fractional priority without error, so neither that User-Agent on the
+// stateless legacy path nor a clientInfo carrying the same label at 2026-07-28
+// may round anything; the second sends Codex's User-Agent beside it, so it
+// also shows that the clientInfo decides whenever the session has one.
+func TestClient_CodexProfile_ReachesCodexAlone_ByClientInfoOrUserAgent(t *testing.T) {
 	gitlab := toolResultsProbeGitLab(t, `{"id":7,"username":"someone"}`, nil)
 
 	for _, tc := range []struct {
-		name     string
-		stateful bool
-		legacy   bool
-		rounded  bool
+		name       string
+		stateful   bool
+		legacy     bool
+		clientInfo string
+		userAgent  string
+		rounded    bool
 	}{
 		{name: "stateless at 2026-07-28 reads the clientInfo each request carries", rounded: true},
 		{name: "stateful at 2025-11-25 keeps the clientInfo of initialize", stateful: true, legacy: true, rounded: true},
-		{name: "stateless at 2025-11-25 has no clientInfo to read", legacy: true},
+		{name: "stateless at 2025-11-25 falls back to the User-Agent", legacy: true, userAgent: codexUserAgent, rounded: true},
+		{name: "stateless at 2025-11-25 with ChatGPT web's User-Agent is not Codex", legacy: true, clientInfo: openAIClientInfo, userAgent: chatGPTWebUserAgent},
+		{name: "stateless at 2026-07-28 with an openai-mcp clientInfo is not Codex", clientInfo: openAIClientInfo, userAgent: codexUserAgent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := []string{"--gitlab-url=" + gitlab}
@@ -447,7 +470,13 @@ func TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient(t *testing.T) 
 			}
 			srv := startServer(t, nil, flags...)
 
-			payload := codexToolCall(t, srv, tc.stateful, tc.legacy)
+			clientInfo := tc.clientInfo
+			if clientInfo == "" {
+				clientInfo = codexClientInfo
+			}
+			payload := codexToolCall(t, srv, clientCall{
+				stateful: tc.stateful, legacy: tc.legacy, clientInfo: clientInfo, userAgent: tc.userAgent,
+			})
 			priorities := priorityOnTheWire.FindAllStringSubmatch(payload, -1)
 			if len(priorities) == 0 {
 				t.Fatalf("the result carries no priority, so it cannot show the profile either way: %s", toolResultsTruncate(payload))
@@ -458,41 +487,55 @@ func TestClient_CodexProfile_AppliesWhereTheSessionKnowsTheClient(t *testing.T) 
 					t.Errorf("a Codex session was sent priority %s, which Codex refuses; want an integer", p[1])
 				}
 				if !tc.rounded && !fractional {
-					t.Errorf("priority %s was rounded on a transport where the session cannot know its client; the documented limit no longer holds", p[1])
+					t.Errorf("priority %s was rounded for a client that is not Codex; want the fraction every other client is sent", p[1])
 				}
 			}
 		})
 	}
 }
 
-// codexToolCall identifies a session as Codex the way a client of that
-// protocol does and returns the JSON-RPC answer to a served tool call. A
-// 2026-07-28 call carries the clientInfo in its own _meta; an older client
-// sends initialize first, and carries the session it was given, if any, on the
-// calls after it. It fails the test unless the call was served, since a
-// refused or unknown call proves nothing about a result.
-func codexToolCall(t *testing.T, srv *server, stateful, legacy bool) string {
+// clientCall is how codexToolCall identifies its client: on which transport
+// and protocol, with which clientInfo, and with which User-Agent, empty for
+// the harness's own.
+type clientCall struct {
+	stateful   bool
+	legacy     bool
+	clientInfo string
+	userAgent  string
+}
+
+// codexToolCall identifies a session the way a client of that protocol does
+// and returns the JSON-RPC answer to a served tool call. A 2026-07-28 call
+// carries the clientInfo in its own _meta; an older client sends initialize
+// first, and carries the session it was given, if any, on the calls after it.
+// Every request carries the call's User-Agent when it names one. It fails the
+// test unless the call was served, since a refused or unknown call proves
+// nothing about a result.
+func codexToolCall(t *testing.T, srv *server, c clientCall) string {
 	t.Helper()
 
 	headers := map[string]string{"PRIVATE-TOKEN": "glpat-whatever", "Mcp-Param-Action": "user.current"}
+	if c.userAgent != "" {
+		headers["User-Agent"] = c.userAgent
+	}
 	call := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":` + codexCurrentUserArguments + `,"_meta":{` +
 		`"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `",` +
 		`"io.modelcontextprotocol/clientCapabilities":{},` +
-		`"io.modelcontextprotocol/clientInfo":` + codexClientInfo + `}}}`
-	if legacy {
+		`"io.modelcontextprotocol/clientInfo":` + c.clientInfo + `}}}`
+	if c.legacy {
 		const legacyVersion = "2025-11-25"
 		headers["MCP-Protocol-Version"] = legacyVersion
 		initialized := srv.do(t, request{
 			method: http.MethodPost, path: "/mcp", headers: headers,
 			body: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` + legacyVersion +
-				`","capabilities":{},"clientInfo":` + codexClientInfo + `}}`,
+				`","capabilities":{},"clientInfo":` + c.clientInfo + `}}`,
 		})
 		if initialized.status != http.StatusOK {
 			t.Fatalf("initialize = %d, want %d: %s", initialized.status, http.StatusOK, toolResultsTruncate(initialized.body))
 		}
 		session := initialized.header.Get("Mcp-Session-Id")
-		if stateful == (session == "") {
-			t.Fatalf("stateful %v, yet initialize was answered with session %q", stateful, session)
+		if c.stateful == (session == "") {
+			t.Fatalf("stateful %v, yet initialize was answered with session %q", c.stateful, session)
 		}
 		headers["Mcp-Session-Id"] = session
 		if got := srv.do(t, request{
