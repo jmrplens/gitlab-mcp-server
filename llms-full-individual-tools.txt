@@ -3923,7 +3923,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_issue_statistics
 
-Get global issue count statistics across all visible projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.
+Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.
 
 **Parameters:**
 
@@ -3939,7 +3939,7 @@ Get global issue count statistics across all visible projects. Returns: a statis
 - `labels` (array of strings): Label names to filter by
 - `milestone` (string): Milestone title to filter by
 - `my_reaction_emoji` (string): Filter by issues you reacted to with this emoji (or None/Any)
-- `scope` (string): Scope: created_by_me, assigned_to_me, all
+- `scope` (string): Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)
 - `search` (string): Search string for title and description
 - `updated_after` (string): Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
@@ -6810,7 +6810,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_all
 
-List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
+List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
 
 **Parameters:**
 
@@ -6843,7 +6843,7 @@ List issues across accessible projects. Returns: visible issues with project con
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
+- `scope` (string): Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `state` (string): Filter by state (opened, closed, all)
@@ -9790,7 +9790,7 @@ List merge requests in one project with filtering and pagination. Returns: match
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `reviewer_id` (integer): Filter by reviewer user ID
 - `reviewer_username` (string): Filter by reviewer username
-- `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
+- `scope` (string): Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `source_branch` (string): Filter by source branch name
@@ -9807,7 +9807,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_list_global
 
-List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.
+List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.
 
 **Parameters:**
 
@@ -9834,7 +9834,7 @@ List merge requests across all accessible projects. Returns: visible MRs with pr
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `reviewer_id` (integer): Filter by reviewer user ID
 - `reviewer_username` (string): Filter by reviewer username
-- `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
+- `scope` (string): Which merge requests to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, reviews_for_me, or all (every merge request the caller can see)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `source_branch` (string): Filter by source branch name
@@ -9879,7 +9879,7 @@ List merge requests across a group and its projects. Returns: visible MRs with p
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `reviewer_id` (integer): Filter by reviewer user ID
 - `reviewer_username` (string): Filter by reviewer username
-- `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
+- `scope` (string): Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `source_branch` (string): Filter by source branch name

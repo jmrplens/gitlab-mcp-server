@@ -87,7 +87,7 @@ type ListInput struct {
 	Labels                 []string                   `json:"labels,omitempty"        jsonschema:"Label names to filter by"`
 	NotLabels              []string                   `json:"not_labels,omitempty"    jsonschema:"Label names to exclude"`
 	Milestone              string                     `json:"milestone,omitempty"     jsonschema:"Milestone title to filter by"`
-	Scope                  string                     `json:"scope,omitempty"         jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Scope                  string                     `json:"scope,omitempty"         jsonschema:"Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)"`
 	Search                 string                     `json:"search,omitempty"        jsonschema:"Search in title and description"`
 	SourceBranch           string                     `json:"source_branch,omitempty" jsonschema:"Filter by source branch name"`
 	TargetBranch           string                     `json:"target_branch,omitempty" jsonschema:"Filter by target branch name"`
@@ -1193,13 +1193,15 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 // Global & Group MR listing
 // ---------------------------------------------------------------------------.
 
-// ListGlobalInput defines filters for listing merge requests across all projects.
+// ListGlobalInput defines filters for GitLab's global merge request list,
+// GET /merge_requests, which answers only the merge requests the caller
+// created unless Scope names another scope.
 type ListGlobalInput struct {
 	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state (opened, closed, merged, all)"`
 	Labels                 []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
 	NotLabels              []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
 	Milestone              string                     `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Which merge requests to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, reviews_for_me, or all (every merge request the caller can see)"`
 	Search                 string                     `json:"search,omitempty"          jsonschema:"Search in title and description"`
 	SourceBranch           string                     `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
 	TargetBranch           string                     `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
@@ -1230,8 +1232,10 @@ type ListGlobalInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// ListGlobal returns a paginated list of merge requests across all projects
-// visible to the authenticated user.
+// ListGlobal returns a page of GitLab's global merge request list. The scope
+// is passed through as the caller wrote it, so an omitted one gets GitLab's
+// default, created_by_me: the merge requests the caller created, not every
+// merge request it can see, which takes scope=all.
 func ListGlobal(ctx context.Context, client *gitlabclient.Client, input ListGlobalInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -1243,8 +1247,11 @@ func ListGlobal(ctx context.Context, client *gitlabclient.Client, input ListGlob
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().MergeRequests.ListMergeRequests(opts, gl.WithContext(ctx))
 	if err != nil {
+		// No scope is a remedy for this 401. GET /merge_requests demands a
+		// user only when scope is not all, and the API guard refuses a token
+		// it cannot use whatever the scope, so the one cause left is the token.
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGlobal", err, http.StatusUnauthorized,
-			"global MR listing requires an authenticated token; results are scoped to MRs visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow further)")
+			"GitLab answers the global merge request list with 401 only when it refused the token itself, not for a missing permission: check that the token is valid, has not expired and has not been revoked")
 	}
 	return mergeRequestListOutput("mrListGlobal", mrs, resp, captured)
 }
@@ -1406,7 +1413,7 @@ type ListGroupInput struct {
 	Labels                 []string                   `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
 	NotLabels              []string                   `json:"not_labels,omitempty"        jsonschema:"Label names to exclude"`
 	Milestone              string                     `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope                  string                     `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Scope                  string                     `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)"`
 	Search                 string                     `json:"search,omitempty"            jsonschema:"Search in title and description"`
 	SourceBranch           string                     `json:"source_branch,omitempty"     jsonschema:"Filter by source branch name"`
 	TargetBranch           string                     `json:"target_branch,omitempty"     jsonschema:"Filter by target branch name"`

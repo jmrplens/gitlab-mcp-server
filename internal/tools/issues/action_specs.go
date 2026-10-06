@@ -99,7 +99,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueReadSpec(specGetByID, toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
 		// gitlab_issue_list — list project issues with optional filtering and pagination.
 		issueReadSpec(specList, toolutil.RouteAction(client, List), "gitlab_issue_list"),
-		// gitlab_issue_list_all — list issues visible to the caller across all projects.
+		// gitlab_issue_list_all: list issues across projects, the caller's own
+		// unless scope names another (GitLab's default is created_by_me).
 		issueReadSpec(specListAll, toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
 		// gitlab_issue_list_group — list issues across a group and its projects.
 		issueReadSpec(specListGroup, toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
@@ -256,11 +257,15 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 		}
 		options.IndividualTool.Description = "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
+	// GET /issues answers with scope=created_by_me when no scope is sent, so
+	// the usage and the description say what an omitted scope returns and
+	// which value lists everything (issue 1172). They used to call the result
+	// every issue visible to the caller.
 	case "gitlab_issue_list_all":
-		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
+		options.Usage = "List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which is what a cross-project issue overview needs."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
 		options.RelatedActions = []string{actionIssueList, actionIssueListGroup, actionSearchIssues}
-		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+		options.IndividualTool.Description = "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
 	case toolIssueListGroup:
 		decorateIssueMeta(&options, individualTool)

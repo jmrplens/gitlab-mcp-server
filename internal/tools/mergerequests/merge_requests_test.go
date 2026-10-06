@@ -7460,7 +7460,20 @@ func TestStatusHints_EachStatusEarnsItsOwnHint(t *testing.T) {
 		_, err := Merge(context.Background(), c, MergeInput{ProjectID: testProjectID, MRIID: 1})
 		return err
 	}
+	// The global listing's hint offered scope=created_by_me "to narrow
+	// further", which is the scope GitLab already answers with when none is
+	// sent (issue 1172), and no scope is a remedy for a 401 there: the route
+	// demands a user only when scope is not all, and the API guard refuses a
+	// token it cannot use whatever the scope. So the hint names the token and
+	// offers neither a scope nor a narrowing.
+	listGlobal := func(c *gitlabclient.Client) error {
+		_, err := ListGlobal(context.Background(), c, ListGlobalInput{})
+		return err
+	}
 	runStatusHintCases(t, []statusHintCase{
+		{"list global 401 offers no scope", http.StatusUnauthorized, listGlobal, "has not been revoked", "scope="},
+		{"list global 401 offers no narrowing", http.StatusUnauthorized, listGlobal, "has not been revoked", "narrow"},
+		{"list global 403 keeps GitLab's message", http.StatusForbidden, listGlobal, "as GitLab said", "has not been revoked"},
 		{"rebase 403", http.StatusForbidden, rebase, "rebase_in_progress", ""},
 		{"rebase 409", http.StatusConflict, rebase, "rebase_in_progress", ""},
 		{"rebase 422 keeps GitLab's message", http.StatusUnprocessableEntity, rebase, "as GitLab said", "rebase_in_progress"},

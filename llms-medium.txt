@@ -735,7 +735,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_get_instance_audit_event: Get a single instance-level audit event by ID (administrator only).
 - gitlab_get_integration: Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipel...
 - gitlab_get_issue_discussion: Get a single issue discussion thread by its discussion id.
-- gitlab_get_issue_statistics: Get global issue count statistics across all visible projects.
+- gitlab_get_issue_statistics: Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the ...
 - gitlab_get_job_token_access_settings: Get a project's CI/CD job token access settings.
 - gitlab_get_key_by_fingerprint: Look up an SSH key or deploy key by fingerprint and return the owning user.
 - gitlab_get_key_with_user: Look up an SSH key by its global ID and return the owning user.
@@ -939,7 +939,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_issue_link_get: Get one issue link by its issue_link_id.
 - gitlab_issue_link_list: List all issues linked to a source issue.
 - gitlab_issue_list: List issues in one project with filtering and pagination.
-- gitlab_issue_list_all: List issues across accessible projects.
+- gitlab_issue_list_all: List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller ca...
 - gitlab_issue_list_group: List issues across a group.
 - gitlab_issue_milestone_event_get: Get a single milestone event for an issue.
 - gitlab_issue_milestone_event_list: List milestone events for an issue.
@@ -1132,7 +1132,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_mr_label_event_get: Get a single label event for a merge request. Returns: the event with action, the label object, and the acting user.
 - gitlab_mr_label_event_list: List label events for a merge request. Returns: label events with action, the label object, the acting user, and pagination metadata.
 - gitlab_mr_list: List merge requests in one project with filtering and pagination.
-- gitlab_mr_list_global: List merge requests across all accessible projects.
+- gitlab_mr_list_global: List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge reque...
 - gitlab_mr_list_group: List merge requests across a group and its projects.
 - gitlab_mr_merge: Merge a merge request now, or schedule auto-merge when its pipeline succeeds.
 - gitlab_mr_milestone_event_get: Get a single milestone event for a merge request. Returns: the event with action, the milestone object, and the acting user.

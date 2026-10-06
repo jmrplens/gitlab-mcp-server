@@ -156,9 +156,12 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 		t.Fatalf("list order_by guidance = %+v, want issue_list_sort_field", guidance)
 	}
 
-	allSpec := byTool["gitlab_issue_list_all"]
-	if !strings.Contains(allSpec.Usage, "across all accessible projects") {
-		t.Fatalf("list_all Usage = %q", allSpec.Usage)
+	// The list_all usage is held to what it says about scope by
+	// TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns. This used to
+	// assert "across all accessible projects", which pinned the sentence that
+	// told a model an omitted scope listed everything (issue 1172).
+	if allSpec := byTool["gitlab_issue_list_all"]; !slices.Contains(allSpec.Aliases, "list all issues") {
+		t.Fatalf("list_all Aliases = %v, want list all issues", allSpec.Aliases)
 	}
 
 	// The issue.list_group canonical action (projected from ActionSpecs) must
@@ -310,6 +313,53 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
 	}
+}
+
+// TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns holds every text a
+// model reads about issue.list_all to the default of the route it calls.
+//
+// GET /issues answers with scope=created_by_me when no scope is sent, so a
+// call naming no scope returns the issues the caller opened and nobody
+// else's. The usage, the individual tool's description and the scope
+// parameter described the action as listing the issues visible to the caller
+// across every accessible project, which is what scope=all does (issue 1172).
+// Each text is served on its own by some surface, so each has to say both
+// halves: what an omitted scope returns, and the value that lists everything.
+func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
+	spec := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))["gitlab_issue_list_all"]
+	scopeDescription, _ := servedProperty(t, spec, "scope")["description"].(string)
+	for _, tt := range []struct {
+		name      string
+		text      string
+		fragments []string
+	}{
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, fragment := range tt.fragments {
+				if !strings.Contains(tt.text, fragment) {
+					t.Errorf("%s = %q, want it to carry %q", tt.name, tt.text, fragment)
+				}
+			}
+		})
+	}
+}
+
+// servedProperty returns the schema the served input schema of spec carries
+// for the named parameter, with every override already applied.
+func servedProperty(t *testing.T, spec toolutil.ActionSpec, name string) map[string]any {
+	t.Helper()
+	properties, ok := spec.Route.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s input schema carries no properties: %#v", spec.IndividualTool.Name, spec.Route.InputSchema)
+	}
+	property, ok := properties[name].(map[string]any)
+	if !ok {
+		t.Fatalf("%s input schema carries no %q property: %#v", spec.IndividualTool.Name, name, properties[name])
+	}
+	return property
 }
 
 func issueSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
