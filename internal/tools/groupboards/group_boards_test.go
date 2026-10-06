@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -917,23 +918,66 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_ValidationAPIError verifies a refused column
-// creation carries the duplicate-scope hint under either code GitLab refuses
-// one with: 400 and 422 share the branch, so each is driven rather than only
-// the one the fixture picked.
-func TestCreateGroupBoardList_ValidationAPIError(t *testing.T) {
-	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+// TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers verifies
+// the hint each refusal of a column creation carries, read from GitLab's own
+// answers at v19.4.1-ee. A label this group cannot use ("Label not found") and
+// a second list for a label the board already has a list for ("Label has
+// already been taken") are both answered 400 by API::BoardsResponses'
+// create_list, which renders the service's first error with that status, and
+// both get the label hint. A caller without admin_issue_board_list on the
+// group, which a role below Planner lacks and an archived group withholds from
+// every role, is refused by authorize! with a plain 403, or a plain 401 where
+// GitLab answers a permission refusal that way (register row 55), and gets the
+// role hint, keyed on the refusal rather than on the status: a 403 naming an
+// RFC 6750 code refuses the token's scope and is told nothing about roles. A
+// 422 is not an answer this route gives, and a 404 names a group or board this
+// call cannot see, so neither carries a hint.
+//
+// Every case also holds the error to the parameters the input offers: the
+// input takes label_id alone, so no refusal may send a model after the
+// assignee, milestone or iteration a list could be scoped to on a licensed
+// instance, nor tell it a license is what it lacks.
+func TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers(t *testing.T) {
+	const (
+		labelHint = "label_id must name a label of this group or of one of its parent groups"
+		takenHint = "this board already has a list for that label"
+		roleHint  = "needs at least the Planner role on the group"
+	)
+	notOffered := regexp.MustCompile(`(?i)assignee|milestone|iteration|premium|ultimate|licen[cs]e`)
+	tests := []struct {
+		name      string
+		status    int
+		body      string
+		wantLabel bool
+		wantRole  bool
+	}{
+		{"label not found", http.StatusBadRequest, `{"message":{"error":"Label not found"}}`, true, false},
+		{"label already taken", http.StatusBadRequest, `{"message":{"error":"Label has already been taken"}}`, true, false},
+		{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, false, true},
+		{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, false, true},
+		{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false, false},
+		{"422 is not this route's", http.StatusUnprocessableEntity, `{"message":"Unprocessable"}`, false, false},
+		{"404 board", http.StatusNotFound, `{"message":"404 Board Not Found"}`, false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, status, `{"message":"List already exists"}`)
+				testutil.RespondJSON(w, tt.status, tt.body)
 			}))
 
-			_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
+			_, err := CreateGroupBoardList(t.Context(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
 			if err == nil {
 				t.Fatal(errExpectedAPI)
 			}
-			if !strings.Contains(err.Error(), "same scope already exists") {
-				t.Fatalf("error = %q, want duplicate scope hint", err.Error())
+			msg := err.Error()
+			if got := strings.Contains(msg, labelHint) && strings.Contains(msg, takenHint); got != tt.wantLabel {
+				t.Errorf("error %q carries the label hint = %v, want %v", msg, got, tt.wantLabel)
+			}
+			if got := strings.Contains(msg, roleHint); got != tt.wantRole {
+				t.Errorf("error %q carries the role hint = %v, want %v", msg, got, tt.wantRole)
+			}
+			if absent := notOffered.FindString(msg); absent != "" {
+				t.Errorf("error %q names %q, which the input does not offer", msg, absent)
 			}
 		})
 	}

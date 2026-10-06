@@ -501,18 +501,42 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return BoardListOutput{}, toolutil.WrapErrWithHint("group_board_list_create", err,
-				"exactly one of label_id (group label), assignee_id (Premium+), or milestone_id (Premium+) must be provided; verify referenced ID exists; a list with the same scope already exists on this board")
-		}
-		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_create", err, http.StatusForbidden,
-			"creating non-label lists (assignee/milestone) requires GitLab Premium or Ultimate; all list creation requires Reporter role on the group")
+		return BoardListOutput{}, createGroupBoardListError(err)
 	}
 	extra, err := toolutil.CapturedBoardList(captured)
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErr("group_board_list_create", err)
 	}
 	return convertBoardList(list, extra), nil
+}
+
+// createGroupBoardListError wraps GitLab's refusal of a column creation with
+// the hint its cause calls for, in terms of the one parameter the input
+// offers. GitLab's route also takes assignee_id, milestone_id and iteration_id
+// on a licensed instance, but client-go's CreateGroupIssueBoardListOptions
+// carries label_id alone, so neither hint may send a model after the others.
+//
+// What GitLab answers, read at v19.4.1-ee: a label this group cannot use and a
+// second list for a label the board already has a list for are both a 400
+// (API::BoardsResponses#create_list renders the service's first error,
+// "Label not found" or "Label has already been taken", with that status), and
+// a license the instance lacks is a 400 too, for the other list types only. A
+// caller without admin_issue_board_list on the group is refused by authorize!
+// with a 403: every role from Planner up holds it, and an archived group, or
+// one under an archived parent, withholds it from all of them. That refusal is
+// keyed on [toolutil.IsPermissionRefusal] rather than on the status, since a
+// 403 naming an RFC 6750 code refuses the token's scope rather than the
+// caller's role, and some routes answer a missing permission with 401.
+func createGroupBoardListError(err error) error {
+	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		return toolutil.WrapErrWithHint("group_board_list_create", err,
+			"label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), and a board holds one list per label, so GitLab answers that the label has already been taken when this board already has a list for that label (group.group_board_list_lists shows them)")
+	}
+	if toolutil.IsPermissionRefusal(err) {
+		return toolutil.WrapErrWithHint("group_board_list_create", err,
+			"creating a list on a group issue board needs at least the Planner role on the group, and GitLab refuses it to every role while the group or one of its parent groups is archived")
+	}
+	return toolutil.WrapErrWithMessage("group_board_list_create", err)
 }
 
 // UpdateGroupBoardListInput represents input for updating a group board list.
