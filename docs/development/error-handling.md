@@ -222,6 +222,16 @@ msg := toolutil.ExtractGitLabMessage(err)
 // "" when no useful detail is available
 ```
 
+A body is GitLab's message when it is JSON whose top-level keys are all among
+`message`, `error` and `error_description`, with one of the first two present
+(`gitLabAuthoredMessage`). One body outside that set is reflected:
+Workhorse's refusal of an Orbit query, answered to `POST /api/v4/orbit/query`
+with exactly a string `code` and a string `message`, when the code is
+`compile_error` or `validation_error` (`isWorkhorseQueryRefusal`), because it
+is the only account of what is wrong with the query. Every other code
+(`execution_error`, `internal_error`, `timeout`, `quota_exhausted`), any
+further key, and the same body answered to any other request are withheld.
+
 ### `WrapErrWithMessage`
 
 For writes, where GitLab's detail tells the model what went wrong. Adds that
