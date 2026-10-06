@@ -22,6 +22,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// domainPrefix is the catalog domain the search actions are published under,
+// with the dot that joins it to a spec name. The ID constants are written
+// whole, so this is the spelling they are held to rather than the one they
+// are built from.
+const domainPrefix = "search."
+
 // crossLinkableIDs is the set of canonical IDs the search cross-links may name:
 // every search action, plus the actions of the packages a search result points
 // a model at next, each under the domain of the group that package joins.

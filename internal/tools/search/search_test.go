@@ -413,6 +413,178 @@ func TestSearchCommits_CancelledContext(t *testing.T) {
 	}
 }
 
+// searchTrailedCommitJSON is a commit as GitLab answers it once its trailers
+// were parsed: trailers keeps the last value of each trailer, and
+// extended_trailers maps each trailer to the list of all of its values, the
+// shape client-go's Commit cannot decode (row 69 of
+// docs/development/upstream-bugs.md).
+const searchTrailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
+	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
+	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
+
+// TestSearchCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer holds
+// search.commits, at each of its three scopes, to the reading issue 1026 gave
+// the commit list: a page carrying a commit whose extended_trailers are lists
+// makes client-go fail the whole page ("cannot unmarshal array into Go struct
+// field .0.extended_trailers.Signed-off-by of type string"), so the page is
+// read off the captured response. The trailed commit keeps both of its
+// Signed-off-by values, the commit beside it keeps its empty map, and the
+// pagination headers of the answer client-go failed to decode still reach the
+// output.
+func TestSearchCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		path  string
+		input CommitsInput
+	}{
+		{name: "project", path: pathSearchProject, input: CommitsInput{ProjectID: "42", Query: "signed"}},
+		{name: "group", path: pathSearchGroup, input: CommitsInput{GroupID: "7", Query: "signed"}},
+		{name: "global", path: pathSearchGlobal, input: CommitsInput{Query: "signed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != tc.path {
+					http.NotFound(w, r)
+					return
+				}
+				testutil.AssertQueryParam(t, r, queryScope, "commits")
+				testutil.RespondJSONWithPagination(w, http.StatusOK,
+					`[`+searchTrailedCommitJSON+`,{"id":"d4e5f6","short_id":"d4e5f6","title":"chore: plain","web_url":"u","trailers":{},"extended_trailers":{}}]`,
+					testutil.PaginationHeaders{Page: "1", PerPage: "2", NextPage: "2"})
+			}))
+
+			out, err := Commits(context.Background(), client, tc.input)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertTrailedCommitPage(t, out)
+		})
+	}
+}
+
+// assertTrailedCommitPage holds a search.commits answer to the page
+// [TestSearchCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer] serves:
+// the trailed commit with every value of each trailer, the plain commit with
+// none, and the pagination headers of the answer.
+func assertTrailedCommitPage(t *testing.T, out CommitsOutput) {
+	t.Helper()
+	if len(out.Commits) != 2 {
+		t.Fatalf("len(Commits) = %d, want 2", len(out.Commits))
+	}
+	want := map[string][]string{
+		"Signed-off-by": {"Alice <alice@example.com>", "Bob <bob@example.com>"},
+		"Reviewed-by":   {"Carol <carol@example.com>"},
+	}
+	trailed, plain := out.Commits[0], out.Commits[1]
+	if trailed.ID != "a1b2c3" || trailed.Title != "feat: signed twice" {
+		t.Errorf("first commit = %+v, want a1b2c3 titled feat: signed twice", trailed)
+	}
+	if !reflect.DeepEqual(trailed.ExtendedTrailers, want) {
+		t.Errorf("ExtendedTrailers = %v, want %v", trailed.ExtendedTrailers, want)
+	}
+	if trailed.Trailers["Signed-off-by"] != "Bob <bob@example.com>" {
+		t.Errorf("Trailers = %v, want the last Signed-off-by value", trailed.Trailers)
+	}
+	if plain.ID != "d4e5f6" || len(plain.ExtendedTrailers) != 0 {
+		t.Errorf("second commit = %+v, want d4e5f6 with no trailers", plain)
+	}
+	if out.Pagination.NextPage != 2 || out.Pagination.PerPage != 2 || !out.Pagination.HasMore {
+		t.Errorf("Pagination = %+v, want the headers of the answer", out.Pagination)
+	}
+}
+
+// TestSearchCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure pins the
+// other side of passing over client-go's decode failure: an answer that fits
+// neither client-go's Commit nor this server's type (an id that is a number)
+// is not published as an empty page. Decoding the capture fails as well, and
+// the handler reports that failure.
+func TestSearchCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":5}]`)
+	}))
+
+	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "x"})
+	if err == nil {
+		t.Fatal("expected the decode failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestSearchCommits_Refused_ReportsTheRefusal holds the error client-go
+// returns for a refusal apart from the decode failure the handler passes
+// over: a 403 is reported as GitLab's refusal, and never as a capture that
+// failed to decode.
+func TestSearchCommits_Refused_ReportsTheRefusal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "x"})
+	if err == nil {
+		t.Fatal(errExpAPIFailure)
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+		t.Errorf("error = %v, want GitLab's 403", err)
+	}
+	if strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("error = %v, want the refusal rather than a decode failure", err)
+	}
+}
+
+// TestScopedSearches_AnswerClientGoCannotDecode_ReportClientGosDecodeFailure
+// holds the scope of what search.commits passes over: client-go failing to
+// decode GitLab's answer is dropped only for the one search that reads its
+// page from the captured response. Every other search sent at a project, a
+// group or the whole instance, fed an answer with a key of the wrong JSON
+// type, still fails with client-go's own decode error, never with the
+// capture's and never as an empty page. The issue case names iid rather than
+// id because client-go's Issue reads a string id as an external tracker's.
+func TestScopedSearches_AnswerClientGoCannotDecode_ReportClientGosDecodeFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		body   string
+		search func(context.Context, *gitlabclient.Client) (any, error)
+	}{
+		{name: "code", body: `[{"startline":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Code(ctx, client, CodeInput{ProjectID: "42", Query: "x"})
+		}},
+		{name: "merge_requests", body: `[{"id":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return MergeRequests(ctx, client, MergeRequestsInput{ProjectID: "42", Query: "x"})
+		}},
+		{name: "issues", body: `[{"iid":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Issues(ctx, client, IssuesInput{ProjectID: "42", Query: "x"})
+		}},
+		{name: "milestones", body: `[{"id":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Milestones(ctx, client, MilestonesInput{ProjectID: "42", Query: "x"})
+		}},
+		{name: "users", body: `[{"id":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Users(ctx, client, UsersInput{ProjectID: "42", Query: "x"})
+		}},
+		{name: "wiki", body: `[{"title":5}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Wiki(ctx, client, WikiInput{ProjectID: "42", Query: "x"})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+
+			out, err := tc.search(context.Background(), client)
+			if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+				t.Fatalf("error = %v, want client-go's decode failure", err)
+			}
+			if strings.Contains(err.Error(), "decode the captured response") {
+				t.Errorf("error = %v, want client-go's decode failure rather than the capture's", err)
+			}
+			if !reflect.ValueOf(out).IsZero() {
+				t.Errorf("output = %+v, want none", out)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Milestones
 // ---------------------------------------------------------------------------.
