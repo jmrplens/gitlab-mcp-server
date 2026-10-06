@@ -226,7 +226,7 @@ readable without opening the tracker:
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), merged | **Yes, unreleased** | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [modelcontextprotocol/go-sdk#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first | No | No | Yes |
-| 24 | gitlab-org/gitlab | [Approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation) | In part, by GitLab, [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183); nothing by us | No | No | No upstream block; this server publishes what each edition sends on the GET and both POSTs | Yes, a shape declaration per EE key against the CE annotation; the carve-outs were the defect |
+| 24 | gitlab-org/gitlab | [Approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation) | Yes, by the merge request; in part before it, by GitLab, [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183) | Yes, [gitlab-org/gitlab!259766](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259766), open, the page only | No | No upstream block; this server publishes what each edition sends on the GET and both POSTs | Yes, a shape declaration per EE key against the CE annotation; the carve-outs were the defect |
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | None possible |
@@ -288,10 +288,10 @@ readable without opening the tracker:
 | 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
-| 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | No | No | No | Yes, a second request by the token's id |
+| 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), open | No | No | Yes, a second request by the token's id |
 | 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list; nothing raised by us, see [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) | No | No | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
 | 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason |
-| 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | No | No | No | Yes, for a fine-grained token, on the epic actions | Withheld with the reason |
+| 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), open, closing that issue | No | Yes, for a fine-grained token, on the epic actions | Withheld with the reason |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | No | No | No | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, unreleased**: in milestone 19.5 | No | Not yet, with [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133) |
@@ -692,6 +692,22 @@ rows 75 and 76 are merged, released and deployed. The same change settles the
 Workaround cells of rows 74, 75 and 76, since `orbit.query` now teaches
 version 12 of the DSL, and adds row 93, which the re-recording of the Orbit
 response record found. Row 74's merge request reads as it did that morning.
+
+Read on 2026-10-06 for the three rows whose merge requests to
+`gitlab-org/gitlab` were opened from the community fork on the evening of the
+5th, each readied for review with a green fork pipeline:
+[gitlab-org/gitlab!259766](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259766),
+the approvals page of row 24,
+[gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764),
+the self route of row 86, and
+[gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765),
+the group boundary of row 89. Each row's Reported and In review fields now say
+so. Row 89 also names the issue another user had filed for the same defect,
+which its merge request closes, and row 24 the other issue its merge request
+cites; rows 86 and 89 carry a Fix in review paragraph where their
+proposal was. None of the three has a review yet. Row 74's merge request
+reads as it did on the 5th: both approvals, nothing open, not merged, and the
+note asking for the merge not posted. No other row was read.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -6008,8 +6024,29 @@ sections below record.
   milestone Backlog, `group::source code`) proposes merging the CE class into
   the EE module and verifying the documentation of the approval responses,
   "as it can be incorrect", and the EE override below cites it in a comment.
-  Nothing has been raised by us.
-- **In review**: no.
+  Ours is the merge request below, opened 2026-10-05; a documentation-only
+  change needs no issue first. It is related to that issue and to
+  [gitlab-org/gitlab#602776](https://gitlab.com/gitlab-org/gitlab/-/issues/602776)
+  ("Merge request approvals API returns approved as true in EE Free with no
+  approvals", opened 2026-06-12 by another user), whose quoted answer from an
+  unlicensed EE instance carries `approvals_required` and `approvals_left`,
+  which only the EE entity exposes.
+- **In review**: yes,
+  [gitlab-org/gitlab!259766](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259766),
+  opened 2026-10-05 from the community fork, documentation only. It says on
+  the page which keys each edition answers the GET with, adds a response
+  attribute table that marks the 20 keys only Enterprise Edition sends and the
+  three deprecated ones, gives a complete example answer for each edition, and
+  says that the approve and unapprove POSTs answer `201 Created` with the same
+  keys. It leaves the routes' `desc` annotations, and so the OpenAPI document,
+  as they are, and asks the reviewer which of two directions they want for
+  them: an EE entity prepended onto the CE one, or the move
+  [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183)
+  proposes. It was readied naming @uchandran, whom the bot set as reviewer and
+  asked for the documentation review. Read on 2026-10-06 it has no approval,
+  no milestone, a green fork pipeline and no thread open but the ready note's,
+  and waits on that review. It retires nothing of ours: the shape declarations
+  under Workaround wait on the annotation, which it leaves.
 - **Merged**: no.
 - **Blocking**: no upstream block. Trusting the CE annotation cost this
   server data until the change under Workaround:
@@ -6102,7 +6139,8 @@ GitLab.com and found the 24 keys, which the EE prepend above explains.
 says what each edition answers, covering the GET and the approve and
 unapprove POSTs, which share the helper and the annotation, or the move
 [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183)
-proposes; the change on this side is made (Workaround).
+proposes. The documentation half is in review and the annotation half is the
+question it asks (In review); the change on this side is made (Workaround).
 
 ### Two project group listings are annotated with the whole Group entity
 
@@ -7711,9 +7749,23 @@ I would like to take this, following the proposal above and the approach of !245
   to provide the same information as `GET /personal_access_tokens/:id`,
   including `granular_scopes`", and the third of its open questions asks
   whether `granular_scopes` is missing from it. Read on 2026-10-05 it is open,
-  unassigned and has no milestone. This entry used to read no: the issue was
-  cited under row 83 and never here. Nothing has been raised by us.
-- **In review**: no.
+  unassigned and has no milestone, and read again on 2026-10-06 it is
+  unchanged. This entry used to read no: the issue was cited under row 83 and
+  never here. Ours is the merge request below, which answers that third
+  question and nothing else, so it is related to the issue rather than closing
+  it: whether self-introspection should need the permission at all, and the
+  behaviour matrix the issue asks for, are for the group to decide.
+- **In review**: yes,
+  [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764),
+  opened 2026-10-05 from the community fork (Fix in review, below). It was
+  readied naming @eduardosanz, who merged the change that gave the other three
+  routes the field, and @idurham for the page; the bot removed the first
+  request and kept @idurham, whom it asked for the documentation review, so no
+  backend reviewer is requested. Read on 2026-10-06 it needs three approvals
+  and has none, has no milestone, a green fork pipeline and no thread open but
+  the ready note's, and waits on a backend reviewer. Its merge would retire
+  nothing here on its own: the read by id stays for every release before the
+  one that carries it.
 - **Merged**: no.
 - **Blocking**: no. It costs every fine-grained session one request more
   each time its grant is read: once when the session starts and on every
@@ -7748,10 +7800,17 @@ ask again by its own id, through a route meant for listing a user's tokens.
 grant, reading the two routes side by side, and confirmed against client-go,
 whose `GetSinglePersonalAccessToken` decodes the self answer.
 
-**Proposal**: pass `with_granular_scopes: true`, and the
-`project_ids_by_namespace_id` the entity reads, on the self route as the get
-by id does, with a request spec for a granular token. The route already
-preloads nothing for it, so the preload the get by id uses comes with it.
+**Fix in review**: for a granular token, the self route preloads the token's
+granular scopes with their namespaces and presents it with
+`with_granular_scopes: true` and the `project_ids_by_namespace_id` the entity
+reads, as the get by id does; a legacy token is presented as before and runs
+no query for scopes it does not have. Five request spec examples pin it: two
+for a legacy token (no `granular_scopes` key, and no query that touches
+them), a fine-grained token holding only Personal Access Token: Read, the same
+token with a project scope as well, and an N+1 guard. A history line under
+"Self-inform" in `doc/api/personal_access_tokens.md` records the release that
+starts returning the field, since the page already promised it. The OpenAPI
+documents do not change: the route's success model is the same entity.
 
 ### The fine-grained refusal names the missing permissions only as display labels in prose
 
@@ -8425,8 +8484,25 @@ refused before it runs if its payload type declares nothing.
 
 ### WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, by another user, before us:
+  [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483),
+  opened on 2026-09-23 in `group::work items` as a `type::bug`, reports a
+  group's `workItems` filtered to epics answering `nodes: []` to a
+  fine-grained token where a classic token reads the epics. Read on
+  2026-10-06 it is open, unassigned and has no milestone. This entry read no
+  until then: the issue was not cited here, and the merge request below is
+  what joins the two, since it closes it.
+- **In review**: yes,
+  [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765),
+  opened 2026-10-05 from the community fork (Fix in review, below). It was
+  readied naming no reviewer; the bot requested @deepika.guliani and then
+  replaced that request with @idurham, whom it asked for the documentation
+  review, so no backend reviewer is requested. Read on 2026-10-06 it needs two
+  approvals and has none, has no milestone, a green fork pipeline and no
+  thread open but the ready note's, and waits on a backend reviewer; the
+  Danger review suggests an `EE: true` trailer on its changelog commit, since
+  its specs are under `ee/`. On its own it would not serve the 14 of the 15
+  epic actions that `Namespace` (row 87) decides first, as Blocking says.
 - **Merged**: no.
 - **Blocking**: yes, for a fine-grained personal access token: the 15 epic
   actions it withholds, and the GraphQL way of `group.epic_list`, whose REST
@@ -8459,8 +8535,17 @@ never read it.
 probe above, which also showed the write committing where the source reading
 had expected a refusal.
 
-**Proposal**: declare `WorkItem` at the group boundary beside the project
-one, as `workItemUpdate` already does.
+**Fix in review**: `WorkItem` declares `read_work_item` at the group boundary
+beside the project one, as `workItemUpdate` already does, naming the
+`namespace` association for the group and the `project` association for the
+project rather than `resource_parent`, so that the boundary preloader keeps a
+group's list of work items at the query count of `master` for either kind of
+token. EE request specs pin the single work item of a group read with a token
+granted on the group, the issue's query, a group's list with its projects'
+work items, a token without Work Item: Read, and N+1 guards for a
+fine-grained and a classic token; the fine-grained GraphQL documentation page
+is regenerated with the new row. A work item in a personal namespace still
+resolves no boundary, which the merge request leaves as a separate question.
 
 ### The pending-permission check exempts every type named `*Edge` or `*Payload`
 
