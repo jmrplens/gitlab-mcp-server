@@ -101,11 +101,11 @@ func recordSearchRuntimeMetrics(resultCount int, fuzzyUsed, ambiguousAlias, lowC
 	if lowConfidence {
 		dynamicSearchRuntimeCounters.lowConfidenceSearches.Add(1)
 	}
-	// The only clamp a negative count needs: nothing is added for it, and the
-	// conversion below never sees one.
-	if destructiveFuzzySuppressions > 0 {
-		dynamicSearchRuntimeCounters.destructiveFuzzySuppressions.Add(uint64(destructiveFuzzySuppressions))
-	}
+	// The only clamp a negative count needs: it adds nothing, and the
+	// conversion never sees one. Written as a clamp rather than a test of the
+	// count, since adding zero changes nothing and a `> 0` therefore carried a
+	// boundary no test could tell from `>= 0`.
+	dynamicSearchRuntimeCounters.destructiveFuzzySuppressions.Add(uint64(max(destructiveFuzzySuppressions, 0)))
 }
 
 func searchIndexPostingCount(index searchIndex) int {

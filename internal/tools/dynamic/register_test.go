@@ -1620,6 +1620,110 @@ func TestInferCapability_GroupsEveryDomainUnderOneCapability(t *testing.T) {
 	}
 }
 
+// TestActionTaggers_EachTest_TagsOnlyTheActionsItNames holds every test of the
+// taggers actionTags walks to the actions it is meant to tag and to the ones
+// it is not.
+//
+// Each row is chosen for one comparison: a positive for every operand, so a
+// test turned around stops tagging what it should, and a near miss for every
+// conjunction, an action that satisfies one half and not the other, so an `&&`
+// that became `||` starts tagging what it should not. A tagger that answers
+// false must add nothing, since actionTags moves on to the next one and would
+// otherwise carry tags of a family the action is not in. absent names a tag a
+// different branch of the same tagger adds, for the rows where two branches
+// both answer true and only the tags tell them apart.
+func TestActionTaggers_EachTest_TagsOnlyTheActionsItNames(t *testing.T) {
+	cases := []struct {
+		name               string
+		tagger             actionTagger
+		id, domain, action string
+		tagged             bool
+		want               string
+		absent             string
+	}{
+		{name: "id pattern: a hook", tagger: addIDPatternTags, id: "project.hook_add", domain: "project", action: "hook_add", tagged: true, want: "webhook"},
+		{name: "id pattern: a deploy key", tagger: addIDPatternTags, id: "project.deploy_key_add", domain: "project", action: "deploy_key_add", tagged: true, want: "deploy key"},
+		{name: "id pattern: a deploy token", tagger: addIDPatternTags, id: "project.deploy_token_list", domain: "project", action: "deploy_token_list", tagged: true, want: "deploy token"},
+		{name: "id pattern: a project member", tagger: addIDPatternTags, id: "project.member_add", domain: "project", action: "member_add", tagged: true, want: "project member"},
+		{name: "id pattern: a group member", tagger: addIDPatternTags, id: "group.member_add", domain: "group", action: "member_add", tagged: true, want: "group member"},
+		{name: "id pattern: a member outside a project or group", tagger: addIDPatternTags, id: "user.member_list", domain: "user", action: "member_list"},
+		{name: "id pattern: a project action naming no pattern", tagger: addIDPatternTags, id: "project.get", domain: "project", action: "get"},
+		{name: "id pattern: a group action naming no pattern", tagger: addIDPatternTags, id: "group.get", domain: "group", action: "get"},
+		{name: "id pattern: a service account token", tagger: addIDPatternTags, id: "project.service_account_pat_create", domain: "project", action: "service_account_pat_create", tagged: true, want: "project service account personal access token"},
+		{name: "id pattern: a project service account", tagger: addIDPatternTags, id: "project.service_account_list", domain: "project", action: "service_account_list", tagged: true, want: "project service account"},
+		{name: "id pattern: a group service account", tagger: addIDPatternTags, id: "group.service_account_list", domain: "group", action: "service_account_list", tagged: true, want: "group service account"},
+		{name: "id pattern: a service account outside a project or group", tagger: addIDPatternTags, id: "admin.service_account_list", domain: "admin", action: "service_account_list"},
+		{name: "id pattern: project discovery", tagger: addIDPatternTags, id: "discover_project.resolve", domain: "discover_project", action: "resolve", tagged: true, want: "project discovery"},
+		{name: "id pattern: a guided flow", tagger: addIDPatternTags, id: "interactive.project_create", domain: "interactive", action: "project_create", tagged: true, want: "guided"},
+		{name: "id pattern: a project access token", tagger: addIDPatternTags, id: "project.access_token_project_list", domain: "project", action: "access_token_project_list", tagged: true, want: "access token"},
+		{name: "id pattern: a group access token", tagger: addIDPatternTags, id: "group.access_token_group_list", domain: "group", action: "access_token_group_list", tagged: true, want: "access token"},
+		{name: "id pattern: a personal access token", tagger: addIDPatternTags, id: "user.token_personal_list", domain: "user", action: "token_personal_list", tagged: true, want: "access token"},
+
+		{name: "core: the current user", tagger: addCoreDomainTags, id: "user.current", domain: "user", action: "current", tagged: true, want: "whoami"},
+		{name: "core: another user action", tagger: addCoreDomainTags, id: "user.get", domain: "user", action: "get"},
+		{name: "core: current outside the user domain", tagger: addCoreDomainTags, id: "group.current", domain: "group", action: "current"},
+		{name: "core: a project action", tagger: addCoreDomainTags, id: "project.star", domain: "project", action: "star", tagged: true, want: "star project"},
+		{name: "core: a repository file", tagger: addCoreDomainTags, id: "repository.file_get", domain: "repository", action: "file_get", tagged: true, want: "repository file", absent: "repository tree"},
+		{name: "core: a file action outside the repository", tagger: addCoreDomainTags, id: "snippet.file_get", domain: "snippet", action: "file_get"},
+		{name: "core: the repository tree", tagger: addCoreDomainTags, id: "repository.tree", domain: "repository", action: "tree", tagged: true, want: "repository tree", absent: "repository file"},
+		{name: "core: a tree outside the repository", tagger: addCoreDomainTags, id: "wiki.tree", domain: "wiki", action: "tree"},
+		{name: "core: another repository action", tagger: addCoreDomainTags, id: "repository.compare", domain: "repository", action: "compare"},
+		{name: "core: search", tagger: addCoreDomainTags, id: "search.code", domain: "search", action: "code", tagged: true},
+		{name: "core: the server", tagger: addCoreDomainTags, id: "server.status", domain: "server", action: "status", tagged: true},
+		{name: "core: the CI catalog", tagger: addCoreDomainTags, id: "ci_catalog.list", domain: "ci_catalog", action: "list", tagged: true},
+		{name: "core: a merge request", tagger: addCoreDomainTags, id: "merge_request.list", domain: "merge_request", action: "list", tagged: true, want: "mr"},
+		{name: "core: a merge request review", tagger: addCoreDomainTags, id: "mr_review.changes_get", domain: "mr_review", action: "changes_get", tagged: true},
+		{name: "core: a CI variable", tagger: addCoreDomainTags, id: "ci_variable.list", domain: "ci_variable", action: "list", tagged: true, want: "ci variable"},
+
+		{name: "environment and CI: an environment", tagger: addEnvironmentAndCITags, id: "environment.list", domain: "environment", action: "list", tagged: true, want: "env"},
+		{name: "environment and CI: a feature flag user list", tagger: addEnvironmentAndCITags, id: "feature_flags.ff_user_list_list", domain: "feature_flags", action: "ff_user_list_list", tagged: true, want: "feature flag user list"},
+		{name: "environment and CI: another feature flag action", tagger: addEnvironmentAndCITags, id: "feature_flags.ff_list", domain: "feature_flags", action: "ff_list"},
+		{name: "environment and CI: a user list outside feature flags", tagger: addEnvironmentAndCITags, id: "user.ff_user_list_list", domain: "user", action: "ff_user_list_list"},
+		{name: "environment and CI: a job", tagger: addEnvironmentAndCITags, id: "job.list", domain: "job", action: "list", tagged: true, want: "ci job"},
+		{name: "environment and CI: a pipeline", tagger: addEnvironmentAndCITags, id: "pipeline.list", domain: "pipeline", action: "list", tagged: true, want: "ci pipeline"},
+		{name: "environment and CI: another domain", tagger: addEnvironmentAndCITags, id: "user.get", domain: "user", action: "get"},
+
+		{name: "admin and release: an admin action", tagger: addAdminReleaseTags, id: "admin.settings_get", domain: "admin", action: "settings_get", tagged: true},
+		{name: "admin and release: a tag lookup", tagger: addAdminReleaseTags, id: "tag.get", domain: "tag", action: "get", tagged: true, want: "verify tag"},
+		{name: "admin and release: another tag action", tagger: addAdminReleaseTags, id: "tag.list", domain: "tag", action: "list", tagged: true, absent: "verify tag"},
+		{name: "admin and release: a release", tagger: addAdminReleaseTags, id: "release.list", domain: "release", action: "list", tagged: true},
+		{name: "admin and release: a repository compare", tagger: addAdminReleaseTags, id: "repository.compare", domain: "repository", action: "compare", tagged: true, want: "compare refs"},
+		{name: "admin and release: another repository action", tagger: addAdminReleaseTags, id: "repository.tree", domain: "repository", action: "tree"},
+		{name: "admin and release: a compare outside the repository", tagger: addAdminReleaseTags, id: "branch.compare", domain: "branch", action: "compare"},
+		{name: "admin and release: another domain", tagger: addAdminReleaseTags, id: "user.get", domain: "user", action: "get"},
+
+		{name: "protection: a group protected branch", tagger: addProtectionTags, id: "group.protected_branch_list", domain: "group", action: "protected_branch_list", tagged: true, want: "group protected branch"},
+		{name: "protection: a protected branch outside a group", tagger: addProtectionTags, id: "project.protected_branch_list", domain: "project", action: "protected_branch_list"},
+		{name: "protection: a group protected environment", tagger: addProtectionTags, id: "group.protected_environment_list", domain: "group", action: "protected_environment_list", tagged: true, want: "group protected environment"},
+		{name: "protection: a group action naming no protection", tagger: addProtectionTags, id: "group.get", domain: "group", action: "get"},
+		{name: "protection: a protected environment outside a group", tagger: addProtectionTags, id: "project.protected_environment_list", domain: "project", action: "protected_environment_list", tagged: true, want: aliasProtectedEnvironment, absent: "group protected environment"},
+		{name: "protection: protect a branch", tagger: addProtectionTags, id: "branch.protect", domain: "branch", action: "protect", tagged: true, want: "protected branch"},
+		{name: "protection: read a protected branch", tagger: addProtectionTags, id: "branch.get_protected", domain: "branch", action: "get_protected", tagged: true, want: "protected branch"},
+		{name: "protection: update a protected branch", tagger: addProtectionTags, id: "branch.update_protected", domain: "branch", action: "update_protected", tagged: true, want: "protected branch"},
+		{name: "protection: unprotect a branch", tagger: addProtectionTags, id: "branch.unprotect", domain: "branch", action: "unprotect", tagged: true, want: "protected branch"},
+		{name: "protection: another branch action", tagger: addProtectionTags, id: "branch.list", domain: "branch", action: "list"},
+		{name: "protection: protect outside the branch domain", tagger: addProtectionTags, id: "tag.protect", domain: "tag", action: "protect"},
+		{name: "protection: a member role", tagger: addProtectionTags, id: "member_role.create", domain: "member_role", action: "create", tagged: true, want: "member role"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var tags []string
+			if got := tc.tagger(tagAppender(&tags), tc.id, tc.domain, tc.action); got != tc.tagged {
+				t.Errorf("tagger(%q, %q, %q) = %v, want %v (tags %v)", tc.id, tc.domain, tc.action, got, tc.tagged, tags)
+			}
+			if !tc.tagged && len(tags) != 0 {
+				t.Errorf("tagger(%q) answered false and still added %v", tc.id, tags)
+			}
+			if tc.want != "" && !slices.Contains(tags, tc.want) {
+				t.Errorf("tagger(%q) tags = %v, want %q among them", tc.id, tags, tc.want)
+			}
+			if tc.absent != "" && slices.Contains(tags, tc.absent) {
+				t.Errorf("tagger(%q) tags = %v, want no %q", tc.id, tags, tc.absent)
+			}
+		})
+	}
+}
+
 // TestInferActionScope_PrefersTheSchemaThenTheDomain verifies that an action's
 // scope is read from the params it takes when it takes one that says so, and
 // from its domain otherwise.
@@ -6032,8 +6136,12 @@ func TestScoreSearch_Alternative(t *testing.T) {
 		{name: "alias", entry: base, raw: "project.destroy", alternative: "project.destroy", want: 100},
 		{name: "tag", entry: base, raw: "danger", alternative: "danger", want: 90},
 		{name: "action", entry: base, raw: "delete", alternative: "delete", want: 80},
+		{name: "domain", entry: base, raw: "project", alternative: "project", want: scoreDomainActionExact},
+		{name: "action word", entry: actionEntry{ID: "x.y", Domain: "x", Action: "file_get"}, raw: "file", alternative: "file", want: scoreDomainActionWord},
+		{name: "domain word", entry: actionEntry{ID: "x.y", Domain: "merge_request", Action: "y"}, raw: "merge", alternative: "merge", want: scoreDomainActionWord},
 		{name: "id contains", entry: base, raw: "ject.del", alternative: "ject.del", want: 55},
 		{name: "domain contains", entry: actionEntry{ID: "x.y", Domain: "project", Action: "remove"}, raw: "proj", alternative: "proj", want: 45},
+		{name: "action contains", entry: actionEntry{ID: "x.y", Domain: "x", Action: "remove"}, raw: "remo", alternative: "remo", want: scoreDomainActionContains},
 		{name: "raw search text", entry: actionEntry{ID: "x.y", Domain: "x", Action: "y", SearchText: "owner filter"}, raw: "owner", alternative: "owner", want: 25},
 		{name: "synonym search text", entry: actionEntry{ID: "x.y", Domain: "x", Action: "y", SearchText: "owner filter"}, raw: "owned", alternative: "owner", want: 18},
 		{name: "no match", entry: base, raw: "missing", alternative: "missing", want: 0},
@@ -10490,6 +10598,8 @@ func TestQueryVerbIntent_HighestPrecedenceWins(t *testing.T) {
 		{name: "destructive then read", terms: searchTermsFromWords("delete", "get"), want: verbIntentDestructive},
 		{name: "destructive outranks diagnostic", terms: searchTermsFromWords("log", "delete"), want: verbIntentDestructive},
 		{name: "workflow outranks write", terms: searchTermsFromWords("update", "retry"), want: verbIntentWorkflow},
+		{name: "diagnostic outranks workflow", terms: searchTermsFromWords("retry", "log"), want: verbIntentDiagnostic},
+		{name: "write outranks read", terms: searchTermsFromWords("get", "create"), want: verbIntentWrite},
 		{name: "no verb at all", terms: searchTermsFromWords("pipeline", "project"), want: ""},
 		{name: "no terms", terms: nil, want: ""},
 	}
