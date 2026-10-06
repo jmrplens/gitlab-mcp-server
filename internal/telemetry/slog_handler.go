@@ -159,13 +159,14 @@ func redactRecord(record slog.Record, identity *Redactor) slog.Record {
 // same shape of defect: a field added to a log line that the export-side
 // redactor had no reason to know about, found in production twice. A field
 // belongs here when it identifies a caller without being an identity the policy
-// governs — token_suffix is the last four characters of the client's
-// credential, which authenticates nothing and correlates everything, and it
-// survived both the none and the pseudonymous policies untouched because
-// neither had heard of it.
+// governs. The first was the handle a client credential is logged by: its last
+// four characters then (token_suffix), which survived both the none and the
+// pseudonymous policies untouched because neither had heard of them, and a
+// keyed digest of it now (credential_hash), which authenticates nothing and
+// correlates everything one caller does.
 //
 // The call sites keep writing it: stderr is the operator's own terminal, and
-// the suffix is what they correlate a refusal by.
+// the handle is what they correlate a refusal by.
 //
 // The refused Host header is the third instance, and the one that showed the
 // list was the right shape: the value is whatever a caller put on the wire,
@@ -173,8 +174,8 @@ func redactRecord(record slog.Record, identity *Redactor) slog.Record {
 // for as long as the host guard had logged it, caught only by a test that
 // won its race against the log batch on every run but one.
 var exportStrippedFields = map[string]bool{
-	LogFieldTokenSuffix: true,
-	LogFieldRequestHost: true,
+	LogFieldCredentialHash: true,
+	LogFieldRequestHost:    true,
 }
 
 // exportAttrs returns what the exported copy of an attribute set may carry.
@@ -201,21 +202,29 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 			// resolves to, URIs and identity included, on the OTLP handler's
 			// side of the policy.
 			attr.Value = attr.Value.Resolve()
-			switch {
-			case attr.Key == LogFieldUserID:
+			// A chain of ifs rather than a tagless switch: Go's coverage
+			// records no block for a case expression, so mutation testing
+			// reads every mutant of one as never reached.
+			if attr.Key == LogFieldUserID {
 				userID = attr.Value.String()
-			case attr.Key == LogFieldUser:
+				continue
+			}
+			if attr.Key == LogFieldUser {
 				username = attr.Value.String()
-			case exportStrippedFields[attr.Key]:
+				continue
+			}
+			if exportStrippedFields[attr.Key] {
 				// Dropped outright: see exportStrippedFields.
-			case attr.Value.Kind() == slog.KindGroup:
+				continue
+			}
+			if attr.Value.Kind() == slog.KindGroup {
 				out = append(out, slog.Attr{
 					Key:   attr.Key,
 					Value: slog.GroupValue(strip(attr.Value.Group())...),
 				})
-			default:
-				out = append(out, redactAttr(attr))
+				continue
 			}
+			out = append(out, redactAttr(attr))
 		}
 		return out
 	}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	// embed is imported for its go:embed directive alone, which reads
+	// domains.json into domainsJSON.
 	_ "embed"
 	"errors"
 	"flag"

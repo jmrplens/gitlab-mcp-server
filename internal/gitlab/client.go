@@ -912,8 +912,10 @@ func (c *Client) setAuthHeader(req *http.Request) {
 // versionDirect queries the GitLab Version API through the raw health client.
 // It bypasses the resilient SDK wrapper so edition detection can run during
 // client initialization and degraded-mode recovery. The URL it asks is
-// healthURL, derived once from the normalized base URL the operator
-// configured, never from a request.
+// healthURL, derived once from the client's normalized base URL: an instance
+// the operator configured or published, or, under --allow-any-gitlab-url, one
+// a caller named in the GITLAB-URL header, which the destination guard judges
+// on every hop (ADR-0022).
 //
 // It records what it learns on the client: the version an answer reports
 // ([Client.Version]), and GitLab's sentence when it refuses the credential the
@@ -1068,8 +1070,10 @@ const (
 // about a 401, or on its revalidation sweep, without the answer raising
 // another.
 //
-// The probe URL is built from the normalized base URL the operator configured,
-// never from a request.
+// The probe URL is built from the client's normalized base URL, as
+// [Client.versionDirect]'s is: an instance the operator configured or
+// published, or, under --allow-any-gitlab-url, one a caller named, which the
+// destination guard judges on every hop (ADR-0022).
 func (c *Client) CheckCredential(ctx context.Context) CredentialVerdict {
 	return c.CheckCredentialDetail(ctx).Verdict
 }

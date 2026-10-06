@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -669,7 +670,8 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 			}
 			return nil, doorPermissionFailure(sentence)
 		}
-		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected at the gate: token already known to carry neither read_api nor api")
+		refusalLog.log(r.Context(), slog.LevelInfo, "request rejected at the gate: token already known to carry neither read_api nor api",
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		if g.guard != nil {
 			return nil, g.guard.insufficientScopeFailure()
 		}
@@ -699,7 +701,8 @@ func (g *mcpServerGate) classify(ctx context.Context, err error, ip, source, ins
 		if g.rejected != nil {
 			g.rejected.RecordBelowMinimum(instance, token)
 		}
-		refusalLog.log(ctx, slog.LevelInfo, "request rejected at the gate: gitlab accepted the token, which carries neither read_api nor api")
+		refusalLog.log(ctx, slog.LevelInfo, "request rejected at the gate: gitlab accepted the token, which carries neither read_api nor api",
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		if g.guard != nil {
 			return g.guard.insufficientScopeFailure()
 		}
@@ -726,7 +729,8 @@ func (g *mcpServerGate) classify(ctx context.Context, err error, ip, source, ins
 		// limiter. This is the path that stops a stream of invented tokens
 		// from churning the pool.
 		g.chargeFailure(ip, source, token)
-		refusalLog.log(ctx, slog.LevelInfo, "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		refusalLog.log(ctx, slog.LevelInfo, "request rejected: gitlab rejected the supplied token",
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,

@@ -93,7 +93,7 @@ const sharedEnvPrefix = "OTEL_EXPORTER_OTLP_"
 
 // validateCertPool checks the CA a signal would verify its collector against.
 func validateCertPool(prefix string) error {
-	key, path := firstSetEnv(prefix, "", "CERTIFICATE")
+	key, path := firstSetEnv(prefix, "CERTIFICATE")
 	if path == "" {
 		return nil
 	}
@@ -144,16 +144,19 @@ func validateClientCert(prefix string) error {
 		}
 	}
 
-	switch {
-	case certKey == "" && keyKey == "":
+	// A chain of ifs rather than a tagless switch: Go's coverage records no
+	// block for a case expression, so mutation testing reads every mutant of
+	// one as never reached.
+	if certKey == "" && keyKey == "" {
 		return nil
-	case keyKey == "":
-		return fmt.Errorf("%s is set without its key; mutual TLS would be silently disabled", certKey)
-	case certKey == "":
-		return fmt.Errorf("%s is set without its certificate; mutual TLS would be silently disabled", keyKey)
-	default:
-		return fmt.Errorf("%s and %s are under different prefixes, and the exporters pair a certificate only with the key of its own prefix; mutual TLS would be silently disabled", certKey, keyKey)
 	}
+	if keyKey == "" {
+		return fmt.Errorf("%s is set without its key; mutual TLS would be silently disabled", certKey)
+	}
+	if certKey == "" {
+		return fmt.Errorf("%s is set without its certificate; mutual TLS would be silently disabled", keyKey)
+	}
+	return fmt.Errorf("%s and %s are under different prefixes, and the exporters pair a certificate only with the key of its own prefix; mutual TLS would be silently disabled", certKey, keyKey)
 }
 
 // firstSetEnv resolves one variable the way the exporters do: the signal's own
@@ -162,11 +165,8 @@ func validateClientCert(prefix string) error {
 // It returns the name it read as well as the value, because a message naming
 // the variable an operator actually set is the difference between a fix and a
 // search.
-func firstSetEnv(signalPrefix, sharedPrefix, suffix string) (key, value string) {
-	if sharedPrefix == "" {
-		sharedPrefix = sharedEnvPrefix
-	}
-	for _, name := range []string{signalPrefix + suffix, sharedPrefix + suffix} {
+func firstSetEnv(signalPrefix, suffix string) (key, value string) {
+	for _, name := range []string{signalPrefix + suffix, sharedEnvPrefix + suffix} {
 		if configured := strings.TrimSpace(os.Getenv(name)); configured != "" {
 			return name, configured
 		}

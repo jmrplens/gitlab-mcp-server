@@ -100,18 +100,22 @@ func e2eObservation(dir string, actions []requestinventory.Action) E2EObservatio
 			unmatched[dispatch.Action] = struct{}{}
 			continue
 		}
-		switch {
-		case dispatch.Requests > 0:
+		// A chain of ifs rather than a tagless switch: Go's coverage records
+		// no block for a case expression, so mutation testing reads every
+		// mutant of one as never reached.
+		if dispatch.Requests > 0 {
 			issuing[dispatch.Action] = struct{}{}
-		case dispatch.RefusalReason != "":
+			continue
+		}
+		if dispatch.RefusalReason != "" {
 			// The server declined to run it, so no request was ever going to
 			// be made. A safe-mode preview and a confirmation guard both land
 			// here, and reporting them as actions that issued nothing would
 			// bury the leads that are about a handler under the modes that
 			// exist to stop one.
-		default:
-			silent[dispatch.Action] = struct{}{}
+			continue
 		}
+		silent[dispatch.Action] = struct{}{}
 	}
 
 	// An action seen issuing a request once is observed, whatever a second

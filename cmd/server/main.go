@@ -3967,15 +3967,16 @@ var processStartTime = time.Now()
 
 // logIgnoredRequestOptions reports request-scoped configuration headers that
 // were intentionally ignored because the server was started with fixed CLI
-// configuration. The token is reduced to a masked suffix before logging.
+// configuration. The token is named by its keyed per-process digest
+// ([serverpool.CredentialHash]) and by none of its characters.
 func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	if !options.HasIgnoredOptions() {
 		return
 	}
-	slog.Warn( //#nosec G706 -- structured log uses constant option names and a masked token suffix only
+	slog.Warn( //#nosec G706 -- structured log uses constant option names and a keyed digest of the token only
 		"request options ignored due to MCP configuration",
 		"ignored_options", options.IgnoredOptionsCopy(),
-		"token_suffix", safeTokenSuffix(token),
+		telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token),
 	)
 }
 
@@ -4031,15 +4032,6 @@ func reportRetiredEnvNames() bool {
 		slog.Error(line + ", and this deployment will not be started under a capability it did not ask for")
 	}
 	return len(refuse) == 0
-}
-
-// safeTokenSuffix returns a masked token suffix suitable for structured logs.
-// Short tokens are fully masked to avoid exposing low-entropy credentials.
-func safeTokenSuffix(token string) string {
-	if len(token) <= 4 {
-		return "****"
-	}
-	return "..." + token[len(token)-4:]
 }
 
 // transportFailureBudget builds the secondary authentication budget, or nil

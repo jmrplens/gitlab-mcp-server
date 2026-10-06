@@ -282,23 +282,26 @@ func envBool(key string) bool {
 		return false
 	}
 	value := strings.TrimSpace(raw)
-	switch {
-	case value == "":
+	// A chain of ifs rather than a tagless switch: Go's coverage records no
+	// block for a case expression, so mutation testing reads every mutant of
+	// one as never reached.
+	if value == "" {
 		// "The SDK MUST interpret an empty value of an environment variable the
 		// same way as when the variable is unset." Container orchestrators
 		// routinely inject an empty variable for a secret that was never
 		// provided, so this is the common case, not the pathological one.
 		return false
-	case strings.EqualFold(value, "true"):
+	}
+	if strings.EqualFold(value, "true") {
 		return true
-	case strings.EqualFold(value, "false"):
-		return false
-	default:
-		slog.Warn("ignoring unrecognized boolean environment variable",
-			"component", "telemetry", "variable", key, "value", value,
-			"expected", "true or false, case-insensitive")
+	}
+	if strings.EqualFold(value, "false") {
 		return false
 	}
+	slog.Warn("ignoring unrecognized boolean environment variable",
+		"component", "telemetry", "variable", key, "value", value,
+		"expected", "true or false, case-insensitive")
+	return false
 }
 
 // abandon retires whatever started before an error, so a partial failure does
@@ -348,9 +351,7 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	}
 	bound := shutdownTimeout
 	if deadline, ok := ctx.Deadline(); ok {
-		if remaining := time.Until(deadline); remaining < bound {
-			bound = remaining
-		}
+		bound = min(bound, time.Until(deadline))
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bound)
 	defer cancel()

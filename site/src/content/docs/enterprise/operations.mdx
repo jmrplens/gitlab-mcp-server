@@ -105,7 +105,8 @@ caller's own token and `/health` needs none. What the deployment does hold:
 Pooled tokens are held in memory for as long as their entry lives, because a
 client cannot call GitLab without one, and the pool is keyed by digest so a scan
 of its lookup structures yields no credential. Nothing is written to disk. Logs
-carry the last four characters of a token and nothing more.
+name a token by a keyed digest that changes with every restart, and carry none
+of its characters.
 
 ## What to monitor
 

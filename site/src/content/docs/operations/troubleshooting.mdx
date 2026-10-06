@@ -10,7 +10,7 @@ faq:
   - q: "Why are Enterprise tools missing?"
     a: "The **Enterprise/Premium catalog is disabled**. In stdio mode, set `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. In HTTP mode, set `--tier=premium` or `--tier=ultimate` to force the catalog, or let detection enable it when the instance license, or a namespace the token administers, is on a Premium or Ultimate plan. `GITLAB_ENTERPRISE` was removed in 3.0.0 and is ignored; there is no `--enterprise` flag, so use `--tier`. Enterprise tools also require a Premium or Ultimate license on the connected instance."
   - q: "How do I enable debug logging?"
-    a: "Set `GITLAB_MCP_LOG_LEVEL=debug` and redirect stderr to a file, for example `GITLAB_MCP_LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log`, then reproduce the failing operation. Every tool call is logged with its tool name, duration and error, never with its arguments, and the GitLab requests and responses behind it are not logged at all. The log also carries token validation events (last 4 characters only) and HTTP session pool operations, and `debug` adds detail such as tier detection, destructive-action confirmations and fine-grained decisions. Logs go to **stderr** and JSON-RPC messages go to **stdout**, so always redirect stderr to avoid mixing the two."
+    a: "Set `GITLAB_MCP_LOG_LEVEL=debug` and redirect stderr to a file, for example `GITLAB_MCP_LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log`, then reproduce the failing operation. Every tool call is logged with its tool name, duration and error, never with its arguments, and the GitLab requests and responses behind it are not logged at all. The log also carries token validation events (the token named by a keyed digest, never by its characters) and HTTP session pool operations, and `debug` adds detail such as tier detection, destructive-action confirmations and fine-grained decisions. Logs go to **stderr** and JSON-RPC messages go to **stdout**, so always redirect stderr to avoid mixing the two."
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
@@ -299,7 +299,7 @@ Enable verbose logging to diagnose issues:
 3. **Examine the logs** — debug logs include:
    - Every tool call with its tool name, duration and error, never its arguments
    - Tier detection, destructive-action confirmations and fine-grained decisions
-   - Token validation events (last 4 characters only)
+   - Token validation events (the token named by a keyed digest, never by its characters)
    - Session pool operations (HTTP mode)
 
    GitLab API requests and responses are not logged.

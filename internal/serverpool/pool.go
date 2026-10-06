@@ -3,6 +3,7 @@ package serverpool
 import (
 	"container/list"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
@@ -1305,7 +1307,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 		"enterprise", entry.serverConfig.Enterprise(),
 		"tier_source", p.tierSource(),
 		"scopes_detected", entry.serverConfig.TokenScopes != nil,
-		"token_suffix", tokenSuffix(token),
+		telemetry.LogFieldCredentialHash, CredentialHash(token),
 	)
 
 	return entry
@@ -1972,12 +1974,49 @@ func sessionKey(token, gitlabURL string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// tokenSuffix returns the last 4 characters of the token for safe logging.
-func tokenSuffix(token string) string {
-	if len(token) <= 4 {
-		return "****"
-	}
-	return "..." + token[len(token)-4:]
+// credentialHashBytes is how much of the HMAC a credential handle keeps: 64
+// bits, sixteen hex characters, which tells apart every credential one process
+// meets while keeping a log line short.
+const credentialHashBytes = 8
+
+// credentialHashKey keys [CredentialHash]. It is drawn once per process and
+// written nowhere, so a handle can be matched against another handle of the
+// same process and against nothing else.
+var credentialHashKey = newCredentialHashKey()
+
+// newCredentialHashKey draws the key [CredentialHash] is computed under.
+//
+// crypto/rand.Read has not returned an error since Go 1.24: a broken entropy
+// source ends the process inside the call instead. So there is no failure to
+// handle here, and none that could be reached by a test.
+func newCredentialHashKey() []byte {
+	key := make([]byte, sha256.Size)
+	_, _ = rand.Read(key)
+	return key
+}
+
+// CredentialHash names a credential in a log line without writing any of it:
+// the first eight bytes of an HMAC-SHA-256 of the token, under a key drawn once
+// per process, in hex.
+//
+// It replaced the token's last four characters, which were credential material
+// in clear: four characters of a working token on every pooled credential, or
+// most of a short secret pasted where a token belongs. The handle keeps what
+// the suffix was there for, tying a refusal, a pool entry and an
+// ignored-options warning to the same credential within one process, and
+// nothing else. It is keyed rather than a plain digest so that a log cannot
+// confirm a guess: hashing a candidate password yields its handle only with the
+// key, and the key never leaves the process. The price is that an operator
+// cannot compute the handle from a client's token, and that one credential's
+// handle differs across restarts and between replicas.
+//
+// The name is load-bearing beyond this package: static analysis of clear-text
+// logging treats a call whose name says it hashes as the end of a credential's
+// flow, which is true of this function and would be false of a renamed suffix.
+func CredentialHash(token string) string {
+	mac := hmac.New(sha256.New, credentialHashKey)
+	_, _ = mac.Write([]byte(token))
+	return hex.EncodeToString(mac.Sum(nil)[:credentialHashBytes])
 }
 
 // StartIdleEviction launches a background goroutine that reclaims entries

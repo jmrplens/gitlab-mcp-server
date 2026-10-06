@@ -109,14 +109,16 @@ func ParseIdentityPolicy(value string) (IdentityPolicy, error) {
 const (
 	LogFieldUser   = "user"
 	LogFieldUserID = "user_id"
-	// LogFieldTokenSuffix is the masked tail of a client credential the pool
-	// and the refusal paths log. It is declared here for the same reason as the
-	// two above: the export-side strip list has to find it by name, and it is
-	// stripped rather than policy-governed because four characters of a token
-	// are a correlation handle and not an identity anyone chose to publish.
-	// The name of a field, never a credential: the value it names is four
-	// masked characters, and this constant is what removes them.
-	LogFieldTokenSuffix = "token_suffix" //nolint:gosec // a log field name, not a secret
+	// LogFieldCredentialHash is the handle the pool and the refusal paths name
+	// a client credential by: a keyed per-process digest of it
+	// (serverpool.CredentialHash), never any of its characters. It is declared
+	// here for the same reason as the two above: the export-side strip list has
+	// to find it by name, and every line that writes it spells it through this
+	// constant, so the two cannot drift. It is stripped rather than
+	// policy-governed because it is a per-caller correlation handle and not an
+	// identity anyone chose to publish, and the policy that records nobody must
+	// not export one.
+	LogFieldCredentialHash = "credential_hash" //nolint:gosec // a log field name, not a secret
 	// LogFieldRequestHost is the Host header of a request the host guard
 	// refused, as the caller sent it. It is written to stderr because a proxy
 	// misconfiguration is diagnosed by reading it, and stripped from the

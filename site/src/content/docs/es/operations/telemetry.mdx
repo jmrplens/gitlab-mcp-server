@@ -469,12 +469,15 @@ Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
   de la ruta, que nombra el endpoint con marcadores donde la URL llevaría rutas
   de proyecto, identificadores y valores de consulta. El span padre ya nombra la
   acción.
-- **`token_suffix`**, los cuatro últimos caracteres de la credencial de un
-  cliente HTTP. Se sigue escribiendo en stderr, donde es lo que un operador usa
-  para correlacionar un rechazo en su propio terminal, y se elimina de la copia
-  exportada de cada registro de log a cualquier profundidad: no autentica nada
-  y lo correlaciona todo, y esa distinción no la puede hacer por ti un backend
-  de telemetría.
+- **`credential_hash`**, el identificador con el que se registra la credencial
+  de un cliente HTTP: un resumen con clave de ella, bajo una clave que se
+  genera al arrancar el proceso y no se escribe en ningún sitio, así que no
+  lleva ninguno de los caracteres del token. Se sigue escribiendo en stderr,
+  donde es lo que un operador usa para correlacionar un rechazo en su propio
+  terminal, y se elimina de la copia exportada de cada registro de log a
+  cualquier profundidad: no autentica nada y correlaciona todo lo que hace un
+  mismo cliente, y esa distinción no la puede hacer por ti un backend de
+  telemetría.
 - **La cabecera `Host` de una petición que rechazó la guarda de host.** Se
   queda en stderr, donde es lo que lees para averiguar qué host está reenviando
   un proxy mal configurado, y se elimina de la copia exportada de la misma
