@@ -570,6 +570,7 @@ const (
 // the LDAP package, which three rows hold against the group detail entity.
 const (
 	projectWithAccessEntity = "API::Entities::Projects::WithAccessAndCatalogSetting"
+	groupEntity             = "API::Entities::Group"
 	groupDetailEntity       = "API::Entities::GroupDetail"
 	projectEntity           = "API::Entities::Project"
 	groupLDAPPkg            = toolsDir + "/groupldap"
@@ -659,7 +660,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	},
 	{
 		Package:  toolsDir + "/projects",
-		Entity:   "API::Entities::Group",
+		Entity:   groupEntity,
 		Field:    declaredSegment,
 		Category: categoryDocumentedNotSent,
 		Reason: "lib/api/projects.rb describes GET :id/share_locations and GET :id/invited_groups as answering with " +
@@ -709,8 +710,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// which the type grain holds against the group routes since
 	// approver_groups wraps it in a one-key object. Answered with a splat per
 	// entity because every key of both is there for the one reason.
-	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: "API::Entities::Group", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
-	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: "API::Entities::GroupDetail", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
+	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: groupEntity, Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
+	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: groupDetailEntity, Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
 
 	// The two entities client-go's own return types put in front of the merge
 	// request output, answered with a splat because every key the entity has is
@@ -784,7 +785,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"client-go's Project, so every endpoint that struct reaches is unioned in front of both.",
 	},
 	{
-		Package: groupsPkg, Type: "Output", Entity: "API::Entities::GroupDetail", Field: declaredSegment,
+		Package: groupsPkg, Type: "Output", Entity: groupDetailEntity, Field: declaredSegment,
 		Category: categoryEntityPublishedElsewhere,
 		Reason: "groups.Output models API::Entities::Group, which is what every route answering with a page of groups " +
 			"renders. groups.DetailOutput embeds it and publishes what GroupDetail adds, on the seven routes that answer " +
@@ -995,7 +996,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The groups a group can be transferred to, whose route annotates a whole
 	// group and presents six keys of one.
-	{Package: groupsPkg, Type: "TransferLocationOutput", Entity: "API::Entities::Group", Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: reasonTransferLocationsPresented},
+	{Package: groupsPkg, Type: "TransferLocationOutput", Entity: groupEntity, Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: reasonTransferLocationsPresented},
 
 	// An epic's subscription on the list, which only the read of one epic
 	// passes the option for.

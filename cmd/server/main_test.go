@@ -11583,14 +11583,14 @@ func TestCreateServer_GatewayCompatInvalidValue(t *testing.T) {
 func TestCatalogTextRewriter_InstallsNothingWithNothingToSubstitute(t *testing.T) {
 	t.Parallel()
 
-	if rewrite := catalogTextRewriter(nil); rewrite != nil {
+	if catalogTextRewriter(nil) != nil {
 		t.Error("a rewriter was built with no substitution to apply")
 	}
 	subs, err := gatewaycompat.ParseSubstitutions("old=new")
 	if err != nil {
 		t.Fatalf("ParseSubstitutions: %v", err)
 	}
-	if rewrite := catalogTextRewriter(subs); rewrite == nil {
+	if catalogTextRewriter(subs) == nil {
 		t.Error("no rewriter was built for a configured substitution")
 	}
 }
