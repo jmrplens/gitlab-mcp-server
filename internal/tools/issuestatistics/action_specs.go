@@ -68,11 +68,15 @@ func issueStatisticsOptions(individualTool string) toolutil.ActionSpecOptions {
 // JSON Schema enum constraints for fixed-vocabulary filter parameters.
 func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
+	// GET /issues_statistics answers with scope=created_by_me when no scope
+	// is sent, so the usage and the description say what an omitted scope
+	// counts and which value counts everything (issue 1172). They used to
+	// describe counts taken across every project visible to the caller.
 	case "gitlab_get_issue_statistics":
-		options.Usage = "Get aggregate issue counts (all, opened, closed) across every project visible to the authenticated user, optionally filtered by labels, milestone, assignee, author, dates, or search."
+		options.Usage = "Get aggregate issue counts (all, opened, closed) across projects, optionally filtered by labels, milestone, assignee, author, dates, or search. When scope is omitted GitLab answers scope=created_by_me and counts only the issues the caller created. Pass scope=all to count every issue the caller can see."
 		options.Aliases = []string{individualTool, "issue statistics", "count issues", "global issue counts"}
 		options.RelatedActions = []string{actionStatisticsGetGroup, actionStatisticsGetProject, "issue.list_all"}
-		options.IndividualTool.Description = "Get global issue count statistics across all visible projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
+		options.IndividualTool.Description = "Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
 			toolutil.SchemaEnumOverride("in", "title", "description", "title,description"),

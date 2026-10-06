@@ -108,11 +108,12 @@ func optIIDs(iids []int64) *[]int64 {
 
 // Get (global).
 
-// GetInput contains parameters for global issue statistics.
+// GetInput contains parameters for global issue statistics, which GitLab
+// counts over the issues the caller created unless Scope names another scope.
 type GetInput struct {
 	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
 	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Scope            string   `json:"scope,omitempty"             jsonschema:"Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)"`
 	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
 	In               string   `json:"in,omitempty"                jsonschema:"Fields the search query applies to (title, description, or title,description)"`
 	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
@@ -128,9 +129,11 @@ type GetInput struct {
 	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
-// Get retrieves global issue statistics across all projects visible to
-// the authenticated user via the GitLab Issue statistics API
-// (GET /issues_statistics). Optional filters narrow the result.
+// Get retrieves global issue statistics via the GitLab Issue statistics API
+// (GET /issues_statistics). The scope is passed through as the caller wrote
+// it, so an omitted one gets GitLab's default, created_by_me, and the counts
+// cover only the issues the caller created; scope=all counts every issue it
+// can see. Optional filters narrow the result.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (StatisticsOutput, error) {
 	opts := &gl.GetIssuesStatisticsOptions{
 		Labels:           labelOptions(input.Labels),

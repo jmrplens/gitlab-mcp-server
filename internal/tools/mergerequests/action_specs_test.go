@@ -146,6 +146,100 @@ func TestDeleteDependencyOutput_NamesTheDependencyItDeleted(t *testing.T) {
 	}
 }
 
+// gitLabMergeRequestScopes is the vocabulary GitLab declares for the scope
+// parameter of all three merge request listings, GET /merge_requests,
+// /groups/:id/merge_requests and /projects/:id/merge_requests, as the route
+// params in docs/development/gitlab-api-live.json spell it. It is written out
+// here rather than read from the override, so the assertion and the code
+// cannot drift together.
+var gitLabMergeRequestScopes = []string{"created_by_me", "assigned_to_me", "reviews_for_me", "all"}
+
+// TestActionSpecs_ListScope_OffersEveryScopeGitLabAccepts holds the scope
+// parameter of the three merge request listings to GitLab's vocabulary, in
+// the enum the served schema carries and in the description beside it.
+//
+// The enum left out reviews_for_me, which every one of these routes accepts
+// (issue 1172), so a model asked for the merge requests waiting on the
+// caller's review was never offered the one scope that answers it, and where
+// a call is validated against the served schema (the individual tools, and
+// the meta tool under the compact and full parameter schemas) sending it was
+// refused before the call reached GitLab. The description is held
+// to naming every value the enum offers because a model reads the two
+// together, and a value the description never mentions is one it has no
+// reason to choose.
+func TestActionSpecs_ListScope_OffersEveryScopeGitLabAccepts(t *testing.T) {
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))
+	for _, tool := range []string{"gitlab_mr_list", "gitlab_mr_list_global", "gitlab_mr_list_group"} {
+		t.Run(tool, func(t *testing.T) {
+			scope := servedProperty(t, byTool[tool], "scope")
+			enum, _ := scope["enum"].([]any)
+			if !slices.EqualFunc(enum, gitLabMergeRequestScopes, func(got any, want string) bool { return got == want }) {
+				t.Errorf("scope enum = %v, want GitLab's vocabulary %v", enum, gitLabMergeRequestScopes)
+			}
+			description, _ := scope["description"].(string)
+			for _, value := range gitLabMergeRequestScopes {
+				if !strings.Contains(description, value) {
+					t.Errorf("scope description %q never names %q, which the enum offers", description, value)
+				}
+			}
+		})
+	}
+}
+
+// TestActionSpecs_ListGlobal_SaysWhatAnOmittedScopeReturns holds every text a
+// model reads about merge_request.list_global to the default of the route it
+// calls.
+//
+// GET /merge_requests answers with scope=created_by_me when no scope is sent,
+// so a call naming no scope returns the merge requests the caller opened and
+// nobody else's. The usage, the individual tool's description and the scope
+// parameter described the action as listing every merge request the caller
+// can see, which is what scope=all does (issue 1172), and the usage offered
+// created_by_me as a way to narrow that. Each text is served on its own by
+// some surface (the usage by find and the meta manifests, the description on
+// the individual surface, the parameter in every input schema), so each has
+// to say both halves: what an omitted scope returns, and the value that lists
+// everything.
+func TestActionSpecs_ListGlobal_SaysWhatAnOmittedScopeReturns(t *testing.T) {
+	spec := mergeRequestSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))["gitlab_mr_list_global"]
+	scopeDescription, _ := servedProperty(t, spec, "scope")["description"].(string)
+	for _, tt := range []struct {
+		name      string
+		text      string
+		fragments []string
+	}{
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every merge request"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, fragment := range tt.fragments {
+				if !strings.Contains(tt.text, fragment) {
+					t.Errorf("%s = %q, want it to carry %q", tt.name, tt.text, fragment)
+				}
+			}
+			if strings.Contains(strings.ToLower(tt.text), "narrow with scope") {
+				t.Errorf("%s = %q, offers a scope as a narrowing of what is already the default", tt.name, tt.text)
+			}
+		})
+	}
+}
+
+// servedProperty returns the schema the served input schema of spec carries
+// for the named parameter, with every override already applied.
+func servedProperty(t *testing.T, spec toolutil.ActionSpec, name string) map[string]any {
+	t.Helper()
+	properties, ok := spec.Route.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s input schema carries no properties: %#v", spec.IndividualTool.Name, spec.Route.InputSchema)
+	}
+	property, ok := properties[name].(map[string]any)
+	if !ok {
+		t.Fatalf("%s input schema carries no %q property: %#v", spec.IndividualTool.Name, name, properties[name])
+	}
+	return property
+}
+
 // hasNaturalLanguageAlias reports whether the spec has at least one alias that
 // is neither the canonical action name nor the individual tool name, matching
 // the R-META aliases_only_toolname detector.

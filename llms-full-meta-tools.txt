@@ -4515,7 +4515,7 @@ Action guidance:
 - link_get: Get one issue link by its issue_link_id. Use issue.link_list first to find the issue_link_id, then this for the link's source/target issue details.
 - link_list: List every issue linked to a source issue (relates_to, blocks, is_blocked_by). Use after locating the source issue with issue.get or issue.list to inspect its relationships, then issue.link_get for one link's details.
 - list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
-- list_all: List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview.
+- list_all: List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which is what a cross-project issue overview needs.
 - list_group: List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.
 - move: Move an issue to a different project, preserving its discussion and metadata.
 - mrs_closing: List merge requests that will close this issue when merged (those referencing it with a closing keyword).
@@ -4529,7 +4529,7 @@ Action guidance:
 - reorder: Reposition an issue relative to another issue (move before or after) to change its manual order on a board or list.
 - spent_time_add: Log time spent on an issue using a human duration such as 2h or 30m. Logged values accumulate across calls.
 - spent_time_reset: Reset the total time spent on an issue back to zero.
-- statistics_get: Get aggregate issue counts (all, opened, closed) across every project visible to the authenticated user, optionally filtered by labels, milestone, assignee, author, dates, or search.
+- statistics_get: Get aggregate issue counts (all, opened, closed) across projects, optionally filtered by labels, milestone, assignee, author, dates, or search. When scope is omitted GitLab answers scope=created_by_me and counts only the issues the caller created. Pass scope=all to count every issue the caller can see.
 - statistics_get_group: Get aggregate issue counts (all, opened, closed) for a group and its descendant projects, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search.
 - statistics_get_project: Get aggregate issue counts (all, opened, closed) for a single project, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search.
 - subscribe: Subscribe the authenticated user to notifications for an issue.
@@ -5676,7 +5676,7 @@ Action guidance:
 - get: Fetch a single merge request by its project-scoped IID, optionally including diverged-commit count, rebase-in-progress state, or HTML-rendered title/description.
 - issues_closed: List issues that will be closed when this merge request is merged (issues referenced via 'Closes #N' in the MR description or commits).
 - list: List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset or keyset pagination.
-- list_global: List merge requests across all projects visible to the caller. Narrow with scope=created_by_me or scope=assigned_to_me, author/reviewer, approvals, or label filters.
+- list_global: List merge requests across projects. When scope is omitted GitLab answers scope=created_by_me, only the merge requests the caller created. Pass scope=all for every merge request the caller can see, or assigned_to_me or reviews_for_me for the ones assigned to the caller or where it is a reviewer, and narrow with author, reviewer, approval, or label filters.
 - list_group: List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset or keyset pagination.
 - merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
 - participants: List the users participating in a merge request (author, assignees, reviewers, commenters), one page at a time with page and per_page.

@@ -6021,6 +6021,9 @@ func TestCreateTodo_EveryField_LandsOnItsOwnField(t *testing.T) {
 // every other error-path test answered 403 to a handler whose one special case
 // is 404, or asserted only that an error came back, which a handler with the
 // branch deleted produces just the same.
+//
+// TestListAll_Unauthorized_PointsAtTheTokenAlone holds what the ListAll remedy
+// must not say, which this table cannot.
 func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 	afterID := int64(1)
 	get := GetInput{ProjectID: testProjectID, IssueIID: 10}
@@ -6057,7 +6060,7 @@ func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 			_, err := ListGroup(ctx, c, ListGroupInput{GroupID: "99"})
 			return err
 		}},
-		{"ListAll/401", http.StatusUnauthorized, "requires an authenticated token", func(ctx context.Context, c *gitlabclient.Client) error {
+		{"ListAll/401", http.StatusUnauthorized, "has not been revoked", func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := ListAll(ctx, c, ListAllInput{})
 			return err
 		}},
@@ -6147,5 +6150,31 @@ func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 				t.Errorf("at 409 error = %q, want no remedy for a status no branch names", err.Error())
 			}
 		})
+	}
+}
+
+// TestListAll_Unauthorized_PointsAtTheTokenAlone holds the remedy a refused
+// global listing carries to what GitLab's route does. It offered
+// scope=created_by_me "to narrow", which is the scope GET /issues already
+// answers with when none is sent (issue 1172), and no scope is a remedy for a
+// 401 there: the route demands a user only when scope is not all, and the API
+// guard refuses a token it cannot use whatever the scope. So the hint names
+// the token and offers neither a scope nor a narrowing.
+func TestListAll_Unauthorized_PointsAtTheTokenAlone(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+	}))
+	_, err := ListAll(t.Context(), client, ListAllInput{})
+	if err == nil {
+		t.Fatal("ListAll() error = nil, want the 401 reported")
+	}
+	if !strings.Contains(err.Error(), "has not been revoked") {
+		t.Errorf("ListAll() error = %q, want it to send the reader to the token", err)
+	}
+	if strings.Contains(err.Error(), "scope=") {
+		t.Errorf("ListAll() error = %q, offers a scope as the remedy for a refused token", err)
+	}
+	if strings.Contains(err.Error(), "narrow") {
+		t.Errorf("ListAll() error = %q, offers a narrowing as the remedy for a refused token", err)
 	}
 }

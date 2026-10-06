@@ -1170,6 +1170,43 @@ func TestActionSpecs_EnumOverridesConstrainPublishedFields(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Get_SaysWhatAnOmittedScopeReturns holds every text a model
+// reads about issue.statistics_get to the default of the route it calls.
+//
+// GET /issues_statistics answers with scope=created_by_me when no scope is
+// sent, so a call naming no scope counts the issues the caller opened and
+// nobody else's. The usage, the individual tool's description and the scope
+// parameter described the counts as taken across every project visible to
+// the caller, which is what scope=all does (issue 1172). Each text is served
+// on its own by some surface, so each has to say both halves: what an omitted
+// scope counts, and the value that counts everything.
+func TestActionSpecs_Get_SaysWhatAnOmittedScopeReturns(t *testing.T) {
+	spec := issueStatsSpecsByTool(issueStatsSpecs(t))["gitlab_get_issue_statistics"]
+	properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	scope, ok := properties["scope"].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema carries no scope property: %#v", properties)
+	}
+	scopeDescription, _ := scope["description"].(string)
+	for _, tt := range []struct {
+		name      string
+		text      string
+		fragments []string
+	}{
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, fragment := range tt.fragments {
+				if !strings.Contains(tt.text, fragment) {
+					t.Errorf("%s = %q, want it to carry %q", tt.name, tt.text, fragment)
+				}
+			}
+		})
+	}
+}
+
 // assertOverridesNamePublishedFields checks that every override names a field
 // the action's input publishes. One that does not patches nothing, silently.
 func assertOverridesNamePublishedFields(t *testing.T, overrides []toolutil.InputSchemaOverride, published map[string]bool) {

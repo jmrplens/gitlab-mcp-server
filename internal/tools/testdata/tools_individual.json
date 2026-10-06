@@ -46059,7 +46059,7 @@
   },
   {
     "name": "gitlab_get_issue_statistics",
-    "description": "Get global issue count statistics across all visible projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.",
+    "description": "Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -46146,7 +46146,7 @@
           "type": "string"
         },
         "scope": {
-          "description": "Scope: created_by_me, assigned_to_me, all",
+          "description": "Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
@@ -92071,7 +92071,7 @@
   },
   {
     "name": "gitlab_issue_list_all",
-    "description": "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
+    "description": "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -92275,7 +92275,7 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "description": "Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
@@ -146182,10 +146182,11 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "description": "Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
+            "reviews_for_me",
             "all"
           ],
           "type": "string"
@@ -147261,7 +147262,7 @@
   },
   {
     "name": "gitlab_mr_list_global",
-    "description": "List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
+    "description": "List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147409,10 +147410,11 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "description": "Which merge requests to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, reviews_for_me, or all (every merge request the caller can see)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
+            "reviews_for_me",
             "all"
           ],
           "type": "string"
@@ -148640,10 +148642,11 @@
           "type": "string"
         },
         "scope": {
-          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "description": "Filter by scope (created_by_me, assigned_to_me, reviews_for_me, all)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
+            "reviews_for_me",
             "all"
           ],
           "type": "string"

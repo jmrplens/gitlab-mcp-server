@@ -93,7 +93,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			WithEmbeddedResource("gitlab://project/{project_id}/mr/{merge_request_iid}"),
 		// gitlab_mr_list — list project MRs.
 		mergeRequestReadSpec("list", toolutil.RouteAction(client, List), "gitlab_mr_list"),
-		// gitlab_mr_list_global — list MRs across all projects visible to the caller.
+		// gitlab_mr_list_global: list MRs across projects, the caller's own
+		// unless scope names another (GitLab's default is created_by_me).
 		mergeRequestReadSpec("list_global", toolutil.RouteAction(client, ListGlobal), "gitlab_mr_list_global"),
 		// gitlab_mr_list_group — list MRs across a group and its projects.
 		mergeRequestReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_mr_list_group"),
@@ -267,11 +268,16 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			related:     []string{actionMRGet, actionMRCreate, "merge_request.list_group", "search.merge_requests"},
 			description: "List merge requests in one project with filtering and pagination. Returns: matching MRs with state, branches, merge status, assignees, reviewers, labels, and pagination metadata. See also: gitlab_mr_get, gitlab_mr_create, gitlab_mr_list_group.",
 		},
+		// GET /merge_requests answers with scope=created_by_me when no scope
+		// is sent, so the two texts below say what an omitted scope returns
+		// and which value lists everything (issue 1172). They used to call
+		// the result every merge request the caller can see and offer
+		// created_by_me as a narrowing of it.
 		"list_global": {
-			usage:       "List merge requests across all projects visible to the caller. Narrow with scope=created_by_me or scope=assigned_to_me, author/reviewer, approvals, or label filters.",
+			usage:       "List merge requests across projects. When scope is omitted GitLab answers scope=created_by_me, only the merge requests the caller created. Pass scope=all for every merge request the caller can see, or assigned_to_me or reviews_for_me for the ones assigned to the caller or where it is a reviewer, and narrow with author, reviewer, approval, or label filters.",
 			aliases:     []string{"list all merge requests", "list my merge requests", "list merge requests across projects"},
 			related:     []string{actionMRList, "merge_request.list_group", "search.merge_requests"},
-			description: "List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
+			description: "List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
 		},
 		"list_group": {
 			usage:       "List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset or keyset pagination.",
@@ -428,10 +434,18 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		options.IndividualTool.Description = meta.description
 	}
 	switch actionName {
+	// All three listings take the scope vocabulary GitLab declares for their
+	// routes, reviews_for_me included. The enum used to leave it out, so no
+	// surface offered a model the one scope that lists the merge requests the
+	// caller is reviewing, and where a call is validated against the served
+	// schema (the individual tools, and the meta tool under the compact and
+	// full parameter schemas) it was refused before reaching GitLab; the
+	// dynamic surface and the default opaque meta schema passed it through
+	// (issue 1172).
 	case "list":
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
-			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "reviews_for_me", "all"}}),
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at", "title"}}),
 			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
 			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
@@ -445,7 +459,7 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 	case "list_global", "list_group":
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
-			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "reviews_for_me", "all"}}),
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
 			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
 			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
