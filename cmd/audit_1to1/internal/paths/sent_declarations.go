@@ -1411,14 +1411,16 @@ func (d sentDeclaration) covers(finding UnsurfacedField) bool {
 	if d.Field != declaredSegment && d.Field != finding.Field {
 		return false
 	}
-	switch {
-	case d.Type == "":
+	// A chain of ifs rather than a tagless switch: Go's coverage records no
+	// block for a case expression, so mutation testing reads every mutant of
+	// one as never reached.
+	if d.Type == "" {
 		return true
-	case finding.Grain == grainType:
-		return d.Type == finding.Type
-	default:
-		return d.Field != declaredSegment
 	}
+	if finding.Grain == grainType {
+		return d.Type == finding.Type
+	}
+	return d.Field != declaredSegment
 }
 
 // key names one declaration in a report, which is how a stale one is reported.

@@ -946,23 +946,32 @@ func jsonTags(structType *ast.StructType) declaredStruct {
 	}
 	for _, field := range structType.Fields.List {
 		name, options, isTagged := jsonName(field)
-		switch {
-		case name == "-":
-		case len(field.Names) == 0 && name != "":
+		// A chain of ifs rather than a tagless switch: Go's coverage records
+		// no block for a case expression, so mutation testing reads every
+		// mutant of one as never reached.
+		if name == "-" {
+			continue
+		}
+		if len(field.Names) == 0 && name != "" {
 			publish(name, options, field.Type)
-		case len(field.Names) == 0:
+			continue
+		}
+		if len(field.Names) == 0 {
 			embed(field.Type)
-		case isTagged:
-			for _, ident := range field.Names {
-				if !ident.IsExported() {
-					continue
-				}
-				key := name
-				if key == "" {
-					key = ident.Name
-				}
-				publish(key, options, field.Type)
+			continue
+		}
+		if !isTagged {
+			continue
+		}
+		for _, ident := range field.Names {
+			if !ident.IsExported() {
+				continue
 			}
+			key := name
+			if key == "" {
+				key = ident.Name
+			}
+			publish(key, options, field.Type)
 		}
 	}
 	sort.Strings(tagged.Fields)
