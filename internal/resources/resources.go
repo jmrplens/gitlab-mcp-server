@@ -113,16 +113,29 @@ type JobResourceOutput struct {
 }
 
 // LabelResourceOutput is the JSON payload for a single project or
-// group label. It includes the label's ID, name, color (hex), optional
-// description, and the current open issue and open MR counts (used by
-// the label detail and listing resources).
+// group label: its ID, name, color (hex) and optional description.
+//
+// It carries no usage count, because the single-label routes never send one:
+// lib/api/entities/label.rb exposes the counts only under
+// options[:with_counts], which GitLab sets from the with_counts parameter of
+// the two label listings, and GET /projects/:id/labels/:name and
+// GET /groups/:id/labels/:name declare no such parameter. The label detail
+// resources used to publish open_issues_count and open_merge_requests_count
+// as 0 for every label (issue 1174).
 type LabelResourceOutput struct {
-	ID                     int64  `json:"id"`
-	Name                   string `json:"name"`
-	Color                  string `json:"color"`
-	Description            string `json:"description"`
-	OpenIssuesCount        int64  `json:"open_issues_count"`
-	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// LabelUsageResourceOutput is one row of the project labels resource: the
+// label and the counts of open issues and open merge requests using it,
+// which GitLab sends because that listing asks with_counts=true.
+type LabelUsageResourceOutput struct {
+	LabelResourceOutput
+	OpenIssuesCount        int64 `json:"open_issues_count"`
+	OpenMergeRequestsCount int64 `json:"open_merge_requests_count"`
 }
 
 // MilestoneResourceOutput is the JSON payload for a single project or
@@ -750,7 +763,12 @@ func registerPipelineJobsResource(server registrar, base *gitlabclient.Client) {
 
 // registerProjectLabelsResource registers the
 // "gitlab://project/{project_id}/labels" template resource that lists all
-// labels defined in a GitLab project.
+// labels defined in a GitLab project with the open issues and merge
+// requests using each.
+//
+// The listing asks with_counts=true because GitLab sends a label's counts
+// only when asked; without it the resource published 0 for every label
+// (issue 1174).
 func registerProjectLabelsResource(server registrar, base *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/labels",
@@ -766,17 +784,14 @@ func registerProjectLabelsResource(server registrar, base *gitlabclient.Client) 
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		labels, resp, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
+		labels, resp, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{PerPage: resourcePerPage, WithCounts: new(true)}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list labels", err)
 		}
-		out := make([]LabelResourceOutput, len(labels))
+		out := make([]LabelUsageResourceOutput, len(labels))
 		for i, l := range labels {
-			out[i] = LabelResourceOutput{
-				ID:                     l.ID,
-				Name:                   l.Name,
-				Color:                  l.Color,
-				Description:            l.Description,
+			out[i] = LabelUsageResourceOutput{
+				LabelResourceOutput:    labelToResourceOutput(l),
 				OpenIssuesCount:        l.OpenIssuesCount,
 				OpenMergeRequestsCount: l.OpenMergeRequestsCount,
 			}
@@ -1517,7 +1532,7 @@ func registerLabelResource(server registrar, base *gitlabclient.Client) {
 		Name:        "label",
 		Title:       "Label Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts.",
+		Description: "Get details for a single project label by numeric ID or label name. Returns id, name, color, and description. Usage counts come from project.label_list with with_counts.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1910,12 +1925,10 @@ func snippetToResourceOutput(s *gl.Snippet) SnippetResourceOutput {
 // one field set by construction and cannot drift apart underneath this.
 func labelToResourceOutput(l *gl.Label) LabelResourceOutput {
 	return LabelResourceOutput{
-		ID:                     l.ID,
-		Name:                   l.Name,
-		Color:                  l.Color,
-		Description:            l.Description,
-		OpenIssuesCount:        l.OpenIssuesCount,
-		OpenMergeRequestsCount: l.OpenMergeRequestsCount,
+		ID:          l.ID,
+		Name:        l.Name,
+		Color:       l.Color,
+		Description: l.Description,
 	}
 }
 
@@ -2235,7 +2248,7 @@ func registerGroupLabelResource(server registrar, base *gitlabclient.Client) {
 		Name:        "group_label",
 		Title:       "Group Label Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts.",
+		Description: "Get details for a single group label by numeric ID or name. Returns id, name, color, and description. Usage counts come from group.group_label_list with with_counts.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

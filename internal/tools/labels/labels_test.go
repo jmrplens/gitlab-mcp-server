@@ -4,8 +4,11 @@ package labels
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -75,40 +78,35 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	})
 }
 
-// TestLabelList_Success verifies LabelList when success.
-func TestLabelList_Success(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{
-					"id":1,
-					"name":"bug",
-					"color":"#d9534f",
-					"text_color":"#FFFFFF",
-					"description":"Bug report",
-					"open_issues_count":5,
-					"closed_issues_count":2,
-					"open_merge_requests_count":1,
-					"priority":1,
-					"is_project_label":true
-				},
-				{
-					"id":2,
-					"name":"feature",
-					"color":"#428bca",
-					"text_color":"#FFFFFF",
-					"description":"New feature request",
-					"open_issues_count":3,
-					"closed_issues_count":10,
-					"open_merge_requests_count":2,
-					"priority":2,
-					"is_project_label":true
-				}
-			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
+// labelListAsGitLabAnswers answers a project label listing the way GitLab
+// does: two labels, with their usage counts only when the request asked for
+// them with with_counts=true, since lib/api/entities/label.rb exposes the
+// counts under options[:with_counts] alone.
+func labelListAsGitLabAnswers(t *testing.T) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathProjectLabels {
+			t.Errorf("request = %s %s, want GET %s", r.Method, r.URL.Path, pathProjectLabels)
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
-	}))
+		bug := `"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","priority":1,"is_project_label":true`
+		feature := `"id":2,"name":"feature","color":"#428bca","text_color":"#FFFFFF","description":"New feature request","priority":2,"is_project_label":true`
+		if r.URL.Query().Get("with_counts") == "true" {
+			bug += `,"open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1`
+			feature += `,"open_issues_count":3,"closed_issues_count":10,"open_merge_requests_count":4`
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{`+bug+`},{`+feature+`}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
+	})
+}
+
+// TestLabelList_Success verifies a listing that did not ask for counts
+// publishes the labels GitLab sent and no usage count, which GitLab did not
+// send: the SDK reads the absent counts as 0, and publishing those read as
+// labels nothing uses (issue 1174).
+func TestLabelList_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, labelListAsGitLabAnswers(t))
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: "42",
@@ -125,8 +123,72 @@ func TestLabelList_Success(t *testing.T) {
 	if out.Labels[1].Name != "feature" {
 		t.Errorf("Labels[1].Name = %q, want %q", out.Labels[1].Name, "feature")
 	}
-	if out.Labels[0].OpenIssuesCount != 5 {
-		t.Errorf("Labels[0].OpenIssuesCount = %d, want 5", out.Labels[0].OpenIssuesCount)
+	for _, label := range out.Labels {
+		if label.OpenIssuesCount != nil || label.ClosedIssuesCount != nil || label.OpenMergeRequestsCount != nil {
+			t.Errorf("label %q carries counts %v, %v, %v, want none for a listing that did not ask", label.Name, label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount)
+		}
+	}
+	if md := FormatListMarkdownString(out); strings.Contains(md, "Open Issues") {
+		t.Errorf("FormatListMarkdownString() = %q, want no count column for a listing that did not ask", md)
+	}
+}
+
+// TestLabelList_CountsAsked_PublishesTheCountsGitLabSent verifies a listing
+// that asks for counts sends with_counts=true and publishes each label's three
+// counts as GitLab sent them, each under its own key.
+func TestLabelList_CountsAsked_PublishesTheCountsGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, labelListAsGitLabAnswers(t))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", WithCounts: true})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	want := [][]string{{"5", "2", "1"}, {"3", "10", "4"}}
+	if len(out.Labels) != len(want) {
+		t.Fatalf("len(Labels) = %d, want %d", len(out.Labels), len(want))
+	}
+	for i, label := range out.Labels {
+		if got := spellCounts(label); !slices.Equal(got, want[i]) {
+			t.Errorf("label %q counts (open issues, closed issues, open MRs) = %v, want %v", label.Name, got, want[i])
+		}
+	}
+}
+
+// spellCounts spells a label's open issue, closed issue and open merge request
+// counts in that order, "none" for one the label does not carry, which
+// pointers printed with %v would not show.
+func spellCounts(label Output) []string {
+	counts := []*int64{label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount}
+	spelled := make([]string, len(counts))
+	for i, count := range counts {
+		if count == nil {
+			spelled[i] = "none"
+			continue
+		}
+		spelled[i] = strconv.FormatInt(*count, 10)
+	}
+	return spelled
+}
+
+// TestLabelGet_PublishesNoUsageCount verifies a single label publishes none of
+// the three usage counts. GET /projects/:id/labels/:name declares no
+// with_counts, so GitLab never sends them there, and the label used to publish
+// all three as 0 (issue 1174).
+func TestLabelGet_PublishesNoUsageCount(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug","color":"#d9534f","description":"Bug report","is_project_label":true}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", LabelID: "bug"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal(label) error = %v", err)
+	}
+	if strings.Contains(string(raw), "_count") {
+		t.Errorf("label JSON = %s, want no usage count", raw)
 	}
 }
 
@@ -1162,7 +1224,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug report",
 		Priority: new(int64(3)), IsProjectLabel: new(true), Subscribed: true, Archived: true,
-		OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
+		OpenIssuesCount: new(int64(5)), ClosedIssuesCount: new(int64(2)), OpenMergeRequestsCount: new(int64(1)),
 	}
 
 	md := FormatMarkdown(o)
@@ -1234,14 +1296,15 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithLabels pins the whole label table, an
-// archived label's glyph included, and the scope column that tells a project's
-// own labels from the ones it inherits.
+// TestFormatListMarkdownString_WithLabels pins the whole label table of a
+// listing that asked for counts, an archived label's glyph included, the
+// scope column that tells a project's own labels from the ones it inherits,
+// and a label nothing uses, whose counts GitLab sent as zeros.
 func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
-			{ID: 1, Name: "bug", Color: "#d9534f", IsProjectLabel: new(true), OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
-			{ID: 2, Name: "stale", Color: "#cccccc", Archived: true},
+			{ID: 1, Name: "bug", Color: "#d9534f", IsProjectLabel: new(true), OpenIssuesCount: new(int64(5)), ClosedIssuesCount: new(int64(2)), OpenMergeRequestsCount: new(int64(1))},
+			{ID: 2, Name: "stale", Color: "#cccccc", Archived: true, OpenIssuesCount: new(int64(0)), ClosedIssuesCount: new(int64(0)), OpenMergeRequestsCount: new(int64(0))},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}

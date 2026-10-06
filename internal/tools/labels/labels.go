@@ -120,7 +120,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	out := make([]Output, len(labels))
 	for i, l := range labels {
-		out[i] = toOutput(l, extras[i])
+		out[i] = labeldata.ProjectListOutput(l, extras[i], input.WithCounts)
 	}
 	return ListOutput{Labels: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

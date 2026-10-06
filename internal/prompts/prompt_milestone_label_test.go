@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -152,19 +153,76 @@ func TestMilestoneProgress_RequiresProjectID(t *testing.T) {
 
 // label_distribution.
 
+// labelCountKeys are the keys lib/api/entities/label.rb exposes only under
+// options[:with_counts], which the label listings set from the with_counts
+// parameter they declare and no other route sets at all.
+var labelCountKeys = []string{"open_issues_count", "closed_issues_count", "open_merge_requests_count"}
+
+// labelsAsGitLabAnswers serves a label list the way GET /projects/:id/labels
+// answers it: each label's open and closed issue counts and its open merge
+// request count go only to a request that asks with_counts=true, and are left
+// out of the answer otherwise.
+//
+// A fixture that sent the counts unasked is how label_distribution and
+// audit_project_workflow shipped reading 0 for every label while their tests
+// passed (issue 1174): the handler never asked, and the mock answered as if it
+// had. The fixture is marshaled here, on the test goroutine, so the handler
+// has nothing left that can fail.
+func labelsAsGitLabAnswers(t *testing.T, labels []*gl.Label) http.HandlerFunc {
+	t.Helper()
+	asked, err := json.Marshal(labels)
+	if err != nil {
+		t.Fatalf("marshaling the label fixture: %v", err)
+	}
+	var rows []map[string]any
+	if err = json.Unmarshal(asked, &rows); err != nil {
+		t.Fatalf("reading the label fixture back: %v", err)
+	}
+	for _, row := range rows {
+		for _, key := range labelCountKeys {
+			delete(row, key)
+		}
+	}
+	unasked, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatalf("marshaling the label fixture without its counts: %v", err)
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("with_counts") == "true" {
+			respondJSON(w, http.StatusOK, string(asked))
+			return
+		}
+		respondJSON(w, http.StatusOK, string(unasked))
+	}
+}
+
+// TestLabelDistribution_AsksGitLabForTheCounts verifies that the prompt's
+// label listing carries with_counts=true, the one parameter that makes GitLab
+// send the counts the whole report is computed from.
+func TestLabelDistribution_AsksGitLabForTheCounts(t *testing.T) {
+	var asked atomic.Value
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, r *http.Request) {
+		asked.Store(r.URL.Query().Get("with_counts"))
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
+
+	if got, _ := asked.Load().(string); got != "true" {
+		t.Errorf("the label listing was sent with_counts=%q, want true: GitLab sends no count without it", got)
+	}
+}
+
 // TestLabelDistribution_WithLabels verifies LabelDistribution when with labels.
 func TestLabelDistribution_WithLabels(t *testing.T) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, r *http.Request) {
-		labels := []*gl.Label{
-			{Name: "bug", OpenIssuesCount: 10, ClosedIssuesCount: 5, OpenMergeRequestsCount: 2},
-			{Name: "feature", OpenIssuesCount: 8, ClosedIssuesCount: 3, OpenMergeRequestsCount: 4},
-			{Name: "unused", OpenIssuesCount: 0, ClosedIssuesCount: 0, OpenMergeRequestsCount: 0},
-		}
-		data, _ := json.Marshal(labels)
-		respondJSON(w, http.StatusOK, string(data))
-	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", labelsAsGitLabAnswers(t, []*gl.Label{
+		{Name: "bug", OpenIssuesCount: 10, ClosedIssuesCount: 5, OpenMergeRequestsCount: 2},
+		{Name: "feature", OpenIssuesCount: 8, ClosedIssuesCount: 3, OpenMergeRequestsCount: 4},
+		{Name: "unused", OpenIssuesCount: 0, ClosedIssuesCount: 0, OpenMergeRequestsCount: 0},
+	}))
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
@@ -759,15 +817,7 @@ func TestLabelDistribution_TheOrderTheTotalsAndTheChart(t *testing.T) {
 		{Name: "unused", OpenIssuesCount: 0, ClosedIssuesCount: 0, OpenMergeRequestsCount: 0},
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
-		data, err := json.Marshal(labels)
-		if err != nil {
-			t.Errorf("marshaling the label fixture: %v", err)
-			respondNotFound(w)
-			return
-		}
-		respondJSON(w, http.StatusOK, string(data))
-	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", labelsAsGitLabAnswers(t, labels))
 
 	text := getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
 
@@ -831,15 +881,7 @@ func TestLabelDistribution_LabelsThatTie_KeepTheOrderGitLabSent(t *testing.T) {
 		labels = append(labels, &gl.Label{Name: name, OpenIssuesCount: int64(tier + 1)})
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
-		data, err := json.Marshal(labels)
-		if err != nil {
-			t.Errorf("marshaling the label fixture: %v", err)
-			respondNotFound(w)
-			return
-		}
-		respondJSON(w, http.StatusOK, string(data))
-	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", labelsAsGitLabAnswers(t, labels))
 
 	text := getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
 
@@ -873,15 +915,7 @@ func TestLabelDistribution_TheChartStopsAtEightSlices(t *testing.T) {
 		})
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
-		data, err := json.Marshal(labels)
-		if err != nil {
-			t.Errorf("marshaling the label fixture: %v", err)
-			respondNotFound(w)
-			return
-		}
-		respondJSON(w, http.StatusOK, string(data))
-	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", labelsAsGitLabAnswers(t, labels))
 
 	text := getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
 
@@ -901,9 +935,9 @@ func TestLabelDistribution_TheChartStopsAtEightSlices(t *testing.T) {
 // with no data, which renders as an error rather than as the absence it is.
 func TestLabelDistribution_NoLabelHasAnOpenIssue_HasNoChart(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `[{"name":"stale","open_issues_count":0,"closed_issues_count":4,"open_merge_requests_count":0}]`)
-	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", labelsAsGitLabAnswers(t, []*gl.Label{
+		{Name: "stale", ClosedIssuesCount: 4},
+	}))
 
 	text := getPromptText(t, mux, "label_distribution", map[string]string{"project_id": "42"})
 

@@ -24,22 +24,21 @@ import (
 //
 // The group label is handed a priority and a project flag and must publish
 // neither: Entities::GroupLabel sends no such keys, so whatever the SDK struct
-// holds there is not something GitLab said.
+// holds there is not something GitLab said. Both are handed usage counts and
+// must publish none, for the same reason: no route these two converters serve
+// sends them (issue 1174).
 func TestOutputConverters_MapSharedFields(t *testing.T) {
 	priority := gl.NewNullableWithValue(int64(3))
 	extra := toolutil.LabelExtra{DescriptionHTML: "<p>Bug</p>"}
 	shared := Output{
-		ID:                     11,
-		Name:                   "bug",
-		Color:                  "#d9534f",
-		TextColor:              "#ffffff",
-		Description:            "Bug",
-		DescriptionHTML:        "<p>Bug</p>",
-		OpenIssuesCount:        5,
-		ClosedIssuesCount:      2,
-		OpenMergeRequestsCount: 7,
-		Subscribed:             true,
-		Archived:               true,
+		ID:              11,
+		Name:            "bug",
+		Color:           "#d9534f",
+		TextColor:       "#ffffff",
+		Description:     "Bug",
+		DescriptionHTML: "<p>Bug</p>",
+		Subscribed:      true,
+		Archived:        true,
 	}
 	wantProject := shared
 	wantProject.Priority = new(int64(3))
@@ -86,13 +85,88 @@ func TestOutput_JSON_ProjectKeysOnlyOnAProjectLabel(t *testing.T) {
 }
 
 // TestOutputConverters_NilInput verifies converters return zero-value output
-// for nil API objects so callers can safely handle absent GitLab payloads.
+// for nil API objects so callers can safely handle absent GitLab payloads,
+// the list converters included when their listing asked for counts.
 func TestOutputConverters_NilInput(t *testing.T) {
-	if got := ProjectOutput(nil, toolutil.LabelExtra{}); got.ID != 0 || got.Name != "" {
-		t.Fatalf("ProjectOutput(nil) = %+v, want zero Output", got)
+	if got := ProjectOutput(nil, toolutil.LabelExtra{}); !reflect.DeepEqual(got, Output{}) {
+		t.Errorf("ProjectOutput(nil) = %+v, want zero Output", got)
 	}
-	if got := GroupOutput(nil, toolutil.LabelExtra{}); got.ID != 0 || got.Name != "" {
-		t.Fatalf("GroupOutput(nil) = %+v, want zero Output", got)
+	if got := GroupOutput(nil, toolutil.LabelExtra{}); !reflect.DeepEqual(got, Output{}) {
+		t.Errorf("GroupOutput(nil) = %+v, want zero Output", got)
+	}
+	if got := ProjectListOutput(nil, toolutil.LabelExtra{}, true); !reflect.DeepEqual(got, Output{}) {
+		t.Errorf("ProjectListOutput(nil, counts asked) = %+v, want zero Output", got)
+	}
+	if got := GroupListOutput(nil, toolutil.LabelExtra{}, true); !reflect.DeepEqual(got, Output{}) {
+		t.Errorf("GroupListOutput(nil, counts asked) = %+v, want zero Output", got)
+	}
+}
+
+// TestListOutputConverters_Counts_PublishedOnlyWhenTheListingAskedForThem
+// verifies a listed label publishes its usage counts exactly when its listing
+// asked GitLab for them with with_counts, each from the SDK field of the same
+// meaning, and otherwise is the label its single-label converter publishes.
+//
+// GitLab sends the counts to a listing that asked and to no other answer, and
+// the SDK decodes an absent count as 0, so a listing that did not ask used to
+// publish 0, 0, 0 for every label, which reads as labels nothing uses (issue
+// 1174). The counts handed here differ from one another so a converter that
+// crossed two of them fails.
+func TestListOutputConverters_Counts_PublishedOnlyWhenTheListingAskedForThem(t *testing.T) {
+	extra := toolutil.LabelExtra{DescriptionHTML: "<p>Bug</p>"}
+	project := &gl.Label{ID: 11, Name: "bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 7, IsProjectLabel: true}
+	group := &gl.GroupLabel{ID: 12, Name: "infra", OpenIssuesCount: 4, ClosedIssuesCount: 9, OpenMergeRequestsCount: 1}
+
+	for _, tc := range []struct {
+		name string
+		got  Output
+		want Output
+	}{
+		{name: "project label, counts asked", got: ProjectListOutput(project, extra, true), want: withUsageCounts(ProjectOutput(project, extra), 5, 2, 7)},
+		{name: "project label, counts not asked", got: ProjectListOutput(project, extra, false), want: ProjectOutput(project, extra)},
+		{name: "group label, counts asked", got: GroupListOutput(group, extra, true), want: withUsageCounts(GroupOutput(group, extra), 4, 9, 1)},
+		{name: "group label, counts not asked", got: GroupListOutput(group, extra, false), want: GroupOutput(group, extra)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !reflect.DeepEqual(tc.got, tc.want) {
+				t.Errorf("converted label = %+v, want %+v", tc.got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWithUsageCounts_SetsEachCountFromItsOwnArgument verifies the three
+// counts land in their own fields, read as the values a reader sees.
+func TestWithUsageCounts_SetsEachCountFromItsOwnArgument(t *testing.T) {
+	got := withUsageCounts(Output{ID: 1}, 5, 2, 7)
+	if got.ID != 1 || got.OpenIssuesCount == nil || *got.OpenIssuesCount != 5 || got.ClosedIssuesCount == nil || *got.ClosedIssuesCount != 2 || got.OpenMergeRequestsCount == nil || *got.OpenMergeRequestsCount != 7 {
+		t.Errorf("withUsageCounts(Output{ID: 1}, 5, 2, 7) = %+v, want ID 1 and counts 5, 2, 7", got)
+	}
+}
+
+// TestOutput_JSON_CountsOnlyWhenSent verifies what the wire carries: the
+// three count keys, zeros included, on a label whose listing asked for them,
+// and none of the three on any other label.
+func TestOutput_JSON_CountsOnlyWhenSent(t *testing.T) {
+	keys := []string{`"open_issues_count"`, `"closed_issues_count"`, `"open_merge_requests_count"`}
+
+	counted, err := json.Marshal(ProjectListOutput(&gl.Label{ID: 1}, toolutil.LabelExtra{}, true))
+	if err != nil {
+		t.Fatalf("json.Marshal(counted label) error = %v", err)
+	}
+	uncounted, err := json.Marshal(ProjectListOutput(&gl.Label{ID: 1, OpenIssuesCount: 5}, toolutil.LabelExtra{}, false))
+	if err != nil {
+		t.Fatalf("json.Marshal(uncounted label) error = %v", err)
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(counted), key+":0") {
+				t.Errorf("counted label JSON = %s, want %s stated as 0", counted, key)
+			}
+			if strings.Contains(string(uncounted), key) {
+				t.Errorf("uncounted label JSON = %s, want no %s key", uncounted, key)
+			}
+		})
 	}
 }
 
@@ -166,17 +240,52 @@ func TestListOptions_NegativePagination_IsNeverSent(t *testing.T) {
 // without dropping label counts, priority, subscription state or the archive
 // flag, which the view model carried nowhere until the card started showing it.
 func TestToMarkdown(t *testing.T) {
-	in := Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: new(int64(3)), IsProjectLabel: new(true), Subscribed: true, Archived: true}
+	in := withUsageCounts(Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", Priority: new(int64(3)), IsProjectLabel: new(true), Subscribed: true, Archived: true}, 5, 2, 1)
 
 	got := ToMarkdown(in)
 
 	want := toolutil.LabelMarkdown{
 		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug",
-		OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
+		CountsSent: true, OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
 		Priority: 3, PrioritySpecified: true, IsProjectLabel: true, Subscribed: true, Archived: true,
 	}
 	if got != want {
 		t.Fatalf("ToMarkdown() = %+v, want %+v", got, want)
+	}
+}
+
+// TestToMarkdown_Counts_SentOnlyWhenTheLabelCarriesAllThree verifies the card
+// model marks the counts sent only for a label carrying all three, and
+// otherwise carries no count at all.
+//
+// A label carries them together or not at all, set by withUsageCounts, so a
+// label missing any one is a label GitLab sent none for, and reading the
+// others as sent would render a zero for a count nobody sent. Each case drops
+// a different one, so a check that read only one of the three, or joined them
+// with "or", fails.
+func TestToMarkdown_Counts_SentOnlyWhenTheLabelCarriesAllThree(t *testing.T) {
+	counted := withUsageCounts(Output{ID: 1}, 5, 2, 7)
+	withoutOpen, withoutClosed, withoutMergeRequests := counted, counted, counted
+	withoutOpen.OpenIssuesCount = nil
+	withoutClosed.ClosedIssuesCount = nil
+	withoutMergeRequests.OpenMergeRequestsCount = nil
+
+	for _, tc := range []struct {
+		name  string
+		label Output
+		want  toolutil.LabelMarkdown
+	}{
+		{name: "all three", label: counted, want: toolutil.LabelMarkdown{ID: 1, CountsSent: true, OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 7}},
+		{name: "none", label: Output{ID: 1}, want: toolutil.LabelMarkdown{ID: 1}},
+		{name: "open issues missing", label: withoutOpen, want: toolutil.LabelMarkdown{ID: 1}},
+		{name: "closed issues missing", label: withoutClosed, want: toolutil.LabelMarkdown{ID: 1}},
+		{name: "open merge requests missing", label: withoutMergeRequests, want: toolutil.LabelMarkdown{ID: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ToMarkdown(tc.label); got != tc.want {
+				t.Errorf("ToMarkdown() = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 

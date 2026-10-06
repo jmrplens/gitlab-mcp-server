@@ -237,16 +237,46 @@ func TestPipelineJobsResource_Success(t *testing.T) {
 	}
 }
 
-// TestProjectLabelsResource_Success verifies that the project_labels resource
-// returns labels with their open issue and MR counts when the API responds
-// successfully.
-func TestProjectLabelsResource_Success(t *testing.T) {
+// labelCountKeys are the keys lib/api/entities/label.rb exposes only under
+// options[:with_counts]. GitLab sets that option on the two label listings,
+// from the with_counts parameter they declare, and on no other route: the
+// single-label routes do not declare the parameter at all.
+var labelCountKeys = []string{"open_issues_count", "closed_issues_count", "open_merge_requests_count"}
+
+// countKeysIn returns the label count keys a published payload carries.
+func countKeysIn(payload map[string]any) []string {
+	var present []string
+	for _, key := range labelCountKeys {
+		if _, ok := payload[key]; ok {
+			present = append(present, key)
+		}
+	}
+	return present
+}
+
+// TestProjectLabelsResource_AsksForTheCounts_PublishesThem verifies that the
+// project_labels resource asks GitLab for each label's usage counts and
+// publishes the ones GitLab sends.
+//
+// GitLab sends a label's counts only to a listing that asks with_counts=true,
+// so the mock answers the way the route does and leaves them out otherwise.
+// The resource used to ask for nothing, and the mock it was tested against
+// sent the counts unasked, so it published 0 for every label while its test
+// passed (issue 1174).
+func TestProjectLabelsResource_AsksForTheCounts_PublishesThem(t *testing.T) {
+	var asked atomic.Value
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/42/labels" {
-			respondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","description":"Bug reports","open_issues_count":3,"open_merge_requests_count":1}]`)
+		if r.URL.Path != "/api/v4/projects/42/labels" {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		withCounts := r.URL.Query().Get("with_counts")
+		asked.Store(withCounts)
+		if withCounts == "true" {
+			respondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","description":"Bug reports","open_issues_count":3,"closed_issues_count":7,"open_merge_requests_count":1}]`)
+			return
+		}
+		respondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","description":"Bug reports"}]`)
 	}))
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/labels"})
@@ -254,15 +284,24 @@ func TestProjectLabelsResource_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
 
-	var labels []LabelResourceOutput
+	if got, _ := asked.Load().(string); got != "true" {
+		t.Errorf("the listing was sent with_counts=%q, want true: GitLab sends no count without it", got)
+	}
+	var labels []map[string]any
 	if err = json.Unmarshal([]byte(result.Contents[0].Text), &labels); err != nil {
 		t.Fatalf(fmtUnmarshal, err)
 	}
 	if len(labels) != 1 {
 		t.Fatalf("expected 1 label, got %d", len(labels))
 	}
-	if labels[0].Name != "bug" {
-		t.Errorf(fmtNameWant, labels[0].Name, "bug")
+	if labels[0]["name"] != "bug" {
+		t.Errorf(fmtNameWant, labels[0]["name"], "bug")
+	}
+	if labels[0]["open_issues_count"] != float64(3) {
+		t.Errorf("open_issues_count = %v, want 3", labels[0]["open_issues_count"])
+	}
+	if labels[0]["open_merge_requests_count"] != float64(1) {
+		t.Errorf("open_merge_requests_count = %v, want 1", labels[0]["open_merge_requests_count"])
 	}
 }
 
@@ -1244,13 +1283,19 @@ func TestTagResource_Success(t *testing.T) {
 	}
 }
 
-// TestLabelResource_Success verifies that the singleton label resource
-// returns label metadata when the GitLab API responds with a valid label
-// payload at gitlab://project/{id}/label/{id}.
-func TestLabelResource_Success(t *testing.T) {
+// TestLabelResource_PublishesNoCountTheRouteNeverSends verifies that the
+// singleton label resource at gitlab://project/{id}/label/{id} publishes the
+// label GitLab sends and no usage count.
+//
+// GET /projects/:id/labels/:name declares no with_counts parameter, so GitLab
+// never sends a single label's counts. The resource used to publish
+// open_issues_count and open_merge_requests_count as 0 for every label, a
+// figure GitLab never gave (issue 1174), so the mock answers what the route
+// sends and the payload is held to carry no count key at all.
+func TestLabelResource_PublishesNoCountTheRouteNeverSends(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/labels/5" {
-			respondJSON(w, http.StatusOK, `{"id":5,"name":"bug","color":"#ff0000","description":"Defect","open_issues_count":3,"open_merge_requests_count":1}`)
+			respondJSON(w, http.StatusOK, `{"id":5,"name":"bug","color":"#ff0000","description":"Defect","text_color":"#FFFFFF","subscribed":false,"priority":null,"is_project_label":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1261,18 +1306,21 @@ func TestLabelResource_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
 
-	var lb LabelResourceOutput
+	var lb map[string]any
 	if err = json.Unmarshal([]byte(result.Contents[0].Text), &lb); err != nil {
 		t.Fatalf(fmtUnmarshal, err)
 	}
-	if lb.ID != 5 {
-		t.Errorf("id = %d, want 5", lb.ID)
+	if lb["id"] != float64(5) {
+		t.Errorf("id = %v, want 5", lb["id"])
 	}
-	if lb.Name != "bug" {
-		t.Errorf(fmtNameWant, lb.Name, "bug")
+	if lb["name"] != "bug" {
+		t.Errorf(fmtNameWant, lb["name"], "bug")
 	}
-	if lb.OpenIssuesCount != 3 {
-		t.Errorf("open_issues_count = %d, want 3", lb.OpenIssuesCount)
+	if lb["color"] != "#ff0000" || lb["description"] != "Defect" {
+		t.Errorf("color and description = %v and %v, want #ff0000 and Defect", lb["color"], lb["description"])
+	}
+	if present := countKeysIn(lb); len(present) > 0 {
+		t.Errorf("the label publishes %v, which GitLab never sends for one label: %s", present, result.Contents[0].Text)
 	}
 }
 
@@ -1535,11 +1583,16 @@ func TestGroupMilestoneResource_Success(t *testing.T) {
 	}
 }
 
-// TestGroupLabelResource_Success verifies the group label resource.
-func TestGroupLabelResource_Success(t *testing.T) {
+// TestGroupLabelResource_PublishesNoCountTheRouteNeverSends verifies that the
+// group label resource publishes the label GitLab sends and no usage count.
+//
+// GET /groups/:id/labels/:name declares no with_counts parameter either, so
+// the counts the resource used to publish were 0 for every group label
+// (issue 1174); the payload is held to carry no count key.
+func TestGroupLabelResource_PublishesNoCountTheRouteNeverSends(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/labels/42") {
-			respondJSON(w, http.StatusOK, `{"id":42,"name":"bug","color":"#ff0000","description":"Bug","open_issues_count":2,"open_merge_requests_count":1}`)
+			respondJSON(w, http.StatusOK, `{"id":42,"name":"bug","color":"#ff0000","description":"Bug","text_color":"#FFFFFF","subscribed":false}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1549,12 +1602,15 @@ func TestGroupLabelResource_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
-	var l LabelResourceOutput
+	var l map[string]any
 	if err = json.Unmarshal([]byte(result.Contents[0].Text), &l); err != nil {
 		t.Fatalf(fmtUnmarshal, err)
 	}
-	if l.ID != 42 || l.Name != "bug" {
-		t.Errorf("got %+v", l)
+	if l["id"] != float64(42) || l["name"] != "bug" {
+		t.Errorf("got %v", l)
+	}
+	if present := countKeysIn(l); len(present) > 0 {
+		t.Errorf("the group label publishes %v, which GitLab never sends for one label: %s", present, result.Contents[0].Text)
 	}
 }
 

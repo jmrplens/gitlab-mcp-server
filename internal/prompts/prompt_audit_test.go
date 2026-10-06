@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -383,15 +384,11 @@ func TestAuditProject_Workflow(t *testing.T) {
 			data, _ := json.Marshal(project)
 			respondJSON(w, http.StatusOK, string(data))
 		})
-		mux.HandleFunc(routeLabels, func(w http.ResponseWriter, r *http.Request) {
-			labels := []*gl.Label{
-				{Name: "bug", Color: "#d73a4a", Description: "Something isn't working", OpenIssuesCount: 5, OpenMergeRequestsCount: 1},
-				{Name: "enhancement", Color: "#a2eeef", Description: "", OpenIssuesCount: 3},
-				{Name: "priority::high", Color: "#ff0000", Description: "High priority"},
-			}
-			data, _ := json.Marshal(labels)
-			respondJSON(w, http.StatusOK, string(data))
-		})
+		mux.HandleFunc(routeLabels, labelsAsGitLabAnswers(t, []*gl.Label{
+			{Name: "bug", Color: "#d73a4a", Description: "Something isn't working", OpenIssuesCount: 5, OpenMergeRequestsCount: 1},
+			{Name: "enhancement", Color: "#a2eeef", Description: "", OpenIssuesCount: 3},
+			{Name: "priority::high", Color: "#ff0000", Description: "High priority"},
+		}))
 		mux.HandleFunc(routeMilestones, func(w http.ResponseWriter, r *http.Request) {
 			state := r.URL.Query().Get("state")
 			if state == "active" {
@@ -425,9 +422,9 @@ func TestAuditProject_Workflow(t *testing.T) {
 
 		checks := []string{
 			"Workflow Audit",
-			"bug",
-			"enhancement",
-			"_missing_",
+			"| bug | #d73a4a | Something isn't working | 5 | 1 |",
+			"| enhancement | #a2eeef | " + toolutil.EmojiWarning + " _missing_ | 3 | 0 |",
+			"| priority::high | #ff0000 | High priority | 0 | 0 |",
 			"Without description:** 1",
 			"Active:** 2",
 			"Closed:** 1",
@@ -995,6 +992,64 @@ func TestAuditProjectWorkflow_SubResourceAPIErrors_StillRendersReport(t *testing
 	}
 	if !strings.Contains(text, "No templates found") {
 		t.Error("expected no-templates warning when template APIs fail")
+	}
+}
+
+// labelListingAsked serves the project and records the with_counts value of
+// the label listing a prompt sends, answering every other route with an empty
+// list.
+func labelListingAsked(asked *atomic.Value) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p"}`)
+	})
+	mux.HandleFunc(routeLabels, func(w http.ResponseWriter, r *http.Request) {
+		asked.Store(r.URL.Query().Get("with_counts"))
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	return mux
+}
+
+// TestAuditProjectWorkflow_LabelListing_AsksGitLabForTheCounts verifies that
+// the workflow audit asks GitLab for each label's usage counts.
+//
+// Its label table has an Open Issues and an Open MRs column, and GitLab sends
+// the figures behind them only to a listing that asks with_counts=true; the
+// audit used to ask for nothing and filled both columns with 0 (issue 1174).
+func TestAuditProjectWorkflow_LabelListing_AsksGitLabForTheCounts(t *testing.T) {
+	var asked atomic.Value
+	client := newTestClient(t, labelListingAsked(&asked))
+	if _, err := handleAuditProjectWorkflow(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"})); err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	if got, _ := asked.Load().(string); got != "true" {
+		t.Errorf("the label listing was sent with_counts=%q, want true: GitLab sends no count without it", got)
+	}
+}
+
+// TestAuditProjectFull_LabelListing_DoesNotAskForCounts verifies that the
+// full audit's label listing leaves the counts out.
+//
+// Its labels section reports how many labels there are and how many lack a
+// description, and reads no count, so asking GitLab to compute three counts
+// per label would cost the instance work nothing renders. Pinned because the
+// two audits read labels side by side and the fix for issue 1174 asked in one
+// of them only.
+func TestAuditProjectFull_LabelListing_DoesNotAskForCounts(t *testing.T) {
+	var asked atomic.Value
+	client := newTestClient(t, labelListingAsked(&asked))
+	if _, err := handleAuditProjectFull(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"})); err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	got, recorded := asked.Load().(string)
+	if !recorded {
+		t.Fatal("the full audit sent no label listing")
+	}
+	if got != "" {
+		t.Errorf("the label listing was sent with_counts=%q, want none: the full audit renders no count", got)
 	}
 }
 

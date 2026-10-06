@@ -5126,7 +5126,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_create
 
-Create a new group label. Returns: the created label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.
+Create a new group label. Returns: the created label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.
 
 **Parameters:**
 
@@ -5153,7 +5153,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_label_get
 
-Get a single group label by ID or name. Returns: the label with color, text color, description, issue and merge request counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.
+Get a single group label by ID or name. Returns: the label with color, text color, description, and subscription state. GitLab sends a label's usage counts only to group.group_label_list with with_counts. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.
 
 **Parameters:**
 
@@ -5164,7 +5164,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_list
 
-List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, issue and merge request counts, priority, subscription state, and pagination metadata. See also: gitlab_group_label_get, gitlab_group_label_create, gitlab_group_get.
+List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, subscription state, the issue and merge request counts when with_counts is true, and pagination metadata. See also: gitlab_group_label_get, gitlab_group_label_create, gitlab_group_get.
 
 **Parameters:**
 
@@ -5208,7 +5208,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_update
 
-Update a group label. Returns: the updated label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.
+Update a group label. Returns: the updated label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.
 
 **Parameters:**
 
@@ -7509,7 +7509,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_create
 
-Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list.
+Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list.
 
 **Parameters:**
 
@@ -7537,7 +7537,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_label_get
 
-Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete.
+Get a single project label by ID or name. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, and archived. GitLab sends a label's usage counts only to project.label_list with with_counts. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete.
 
 **Parameters:**
 
@@ -7548,7 +7548,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_list
 
-List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list.
+List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list.
 
 **Parameters:**
 
@@ -7600,7 +7600,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_update
 
-Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.
+Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.
 
 **Parameters:**
 

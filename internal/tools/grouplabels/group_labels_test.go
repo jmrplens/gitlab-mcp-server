@@ -112,6 +112,54 @@ func TestList_Success(t *testing.T) {
 	if out.Labels[0].Priority != nil || out.Labels[0].IsProjectLabel != nil {
 		t.Errorf("(Priority, IsProjectLabel) = (%v, %v), want (nil, nil) on a group label", out.Labels[0].Priority, out.Labels[0].IsProjectLabel)
 	}
+	// A listing that did not ask with_counts is sent no counts, so a label of
+	// it publishes none, however the body it came from read (issue 1174).
+	if out.Labels[0].OpenIssuesCount != nil || out.Labels[0].ClosedIssuesCount != nil || out.Labels[0].OpenMergeRequestsCount != nil {
+		t.Errorf("counts = (%v, %v, %v), want none for a listing that did not ask", out.Labels[0].OpenIssuesCount, out.Labels[0].ClosedIssuesCount, out.Labels[0].OpenMergeRequestsCount)
+	}
+}
+
+// TestList_CountsAsked_PublishesTheCountsGitLabSent verifies a listing that
+// asks with_counts publishes each label's three counts as GitLab sent them,
+// each under its own key, and a group label read alone publishes none, since
+// GET /groups/:id/labels/:name declares no with_counts (issue 1174).
+func TestList_CountsAsked_PublishesTheCountsGitLabSent(t *testing.T) {
+	const counted = `{"id":1,"name":"bug","color":"#d9534f","open_issues_count":4,"closed_issues_count":9,"open_merge_requests_count":6}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == pathGroupLabels && r.URL.Query().Get("with_counts") == "true":
+			testutil.RespondJSON(w, http.StatusOK, `[`+counted+`]`)
+		case r.URL.Path == pathLabel1:
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug","color":"#d9534f"}`)
+		default:
+			t.Errorf("request = %s %s?%s, want a counted listing or the label", r.Method, r.URL.Path, r.URL.RawQuery)
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := List(context.Background(), client, ListInput{GroupID: "10", WithCounts: true})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Labels) != 1 {
+		t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
+	}
+	label := out.Labels[0]
+	if label.OpenIssuesCount == nil || *label.OpenIssuesCount != 4 || label.ClosedIssuesCount == nil || *label.ClosedIssuesCount != 9 || label.OpenMergeRequestsCount == nil || *label.OpenMergeRequestsCount != 6 {
+		t.Errorf("counts = (%v, %v, %v), want 4, 9 and 6", label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount)
+	}
+
+	single, err := Get(context.Background(), client, GetInput{GroupID: "10", LabelID: "1"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	raw, err := json.Marshal(single)
+	if err != nil {
+		t.Fatalf("json.Marshal(label) error = %v", err)
+	}
+	if strings.Contains(string(raw), "_count") {
+		t.Errorf("label JSON = %s, want no usage count", raw)
+	}
 }
 
 // TestList_WithSearch verifies the List_WithSearch handler.
@@ -901,9 +949,9 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		Color:                  "#d9534f",
 		Description:            "Bug report",
 		Subscribed:             true,
-		OpenIssuesCount:        5,
-		ClosedIssuesCount:      3,
-		OpenMergeRequestsCount: 1,
+		OpenIssuesCount:        new(int64(5)),
+		ClosedIssuesCount:      new(int64(3)),
+		OpenMergeRequestsCount: new(int64(1)),
 	})
 
 	want := "## Group Label: bug\n\n" +
@@ -978,8 +1026,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
-			{ID: 1, Name: "bug", Color: "#d9534f", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
-			{ID: 2, Name: "feature", Color: "#428bca", OpenIssuesCount: 3, ClosedIssuesCount: 0, OpenMergeRequestsCount: 2, Archived: true},
+			{ID: 1, Name: "bug", Color: "#d9534f", OpenIssuesCount: new(int64(5)), ClosedIssuesCount: new(int64(2)), OpenMergeRequestsCount: new(int64(1))},
+			{ID: 2, Name: "feature", Color: "#428bca", OpenIssuesCount: new(int64(3)), ClosedIssuesCount: new(int64(0)), OpenMergeRequestsCount: new(int64(2)), Archived: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}

@@ -387,7 +387,7 @@ func registerAuditProjectWorkflowPrompt(server promptAdder, client *gitlabclient
 	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_workflow",
 		Title: toolutil.TitleFromName("audit_project_workflow"),
-		Description: "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), " +
+		Description: "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), " +
 			"milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like " +
 			"labels without descriptions, milestones without due dates, or missing templates.",
 		Icons: toolutil.IconSecurity,
@@ -414,8 +414,13 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Workflow Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
+	// WithCounts, because the label table's Open Issues and Open MRs columns
+	// are figures GitLab sends only to a listing that asks for them: without
+	// it both columns read 0 for every label (issue 1174). The full audit's
+	// listing below asks for none, since its labels section renders no count.
 	labels, _, labelsErr := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
-		PerPage: maxListItems,
+		PerPage:    maxListItems,
+		WithCounts: new(true),
 	}, gl.WithContext(ctx))
 	if labelsErr != nil {
 		slog.WarnContext(ctx, "failed to fetch labels", "error", labelsErr)

@@ -1129,7 +1129,7 @@ func TestFormatIssue_ListGroupMarkdown(t *testing.T) {
 func TestFormatLabel_ListMarkdown(t *testing.T) {
 	t.Run("with labels", func(t *testing.T) {
 		out := labels.ListOutput{
-			Labels:     []labels.Output{{Name: "bug", Color: "#ff0000", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1}},
+			Labels:     []labels.Output{{Name: "bug", Color: "#ff0000", OpenIssuesCount: new(int64(5)), ClosedIssuesCount: new(int64(2)), OpenMergeRequestsCount: new(int64(1))}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := labels.FormatListMarkdownString(out)
