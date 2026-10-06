@@ -175,13 +175,14 @@ func mainRecord() *apilive.Document {
 }
 
 // fixtureSources hands a run the fixture program, its client-go answers, the
-// small record and schema, and no declarations, for the named actions.
+// small record and schema, and no declarations, for the named actions, the
+// two that only read classified as reads.
 func fixtureSources(t *testing.T, names ...string) sources {
 	t.Helper()
 	prog := loadMain(t)
 	actions := make([]actionrequests.Action, len(names))
 	for i, name := range names {
-		actions[i] = actionrequests.Action{ID: "fixture." + name, Name: name, Owner: "grantsmain"}
+		actions[i] = actionrequests.Action{ID: "fixture." + name, Name: name, Owner: "grantsmain", ReadOnly: name == "get" || name == "maybe"}
 	}
 	return sources{
 		catalog: func() ([]actionrequests.Action, error) { return actions, nil },
@@ -217,12 +218,14 @@ func TestRun_WritesTheArtifactsThenHoldsThemCurrent(t *testing.T) {
 		t.Fatalf("run = %v\n%s", err, progress.String())
 	}
 	if want := "1 actions derived, 1 rows at GitLab 19.4.1-ee: 0 denied to every fine-grained token, 0 served with parts always empty; " +
-		"1 operations, 1 groups, 0 GraphQL elements, 0 element signatures read from the pinned schema\n"; progress.String() != want {
+		"1 operations, 1 groups, 0 GraphQL elements, 0 element signatures read from the pinned schema\n" +
+		"classic scope: 0 api, 1 read_api, 0 other-credential, 0 no-request; read_api reaches 1 actions, " +
+		"and these depart from their read-only classification: none\n"; progress.String() != want {
 		t.Errorf("progress = %q, want %q", progress.String(), want)
 	}
 	for path, want := range map[string]string{
-		artifactPaths(root)[0]: `"route": "GET /projects/:id"`,
-		artifactPaths(root)[1]: `{ID: "fixture.get", Paths: [][]uint32{{0}}}`,
+		artifactPaths(root)[0]: `"classic": "read_api"`,
+		artifactPaths(root)[1]: `{ID: "fixture.get", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{0}}}`,
 		artifactPaths(root)[2]: "| `fixture.get` | Project: Read at project |",
 		artifactPaths(root)[3]: "| `fixture.get` | Project: Read en proyecto |",
 	} {
@@ -270,10 +273,11 @@ func TestRun_CheckDerivation_WritesNothing(t *testing.T) {
 	}
 }
 
-// TestRun_EachGate_RefusesTheArtifacts verifies the three gates, each on the
-// shape it exists for, and that a run with a finding writes and compares
-// nothing, in either mode: an artifact joined from an incomplete derivation
-// would answer wrongly for the actions the findings name.
+// TestRun_EachGate_RefusesTheArtifacts verifies the gates, each on the shape
+// it exists for (the fourth on an action that may send nothing and may read),
+// and that a run with a finding writes and compares nothing, in
+// either mode: an artifact joined from an incomplete derivation would answer
+// wrongly for the actions the findings name.
 func TestRun_EachGate_RefusesTheArtifacts(t *testing.T) {
 	in := fixtureSources(t, "get", "pair", "maybe", "mutate")
 	cases := []struct {
@@ -289,13 +293,14 @@ func TestRun_EachGate_RefusesTheArtifacts(t *testing.T) {
 			root := t.TempDir()
 			var progress bytes.Buffer
 			err := run(&progress, root, testCase.opts, in)
-			if err == nil || !strings.Contains(err.Error(), "the derivation has 3 finding(s)") {
-				t.Fatalf("run = %v, want three findings refused", err)
+			if err == nil || !strings.Contains(err.Error(), "the derivation has 4 finding(s)") {
+				t.Fatalf("run = %v, want four findings refused", err)
 			}
 			for _, want := range []string{
 				"gate 1: fixture.pair sends GET /projects/: (from grantsmain.get) and DELETE /projects/: (from grantsmain.Pair) on one path",
 				"gate 2: fixture.mutate is denied by thingCreate, which the live record does not hold as a graphql-mutation-undeclared",
 				"gate 3: fixture.maybe can run sending none of its requests (GET /projects/: (from grantsmain.get) is never mandatory)",
+				"gate 4: fixture.maybe may send GET /projects/:, which needs read_api, more than the no-request the action needs",
 			} {
 				if !strings.Contains(progress.String(), want) {
 					t.Errorf("progress holds no %q:\n%s", want, progress.String())
@@ -392,8 +397,12 @@ func TestDeriveAndJoin_NamesTheStageThatFailed(t *testing.T) {
 func TestLiveSources_ReadTheTreeWithThisCommandsDeclarations(t *testing.T) {
 	in := liveSources()
 	if len(in.requests) != len(requestDeclarations) || len(in.grants.Routes) != len(grantDeclarations.Routes) ||
-		len(in.grants.Unresolvable) != len(grantDeclarations.Unresolvable) {
+		len(in.grants.Unresolvable) != len(grantDeclarations.Unresolvable) || len(in.grants.Classic) != len(classicRoutes) ||
+		len(in.variations) != len(classicVariations) || len(in.disagreements) != len(annotationDisagreements) {
 		t.Error("the live sources do not carry this command's declarations")
+	}
+	if len(grantDeclarations.Classic) != 0 {
+		t.Error("the classic routes were written into the grant declarations rather than beside them")
 	}
 	record, recordErr := in.record(moduleRoot(t))
 	if recordErr != nil || record.Source.Version == "" {
@@ -482,5 +491,15 @@ func TestMain_ExitsWithWhatRunMainReturns(t *testing.T) {
 	main()
 	if code != 0 {
 		t.Errorf("main exited %d, want 0", code)
+	}
+}
+
+// TestGroupScopes_ReadsWhatEachActionsGroupDemands verifies an action of a
+// group the scope filter names carries that group's scopes, and an action of
+// any other group carries none, which the record leaves out.
+func TestGroupScopes_ReadsWhatEachActionsGroupDemands(t *testing.T) {
+	got := groupScopes([]actionrequests.Action{{ID: "admin.metadata_get", Group: "gitlab_admin"}, {ID: "issue.list", Group: "gitlab_issue"}})
+	if len(got) != 1 || !slices.Equal(got["admin.metadata_get"], []string{"admin_mode"}) {
+		t.Errorf("groupScopes = %v, want admin_mode for the admin action alone", got)
 	}
 }

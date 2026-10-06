@@ -109,6 +109,9 @@ type Operation struct {
 	// Paths are the path of every object position the document selects, for
 	// the record of what this server sends.
 	Paths []string
+	// APIOnly are the fields of [apiOnlyQueryFields] the document selects, as
+	// that table keys them, each once in the order first met.
+	APIOnly []string
 	// Fallbacks counts the positions whose signature the record does not
 	// carry and the pinned schema answered.
 	Fallbacks int
@@ -141,6 +144,7 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 	var positions []*position
 	skipped := 0
 	for _, field := range fields(op.SelectionSet) {
+		out.noteAPIOnly(field)
 		if !isObject(field) {
 			continue
 		}
@@ -179,18 +183,21 @@ func (a *analyzer) operation(name string, op *gqlast.OperationDefinition) Operat
 // groups beside any other field's, and the first field that declares nothing.
 // It reports whether the field opts out of the check, which leaves the
 // operation to GitLab only when every field does.
+//
+// The cases are a sequence of ifs rather than an untagged switch so the
+// mutation tool can measure each condition; it cannot see a case expression.
 func (a *analyzer) mutation(root *position, out *Operation) (skipped bool) {
 	mutation, known := a.authz.Mutations[root.field]
-	switch {
-	case !known || len(mutation.Granular) == 0:
+	if !known || len(mutation.Granular) == 0 {
 		if out.Undeclared == "" {
 			out.Undeclared = root.field
 		}
-	case anySkip(mutation.Granular):
-		return true
-	default:
-		out.Groups = dedupeRequirements(append(out.Groups, directiveGroups(mutation.Granular)...))
+		return false
 	}
+	if anySkip(mutation.Granular) {
+		return true
+	}
+	out.Groups = dedupeRequirements(append(out.Groups, directiveGroups(mutation.Granular)...))
 	return false
 }
 
@@ -217,13 +224,14 @@ func spineFrom(start *position) []*position {
 		var next *position
 		others := 0
 		for _, child := range at.children {
-			switch {
-			case framing[child.field]:
-			case next == nil:
-				next = child
-			default:
-				others++
+			if framing[child.field] {
+				continue
 			}
+			if next == nil {
+				next = child
+				continue
+			}
+			others++
 		}
 		for _, scalar := range at.scalars {
 			if !framing[scalar] {
@@ -267,6 +275,7 @@ func (a *analyzer) build(parent *position, field *gqlast.Field, out *Operation) 
 		out.Fallbacks++
 	}
 	for _, selected := range fields(field.SelectionSet) {
+		out.noteAPIOnly(selected)
 		if isObject(selected) {
 			at.children = append(at.children, a.build(at, selected, out))
 		} else {
@@ -274,6 +283,26 @@ func (a *analyzer) build(parent *position, field *gqlast.Field, out *Operation) 
 		}
 	}
 	return at
+}
+
+// noteAPIOnly records a selected field GitLab answers only to a token
+// carrying api, keyed by the type it is selected on, which is how
+// [apiOnlyQueryFields] names it.
+func (op *Operation) noteAPIOnly(field *gqlast.Field) {
+	key := field.ObjectDefinition.Name + "." + field.Name
+	if apiOnlyQueryFields[key] && !slices.Contains(op.APIOnly, key) {
+		op.APIOnly = append(op.APIOnly, key)
+	}
+}
+
+// classic is the classic scope GitLab requires for the operation: api for a
+// mutation, and for a query that selects a field only api is answered, and
+// read_api for any other query.
+func (op *Operation) classic() finegrained.ClassicScope {
+	if op.Mutation || len(op.APIOnly) > 0 {
+		return finegrained.ClassicAPI
+	}
+	return finegrained.ClassicReadAPI
 }
 
 // flatten lists a position and every position under it, depth first.

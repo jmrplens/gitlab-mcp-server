@@ -64,10 +64,17 @@ func TestCatalog_CarriesEachIdentityFieldFromItsOwnSource(t *testing.T) {
 		group string
 		want  Action
 	}{
-		{group: "a domain group", want: Action{ID: "issue.list", Name: "list", Owner: "issues", Tool: "gitlab_issue_list", ReadOnly: true}},
-		{group: "the maintenance group", want: Action{ID: "server.status", Name: "status", Owner: "health", Tool: "gitlab_server_status", ReadOnly: true}},
-		{group: "the GitLab.com build", want: Action{ID: "orbit.status", Name: "status", Owner: "orbit", Tool: "gitlab_orbit_status", ReadOnly: true}},
-		{group: "the standalone actions", want: Action{ID: "discover_project.resolve", Name: "resolve", Owner: "projectdiscovery", Tool: "gitlab_discover_project", ReadOnly: true}},
+		{group: "a domain group", want: Action{ID: "issue.list", Name: "list", Owner: "issues", Tool: "gitlab_issue_list", ReadOnly: true, Group: "gitlab_issue"}},
+		{group: "the maintenance group", want: Action{ID: "server.status", Name: "status", Owner: "health", Tool: "gitlab_server_status", ReadOnly: true, Group: "gitlab_server"}},
+		{group: "the GitLab.com build", want: Action{ID: "orbit.status", Name: "status", Owner: "orbit", Tool: "gitlab_orbit_status", ReadOnly: true, Group: "gitlab_orbit"}},
+		{
+			group: "the standalone actions",
+			want: Action{
+				ID: "discover_project.resolve", Name: "resolve", Owner: "projectdiscovery", Tool: "gitlab_discover_project", ReadOnly: true,
+				Group: "gitlab_discover_project",
+			},
+		},
+		{group: "an admin_mode group", want: Action{ID: "admin.metadata_get", Name: "metadata_get", Owner: "metadata", Tool: "gitlab_get_metadata", ReadOnly: true, Group: "gitlab_admin"}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.group, func(t *testing.T) {

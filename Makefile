@@ -2242,10 +2242,12 @@ check-action-grants:
 ## check-action-grants-derivation: derive and join every action and fail on any
 ## finding: an action not derived or declared, a route or element the record
 ## does not place, a permission no assignable expands to, a stale declaration
-## or directive, and the three gates (an unqualified second request on a path,
+## or directive, and the five gates (an unqualified second request on a path,
 ## a denial naming something the record does not hold, a way of running that
-## sends nothing). It compares none of the three artifacts, so it is never
-## deferred.
+## sends nothing, ways of one action needing different classic scopes, and a
+## read or write classification that departs from what read_api reaches with
+## no declaration saying why). It compares none of the three artifacts, so it
+## is never deferred.
 check-action-grants-derivation:
 	$(call action_grants,-check-derivation)
 

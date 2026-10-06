@@ -142,11 +142,12 @@ func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
 func (check *E2ECheck) judge(action actionrequests.RecordAction, seen *observation) bool {
 	lead := CountLead{Action: action.ID, Fewest: fewestRequests(action.Paths), Observed: seen.requests}
 	led := false
-	switch {
-	case len(action.Requests) == 0 && lead.Observed > 0:
+	// A sequence of ifs rather than an untagged switch, so the mutation tool
+	// can measure each condition; it cannot see a case expression.
+	if len(action.Requests) == 0 && lead.Observed > 0 {
 		check.SentWhereNoneDerived = append(check.SentWhereNoneDerived, lead)
 		led = true
-	case lead.Observed < lead.Fewest:
+	} else if lead.Observed < lead.Fewest {
 		check.FewerThanAnyPath = append(check.FewerThanAnyPath, lead)
 		led = true
 	}

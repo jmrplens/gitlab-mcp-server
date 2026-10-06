@@ -118,6 +118,78 @@ func TestCause_GraphQL_TellsTheGraphQLCausesApart(t *testing.T) {
 	}
 }
 
+// classicScopes are the known classic scopes, weakest first.
+var classicScopes = []ClassicScope{ClassicNoRequest, ClassicOtherCredential, ClassicReadAPI, ClassicAPI}
+
+// TestClassicScope_StringAndParse_RoundTripEveryKnownScope verifies each
+// classic scope is spelled as the committed records write it and read back
+// from that spelling, and that the zero value, a value past the last scope and
+// any other spelling read as unknown.
+func TestClassicScope_StringAndParse_RoundTripEveryKnownScope(t *testing.T) {
+	cases := []struct {
+		scope ClassicScope
+		want  string
+	}{
+		{ClassicNoRequest, "no-request"},
+		{ClassicOtherCredential, "other-credential"},
+		{ClassicReadAPI, "read_api"},
+		{ClassicAPI, "api"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			if got := tc.scope.String(); got != tc.want {
+				t.Errorf("String() = %q, want %q", got, tc.want)
+			}
+			if got, ok := ParseClassicScope(tc.want); !ok || got != tc.scope {
+				t.Errorf("ParseClassicScope(%q) = %v, %v; want %v, true", tc.want, got, ok, tc.scope)
+			}
+		})
+	}
+	unspelled := []struct {
+		name  string
+		scope ClassicScope
+	}{
+		{name: "zero", scope: ClassicUnknown},
+		{name: "past the last", scope: ClassicAPI + 1},
+	}
+	for _, tc := range unspelled {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.scope.String(); got != "unknown" {
+				t.Errorf("ClassicScope(%d).String() = %q, want unknown", tc.scope, got)
+			}
+		})
+	}
+	for _, name := range []string{"unknown", "API", "write_api", ""} {
+		t.Run("parse "+name, func(t *testing.T) {
+			if got, ok := ParseClassicScope(name); ok || got != ClassicUnknown {
+				t.Errorf("ParseClassicScope(%q) = %v, %v; want unknown, false", name, got, ok)
+			}
+		})
+	}
+}
+
+// TestClassicScope_ReachableWith_HoldsEveryPairToTheOrder verifies a known
+// scope is reached by a token at or above it and by none below, in every
+// pairing, and that an unknown need is reached by no token at all.
+func TestClassicScope_ReachableWith_HoldsEveryPairToTheOrder(t *testing.T) {
+	for i, need := range classicScopes {
+		for j, token := range classicScopes {
+			t.Run(need.String()+" with "+token.String(), func(t *testing.T) {
+				if got, want := need.ReachableWith(token), i <= j; got != want {
+					t.Errorf("%v.ReachableWith(%v) = %v, want %v", need, token, got, want)
+				}
+			})
+		}
+	}
+	for _, token := range append([]ClassicScope{ClassicUnknown}, classicScopes...) {
+		t.Run("unknown with "+token.String(), func(t *testing.T) {
+			if ClassicUnknown.ReachableWith(token) {
+				t.Errorf("ClassicUnknown.ReachableWith(%v) = true, want false", token)
+			}
+		})
+	}
+}
+
 // TestTable_Requirement_FindsARowByBinarySearch verifies every row is found by
 // its ID and that an ID before the first row, between two rows or after the
 // last finds none.

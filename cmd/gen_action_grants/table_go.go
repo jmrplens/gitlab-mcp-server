@@ -53,6 +53,13 @@ var (
 		finegrained.CauseRESTUndeclared:       "finegrained.CauseRESTUndeclared",
 		finegrained.CauseNotGranted:           "finegrained.CauseNotGranted",
 	}
+	classicConstants = map[finegrained.ClassicScope]string{
+		finegrained.ClassicUnknown:         "finegrained.ClassicUnknown",
+		finegrained.ClassicNoRequest:       "finegrained.ClassicNoRequest",
+		finegrained.ClassicOtherCredential: "finegrained.ClassicOtherCredential",
+		finegrained.ClassicReadAPI:         "finegrained.ClassicReadAPI",
+		finegrained.ClassicAPI:             "finegrained.ClassicAPI",
+	}
 	effectConstants = map[finegrained.Effect]string{
 		finegrained.EffectNull:              "finegrained.EffectNull",
 		finegrained.EffectNullOrEmpty:       "finegrained.EffectNullOrEmpty",
@@ -93,7 +100,7 @@ func renderTable(table *finegrained.Table) []byte {
 	b.WriteString("},\n")
 	b.WriteString("Operations: []finegrained.Operation{\n")
 	for _, op := range table.Operations {
-		fmt.Fprintf(&b, "{Name: %q", op.Name)
+		fmt.Fprintf(&b, "{Name: %q, Classic: %s", op.Name, constantOf(classicConstants, op.Classic))
 		writeIndices(&b, "Groups", op.Groups)
 		writeFlag(&b, "Skip", op.Skip)
 		writeIndices(&b, "Spine", op.Spine)
@@ -114,7 +121,7 @@ func renderTable(table *finegrained.Table) []byte {
 	b.WriteString("},\n")
 	b.WriteString("Actions: []finegrained.Requirement{\n")
 	for _, row := range table.Actions {
-		fmt.Fprintf(&b, "{ID: %q", row.ID)
+		fmt.Fprintf(&b, "{ID: %q, Classic: %s", row.ID, constantOf(classicConstants, row.Classic))
 		if len(row.Paths) > 0 {
 			paths := make([]string, len(row.Paths))
 			for i, path := range row.Paths {
@@ -150,13 +157,14 @@ func denial(d finegrained.Denial) string {
 		constantOf(causeConstants, d.Cause), d.Element, constantOf(effectConstants, d.Effect))
 }
 
-// constantOf spells a cause or an effect as the constant that names it. A
-// value finegrained declares and this table does not name is a defect of the
-// table above, which the repository's rule says to state at the leaf.
-func constantOf[V ~string](names map[V]string, value V) string {
+// constantOf spells a cause, an effect or a classic scope as the constant
+// that names it. A value finegrained declares and this table does not name is
+// a defect of the table above, which the repository's rule says to state at
+// the leaf.
+func constantOf[V comparable](names map[V]string, value V) string {
 	name, ok := names[value]
 	if !ok {
-		cmdutil.MustDo(fmt.Errorf("%T %q has no constant in the table writer", value, value))
+		cmdutil.MustDo(fmt.Errorf("%T %q has no constant in the table writer", value, fmt.Sprint(value)))
 	}
 	return name
 }

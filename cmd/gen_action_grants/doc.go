@@ -16,6 +16,13 @@
 // position by position against the authorization recorded for it, and a
 // declaration in grant_declarations.go answers what the record cannot place.
 //
+// The same requests decide what a classic personal access token or an OAuth
+// token needs: read_api for a REST GET or HEAD and a GraphQL query, api for
+// anything else, with the routes GitLab grants otherwise declared in
+// classic_declarations.go. Each action needs what the least demanding of its
+// ways needs, and gates 4 and 5 ([classicFindings]) hold that value to the
+// action's ways and to its read or write classification.
+//
 // It writes three artifacts: docs/development/action-requests.json, what
 // each action sends; internal/tools/actiongrants/table_gen.go, the table the
 // server reads, written as keyed literals of constants so that building it
@@ -24,8 +31,8 @@
 // languages: site/src/content/docs/reference/fine-grained-permissions.mdx
 // and its Spanish twin under site/src/content/docs/es/. -check compares the
 // three with what the tree derives now, both pages of the third included,
-// and -check-derivation fails on every finding and on the three gates of
-// [gateFindings] without writing anything.
+// and -check-derivation fails on every finding and on the five gates of
+// [gateFindings] and [classicFindings] without writing anything.
 //
 // The command loads and builds itself with table_gen.go replaced by
 // table_stub.go.txt through the go command's -overlay, which the Makefile

@@ -30,13 +30,14 @@ func writeRecord(t *testing.T, content string) string {
 func TestRenderRecord_ReadRecord_RoundTripsWhatTheWriterWrote(t *testing.T) {
 	actions := []RecordAction{
 		{
-			ID: "issue.get", Handlers: []string{"issues.Get"}, Paths: [][]int{{0}},
+			ID: "issue.get", Handlers: []string{"issues.Get"}, Paths: [][]int{{0}}, Classic: "read_api", GroupScopes: []string{"admin_mode"},
 			Requests: []RecordRequest{{
 				Kind: KindREST, Route: "GET /projects/:id/issues/:issue_iid", Class: ClassMandatory,
+				Classic: "read_api", ClassicDeclaration: "read-api-every-method",
 				Sites: []string{"issues.Get"}, SDKMethods: []string{"Issues.GetIssue"},
 			}},
 		},
-		{ID: "repository.archive", Handlers: []string{"repository.Archive"}, Declaration: "sends-nothing"},
+		{ID: "repository.archive", Handlers: []string{"repository.Archive"}, Declaration: "sends-nothing", Classic: "no-request"},
 	}
 	rendered := RenderRecord(actions)
 	if !strings.Contains(string(rendered), `"paths": []`) {

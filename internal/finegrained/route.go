@@ -1,7 +1,9 @@
 package finegrained
 
 import (
+	"cmp"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -125,6 +127,15 @@ func (t *Table) routes() map[string][]routeVariant {
 			index[method] = append(index[method], routeVariant{template: path, segments: segments, literals: literalCount(segments)})
 		}
 	}
+	for _, variants := range index {
+		// Most specific first and, of two as specific, the template that sorts
+		// first, so the first variant a request matches is the one it names
+		// and the answer does not depend on the order the table lists its
+		// operations in.
+		slices.SortStableFunc(variants, func(a, b routeVariant) int {
+			return cmp.Or(cmp.Compare(b.literals, a.literals), strings.Compare(a.template, b.template))
+		})
+	}
 	actual, _ := routeIndexes.LoadOrStore(t, index)
 	stored, _ := actual.(map[string][]routeVariant)
 	return stored
@@ -137,7 +148,7 @@ func expandOptional(path string) []string {
 	if open < 0 {
 		return []string{path}
 	}
-	depth, end := 0, -1
+	depth := 0
 	for i := open; i < len(path); i++ {
 		switch path[i] {
 		case '(':
@@ -146,17 +157,17 @@ func expandOptional(path string) []string {
 			depth--
 		}
 		if depth == 0 {
-			end = i
-			break
+			return expandGroup(path[:open], path[open+1:i], path[i+1:])
 		}
 	}
-	if end < 0 {
-		// An unbalanced group is a template this reader cannot expand; it is
-		// kept as written, and no request path carries a parenthesis to match
-		// it.
-		return []string{path}
-	}
-	before, inner, after := path[:open], path[open+1:end], path[end+1:]
+	// An unbalanced group is a template this reader cannot expand; it is kept
+	// as written, and no request path carries a parenthesis to match it.
+	return []string{path}
+}
+
+// expandGroup writes out a path whose first optional group holds inner, with
+// the group taken and left out, and every way the rest of the path can be.
+func expandGroup(before, inner, after string) []string {
 	var out []string
 	for _, rest := range expandOptional(after) {
 		for _, held := range expandOptional(inner) {
@@ -179,22 +190,16 @@ func literalCount(segments []string) int {
 	return count
 }
 
-// bestRoute is the most specific variant a request's segments match, the
-// template it belongs to, and whether any matched. Of two variants as
-// specific, the template that sorts first wins, so the answer does not depend
-// on the order the table lists its operations in.
+// bestRoute is the template of the first variant a request's segments match,
+// which the order [Table.routes] keeps them in makes the most specific, and
+// whether any matched.
 func bestRoute(variants []routeVariant, segments []string) (string, bool) {
-	best := -1
-	template := ""
 	for _, variant := range variants {
-		if !matchSegments(variant.segments, segments) {
-			continue
-		}
-		if variant.literals > best || variant.literals == best && variant.template < template {
-			best, template = variant.literals, variant.template
+		if matchSegments(variant.segments, segments) {
+			return variant.template, true
 		}
 	}
-	return template, best >= 0
+	return "", false
 }
 
 // matchSegments reports whether a request's segments are a path the

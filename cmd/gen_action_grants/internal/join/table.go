@@ -3,6 +3,7 @@ package join
 import (
 	"cmp"
 	"fmt"
+	"net/http"
 	"reflect"
 	"slices"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	gqlast "github.com/vektah/gqlparser/v2/ast"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_action_grants/internal/derive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 )
@@ -57,12 +59,43 @@ type BoundaryDeclaration struct {
 	Reason   string
 }
 
+// ClassicDeclaration says which classic scope a REST route needs where GitLab
+// departs from its general rule, read_api for a GET or a HEAD and api for
+// anything else: a route granting read_api, or every scope, for every method,
+// and one GitLab authenticates by another credential the caller passes and
+// never by the token. The record carries no route's scopes, so this is the
+// one place the join reads them from a person; it corroborates what it can,
+// holding a declared other credential to the route's skip reason.
+type ClassicDeclaration struct {
+	// Route is the record route, as the table names it ("POST /markdown").
+	Route    string
+	Category string
+	Reason   string
+	Scope    finegrained.ClassicScope
+}
+
 // Declarations are the answers the join takes from a person.
 type Declarations struct {
 	Routes       []RouteDeclaration
 	Effects      []EffectDeclaration
 	Unresolvable []BoundaryDeclaration
+	Classic      []ClassicDeclaration
 }
+
+// otherCredentialSkips are the skip reasons of the record that mean GitLab
+// authenticates a route by a credential the caller passes as a parameter,
+// a runner's token or a pipeline trigger's, and never reads the token this
+// server holds.
+var otherCredentialSkips = map[string]bool{"runner_token_auth": true, "trigger_token_auth": true}
+
+// apiOnlyQueryFields are the GraphQL fields GitLab answers only to a token
+// carrying api, a query selecting one needing api although it reads: each
+// is declared with scopes: [:api] (app/graphql/types/issue_type.rb:170-171
+// and app/graphql/types/work_item_type.rb:80-81 at v19.4.1-ee), and the
+// field's authorization answers any other token null there, with no error
+// (app/graphql/types/base_field.rb and GitlabSchema.unauthorized_field). Keyed
+// by the type the field is selected on and its name.
+var apiOnlyQueryFields = map[string]bool{"Issue.createNoteEmail": true, "WorkItem.createNoteEmail": true}
 
 // Request is one derived request, joined.
 type Request struct {
@@ -77,6 +110,21 @@ type Request struct {
 	Operation int
 	// Route is the declaration that placed a route the record lacks.
 	Route string
+	// Classic is the classic scope the request needs, and ClassicDeclaration
+	// the category of what departed from GitLab's general rule to decide it.
+	Classic            finegrained.ClassicScope
+	ClassicDeclaration string
+}
+
+// WayClassic is the classic scope one way of running an action needs: the
+// strongest any of its requests needs, and [finegrained.ClassicNoRequest]
+// for a way that sends nothing.
+func WayClassic(requests []Request, path []int) finegrained.ClassicScope {
+	way := finegrained.ClassicNoRequest
+	for _, index := range path {
+		way = max(way, requests[index].Classic)
+	}
+	return way
 }
 
 // Action is one action, joined.
@@ -121,6 +169,9 @@ type joiner struct {
 	// opDegraded are the positions an operation always answers empty, by
 	// index.
 	opDegraded map[int][]uint32
+	// opClassicDecl is the category of what decided an operation's classic
+	// scope where GitLab departs from its general rule, by index.
+	opClassicDecl map[int]string
 	// judged keeps each GraphQL document's judged operation, by key.
 	judged     map[string]*Operation
 	elements   []finegrained.Element
@@ -134,19 +185,20 @@ type joiner struct {
 // Join joins every derived action to the record.
 func Join(record *apilive.Document, schema *gqlast.Schema, actions []derive.Action, decl Declarations) Result {
 	j := &joiner{
-		record:     record,
-		routes:     apilive.NewRouteIndex(record.Routes),
-		analyzer:   &analyzer{authz: record.GraphQLAuthz, schema: schema},
-		decl:       decl,
-		usedDecl:   map[string]bool{},
-		groupIndex: map[string]uint32{},
-		opIndex:    map[string]int{},
-		opDenial:   map[int]*finegrained.Denial{},
-		opDegraded: map[int][]uint32{},
-		judged:     map[string]*Operation{},
-		elemIndex:  map[string]uint32{},
-		opGraphQL:  map[int]bool{},
-		collection: map[int]bool{},
+		record:        record,
+		routes:        apilive.NewRouteIndex(record.Routes),
+		analyzer:      &analyzer{authz: record.GraphQLAuthz, schema: schema},
+		decl:          decl,
+		usedDecl:      map[string]bool{},
+		groupIndex:    map[string]uint32{},
+		opIndex:       map[string]int{},
+		opDenial:      map[int]*finegrained.Denial{},
+		opDegraded:    map[int][]uint32{},
+		judged:        map[string]*Operation{},
+		opClassicDecl: map[int]string{},
+		elemIndex:     map[string]uint32{},
+		opGraphQL:     map[int]bool{},
+		collection:    map[int]bool{},
 	}
 	table := j.vocabulary()
 	var out []Action
@@ -291,6 +343,9 @@ func (j *joiner) action(act derive.Action) Action {
 		}
 		if request.Operation < 0 {
 			complete = false
+		} else {
+			request.Classic = j.ops[request.Operation].Classic
+			request.ClassicDeclaration = j.opClassicDecl[request.Operation]
 		}
 		out.Requests = append(out.Requests, request)
 	}
@@ -319,12 +374,64 @@ func (j *joiner) restRequest(request *Request, actionID string) {
 		return
 	}
 	groups, skip, denied := restRequirements(route)
-	op := finegrained.Operation{Name: request.Name, Groups: j.groupsOf(groups, request.Name), Skip: skip}
+	classic, decided := j.restClassic(route, request.Name)
+	op := finegrained.Operation{Name: request.Name, Classic: classic, Groups: j.groupsOf(groups, request.Name), Skip: skip}
 	index := j.addOp(key, op)
 	if denied != "" {
 		j.opDenial[index] = &finegrained.Denial{Cause: denied, Element: request.Name, Effect: finegrained.EffectRefused}
 	}
+	if decided != "" {
+		j.opClassicDecl[index] = decided
+	}
 	request.Operation = index
+}
+
+// restClassic reads which classic scope a route needs, and the category of
+// the declaration that decided it where GitLab departs from its general rule:
+// read_api for a GET or a HEAD (lib/api/api.rb:60-61 at v19.4.1-ee), api for
+// any other method. The record holds what it can of a declaration to account:
+// a route whose skip reason says GitLab authenticates it by another credential
+// is declared so, and a declaration says so of no other route. A declaration
+// that agrees with the rule answers nothing.
+func (j *joiner) restClassic(route *apilive.Route, name string) (scope finegrained.ClassicScope, declaration string) {
+	rule := finegrained.ClassicAPI
+	if readMethod(route.Method) {
+		rule = finegrained.ClassicReadAPI
+	}
+	skip := ""
+	if route.Authorization != nil {
+		skip = route.Authorization.Skip
+	}
+	declared := j.classicDeclared(name)
+	if declared == nil {
+		if rule == finegrained.ClassicAPI && otherCredentialSkips[skip] {
+			j.findings = append(j.findings, fmt.Sprintf("%s skips the fine-grained check as %s, so GitLab authenticates it by another credential; "+
+				"declare the classic scope it needs", name, skip))
+		}
+		return rule, ""
+	}
+	if declared.Scope == rule {
+		j.findings = append(j.findings, fmt.Sprintf("the %s classic declaration of %s answers nothing: GitLab's rule already gives a %s %s",
+			declared.Category, name, route.Method, rule))
+		return rule, ""
+	}
+	if (declared.Scope == finegrained.ClassicOtherCredential) != otherCredentialSkips[skip] {
+		j.findings = append(j.findings, fmt.Sprintf("the %s classic declaration of %s says %s, and the live record's skip reason for it is %q",
+			declared.Category, name, declared.Scope, skip))
+	}
+	return declared.Scope, declared.Category
+}
+
+// classicDeclared finds the classic declaration of a record route, noting
+// that it answered something.
+func (j *joiner) classicDeclared(name string) *ClassicDeclaration {
+	for i := range j.decl.Classic {
+		if j.decl.Classic[i].Route == name {
+			j.usedDecl["classic "+name] = true
+			return &j.decl.Classic[i]
+		}
+	}
+	return nil
 }
 
 // declaredRoute finds the record route a declaration says a derived route
@@ -338,12 +445,34 @@ func (j *joiner) declaredRoute(derived string) (*apilive.Route, bool) {
 		for i := range j.record.Routes {
 			if apilive.RouteName(&j.record.Routes[i]) == declaration.Use {
 				j.sameAuthorization(derived, &j.record.Routes[i])
+				j.sameClassicRule(derived, declaration, &j.record.Routes[i])
 				return &j.record.Routes[i], true
 			}
 		}
 		j.findings = append(j.findings, fmt.Sprintf("the %s declaration of %s names %s, which is no route of the live record", declaration.Category, derived, declaration.Use))
 	}
 	return nil, false
+}
+
+// readMethod reports whether GitLab's general rule grants read_api to a
+// request sent with method: a GET or a HEAD (lib/api/api.rb:60-61 at
+// v19.4.1-ee), whose rule keys on the request's own method.
+func readMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+// sameClassicRule holds a declared route to the side of GitLab's scope rule
+// its own method falls on. The classic scope is read from the record route a
+// request is joined to and shared by every request joined there, and R-GRANT
+// reads it back from that same route, so a declaration naming a route on the
+// other side of the read_api line would hand the request the other method's
+// scope with nothing left to notice.
+func (j *joiner) sameClassicRule(derived string, declaration RouteDeclaration, named *apilive.Route) {
+	method, _, _ := strings.Cut(derived, " ")
+	if readMethod(method) != readMethod(named.Method) {
+		j.findings = append(j.findings, fmt.Sprintf("the %s declaration of %s names %s, which GitLab's scope rule reads on the other side of read_api from a %s",
+			declaration.Category, derived, declaration.Use, method))
+	}
 }
 
 // sameAuthorization holds a declared route to what it stands for: every
@@ -467,36 +596,50 @@ func (j *joiner) rulesFor(actionID string, op *Operation) actionRules {
 // refusal comes before anything its payload holds, since nothing is written
 // when it is refused.
 func (j *joiner) graphQLOperation(key string, judged *Operation, rules actionRules) int {
-	op := finegrained.Operation{Name: judged.Name, Groups: j.groupsOf(judged.Groups, judged.Name), Skip: judged.Skip}
+	op := finegrained.Operation{Name: judged.Name, Classic: judged.classic(), Groups: j.groupsOf(judged.Groups, judged.Name), Skip: judged.Skip}
 	index := j.addOp(key, op)
+	if !judged.Mutation && len(judged.APIOnly) > 0 {
+		j.opClassicDecl[index] = actionrequests.ClassicAPIOnlyField + " " + strings.Join(judged.APIOnly, ", ")
+	}
 	j.opGraphQL[index] = true
 	j.collection[index] = judged.Collection
-	switch {
-	case judged.Undeclared != "":
+	// The cases here and below are sequences of ifs rather than untagged
+	// switches so the mutation tool can measure each condition; it cannot see
+	// a case expression.
+	if judged.Undeclared != "" {
 		j.opDenial[index] = &finegrained.Denial{Cause: finegrained.CauseMutationUndeclared, Element: judged.Undeclared, Effect: finegrained.EffectRefused}
-	case rules.mutationUnresolvable != "":
+	} else if rules.mutationUnresolvable != "" {
 		j.opDenial[index] = &finegrained.Denial{Cause: finegrained.CauseBoundaryUnresolvable, Element: rules.mutationUnresolvable, Effect: finegrained.EffectRefused}
 	}
 	for i, element := range judged.Elements {
-		if element.Skip {
-			continue
-		}
-		met := rules.elements[i]
-		denied := element.Undeclared || met.unresolvable
-		switch {
-		case denied && met.fatal:
-			if j.opDenial[index] == nil {
-				j.opDenial[index] = positionDenial(judged.Mutation, element, met)
-			}
-		case denied:
-			j.opDegraded[index] = append(j.opDegraded[index], j.element(element))
-		case met.fatal:
-			j.ops[index].Spine = append(j.ops[index].Spine, j.element(element))
-		default:
-			j.ops[index].OffSpine = append(j.ops[index].OffSpine, j.element(element))
+		if !element.Skip {
+			j.placeElement(index, judged.Mutation, element, rules.elements[i])
 		}
 	}
 	return index
+}
+
+// placeElement files one judged position of an operation: a denial no grant
+// passes when it is fatal (the first of them, in the order the document is
+// answered), a part served empty when it is denied and not fatal, and
+// otherwise a requirement on the spine or off it.
+func (j *joiner) placeElement(index int, mutation bool, element Element, met positionVerdict) {
+	denied := element.Undeclared || met.unresolvable
+	if denied && met.fatal {
+		if j.opDenial[index] == nil {
+			j.opDenial[index] = positionDenial(mutation, element, met)
+		}
+		return
+	}
+	if denied {
+		j.opDegraded[index] = append(j.opDegraded[index], j.element(element))
+		return
+	}
+	if met.fatal {
+		j.ops[index].Spine = append(j.ops[index].Spine, j.element(element))
+		return
+	}
+	j.ops[index].OffSpine = append(j.ops[index].OffSpine, j.element(element))
 }
 
 // positionDenial is why no grant passes an operation whose position, on the
@@ -553,6 +696,16 @@ func (j *joiner) requirement(id string, requests []Request, paths [][]int) *fine
 	row := &finegrained.Requirement{ID: id}
 	degraded := map[uint32]bool{}
 	var deniedWays []finegrained.Denial
+	// A classic token is judged on every way the action can run, the ways no
+	// fine-grained token passes included: GitLab asks a classic token for its
+	// scopes and never for a grant.
+	var ways []finegrained.ClassicScope
+	for _, path := range paths {
+		ways = append(ways, WayClassic(requests, path))
+	}
+	if len(ways) > 0 {
+		row.Classic = slices.Min(ways)
+	}
 	for _, path := range paths {
 		var ops []uint32
 		var denial *finegrained.Denial
@@ -637,6 +790,11 @@ func (j *joiner) staleDeclarations() {
 	for _, declaration := range j.decl.Unresolvable {
 		if !j.usedDecl["boundary "+declaration.Action+" "+declaration.Path] {
 			j.findings = append(j.findings, fmt.Sprintf("the %s declaration of %s at %s answers nothing: no position or mutation of the action is there", declaration.Category, declaration.Action, declaration.Path))
+		}
+	}
+	for _, declaration := range j.decl.Classic {
+		if !j.usedDecl["classic "+declaration.Route] {
+			j.findings = append(j.findings, fmt.Sprintf("the %s classic declaration of %s answers nothing: no action sends the route", declaration.Category, declaration.Route))
 		}
 	}
 }
