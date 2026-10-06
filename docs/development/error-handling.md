@@ -476,15 +476,15 @@ hinted path the canonical action ID the hint names.
 
 ## Hint coverage
 
-Counted on 2026-10-05 over the non-test Go files under `internal/`, with
+Counted on 2026-10-06 over the non-test Go files under `internal/`, with
 `internal/toolutil` itself excluded:
 
 | Call                    | Sites                               |
 | ----------------------- | ----------------------------------- |
 | `WrapErrWithStatusHint` | 869                                 |
-| `WrapErrWithHint`       | 378                                 |
+| `WrapErrWithHint`       | 379                                 |
 | `WrapErrWithMessage`    | 365                                 |
-| `WrapErr`               | 257                                 |
+| `WrapErr`               | 262                                 |
 | `NotFoundResult`        | 22, one shared formatter per domain |
 
 164 of the 180 packages under `internal/tools` carry at least one hint, in 193
