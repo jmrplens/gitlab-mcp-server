@@ -6,10 +6,10 @@
   },
   "dynamic": {
     "visible_tools": 2,
-    "tool_schema_tokens": 1554,
+    "tool_schema_tokens": 1624,
     "total_tokens": {
-      "full": 10389,
-      "minimal": 1724
+      "full": 10459,
+      "minimal": 1794
     },
     "reachable_actions": {
       "free": 872,
@@ -21,17 +21,17 @@
     "free": {
       "visible_tools": 868,
       "tool_schema_tokens": 550743,
-      "reduction_factor_vs_dynamic": 354
+      "reduction_factor_vs_dynamic": 339
     },
     "premium": {
       "visible_tools": 1022,
       "tool_schema_tokens": 663219,
-      "reduction_factor_vs_dynamic": 427
+      "reduction_factor_vs_dynamic": 408
     },
     "ultimate": {
       "visible_tools": 1088,
       "tool_schema_tokens": 703374,
-      "reduction_factor_vs_dynamic": 453
+      "reduction_factor_vs_dynamic": 433
     }
   }
 }
