@@ -2748,6 +2748,7 @@ func refusalLogs(t *testing.T, buf *bytes.Buffer) []refusalLog {
 // observes, and a refusal filed under the wrong one hides the pattern the
 // record exists to show, such as a fleet of clients all forgetting confirm.
 func TestDynamicRefusals_LogTheCallAndItsReason(t *testing.T) {
+	withoutYOLOMode(t)
 	registry := NewRegistry(testRoutes(t))
 	execute := func(input ExecuteInput) func(context.Context) (*mcp.CallToolResult, error) {
 		return func(ctx context.Context) (*mcp.CallToolResult, error) {
@@ -2846,6 +2847,7 @@ func (r *dispatchRecorder) IdentifyDispatch(tool, action string) (mcpotel.Identi
 // the alias, so without this record the span of a refused aliased call would
 // carry no action.
 func TestExecute_ReportsTheResolvedRouteToTheSpan(t *testing.T) {
+	withoutYOLOMode(t)
 	registry := NewRegistry(testRoutes(t))
 	cases := []struct {
 		name       string
@@ -3113,6 +3115,7 @@ func TestDescribe_CurrentAmbiguousAliasBehaviorRemainsStable(t *testing.T) {
 // action sent without confirm is refused with a tool error naming
 // confirm=true, and that nothing is dispatched.
 func TestExecute_DestructiveActionRequiresConfirm(t *testing.T) {
+	withoutYOLOMode(t)
 	registry := NewRegistry(testRoutes(t))
 
 	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.delete", Params: map[string]any{"project_id": 123}})
@@ -3156,6 +3159,7 @@ func TestExecute_DestructiveActionExecutesWithConfirm(t *testing.T) {
 // confirm guidance when confirm is absent and dispatched, with confirm=true
 // reaching the route, when it is present.
 func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
+	withoutYOLOMode(t)
 	registry := NewRegistry(testRoutes(t))
 
 	blocked, blockedOutput, blockedErr := registry.Execute(t.Context(), nil, ExecuteInput{
@@ -3192,6 +3196,281 @@ func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
 	}
 	if data["confirm"] != true {
 		t.Fatalf("Execute(allowed) confirm = %v, want true", data["confirm"])
+	}
+}
+
+// withoutYOLOMode clears both confirmation switches for the rest of the test.
+//
+// The dynamic gate reads them (issue 1166), so a developer or an agent runtime
+// that exports GITLAB_MCP_YOLO_MODE or AUTOPILOT would otherwise turn every
+// assertion about the refusal into one about the switch. An empty value is
+// what IsYOLOMode reads as unset, so neither decides.
+func withoutYOLOMode(t *testing.T) {
+	t.Helper()
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+}
+
+// TestExecute_DestructiveAction_YOLOSettingsDecideTheGate holds the gate of
+// gitlab_execute_action to the confirmation order the meta and individual
+// surfaces follow (issue 1166): GITLAB_MCP_YOLO_MODE truthy, or AUTOPILOT
+// truthy while it is unset, dispatches a destructive action sent without
+// confirm; a set GITLAB_MCP_YOLO_MODE decides alone, so false keeps the
+// refusal over an inherited AUTOPILOT; and anything else is refused as
+// before, with the refusal recorded as needs_confirmation.
+//
+// A dispatched call is told apart from a refused one three ways: the result,
+// the route's own output reaching the caller with no confirm the gate added,
+// and the refusal record, of which a dispatched call writes none.
+func TestExecute_DestructiveAction_YOLOSettingsDecideTheGate(t *testing.T) {
+	cases := []struct {
+		name       string
+		yolo       string
+		autopilot  string
+		dispatched bool
+	}{
+		{name: "neither set refuses", dispatched: false},
+		{name: "GITLAB_MCP_YOLO_MODE=true dispatches", yolo: "true", dispatched: true},
+		{name: "GITLAB_MCP_YOLO_MODE=YES dispatches", yolo: "YES", dispatched: true},
+		{name: "GITLAB_MCP_YOLO_MODE=1 dispatches", yolo: "1", dispatched: true},
+		{name: "AUTOPILOT=1 with GITLAB_MCP_YOLO_MODE unset dispatches", autopilot: "1", dispatched: true},
+		{name: "AUTOPILOT=true with GITLAB_MCP_YOLO_MODE unset dispatches", autopilot: "true", dispatched: true},
+		{name: "GITLAB_MCP_YOLO_MODE=false keeps the refusal over AUTOPILOT=true", yolo: "false", autopilot: "true", dispatched: false},
+		{name: "GITLAB_MCP_YOLO_MODE=no refuses", yolo: "no", dispatched: false},
+		{name: "AUTOPILOT=0 refuses", autopilot: "0", dispatched: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_YOLO_MODE", tc.yolo)
+			t.Setenv("AUTOPILOT", tc.autopilot)
+			logs := captureDebugSlog(t)
+			registry := NewRegistry(testRoutes(t))
+
+			result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{
+				Action: "project.delete",
+				Params: map[string]any{"project_id": 123},
+			})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if result == nil {
+				t.Fatal("Execute() result = nil")
+			}
+			if tc.dispatched {
+				assertDestructiveDispatched(t, result, output, refusalLogs(t, logs))
+				return
+			}
+			assertDestructiveRefused(t, result, output, refusalLogs(t, logs))
+		})
+	}
+}
+
+// assertDestructiveRefused holds a project.delete call to the refusal the
+// dynamic gate answers without a confirmation: an error naming confirm=true,
+// no output from the route, and exactly one needs_confirmation record.
+func assertDestructiveRefused(t *testing.T, result *mcp.CallToolResult, output any, refusals []refusalLog) {
+	t.Helper()
+	if !result.IsError || !strings.Contains(textContent(result), "confirm=true") {
+		t.Errorf("Execute() = %+v, want the refusal naming confirm=true", result)
+	}
+	if output != nil {
+		t.Errorf("Execute() output = %+v, want nil: the route must not run", output)
+	}
+	want := []refusalLog{{Tool: ExecuteActionToolName + "/project.delete", Reason: toolutil.RefusalNeedsConfirmation}}
+	if !slices.Equal(refusals, want) {
+		t.Errorf("refusal records = %+v, want exactly %+v", refusals, want)
+	}
+}
+
+// assertDestructiveDispatched holds a project.delete call to the answer of a
+// dispatched one: the route's own output, with no confirm the gate added, and
+// no refusal record.
+func assertDestructiveDispatched(t *testing.T, result *mcp.CallToolResult, output any, refusals []refusalLog) {
+	t.Helper()
+	if result.IsError {
+		t.Fatalf("Execute() = %q, want the action dispatched", textContent(result))
+	}
+	data, ok := output.(map[string]any)
+	if !ok {
+		t.Fatalf("Execute() output = %T, want the route's map", output)
+	}
+	if data["deleted"] != true {
+		t.Errorf("deleted = %v, want true: the route did not run", data["deleted"])
+	}
+	if confirm := data["confirm"]; confirm != nil {
+		t.Errorf("confirm = %v reached the route, want none: the switch passes the gate, it does not write a confirmation", confirm)
+	}
+	if len(refusals) != 0 {
+		t.Errorf("refusal records = %+v, want none for a dispatched call", refusals)
+	}
+}
+
+// TestExecute_DestructiveAction_YOLOModeStaysBehindTheOtherGuards verifies that
+// the switch issue 1166 lets the gate read passes the confirmation and nothing
+// else: a call it would dispatch is still refused for a missing required
+// parameter, and safe mode, which rewrites the catalog before any call
+// arrives, still answers with its preview and never reaches the route.
+func TestExecute_DestructiveAction_YOLOModeStaysBehindTheOtherGuards(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
+
+	t.Run("a missing required param is still refused", func(t *testing.T) {
+		logs := captureDebugSlog(t)
+		result, output, err := NewRegistry(testRoutes(t)).Execute(t.Context(), nil, ExecuteInput{
+			Action: "project.delete",
+			Params: map[string]any{},
+		})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError || !strings.Contains(textContent(result), "Missing required params: project_id") {
+			t.Errorf("Execute() = %+v, want the invalid-params refusal", result)
+		}
+		if output != nil {
+			t.Errorf("Execute() output = %+v, want nil", output)
+		}
+		want := []refusalLog{{Tool: ExecuteActionToolName + "/project.delete", Reason: toolutil.RefusalInvalidParams}}
+		if got := refusalLogs(t, logs); !slices.Equal(got, want) {
+			t.Errorf("refusal records = %+v, want exactly %+v", got, want)
+		}
+	})
+
+	t.Run("safe mode still previews", func(t *testing.T) {
+		registry := NewRegistryFromCatalog(actioncatalog.FromActionMaps(testRoutes(t)).WithSafeModePreviews())
+		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{
+			Action: "project.delete",
+			Params: map[string]any{"project_id": 123},
+		})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || result.IsError {
+			t.Fatalf("Execute() = %+v, want the safe-mode preview", result)
+		}
+		preview, ok := output.(toolutil.SafeModePreview)
+		if !ok {
+			t.Fatalf("Execute() output = %T (%+v), want toolutil.SafeModePreview: the route ran", output, output)
+		}
+		if preview.Status != "blocked" || preview.Tool != "project.delete" {
+			t.Errorf("preview = %+v, want project.delete blocked", preview)
+		}
+	})
+}
+
+// TestFind_DestructiveSchema_ConfirmationFollowsTheYOLOSwitch holds what
+// gitlab_find_action tells a model about confirming a destructive action to
+// what execute will do with it (issue 1166). With the switch off, the
+// x_confirmation marker of the input schema sends the model to the user for
+// approval before it sets confirm. With GITLAB_MCP_YOLO_MODE on, or AUTOPILOT
+// while it is unset, execute runs the action without confirm, and that same
+// sentence would stall the unattended run the switch exists for, so the marker
+// says the confirmation is skipped instead. Where confirm goes and the example
+// call carrying confirm=true stay as they are, since a confirm sent anyway is
+// still accepted.
+func TestFind_DestructiveSchema_ConfirmationFollowsTheYOLOSwitch(t *testing.T) {
+	cases := []struct {
+		name      string
+		yolo      string
+		autopilot string
+		want      string
+		deny      string
+	}{
+		{name: "neither set asks for approval", want: "after explicit user approval", deny: "skips"},
+		{name: "GITLAB_MCP_YOLO_MODE=true says the confirmation is skipped", yolo: "true", want: "skips the confirmation", deny: "approval"},
+		{name: "AUTOPILOT=1 with GITLAB_MCP_YOLO_MODE unset says it is skipped", autopilot: "1", want: "skips the confirmation", deny: "approval"},
+		{name: "GITLAB_MCP_YOLO_MODE=false over AUTOPILOT=true asks for approval", yolo: "false", autopilot: "true", want: "after explicit user approval", deny: "skips"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_YOLO_MODE", tc.yolo)
+			t.Setenv("AUTOPILOT", tc.autopilot)
+
+			_, output, err := NewRegistry(testRoutes(t)).Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 1})
+			if err != nil {
+				t.Fatalf("Find() error = %v", err)
+			}
+			if output.Count != 1 || output.Results[0].ID != "project.delete" || !output.Results[0].Destructive {
+				t.Fatalf("Find() output = %+v, want project.delete marked destructive", output)
+			}
+			result := output.Results[0]
+			confirmation, ok := result.InputSchema["x_confirmation"].(map[string]any)
+			if !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
+				t.Fatalf("x_confirmation = %+v, want the top-level confirm location", result.InputSchema["x_confirmation"])
+			}
+			description, _ := confirmation["description"].(string)
+			if !strings.Contains(description, tc.want) || strings.Contains(description, tc.deny) {
+				t.Errorf("x_confirmation description = %q, want %q and no %q", description, tc.want, tc.deny)
+			}
+			if result.Example.Arguments["confirm"] != true {
+				t.Errorf("example = %+v, want confirm=true kept: execute still accepts it", result.Example)
+			}
+		})
+	}
+}
+
+// TestSearch_DestructiveNextStep_FollowsTheYOLOSwitch is the search twin of
+// the find test above: the next step the registry computes for a destructive
+// top result reads the switch where execute does, so it sends the model to the
+// user for approval only while execute would wait for one.
+func TestSearch_DestructiveNextStep_FollowsTheYOLOSwitch(t *testing.T) {
+	cases := []struct {
+		name string
+		yolo string
+		want string
+		deny string
+	}{
+		{name: "switch off asks for approval", want: "only after explicit user approval", deny: "skips"},
+		{name: "switch on says the confirmation is skipped", yolo: "true", want: "skips its confirmation", deny: "approval"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_YOLO_MODE", tc.yolo)
+			t.Setenv("AUTOPILOT", "")
+
+			_, output, err := NewRegistry(testRoutes(t)).Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 1})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if output.Count != 1 || output.Results[0].ID != "project.delete" {
+				t.Fatalf("Search() output = %+v, want project.delete", output)
+			}
+			if !strings.Contains(output.NextStep, tc.want) || strings.Contains(output.NextStep, tc.deny) {
+				t.Errorf("NextStep = %q, want %q and no %q", output.NextStep, tc.want, tc.deny)
+			}
+		})
+	}
+}
+
+// TestDynamicInputSchema_SharedRoute_DerivesOncePerSwitchState verifies that
+// the process-wide derivation of a shared action's find schema is keyed on the
+// confirmation switch too. Without that, the schema derived while the switch
+// was off would be served once it is on, and its marker would keep asking for
+// an approval execute no longer waits for. Each state still derives once.
+func TestDynamicInputSchema_SharedRoute_DerivesOncePerSwitchState(t *testing.T) {
+	schema := map[string]any{"type": "object", "properties": map[string]any{"project_id": map[string]any{"type": "integer"}}}
+	toolutil.ShareSchema(schema)
+	entry := actionEntry{ID: "project.delete", Tool: "gitlab_project", Action: "delete", Destructive: true, Route: toolutil.ActionRoute{InputSchema: schema}}
+	confirmationText := func(derived map[string]any) string {
+		confirmation, _ := derived["x_confirmation"].(map[string]any)
+		text, _ := confirmation["description"].(string)
+		return text
+	}
+
+	withoutYOLOMode(t)
+	asked := dynamicInputSchema(entry)
+	if again := dynamicInputSchema(entry); reflect.ValueOf(again).UnsafePointer() != reflect.ValueOf(asked).UnsafePointer() {
+		t.Fatal("dynamicInputSchema(shared route) derived twice with the switch off, want once")
+	}
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
+	skipped := dynamicInputSchema(entry)
+	if again := dynamicInputSchema(entry); reflect.ValueOf(again).UnsafePointer() != reflect.ValueOf(skipped).UnsafePointer() {
+		t.Fatal("dynamicInputSchema(shared route) derived twice with the switch on, want once")
+	}
+
+	if got := confirmationText(asked); !strings.Contains(got, "after explicit user approval") {
+		t.Errorf("x_confirmation with the switch off = %q, want the approval it asks for", got)
+	}
+	if got := confirmationText(skipped); !strings.Contains(got, "skips the confirmation") || strings.Contains(got, "approval") {
+		t.Errorf("x_confirmation with the switch on = %q, want the skipped confirmation and no approval", got)
 	}
 }
 
@@ -9280,10 +9559,17 @@ func TestCompactParameterGuidance_OrdersByConfusionCount(t *testing.T) {
 // low while being the only candidate, so either signal alone must produce the
 // confirmation advice: a model that executes an ambiguous top hit without
 // asking has acted on an action the user never named.
+//
+// The destructive sentence follows the confirmation switch (issue 1166): with
+// GITLAB_MCP_YOLO_MODE on, execute runs the action without confirm, so a next
+// step that still sent the model to wait for a user's approval would stall the
+// unattended run the switch exists for. The switch changes that sentence and
+// nothing else, which the non-destructive row holds.
 func TestSearchNextStep_AdviceForEachTopResultShape(t *testing.T) {
 	cases := []struct {
 		name    string
 		results []SearchResult
+		skipped bool
 		want    string
 		deny    string
 	}{
@@ -9310,14 +9596,28 @@ func TestSearchNextStep_AdviceForEachTopResultShape(t *testing.T) {
 		{
 			name:    "destructive high confidence names the params and the confirm flag",
 			results: []SearchResult{{ID: "project.delete", Destructive: true, RequiredParams: []string{"project_id"}}},
-			want:    "confirm:true",
+			want:    "confirm:true only after explicit user approval",
 			deny:    "needs confirmation",
+		},
+		{
+			name:    "destructive with the confirmation skipped asks for no approval",
+			results: []SearchResult{{ID: "project.delete", Destructive: true, RequiredParams: []string{"project_id"}}},
+			skipped: true,
+			want:    "skips its confirmation",
+			deny:    "approval",
+		},
+		{
+			name:    "a skipped confirmation adds nothing to an action that is not destructive",
+			results: []SearchResult{{ID: "project.get", RequiredParams: []string{"project_id"}}},
+			skipped: true,
+			want:    "is high confidence",
+			deny:    "confirm",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := searchNextStep(tc.results)
+			got := searchNextStep(tc.results, tc.skipped)
 			if tc.want == "" {
 				if got != "" {
 					t.Fatalf("searchNextStep() = %q, want empty", got)

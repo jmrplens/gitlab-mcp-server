@@ -812,6 +812,51 @@ func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
 	}
 }
 
+// TestDynamicConfirmationDescription_TheSwitchChoosesWhatTheMarkerSays pins
+// the two texts of the x_confirmation marker the dynamic surface serves in
+// gitlab_find_action's schemas and in gitlab://tools/{id} alike (issue 1166).
+//
+// With the switch off the model is sent to the user before it confirms; with
+// it on the marker says the confirmation is skipped and that a confirm sent
+// anyway is still accepted, since sending the model to a user nobody is
+// watching would stall the unattended run the switch exists for. Each text
+// is held to what it must say and to what only the other may say, so a swap
+// of the two branches fails here as well as a lost phrase.
+func TestDynamicConfirmationDescription_TheSwitchChoosesWhatTheMarkerSays(t *testing.T) {
+	tests := []struct {
+		name    string
+		skipped bool
+		want    []string
+		deny    string
+	}{
+		{
+			name:    "switch off asks for approval first",
+			skipped: false,
+			want:    []string{"Set top-level confirm=true on gitlab_execute_action after explicit user approval", "do not put confirm inside params"},
+			deny:    "skips",
+		},
+		{
+			name:    "switch on says the confirmation is skipped",
+			skipped: true,
+			want:    []string{"skips the confirmation of destructive actions", "gitlab_execute_action runs this one without confirm", "still accepts a top-level confirm=true", "do not put confirm inside params"},
+			deny:    "approval",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DynamicConfirmationDescription(tt.skipped)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("DynamicConfirmationDescription(%v) = %q, want it to contain %q", tt.skipped, got, want)
+				}
+			}
+			if strings.Contains(got, tt.deny) {
+				t.Errorf("DynamicConfirmationDescription(%v) = %q, must not contain %q", tt.skipped, got, tt.deny)
+			}
+		})
+	}
+}
+
 // TestConfirmAction_ADismissedDialogIsNotARefusal covers the third outcome of a
 // confirmation, distinct from both an accept and a decline.
 //

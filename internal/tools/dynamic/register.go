@@ -702,7 +702,7 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 		results = append(results, result)
 	}
 
-	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results)}
+	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results, toolutil.IsYOLOMode())}
 	if len(results) == 0 {
 		output.Suggestions = r.suggestSearchTokens(query, noMatchSuggestionLimit)
 	}
@@ -865,7 +865,17 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if input.Confirm {
 		params["confirm"] = true
 	}
-	if entry.Destructive && !hasExplicitConfirm(params) {
+	// GITLAB_MCP_YOLO_MODE, or AUTOPILOT while it is unset, passes the gate
+	// the way [toolutil.ConfirmDestructiveAction] lets the same action
+	// through on the meta and individual surfaces, so the switch an unattended
+	// run sets means the same thing on every surface (issue 1166). It is the
+	// last thing asked, after the fine-grained refusal and the parameter
+	// check, and read-only and safe mode are settled before any call arrives:
+	// the first leaves the action out of the catalog and the second clears
+	// its destructive flag and answers with a preview, so neither reaches
+	// this line. The meta handler the call goes on to applies the same
+	// switch, so it does not ask again.
+	if entry.Destructive && !hasExplicitConfirm(params) && !toolutil.IsYOLOMode() {
 		// A refusal like the surface-tool one, and recorded like it: this is
 		// the default surface, so leaving it out meant the most common
 		// needs_confirmation refusals never reached the refusal metric at all.
@@ -2365,18 +2375,28 @@ func (r *Registry) describeEntry(entry actionEntry) ActionDescription {
 // moved out to gitlab_execute_action's own argument. For an entry of a shared
 // catalog it is derived once for the process (see [toolutil.DeriveSchema])
 // and served to every caller, which must not mutate it.
+//
+// The confirmation switch is in the transform name because the marker of a
+// destructive entry says what the execute gate will do (issue 1166). The
+// switch is fixed for the life of a server process, so in production one
+// state is ever derived; naming it keeps a schema derived in one state from
+// being served in the other wherever the environment does change.
 func dynamicInputSchema(entry actionEntry) map[string]any {
-	transform := "dynamic-input|destructive=" + strconv.FormatBool(entry.Destructive) + "|guidance=" + toolutil.ParameterGuidanceIdentity(entry.Route.ParameterGuidance)
+	confirmationSkipped := toolutil.IsYOLOMode()
+	transform := "dynamic-input|destructive=" + strconv.FormatBool(entry.Destructive) + "|confirmation-skipped=" + strconv.FormatBool(confirmationSkipped) + "|guidance=" + toolutil.ParameterGuidanceIdentity(entry.Route.ParameterGuidance)
 	derived := toolutil.DeriveSchema(entry.Route.InputSchema, transform, func() any {
-		return buildDynamicInputSchema(entry)
+		return buildDynamicInputSchema(entry, confirmationSkipped)
 	})
 	schema, _ := derived.(map[string]any)
 	return schema
 }
 
 // buildDynamicInputSchema builds what [dynamicInputSchema] serves, on a copy
-// of the meta-action schema, which may itself be shared.
-func buildDynamicInputSchema(entry actionEntry) map[string]any {
+// of the meta-action schema, which may itself be shared. confirmationSkipped
+// chooses what the x_confirmation marker of a destructive entry says, in the
+// words [toolutil.DynamicConfirmationDescription] keeps for this schema and
+// for the one gitlab://tools/{id} serves, which find links every result to.
+func buildDynamicInputSchema(entry actionEntry, confirmationSkipped bool) map[string]any {
 	schema := toolutil.CloneSchemaMap(toolutil.MetaActionSchema(entry.Route))
 	if entry.Route.InputSchema == nil {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
@@ -2394,7 +2414,7 @@ func buildDynamicInputSchema(entry actionEntry) map[string]any {
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_action.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+			"description": toolutil.DynamicConfirmationDescription(confirmationSkipped),
 		}
 	}
 	return schema
@@ -4014,7 +4034,13 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 	}
 }
 
-func searchNextStep(results []SearchResult) string {
+// searchNextStep is the next step a search publishes for its top result.
+// confirmationSkipped is the switch the execute gate reads: for a destructive
+// top result it decides whether the step sends the model to the user for
+// approval before confirm=true or says the confirmation is skipped, since
+// asking for an approval execute no longer waits for would stall the
+// unattended run the switch exists for (issue 1166).
+func searchNextStep(results []SearchResult, confirmationSkipped bool) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -4029,9 +4055,18 @@ func searchNextStep(results []SearchResult) string {
 	fmt.Fprintf(&b, "Top result %s is high confidence. Use its exact parameter schema before executing", backtickString(top.ID))
 	fmt.Fprintf(&b, "; search only proves required params %s.", compactParamList(top.RequiredParams, 8))
 	if top.Destructive {
-		b.WriteString(" Because this action is destructive, execute later with top-level confirm:true only after explicit user approval.")
+		b.WriteString(destructiveNextStep(confirmationSkipped))
 	}
 	return b.String()
+}
+
+// destructiveNextStep is the sentence [searchNextStep] closes with when its
+// top result is destructive.
+func destructiveNextStep(confirmationSkipped bool) string {
+	if confirmationSkipped {
+		return " This action is destructive, and this server's configuration skips its confirmation: executing it runs it at once, with or without top-level confirm:true."
+	}
+	return " Because this action is destructive, execute later with top-level confirm:true only after explicit user approval."
 }
 
 func compactParamList(params []string, limit int) string {

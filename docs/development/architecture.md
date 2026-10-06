@@ -418,10 +418,33 @@ in this order:
    `confirm: true` once the user has approved.
 
 The meta and individual dispatchers apply it. The dynamic surface's
-`gitlab_execute_action` refuses a destructive action without `confirm=true`
-before it reaches that flow, so on that surface neither the YOLO switch nor
-elicitation confirms a catalog action
-([#1166](https://github.com/jmrplens/gitlab-mcp-server/issues/1166)).
+`gitlab_execute_action` has a gate of its own in front of that flow, in
+`Registry.Execute`: it refuses a destructive action unless the call carries a
+top-level `confirm=true` or `toolutil.IsYOLOMode()` holds, so the YOLO switch
+means the same thing there as on the other two surfaces and elicitation is the
+one step the dynamic surface never takes
+([#1166](https://github.com/jmrplens/gitlab-mcp-server/issues/1166)). The gate
+runs after the fine-grained refusal and the parameter check, and read-only and
+safe mode are settled before it: the first removes the action from the
+catalog, the second clears its destructive flag and answers with a preview.
+The call then enters the meta handler, whose own `ConfirmDestructiveAction`
+lets it through on the same switch or the same `confirm`.
+
+What the surface tells a model about that step reads the same switch. The
+`x_confirmation` marker of a destructive action's schema, in the results of
+`gitlab_find_action` (`dynamicInputSchema`) and in `gitlab://tools/{id}`
+(`enrichDynamicSchema` in `internal/resources`), sends the model to the user
+for approval before `confirm=true` only while the gate asks for it, and says
+the confirmation is skipped once the switch holds; an approval nobody gives
+would stall the unattended run the switch exists for. Both take that text from
+`toolutil.DynamicConfirmationDescription`, its one home, so the wording is
+changed there and the two cannot drift apart. Both schemas are derived
+once per process with the switch in the transform name, so a schema derived in
+one state is never served in the other. The two tool descriptions in
+`tools/list` keep saying a destructive action requires `confirm=true`: they
+are constants, the committed manifests are generated from a listing and must
+not depend on a variable the generating machine happens to export, and
+`confirm=true` still works with the switch on.
 
 ### Dual response
 

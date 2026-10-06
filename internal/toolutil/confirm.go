@@ -40,6 +40,24 @@ func isTruthy(s string) bool {
 	}
 }
 
+// DynamicConfirmationDescription is the text of the x_confirmation marker a
+// destructive action's input schema carries on the dynamic surface, in the
+// schema gitlab_find_action returns and in the one gitlab://tools/{id} serves,
+// which find links every result to. Both readers take it from here, so the two
+// cannot say different things.
+//
+// confirmationSkipped is the switch the dynamic execute gate reads
+// ([IsYOLOMode], issue 1166), and it chooses the text: while the gate asks for
+// confirm, the model is sent to the user for approval first, and once the
+// switch skips the gate the marker says so, since an approval nobody gives
+// would stall the unattended run the switch exists for.
+func DynamicConfirmationDescription(confirmationSkipped bool) string {
+	if confirmationSkipped {
+		return "This server's configuration skips the confirmation of destructive actions, so gitlab_execute_action runs this one without confirm and still accepts a top-level confirm=true; do not put confirm inside params."
+	}
+	return "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params."
+}
+
 // ConfirmDestructiveAction checks whether a destructive action should proceed.
 // The confirmation flow is:
 //

@@ -632,6 +632,10 @@ type fakeGitLab struct {
 	// test can tell a write GitLab was asked to make from one the server
 	// withheld before sending anything.
 	issuesCreated atomic.Int32
+	// issuesDeleted counts the deletions of issue 1 that reached the instance,
+	// so a test can tell a destructive call the server dispatched from one it
+	// refused, previewed or withheld before sending anything.
+	issuesDeleted atomic.Int32
 	// versionRefusal, when set, is the sentence GitLab refuses the version
 	// endpoint with: a 403 carrying insufficient_granular_scope, what a
 	// fine-grained token not granted Metadata: Read is answered. Empty
@@ -722,6 +726,10 @@ func startFakeGitLab(t *testing.T) *fakeGitLab {
 	mux.HandleFunc("POST /api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
 		fake.issuesCreated.Add(1)
 		writeJSON(w, `{"id":1,"iid":1,"project_id":42,"title":"sent to GitLab","state":"opened","web_url":"http://example.invalid/g/proj/-/issues/1"}`)
+	})
+	mux.HandleFunc("DELETE /api/v4/projects/42/issues/1", func(w http.ResponseWriter, _ *http.Request) {
+		fake.issuesDeleted.Add(1)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	// A collection larger than one page, answering exactly what was asked for
 	// and reporting the rest through the pagination headers GitLab sends. It

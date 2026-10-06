@@ -240,11 +240,11 @@ Un handler que comprueba un valor frente a un conjunto fijo nombra los valores q
 
 Una acción que el catálogo clasifica como destructiva pide confirmación antes de ejecutarse; [Seguridad](/gitlab-mcp-server/es/operations/security/#acciones-destructivas) explica qué acciones son y por qué. Antes se deciden tres cosas: una acción que una sesión de grano fino no puede ejecutar se rechaza, el modo de solo lectura ha retirado todas las escrituras, y el modo seguro previsualiza una escritura en lugar de ejecutarla, así que no pregunta nada.
 
-En las superficies meta e individual, una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
+En todas las superficies, una llamada destructiva sigue adelante con la primera de estas condiciones que se cumpla:
 
 1. `GITLAB_MCP_YOLO_MODE` tiene un valor verdadero (`1`, `true` o `yes`) o, si no está definida, lo tiene `AUTOPILOT`.
-2. La llamada lleva `"confirm": true` (dentro de `params` en la superficie meta).
-3. El cliente admite elicitación y el usuario aprueba la pregunta, `Confirm gitlab_branch/delete? This action may be irreversible.` En el protocolo 2026-07-28 la pregunta viaja como una petición de entrada que el cliente responde enviando la llamada de nuevo ([Elicitación](/gitlab-mcp-server/es/capabilities/elicitation/)).
+2. La llamada lleva `"confirm": true` (dentro de `params` en la superficie meta, en el nivel superior de los argumentos en la dinámica).
+3. En las superficies meta e individual, el cliente admite elicitación y el usuario aprueba la pregunta, `Confirm gitlab_branch/delete? This action may be irreversible.` En el protocolo 2026-07-28 la pregunta viaja como una petición de entrada que el cliente responde enviando la llamada de nuevo ([Elicitación](/gitlab-mcp-server/es/capabilities/elicitation/)).
 
 Si no, **se rechaza por defecto (fail-closed)** y nada llega a GitLab: `Confirm gitlab_branch/delete? This action may be irreversible. The connected client cannot prompt for confirmation. Re-send with confirm=true only after the user explicitly approves this operation.`
 
@@ -259,7 +259,7 @@ Cuando se pregunta al usuario, toda respuesta salvo una aprobación devuelve un 
 
 Un estado de confirmación que el servidor no emitió es un fallo de protocolo y no una respuesta, y se rechaza como un error JSON-RPC de parámetros inválidos.
 
-**La superficie dinámica no pregunta nada.** `gitlab_execute_action` rechaza una acción destructiva enviada sin un `confirm: true` de nivel superior antes de despachar nada: `gitlab_execute_action: action "branch.delete" is destructive. Re-send with confirm=true only after the user explicitly approves this operation.` No lee `GITLAB_MCP_YOLO_MODE` ni `AUTOPILOT`, así que en la superficie por defecto la confirmación es siempre el `confirm: true` de quien llama.
+**La superficie dinámica no pregunta nada.** Salvo que `GITLAB_MCP_YOLO_MODE` o `AUTOPILOT` la dejen pasar como en el paso 1, `gitlab_execute_action` rechaza una acción destructiva enviada sin un `confirm: true` de nivel superior antes de despachar nada: `gitlab_execute_action: action "branch.delete" is destructive. Re-send with confirm=true only after the user explicitly approves this operation.` Nunca pregunta, así que en la superficie por defecto la confirmación es el `confirm: true` de quien llama o el ajuste del operador, y un rechazo registrado como `needs_confirmation` significa lo mismo en todas las superficies. Hasta la 3.1.0 esta superficie no leía ninguno de los dos ajustes.
 
 ## Lo que un error omite
 

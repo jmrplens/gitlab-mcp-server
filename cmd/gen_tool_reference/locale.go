@@ -116,7 +116,7 @@ var english = language{
 	readOnlyCount: "Read-only actions: %d of %d, the ones a deployment in read-only mode keeps.",
 
 	actionsIntro:    "The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served.",
-	destructiveNote: "A destructive action runs only once confirmed: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).",
+	destructiveNote: "A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).",
 	paramTierNote:   "A parameter followed by a tier in parentheses is served only from that tier on.",
 
 	columnAction:     "Action",
@@ -182,7 +182,7 @@ var spanish = language{
 	readOnlyCount: "Acciones de solo lectura: %d de %d, las que conserva un despliegue en modo de solo lectura.",
 
 	actionsIntro:    "La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés.",
-	destructiveNote: "Una acción destructiva solo se ejecuta una vez confirmada: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).",
+	destructiveNote: "Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/operations/security/#acciones-destructivas)).",
 	paramTierNote:   "Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.",
 
 	columnAction:     "Acción",
