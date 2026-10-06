@@ -6970,8 +6970,8 @@ a fix we carry upstream in our name.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no. The transfer is accepted and applied; what misleads is the
-  answer and the pages that describe it: the object in the 200 is where it
-  still is, a failure after that answer reaches the caller only as a to-do
+  answer and the pages that describe it: the object in the answer (a 200 for
+  a project, a 201 for a group) is where it still is, a failure after that answer reaches the caller only as a to-do
   item, and neither API page says so. The to-do API page's own `action` and
   `type` lists leave out the value that item carries.
 - **Workaround**: yes. `projects.Transfer` (`internal/tools/projects/transfer.go`)
@@ -7009,12 +7009,16 @@ to-do items"). Read on `master` on 2026-09-27; the feature flag
 `groups_and_projects_async_transfer` (introduced in 18.11, off by default) was
 removed by
 [gitlab-org/gitlab!250913](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/250913)
-in the 19.4 milestone, so 18.11 to 19.3 behave the same way when it is enabled.
+in the 19.4 milestone. In 18.11 it gated only the web controllers: the two
+REST routes have no `enqueue_async_transfer` at `v18.11.12-ee` and read the
+flag from `v19.0.0-ee`, so through the API 19.0 to 19.3 behave the same way
+when it is enabled, and 18.11 transfers inline (corrected on 2026-10-06; this
+paragraph had said 18.11 to 19.3).
 
 **What**: both routes run the checks of `ensure_allowed_transfer`
 synchronously, move the namespace's state machine to `transfer_scheduled`,
-enqueue the worker, and answer 200 with the object as it stands, before the
-worker moves it. For a project that synchronous half is only the blank
+enqueue the worker, and answer with the object as it stands, before the
+worker moves it: `200 OK` for a project and `201 Created` for a group. For a project that synchronous half is only the blank
 namespace, the namespace it is already in and the two permission checks: the
 checks that a project with the same name or path is not in the target
 namespace, nor one there pending deletion, the container registry checks and
