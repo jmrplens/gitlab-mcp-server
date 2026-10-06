@@ -154,13 +154,81 @@ func FormatRulesMarkdown(out RulesOutput) string {
 	return b.String()
 }
 
+// userBasicCell renders one whole user the way [userCell] renders the subset:
+// the "@handle" linked to the profile, or the display name when GitLab sent
+// no username.
+func userBasicCell(u toolutil.UserBasicOutput) string {
+	if handle := toolutil.MdUserLink(u.Username, u.WebURL); handle != "" {
+		return handle
+	}
+	return toolutil.MdTitleLink(u.Name, u.WebURL)
+}
+
+// userBasicList renders a set of whole users as the comma-joined list a row
+// shows, and nothing at all when there are none.
+func userBasicList(users []toolutil.UserBasicOutput) string {
+	cells := make([]string, 0, len(users))
+	for _, u := range users {
+		if cell := userBasicCell(u); cell != "" {
+			cells = append(cells, cell)
+		}
+	}
+	return strings.Join(cells, ", ")
+}
+
+// ruleNames renders the rules a short reference names, each by its name
+// escaped, or by its ID when it has none.
+func ruleNames(rules []ApprovalRuleShortOutput) string {
+	names := make([]string, 0, len(rules))
+	for _, r := range rules {
+		if r.Name != "" {
+			names = append(names, toolutil.EscapeMdTableCell(r.Name))
+			continue
+		}
+		names = append(names, "#"+strconv.FormatInt(r.ID, 10))
+	}
+	return strings.Join(names, ", ")
+}
+
+// countRow writes a count an Enterprise Edition answer sends, zero included,
+// and nothing when GitLab did not send it.
+func countRow(card *toolutil.Card, label string, v *int64) {
+	if v == nil {
+		return
+	}
+	card.Int(label, *v)
+}
+
+// textRow writes a value an Enterprise Edition answer sends, and nothing when
+// GitLab did not send it or sent it blank.
+func textRow(card *toolutil.Card, label string, v *string) {
+	if v == nil {
+		return
+	}
+	card.Field(label, *v)
+}
+
+// WriteEnterpriseRows writes onto card the rows of the approval state an
+// Enterprise Edition instance answers with, each only when GitLab sent its
+// key, so a Community Edition answer adds none. The deprecated approvers and
+// approver groups are left to the structured result, since they repeat the
+// first rule's users and groups.
+func WriteEnterpriseRows(card *toolutil.Card, s EnterpriseApprovalState) {
+	textRow(card, "Title", s.Title)
+	textRow(card, "State", s.State)
+	countRow(card, "Approvals Required", s.ApprovalsRequired)
+	countRow(card, "Approvals Left", s.ApprovalsLeft)
+	card.Markdown("Rules Left", ruleNames(s.ApprovalRulesLeft))
+	card.Markdown("Rules Nobody Can Satisfy", ruleNames(s.InvalidApproversRules))
+	card.BoolPtr("Has Approval Rules", s.HasApprovalRules)
+	card.BoolPtr("Approval Rules Available", s.MergeRequestApproversAvailable)
+	card.BoolPtr("Password Required To Approve", s.RequirePasswordToApprove)
+	card.Markdown("Suggested Approvers", userBasicList(s.SuggestedApprovers))
+}
+
 // FormatConfigMarkdown renders a merge request's approvals as the card of one
-// object.
-//
-// The rows it used to print for approvals required, approvals left and whether
-// rules exist are gone with the fields behind them: GitLab answers none of them
-// at this endpoint, so every one of those rows printed a zero. What answers
-// those questions is action 'approval_state', which the hints point at.
+// object: the four rows every edition answers with, then the approval state
+// an Enterprise Edition instance adds, row by row as GitLab sent it.
 func FormatConfigMarkdown(c ConfigOutput) string {
 	var b strings.Builder
 	card := toolutil.NewCard(&b, "MR Approvals")
@@ -168,10 +236,11 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 	card.Bool("You have approved", c.UserHasApproved)
 	card.Bool("You can approve", c.UserCanApprove)
 	card.Markdown("Approved By", approverList(c.ApprovedBy))
+	WriteEnterpriseRows(card, c.EnterpriseApprovalState)
 	card.End(
 		toolutil.HintAction(actionMRApprove, "approve this merge request"),
 		toolutil.HintAction(actionMRUnapprove, "withdraw your approval"),
-		toolutil.HintAction(actionApprovalState, "see how many approvals are required and left"),
+		toolutil.HintAction(actionApprovalState, "see each approval rule and whether it is satisfied"),
 		toolutil.HintAction(actionApprovalRules, "list the configured rules"),
 	)
 	return b.String()

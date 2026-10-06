@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -354,7 +355,7 @@ func TestApprove_TheApproversAndTheCallersState_ReachTheOutput(t *testing.T) {
 		t.Fatalf("Approve() unexpected error: %v", err)
 	}
 	want := ApproveOutput{
-		ApprovalsRequired: 2, ApprovedBy: 2, Approved: true, UserHasApproved: true,
+		ApprovedBy: 2, Approved: true, UserHasApproved: true, ApprovalsRequired: new(int64(2)),
 		ApprovedByUsers: []ApproverOutput{
 			{User: &toolutil.UserBasicOutput{
 				ID: 11, Username: "u12", Name: "N13", State: "active",
@@ -386,19 +387,115 @@ func TestApprove_AnAnswerTheCaptureCannotHold_IsAnError(t *testing.T) {
 	}
 }
 
-// TestMRUnapprove_Success verifies that Unapprove removes the current user's
-// approval. The mock returns 204 No Content and the test asserts no error.
-func TestMRUnapprove_Success(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/merge_requests/1/unapprove" {
-			w.WriteHeader(http.StatusNoContent)
+// unapproveCommunityBody is what a Community Edition instance answers an
+// unapprove with: the four keys of Entities::MergeRequestApprovals, here for a
+// merge request somebody else still approves.
+const unapproveCommunityBody = `{"user_has_approved":false,"user_can_approve":true,"approved":true,
+	"approved_by":[{"user":{"id":21,"username":"u22","name":"N24","state":"active","locked":false},
+		"approved_at":"2026-03-04T05:06:07Z"}]}`
+
+// unapproveEnterpriseBody is what an Enterprise Edition instance answers the
+// same unapprove with: the whole approval state, in the order GitLab exposes
+// it, for a merge request one rule still holds back.
+const unapproveEnterpriseBody = `{"id":542,"iid":1,"project_id":42,"title":"T","description":"","state":"opened",
+	"created_at":"2026-10-02T10:32:16.589Z","updated_at":"2026-10-05T04:28:05.548Z","merge_status":"can_be_merged",
+	"approved":false,"approvals_required":1,"approvals_left":1,"require_password_to_approve":false,
+	"approved_by":[],"suggested_approvers":[],"approvers":[],"approver_groups":[],
+	"user_has_approved":false,"user_can_approve":true,
+	"approval_rules_left":[{"id":3,"name":"Security","rule_type":"regular"}],"has_approval_rules":true,
+	"merge_request_approvers_available":true,"multiple_approval_rules_available":true,"invalid_approvers_rules":[]}`
+
+// unapproveAnswering returns a client whose unapprove route answers body with
+// 201, which is what GitLab answers it with on every edition.
+func unapproveAnswering(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/unapprove" {
+			testutil.RespondJSON(w, http.StatusCreated, body)
 			return
 		}
 		http.NotFound(w, r)
 	}))
+}
 
-	if err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1}); err != nil {
-		t.Errorf("Unapprove() unexpected error: %v", err)
+// TestMRUnapprove_ACommunityEditionAnswer_IsTheStateLeft verifies that the
+// withdrawal publishes the approval state GitLab answered with, which the
+// SDK discards: the approval somebody else still holds, and no Enterprise key,
+// since a Community Edition answer sends none.
+func TestMRUnapprove_ACommunityEditionAnswer_IsTheStateLeft(t *testing.T) {
+	out, err := Unapprove(context.Background(), unapproveAnswering(t, unapproveCommunityBody), ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Unapprove() unexpected error: %v", err)
+	}
+	want := ApproveOutput{
+		ApprovedBy: 1, Approved: true, UserCanApprove: true,
+		ApprovedByUsers: []ApproverOutput{{
+			User:       &toolutil.UserBasicOutput{ID: 21, Username: "u22", Name: "N24", State: "active"},
+			ApprovedAt: "2026-03-04T05:06:07Z",
+		}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Unapprove() = %+v, want %+v", out, want)
+	}
+}
+
+// TestMRUnapprove_AnEnterpriseEditionAnswer_KeepsEveryKeyItSent verifies the
+// Enterprise half: the counts the withdrawal left, the rule still to satisfy,
+// and the empty lists and the false flag kept as the answers they are.
+func TestMRUnapprove_AnEnterpriseEditionAnswer_KeepsEveryKeyItSent(t *testing.T) {
+	out, err := Unapprove(context.Background(), unapproveAnswering(t, unapproveEnterpriseBody), ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Unapprove() unexpected error: %v", err)
+	}
+	s := out.EnterpriseApprovalState
+	if s.ApprovalsLeft == nil || *s.ApprovalsLeft != 1 || s.ApprovalsRequired == nil || *s.ApprovalsRequired != 1 {
+		t.Errorf("counts = %v/%v, want 1 required and 1 left", s.ApprovalsRequired, s.ApprovalsLeft)
+	}
+	if want := []mrapprovals.ApprovalRuleShortOutput{{ID: 3, Name: "Security", RuleType: "regular"}}; !slices.Equal(s.ApprovalRulesLeft, want) {
+		t.Errorf("approval_rules_left = %+v, want %+v", s.ApprovalRulesLeft, want)
+	}
+	if s.RequirePasswordToApprove == nil || *s.RequirePasswordToApprove || s.InvalidApproversRules == nil || len(s.InvalidApproversRules) != 0 {
+		t.Errorf("state = %+v, want the false flag and the empty list kept", s)
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	for _, key := range []string{`"approvals_left":1`, `"invalid_approvers_rules":[]`, `"has_approval_rules":true`, `"approved":false`} {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(encoded), key) {
+				t.Errorf("output %s lacks %s", encoded, key)
+			}
+		})
+	}
+}
+
+// TestMRUnapprove_AnAnswerWithNoBody_IsAnError verifies that a withdrawal
+// answered with no approval state is reported rather than published as an
+// empty one: GitLab answers an unapprove with the state on every edition, and
+// an empty state would say the merge request is not approved whether or not
+// it is.
+func TestMRUnapprove_AnAnswerWithNoBody_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	_, err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrUnapprove") {
+		t.Fatalf("Unapprove() error = %v, want the operation's error for an answer with no state", err)
+	}
+}
+
+// TestApprove_AnEnterpriseKeyTheCaptureCannotHold_IsAnError verifies that a
+// key client-go does not model fails the call when it does not have the shape
+// GitLab gives it, after the approvers were read: both reads of the captured
+// answer are held to it, not only the first.
+func TestApprove_AnEnterpriseKeyTheCaptureCannotHold_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"approved":true,"approved_by":[],"invalid_approvers_rules":"none"}`)
+	}))
+	_, err := Approve(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "mrApprove") {
+		t.Fatalf("Approve() error = %v, want the operation's error for an undecodable answer", err)
 	}
 }
 
@@ -1938,7 +2035,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 		assertContains(t, err, wantSubstr)
 	})
 	t.Run("Unapprove", func(t *testing.T) {
-		err := Unapprove(ctx, client, ApproveInput{ProjectID: pid, MRIID: 0})
+		_, err := Unapprove(ctx, client, ApproveInput{ProjectID: pid, MRIID: 0})
 		assertContains(t, err, wantSubstr)
 	})
 	t.Run("Commits", func(t *testing.T) {
@@ -2156,7 +2253,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 		}))
-		err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+		_, err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
 		assertContains(t, err, "merge_request.approve")
 	})
 
@@ -2525,21 +2622,24 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 }
 
 // TestFormatApproveMarkdown_Populated verifies the whole rendering of the
-// approval status: the flag is a glyph rather than the bare "true" the %v this
-// replaced printed.
+// approval status as an Enterprise Edition instance answers it: the flag is a
+// glyph rather than the bare "true" the %v this replaced printed, and the
+// approvals required and left follow the rows every edition gets.
 func TestFormatApproveMarkdown_Populated(t *testing.T) {
 	want := "## MR Approval Status\n\n" +
 		"- **Approved**: ✅\n" +
-		"- **Approvals Required**: 2\n" +
 		"- **Approvals Given**: 1\n" +
 		"- **You Approved**: ✅\n" +
 		"- **You Can Approve**: ❌\n" +
 		"- **Approved By**: [@alice](https://gitlab.example.com/alice) (1 Jan 2026 00:00 UTC), @bob\n" +
+		"- **Approvals Required**: 2\n" +
+		"- **Approvals Left**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'merge_request.merge' to merge this merge request\n" +
 		"- Use action 'merge_request.get' to see its full details\n"
 	got := FormatApproveMarkdown(ApproveOutput{
-		Approved: true, ApprovalsRequired: 2, ApprovedBy: 1, UserHasApproved: true,
+		Approved: true, ApprovedBy: 1, UserHasApproved: true,
+		ApprovalsRequired: new(int64(2)), ApprovalsLeft: new(int64(0)),
 		ApprovedByUsers: []ApproverOutput{
 			{User: &toolutil.UserBasicOutput{Username: testAuthorAlice, WebURL: "https://gitlab.example.com/alice"}, ApprovedAt: "2026-01-01T00:00:00Z"},
 			{},
@@ -2552,11 +2652,12 @@ func TestFormatApproveMarkdown_Populated(t *testing.T) {
 }
 
 // TestFormatApproveMarkdown_Empty verifies that an unapproved merge request
-// renders every count, since zero is an answer here rather than an absence.
+// renders the approvals given at zero, since zero is an answer there, and no
+// approvals required, which a Community Edition answer does not send and
+// the card once printed as a zero all the same.
 func TestFormatApproveMarkdown_Empty(t *testing.T) {
 	want := "## MR Approval Status\n\n" +
 		"- **Approved**: ❌\n" +
-		"- **Approvals Required**: 0\n" +
 		"- **Approvals Given**: 0\n" +
 		"- **You Approved**: ❌\n" +
 		"- **You Can Approve**: ❌\n" +
@@ -3711,7 +3812,7 @@ func TestUnapprove_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	ctx := testutil.CancelledCtx(t)
-	err := Unapprove(ctx, client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	_, err := Unapprove(ctx, client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Unapprove() expected error for canceled context, got nil")
 	}
@@ -4008,7 +4109,7 @@ func TestUnapprove_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	err := Unapprove(context.Background(), client, ApproveInput{MRIID: 1})
+	_, err := Unapprove(context.Background(), client, ApproveInput{MRIID: 1})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
@@ -4151,7 +4252,7 @@ func newMRRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 		// Approve
 		"POST " + pathMR1 + "/approve": {http.StatusCreated, `{"approvals_required":1,"approved_by":[{"user":{"username":"test"}}],"approved":true}`, nil},
 		// Unapprove
-		"POST " + pathMR1 + "/unapprove": {http.StatusNoContent, "", nil},
+		"POST " + pathMR1 + "/unapprove": {http.StatusCreated, unapproveCommunityBody, nil},
 		// Commits
 		"GET " + pathMR1 + "/commits": {http.StatusOK, `[{"id":"abc","short_id":"abc","title":"commit","author_name":"test","committed_date":"2026-01-01T00:00:00Z","web_url":"http://c/1"}]`, defaultPgHdr()},
 		// Pipelines
@@ -5282,7 +5383,7 @@ func TestUnapprove_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
 	}))
-	err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+	_, err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("expected error")
 	}

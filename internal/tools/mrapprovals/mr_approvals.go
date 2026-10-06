@@ -137,25 +137,30 @@ type RulesOutput struct {
 }
 
 // ConfigOutput holds what GitLab answers at
-// GET /projects/:id/merge_requests/:merge_request_iid/approvals, which is four
-// fields on every tier.
+// GET /projects/:id/merge_requests/:merge_request_iid/approvals, which depends
+// on the edition rather than on the license.
 //
-// It used to carry all twenty-four of gl.MergeRequestApprovals, because the 1:1
-// norm mirrors the SDK type and that type models the response of the POST at
-// the same path, deprecated in GitLab 16.0, which this action does not call.
-// GitLab's own generated OpenAPI document separates the two: the GET declares
-// approved, approved_by, user_can_approve and user_has_approved, and every one
-// of the other twenty appears only under the POST. So a model was told to
-// expect an id, a title, a state and an approvals_required it would never
-// receive, and thirteen of those arrived in the payload as zeroes because they
-// carry no omitempty. Mirroring the SDK is mirroring a second model of the API,
-// not the API, which is the whole reason cmd/gen_api_live exists.
+// Every edition sends approved, approved_by, user_has_approved and
+// user_can_approve. An Enterprise Edition instance, GitLab.com included and
+// licensed or not, sends the merge request's whole approval state besides,
+// which [EnterpriseApprovalState] carries and explains; a Community Edition
+// instance sends none of it, and those keys are then absent rather than zero.
+//
+// It once carried every field of gl.MergeRequestApprovals as a value, so a
+// Community Edition answer published an id of 0 and an approvals_required of
+// 0 it never sent. It was then cut to the four (issue 580), on the reading
+// that the twenty belonged to the deprecated POST at the same path, which
+// held for Community Edition alone: the Enterprise override of
+// present_approval answers the GET with them too, and the cut dropped them on
+// every Enterprise instance. Presence now comes from the captured answer, so
+// each edition gets exactly what it sent.
 type ConfigOutput struct {
 	toolutil.HintableOutput
-	Approved        bool                              `json:"approved"`
-	UserHasApproved bool                              `json:"user_has_approved"`
-	UserCanApprove  bool                              `json:"user_can_approve"`
+	Approved        bool                              `json:"approved"          jsonschema:"Community Edition: whether anyone has approved. Enterprise Edition: whether the approvals required are met, true when none are required"`
+	UserHasApproved bool                              `json:"user_has_approved" jsonschema:"Whether the calling user has approved"`
+	UserCanApprove  bool                              `json:"user_can_approve"  jsonschema:"Whether the calling user may approve"`
 	ApprovedBy      []*MergeRequestApproverUserOutput `json:"approved_by,omitempty"`
+	EnterpriseApprovalState
 }
 
 // ---------------------------------------------------------------------------
@@ -256,18 +261,21 @@ func rawMutateApprovalRule(ctx context.Context, client *gitlabclient.Client, met
 }
 
 // configToOutput converts a client-go MergeRequestApprovals to ConfigOutput,
-// taking the four fields the GET actually answers with.
+// taking from it the four fields every edition answers with, and the
+// Enterprise Edition approval state from what the captured answer held.
 //
-// The SDK type carries twenty more, and they are deliberately dropped rather
-// than forwarded: they belong to the deprecated POST at the same path, so on a
-// GET they are the zero value whatever the tier, and publishing a zero is worse
-// than publishing nothing. [ConfigOutput] records the whole reasoning.
-func configToOutput(c *gl.MergeRequestApprovals) ConfigOutput {
+// The SDK type's other twenty fields are deliberately not read: they are
+// values, so a Community Edition answer leaves each at its zero and an
+// Enterprise one cannot be told from it, and publishing a zero GitLab did not
+// send is worse than publishing nothing. [EnterpriseApprovalState] carries
+// those keys with their presence instead.
+func configToOutput(c *gl.MergeRequestApprovals, state EnterpriseApprovalState) ConfigOutput {
 	return ConfigOutput{
-		Approved:        c.Approved,
-		UserHasApproved: c.UserHasApproved,
-		UserCanApprove:  c.UserCanApprove,
-		ApprovedBy:      approverUserOutputs(c.ApprovedBy),
+		Approved:                c.Approved,
+		UserHasApproved:         c.UserHasApproved,
+		UserCanApprove:          c.UserCanApprove,
+		ApprovedBy:              approverUserOutputs(c.ApprovedBy),
+		EnterpriseApprovalState: state,
 	}
 }
 
@@ -340,7 +348,8 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 }
 
 // Config reports who has approved a merge request and whether the calling user
-// can and has.
+// can and has, and on an Enterprise Edition instance the merge request's
+// approval state besides.
 //
 // It is not a Premium action, though it long said so: GitLab answers this
 // endpoint on Community Edition, and the approval *rules* that do need Premium
@@ -355,6 +364,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 	if input.MRIID <= 0 {
 		return ConfigOutput{}, toolutil.ErrRequiredInt64("mrApprovalConfig", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	cfg, _, err := client.GL().MergeRequestApprovals.GetConfiguration(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsNotFound(err) {
@@ -364,7 +374,11 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
 			"the caller must be able to see the merge request; verify project_id + merge_request_iid")
 	}
-	return configToOutput(cfg), nil
+	state, err := CapturedEnterpriseState(captured)
+	if err != nil {
+		return ConfigOutput{}, toolutil.WrapErr("mrApprovalConfig", err)
+	}
+	return configToOutput(cfg, state), nil
 }
 
 // Reset clears all existing approvals on a merge request.

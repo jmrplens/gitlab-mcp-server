@@ -3780,7 +3780,7 @@ func TestMRUnapprove_ContextCancelled(t *testing.T) {
 	}))
 	ctx := testutil.CancelledCtx(t)
 
-	err := mergerequests.Unapprove(ctx, client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
+	_, err := mergerequests.Unapprove(ctx, client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
 		t.Fatal(msgCancelledCtxErr)
 	}
@@ -3804,7 +3804,7 @@ func TestMRUnapprove_APIError(t *testing.T) {
 		respondJSON(w, http.StatusForbidden, jsonForbidden)
 	}))
 
-	err := mergerequests.Unapprove(context.Background(), client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
+	_, err := mergerequests.Unapprove(context.Background(), client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
 		t.Fatal(msgForbiddenErr)
 	}

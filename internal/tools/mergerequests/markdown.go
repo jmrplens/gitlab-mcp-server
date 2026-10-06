@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -253,16 +254,18 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // FormatApproveMarkdown renders the approval state after an approve or
-// unapprove as the card of one object.
+// unapprove as the card of one object: the rows every edition answers with,
+// then the approval state an Enterprise Edition instance adds, each row only
+// when GitLab sent its key.
 func FormatApproveMarkdown(a ApproveOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "MR Approval Status")
 	c.Bool("Approved", a.Approved)
-	c.Int("Approvals Required", int64(a.ApprovalsRequired))
 	c.Int("Approvals Given", int64(a.ApprovedBy))
 	c.Bool("You Approved", a.UserHasApproved)
 	c.Bool("You Can Approve", a.UserCanApprove)
 	c.Markdown("Approved By", approverList(a.ApprovedByUsers))
+	mrapprovals.WriteEnterpriseRows(c, a.EnterpriseApprovalState)
 	c.End(
 		toolutil.HintAction(actionMRMerge, "merge this merge request"),
 		toolutil.HintAction(actionMRGet, "see its full details"),

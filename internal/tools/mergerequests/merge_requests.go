@@ -14,6 +14,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -384,23 +385,29 @@ type ApproveInput struct {
 	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request. Approve only if HEAD matches (safety check, applies to approve only)"`
 }
 
-// ApproveOutput holds the approval state after approve/unapprove.
+// ApproveOutput holds the approval state GitLab answers an approve or an
+// unapprove with.
 //
-// POST /projects/:id/merge_requests/:merge_request_iid/approve presents
-// lib/api/entities/merge_request_approvals.rb, or on an Enterprise instance
-// ee/lib/api/entities/approval_state.rb, and both send who approved, whether
-// the caller has approved and whether the caller may approve in the same
-// shape. ApprovedBy counts the approvers; ApprovedByUsers lists them as GitLab
-// sends them, each user whole, which is read from the captured response
-// because client-go decodes the approvers' users into BasicUser.
+// POST /projects/:id/merge_requests/:merge_request_iid/approve and .../unapprove
+// both answer through present_approval, which a Community Edition instance
+// renders with lib/api/entities/merge_request_approvals.rb and every
+// Enterprise Edition build, licensed or not, with the merge request's approval
+// state (ee/lib/api/entities/approval_state.rb). Both send who approved,
+// whether the caller has approved and whether the caller may approve in the
+// same shape; the Enterprise one adds the twenty keys
+// [mrapprovals.EnterpriseApprovalState] carries, approvals_required among them,
+// each absent when GitLab did not send it rather than published as a zero.
+// ApprovedBy counts the approvers; ApprovedByUsers lists them as GitLab sends
+// them, each user whole, which is read from the captured response because
+// client-go decodes the approvers' users into BasicUser.
 type ApproveOutput struct {
 	toolutil.HintableOutput
-	ApprovalsRequired int              `json:"approvals_required"`
-	ApprovedBy        int              `json:"approved_by_count"`
-	Approved          bool             `json:"approved"`
-	ApprovedByUsers   []ApproverOutput `json:"approved_by,omitempty"`
-	UserHasApproved   bool             `json:"user_has_approved"`
-	UserCanApprove    bool             `json:"user_can_approve"`
+	ApprovedBy      int              `json:"approved_by_count"`
+	Approved        bool             `json:"approved"          jsonschema:"Community Edition: whether anyone has approved. Enterprise Edition: whether the approvals required are met, true when none are required"`
+	ApprovedByUsers []ApproverOutput `json:"approved_by,omitempty"`
+	UserHasApproved bool             `json:"user_has_approved"`
+	UserCanApprove  bool             `json:"user_can_approve"`
+	mrapprovals.EnterpriseApprovalState
 }
 
 // ApproverOutput is one approval of a merge request, as
@@ -863,8 +870,9 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 }
 
 // Approve adds an approval to the specified merge request and returns the
-// updated approval state including required count, approved-by count, overall
-// approved status, the approvers and the caller's own approval state.
+// updated approval state: the approved-by count, overall approved status, the
+// approvers, the caller's own approval state and, on an Enterprise Edition
+// instance, the approvals required and left and the rules left to satisfy.
 func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (ApproveOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ApproveOutput{}, err
@@ -892,45 +900,70 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 		}
 		return ApproveOutput{}, toolutil.WrapErrWithMessage("mrApprove", err)
 	}
+	return approvalOutput("mrApprove", approvals, captured)
+}
+
+// approvalOutput builds the approval state an approve or an unapprove was
+// answered with: the keys every edition sends off client-go's decode, and off
+// the captured answer each approver whole and the Enterprise Edition approval
+// state, which a Community Edition answer leaves empty. An answer either read
+// refuses is the operation's error, since client-go accepted the same bytes and
+// the fault is then in the type that read them.
+func approvalOutput(op string, approvals *gl.MergeRequestApprovals, captured *gitlabclient.ResponseCapture) (ApproveOutput, error) {
 	var extra approvalsExtra
-	if err = captured.Decode(&extra); err != nil {
-		return ApproveOutput{}, toolutil.WrapErr("mrApprove", err)
+	if err := captured.Decode(&extra); err != nil {
+		return ApproveOutput{}, toolutil.WrapErr(op, err)
+	}
+	state, err := mrapprovals.CapturedEnterpriseState(captured)
+	if err != nil {
+		return ApproveOutput{}, toolutil.WrapErr(op, err)
 	}
 	var approvers []ApproverOutput
 	for _, approval := range extra.ApprovedBy {
 		approvers = append(approvers, ApproverOutput{User: approval.User, ApprovedAt: toolutil.RFC3339Ptr(approval.ApprovedAt)})
 	}
 	return ApproveOutput{
-		ApprovalsRequired: int(approvals.ApprovalsRequired),
-		ApprovedBy:        len(approvals.ApprovedBy),
-		Approved:          approvals.Approved,
-		ApprovedByUsers:   approvers,
-		UserHasApproved:   approvals.UserHasApproved,
-		UserCanApprove:    approvals.UserCanApprove,
+		ApprovedBy:              len(approvals.ApprovedBy),
+		Approved:                approvals.Approved,
+		ApprovedByUsers:         approvers,
+		UserHasApproved:         approvals.UserHasApproved,
+		UserCanApprove:          approvals.UserCanApprove,
+		EnterpriseApprovalState: state,
 	}, nil
 }
 
 // Unapprove removes the current user's approval from the specified merge
-// request. Returns an error if the API call fails.
-func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveInput) error {
+// request and returns the approval state GitLab answers with, which is the
+// same one an approve answers with.
+//
+// client-go's UnapproveMergeRequest discards that answer, so the whole state
+// is read off the captured response: a withdrawal that left the merge request
+// unapproved, or still approved by somebody else, is then what the caller is
+// told rather than a bare confirmation.
+func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (ApproveOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return ApproveOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return errors.New("mrUnapprove: project_id is required. Use project.list to find the ID first, then pass it as project_id")
+		return ApproveOutput{}, errors.New("mrUnapprove: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrUnapprove", "merge_request_iid")
+		return ApproveOutput{}, toolutil.ErrRequiredInt64("mrUnapprove", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, err := client.GL().MergeRequestApprovals.UnapproveMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return toolutil.WrapErrWithHint("mrUnapprove", err,
+			return ApproveOutput{}, toolutil.WrapErrWithHint("mrUnapprove", err,
 				"verify project_id and merge_request_iid; unapproval requires you to have previously approved the MR (use merge_request.approve first if you have not)")
 		}
-		return toolutil.WrapErrWithMessage("mrUnapprove", err)
+		return ApproveOutput{}, toolutil.WrapErrWithMessage("mrUnapprove", err)
 	}
-	return nil
+	var approvals gl.MergeRequestApprovals
+	if err = captured.Decode(&approvals); err != nil {
+		return ApproveOutput{}, toolutil.WrapErr("mrUnapprove", err)
+	}
+	return approvalOutput("mrUnapprove", &approvals, captured)
 }
 
 // CommitsInput defines parameters for listing commits in a merge request.

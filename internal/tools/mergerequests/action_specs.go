@@ -103,7 +103,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_mr_approve — add the caller's approval to the MR.
 		mergeRequestUpdateSpec("approve", toolutil.RouteAction(client, Approve), "gitlab_mr_approve"),
 		// gitlab_mr_unapprove — remove the caller's approval (destructive, idempotent).
-		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.RouteAction(client, UnapproveOutput), "gitlab_mr_unapprove"),
+		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.RouteAction(client, Unapprove), "gitlab_mr_unapprove"),
 		// gitlab_mr_commits — list commits on the MR.
 		mergeRequestReadSpec("commits", toolutil.RouteAction(client, Commits), "gitlab_mr_commits"),
 		// gitlab_mr_pipelines — list pipelines attached to the MR.
@@ -160,16 +160,6 @@ func mergeRequestGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		return mergeRequestNotFoundOutput{Identifier: fmt.Sprintf("!%s in project %s",
 			toolutil.ParamText(params["merge_request_iid"]), toolutil.ParamText(params["project_id"]))}
 	})
-}
-
-// UnapproveOutput removes approval from a merge request and returns the
-// legacy [toolutil.DeleteOutput] success shape required by the
-// destructive-action contract.
-func UnapproveOutput(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (toolutil.DeleteOutput, error) {
-	if err := Unapprove(ctx, client, input); err != nil {
-		return toolutil.DeleteOutput{}, err
-	}
-	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted approval from MR !%d in project %s.", input.MRIID, input.ProjectID)}, nil
 }
 
 // DeleteOutput deletes a merge request and returns the legacy
@@ -298,13 +288,13 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			usage:       "Add the caller's approval to a merge request. Pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).",
 			aliases:     []string{"approve merge request", "approve mr", "add my approval to mr", "sign off on mr", "lgtm this mr"},
 			related:     []string{"merge_request.unapprove", actionMRMerge, actionMRGet},
-			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
+			description: "Approve a merge request on behalf of the caller. Returns: the approval state with the approved-by count, overall approved flag, the approvers with when each approved, and whether the caller has approved and may approve, and on an Enterprise Edition instance also the approvals required and left and the rules left to satisfy. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
 		},
 		"unapprove": {
 			usage:       "Remove the caller's previously granted approval from a merge request (idempotent. Requires the caller to have approved first).",
 			aliases:     []string{"unapprove merge request", "remove approval", "revoke mr approval"},
 			related:     []string{actionMRApprove, actionMRGet},
-			description: "Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_approve, gitlab_mr_get.",
+			description: "Remove the caller's approval from a merge request. Returns: the approval state left after the withdrawal, in the shape the approve answers with: the approved-by count and users, the overall approved flag, whether the caller has approved and may approve, and on an Enterprise Edition instance the approvals required and left. See also: gitlab_mr_approve, gitlab_mr_get.",
 		},
 		"commits": {
 			usage:       "List the commits contained in a merge request, ordered and paginated (offset or keyset).",
