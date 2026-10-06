@@ -4,7 +4,7 @@ description: Seis herramientas MCP de solo lectura para la API experimental Know
 datePublished: "2026-05-06"
 faq:
   - q: "¿Qué es Orbit en GitLab MCP Server?"
-    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el nivel resuelto es Premium o Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con GITLAB_MCP_TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con GITLAB_MCP_TOOL_SURFACE=individual."
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, listar el manifiesto de herramientas MCP que sirve Orbit, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el nivel resuelto es Premium o Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con GITLAB_MCP_TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con GITLAB_MCP_TOOL_SURFACE=individual."
   - q: "¿Orbit está disponible en GitLab autoalojado?"
     a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso en un nivel Premium o Ultimate, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
   - q: "¿Qué licencia y configuración requiere Orbit?"
@@ -349,13 +349,13 @@ Devuelve el estado de indexación del grafo para un namespace, proyecto o ruta. 
 
 En cualquier superficie, los schemas de parámetros por acción están disponibles como recursos MCP, así que puedes conocer la forma exacta de `params` de cada acción Orbit sin expandir todos los schemas en `tools/list`; en la superficie dinámica `gitlab_find_action` devuelve el mismo schema inline. Estos recursos siguen disponibles con `GITLAB_MCP_CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `GITLAB_MCP_META_PARAM_SCHEMA`. La tabla lista los IDs de la superficie predeterminada; con `GITLAB_MCP_TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_orbit.<acción>`.
 
-| Recurso                             | Propósito                                            |
-| ----------------------------------- | ---------------------------------------------------- |
-| `gitlab://tools/orbit.status`       | Parámetros para comprobar salud del servicio         |
-| `gitlab://tools/orbit.schema`       | Parámetros para inspeccionar la ontología            |
-| `gitlab://tools/orbit.tools`        | Parámetros para descubrir el manifiesto de consultas |
-| `gitlab://tools/orbit.dsl`          | Parámetros para el esquema DSL/gramática             |
-| `gitlab://tools/orbit.query`        | Parámetros para consultas Knowledge Graph            |
-| `gitlab://tools/orbit.graph_status` | Parámetros para comprobar estado de indexación       |
+| Recurso                             | Propósito                                               |
+| ----------------------------------- | ------------------------------------------------------- |
+| `gitlab://tools/orbit.status`       | Parámetros para comprobar salud del servicio            |
+| `gitlab://tools/orbit.schema`       | Parámetros para inspeccionar la ontología               |
+| `gitlab://tools/orbit.tools`        | Parámetros para descubrir el manifiesto de herramientas |
+| `gitlab://tools/orbit.dsl`          | Parámetros para el esquema DSL/gramática                |
+| `gitlab://tools/orbit.query`        | Parámetros para consultas Knowledge Graph               |
+| `gitlab://tools/orbit.graph_status` | Parámetros para comprobar estado de indexación          |
 
 <FAQ />

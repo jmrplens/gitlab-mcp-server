@@ -347,13 +347,13 @@ Returns graph indexing status for a namespace, project, or full path. Use to che
 
 On every surface, action parameter schemas are available through MCP resources, so you can learn the exact `params` shape of each Orbit action without expanding every schema in `tools/list`; on the dynamic surface `gitlab_find_action` returns the same schema inline. These resources remain available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal`, regardless of `GITLAB_MCP_META_PARAM_SCHEMA` mode. The table lists the default-surface IDs; with `GITLAB_MCP_TOOL_SURFACE=meta` the entry is `gitlab://tools/gitlab_orbit.<action>`.
 
-| Resource                            | Purpose                                 |
-| ----------------------------------- | --------------------------------------- |
-| `gitlab://tools/orbit.status`       | Parameters for service health checks    |
-| `gitlab://tools/orbit.schema`       | Parameters for ontology inspection      |
-| `gitlab://tools/orbit.tools`        | Parameters for query manifest discovery |
-| `gitlab://tools/orbit.dsl`          | Parameters for DSL schema/grammar       |
-| `gitlab://tools/orbit.query`        | Parameters for Knowledge Graph queries  |
-| `gitlab://tools/orbit.graph_status` | Parameters for indexing status checks   |
+| Resource                            | Purpose                                |
+| ----------------------------------- | -------------------------------------- |
+| `gitlab://tools/orbit.status`       | Parameters for service health checks   |
+| `gitlab://tools/orbit.schema`       | Parameters for ontology inspection     |
+| `gitlab://tools/orbit.tools`        | Parameters for tool manifest discovery |
+| `gitlab://tools/orbit.dsl`          | Parameters for DSL schema/grammar      |
+| `gitlab://tools/orbit.query`        | Parameters for Knowledge Graph queries |
+| `gitlab://tools/orbit.graph_status` | Parameters for indexing status checks  |
 
 <FAQ />
