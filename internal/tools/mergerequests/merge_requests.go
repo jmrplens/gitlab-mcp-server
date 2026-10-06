@@ -983,8 +983,7 @@ type mergeRequestItemsListArgs struct {
 
 // listMergeRequestItems converts the whole page at once rather than one item
 // at a time, because a converter may need the captured response beside what
-// the SDK decoded (ADR-0021) and a capture answers for the page. A converter
-// that needs nothing of the sort is adapted by [plainItems].
+// the SDK decoded (ADR-0021) and a capture answers for the page.
 func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func([]T) ([]O, error), buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
 	var zero R
 	if err := ctx.Err(); err != nil {
@@ -1007,20 +1006,18 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestIt
 	return buildOutput(out, toolutil.PaginationFromResponse(resp)), nil
 }
 
-// plainItems adapts a per-item converter that reads nothing but what the SDK
-// decoded to the page-at-a-time form [listMergeRequestItems] takes.
-func plainItems[T, O any](convert func(T) O) func([]T) ([]O, error) {
-	return func(items []T) ([]O, error) {
-		out := make([]O, len(items))
-		for i, item := range items {
-			out[i] = convert(item)
-		}
-		return out, nil
-	}
-}
-
 // Commits retrieves the list of commits in a merge request.
+//
+// The page is read from the captured response (ADR-0021), as
+// [commits.List] reads its own: a commit whose trailers GitLab parsed carries
+// extended_trailers as lists, which client-go's Commit cannot decode, and
+// client-go then returns no page at all. Its failure to read an answer GitLab
+// gave is passed over ([commits.MisreadByClientGo]) and the capture decoded
+// instead; an answer the capture cannot hold either is reported, and the
+// response client-go hands back with its failure still carries the page's
+// headers.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	return listMergeRequestItems(ctx, mergeRequestItemsListArgs{
 		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrCommits",
 		listOpts: mrItemListOptions{
@@ -1033,8 +1030,14 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
 			lo.applyTo(&listOptions.ListOptions)
-			return client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
-		}, plainItems(commits.ToOutput), func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
+			items, resp, err := client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
+			if commits.MisreadByClientGo(err) {
+				return items, resp, nil
+			}
+			return items, resp, err
+		}, func([]*gl.Commit) ([]commits.Output, error) {
+			return commits.CapturedOutputs(captured)
+		}, func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
 			return CommitsOutput{Commits: out, Pagination: pagination}
 		})
 }

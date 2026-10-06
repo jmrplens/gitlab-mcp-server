@@ -94,6 +94,12 @@ type scopedSearchArgs[T any] struct {
 	projectSearch scopedSearchFunc[T]
 	groupSearch   scopedSearchFunc[T]
 	globalSearch  globalSearchFunc[T]
+	// capturesPage marks a caller that reads the page from the captured
+	// response (ADR-0021) rather than from what client-go decoded. client-go
+	// failing to decode an answer GitLab gave ([commits.MisreadByClientGo])
+	// is then not the search's failure: the error is dropped and the response
+	// kept, so the page's headers still reach the output.
+	capturesPage bool
 }
 
 func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T, *gl.Response, error) {
@@ -121,7 +127,7 @@ func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T,
 	default:
 		items, resp, err = args.globalSearch(args.query, opts, gl.WithContext(ctx))
 	}
-	if err != nil {
+	if err != nil && (!args.capturesPage || !commits.MisreadByClientGo(err)) {
 		return nil, nil, wrapSearchErr(args.operation, err)
 	}
 	return items, resp, nil
@@ -342,17 +348,29 @@ type CommitsOutput struct {
 
 // Commits searches for commits in GitLab.
 // Scope priority: project_id > group_id > global.
+//
+// The page is read from the captured response (ADR-0021), as
+// [commits.List] reads its own: a commit whose trailers GitLab parsed carries
+// extended_trailers as lists, which client-go's Commit cannot decode, and
+// client-go then returns no page at all. Its failure to read an answer GitLab
+// gave is passed over ([commits.MisreadByClientGo]) and the capture decoded
+// instead; an answer the capture cannot hold either is reported.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
 	searchClient := client.GL().Search
-	commitResults, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchCommits", projectSearch: searchClient.CommitsByProject,
 		groupSearch: searchClient.CommitsByGroup, globalSearch: searchClient.Commits,
+		capturesPage: true,
 	})
 	if err != nil {
 		return CommitsOutput{}, err
 	}
-	out := convertSearchResults(commitResults, commits.ToOutput)
+	out, err := commits.CapturedOutputs(captured)
+	if err != nil {
+		return CommitsOutput{}, toolutil.WrapErr("searchCommits", err)
+	}
 	return CommitsOutput{Commits: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 

@@ -441,6 +441,107 @@ func TestMRCommits_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// mrTrailedCommitJSON is a merge request commit as GitLab answers it once its
+// trailers were parsed: trailers keeps the last value of each trailer, and
+// extended_trailers maps each trailer to the list of all of its values, the
+// shape client-go's Commit cannot decode (row 69 of
+// docs/development/upstream-bugs.md).
+const mrTrailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
+	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
+	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
+
+// TestMRCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer holds
+// merge_request.commits to the reading issue 1026 gave the commit list: a page
+// carrying a commit whose extended_trailers are lists makes client-go fail the
+// whole page ("cannot unmarshal array into Go struct field
+// .0.extended_trailers.Signed-off-by of type string"), so the page is read off
+// the captured response. The trailed commit keeps both of its
+// Signed-off-by values, the commit beside it keeps its empty map, and the
+// pagination headers of the answer client-go failed to decode still reach the
+// output.
+func TestMRCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathMR1+"/commits" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[`+mrTrailedCommitJSON+`,{"id":"d4e5f6","short_id":"d4e5f6","title":"chore: plain","web_url":"u","trailers":{},"extended_trailers":{}}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "2", NextPage: "2"})
+	}))
+
+	out, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Commits() unexpected error: %v", err)
+	}
+	if len(out.Commits) != 2 {
+		t.Fatalf("len(Commits) = %d, want 2", len(out.Commits))
+	}
+	trailed, plain := out.Commits[0], out.Commits[1]
+	want := map[string][]string{
+		"Signed-off-by": {"Alice <alice@example.com>", "Bob <bob@example.com>"},
+		"Reviewed-by":   {"Carol <carol@example.com>"},
+	}
+	if trailed.ID != "a1b2c3" || trailed.Title != "feat: signed twice" {
+		t.Errorf("first commit = %+v, want a1b2c3 titled feat: signed twice", trailed)
+	}
+	if !reflect.DeepEqual(trailed.ExtendedTrailers, want) {
+		t.Errorf("ExtendedTrailers = %v, want %v", trailed.ExtendedTrailers, want)
+	}
+	if trailed.Trailers["Signed-off-by"] != "Bob <bob@example.com>" {
+		t.Errorf("Trailers = %v, want the last Signed-off-by value", trailed.Trailers)
+	}
+	if plain.ID != "d4e5f6" || len(plain.ExtendedTrailers) != 0 {
+		t.Errorf("second commit = %+v, want d4e5f6 with no trailers", plain)
+	}
+	if out.Pagination.NextPage != 2 || out.Pagination.PerPage != 2 {
+		t.Errorf("Pagination = %+v, want the headers of the answer", out.Pagination)
+	}
+}
+
+// TestMRCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure pins the other
+// side of passing over client-go's decode failure: an answer that fits neither
+// client-go's Commit nor this server's type (an id that is a number) is not
+// published as an empty page. Decoding the capture fails as well, and the
+// handler reports that failure.
+func TestMRCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":5}]`)
+	}))
+
+	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("expected the decode failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestMRCommits_Refused_ReportsTheRefusalWithItsHint holds the error client-go
+// returns for a refusal apart from the decode failure the handler passes over:
+// a 404 is reported as GitLab's refusal, with the hint that names the
+// identifiers to check, and never as a capture that failed to decode.
+func TestMRCommits_Refused_ReportsTheRefusalWithItsHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}))
+
+	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("expected the refusal, got nil")
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		t.Errorf("error = %v, want GitLab's 404", err)
+	}
+	if !strings.Contains(err.Error(), "merge_request.get") {
+		t.Errorf("error = %v, want the hint naming merge_request.get", err)
+	}
+	if strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("error = %v, want the refusal rather than a decode failure", err)
+	}
+}
+
 // TestMRPipelines_Success verifies that Pipelines returns pipelines for a MR.
 func TestMRPipelines_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
