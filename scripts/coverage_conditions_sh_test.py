@@ -688,13 +688,15 @@ class CoverageConditionsTest(unittest.TestCase):
     def test_gate_all_fails_on_every_condition_not_evaluated_both_ways(self):
         # The three shapes gobco writes such a condition in, a line a Windows
         # console ended with a carriage return among them, and a report that
-        # names none, which passes and says so.
+        # names none, which passes and says so. A held condition exits 3, the
+        # status no other failure of the script uses, which is how the
+        # on-demand measurement tells a figure the gate held from no figure.
         scope = "the files of ./internal/plain measured on linux/amd64 under build tags (none)"
         cases = [
-            ("never false", 'plain.go:4:9: condition "c == 1" was 3 times true but never false', 1),
-            ("never true", 'plain.go:4:9: condition "c == 1" was once false but never true', 1),
-            ("never evaluated", 'plain.go:4:9: condition "c == 1" was never evaluated', 1),
-            ("a line ending in a carriage return", 'plain.go:4:9: condition "c == 1" was never evaluated\r', 1),
+            ("never false", 'plain.go:4:9: condition "c == 1" was 3 times true but never false', 3),
+            ("never true", 'plain.go:4:9: condition "c == 1" was once false but never true', 3),
+            ("never evaluated", 'plain.go:4:9: condition "c == 1" was never evaluated', 3),
+            ("a line ending in a carriage return", 'plain.go:4:9: condition "c == 1" was never evaluated\r', 3),
             ("every condition both ways", 'plain.go:4:9: condition "c == 1" was once true and once false', 0),
             ("no condition named", "", 0),
         ]
@@ -721,11 +723,11 @@ class CoverageConditionsTest(unittest.TestCase):
         windows = {"GOOS": "windows", "GOBCO_GATE": "beyond:linux/amd64"}
         held = "the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go)"
         cases = [
-            ("one in the Windows half", 'proc_windows.go:5:9: condition "c == 2" was once true but never false', 1, 0),
-            ("one named with a Windows path", 'cmd\\tool\\proc_windows.go:5:9: condition "c == 2" was never evaluated', 1, 0),
+            ("one in the Windows half", 'proc_windows.go:5:9: condition "c == 2" was once true but never false', 3, 0),
+            ("one named with a Windows path", 'cmd\\tool\\proc_windows.go:5:9: condition "c == 2" was never evaluated', 3, 0),
             ("one in a file Linux builds too", 'main.go:3:9: condition "x" was never evaluated', 0, 1),
             ("one of each", 'main.go:3:9: condition "x" was never evaluated\n'
-                            'proc_windows.go:5:9: condition "c == 2" was once false but never true', 1, 1),
+                            'proc_windows.go:5:9: condition "c == 2" was once false but never true', 3, 1),
             ("none", "", 0, 0),
         ]
         for name, conditions, status, left in cases:
@@ -764,7 +766,7 @@ class CoverageConditionsTest(unittest.TestCase):
         proc, _ = self.run_script("./internal/winonly", env={
             "GOOS": "windows", "GOBCO_GATE": "beyond:linux/amd64",
             "STUB_GOBCO_CONDITIONS": 'w_windows.go:4:9: condition "c == 1" was never evaluated'})
-        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
         self.assertIn("builds and linux/amd64 does not (w_windows.go)", proc.stderr)
 
     def test_gate_reference_go_cannot_load_is_refused(self):

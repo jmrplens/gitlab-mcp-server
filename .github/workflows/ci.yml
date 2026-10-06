@@ -1287,7 +1287,9 @@ jobs:
       # builds and linux/amd64 does not, and prints and passes one in a file
       # Linux builds too, which the local gate before a commit measures and no
       # CI step does. Holding those here as well would fail a leg over a test
-      # the platform skips, for a condition already measured both ways.
+      # the platform skips, for a condition already measured both ways. The
+      # figure for a whole package on Windows or macOS is conditions.yml's,
+      # dispatched by hand, which runs this same script and fails on no figure.
       #
       # Through bash and the script itself rather than make, which
       # windows-latest does not promise. The timeout is gobco's go test's, whose

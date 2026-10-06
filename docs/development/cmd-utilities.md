@@ -52,6 +52,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_third_party_notices`      | Generators                    | Writes `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the release binaries link, read from their build information, the packages each links and the module cache                                                                                                                                                             | Release time: GoReleaser's `sboms`, the Dockerfile, `make mcpb`                                                                                                         |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                                                                                                                                                                      | part of `make audit-docs`                                                                                                                                               |
 | `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential), draws the published charts, measures whether a bound leaves a quiet tenant better off, and measures what a held call and a stateful session cost the process and what the process does with each past its descriptor limit                                                  | `make bench-resources`, `make bench-fairness`, `make bench-held`, `make bench-sessions`                                                                                 |
+| `measure_conditions`           | Measurements                  | Plans the on-demand condition coverage workflow (`conditions.yml`) and writes its job summary from the records the runs left                                                                                                                                                                                                                              | Dispatch only: `gh workflow run conditions.yml`                                                                                                                         |
 | `gen_model_corpus`             | Evaluation                    | Renders the model evaluation corpus breadth ledger: what the corpus asks about, counted against the action catalog                                                                                                                                                                                                                                        | `make gen-model-corpus`, `make check-model-corpus`                                                                                                                      |
 | `gen_model_results`            | Evaluation                    | Folds a run's observation shards into the committed record, scores them and redraws the published results page                                                                                                                                                                                                                                            | `make gen-model-results`, `make model-results-record`, `make model-results-refold`, `make check-model-results`                                                          |
 | `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                                                                                                                                                                             | `make build`, `make run`                                                                                                                                                |
@@ -2301,6 +2302,47 @@ The measurement record, the SVG chart pairs under the site chart directory (one 
 - `make bench-resources-render` — redraw from the committed record; what to run after changing a figure.
 - `make check-bench-resources` — CI gate; seconds, since no benchmark is run.
 - `make bench-fairness`, `make bench-held` and `make bench-sessions`: the three modes above, each writing its own uncommitted document under `bench/`.
+
+## Measurements
+
+### measure_conditions
+
+The two ends of `.github/workflows/conditions.yml`, the condition coverage measurement dispatched by hand on Windows, macOS and Linux (issue 1210). The measuring itself is `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`, run through bash on each runner; this command plans the runs and writes the job summary from what they left. See [Testing Documentation](testing/README.md) for how to dispatch it.
+
+#### Usage
+
+```bash
+# Validate a dispatch and print the matrix line for $GITHUB_OUTPUT
+go run ./cmd/measure_conditions/ plan -packages "./cmd/server" -systems "windows-latest macos-latest" -gate all
+
+# An empty package list: every package carrying a GOOS- or GOARCH-constrained file
+go run ./cmd/measure_conditions/ plan -systems ubuntu-latest -gate beyond:linux/amd64
+
+# Write the job summary from the downloaded artifacts
+go run ./cmd/measure_conditions/ summarize -plan "$MATRIX" -records records/ -gate all -commit "$(git rev-parse HEAD)"
+```
+
+#### plan
+
+| Flag        | Default | Description                                                                                                                                          |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-packages` | (empty) | Package directories, `./cmd/server` style, separated by spaces or commas; empty finds every package whose built files differ between release targets |
+| `-systems`  | (empty) | Runners: `windows-latest`, `macos-latest`, `ubuntu-latest`; at least one, and no other label                                                         |
+| `-gate`     | (empty) | The `GOBCO_GATE` the script runs with: `all` or `beyond:GOOS/GOARCH`, refused here as the script would refuse it                                     |
+| `-dir`      | `.`     | Module root the discovery lists                                                                                                                      |
+
+A package is constrained when the files the go command builds for it differ between two of the platforms `.goreleaser.yml` builds (its `goos` crossed with its `goarch`), listed with `CGO_ENABLED=1` under each, which is the set `audit_dead_consts` reads a package again under. A file behind a tag alone differs on no release target and is left out. Exit 2 for an input it refuses, 1 when the discovery failed or found nothing.
+
+#### summarize
+
+| Flag       | Default | Description                                                     |
+| ---------- | ------- | --------------------------------------------------------------- |
+| `-plan`    | (empty) | The matrix `plan` printed, as JSON                              |
+| `-records` | (empty) | Directory the artifacts were downloaded into, read at any depth |
+| `-gate`    | (empty) | The gate the runs used, named in the summary                    |
+| `-commit`  | (empty) | The commit measured, named in the summary                       |
+
+Each run leaves `run.env` (`package`, `system`, `platform`, `status`, one `key=value` each) beside `gobco.txt`, everything the script printed. A status of 0 or 3 is a measurement (3 is the gate holding a condition, which the script uses for nothing else) and any other is none. The summary is one row per run with gobco's figure, every condition not evaluated both ways with its file and line, and the reason each unmeasured run gave. It exits 0 whatever the figures say, 1 when a record cannot be read, names a run the plan did not ask for, repeats one, or disagrees with its own status, and 2 for a usage error.
 
 ## Evaluation
 
