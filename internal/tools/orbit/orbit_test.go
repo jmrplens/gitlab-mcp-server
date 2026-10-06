@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -445,7 +446,7 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 			http.Error(w, "decode request", http.StatusInternalServerError)
 			return
 		}
-		if string(got["query"]) != `{"node":{"entity":"Project","id":"p","node_ids":[1]},"query_type":"traversal"}` {
+		if string(got["query"]) != `{"nodes":[{"entity":"Project","id":"p","node_ids":[1]}],"query_type":"traversal"}` {
 			t.Errorf("query body = %s, want traversal query with node_ids", got["query"])
 			http.Error(w, "query body, want traversal query with node_ids", http.StatusInternalServerError)
 			return
@@ -464,10 +465,7 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query: map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		},
+		Query:          projectByIDQuery(),
 		ResponseFormat: "raw",
 	})
 	if err != nil {
@@ -506,10 +504,7 @@ func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"result":[{"_id":"1"}],"query_type":"traversal","row_count":1}`)
 	}))
 
-	out, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
-		"query_type": "traversal",
-		"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-	}})
+	out, err := Query(context.Background(), client, QueryInput{Query: projectByIDQuery()})
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
@@ -519,35 +514,60 @@ func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
 	}
 }
 
-// TestQuery_EveryQueryType_ReachesTheWire verifies that a well-formed query of
-// each of the other three types passes the client-side validator and is
-// forwarded to GitLab as the caller wrote it: an aggregation with a scoped
-// node, a neighbors expansion referencing its node by id, and a path between
-// two nodes. The rejection tests prove the validator refuses; this proves it
-// does not refuse what GitLab accepts.
+// projectByIDQuery is the smallest query GitLab.com runs in version 12 of the
+// DSL: one Project node, in the nodes list every query carries, bounded by its
+// id.
+func projectByIDQuery() map[string]any {
+	return map[string]any{
+		"query_type": "traversal",
+		"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
+	}
+}
+
+// TestQuery_EveryQueryType_ReachesTheWire verifies that a query of each type,
+// in the version 12 shape GitLab.com answered 200 to on 2026-10-05, is
+// forwarded to GitLab as the caller wrote it: a filtered traversal, an
+// aggregation grouped by a node and sorted by its count, a neighbors query
+// whose center is its one node, and a path with the rel_types GitLab
+// requires. The neighbors case is the shape the validator this package
+// carried, written for an older shape of the DSL, refused before sending
+// anything (issue 1031).
 func TestQuery_EveryQueryType_ReachesTheWire(t *testing.T) {
 	tests := []struct {
 		name  string
 		query map[string]any
 	}{
 		{
+			name: "traversal",
+			query: map[string]any{
+				"query_type": "traversal",
+				"nodes": []any{
+					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"starts_with": "plens1/"}}, "columns": []any{"id", "full_path"}},
+				},
+				"limit": 3,
+			},
+		},
+		{
 			name: "aggregation",
 			query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
-					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"op": "starts_with", "value": "plens1/"}}},
-					map[string]any{"id": "mr", "entity": "MergeRequest", "columns": []any{"id"}},
+					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"starts_with": "plens1/"}}},
+					map[string]any{"id": "mr", "entity": "MergeRequest"},
 				},
-				"relationships": []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
-				"aggregations":  []any{map[string]any{"function": "count", "target": "mr", "alias": "mr_count"}},
+				"relationships":    []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
+				"group_by":         []any{"p"},
+				"aggregations":     []any{map[string]any{"count": "mr", "as": "mr_count"}},
+				"aggregation_sort": "-mr_count",
 			},
 		},
 		{
 			name: "neighbors",
 			query: map[string]any{
 				"query_type": "neighbors",
-				"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}},
-				"neighbors":  map[string]any{"node": "p", "direction": "both"},
+				"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
+				"neighbors":  map[string]any{"direction": "both"},
+				"limit":      5,
 			},
 		},
 		{
@@ -558,7 +578,7 @@ func TestQuery_EveryQueryType_ReachesTheWire(t *testing.T) {
 					map[string]any{"id": "u", "entity": "User", "node_ids": []any{7}},
 					map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}},
 				},
-				"path": map[string]any{"type": "shortest", "from": "u", "to": "p", "max_depth": 3},
+				"path": map[string]any{"type": "shortest", "from": "u", "to": "p", "max_depth": 3, "rel_types": []any{"*"}},
 			},
 		},
 	}
@@ -620,10 +640,7 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query: map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		},
+		Query:          projectByIDQuery(),
 		ResponseFormat: "llm",
 	})
 	if err != nil {
@@ -646,14 +663,115 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}))
 
 	_, err := Query(context.Background(), client, QueryInput{
-		Query: map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		},
+		Query:          projectByIDQuery(),
 		ResponseFormat: "llm",
 	})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// TestQuery_AnyShape_IsLeftForGitLabToJudge verifies that the handler holds a
+// query to nothing but being one: queries in the older shape this package
+// taught (a top-level node, an {op, value} filter, a node named inside
+// neighbors), an unbounded one, one with an unknown or missing query_type, and
+// an empty object all reach GitLab exactly as the caller wrote them.
+//
+// The shape rules this package used to check were written for that older
+// shape, and they refused the one neighbors query GitLab runs while letting
+// through queries GitLab refuses (issue 1031). GitLab compiles every query
+// against the DSL it serves and says what is wrong with it, so a local copy of
+// those rules could only ever fall behind it.
+func TestQuery_AnyShape_IsLeftForGitLabToJudge(t *testing.T) {
+	tests := []struct {
+		name  string
+		query map[string]any
+	}{
+		{name: "a top-level node", query: map[string]any{"query_type": "traversal", "node": map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}},
+		{name: "an op and value filter", query: map[string]any{"query_type": "traversal", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"op": "starts_with", "value": "plens1/"}}}}}},
+		{name: "a node named inside neighbors", query: map[string]any{"query_type": "neighbors", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}, "neighbors": map[string]any{"node": "p"}}},
+		{name: "an unbounded node", query: map[string]any{"query_type": "traversal", "nodes": []any{map[string]any{"id": "p", "entity": "Project"}}}},
+		{name: "an unknown query_type", query: map[string]any{"query_type": "search", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}}},
+		{name: "no query_type", query: map[string]any{"nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}}},
+		{name: "an empty object", query: map[string]any{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantQuery, marshalErr := json.Marshal(tt.query)
+			if marshalErr != nil {
+				t.Fatalf("marshal query: %v", marshalErr)
+			}
+			var sent atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sent.Add(1)
+				var got map[string]json.RawMessage
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "decode request", http.StatusInternalServerError)
+					return
+				}
+				if string(got["query"]) != string(wantQuery) {
+					t.Errorf("query body = %s, want the caller's %s", got["query"], wantQuery)
+				}
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"code":"compile_error","message":"schema violation"}`)
+			}))
+
+			_, err := Query(context.Background(), client, QueryInput{Query: tt.query})
+			if err == nil {
+				t.Fatal("Query() error = nil, want GitLab's refusal")
+			}
+			if sent.Load() != 1 {
+				t.Fatalf("requests sent = %d, want the one GitLab judges the query by", sent.Load())
+			}
+		})
+	}
+}
+
+// TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint verifies what a
+// caller is told when GitLab refuses a query: the operation, GitLab's code and
+// message as Workhorse wrote them, the hint naming orbit.dsl and orbit.schema,
+// and the request line, on both the structured and the llm path. The message
+// is what makes the refusal correctable, and before issue 1031 it was
+// withheld: the code key read as the mark of a body something other than
+// GitLab composed, so a model was told only "bad request".
+func TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint(t *testing.T) {
+	const refusal = `schema violation: "nodes" is a required property at ; Additional properties are not allowed ('node' was unexpected) at `
+	formats := []struct {
+		name   string
+		format string
+	}{
+		{name: "the default format", format: ""},
+		{name: "raw", format: "raw"},
+		{name: "llm", format: "llm"},
+	}
+	for _, tc := range formats {
+		format := tc.format
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				body, err := json.Marshal(map[string]string{"code": "compile_error", "message": refusal})
+				if err != nil {
+					t.Errorf("marshal refusal: %v", err)
+				}
+				testutil.RespondJSON(w, http.StatusBadRequest, string(body))
+			}))
+
+			_, err := Query(context.Background(), client, QueryInput{
+				Query:          map[string]any{"query_type": "traversal", "node": map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
+				ResponseFormat: format,
+			})
+			if err == nil {
+				t.Fatal("Query() error = nil, want GitLab's refusal")
+			}
+			want := "orbit_query: bad request: check your input parameters ({code: compile_error}, {message: " + refusal + "}). " +
+				"Suggestion: " + queryRefusedHint + ": POST "
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("Query() error = %q, want it to begin %q", err, want)
+			}
+			if !strings.HasSuffix(err.Error(), "/api/v4/orbit/query: 400 {code: compile_error}, {message: "+refusal+"}") {
+				t.Fatalf("Query() error = %q, want the request line and GitLab's refusal at its end", err)
+			}
+		})
 	}
 }
 
@@ -725,7 +843,7 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/graph_status")
 		testutil.AssertQueryParam(t, r, "full_path", "gitlab-org/gitlab")
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"projects": {"indexed": 3, "total_known": 4},
+			"projects": {"indexed": 3, "total_known": 4, "gaps": 1},
 			"domains": [{"name": "SDLC", "items": [{"name": "MergeRequest", "count": 42}]}],
 			"indexing": {"state": "indexed", "last_duration_ms": 99}
 		}`)
@@ -736,7 +854,7 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 		t.Fatalf("GraphStatus() error: %v", err)
 	}
 	want := GraphStatusOutput{
-		Projects: &GraphStatusProjects{Indexed: 3, TotalKnown: 4},
+		Projects: &GraphStatusProjects{Indexed: 3, TotalKnown: 4, Gaps: 1},
 		Domains:  []GraphStatusDomain{{Name: "SDLC", Items: []GraphStatusDomainItem{{Name: "MergeRequest", Count: 42}}}},
 		Indexing: &GraphStatusIndexing{State: "indexed", LastDurationMs: 99},
 	}
@@ -803,6 +921,42 @@ func TestGraphStatus_WithoutIndexing_LeavesIndexingNil(t *testing.T) {
 	}
 }
 
+// TestGraphStatus_LLMFormat_HasNoProjectsToCountGapsIn verifies that the llm
+// answer, formatted_text and nothing else, publishes the text and no project
+// counts: the captured body carries no projects object, so there is no gaps
+// count to read and no counts object to write it into.
+func TestGraphStatus_LLMFormat_HasNoProjectsToCountGapsIn(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "response_format", "llm")
+		testutil.RespondJSON(w, http.StatusOK, `{"formatted_text":"indexed: 2 of 2"}`)
+	}))
+
+	out, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "plens1", ResponseFormat: "llm"})
+	if err != nil {
+		t.Fatalf("GraphStatus() error: %v", err)
+	}
+	want := GraphStatusOutput{FormattedText: "indexed: 2 of 2", Domains: []GraphStatusDomain{}}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("GraphStatus() = %+v, want %+v", out, want)
+	}
+}
+
+// TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError verifies that a
+// gaps count the captured body carries as something other than a number is an
+// error the handler reports, rather than a zero published as if GitLab had
+// counted none: client-go ignores the key, so its own decode succeeds and
+// only the read of the capture can notice.
+func TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":2,"gaps":"many"}}`)
+	}))
+
+	_, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "plens1"})
+	if err == nil || !strings.Contains(err.Error(), "orbit_graph_status") || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Fatalf("GraphStatus() error = %v, want the captured body's decode failure under the operation", err)
+	}
+}
+
 // TestOrbit_ValidationErrors_ReturnActionableErrors verifies that client-side input
 // validation for all Orbit handlers returns actionable error messages for invalid formats and malformed queries.
 //
@@ -832,27 +986,27 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Query(context.Background(), client, QueryInput{})
 				return err
 			},
-			want: "query",
+			want: "query is required",
 		},
 		{
 			name: "unmarshalable query",
 			call: func() error {
-				// A func value cannot be JSON-encoded. The query passes
-				// structural validation (it has query_type and node_ids) but
-				// fails the final json.Marshal step. This protects callers
-				// from passing unserializable values in the query map.
+				// A func value cannot be JSON-encoded, which is one of the two
+				// things about a query GitLab cannot be asked to judge, since
+				// nothing can be sent. A caller decoding JSON never builds one;
+				// a caller building the map in Go can.
 				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
 					"query_type": "traversal",
-					"node": map[string]any{
+					"nodes": []any{map[string]any{
 						"id":       "p",
 						"entity":   "Project",
 						"node_ids": []int{1},
 						"bad":      func() {},
-					},
+					}},
 				}})
 				return err
 			},
-			want: "JSON object",
+			want: "query must be a JSON object: json: unsupported type: func()",
 		},
 		{
 			name: "invalid schema format",
@@ -898,14 +1052,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 			name: "invalid query response format",
 			call: func() error {
 				_, err := Query(context.Background(), client, QueryInput{
-					Query: map[string]any{
-						"query_type": "traversal",
-						"node": map[string]any{
-							"id":       "p",
-							"entity":   "Project",
-							"node_ids": []int{1},
-						},
-					},
+					Query:          projectByIDQuery(),
 					ResponseFormat: "xml",
 				})
 				return err
@@ -919,81 +1066,6 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				return err
 			},
 			want: "use raw or llm",
-		},
-		{
-			name: "missing query_type",
-			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{}})
-				return err
-			},
-			want: "query_type is required",
-		},
-		{
-			name: "unknown query_type",
-			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"query_type": "search"}})
-				return err
-			},
-			want: "must be one of: traversal, aggregation, neighbors, path_finding",
-		},
-		{
-			name: "traversal without node_ids or filters",
-			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
-					"query_type": "traversal",
-					"node":       map[string]any{"id": "p", "entity": "Project", "columns": []string{"id"}},
-				}})
-				return err
-			},
-			want: "require at least one node",
-		},
-		{
-			name: "aggregation without node_ids or filters",
-			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
-					"query_type":   "aggregation",
-					"nodes":        []any{map[string]any{"id": "mr", "entity": "MergeRequest", "columns": []any{"id"}}},
-					"aggregations": []any{map[string]any{"function": "count", "target": "mr", "alias": "mr_count"}},
-				}})
-				return err
-			},
-			want: "aggregation queries require at least one node",
-		},
-		{
-			name: "traversal with id_range is also scoped",
-			call: func() error {
-				// id_range counts as a valid scope per the Orbit query
-				// language reference. This subtest uses its own client that
-				// returns 500 on every call so the test can confirm the
-				// request reached the wire (and thus passed client-side
-				// validation) without triggering the shared fixture's
-				// "handler should not be called" assertion.
-				allowClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					w.WriteHeader(http.StatusInternalServerError)
-				}))
-				_, err := Query(context.Background(), allowClient, QueryInput{Query: map[string]any{
-					"query_type": "traversal",
-					"node": map[string]any{
-						"id":       "p",
-						"entity":   "Project",
-						"id_range": map[string]any{"start": 1, "end": 100},
-					},
-				}})
-				return err
-			},
-			want: "internal server error", // httptest handler returns 500
-		},
-		{
-			name: "path_finding with fewer than two nodes",
-			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
-					"query_type": "path_finding",
-					"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}}},
-					"path":       map[string]any{"type": "shortest", "from": "p", "to": "p", "max_depth": 1},
-				}})
-				return err
-			},
-			want: "at least two top-level node",
 		},
 	}
 
@@ -1064,13 +1136,23 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusForbidden,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
-					"query_type": "traversal",
-					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-				}})
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
 				return err
 			},
 			want: "Knowledge Graph enabled",
+		},
+		{
+			// A query GitLab refuses gets the hint naming where a correction
+			// comes from, and only the query route gets it: the graph_status
+			// case below keeps the hint every other route gives a 400.
+			name:   "query refused",
+			path:   "/api/v4/orbit/query",
+			status: http.StatusBadRequest,
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
+				return err
+			},
+			want: "Suggestion: " + queryRefusedHint,
 		},
 		{
 			name:   "bad request",
@@ -1087,10 +1169,7 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusTooManyRequests,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
-					"query_type": "traversal",
-					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-				}})
+				_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
 				return err
 			},
 			want: "rate-limited",
@@ -1151,10 +1230,7 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		{name: "tools", call: func() error { _, err := Tools(ctx, client, ToolsInput{}); return err }},
 		{name: "dsl", call: func() error { _, err := DSL(ctx, client, DSLInput{}); return err }},
 		{name: "query", call: func() error {
-			_, err := Query(ctx, client, QueryInput{Query: map[string]any{
-				"query_type": "traversal",
-				"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-			}})
+			_, err := Query(ctx, client, QueryInput{Query: projectByIDQuery()})
 			return err
 		}},
 		{name: "graph status", call: func() error {

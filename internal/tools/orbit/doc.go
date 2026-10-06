@@ -19,10 +19,12 @@
 //
 // Reference: https://docs.gitlab.com/api/orbit/
 //
-// The Query handler accepts the full Orbit query DSL (traversal,
-// aggregation, neighbors, path_finding) described at
-// https://docs.gitlab.com/orbit/remote/queries/. Client-side validation
-// in [validateQuery] only checks the small subset of rules the live API
-// rejects with confusing 400 errors; the canonical schema is served by
-// [DSL] and changes during the Orbit beta.
+// The Query handler forwards a query in the Orbit query DSL (traversal,
+// aggregation, neighbors, path_finding) as the caller wrote it, checking
+// only that one was given and that it encodes as JSON. The DSL is the JSON
+// Schema [DSL] serves, version 12 at the time of writing, and it changes
+// during the Orbit beta: GitLab compiles each query against it and refuses
+// what it cannot run with a message naming the fault, which reaches the
+// caller rather than being replaced by rules written here, which went stale
+// once already (issue 1031).
 package orbit

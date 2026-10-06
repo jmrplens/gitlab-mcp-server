@@ -14,6 +14,10 @@ import (
 // the checks are asked on, well inside the window.
 const recordDay = "2026-09-27"
 
+// dslSchema is the $id of the query DSL GitLab.com served when version 2 of
+// the record was introduced.
+const dslSchema = "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12"
+
 var judgedOn = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
 // wholeRecord is a record that passes every check: each expected call once,
@@ -22,7 +26,7 @@ func wholeRecord() Document {
 	doc := Document{
 		SchemaVersion: SchemaVersion,
 		Note:          "fixture",
-		Source:        Source{Instance: Instance, OrbitVersion: "0.130.0", Namespace: "plens1", RetrievedAt: recordDay},
+		Source:        Source{Instance: Instance, OrbitVersion: "0.130.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", Namespace: "plens1", RetrievedAt: recordDay},
 	}
 	for _, id := range ExpectedCalls() {
 		doc.Calls = append(doc.Calls, Call{
@@ -127,7 +131,8 @@ func TestRead_WhatIsNotARecordOfThisBuild_IsRefused(t *testing.T) {
 	}{
 		{name: "missing", want: "reading the Orbit response record"},
 		{name: "not JSON", content: "{", want: "decoding the Orbit response record"},
-		{name: "another schema version", content: `{"schema_version": 2}`, want: "schema version 2 and this build reads version 1: regenerate it with make gen-orbit-record"},
+		{name: "the schema version before the query DSL was recorded", content: `{"schema_version": 1}`, want: "schema version 1 and this build reads version 2: regenerate it with make gen-orbit-record"},
+		{name: "a later schema version", content: `{"schema_version": 3}`, want: "schema version 3 and this build reads version 2: regenerate it with make gen-orbit-record"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -290,6 +295,8 @@ func TestProblems_EachDefect_IsNamed(t *testing.T) {
 	}{
 		{name: "another instance", edit: func(d *Document) { d.Source.Instance = "https://gitlab.example.com" }, want: `taken from "https://gitlab.example.com", not https://gitlab.com`},
 		{name: "no version", edit: func(d *Document) { d.Source.OrbitVersion = "" }, want: "names no Orbit version"},
+		{name: "no query DSL schema", edit: func(d *Document) { d.Source.DSLSchema = "" }, want: "names no query DSL schema and version"},
+		{name: "no query DSL version", edit: func(d *Document) { d.Source.DSLVersion = "" }, want: "names no query DSL schema and version"},
 		{name: "no namespace", edit: func(d *Document) { d.Source.Namespace = "" }, want: "names no fixture namespace"},
 		{name: "no date", edit: func(d *Document) { d.Source.RetrievedAt = "yesterday" }, want: `taken on "yesterday", which is not a date`},
 		{name: "a future date", edit: func(d *Document) { d.Source.RetrievedAt = "2026-12-01" }, want: "has not happened yet"},
@@ -376,5 +383,42 @@ func TestDiff_NamesEveryChangeToTheKeyTree(t *testing.T) {
 	}
 	if got := Diff(before, before); got != nil {
 		t.Errorf("Diff() of a record with itself = %q, want nil", got)
+	}
+}
+
+// TestDiff_AChangedQueryDSL_IsTheOneProvenanceChangeReported verifies the
+// drift alarm issue 1031 asked for: a record taken against another query DSL,
+// a new $id or only a new version of the same one, is reported, while a new
+// Orbit version or day alone is not. orbit.query teaches a model that
+// language, so a change to it is a change somebody has to read its guidance
+// against before the record is committed.
+func TestDiff_AChangedQueryDSL_IsTheOneProvenanceChangeReported(t *testing.T) {
+	committed := Source{OrbitVersion: "0.135.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", RetrievedAt: "2026-10-01"}
+	cases := []struct {
+		name  string
+		after Source
+		want  []string
+	}{
+		{
+			name:  "a new version of the language",
+			after: Source{OrbitVersion: "0.137.0", DSLSchema: dslSchema, DSLVersion: "12.1.10", RetrievedAt: recordDay},
+			want:  []string{"~ query DSL: " + dslSchema + " 12.1.9 -> " + dslSchema + " 12.1.10: read orbit.query's guidance against it"},
+		},
+		{
+			name:  "a new language at the same version",
+			after: Source{OrbitVersion: "0.135.0", DSLSchema: "graph_query/v13", DSLVersion: "12.1.9", RetrievedAt: "2026-10-01"},
+			want:  []string{"~ query DSL: " + dslSchema + " 12.1.9 -> graph_query/v13 12.1.9: read orbit.query's guidance against it"},
+		},
+		{
+			name:  "a new Orbit version and day alone",
+			after: Source{OrbitVersion: "0.137.0", DSLSchema: dslSchema, DSLVersion: "12.1.9", RetrievedAt: recordDay},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Diff(Document{Source: committed}, Document{Source: tc.after}); !slices.Equal(got, tc.want) {
+				t.Errorf("Diff() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

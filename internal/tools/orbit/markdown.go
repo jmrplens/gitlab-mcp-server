@@ -16,7 +16,6 @@ import (
 const (
 	actionStatus      = "orbit.status"
 	actionSchema      = "orbit.schema"
-	actionTools       = "orbit.tools"
 	actionDSL         = "orbit.dsl"
 	actionQuery       = "orbit.query"
 	actionGraphStatus = "orbit.graph_status"
@@ -175,12 +174,18 @@ func replicaCell(replicas *StatusReplicas) string {
 // object: the version and the three type counts, then the domains as a nested
 // collection. The compact text GitLab answers the llm format with is the whole
 // response, so it is rendered as the card's body instead.
+//
+// Its next steps lead to the query language and then to a query. They used to
+// lead to orbit.tools for "the live query and tool manifest", which is the
+// manifest of the MCP tools Orbit serves (list_commands and invoke_command on
+// GitLab.com, read 2026-10-06) and describes no query: the grammar is what
+// orbit.dsl returns.
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Schema")
 	hints := []string{
-		toolutil.HintAction(actionTools, "inspect the live query and tool manifest"),
-		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the manifest"),
+		toolutil.HintAction(actionDSL, "read the grammar a query is written in"),
+		toolutil.HintAction(actionQuery, "run a query naming the node and edge types listed here"),
 	}
 	if out.FormattedText != "" {
 		c.Fence("", "text", out.FormattedText)
@@ -212,6 +217,10 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 // used to be stripped of every backtick it held and then run through the cell
 // escaper inside a hand-written span, which showed "&#124;" as those five
 // characters and quietly deleted part of the name.
+//
+// The tools listed are Orbit's own, which a query sent through orbit.query
+// does not use, so the next steps lead to the grammar and the names a query
+// is built from rather than to the parameters these tools declare.
 func FormatToolsMarkdown(out ToolsOutput) string {
 	if len(out.Tools) == 0 {
 		return toolutil.EmptyMessage("Orbit tools")
@@ -226,8 +235,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction(actionQuery, "build a query from the parameters a tool declares"),
-		toolutil.HintAction(actionSchema, "read the node and edge names those parameters take"))
+		toolutil.HintAction(actionDSL, "read the grammar a graph query is written in"),
+		toolutil.HintAction(actionSchema, "read the node and edge names a graph query names"))
 	return b.String()
 }
 
@@ -305,6 +314,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	if out.Projects != nil {
 		c.Int("Indexed projects", out.Projects.Indexed)
 		c.Int("Total known projects", out.Projects.TotalKnown)
+		c.Int("Projects out of indexing attempts", out.Projects.Gaps)
 	}
 	if out.Indexing != nil {
 		c.Field("Indexing state", out.Indexing.State)

@@ -25,8 +25,10 @@
 // has not reached, whose answers would lack the rows and counts the record
 // holds the shape of. It compares what it recorded with the record committed
 // at HEAD, read through git rather than from the file it has just replaced,
-// and prints every key added, dropped or changed; when the key tree differs it
-// still writes the new record and exits 1, and every later recording exits 1
+// and prints every key added, dropped or changed, and a query DSL whose $id or
+// version moved (read from the raw orbit.dsl answer into the record's source);
+// when the key tree or the DSL differs it still writes the new record and
+// exits 1, and every later recording exits 1
 // too until somebody has read the change and committed the record. A -dir
 // outside the repository, a record HEAD does not hold yet, or a machine with
 // no git leaves nothing to compare with, which the run says and passes. -check

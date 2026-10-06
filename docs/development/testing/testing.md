@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 20,764 |
-| Unit test functions                                   | 19,303 |
-| E2E test functions                                    |  1,461 |
-| cmd test functions                                    |  4,572 |
-| Test files (internal/)                                |    698 |
+| Total test functions                                  | 20,752 |
+| Unit test functions                                   | 19,290 |
+| E2E test functions                                    |  1,462 |
+| cmd test functions                                    |  4,574 |
+| Test files (internal/)                                |    697 |
 | Test files (cmd/)                                     |    312 |
 | Test files (test/e2e/)                                |    407 |
 | Tool sub-packages tested                              |    180 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,220 | 63.7% |
+| `TestFunc_Scenario` (2-part)           | 13,202 | 63.6% |
 | `TestFunc` (no underscore)             |    913 |  4.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  6,631 | 31.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  6,637 | 32.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,798 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          3,801 |        225 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            386 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (180) |         10,547 |        457 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,461 |        407 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,572 |        312 | server entry point and developer command utilities                                              |
-| **Total**               |     **20,764** |  **1,417** |                                                                                                 |
+| Tool sub-packages (180) |         10,529 |        456 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,462 |        407 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          4,574 |        312 | server entry point and developer command utilities                                              |
+| **Total**               |     **20,752** |  **1,416** |                                                                                                 |
 
 ### Core Packages
 
@@ -89,8 +89,8 @@
 | testutil/modelscore      |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,219 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **3,798** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,222 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **3,801** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -250,7 +250,7 @@
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         39 |          2 |   100.0% |         6 |
-| orbit                   |         88 |          4 |   100.0% |         6 |
+| orbit                   |         70 |          3 |   100.0% |         6 |
 | packages                |        177 |          6 |   100.0% |        10 |
 | pages                   |         64 |          2 |   100.0% |         9 |
 | pipelines               |        130 |          4 |   100.0% |        12 |
@@ -309,7 +309,7 @@
 | wikis                   |         71 |          2 |   100.0% |         6 |
 | workitems               |        128 |          5 |    99.8% |         6 |
 | workitemsavedviews      |         59 |          4 |   100.0% |         7 |
-| **Total**               | **10,547** |    **457** |          | **1,190** |
+| **Total**               | **10,529** |    **456** |          | **1,190** |
 
 </details>
 
@@ -923,16 +923,17 @@ make inspector-stop # Stop Inspector and clean up temp binary
 
 The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `test/e2e/orbit/live_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
 
-The suite is organized as four entry points:
+The suite is organized as five entry points, every query in version 12 of the Orbit query DSL. A query GitLab refuses to compile fails its subtest with GitLab's own reason, and no project, user or namespace id is written down: each is found by its path in the fixture namespace.
 
-| Entry point                              | Subtests | What it exercises                                                                                                                                                                                                                                                                                  |
-| ---------------------------------------- | -------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TestOrbitLiveGitLabCom`                 |       14 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal/aggregation/neighbors/path_finding/llm-format), and graph_status (full_path/namespace_id)                                                                                                    |
-| `TestOrbitLiveGitLabCom_ShapeDiscovery`  |        6 | Regression coverage of the canonical Query DSL shapes for each `query_type` variant — `aggregation_with_filter`, `aggregation_with_node_ids`, `neighbors_id_reference`, `path_finding_shortest`, and the default schema format                                                                     |
-| `TestOrbitLiveGitLabCom_Fixtures`        |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces                                                                                                                     |
-| `TestOrbitLiveGitLabCom_FeatureCoverage` |       14 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), cursor pagination, `id_range` scope, and `options.dynamic_columns` |
+| Entry point                              | Subtests | What it exercises                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------- | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TestOrbitLiveGitLabCom`                 |       15 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal by node_ids and by filter, aggregation, llm format, neighbors, path_finding, and a query with a top-level node refused in GitLab's words), and graph_status (full_path/namespace_id)                                                                      |
+| `TestOrbitLiveGitLabCom_DSL`             |        1 | The query DSL GitLab.com serves is the version `orbit.query` teaches (`graph_query/v12`), so a new major version fails here first                                                                                                                                                                                                                               |
+| `TestOrbitLiveGitLabCom_ShapeDiscovery`  |        9 | Regression coverage of the smallest query of each kind GitLab.com runs (aggregation by filter and by node_ids, a neighbors query whose center is its one node, a path along any relationship type) and the schema in each format under each input name                                                                                                          |
+| `TestOrbitLiveGitLabCom_Fixtures`        |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces                                                                                                                                                                                  |
+| `TestOrbitLiveGitLabCom_FeatureCoverage` |       17 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`, `gte` with `lt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), keyset pagination, `id_range` scope, a neighbors query of one relationship type, and `options.dynamic_columns` |
 
-Total: **4 suites, 41 subtests** behind the `orbitlive` build tag.
+Total: **5 suites, 49 subtests** behind the `orbitlive` build tag.
 
 The Orbit indexer is eventually consistent. Subtests that match content the indexer has not yet picked up will report `row_count=0` and pass — they are informational, not strict equality. Re-run the live test a few minutes after `make test-e2e-gitlab-com` to allow the indexer to catch up.
 

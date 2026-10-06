@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -82,75 +83,89 @@ type DSLOutput struct {
 
 // QueryInput holds parameters for executing an Orbit Knowledge Graph query.
 //
-// The Query field is the live Orbit query DSL. GitLab validates the
-// shape server-side against a JSON Schema with four `oneOf`
-// alternatives keyed on `query_type`:
+// The Query field is a query in the DSL GitLab serves at
+// GET /api/v4/orbit/schema/dsl ([DSL]), a JSON Schema whose $id is
+// graph_query/v12 (version 12.1.10 on GitLab.com, Orbit 0.137.0, read
+// 2026-10-05). This server checks only that a query was given and that it
+// encodes as JSON: GitLab compiles it against that schema and the ontology
+// and refuses what it cannot run with a message naming the fault, which
+// reaches the caller (toolutil's Workhorse query refusal). Rules written here
+// would only go stale, which is how the checks this field carried, written for
+// an older shape of the DSL, came to refuse the one neighbors shape GitLab
+// accepts (issue 1031).
 //
-//  1. traversal    — {query_type, node|nodes, relationships?, filters?, columns?, limit, cursor?, order_by?, options?}
-//  2. aggregation  — {query_type, nodes, aggregations, group_by?, aggregation_sort?, limit, options?}
-//  3. neighbors    — {query_type, node, neighbors: {node, direction?, rel_types?}, options?, limit}
-//  4. path_finding — {query_type, nodes: [2+], path: {type, from, to, max_depth, rel_types?}, options?, limit}
+// The shape, as version 12 states it:
 //
-// Top-level fields (only `query_type` is required):
-//   - node|nodes:        one or more node selectors. Use `node` for a
-//     single node, `nodes: [array]` for multiple.
-//   - relationships:     [{type, from, to, direction?, min_hops?, max_hops?, filters?}]. Joins node selectors by alias.
-//   - aggregations:      [{function: count|sum|avg|min|max, target, property?, alias}]. Required for aggregation.
-//   - group_by:          [{kind: node|property, node, property?, alias?}] — buckets aggregation rows.
-//   - aggregation_sort:  {column, direction: ASC|DESC} — sorts aggregation results.
-//   - order_by:          {node, property, direction: ASC|DESC} — sorts traversal results.
-//   - limit:             integer, 1..1000. Default 30.
-//   - cursor:            {page_size, offset} — pagination. `page_size + offset` must be <= `limit`.
-//   - path:              required for path_finding. {type: shortest|all_shortest|any, from, to, max_depth: 1..3, rel_types?}.
-//   - neighbors:         required for neighbors. {node, direction?: outgoing|incoming|both, rel_types?}.
-//   - options:           {dynamic_columns?: default|*, include_debug_sql?, skip_dedup?, ...} for performance/debug knobs.
+//   - query_type (required): traversal, aggregation, neighbors or
+//     path_finding.
+//   - nodes (required): one to five node selectors, a list even for one node.
+//     A top-level node is refused. Each selector is {id, entity, columns?,
+//     filters?, node_ids?, id_range?, id_property?}: id is the alias the rest
+//     of the query refers to, entity a type orbit.schema lists, columns "*" or
+//     a list of properties, node_ids at most 500 ids, id_range {start, end}.
+//   - filters: {property: entry}, where an entry is a bare value (equality),
+//     an object keyed by operators ({"starts_with": "group/"},
+//     {"gte": 1, "lt": 9}), or a list of such objects. The operators are eq,
+//     ne, gt, lt, gte, lte, in, contains, starts_with, ends_with, is_null,
+//     is_not_null, token_match, all_tokens and any_tokens. The older
+//     {op, value} form is refused, and a search pattern shorter than three
+//     characters is refused at compile time.
+//   - relationships: [{type, from, to, hops?, direction?, filters?}], type a
+//     relationship name, a list of names or "*", hops an inclusive
+//     [min, max] between 1 and 3.
+//   - aggregations: [{<function>: ref, as?}], one function key among count,
+//     sum, avg, min, max and collect, whose value is "node" (count only) or
+//     "node.property".
+//   - group_by: ["node" | "node.property" | {key, truncate?, as?}].
+//   - order_by: "node.property", or "-node.property" for descending.
+//   - aggregation_sort: an output column, "-column" for descending.
+//   - limit: 1 to 1000, default 30. cursor: {page_size, after}, where after
+//     is the pagination.next_cursor of the previous answer.
+//   - neighbors: required for a neighbors query, {direction?, rel_types?}.
+//     The center is nodes[0], the query's only node, and nothing in
+//     neighbors names it. direction defaults to outgoing, so a query wanting
+//     every relationship of the center passes "both".
+//   - path: required for path_finding, {type: "shortest", from, to,
+//     max_depth: 1 to 3, rel_types}. rel_types is required ("*" for any),
+//     and each relationship is followed only in its defined direction.
+//   - options: {dynamic_columns?: "default" | "*", include_debug_sql?}.
 //
-// Node selector fields:
-//   - id:        string, local alias. Referenced by relationships, aggregations, path, and neighbors.
-//   - entity:    string, ontology node type (Project, MergeRequest, File, Vulnerability, etc.).
-//   - columns:   string[] of properties to return, or "*" for all non-restricted columns.
-//   - filters:   {property: value_or_op_object} — see operators below.
-//   - node_ids:  int[] of exact ids. Maximum 500 per selector.
-//   - id_range:  {start, end}. Span must be <= 100,000 to count as scope.
-//   - id_property: optional. Property used by node_ids and id_range. Default "id".
-//
-// Filter operators ({op, value}):
-//
-//	eq, gt, gte, lt, lte, in, contains, starts_with, ends_with,
-//	is_null, is_not_null, token_match, all_tokens, any_tokens.
-//
-// Simple equality is also accepted: {property: "value"}.
-//
-// Scope rules: traversal and aggregation queries MUST have at least
-// one node with `node_ids`, `filters`, or `id_range` (span <= 100K).
-// Otherwise the server rejects the request to avoid full edge table
-// scans. Neighbors and path_finding reference nodes by their
-// top-level `id` (a string), not by entity name.
+// A traversal or aggregation query needs node_ids or filters on at least one
+// node, and a neighbors query on its center; GitLab refuses an unbounded
+// query rather than scan every edge. A multi-node traversal needs
+// relationships joining its nodes.
 //
 // Examples:
 //
-//   - Find projects in plens1:
-//     {query_type:"traversal", node:{id:"p",entity:"Project",
-//     filters:{full_path:{op:"starts_with",value:"plens1/"}}}}
+//   - Projects under a group:
+//     {"query_type":"traversal","nodes":[{"id":"p","entity":"Project",
+//     "filters":{"full_path":{"starts_with":"gitlab-org/"}},
+//     "columns":["id","full_path"]}],"limit":20}
 //
-//   - Count MRs per project (group_by node):
-//     {query_type:"aggregation",
-//     nodes:[{id:"p",entity:"Project",filters:{...}},
-//     {id:"mr",entity:"MergeRequest",columns:["id"]}],
-//     relationships:[{type:"IN_PROJECT",from:"mr",to:"p"}],
-//     group_by:[{kind:"node",node:"p"}],
-//     aggregations:[{function:"count",target:"mr",alias:"mr_count"}],
-//     aggregation_sort:{column:"mr_count",direction:"DESC"}}
+//   - Merge requests per project:
+//     {"query_type":"aggregation","nodes":[{"id":"p","entity":"Project",
+//     "filters":{"full_path":{"starts_with":"gitlab-org/"}}},
+//     {"id":"mr","entity":"MergeRequest"}],
+//     "relationships":[{"type":"IN_PROJECT","from":"mr","to":"p"}],
+//     "group_by":["p"],"aggregations":[{"count":"mr","as":"mr_count"}],
+//     "aggregation_sort":"-mr_count"}
 //
-//   - Find a path between two nodes (max depth 3):
-//     {query_type:"path_finding",
-//     nodes:[{id:"u",entity:"User",node_ids:[...]},
-//     {id:"p",entity:"Project",node_ids:[...]}],
-//     path:{type:"shortest",from:"u",to:"p",max_depth:3}}
+//   - Everything a project is related to:
+//     {"query_type":"neighbors","nodes":[{"id":"p","entity":"Project",
+//     "filters":{"full_path":"gitlab-org/gitlab"}}],
+//     "neighbors":{"direction":"both"}}
 //
-// Reference: https://docs.gitlab.com/orbit/remote/queries/
+//   - A path from a user to a project:
+//     {"query_type":"path_finding","nodes":[{"id":"u","entity":"User",
+//     "node_ids":[1]},{"id":"p","entity":"Project","node_ids":[2]}],
+//     "path":{"type":"shortest","from":"u","to":"p","max_depth":3,
+//     "rel_types":["*"]}}
+//
+// Reference: https://docs.gitlab.com/orbit/remote/queries/, the Orbit query
+// language guide, which states the path and neighbors rules above since
+// Orbit 0.137.0 (register rows 75 and 76 of docs/development/upstream-bugs.md).
 type QueryInput struct {
-	Query map[string]any `json:"query" jsonschema:"Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.,required"`
+	Query map[string]any `json:"query" jsonschema:"Orbit query in the version 12 DSL that orbit.dsl serves, as a JSON object. Required: query_type (traversal, aggregation, neighbors or path_finding) and nodes, a list of node selectors {id, entity, columns, filters, node_ids, id_range} even for one node. A filter is a bare value for equality or an object keyed by operators such as {\"starts_with\": \"gitlab-org/\"}, never {op, value}. A traversal or aggregation query needs node_ids or filters on a node. A neighbors query takes one node and neighbors {direction, rel_types}, where direction defaults to outgoing (pass both for every relationship). A path_finding query takes two nodes and path {type: shortest, from, to, max_depth 1 to 3, rel_types} with rel_types required (* for any). Aggregations are {count: \"mr\", as: \"n\"}, order_by is \"node.property\" (\"-node.property\" descending). orbit.schema lists the entities, properties and relationship types. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
 	ResponseFormatInput
 }
 
@@ -342,6 +357,13 @@ type GraphStatusProjects struct {
 	Indexed int64 `json:"indexed"`
 	// TotalKnown is the total number of projects eligible for indexing.
 	TotalKnown int64 `json:"total_known"`
+	// Gaps is the number of projects the indexer gave up on: every attempt
+	// it is allowed was used and none produced an index (ProjectsStatus.gaps
+	// in crates/orbit-server/proto/orbit.proto of
+	// gitlab-org/orbit/knowledge-graph). client-go's OrbitGraphStatusProjects
+	// does not model it, so [GraphStatus] reads it from the captured response
+	// (register row 93 of docs/development/upstream-bugs.md).
+	Gaps int64 `json:"gaps"`
 }
 
 // GraphStatusDomainItem describes a count for one Orbit graph node type.
@@ -544,16 +566,20 @@ func llmGrammar(body string) string {
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.
 //
-// Endpoint: POST /api/v4/orbit/query. The query body is validated by
-// [validateQuery] before being forwarded; see [QueryInput] for the full
-// DSL shape.
+// Endpoint: POST /api/v4/orbit/query. The query is forwarded as the caller
+// wrote it, once [encodeQuery] has checked there is one and that it encodes;
+// see [QueryInput] for the DSL. GitLab judges everything else, and a query it
+// refuses comes back as a 400 whose message says what to change, with
+// [queryRefusedHint] pointing at the two actions that describe the DSL and
+// the graph.
 //
-// The live API exposes four `oneOf` query_type variants:
+// The four query types:
 //
-//   - traversal    — multi-node joins with relationships, ordering, paging.
-//   - aggregation  — group-by plus count|sum|avg|min|max functions.
-//   - neighbors    — one-hop or two-hop expansion from a single node.
-//   - path_finding — shortest path between two top-level nodes (depth 1..3).
+//   - traversal: one node, or several joined by relationships, with
+//     ordering and keyset pagination.
+//   - aggregation: count, sum, avg, min, max or collect, grouped or not.
+//   - neighbors: the relationships of the query's one node.
+//   - path_finding: the shortest path between two nodes, depth 1 to 3.
 //
 // When response_format is omitted, the handler sends "raw" (structured
 // JSON) explicitly rather than leaving the choice to GitLab's default,
@@ -566,7 +592,7 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	if err := ctx.Err(); err != nil {
 		return QueryOutput{}, err
 	}
-	query, err := validateQuery(input.Query)
+	query, err := encodeQuery(input.Query)
 	if err != nil {
 		return QueryOutput{}, err
 	}
@@ -591,16 +617,66 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 		var raw bytes.Buffer
 		_, err = client.GL().Orbit.QueryRaw(request, &raw, gl.WithContext(ctx))
 		if err != nil {
-			return QueryOutput{}, wrapOrbitErr("orbit_query", err)
+			return QueryOutput{}, wrapQueryErr(err)
 		}
 		return QueryOutput{FormattedText: raw.String(), QueryType: queryType(input.Query)}, nil
 	}
 
 	result, _, err := client.GL().Orbit.Query(request, gl.WithContext(ctx))
 	if err != nil {
-		return QueryOutput{}, wrapOrbitErr("orbit_query", err)
+		return QueryOutput{}, wrapQueryErr(err)
 	}
 	return convertQuery(result), nil
+}
+
+// encodeQuery checks the two things about a query GitLab cannot answer for
+// itself, that one was given and that it encodes as JSON, and returns it
+// encoded. Everything else about its shape is GitLab's to judge: the rules
+// this used to hold a query to were written for an older shape of the DSL and
+// refused the one neighbors query GitLab runs (issue 1031), and GitLab's own
+// refusal names the fault it finds.
+func encodeQuery(query map[string]any) (json.RawMessage, error) {
+	if query == nil {
+		return nil, toolutil.ErrFieldRequired("query")
+	}
+	buf, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("query must be a JSON object: %w", err)
+	}
+	return json.RawMessage(buf), nil
+}
+
+// queryType returns the query_type field of an Orbit query as a
+// string, or "" when the field is missing or of an unexpected type.
+// Used to label the Query output envelope regardless of the chosen
+// response format.
+func queryType(query map[string]any) string {
+	queryTypeValue, ok := query["query_type"].(string)
+	if !ok {
+		return ""
+	}
+	return queryTypeValue
+}
+
+// orbitQueryOp is the operation a [Query] failure is reported under.
+const orbitQueryOp = "orbit_query"
+
+// queryRefusedHint follows a query GitLab refused with 400. The refusal
+// carries GitLab's account of the fault when it compiled the query against
+// the DSL or the ontology, so the hint names where the vocabulary of a
+// correction comes from rather than guessing at the fault itself. It is one
+// literal: a constant joined from two has an operator gremlins mutates and
+// no coverage block to place it in, so it reads as a mutant no test reaches.
+const queryRefusedHint = "correct the query where GitLab's message points. orbit.dsl serves the query language and orbit.schema the entities, properties and relationship types it accepts"
+
+// wrapQueryErr classifies a failed [Query]. A 400 is a query GitLab refused
+// to run, which [queryRefusedHint] answers; anything else is classified the
+// way every Orbit failure is, by [wrapOrbitErr].
+func wrapQueryErr(err error) error {
+	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		return toolutil.WrapErrWithHint(orbitQueryOp, err, queryRefusedHint)
+	}
+	return wrapOrbitErr(orbitQueryOp, err)
 }
 
 // GraphStatus retrieves Orbit graph indexing status for a single
@@ -609,6 +685,10 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 // Endpoint: GET /api/v4/orbit/graph_status. Exactly one of namespace_id,
 // project_id, or full_path must be set. Useful for verifying that the
 // indexer has caught up before running Query.
+//
+// The count of projects the indexer gave up on, projects.gaps, is read from
+// the captured response ([gitlabclient.WithResponseCapture]), since client-go
+// does not model it; see [GraphStatusProjects.Gaps].
 func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GraphStatusOutput{}, err
@@ -617,13 +697,33 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 	if err != nil {
 		return GraphStatusOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 
 	status, _, err := client.GL().Orbit.GetGraphStatus(opts, gl.WithContext(ctx))
 	if err != nil {
-		return GraphStatusOutput{}, wrapOrbitErr("orbit_graph_status", err)
+		return GraphStatusOutput{}, wrapOrbitErr(orbitGraphStatusOp, err)
 	}
-	return convertGraphStatus(status), nil
+	var unmodeled struct {
+		Projects *struct {
+			Gaps int64 `json:"gaps"`
+		} `json:"projects"`
+	}
+	if err = captured.Decode(&unmodeled); err != nil {
+		return GraphStatusOutput{}, toolutil.WrapErr(orbitGraphStatusOp, err)
+	}
+	out := convertGraphStatus(status)
+	// The llm answer carries formatted_text alone, and the structured one
+	// carries projects whenever client-go decoded them, so the two are nil
+	// together and only the second needs asking.
+	if unmodeled.Projects != nil {
+		out.Projects.Gaps = unmodeled.Projects.Gaps
+	}
+	return out, nil
 }
+
+// orbitGraphStatusOp is the operation a [GraphStatus] failure is reported
+// under.
+const orbitGraphStatusOp = "orbit_graph_status"
 
 // schemaResponseFormat normalizes the SchemaInput format fields. The
 // input accepts both Format and ResponseFormat, the name GitLab declares;

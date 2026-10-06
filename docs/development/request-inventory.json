@@ -13476,7 +13476,8 @@
       "query": [
         "full_path",
         "namespace_id",
-        "project_id"
+        "project_id",
+        "response_format"
       ]
     },
     {

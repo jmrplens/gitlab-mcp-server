@@ -13001,13 +13001,14 @@ Action params schema: gitlab://tools/gitlab_orbit.<action>.
 Action guidance:
 - dsl: Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 - graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
-- query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+- query: Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 - schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
 - status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 - tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
 Parameter guidance:
 - graph_status.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
 - graph_status.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- query.query: graph_query. Source: A JSON object in the version 12 DSL that orbit.dsl serves, naming entities, properties and relationship types orbit.schema lists. Avoid: A top-level node is refused. Every query lists its node selectors in nodes, even a query with one node., A filter is a bare value for equality or an object keyed by operators, such as {"starts_with": "gitlab-org/"} or {"gte": 1, "lt": 9}. The older {op, value} form is refused., A neighbors query names no node inside neighbors. Its center is its one node, and neighbors holds only direction and rel_types. direction defaults to outgoing, so pass both to get every relationship of the center., A path_finding query needs rel_types in path, ["*"] for any relationship type, and the only path type is shortest., An aggregation is keyed by its function, {"count": "mr", "as": "mr_count"}. A group_by entry is a node id or a node id and a property joined by a dot. order_by and aggregation_sort are strings, with a leading - for descending.
 
 GitLab orbit actions.
 
@@ -13026,7 +13027,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>graph_status</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"domains":{"items":{"additionalProperties":false,"properties":{"items":{"items":{"additionalProperties":false,"properties":{"count":{"type":"integer"},"name":{"type":"string"}},"required":["count"],"type":"object"},"type":["null","array"]},"name":{"type":"string"}},"type":"object"},"type":["null","array"]},"formatted_text":{"type":"string"},"indexing":{"additionalProperties":false,"properties":{"last_completed_at":{"type":"string"},"last_duration_ms":{"type":"integer"},"last_error":{"type":"string"},"last_started_at":{"type":"string"},"state":{"type":"string"}},"type":["null","object"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"projects":{"additionalProperties":false,"properties":{"indexed":{"type":"integer"},"total_known":{"type":"integer"}},"required":["indexed","total_known"],"type":["null","object"]}},"type":"object"}
+{"additionalProperties":false,"properties":{"domains":{"items":{"additionalProperties":false,"properties":{"items":{"items":{"additionalProperties":false,"properties":{"count":{"type":"integer"},"name":{"type":"string"}},"required":["count"],"type":"object"},"type":["null","array"]},"name":{"type":"string"}},"type":"object"},"type":["null","array"]},"formatted_text":{"type":"string"},"indexing":{"additionalProperties":false,"properties":{"last_completed_at":{"type":"string"},"last_duration_ms":{"type":"integer"},"last_error":{"type":"string"},"last_started_at":{"type":"string"},"state":{"type":"string"}},"type":["null","object"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"projects":{"additionalProperties":false,"properties":{"gaps":{"type":"integer"},"indexed":{"type":"integer"},"total_known":{"type":"integer"}},"required":["indexed","total_known","gaps"],"type":["null","object"]}},"type":"object"}
 ```
 
 </details>
@@ -23918,11 +23919,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 
 **Parameters:**
 
-- `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
+- `query` (object) (required): Orbit query in the version 12 DSL that orbit.dsl serves, as a JSON object. Required: query_type (traversal, aggregation, neighbors or path_finding) and nodes, a list of node selectors {id, entity, columns, filters, node_ids, id_range} even for one node. A filter is a bare value for equality or an object keyed by operators such as {"starts_with": "gitlab-org/"}, never {op, value}. A traversal or aggregation query needs node_ids or filters on a node. A neighbors query takes one node and neighbors {direction, rel_types}, where direction defaults to outgoing (pass both for every relationship). A path_finding query takes two nodes and path {type: shortest, from, to, max_depth 1 to 3, rel_types} with rel_types required (* for any). Aggregations are {count: "mr", as: "n"}, order_by is "node.property" ("-node.property" descending). orbit.schema lists the entities, properties and relationship types. GitLab refuses a query it cannot compile with a message naming the fault.
 - `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true

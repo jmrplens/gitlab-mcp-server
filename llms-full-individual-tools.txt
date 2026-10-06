@@ -10494,11 +10494,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 
 **Parameters:**
 
-- `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
+- `query` (object) (required): Orbit query in the version 12 DSL that orbit.dsl serves, as a JSON object. Required: query_type (traversal, aggregation, neighbors or path_finding) and nodes, a list of node selectors {id, entity, columns, filters, node_ids, id_range} even for one node. A filter is a bare value for equality or an object keyed by operators such as {"starts_with": "gitlab-org/"}, never {op, value}. A traversal or aggregation query needs node_ids or filters on a node. A neighbors query takes one node and neighbors {direction, rel_types}, where direction defaults to outgoing (pass both for every relationship). A path_finding query takes two nodes and path {type: shortest, from, to, max_depth 1 to 3, rel_types} with rel_types required (* for any). Aggregations are {count: "mr", as: "n"}, order_by is "node.property" ("-node.property" descending). orbit.schema lists the entities, properties and relationship types. GitLab refuses a query it cannot compile with a message naming the fault.
 - `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true

@@ -167,8 +167,8 @@ func TestFormatSchemaMarkdown_RendersTheWholeCard(t *testing.T) {
 		"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
 		"| core | Core entities | User, Project |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.tools' to inspect the live query and tool manifest\n" +
-		"- Use action 'orbit.query' to run a query once you have chosen a shape from the manifest\n"
+		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
 
 	if got := FormatSchemaMarkdown(out); got != want {
 		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
@@ -187,8 +187,8 @@ func TestFormatSchemaMarkdown_NoDomains_WritesNoTable(t *testing.T) {
 		"- **Nodes**: 1\n" +
 		"- **Edges**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.tools' to inspect the live query and tool manifest\n" +
-		"- Use action 'orbit.query' to run a query once you have chosen a shape from the manifest\n"
+		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
 
 	if got := FormatSchemaMarkdown(out); got != want {
 		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
@@ -196,26 +196,29 @@ func TestFormatSchemaMarkdown_NoDomains_WritesNoTable(t *testing.T) {
 }
 
 // TestFormatToolsMarkdown_RendersTheWholeTable verifies that the tool manifest
-// renders as a table whose name column is a code span.
+// renders as a table whose name column is a code span, and that its next steps
+// lead to the grammar and the ontology a graph query is built from.
 //
 // The name used to be stripped of every backtick it held and then escaped as a
 // cell inside a hand-written span, which showed the entity as its five
 // characters and quietly deleted part of the name. The span writer for a cell
 // keeps the name whole and escapes only the pipe, which is the one character a
-// span cannot contain in a table.
+// span cannot contain in a table. The first row is one of the two tools
+// GitLab.com lists, neither of which carries the query DSL, so the next steps
+// that used to send a model to the tools' parameters sent it nowhere useful.
 func TestFormatToolsMarkdown_RendersTheWholeTable(t *testing.T) {
 	out := ToolsOutput{Tools: []ToolDefinition{
-		{Name: "query_graph", Description: "Execute graph queries"},
+		{Name: "list_commands", Description: "Discover Orbit commands"},
 		{Name: "count`nodes", Description: "Count nodes"},
 	}}
 
 	want := "## Orbit Tools (2)\n\n" +
 		"| Tool | Description |\n| --- | --- |\n" +
-		"| `query_graph` | Execute graph queries |\n" +
+		"| `list_commands` | Discover Orbit commands |\n" +
 		"| ``count`nodes`` | Count nodes |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.query' to build a query from the parameters a tool declares\n" +
-		"- Use action 'orbit.schema' to read the node and edge names those parameters take\n"
+		"- Use action 'orbit.dsl' to read the grammar a graph query is written in\n" +
+		"- Use action 'orbit.schema' to read the node and edge names a graph query names\n"
 
 	if got := FormatToolsMarkdown(out); got != want {
 		t.Errorf("FormatToolsMarkdown() =\n%q\nwant\n%q", got, want)
@@ -340,7 +343,7 @@ func TestFormatQueryMarkdown_BacktickRuns_WidenEveryFence(t *testing.T) {
 // that a duration GitLab did not send writes no row.
 func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 	out := GraphStatusOutput{
-		Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3},
+		Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3, Gaps: 1},
 		Indexing: &GraphStatusIndexing{
 			State:           "indexed",
 			LastStartedAt:   "2026-03-20T15:45:00Z",
@@ -357,6 +360,7 @@ func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 	want := "## Orbit Graph Status\n\n" +
 		"- **Indexed projects**: 2\n" +
 		"- **Total known projects**: 3\n" +
+		"- **Projects out of indexing attempts**: 1\n" +
 		"- **Indexing state**: indexed\n" +
 		"- **Last started at**: 20 Mar 2026 15:45 UTC\n" +
 		"- **Last completed at**: 20 Mar 2026 15:50 UTC\n" +
@@ -376,13 +380,16 @@ func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 
 // TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable verifies that an
 // indexing status carrying no per-domain counts renders its project rows and
-// no Domains section, rather than a heading over an empty table.
+// no Domains section, rather than a heading over an empty table. A count of
+// zero projects out of indexing attempts is written too, since GitLab always
+// sends the count and zero is the answer a healthy namespace gives.
 func TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable(t *testing.T) {
 	out := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3}}
 
 	want := "## Orbit Graph Status\n\n" +
 		"- **Indexed projects**: 2\n" +
 		"- **Total known projects**: 3\n" +
+		"- **Projects out of indexing attempts**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
 		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
@@ -442,8 +449,8 @@ func TestOrbitMarkdownFormatters_HostileValues_StayInsideTheirCells(t *testing.T
 				"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
 				"| core&#124;domain | Core entities | User&#124;Account |\n" +
 				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.tools' to inspect the live query and tool manifest\n" +
-				"- Use action 'orbit.query' to run a query once you have chosen a shape from the manifest\n",
+				"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+				"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n",
 		},
 		{
 			name: "tool manifest",
@@ -452,8 +459,8 @@ func TestOrbitMarkdownFormatters_HostileValues_StayInsideTheirCells(t *testing.T
 				"| Tool | Description |\n| --- | --- |\n" +
 				"| ``query`\\|graph`` | Run queries |\n" +
 				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.query' to build a query from the parameters a tool declares\n" +
-				"- Use action 'orbit.schema' to read the node and edge names those parameters take\n",
+				"- Use action 'orbit.dsl' to read the grammar a graph query is written in\n" +
+				"- Use action 'orbit.schema' to read the node and edge names a graph query names\n",
 		},
 		{
 			name: "graph status domains",

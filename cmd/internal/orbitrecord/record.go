@@ -17,8 +17,10 @@ import (
 )
 
 // SchemaVersion is the shape of this record. A reader refuses a version it
-// was not written for rather than guessing at a field that moved.
-const SchemaVersion = 1
+// was not written for rather than guessing at a field that moved. Version 2
+// added the query DSL the record was taken against to its source
+// ([Source.DSLSchema], [Source.DSLVersion]).
+const SchemaVersion = 2
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -67,6 +69,18 @@ type Source struct {
 	// reported in the status call, which is what moves between two
 	// recordings far more often than GitLab's own release does.
 	OrbitVersion string `json:"orbit_version"`
+	// DSLSchema is the $id of the query DSL GitLab.com served beside the
+	// answers (orbit.dsl, raw): the language orbit.query's guidance teaches,
+	// graph_query/v12 when this field was added. A new $id is a new major
+	// version of that language.
+	DSLSchema string `json:"dsl_schema"`
+	// DSLVersion is the DSL's own version field, which moves with every
+	// change GitLab makes to the language (query_dsl in config/versions.yaml
+	// of gitlab-org/orbit/knowledge-graph). With [DSLSchema] it is the drift
+	// alarm issue 1031 asked for: [Diff] reports either changing, so a
+	// recording fails until somebody has read orbit.query's guidance against
+	// the new language and committed the record.
+	DSLVersion string `json:"dsl_version"`
 	// Namespace is the fixture namespace the indexing status and the query
 	// were asked about (test/fixtures/orbit, docs/development/orbit-fixtures.md).
 	Namespace string `json:"namespace"`
@@ -337,6 +351,9 @@ func Problems(doc Document, now time.Time) []string {
 	if doc.Source.OrbitVersion == "" {
 		problems = append(problems, "the record names no Orbit version: nothing can then say which Knowledge Graph service it speaks for")
 	}
+	if doc.Source.DSLSchema == "" || doc.Source.DSLVersion == "" {
+		problems = append(problems, "the record names no query DSL schema and version: nothing can then say which query language orbit.query's guidance was checked against, and a change to it goes unreported")
+	}
 	if doc.Source.Namespace == "" {
 		problems = append(problems, "the record names no fixture namespace: the indexing status and the query were asked about something nobody can find again")
 	}
@@ -444,15 +461,22 @@ func keyShapeProblems(id CallID, key Key) []string {
 	return problems
 }
 
-// Diff lists what changed between two records' key trees, one line per
-// change, sorted: a call added or dropped, a key added or dropped, a key's
-// kinds changed, and a key that became or stopped being verbatim. Provenance
-// and request names are not compared, since a new day or version is what
-// every recording brings and is not a change to the shape.
+// Diff lists what changed between two records, one line per change, sorted: a
+// call added or dropped, a key added or dropped, a key's kinds changed, a key
+// that became or stopped being verbatim, and the query DSL the record was
+// taken against. The rest of the provenance and the request names are not
+// compared, since a new day or Orbit version is what every recording brings
+// and is not a change to the shape. The DSL is the exception because it is
+// what orbit.query teaches a model: a new $id or version is a language that
+// guidance has not been read against yet (issue 1031).
 func Diff(before, after Document) []string {
 	beforeCalls := callsByID(before.Calls)
 	afterCalls := callsByID(after.Calls)
 	var lines []string
+	if before.Source.DSLSchema != after.Source.DSLSchema || before.Source.DSLVersion != after.Source.DSLVersion {
+		lines = append(lines, fmt.Sprintf("~ query DSL: %s %s -> %s %s: read orbit.query's guidance against it",
+			before.Source.DSLSchema, before.Source.DSLVersion, after.Source.DSLSchema, after.Source.DSLVersion))
+	}
 	for id, call := range afterCalls {
 		previous, had := beforeCalls[id]
 		if !had {

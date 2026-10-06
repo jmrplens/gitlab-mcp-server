@@ -2,11 +2,13 @@ package orbit
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -115,6 +117,90 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 	graphStatusSpec := specs[5]
 	if !slices.Contains(graphStatusSpec.RelatedActions, "orbit.query") {
 		t.Fatalf("orbit.graph_status RelatedActions = %v, want orbit.query", graphStatusSpec.RelatedActions)
+	}
+}
+
+// TestOrbit_QuerySpec_TeachesTheVersion12DSL verifies that what orbit.query
+// serves a model about its one parameter is version 12 of the DSL, the one
+// GitLab.com compiles queries against: the usage line, the schema description
+// of query, and its parameter guidance, whose example is a query of that
+// version. Every confusion names a rule of that version a model gets wrong,
+// three of them refusing the older shape this server taught until issue 1031.
+// The other five actions take no query and carry no guidance.
+func TestOrbit_QuerySpec_TeachesTheVersion12DSL(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "tok", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	specs := ActionSpecs(client)
+	for i, spec := range specs {
+		if i != 4 && spec.ParameterGuidance != nil {
+			t.Errorf("ActionSpecs()[%d] (%s).ParameterGuidance = %v, want none", i, spec.Name, spec.ParameterGuidance)
+		}
+	}
+	querySpec := specs[4]
+	field, ok := reflect.TypeFor[QueryInput]().FieldByName("Query")
+	if !ok {
+		t.Fatal("QueryInput has no Query field")
+	}
+	guidance, ok := querySpec.ParameterGuidance["query"]
+	if !ok {
+		t.Fatalf("orbit.query ParameterGuidance = %v, want guidance for query", querySpec.ParameterGuidance)
+	}
+
+	// The first sentence is what a reader that shortens descriptions keeps
+	// (llms-medium.txt keeps it, cut at 160 runes), so the two pointers are
+	// held there and not merely somewhere in the line.
+	firstSentence, _, _ := strings.Cut(querySpec.Usage, ". ")
+	if n := utf8.RuneCountInString(firstSentence); n > 160 {
+		t.Errorf("orbit.query usage's first sentence is %d runes, want at most 160 so a reader that cuts there keeps it whole: %q", n, firstSentence)
+	}
+
+	served := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "the first sentence points at the DSL", text: firstSentence, want: "orbit.dsl"},
+		{name: "the first sentence points at the schema", text: firstSentence, want: "orbit.schema"},
+		{name: "usage names the version", text: querySpec.Usage, want: "version 12"},
+		{name: "usage names the nodes list", text: querySpec.Usage, want: "nodes array"},
+		{name: "usage points at the DSL", text: querySpec.Usage, want: "orbit.dsl"},
+		{name: "usage points at the schema", text: querySpec.Usage, want: "orbit.schema"},
+		{name: "usage points at the refusal", text: querySpec.Usage, want: "message GitLab answers with"},
+		{name: "description names the version", text: field.Tag.Get("jsonschema"), want: "version 12"},
+		{name: "description points at the DSL", text: field.Tag.Get("jsonschema"), want: "orbit.dsl"},
+		{name: "description points at the schema", text: field.Tag.Get("jsonschema"), want: "orbit.schema"},
+		{name: "description lists nodes", text: field.Tag.Get("jsonschema"), want: "nodes, a list"},
+		{name: "description keys a filter by its operator", text: field.Tag.Get("jsonschema"), want: `{"starts_with"`},
+		{name: "description refuses op and value", text: field.Tag.Get("jsonschema"), want: "never {op, value}"},
+		{name: "description gives the neighbors default", text: field.Tag.Get("jsonschema"), want: "defaults to outgoing"},
+		{name: "description requires rel_types on a path", text: field.Tag.Get("jsonschema"), want: "rel_types required"},
+		{name: "description keeps the parameter required", text: field.Tag.Get("jsonschema"), want: ",required"},
+		{name: "value source points at the DSL", text: guidance.ValueSource, want: "orbit.dsl"},
+		{name: "value source points at the schema", text: guidance.ValueSource, want: "orbit.schema"},
+		{name: "confusions refuse a top-level node", text: strings.Join(guidance.CommonConfusions, "\n"), want: "top-level node is refused"},
+		{name: "confusions key a filter by its operator", text: strings.Join(guidance.CommonConfusions, "\n"), want: `{"starts_with": "gitlab-org/"}`},
+		{name: "confusions refuse op and value", text: strings.Join(guidance.CommonConfusions, "\n"), want: "older {op, value} form is refused"},
+		{name: "confusions give the neighbors default", text: strings.Join(guidance.CommonConfusions, "\n"), want: "defaults to outgoing"},
+		{name: "confusions name any relationship type", text: strings.Join(guidance.CommonConfusions, "\n"), want: `["*"]`},
+		{name: "confusions key an aggregation by its function", text: strings.Join(guidance.CommonConfusions, "\n"), want: `{"count": "mr", "as": "mr_count"}`},
+	}
+	for _, tt := range served {
+		t.Run(tt.name, func(t *testing.T) {
+			if !strings.Contains(tt.text, tt.want) {
+				t.Errorf("served text = %q, want it to say %q", tt.text, tt.want)
+			}
+		})
+	}
+
+	var example map[string]any
+	if err = json.Unmarshal([]byte(guidance.ExampleBinding), &example); err != nil {
+		t.Fatalf("query ExampleBinding %q is not JSON: %v", guidance.ExampleBinding, err)
+	}
+	nodes, isList := example["nodes"].([]any)
+	if example["query_type"] != "traversal" || !isList || len(nodes) != 1 || example["node"] != nil {
+		t.Errorf("query ExampleBinding = %v, want a traversal listing its one node in nodes", example)
 	}
 }
 
@@ -263,10 +349,7 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		}}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -304,10 +387,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		}}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -357,10 +437,7 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
-			"query_type": "traversal",
-			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
-		}}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDQuery()}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 

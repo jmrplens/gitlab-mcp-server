@@ -1,11 +1,13 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "note": "What GitLab.com's Orbit routes answered the requests this server's handlers build, as a key tree with no values: written by cmd/gen_orbit_record, judged offline by its -check, and compared with the Orbit output types by cmd/audit_1to1 -scope=paths. A verbatim key is recorded as its root only, because its keys are data.",
   "source": {
     "instance": "https://gitlab.com",
-    "orbit_version": "0.130.0",
+    "orbit_version": "0.137.0",
+    "dsl_schema": "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/graph_query/v12",
+    "dsl_version": "12.1.10",
     "namespace": "plens1",
-    "retrieved_at": "2026-09-27"
+    "retrieved_at": "2026-10-05"
   },
   "calls": [
     {
@@ -161,13 +163,13 @@
           {
             "path": "indexing.last_completed_at",
             "kinds": [
-              "string"
+              "null"
             ]
           },
           {
             "path": "indexing.last_duration_ms",
             "kinds": [
-              "number"
+              "null"
             ]
           },
           {
@@ -179,7 +181,7 @@
           {
             "path": "indexing.last_started_at",
             "kinds": [
-              "string"
+              "null"
             ]
           },
           {
@@ -192,6 +194,12 @@
             "path": "projects",
             "kinds": [
               "object"
+            ]
+          },
+          {
+            "path": "projects.gaps",
+            "kinds": [
+              "number"
             ]
           },
           {
