@@ -481,11 +481,14 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client, names
 		return rowSummary(out), nil
 	})
 
-	summarize(t, "Query_version_11_shape_is_refused_in_GitLabs_words", func(ctx context.Context) (any, error) {
+	summarize(t, "Query_with_a_top_level_node_is_refused_in_GitLabs_words", func(ctx context.Context) (any, error) {
 		// The shape this server taught until issue 1031: a top-level node.
 		// It reaches GitLab as written, and what comes back is GitLab's own
 		// account of the fault and the hint naming orbit.dsl, never a
-		// refusal of this server's making.
+		// refusal of this server's making. The account is held by its code
+		// and never by its prose, which is the JSON Schema validator's
+		// wording rather than Workhorse's contract and is being rewritten
+		// upstream; the summary carries the prose to the run's log instead.
 		_, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
@@ -495,12 +498,12 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client, names
 		if err == nil {
 			return nil, errors.New("GitLab.com ran a query with a top-level node, which version 12 of the DSL refuses: read orbit.dsl, the language may have moved")
 		}
-		for _, want := range []string{"{code: compile_error}", `"nodes" is a required property`, "orbit.dsl serves the query language"} {
+		for _, want := range []string{"{code: compile_error}", "orbit.dsl serves the query language"} {
 			if !strings.Contains(err.Error(), want) {
 				return nil, fmt.Errorf("refusal = %q, want it to carry %q", err.Error(), want)
 			}
 		}
-		return "refused with GitLab's compile error", nil
+		return "refused with GitLab's compile error: " + err.Error(), nil
 	})
 }
 
