@@ -1227,7 +1227,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_label_create`
 
-> Create a new group label. Returns: the created label with id, name, color, text color, description, counts, priority, and subscription state. See also: [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_update`](#groupgroup_label_update).
+> Create a new group label. Returns: the created label with id, name, color, text color, description, and subscription state. See also: [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_update`](#groupgroup_label_update).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_label_create`
 - **Herramienta individual**: `gitlab_group_label_create`
@@ -1259,7 +1259,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_label_get`
 
-> Get a single group label by ID or name. Returns: the label with color, text color, description, issue and merge request counts, priority, and subscription state. See also: [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_update`](#groupgroup_label_update), [`group.group_label_delete`](#groupgroup_label_delete).
+> Get a single group label by ID or name. Returns: the label with color, text color, description, and subscription state. GitLab sends a label's usage counts only to group.group_label_list with with_counts. See also: [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_update`](#groupgroup_label_update), [`group.group_label_delete`](#groupgroup_label_delete).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_label_get`
 - **Herramienta individual**: `gitlab_group_label_get`
@@ -1273,7 +1273,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_label_list`
 
-> List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, issue and merge request counts, priority, subscription state, and pagination metadata. See also: [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_create`](#groupgroup_label_create), [`group.get`](#groupget).
+> List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, subscription state, the issue and merge request counts when with_counts is true, and pagination metadata. See also: [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_create`](#groupgroup_label_create), [`group.get`](#groupget).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_label_list`
 - **Herramienta individual**: `gitlab_group_label_list`
@@ -1326,7 +1326,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_label_update`
 
-> Update a group label. Returns: the updated label with id, name, color, text color, description, counts, priority, and subscription state. See also: [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_delete`](#groupgroup_label_delete).
+> Update a group label. Returns: the updated label with id, name, color, text color, description, and subscription state. See also: [`group.group_label_get`](#groupgroup_label_get), [`group.group_label_list`](#groupgroup_label_list), [`group.group_label_delete`](#groupgroup_label_delete).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_label_update`
 - **Herramienta individual**: `gitlab_group_label_update`

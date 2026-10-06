@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -12,11 +13,18 @@ import (
 // and a card that says nothing about it shows an archived label exactly as it
 // shows a live one: the label carried the flag on its output type and no
 // renderer read it.
+//
+// CountsSent says whether GitLab sent the three usage counts beside it.
+// lib/api/entities/label.rb exposes them only under options[:with_counts],
+// which GitLab sets from the with_counts parameter of the two label listings
+// and on no other route, so a label from any other answer carries none, and
+// rendering its zeros would read as a label nothing uses (issue 1174).
 type LabelMarkdown struct {
 	ID                     int64
 	Name                   string
 	Color                  string
 	Description            string
+	CountsSent             bool
 	OpenIssuesCount        int64
 	ClosedIssuesCount      int64
 	OpenMergeRequestsCount int64
@@ -42,8 +50,9 @@ type LabelMarkdownOptions struct {
 
 // FormatLabelMarkdown renders a project or group label as a card: the
 // identity rows, the description as the card's long text, the priority when
-// GitLab sent one, the two flags as glyphs, and the counters when the caller
-// asked GitLab for them.
+// GitLab sent one, the two flags as glyphs, and the counters when GitLab sent
+// them, zeros included, since a label a listing counted and nothing uses is
+// an answer of its own.
 func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string {
 	var b strings.Builder
 	c := NewCard(&b, opts.DetailTitle+": "+label.Name)
@@ -56,7 +65,7 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 	c.Bool("Project label", label.IsProjectLabel)
 	c.Bool("Subscribed", label.Subscribed)
 	c.Flag(EmojiArchived, "Archived", label.Archived)
-	if label.OpenIssuesCount > 0 || label.ClosedIssuesCount > 0 || label.OpenMergeRequestsCount > 0 {
+	if label.CountsSent {
 		c.Field("Issues", fmt.Sprintf("%d open, %d closed", label.OpenIssuesCount, label.ClosedIssuesCount))
 		c.Int("Open MRs", label.OpenMergeRequestsCount)
 	}
@@ -68,22 +77,36 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 // table, one row per label with its scope. Labels carry no link, so the
 // footer carries no instruction to keep them, and an empty list is the
 // configured message alone.
+//
+// The three count columns appear only on a page whose labels GitLab counted,
+// which is a listing asked for with with_counts; on every other page they
+// were a column of zeros GitLab never sent.
 func formatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput, opts LabelMarkdownOptions) string {
 	if len(labels) == 0 {
 		return emptyResult(opts.EmptyListText)
 	}
 	var b strings.Builder
 	WriteListHeading(&b, opts.ListTitle, len(labels), pagination)
-	b.WriteString(MarkdownTableHeader("Name", "Color", "Scope", "Open Issues", "Closed Issues", "Open MRs"))
+	counted := slices.ContainsFunc(labels, func(label LabelMarkdown) bool { return label.CountsSent })
+	columns := []string{"Name", "Color", "Scope"}
+	if counted {
+		columns = append(columns, "Open Issues", "Closed Issues", "Open MRs")
+	}
+	b.WriteString(MarkdownTableHeader(columns...))
 	for _, label := range labels {
-		b.WriteString(MarkdownTableRow(
+		cells := []string{
 			labelNameCell(label),
 			EscapeMdTableCell(label.Color),
 			labelScope(label.IsProjectLabel),
-			strconv.FormatInt(label.OpenIssuesCount, 10),
-			strconv.FormatInt(label.ClosedIssuesCount, 10),
-			strconv.FormatInt(label.OpenMergeRequestsCount, 10),
-		))
+		}
+		if counted {
+			cells = append(cells,
+				strconv.FormatInt(label.OpenIssuesCount, 10),
+				strconv.FormatInt(label.ClosedIssuesCount, 10),
+				strconv.FormatInt(label.OpenMergeRequestsCount, 10),
+			)
+		}
+		b.WriteString(MarkdownTableRow(cells...))
 	}
 	WriteListFooter(&b, pagination, false, opts.ListHints...)
 	return b.String()

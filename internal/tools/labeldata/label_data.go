@@ -16,6 +16,15 @@ import (
 // Entities::GroupLabel adds nothing. Both are pointers so a group label
 // publishes neither, and so a project label without a priority publishes no
 // priority rather than a zero, which is a priority GitLab accepts.
+//
+// The three usage counts are pointers for the same reason. Entities::Label
+// exposes them only under options[:with_counts], which GitLab sets from the
+// with_counts parameter of the two label listings and on no other route, so
+// a label read, created, updated or subscribed to carries none, and neither
+// does a listing that did not ask. The SDK decodes an absent count as 0, and
+// publishing that 0 read as a label nothing uses (issue 1174), so a label
+// publishes its counts only when they come from a listing that asked, set by
+// [ProjectListOutput] and [GroupListOutput].
 type Output struct {
 	toolutil.HintableOutput
 	ID                     int64  `json:"id"`
@@ -24,9 +33,9 @@ type Output struct {
 	TextColor              string `json:"text_color"`
 	Description            string `json:"description"`
 	DescriptionHTML        string `json:"description_html,omitempty"`
-	OpenIssuesCount        int64  `json:"open_issues_count"`
-	ClosedIssuesCount      int64  `json:"closed_issues_count"`
-	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
+	OpenIssuesCount        *int64 `json:"open_issues_count,omitempty"`
+	ClosedIssuesCount      *int64 `json:"closed_issues_count,omitempty"`
+	OpenMergeRequestsCount *int64 `json:"open_merge_requests_count,omitempty"`
 	Priority               *int64 `json:"priority,omitempty"`
 	IsProjectLabel         *bool  `json:"is_project_label,omitempty"`
 	Subscribed             bool   `json:"subscribed"`
@@ -34,26 +43,36 @@ type Output struct {
 }
 
 // ProjectOutput converts a GitLab project label to shared output fields, and
-// takes the field the capture read beside the SDK.
+// takes the field the capture read beside the SDK. It publishes no usage
+// count, which no answer but a listing that asked for them carries; a label
+// of such a listing is converted by [ProjectListOutput].
 func ProjectOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
 	}
 	out := outputFromFields(labelFields{
-		ID:                     label.ID,
-		Name:                   label.Name,
-		Color:                  label.Color,
-		TextColor:              label.TextColor,
-		Description:            label.Description,
-		DescriptionHTML:        extra.DescriptionHTML,
-		OpenIssuesCount:        label.OpenIssuesCount,
-		ClosedIssuesCount:      label.ClosedIssuesCount,
-		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
-		Subscribed:             label.Subscribed,
-		Archived:               label.Archived,
+		ID:              label.ID,
+		Name:            label.Name,
+		Color:           label.Color,
+		TextColor:       label.TextColor,
+		Description:     label.Description,
+		DescriptionHTML: extra.DescriptionHTML,
+		Subscribed:      label.Subscribed,
+		Archived:        label.Archived,
 	})
 	out.Priority = priorityFromNullable(label.Priority)
 	out.IsProjectLabel = new(label.IsProjectLabel)
+	return out
+}
+
+// ProjectListOutput converts one label of a project label listing, with its
+// usage counts when the listing asked GitLab for them with with_counts, the
+// one answer GitLab sends them on.
+func ProjectListOutput(label *gl.Label, extra toolutil.LabelExtra, withCounts bool) Output {
+	out := ProjectOutput(label, extra)
+	if withCounts && label != nil {
+		out = withUsageCounts(out, label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount)
+	}
 	return out
 }
 
@@ -62,24 +81,41 @@ func ProjectOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
 // nor IsProjectLabel: the group label routes present Entities::GroupLabel,
 // which sends neither, so the SDK struct's copies of them are always empty
 // there and publishing them would state a priority and a scope GitLab never
-// gave.
+// gave. It publishes no usage count either, for the reason [ProjectOutput]
+// gives; a label of a listing that asked is converted by [GroupListOutput].
 func GroupOutput(label *gl.GroupLabel, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
 	}
 	return outputFromFields(labelFields{
-		ID:                     label.ID,
-		Name:                   label.Name,
-		Color:                  label.Color,
-		TextColor:              label.TextColor,
-		Description:            label.Description,
-		DescriptionHTML:        extra.DescriptionHTML,
-		OpenIssuesCount:        label.OpenIssuesCount,
-		ClosedIssuesCount:      label.ClosedIssuesCount,
-		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
-		Subscribed:             label.Subscribed,
-		Archived:               label.Archived,
+		ID:              label.ID,
+		Name:            label.Name,
+		Color:           label.Color,
+		TextColor:       label.TextColor,
+		Description:     label.Description,
+		DescriptionHTML: extra.DescriptionHTML,
+		Subscribed:      label.Subscribed,
+		Archived:        label.Archived,
 	})
+}
+
+// GroupListOutput converts one label of a group label listing, with its usage
+// counts when the listing asked GitLab for them with with_counts.
+func GroupListOutput(label *gl.GroupLabel, extra toolutil.LabelExtra, withCounts bool) Output {
+	out := GroupOutput(label, extra)
+	if withCounts && label != nil {
+		out = withUsageCounts(out, label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount)
+	}
+	return out
+}
+
+// withUsageCounts sets the three usage counts a listing asked for, together,
+// since GitLab sends them together or not at all.
+func withUsageCounts(out Output, openIssues, closedIssues, openMergeRequests int64) Output {
+	out.OpenIssuesCount = new(openIssues)
+	out.ClosedIssuesCount = new(closedIssues)
+	out.OpenMergeRequestsCount = new(openMergeRequests)
+	return out
 }
 
 // NewProjectListOptions builds GitLab options for listing project labels.
@@ -110,11 +146,20 @@ func NewGroupListOptions(page, perPage int, search string, withCounts, includeAn
 	return opts
 }
 
-// ToMarkdown converts shared label output to the toolutil markdown model.
+// ToMarkdown converts shared label output to the toolutil markdown model. The
+// counts are marked sent only when the label carries all three, which is how
+// [withUsageCounts] sets them: a view holding some of them would render a
+// zero for a count GitLab never sent.
 func ToMarkdown(label Output) toolutil.LabelMarkdown {
-	md := toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: isProjectLabel(label), Subscribed: label.Subscribed, Archived: label.Archived}
+	md := toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, IsProjectLabel: isProjectLabel(label), Subscribed: label.Subscribed, Archived: label.Archived}
 	if label.Priority != nil {
 		md.Priority, md.PrioritySpecified = *label.Priority, true
+	}
+	if label.OpenIssuesCount != nil && label.ClosedIssuesCount != nil && label.OpenMergeRequestsCount != nil {
+		md.CountsSent = true
+		md.OpenIssuesCount = *label.OpenIssuesCount
+		md.ClosedIssuesCount = *label.ClosedIssuesCount
+		md.OpenMergeRequestsCount = *label.OpenMergeRequestsCount
 	}
 	return md
 }
@@ -187,32 +232,26 @@ func FormatMarkdown(label Output) string {
 }
 
 type labelFields struct {
-	ID                     int64
-	Name                   string
-	Color                  string
-	TextColor              string
-	Description            string
-	DescriptionHTML        string
-	OpenIssuesCount        int64
-	ClosedIssuesCount      int64
-	OpenMergeRequestsCount int64
-	Subscribed             bool
-	Archived               bool
+	ID              int64
+	Name            string
+	Color           string
+	TextColor       string
+	Description     string
+	DescriptionHTML string
+	Subscribed      bool
+	Archived        bool
 }
 
 func outputFromFields(fields labelFields) Output {
 	return Output{
-		ID:                     fields.ID,
-		Name:                   fields.Name,
-		Color:                  fields.Color,
-		TextColor:              fields.TextColor,
-		Description:            fields.Description,
-		DescriptionHTML:        fields.DescriptionHTML,
-		OpenIssuesCount:        fields.OpenIssuesCount,
-		ClosedIssuesCount:      fields.ClosedIssuesCount,
-		OpenMergeRequestsCount: fields.OpenMergeRequestsCount,
-		Subscribed:             fields.Subscribed,
-		Archived:               fields.Archived,
+		ID:              fields.ID,
+		Name:            fields.Name,
+		Color:           fields.Color,
+		TextColor:       fields.TextColor,
+		Description:     fields.Description,
+		DescriptionHTML: fields.DescriptionHTML,
+		Subscribed:      fields.Subscribed,
+		Archived:        fields.Archived,
 	}
 }
 
@@ -226,13 +265,15 @@ func priorityFromNullable(value gl.Nullable[int64]) *int64 {
 	return new(value.MustGet())
 }
 
+// applyCommonListOptions sets the page and page size a caller asked for. A
+// value at or below zero is sent as nothing, which client-go's omitempty does
+// with a zero, so GitLab applies its own default instead of refusing a
+// negative. It is written with max rather than a guarded assignment because
+// the two readings of the guard's boundary agreed at zero, where both left a
+// zero: a mutant flipping it could never be killed.
 func applyCommonListOptions(opts *gl.ListOptions, page, perPage int) {
-	if page > 0 {
-		opts.Page = int64(page)
-	}
-	if perPage > 0 {
-		opts.PerPage = int64(perPage)
-	}
+	opts.Page = int64(max(page, 0))
+	opts.PerPage = int64(max(perPage, 0))
 }
 
 func applyCommonLabelFilters(search **string, withCounts **bool, searchValue string, includeCounts bool) {

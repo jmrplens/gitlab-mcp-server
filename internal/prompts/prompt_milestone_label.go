@@ -185,8 +185,13 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 		return nil, toolutil.InvalidParams(errors.New("label_distribution: project_id is required"))
 	}
 
+	// WithCounts, because GitLab sends a label's issue and merge request
+	// counts only to a listing that asks for them, and the whole report is
+	// computed from those counts: without it every label read as unused and
+	// the table had no rows (issue 1174).
 	labels, _, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
-		PerPage: maxListItems,
+		PerPage:    maxListItems,
+		WithCounts: new(true),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("label_distribution: %w", err)

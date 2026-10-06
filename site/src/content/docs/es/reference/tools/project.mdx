@@ -1456,7 +1456,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.label_create`
 
-> Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: [`project.label_get`](#projectlabel_get), [`project.label_update`](#projectlabel_update), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist).
+> Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: [`project.label_get`](#projectlabel_get), [`project.label_update`](#projectlabel_update), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist).
 
 - **Meta-herramienta**: `gitlab_project`, acción `label_create`
 - **Herramienta individual**: `gitlab_label_create`
@@ -1489,7 +1489,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.label_get`
 
-> Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: [`project.label_list`](#projectlabel_list), [`project.label_update`](#projectlabel_update), [`project.label_delete`](#projectlabel_delete).
+> Get a single project label by ID or name. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, and archived. GitLab sends a label's usage counts only to project.label_list with with_counts. See also: [`project.label_list`](#projectlabel_list), [`project.label_update`](#projectlabel_update), [`project.label_delete`](#projectlabel_delete).
 
 - **Meta-herramienta**: `gitlab_project`, acción `label_get`
 - **Herramienta individual**: `gitlab_label_get`
@@ -1503,7 +1503,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.label_list`
 
-> List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: [`project.label_get`](#projectlabel_get), [`project.label_create`](#projectlabel_create), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist).
+> List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: [`project.label_get`](#projectlabel_get), [`project.label_create`](#projectlabel_create), [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist).
 
 - **Meta-herramienta**: `gitlab_project`, acción `label_list`
 - **Herramienta individual**: `gitlab_label_list`
@@ -1567,7 +1567,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.label_update`
 
-> Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: [`project.label_get`](#projectlabel_get), [`project.label_list`](#projectlabel_list), [`project.label_delete`](#projectlabel_delete).
+> Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: [`project.label_get`](#projectlabel_get), [`project.label_list`](#projectlabel_list), [`project.label_delete`](#projectlabel_delete).
 
 - **Meta-herramienta**: `gitlab_project`, acción `label_update`
 - **Herramienta individual**: `gitlab_label_update`

@@ -1606,7 +1606,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 
 - **URI Template**: `gitlab://group/{group_id}/label/{label_id}`
 - **MIME**: application/json
-- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
+- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, and description. Usage counts come from group.group_label_list with with_counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
 
 ### group_members
 
@@ -1708,7 +1708,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 
 - **URI Template**: `gitlab://project/{project_id}/label/{label_id}`
 - **MIME**: application/json
-- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
+- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, and description. Usage counts come from project.label_list with with_counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
 
 ### project_labels
 
@@ -1842,7 +1842,7 @@ Run a comprehensive audit of a GitLab project covering settings, branch protecti
 
 ### audit_project_workflow
 
-Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
+Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
 
 **Arguments:**
 

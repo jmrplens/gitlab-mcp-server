@@ -15,6 +15,7 @@ func TestFormatLabelMarkdown_AllBranches(t *testing.T) {
 		Name:                   "bug|fix",
 		Color:                  "#ff0000",
 		Description:            "one|two",
+		CountsSent:             true,
 		OpenIssuesCount:        3,
 		ClosedIssuesCount:      2,
 		OpenMergeRequestsCount: 1,
@@ -114,15 +115,16 @@ func TestFormatLabelMarkdown_MultiLineDescription_QuotesUnderTheLabel(t *testing
 	}
 }
 
-// TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet verifies the counter
-// block appears when any single counter is non-zero rather than only when they
-// all are.
+// TestFormatLabelMarkdown_Counters_RenderExactlyWhenGitLabSentThem verifies
+// the counter rows follow whether GitLab sent the counts, not their values.
 //
-// The ordinary shape of a label is exactly this: issues open and nothing
-// closed, or merge requests and no issues at all. A label whose counters are
-// all zero and one whose counters are all set both agree whatever the three
-// checks are joined by, so neither says which join the renderer uses.
-func TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet(t *testing.T) {
+// GitLab sends a label's counts only to a listing that asked with_counts=true,
+// and the card used to decide by whether any count was above zero: a label
+// such a listing counted and nothing uses lost its answer, while the zeros of
+// a label whose route sends no counts at all were the only thing keeping the
+// rows away (issue 1174). Counts sent as zeros render as zeros, and counts the
+// view carries without GitLab having sent them render nothing.
+func TestFormatLabelMarkdown_Counters_RenderExactlyWhenGitLabSentThem(t *testing.T) {
 	head := "## Label: bug\n\n- **ID**: 0\n- **Color**: #ff0000\n- **Project label**: " + EmojiCross + "\n- **Subscribed**: " + EmojiCross + "\n"
 	for _, tc := range []struct {
 		name  string
@@ -130,19 +132,19 @@ func TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "open issues only",
-			label: LabelMarkdown{Name: "bug", Color: "#ff0000", OpenIssuesCount: 4},
-			want:  head + "- **Issues**: 4 open, 0 closed\n- **Open MRs**: 0\n",
+			name:  "sent as zeros",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", CountsSent: true},
+			want:  head + "- **Issues**: 0 open, 0 closed\n- **Open MRs**: 0\n",
 		},
 		{
-			name:  "closed issues only",
-			label: LabelMarkdown{Name: "bug", Color: "#ff0000", ClosedIssuesCount: 9},
-			want:  head + "- **Issues**: 0 open, 9 closed\n- **Open MRs**: 0\n",
+			name:  "sent with values",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", CountsSent: true, OpenIssuesCount: 4, ClosedIssuesCount: 9, OpenMergeRequestsCount: 2},
+			want:  head + "- **Issues**: 4 open, 9 closed\n- **Open MRs**: 2\n",
 		},
 		{
-			name:  "open merge requests only",
-			label: LabelMarkdown{Name: "bug", Color: "#ff0000", OpenMergeRequestsCount: 2},
-			want:  head + "- **Issues**: 0 open, 0 closed\n- **Open MRs**: 2\n",
+			name:  "not sent",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", OpenIssuesCount: 4, ClosedIssuesCount: 9, OpenMergeRequestsCount: 2},
+			want:  head,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,34 +155,44 @@ func TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet(t *testing.T) {
 	}
 }
 
+// labelListRow is the domain row the list tests map to the shared view, the
+// shape FormatLabelListMarkdownFunc is handed by the label packages.
+type labelListRow struct {
+	Name                   string
+	Color                  string
+	CountsSent             bool
+	OpenIssuesCount        int64
+	ClosedIssuesCount      int64
+	OpenMergeRequestsCount int64
+	IsProjectLabel         bool
+	Archived               bool
+}
+
+// formatLabelListRows renders rows through FormatLabelListMarkdownFunc with the
+// project copy and a one-page pagination block of their own size.
+func formatLabelListRows(rows []labelListRow) string {
+	return FormatLabelListMarkdownFunc(rows, PaginationOutput{Page: 1, PerPage: 20, TotalItems: int64(len(rows)), TotalPages: 1}, LabelMarkdownOptions{
+		ListTitle: "Labels",
+		ListHints: []string{HintPreserveLinks, "Use action 'label_get'"},
+	}, func(label labelListRow) LabelMarkdown {
+		return LabelMarkdown{Name: label.Name, Color: label.Color, CountsSent: label.CountsSent, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: label.IsProjectLabel, Archived: label.Archived}
+	})
+}
+
 // TestFormatLabelListMarkdownFunc_WithLabels verifies the list byte for
-// byte: the heading with GitLab's total, the table with the scope column,
-// the footer, and the caller's hint without a link hint, since labels carry
-// no link.
+// byte: the heading with GitLab's total, the table with the scope column and
+// the counts GitLab sent, zeros included, the footer, and the caller's hint
+// without a link hint, since labels carry no link.
 //
 // The archived row is in the table because GitLab archives a label rather
 // than deleting it: it keeps coming back in every list and stays on the
 // issues that carry it, so a row that reads exactly like a live one tells a
 // model to keep using a label nobody may apply any more.
 func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
-	type labelOutput struct {
-		Name                   string
-		Color                  string
-		OpenIssuesCount        int64
-		ClosedIssuesCount      int64
-		OpenMergeRequestsCount int64
-		IsProjectLabel         bool
-		Archived               bool
-	}
-	got := FormatLabelListMarkdownFunc([]labelOutput{
-		{Name: "bug|fix", Color: "#ff0000", OpenIssuesCount: 3, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, IsProjectLabel: true},
-		{Name: "inherited", Color: "#00ff00"},
-		{Name: "retired", Color: "#0000ff", IsProjectLabel: true, Archived: true},
-	}, PaginationOutput{Page: 1, PerPage: 20, TotalItems: 3, TotalPages: 1}, LabelMarkdownOptions{
-		ListTitle: "Labels",
-		ListHints: []string{HintPreserveLinks, "Use action 'label_get'"},
-	}, func(label labelOutput) LabelMarkdown {
-		return LabelMarkdown{Name: label.Name, Color: label.Color, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: label.IsProjectLabel, Archived: label.Archived}
+	got := formatLabelListRows([]labelListRow{
+		{Name: "bug|fix", Color: "#ff0000", CountsSent: true, OpenIssuesCount: 3, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, IsProjectLabel: true},
+		{Name: "inherited", Color: "#00ff00", CountsSent: true},
+		{Name: "retired", Color: "#0000ff", CountsSent: true, IsProjectLabel: true, Archived: true},
 	})
 
 	want := "## Labels (3)\n\n" +
@@ -193,6 +205,32 @@ func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
 		hintsSection("Use action 'label_get'")
 	if got != want {
 		t.Errorf("label list:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatLabelListMarkdownFunc_CountsNotSent_HasNoCountColumns verifies a
+// page GitLab sent no counts for, which is every listing not asked with
+// with_counts, carries neither the three count headings nor a count cell.
+//
+// Those columns used to be printed on every page, so a listing that asked
+// for no counts showed 0 | 0 | 0 for every label, which reads as labels
+// nothing uses (issue 1174). The rows carry counts the view was handed
+// without GitLab having sent them, so a table that printed them would fail.
+func TestFormatLabelListMarkdownFunc_CountsNotSent_HasNoCountColumns(t *testing.T) {
+	got := formatLabelListRows([]labelListRow{
+		{Name: "bug", Color: "#ff0000", OpenIssuesCount: 3, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, IsProjectLabel: true},
+		{Name: "inherited", Color: "#00ff00"},
+	})
+
+	want := "## Labels (2)\n\n" +
+		"| Name | Color | Scope |\n" +
+		"| --- | --- | --- |\n" +
+		"| bug | #ff0000 | project |\n" +
+		"| inherited | #00ff00 | group |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		hintsSection("Use action 'label_get'")
+	if got != want {
+		t.Errorf("label list without counts:\n got %q\nwant %q", got, want)
 	}
 }
 

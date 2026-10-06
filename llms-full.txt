@@ -3570,7 +3570,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3586,7 +3586,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3594,7 +3594,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3602,7 +3602,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3618,7 +3618,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -8424,7 +8424,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -8440,7 +8440,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -8448,7 +8448,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -8464,7 +8464,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -8480,7 +8480,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","subscribed","archived"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":["null","integer"]},"color":{"type":"string"},"description":{"type":"string"},"description_html":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":["null","boolean"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":["null","integer"]},"open_merge_requests_count":{"type":["null","integer"]},"priority":{"type":["null","integer"]},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -18551,7 +18551,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_create
 
-Create a new group label. Returns: the created label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.
+Create a new group label. Returns: the created label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.
 
 **Parameters:**
 
@@ -18578,7 +18578,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_label_get
 
-Get a single group label by ID or name. Returns: the label with color, text color, description, issue and merge request counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.
+Get a single group label by ID or name. Returns: the label with color, text color, description, and subscription state. GitLab sends a label's usage counts only to group.group_label_list with with_counts. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.
 
 **Parameters:**
 
@@ -18589,7 +18589,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_list
 
-List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, issue and merge request counts, priority, subscription state, and pagination metadata. See also: gitlab_group_label_get, gitlab_group_label_create, gitlab_group_get.
+List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, subscription state, the issue and merge request counts when with_counts is true, and pagination metadata. See also: gitlab_group_label_get, gitlab_group_label_create, gitlab_group_get.
 
 **Parameters:**
 
@@ -18633,7 +18633,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_label_update
 
-Update a group label. Returns: the updated label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.
+Update a group label. Returns: the updated label with id, name, color, text color, description, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.
 
 **Parameters:**
 
@@ -20934,7 +20934,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_create
 
-Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list.
+Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list.
 
 **Parameters:**
 
@@ -20962,7 +20962,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_label_get
 
-Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete.
+Get a single project label by ID or name. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, and archived. GitLab sends a label's usage counts only to project.label_list with with_counts. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete.
 
 **Parameters:**
 
@@ -20973,7 +20973,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_list
 
-List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list.
+List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list.
 
 **Parameters:**
 
@@ -21025,7 +21025,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_update
 
-Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.
+Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.
 
 **Parameters:**
 
@@ -29534,7 +29534,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 - **URI Template**: `gitlab://group/{group_id}/label/{label_id}`
 - **MIME**: application/json
-- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
+- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, and description. Usage counts come from group.group_label_list with with_counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
 
 ### group_members
 
@@ -29636,7 +29636,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 - **URI Template**: `gitlab://project/{project_id}/label/{label_id}`
 - **MIME**: application/json
-- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
+- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, and description. Usage counts come from project.label_list with with_counts. Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions.
 
 ### project_labels
 
@@ -29770,7 +29770,7 @@ Run a comprehensive audit of a GitLab project covering settings, branch protecti
 
 ### audit_project_workflow
 
-Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
+Audit workflow configuration for a GitLab project: labels (names, colors, descriptions, open issue/MR counts), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
 
 **Arguments:**
 

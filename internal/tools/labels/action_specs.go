@@ -127,12 +127,12 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance."
 		options.Aliases = []string{"list labels", "show project labels", "find labels"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelCreate, actionIssueList}
-		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
+		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
 	case specLabelGet:
 		options.Usage = "Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed."
 		options.Aliases = []string{"get label", "show label details", "lookup label"}
 		options.RelatedActions = []string{actionLabelList, actionLabelUpdate, actionLabelDelete}
-		options.IndividualTool.Description = "Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete."
+		options.IndividualTool.Description = "Get a single project label by ID or name. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, and archived. GitLab sends a label's usage counts only to project.label_list with with_counts. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
@@ -144,7 +144,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "Create a label in a project with required name and color, plus optional description and priority."
 		options.Aliases = []string{"create label", "add label", "new label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelUpdate, actionIssueList}
-		options.IndividualTool.Description = "Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list."
+		options.IndividualTool.Description = "Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"color": {
 				SemanticRole:     "hex_color",
@@ -157,7 +157,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name). At least one mutable field is required."
 		options.Aliases = []string{"update label", "edit label", "rename label", "recolor label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelList, actionLabelDelete}
-		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
+		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
