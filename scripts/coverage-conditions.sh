@@ -91,11 +91,12 @@
 #                                 that platform measures its file
 #
 # The second is what the Windows and macOS legs of CI run with linux/amd64,
-# the platform the gate is otherwise applied on: there the files only they
-# build are held to the gate, and a condition of a shared file that a test
-# skipped on that platform leaves one-way does not fail a leg for something
-# the Linux run measures both ways. Any other value is refused before gobco
-# runs.
+# the platform the gate is otherwise applied on, by the GOBCO_GATE=all run a
+# touched package passes before it is committed (no CI step runs gobco on
+# Linux): there the files only they build are held to the gate, and a
+# condition of a shared file that a test skipped on that platform leaves
+# one-way does not fail a leg for something the Linux run measures both ways.
+# Any other value is refused before gobco runs.
 #
 # GOBCO_TEST_FLAGS carries go test flags for gobco's go test, separated by
 # spaces and each written in one word (-timeout=30m), since gobco runs it with

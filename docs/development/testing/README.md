@@ -136,12 +136,14 @@ The Windows and non-Linux halves of `cmd/server` (four source files:
 of CI's cross-platform job run the script on both packages through bash with
 `GOBCO_GATE=beyond:linux/amd64`. A condition left one-way in a file only that
 leg builds fails the leg; one in a file Linux builds too is printed and passed,
-since the Linux gate measures it and a test the platform skips would otherwise
-fail a leg over a condition already decided both ways. Two of those files carry
-conditions, the two operands of the Windows connection-refused check and the
-Windows listen's failure; the other four carry none. macOS builds only
-`probe_other.go` beyond Linux, which carries none, so its leg holds nothing
-today and is there for the next file only it builds.
+since the `GOBCO_GATE=all` run a touched package passes on Linux before it is
+committed measures it, and a test the platform skips would otherwise fail a leg
+over a condition already decided both ways. That run is local: no CI step runs
+gobco on Linux, so the shared files are held by it and not by CI. Two of those
+files carry conditions, the two operands of the Windows connection-refused
+check and the Windows listen's failure; the other four carry none. macOS
+builds only `probe_other.go` beyond Linux, which carries none, so its leg holds
+nothing today and is there for the next file only it builds.
 
 **The e2e harness stays unmeasured until gobco honours build tags.**
 `TAGS=<tag>` reaches `go list` and gobco's `go test` alike, and under

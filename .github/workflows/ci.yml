@@ -1270,21 +1270,24 @@ jobs:
           path: test-results/unit-suite
           retention-days: 7
           if-no-files-found: ignore
-      # Condition coverage (gobco) of the files a Linux run leaves out. The
-      # condition gate is applied on Linux, where `make coverage-conditions`
-      # measures cmd/server and internal/toolutil in a copy without the files
-      # the go command does not build there, so their other halves (the
-      # Windows socket-mode and connection-refused halves of cmd/server, its
-      # non-Linux probe and non-Unix descriptor limit, and the two non-Unix
-      # file halves of internal/toolutil) were measured by nothing (issue
-      # 1017). Not on Linux, which builds none of them.
+      # Condition coverage (gobco) of the files a Linux run leaves out. This is
+      # the only step in CI that runs gobco. The condition gate is otherwise
+      # held before a commit rather than here: every touched package must pass
+      # `GOBCO_GATE=all make coverage-conditions` on Linux, which measures
+      # cmd/server and internal/toolutil in a copy without the files the go
+      # command does not build there, so their other halves (the Windows
+      # socket-mode and connection-refused halves of cmd/server, its non-Linux
+      # probe and descriptor_limit_other.go, built on every platform but Linux
+      # and macOS, and the two non-Unix file halves of internal/toolutil) were
+      # measured by nothing (issue 1017). Not on Linux, which builds none of
+      # them.
       #
       # It gates on what only this platform can measure: GOBCO_GATE fails the
       # leg on a condition not evaluated both ways in a file this platform
       # builds and linux/amd64 does not, and prints and passes one in a file
-      # Linux builds too, which the Linux gate measures. Holding those here as
-      # well would fail a leg over a test the platform skips, for a condition
-      # already measured both ways.
+      # Linux builds too, which the local gate before a commit measures and no
+      # CI step does. Holding those here as well would fail a leg over a test
+      # the platform skips, for a condition already measured both ways.
       #
       # Through bash and the script itself rather than make, which
       # windows-latest does not promise. The timeout is gobco's go test's, whose
