@@ -180,12 +180,13 @@ func newCredentialRedactor() func(string) string {
 // The variables use W3C Baggage syntax, so a credential containing a space is
 // written percent-encoded and the exporter logs whichever form it was holding
 // when it gave up. Both spellings are the same secret.
+//
+// A value that decodes to itself is not skipped here: every caller has just
+// offered the value as it stands, and add refuses a secret it already holds.
 func addUnescaped(add func(string), value string) {
-	decoded, err := url.QueryUnescape(value)
-	if err != nil || decoded == value {
-		return
+	if decoded, err := url.QueryUnescape(value); err == nil {
+		add(decoded)
 	}
-	add(decoded)
 }
 
 // credentialEnvKeys lists the variables carrying a collector credential, in a
@@ -193,7 +194,7 @@ func addUnescaped(add func(string), value string) {
 // cannot drift apart.
 func credentialEnvKeys() []string {
 	seen := map[string]bool{}
-	keys := make([]string, 0, len(headerKeys)+1)
+	var keys []string
 	for _, signal := range []string{"traces", "metrics", "logs"} {
 		for _, key := range headerKeys[signal] {
 			if !seen[key] {
@@ -299,16 +300,19 @@ func (h *sdkVerbosityHandler) WithGroup(name string) slog.Handler {
 // clampSDKLevel maps a logr-derived level to the slog level the SDK's channel
 // naming promises. Levels at Info and above pass through: they are not the
 // SDK's verbosity scheme.
+//
+// A chain of ifs rather than a tagless switch, because Go's coverage records
+// no block for a case expression and mutation testing would read every mutant
+// of one as never reached.
 func clampSDKLevel(level slog.Level) slog.Level {
-	switch {
-	case level >= slog.LevelInfo:
+	if level >= slog.LevelInfo {
 		return level
-	case level > slog.LevelDebug:
+	}
+	if level > slog.LevelDebug {
 		// V(1) through V(3): the SDK's warn channel.
 		return slog.LevelWarn
-	default:
-		// V(4) and beyond: the SDK's info and debug channels, both of which
-		// its docs describe as internal detail.
-		return slog.LevelDebug
 	}
+	// V(4) and beyond: the SDK's info and debug channels, both of which its
+	// docs describe as internal detail.
+	return slog.LevelDebug
 }

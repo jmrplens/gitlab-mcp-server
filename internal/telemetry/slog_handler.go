@@ -202,21 +202,29 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 			// resolves to, URIs and identity included, on the OTLP handler's
 			// side of the policy.
 			attr.Value = attr.Value.Resolve()
-			switch {
-			case attr.Key == LogFieldUserID:
+			// A chain of ifs rather than a tagless switch: Go's coverage
+			// records no block for a case expression, so mutation testing
+			// reads every mutant of one as never reached.
+			if attr.Key == LogFieldUserID {
 				userID = attr.Value.String()
-			case attr.Key == LogFieldUser:
+				continue
+			}
+			if attr.Key == LogFieldUser {
 				username = attr.Value.String()
-			case exportStrippedFields[attr.Key]:
+				continue
+			}
+			if exportStrippedFields[attr.Key] {
 				// Dropped outright: see exportStrippedFields.
-			case attr.Value.Kind() == slog.KindGroup:
+				continue
+			}
+			if attr.Value.Kind() == slog.KindGroup {
 				out = append(out, slog.Attr{
 					Key:   attr.Key,
 					Value: slog.GroupValue(strip(attr.Value.Group())...),
 				})
-			default:
-				out = append(out, redactAttr(attr))
+				continue
 			}
+			out = append(out, redactAttr(attr))
 		}
 		return out
 	}

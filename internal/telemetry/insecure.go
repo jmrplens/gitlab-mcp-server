@@ -110,16 +110,18 @@ func isPlaintextRemoteForSignal(signal, endpoint string) bool {
 		return false
 	}
 	insecure, decided := insecureFromEnv(signal)
-	switch {
-	case !decided:
+	// A chain of ifs rather than a tagless switch: Go's coverage records no
+	// block for a case expression, so mutation testing reads every mutant of
+	// one as never reached.
+	if !decided {
 		return schemeOf(endpoint) == "http"
-	case signal == "logs" && schemeOf(endpoint) != "":
+	}
+	if signal == "logs" && schemeOf(endpoint) != "" {
 		// The exporter this signal uses honors the specification, so a scheme
 		// on the endpoint settles it and the variable never applies.
 		return schemeOf(endpoint) == "http"
-	default:
-		return insecure
 	}
+	return insecure
 }
 
 // insecureFromEnv reads the insecure variables for one signal, most specific
