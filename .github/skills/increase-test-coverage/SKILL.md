@@ -426,7 +426,7 @@ make coverage-conditions PKG=./cmd/<command>
 # <file>.go:<line>:<col>: condition "<expression>" was <n> times true but never false
 ```
 
-Every reported line is a missing case from the table in step 1. The target is nothing reported. A condition that genuinely cannot take the other value is dead code: remove it as a code change, or extract it so a test can reach it; do not leave it as an accepted exception. gobco does not report a function never called at all (statement coverage does) and does not instrument `select`.
+Every reported line is a missing case from the table in step 1. The target is nothing reported, and `GOBCO_GATE=all make coverage-conditions PKG=...` makes the run fail rather than report when anything is. A condition that genuinely cannot take the other value is dead code: remove it as a code change, or extract it so a test can reach it; do not leave it as an accepted exception. gobco does not report a function never called at all (statement coverage does) and does not instrument `select`.
 
 ### 3. Prove the cases with mutation testing
 

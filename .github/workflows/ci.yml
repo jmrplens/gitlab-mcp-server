@@ -1187,8 +1187,9 @@ jobs:
   # generated-artifact gates or the coverage floor: their answers cannot depend
   # on the operating system, so running them three times would triple the flake
   # surface and add no signal. What does depend on the platform is here, namely
-  # the build constraints, every path the code touches, and the two transport
-  # modules that spawn the real binary.
+  # the build constraints, every path the code touches, the two transport
+  # modules that spawn the real binary, and the condition coverage of the files
+  # only a platform other than Linux builds.
   #
   # Linux is in the matrix even though Test already runs the suite there,
   # because it is the control: without it, a macOS-only failure cannot be told
@@ -1269,6 +1270,40 @@ jobs:
           path: test-results/unit-suite
           retention-days: 7
           if-no-files-found: ignore
+      # Condition coverage (gobco) of the files a Linux run leaves out. The
+      # condition gate is applied on Linux, where `make coverage-conditions`
+      # measures cmd/server and internal/toolutil in a copy without the files
+      # the go command does not build there, so their other halves (the
+      # Windows socket-mode and connection-refused halves of cmd/server, its
+      # non-Linux probe and non-Unix descriptor limit, and the two non-Unix
+      # file halves of internal/toolutil) were measured by nothing (issue
+      # 1017). Not on Linux, which builds none of them.
+      #
+      # It gates on what only this platform can measure: GOBCO_GATE fails the
+      # leg on a condition not evaluated both ways in a file this platform
+      # builds and linux/amd64 does not, and prints and passes one in a file
+      # Linux builds too, which the Linux gate measures. Holding those here as
+      # well would fail a leg over a test the platform skips, for a condition
+      # already measured both ways.
+      #
+      # Through bash and the script itself rather than make, which
+      # windows-latest does not promise. The timeout is gobco's go test's, whose
+      # default of ten minutes is the one the unit suite above had to raise for
+      # cmd/server on Windows. A Go runtime crash of issue 467 fails this step
+      # the way it fails the suite's first run, with a "fatal error:" line in
+      # the log, and is answered the same way: rerun the failed job.
+      - name: Condition coverage of the platform halves
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        env:
+          GOBCO_GATE: beyond:linux/amd64
+          GOBCO_TEST_FLAGS: -timeout=30m
+        run: |
+          status=0
+          for pkg in ./cmd/server ./internal/toolutil; do
+            bash scripts/coverage-conditions.sh "$pkg" || status=1
+          done
+          exit "$status"
       # The two transport modules need neither GitLab nor a credential, and
       # they are why this is not a build-only check: they start the real binary
       # and drive it the way a client does, over pipes and sockets, which is

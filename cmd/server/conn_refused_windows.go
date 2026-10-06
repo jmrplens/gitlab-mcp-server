@@ -11,7 +11,7 @@ import (
 	"syscall"
 )
 
-// wsaeConnRefused is Winsock's WSAECONNREFUSED, "No connection could be made
+// errWSAEConnRefused is Winsock's WSAECONNREFUSED, "No connection could be made
 // because the target machine actively refused it".
 //
 // It is spelled out here because Go's syscall package does not export it on
@@ -21,7 +21,7 @@ import (
 // value, so a check against the POSIX name alone answers false for the one case
 // it exists to recognize. The number is Winsock's, fixed since Windows Sockets 2
 // and part of its ABI.
-const wsaeConnRefused = syscall.Errno(10061)
+const errWSAEConnRefused = syscall.Errno(10061)
 
 // isConnRefused reports whether err is the kernel's answer that nothing is
 // listening on the address that was dialed.
@@ -29,5 +29,5 @@ const wsaeConnRefused = syscall.Errno(10061)
 // Both spellings are accepted. The POSIX one cannot reach a socket error here,
 // but it costs nothing and keeps this honest if a future Go maps the two.
 func isConnRefused(err error) bool {
-	return errors.Is(err, wsaeConnRefused) || errors.Is(err, syscall.ECONNREFUSED)
+	return errors.Is(err, errWSAEConnRefused) || errors.Is(err, syscall.ECONNREFUSED)
 }

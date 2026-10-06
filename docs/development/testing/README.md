@@ -77,7 +77,10 @@ sharing the box with another run, its own tests take 30 s and a full gremlins
 pass over its 1194 mutants takes 49 minutes. What makes that affordable is that
 a killed mutant costs only as long as the first test that notices it, not a
 whole suite run: 1194 mutants at 30 s each across four workers would be two and
-a half hours, and the pass takes a third of that.
+a half hours, and the pass takes a third of that. The pass that closed issue
+1017 had 1307 mutants, 1260 of them covered, and a suite of 50 s, and was
+split by file into three runs of two workers on five cores each, side by side
+through `GREMLINS_FLAGS`' `--exclude-files`: about two hours each.
 
 **gobco reads a package as every `.go` file in its directory, so the recipe
 stages a package with build-constrained files.** gobco v1.3.4, the latest
@@ -112,15 +115,33 @@ such a file is staged for that reason alone. A package with neither kind of
 file runs where it is, a constraint on the platform alone included
 (`internal/tools/packages`, whose `packages_stream_unix_test.go` sits behind
 `//go:build !windows`), and `internal/config` still reports 424/424 in 3 s.
-Measured on linux/amd64: `cmd/server` 1990/2032 (42 conditions left) and
-`internal/toolutil` 3604/3782 (178 left).
+Measured on linux/amd64 in October 2026: `cmd/server` 2236/2236 and
+`internal/toolutil` 3870/3870, every condition of either evaluated both ways.
 
-**The platform halves the copy leaves out are not measured.** The Windows and
-non-Linux halves of `cmd/server` (five files) and the non-Unix halves of
-`internal/toolutil` (two files) build only on a platform other than the one
-running gobco, and nothing runs gobco on Windows or macOS today. Their
-conditions have never been measured, and they stay open under issue 1017,
-as do the 42 and 178 conditions above that no test evaluates both ways.
+**The report becomes a gate with `GOBCO_GATE`.** Unset, the script prints
+gobco's report and passes whatever it found. `GOBCO_GATE=all` fails the run on
+any condition gobco names as never true, never false or never evaluated, which
+is the gate a touched package is held to before it is committed.
+`GOBCO_GATE=beyond:GOOS/GOARCH` fails it only on such a condition in a file
+this build compiles and the named platform does not, and prints, counts and
+passes the rest. A value it cannot read is refused before gobco runs.
+`GOBCO_TEST_FLAGS` hands gobco's `go test` flags of its own (`-timeout=30m`),
+one word each.
+
+**The platform halves the copy leaves out are measured where they build.**
+The Windows and non-Linux halves of `cmd/server` (four source files:
+`conn_refused_windows.go`, `socket_mode_windows.go`, `probe_other.go` and
+`descriptor_limit_other.go`) and the non-Unix halves of `internal/toolutil`
+(two) build only on a platform other than Linux, so the Windows and macOS legs
+of CI's cross-platform job run the script on both packages through bash with
+`GOBCO_GATE=beyond:linux/amd64`. A condition left one-way in a file only that
+leg builds fails the leg; one in a file Linux builds too is printed and passed,
+since the Linux gate measures it and a test the platform skips would otherwise
+fail a leg over a condition already decided both ways. Two of those files carry
+conditions, the two operands of the Windows connection-refused check and the
+Windows listen's failure; the other four carry none. macOS builds only
+`probe_other.go` beyond Linux, which carries none, so its leg holds nothing
+today and is there for the next file only it builds.
 
 **The e2e harness stays unmeasured until gobco honours build tags.**
 `TAGS=<tag>` reaches `go list` and gobco's `go test` alike, and under
