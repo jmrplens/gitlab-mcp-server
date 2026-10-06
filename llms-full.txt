@@ -13001,7 +13001,7 @@ Action params schema: gitlab://tools/gitlab_orbit.<action>.
 Action guidance:
 - dsl: Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 - graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
-- query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding) in the version 12 query DSL, which lists every node in a nodes array. Read orbit.dsl for the grammar and orbit.schema for the entities and relationship types, and correct a refused query from the message GitLab answers with.
+- query: Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 - schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
 - status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 - tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
@@ -23919,7 +23919,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding) in the version 12 query DSL, which lists every node in a nodes array. Read orbit.dsl for the grammar and orbit.schema for the entities and relationship types, and correct a refused query from the message GitLab answers with.
+Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 
 **Parameters:**
 

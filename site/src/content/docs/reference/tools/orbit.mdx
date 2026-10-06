@@ -77,7 +77,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `orbit.query`
 
-> Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding) in the version 12 query DSL, which lists every node in a nodes array. Read orbit.dsl for the grammar and orbit.schema for the entities and relationship types, and correct a refused query from the message GitLab answers with.
+> Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, naming the entities and relationship types orbit.schema lists. Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, and a refused query is corrected from the message GitLab answers with.
 
 - **Meta-tool**: `gitlab_orbit`, action `query`
 - **Individual tool**: `gitlab_orbit_query`

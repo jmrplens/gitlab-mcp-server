@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -147,11 +148,21 @@ func TestOrbit_QuerySpec_TeachesTheVersion12DSL(t *testing.T) {
 		t.Fatalf("orbit.query ParameterGuidance = %v, want guidance for query", querySpec.ParameterGuidance)
 	}
 
+	// The first sentence is what a reader that shortens descriptions keeps
+	// (llms-medium.txt keeps it, cut at 160 runes), so the two pointers are
+	// held there and not merely somewhere in the line.
+	firstSentence, _, _ := strings.Cut(querySpec.Usage, ". ")
+	if n := utf8.RuneCountInString(firstSentence); n > 160 {
+		t.Errorf("orbit.query usage's first sentence is %d runes, want at most 160 so a reader that cuts there keeps it whole: %q", n, firstSentence)
+	}
+
 	served := []struct {
 		name string
 		text string
 		want string
 	}{
+		{name: "the first sentence points at the DSL", text: firstSentence, want: "orbit.dsl"},
+		{name: "the first sentence points at the schema", text: firstSentence, want: "orbit.schema"},
 		{name: "usage names the version", text: querySpec.Usage, want: "version 12"},
 		{name: "usage names the nodes list", text: querySpec.Usage, want: "nodes array"},
 		{name: "usage points at the DSL", text: querySpec.Usage, want: "orbit.dsl"},

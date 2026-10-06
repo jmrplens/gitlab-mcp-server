@@ -45,10 +45,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{orbitActionDSL, orbitActionQuery},
 			[]string{"kg.dsl", "knowledge_graph.dsl", "kg.grammar", "knowledge_graph.grammar"}, nil),
 		orbitReadSpec("query", orbitReadRoute(client, Query, "GitLab Orbit Query", "submitted query"), "gitlab_orbit_query",
-			"Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding) "+
-				"in the version 12 query DSL, which lists every node in a nodes array. "+
-				"Read orbit.dsl for the grammar and orbit.schema for the entities and relationship types, "+
-				"and correct a refused query from the message GitLab answers with.",
+			"Execute a read-only GitLab Orbit (Knowledge Graph) query in the version 12 DSL orbit.dsl serves, "+
+				"naming the entities and relationship types orbit.schema lists. "+
+				"Every query has a query_type (traversal, aggregation, neighbors, or path_finding) and lists its nodes in a nodes array, "+
+				"and a refused query is corrected from the message GitLab answers with.",
 			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
 			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"},
 			queryGuidance()),
