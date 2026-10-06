@@ -8863,16 +8863,18 @@ choice, and the merge closed the issue without taking it.
   the go command does not build here and blanks the constraint lines gobco's
   narrow build context would misread, which is what the fix does inside gobco:
   `scripts/coverage-conditions.sh`, run by `make coverage-conditions` and by
-  `scripts/check-spec-conditions.sh`, measures `cmd/server` at 1990 of 2032
-  conditions and `internal/toolutil` at 3604 of 3782 on linux/amd64. The
+  `scripts/check-spec-conditions.sh`, measures `cmd/server` at 2236 of 2236
+  conditions and `internal/toolutil` at 3870 of 3870 on linux/amd64. The
   harness is not measured: every file of it sits behind `e2e`, so blanking
   its constraints fails its own test that each file carries exactly that
   line, and the script says the figure it printed is not a measurement. The
-  platform halves the copy leaves out (five files of `cmd/server`, two of
-  `internal/toolutil`) are measured only on a platform that builds them, and
-  nothing runs gobco there today. It retires when a gobco release carries the
-  fix and the pin, `github.com/rillig/gobco@v1.3.4` in
-  `scripts/coverage-conditions.sh`, moves to it.
+  platform halves the copy leaves out (four source files of `cmd/server`, two
+  of `internal/toolutil`) are measured on the platforms that build them: the
+  Windows and macOS legs of CI's cross-platform job run the same script on
+  both packages and fail on a condition left one-way in a file Linux does not
+  build. It retires when a gobco release carries the fix and the pin,
+  `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`, moves
+  to it.
 
 **Where**: `rillig/gobco` at `7a09995` (v1.3.4 behaves the same).
 `instrumenter.instrument` hands every `.go` file of the directory to

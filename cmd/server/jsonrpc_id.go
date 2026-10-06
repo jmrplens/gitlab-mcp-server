@@ -86,16 +86,21 @@ func requestIDFromBody(r *http.Request) json.RawMessage {
 // means: the client matches on the value it sent, not on our reading of it.
 // Everything else (null, an object, an array, an absent member) leaves the
 // response with no id.
+//
+// Written as ifs rather than a tagless switch, because a case expression
+// carries no statement counter of its own and the mutation gate reports every
+// mutant in one as not covered, the digit range's two boundaries among them.
 func isRequestID(raw json.RawMessage) bool {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return false
 	}
-	switch {
-	case trimmed[0] == '"':
+	first := trimmed[0]
+	if first == '"' {
 		var s string
 		return json.Unmarshal(trimmed, &s) == nil
-	case trimmed[0] == '-' || (trimmed[0] >= '0' && trimmed[0] <= '9'):
+	}
+	if first == '-' || (first >= '0' && first <= '9') {
 		var n json.Number
 		return json.Unmarshal(trimmed, &n) == nil
 	}

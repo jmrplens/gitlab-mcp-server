@@ -1751,6 +1751,26 @@ func TestClosableListenURIs_MixedStream_IsLeftAlone(t *testing.T) {
 			want: false,
 		},
 		{
+			// Each list-changed kind keeps the stream open on its own, not
+			// only the one checked first.
+			name:   "resources plus prompts list-changed",
+			method: methodSubscriptionsListen,
+			req: listenReq(&mcp.NotificationSubscriptions{
+				ResourceSubscriptions: []string{"a"},
+				PromptsListChanged:    true,
+			}),
+			want: false,
+		},
+		{
+			name:   "resources plus resources list-changed",
+			method: methodSubscriptionsListen,
+			req: listenReq(&mcp.NotificationSubscriptions{
+				ResourceSubscriptions: []string{"a"},
+				ResourcesListChanged:  true,
+			}),
+			want: false,
+		},
+		{
 			name:   "no resources",
 			method: methodSubscriptionsListen,
 			req:    listenReq(&mcp.NotificationSubscriptions{ResourcesListChanged: true}),

@@ -787,7 +787,10 @@ modeleval-probe:
 # constraint on the platform alone included, is run where it is, as before.
 # TAGS names build tags for a package behind one (TAGS=e2e), passed to go list
 # and to gobco's go test alike, and a report that measured no condition (0/0)
-# is refused.
+# is refused. GOBCO_GATE=all turns the report into the gate a touched package
+# is held to (it fails on any condition not evaluated both ways), and
+# GOBCO_GATE=beyond:linux/amd64 into the one the Windows and macOS legs of CI
+# run, which holds only the files linux/amd64 does not build.
 coverage-conditions:
 	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
 	@scripts/coverage-conditions.sh $(PKG) $(TAGS)

@@ -347,11 +347,12 @@ func boundedShutdown(t *testing.T) context.Context {
 // already coming up.
 func TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto(t *testing.T) {
 	tests := []struct {
-		name    string
-		env     string
-		flag    string
-		surface string
-		want    bool
+		name         string
+		env          string
+		flag         string
+		surface      string
+		unregistered bool
+		want         bool
 	}{
 		{name: "auto keeps the name on the dynamic surface", surface: config.ToolSurfaceDynamic, want: false},
 		{name: "auto drops it on the individual surface", surface: config.ToolSurfaceIndividual, want: true},
@@ -359,6 +360,9 @@ func TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto(t *testi
 		{name: "the environment can force it on", env: "on", surface: config.ToolSurfaceIndividual, want: false},
 		{name: "the flag beats the environment", env: "off", flag: "on", surface: config.ToolSurfaceIndividual, want: false},
 		{name: "an unusable value falls back to auto", env: "sometimes", surface: config.ToolSurfaceIndividual, want: true},
+		// A caller that never registered the flag, which is every path that
+		// reaches this before main has run: the environment decides.
+		{name: "an unregistered flag leaves it to the environment", env: "off", surface: config.ToolSurfaceDynamic, unregistered: true, want: true},
 	}
 
 	for _, tt := range tests {
@@ -369,6 +373,9 @@ func TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto(t *testi
 			previous := telemetryToolNameFlag
 			t.Cleanup(func() { telemetryToolNameFlag = previous })
 			telemetryToolNameFlag = flag.String("telemetry-tool-name", "", "")
+			if tt.unregistered {
+				telemetryToolNameFlag = nil
+			}
 			if tt.flag != "" {
 				if err := flag.CommandLine.Parse([]string{"-telemetry-tool-name=" + tt.flag}); err != nil {
 					t.Fatalf("parsing: %v", err)

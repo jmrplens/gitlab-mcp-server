@@ -45,8 +45,19 @@ func individualFineGrainedShell(t *testing.T, client *gitlabclient.Client, cfg *
 	if err != nil {
 		t.Fatalf("newServerShell: %v", err)
 	}
-	if registerErr := shell.register(t.Context()); registerErr != nil {
-		t.Fatalf("register: %v", registerErr)
+	// Awaited with a bound, because a registration that never returns is a
+	// defect to report rather than a suite to hang: registration lists its own
+	// tools through the readiness gate, and a gate that held that call back
+	// would wait for itself.
+	registered := make(chan error, 1)
+	go func() { registered <- shell.register(t.Context()) }()
+	select {
+	case registerErr := <-registered:
+		if registerErr != nil {
+			t.Fatalf("register: %v", registerErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatalf("register did not return within %s", testHTTPLivenessTimeout)
 	}
 	shell.gate.markReady()
 	return shell

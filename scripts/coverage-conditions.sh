@@ -24,9 +24,9 @@
 # gobco then parses one build context, the one its own `go test` compiles, and
 # every figure it prints is about the files that build on this platform under
 # the tags given. The files left out are named, because this run does not
-# measure their conditions: only a run on a platform that builds them could,
-# and nothing runs gobco on Windows or macOS today, so theirs stay open under
-# issue 1017.
+# measure their conditions: only a run on a platform that builds them can, which
+# is what the Windows and macOS legs of CI's cross-platform job run this for,
+# gated as GOBCO_GATE below describes.
 #
 # The copy is of the module rather than of the package, because anything else
 # changes what the tests see. gobco bridges an external test package to the
@@ -77,6 +77,31 @@
 # test binary never wrote its counts (no test ran) and for one whose every
 # file it declined to instrument, and both read like a package with nothing
 # left to test.
+#
+# The report is a report, and passes whatever it found, unless GOBCO_GATE
+# makes it a gate. A condition not evaluated both ways is one gobco names as
+# "never true", "never false" or "never evaluated", and the gate fails on it:
+#
+#   GOBCO_GATE=all                every such condition fails the run, which is
+#                                 the gate a touched package is held to before
+#                                 it is committed
+#   GOBCO_GATE=beyond:GOOS/GOARCH only those in a file this build compiles and
+#                                 that platform does not; every other one is
+#                                 printed, counted and passed, since a run on
+#                                 that platform measures its file
+#
+# The second is what the Windows and macOS legs of CI run with linux/amd64,
+# the platform the gate is otherwise applied on, by the GOBCO_GATE=all run a
+# touched package passes before it is committed (no CI step runs gobco on
+# Linux): there the files only they build are held to the gate, and a
+# condition of a shared file that a test skipped on that platform leaves
+# one-way does not fail a leg for something the Linux run measures both ways.
+# Any other value is refused before gobco runs.
+#
+# GOBCO_TEST_FLAGS carries go test flags for gobco's go test, separated by
+# spaces and each written in one word (-timeout=30m), since gobco runs it with
+# go test's own ten-minute timeout and cmd/server takes about three times as
+# long on Windows as on Linux.
 set -euo pipefail
 
 # The files a run leaves out are listed in the order a glob returns them,
@@ -96,6 +121,22 @@ if [ -n "$TAGS" ]; then
   # the go command still reads a build flag.
   gobco_args=("-test=-tags=$TAGS")
 fi
+read -r -a test_flags <<<"${GOBCO_TEST_FLAGS:-}"
+for flag in ${test_flags[@]+"${test_flags[@]}"}; do
+  gobco_args+=("-test=$flag")
+done
+
+# The gate is read before anything runs, so a value it cannot read is refused
+# rather than discovered after a run of several minutes.
+GATE=${GOBCO_GATE:-}
+reference=""
+if [ -n "$GATE" ] && [ "$GATE" != all ]; then
+  reference=${GATE#beyond:}
+  if [ "$reference" = "$GATE" ] || ! [[ $reference =~ ^[a-z0-9]+/[a-z0-9]+$ ]]; then
+    echo "gobco: GOBCO_GATE=$GATE is neither all nor beyond:GOOS/GOARCH; refusing to measure" >&2
+    exit 2
+  fi
+fi
 
 # The package under the build context every go command here shares with the
 # `go test` gobco runs. -e keeps a package go cannot load (a path that is not
@@ -105,12 +146,16 @@ listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Dir}}
 {{with .Module}}{{.Dir}}{{end}}
 {{len .TestGoFiles}} {{len .XTestGoFiles}}
 {{join .GoFiles " "}} {{join .CgoFiles " "}} {{join .TestGoFiles " "}} {{join .XTestGoFiles " "}}
+{{join .GoFiles " "}} {{join .CgoFiles " "}}
 {{with .Error}}{{.}}{{end}}' "$PKG")
 {
   IFS= read -r pkgdir
   IFS= read -r moddir
   read -r tests xtests
   read -r -a built
+  # The files gobco instruments, which are the only ones whose conditions it
+  # reports: it leaves the test files as they are.
+  read -r -a sources
   listerr=$(cat)
 } <<<"$listing"
 if [ -n "$listerr" ]; then
@@ -128,6 +173,48 @@ moddir=${moddir//\\//}
   read -r goarch
 } < <(go env GOOS GOARCH)
 context="$goos/$goarch under build tags ${TAGS:-(none)}"
+
+# listed reports whether its first argument is among the rest.
+listed() {
+  local want=$1 name
+  shift
+  for name in "$@"; do
+    if [ "$name" = "$want" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The files a beyond: gate holds: the sources this build compiles that the
+# reference platform does not, asked of the go command under the same tags.
+# CGO_ENABLED is set because the go command turns cgo off for a platform other
+# than the host's, which would count a cgo file the reference does build, on a
+# machine with a C toolchain, as one it leaves out. A package the reference
+# builds no file of at all is one whose every source is beyond it.
+gated=()
+if [ -n "$reference" ]; then
+  reference_listing=$(CGO_ENABLED=1 GOOS=${reference%/*} GOARCH=${reference#*/} \
+    go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{join .GoFiles " "}} {{join .CgoFiles " "}}
+{{with .Error}}{{.}}{{end}}' "$PKG")
+  {
+    read -r -a reference_sources
+    reference_error=$(cat)
+  } <<<"$reference_listing"
+  case "$reference_error" in
+    "") ;;
+    *"build constraints exclude all Go files"*) reference_sources=() ;;
+    *)
+      echo "gobco: go cannot load $PKG for $reference under build tags ${TAGS:-(none)}, which GOBCO_GATE=$GATE compares this build with: $reference_error; refusing to measure" >&2
+      exit 1
+      ;;
+  esac
+  for name in ${sources[@]+"${sources[@]}"}; do
+    if ! listed "$name" ${reference_sources[@]+"${reference_sources[@]}"}; then
+      gated+=("$name")
+    fi
+  done
+fi
 
 # The names a constraint may use and still be read by gobco's context exactly
 # as the go command reads it: every operating system and architecture the
@@ -156,13 +243,7 @@ beyond_platform() {
 # built_here reports whether the go command builds the named file of the
 # package under this build context.
 built_here() {
-  local name
-  for name in ${built[@]+"${built[@]}"}; do
-    if [ "$name" = "$1" ]; then
-      return 0
-    fi
-  done
-  return 1
+  listed "$1" ${built[@]+"${built[@]}"}
 }
 
 # Every file gobco would parse: each regular file of the directory whose name
@@ -266,4 +347,54 @@ fi
 if ! grep -qE '^Condition coverage: [0-9]+/[1-9][0-9]*$' "$report"; then
   echo "gobco: the report above measured no condition of $PKG (Condition coverage: 0/0, or no figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement" >&2
   exit 1
+fi
+
+if [ -z "$GATE" ]; then
+  exit 0
+fi
+
+# gobco names a condition it could not decide in one of three shapes, its
+# file first and relative to the package it ran in:
+#   main.go:91:5: condition "x != \"\"" was 3 times true but never false
+#   main.go:91:5: condition "x != \"\"" was once false but never true
+#   main.go:91:5: condition "x != \"\"" was never evaluated
+# The third is a gap as much as the other two: a condition no test reaches is
+# one no test has decided either way.
+#
+# The file is compared by its name alone, under either separator, and a
+# carriage return a Windows console may have added is dropped first.
+held=()
+left=0
+while IFS= read -r line; do
+  file=${line%%:*}
+  file=${file##*/}
+  file=${file##*\\}
+  if [ "$GATE" = all ] || listed "$file" ${gated[@]+"${gated[@]}"}; then
+    held+=("$line")
+  else
+    left=$((left + 1))
+  fi
+done < <(tr -d '\r' <"$report" | grep -E '^[^:]+\.go:[0-9]+:[0-9]+: condition .*(but never (true|false)|was never evaluated)$' || true)
+
+if [ "$GATE" = all ]; then
+  scope="the files of $PKG measured on $context"
+elif [ "${#gated[@]}" -gt 0 ]; then
+  scope="the files of $PKG that $context builds and $reference does not (${gated[*]})"
+else
+  scope=""
+fi
+elsewhere=""
+if [ "$left" -gt 0 ]; then
+  elsewhere="; $left condition(s) in files $reference also builds were not, and are left to a run there"
+fi
+
+if [ "${#held[@]}" -gt 0 ]; then
+  echo "gobco: GOBCO_GATE=$GATE: ${#held[@]} condition(s) in $scope were not evaluated both ways:" >&2
+  printf '  %s\n' "${held[@]}" >&2
+  exit 1
+fi
+if [ -z "$scope" ]; then
+  echo "gobco: GOBCO_GATE=$GATE: $context builds no source of $PKG that $reference does not, so the gate holds nothing here$elsewhere"
+else
+  echo "gobco: GOBCO_GATE=$GATE: every condition in $scope was evaluated both ways$elsewhere"
 fi

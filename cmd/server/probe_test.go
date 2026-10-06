@@ -58,6 +58,9 @@ func TestParseListenerFlags_ReadsEverySpelling(t *testing.T) {
 		{name: "a value missing at the end", args: []string{"--http", "--http-addr"}, want: listenerFlags{addr: "", http: true, httpSet: true}},
 		{name: "a bare -- ends the scan", args: []string{"--http-addr=:9090", "--", "--http", "--http-addr=:1234"}, want: listenerFlags{addr: ":9090"}},
 		{name: "everything after -- is positional", args: []string{"--", "--http"}, want: listenerFlags{addr: ":8080"}},
+		// A lone dash is a positional by convention (standard input), not a
+		// flag with an empty name, so it takes no value and sets nothing.
+		{name: "a lone dash is positional", args: []string{"-", "--http-addr=:7070"}, want: listenerFlags{addr: ":7070"}},
 		{name: "a probe is not a server", args: []string{"--probe"}, want: listenerFlags{addr: ":8080", utility: true}},
 		{name: "a shutdown is not a server", args: []string{"-shutdown"}, want: listenerFlags{addr: ":8080", utility: true}},
 	}
@@ -156,6 +159,7 @@ func TestParseProbeTarget_AcceptsTheDocumentedForms(t *testing.T) {
 		{name: "surrounding whitespace", in: "  :9090 ", want: "http://127.0.0.1:9090/health"},
 		{name: "empty", in: "", wantErr: true},
 		{name: "a URL without a host", in: "http://", wantErr: true},
+		{name: "a URL that does not parse", in: "http://[::1", wantErr: true},
 		{name: "a bare word", in: "localhost", wantErr: true},
 	}
 	for _, tc := range cases {
@@ -676,6 +680,50 @@ func TestLivePeers_ListsRunningPeersAndSkipsOnesWithoutACommandLine(t *testing.T
 			t.Fatalf("after 10s: running peer listed=%v, zombie listed=%v; want the running one and not the zombie", sawRunning, sawZombie)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestLivePeers_APeerThatVanishedAfterItsNameWasRead_IsSkipped covers the
+// gap between the listing that matched a peer by name and the read of its
+// command line: a process that exited and was reaped in between has no command
+// line left to read, and is passed over rather than failing the whole lookup
+// or being probed on the default port.
+//
+// The gap is a race against the machine's own process churn, so it is made
+// deterministic through the listing's seam: the peer's name is read, and
+// cached by gopsutil, while it runs, and it is ended and reaped before the
+// listing hands it over. Where gopsutil does not cache the name, discovery
+// passes it over one step earlier, and the answer is the same.
+func TestLivePeers_APeerThatVanishedAfterItsNameWasRead_IsSkipped(t *testing.T) {
+	sleeper := exec.CommandContext(t.Context(), "/bin/sleep", "60")
+	if err := sleeper.Start(); err != nil {
+		t.Skipf("cannot start a child process: %v", err)
+	}
+	peer := &process.Process{Pid: pid32(t, sleeper.Process.Pid)}
+	name, err := peer.Name()
+	if err != nil {
+		_ = sleeper.Process.Kill()
+		_ = sleeper.Wait()
+		t.Skipf("the child's name cannot be read here: %v", err)
+	}
+	if killErr := sleeper.Process.Kill(); killErr != nil {
+		t.Fatalf("ending the child: %v", killErr)
+	}
+	_ = sleeper.Wait()
+
+	withArgv0(t, filepath.Join(t.TempDir(), name))
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() ([]*process.Process, error) {
+		return []*process.Process{peer}, nil
+	}
+
+	peers, err := livePeers()
+	if err != nil {
+		t.Fatalf("livePeers() error = %v, want nil: a vanished peer is not a failure", err)
+	}
+	if len(peers) != 0 {
+		t.Errorf("livePeers() = %v, want none: the only peer is gone and has no command line", peers)
 	}
 }
 

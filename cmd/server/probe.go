@@ -20,6 +20,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -32,7 +33,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -112,11 +113,7 @@ func parseListenerFlags(args []string) listenerFlags {
 		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			continue
 		}
-		name := strings.TrimLeft(arg, "-")
-		value, hasValue := "", false
-		if eq := strings.IndexByte(name, '='); eq >= 0 {
-			name, value, hasValue = name[:eq], name[eq+1:], true
-		}
+		name, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 		// takeValue reads a string flag's argument, from the same token or the
 		// next one.
 		takeValue := func() string {
@@ -200,12 +197,15 @@ func probeTargetFor(addr, tlsCert string) probeTarget {
 
 // parseProbeTarget reads a target given on the command line: an http or https
 // URL, unix:<path> or a bare path for a socket, or host:port for plain HTTP.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func parseProbeTarget(s string) (probeTarget, error) {
 	s = strings.TrimSpace(s)
-	switch {
-	case s == "":
+	if s == "" {
 		return probeTarget{}, errors.New("empty target")
-	case strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://"):
+	}
+	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
 		u, err := url.Parse(s)
 		if err != nil || u.Host == "" {
 			return probeTarget{}, fmt.Errorf("%q is not a URL with a host", s)
@@ -215,9 +215,11 @@ func parseProbeTarget(s string) (probeTarget, error) {
 			path = probeHealthPath
 		}
 		return probeTarget{scheme: u.Scheme, addr: u.Host, path: path}, nil
-	case strings.HasPrefix(s, "unix:"):
-		return parseProbeTarget(strings.TrimPrefix(s, "unix:"))
-	case isUnixSocketAddr(s):
+	}
+	if path, ok := strings.CutPrefix(s, "unix:"); ok {
+		return parseProbeTarget(path)
+	}
+	if isUnixSocketAddr(s) {
 		return probeTarget{scheme: "unix", addr: s, path: probeHealthPath}, nil
 	}
 	if _, _, err := net.SplitHostPort(s); err != nil {
@@ -357,16 +359,14 @@ type probeDeps struct {
 func runProbe(ctx context.Context, args []string, certFile string, deps probeDeps, stderr io.Writer) int {
 	// One deadline for the whole run, so a peer that never answers cannot
 	// spend the next peer's time. A caller with an earlier deadline of its
-	// own keeps it: the context already carries the tighter one.
+	// own keeps it, which context.WithTimeout already does: a deadline later
+	// than the parent's leaves the parent's in force.
 	budget := deps.budget
 	if budget <= 0 {
 		budget = probeBudget
 	}
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > budget {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, budget)
-		defer cancel()
-	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 
 	if len(args) > 0 {
 		target, err := parseProbeTarget(args[0])
@@ -388,10 +388,11 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 		fmt.Fprintf(stderr, "probe: listing processes: %v\n", err)
 		return probeUnhealthy
 	}
-	sort.Slice(peers, func(i, j int) bool { return peers[i].pid < peers[j].pid })
+	slices.SortFunc(peers, func(a, b probePeer) int { return cmp.Compare(a.pid, b.pid) })
 
+	// Every server the loop reaches either answers, which ends the run, or
+	// leaves a failure, so no failure at the end means no server was found.
 	var failures []string
-	servers := 0
 	for _, peer := range peers {
 		if len(peer.args) == 0 {
 			continue
@@ -400,7 +401,6 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 		if flags.utility {
 			continue
 		}
-		servers++
 		serves, why := peerServesHTTP(flags, func() (bool, error) { return deps.stdinIsNull(peer.pid) })
 		if !serves {
 			fmt.Fprintf(stderr, "probe: pid %d serves stdio (%s) and is running\n", peer.pid, why)
@@ -414,7 +414,7 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 		fmt.Fprintf(stderr, "probe: pid %d at %s answered\n", peer.pid, target)
 		return probeHealthy
 	}
-	if servers == 0 {
+	if len(failures) == 0 {
 		fmt.Fprintf(stderr, "probe: no running instance of %s\n", canonicalBinaryName(filepath.Base(os.Args[0])))
 		return probeUnhealthy
 	}

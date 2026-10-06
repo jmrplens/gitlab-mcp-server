@@ -36,6 +36,14 @@ func TestBuildIdentifier_RendersOneComparableLabelForEveryBuildShape(t *testing.
 		{name: "a dirty pseudo-version says so", version: "2.7.6-0.20260903061404-6e6ff5beb20e+dirty", commit: "6e6ff5beb20e", want: "2.7.5+6e6ff5b.dirty"},
 		{name: "a pseudo-version supplies the commit when none was stamped", version: "2.8.1-0.20260903061404-abcdef123456", commit: "none", want: "2.8.0+abcdef1"},
 		{name: "a pseudo-version at patch zero keeps it", version: "3.0.0-0.20260903061404-abcdef123456", commit: "", want: "3.0.0+abcdef1"},
+		// The pattern admits any run of digits, and a patch too large for an
+		// int is one strconv cannot read: it is kept as it was written rather
+		// than counted down from a number nobody can hold.
+		{
+			name:    "a pseudo-version whose patch overflows keeps it",
+			version: "3.0.99999999999999999999-0.20260903061404-abcdef123456", commit: "",
+			want: "3.0.99999999999999999999+abcdef1",
+		},
 		{name: "a dirty release", version: "2.7.5+dirty", commit: "404e367", want: "2.7.5+404e367.dirty"},
 		{name: "a short commit is kept whole", version: "dev", commit: "abc", want: "dev+abc"},
 		{name: "an unstamped build", version: "dev", commit: "", want: "dev"},

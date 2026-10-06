@@ -81,6 +81,34 @@ func TestRequestIDFromBody_RecoversOnlyALegalRequestID(t *testing.T) {
 	}
 }
 
+// TestIsRequestID_RefusesWhatIsNotAStringOrANumber covers the predicate on raw
+// bytes it was not handed by a decoder: a value that starts like a string or a
+// number and is neither, and one that starts with a byte no JSON value starts
+// with. The caller above only ever passes what a decoder accepted, so these
+// are the cases that hold the predicate to its own sentence rather than to
+// its caller's.
+func TestIsRequestID_RefusesWhatIsNotAStringOrANumber(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"a string", `"req-1"`, true},
+		{"a number", `42`, true},
+		{"a negative number", `-7`, true},
+		{"an unterminated string", `"req-1`, false},
+		{"digits that are not a number", `4-2`, false},
+		{"a leading plus, which JSON has no number for", `+1`, false},
+		{"only whitespace", "  \n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRequestID([]byte(tc.raw)); got != tc.want {
+				t.Errorf("isRequestID(%q) = %v, want %v", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestRequestIDFromBody_IsBounded checks that the probe cannot be used to make
 // the server buffer an arbitrary body.
 //

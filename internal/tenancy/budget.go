@@ -45,7 +45,7 @@ func EscalationOn(limit int, window, step time.Duration) bool {
 // the distinct keys that failed through it. Without the header the per-address
 // budget is already keyed on that address, and a second limiter over the same
 // string would only halve it. The budget's window falls back to the default
-// when AUB-001's is zero, in three places the register declares rather than
+// when AUB-001's is zero, in two places the register declares rather than
 // moves (issue 958).
 func TransportSourceBudgetOn(trustedProxyHeader string) bool {
 	return strings.TrimSpace(trustedProxyHeader) != ""

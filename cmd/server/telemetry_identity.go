@@ -147,16 +147,22 @@ func announceIdentityChoice() {
 // and also asked for rotation has expressed two intentions that cannot both
 // hold, and the one this server honors is the key, because rotating a secret
 // its owner supplied would destroy the correlation they configured it for.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func logKeyringChoice(ring *Keyring, requested time.Duration) {
-	switch {
-	case ring.Configured() && requested > 0:
+	if ring.Configured() && requested > 0 {
 		slog.Warn("telemetry pseudonyms use the configured key; the rotation interval is ignored",
 			"component", "telemetry", "requested_rotation", requested,
 			"why", "a key supplied by the operator is theirs to rotate")
-	case ring.Configured():
+		return
+	}
+	if ring.Configured() {
 		slog.Info("telemetry pseudonyms use the configured key, so they are stable across replicas and restarts",
 			"component", "telemetry")
-	case ring.Rotation() > 0:
+		return
+	}
+	if ring.Rotation() > 0 {
 		slog.Info("telemetry pseudonyms use a generated key that rotates",
 			"component", "telemetry", "rotation", ring.Rotation())
 	}

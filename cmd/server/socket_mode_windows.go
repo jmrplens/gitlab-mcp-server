@@ -5,7 +5,7 @@
 // Windows supports AF_UNIX sockets but not the POSIX permission bits the mode
 // describes: access follows the ACL the socket inherits from its directory,
 // and there is no umask and no fchmod to apply. Saying so out loud is the
-// honest behaviour — quietly accepting the flag would let an operator believe
+// honest behavior: quietly accepting the flag would let an operator believe
 // a restriction is in force that the platform never applied.
 
 package main

@@ -42,6 +42,7 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "scripts", "coverage-conditions.sh")
 MAKEFILE = os.path.join(ROOT, "Makefile")
+CI_WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
 SPEC_CONDITIONS = os.path.join(ROOT, "scripts", "check-spec-conditions.sh")
 GOBCO = "github.com/rillig/gobco@v1.3.4"
 
@@ -58,8 +59,14 @@ import time
 args = sys.argv[1:]
 env = os.environ
 GOBCO = "github.com/rillig/gobco@v1.3.4"
-# What linux/amd64 satisfies without being asked, as far as the fixtures go.
-ACTIVE = {"linux", "unix", "amd64", "gc", "go1.22"}
+# The platform this call is for: GOOS and GOARCH as the go command reads them,
+# linux/amd64 when neither is set.
+GOOS = env.get("GOOS", "linux")
+GOARCH = env.get("GOARCH", "amd64")
+# What that platform satisfies without being asked, as far as the fixtures go.
+ACTIVE = {GOOS, GOARCH, "gc", "go1.22"} | ({"unix"} if GOOS != "windows" else set())
+# The operating systems a file name can end in, which the fixtures use.
+SYSTEMS = ("linux", "windows", "darwin")
 
 
 def tags_of(argv):
@@ -78,16 +85,17 @@ def tags_of(argv):
 
 
 def builds(path, tags):
-    """Whether the go command builds the file under linux/amd64 and tags:
-    a leading dot or underscore never, a GOOS suffix only for linux, and a
-    //go:build line of terms joined by && when every term holds."""
+    """Whether the go command builds the file under this call's platform and
+    tags: a leading dot or underscore never, a GOOS suffix only for that
+    system, and a //go:build line of terms joined by && when every term
+    holds."""
     name = os.path.basename(path)
     if name.startswith((".", "_")):
         return False
     stem = name[:-len(".go")]
     if stem.endswith("_test"):
         stem = stem[:-len("_test")]
-    if stem.endswith(("_windows", "_darwin")):
+    if any(stem.endswith("_" + system) for system in SYSTEMS if system != GOOS):
         return False
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -137,11 +145,11 @@ def render(template, fields):
     return template
 
 
-entry = {"argv": args, "cwd": os.getcwd()}
+entry = {"argv": args, "cwd": os.getcwd(), "goos": GOOS, "goarch": GOARCH}
 status = 0
 if args == ["env", "GOOS", "GOARCH"]:
-    print("linux")
-    print("amd64")
+    print(GOOS)
+    print(GOARCH)
 elif args == ["tool", "dist", "list"]:
     # A slice of what the toolchain prints, one os/arch pair per line.
     for pair in ("aix/ppc64", "android/arm64", "darwin/amd64", "darwin/arm64", "freebsd/amd64",
@@ -157,6 +165,8 @@ elif args[:2] == ["list", "-e"]:
     xtests = [n for n in names if n.endswith("_test.go") and clause(os.path.join(pkgdir, n)).endswith("_test")]
     gofiles = [n for n in names if not n.endswith("_test.go")]
     error = env.get("STUB_LIST_ERROR", "")
+    if env.get("STUB_LIST_ERROR_FOR_GOOS") == GOOS:
+        error = "planted load error for " + GOOS
     if not exists:
         error = "directory %s outside main module or its selected dependencies" % args[-1]
     elif not gofiles and not tests and not xtests:
@@ -219,7 +229,15 @@ elif args[:2] == ["run", GOBCO]:
         print("")
         if figure != "none":
             print("Condition coverage: " + figure)
-            print('%s:4:9: condition "c == 1" was once true but never false' % files[0])
+            # The conditions it names, one per line, which a case sets with
+            # STUB_GOBCO_CONDITIONS (an empty value names none), or one in
+            # the first file by default.
+            if "STUB_GOBCO_CONDITIONS" in env:
+                for line in env["STUB_GOBCO_CONDITIONS"].split("\n"):
+                    if line:
+                        print(line)
+            else:
+                print('%s:4:9: condition "c == 1" was once true but never false' % files[0])
         status = int(env.get("STUB_GOBCO_STATUS", "0"))
 else:
     sys.stderr.write("stub go: unexpected call %r\n" % (args,))
@@ -273,6 +291,9 @@ FILES = {
     # No test at all, and a platform half left out.
     "internal/untested/untested.go": "package untested\n",
     "internal/untested/untested_windows.go": "package untested\n\nfunc w() {}\n",
+    # A package only Windows builds a file of.
+    "internal/winonly/w_windows.go": "package winonly\n\nfunc w(c int) bool {\n\treturn c == 1\n}\n",
+    "internal/winonly/w_windows_test.go": "package winonly\n",
     # What the rest of the module holds: files a test reads by a relative
     # path, which the staged copy keeps, and the directories it leaves out.
     "docs/guide.md": "guide\n",
@@ -654,6 +675,146 @@ class CoverageConditionsTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assert_staged(self.gobco(calls)[0], os.path.join("cmd", "tool"))
         self.assertEqual(self.staged_copies(), [])
+
+    def test_without_a_gate_a_one_way_condition_is_reported_and_passes(self):
+        # The default: the report is printed whole and the run passes whatever
+        # it found, which is what every caller before the gate relied on.
+        proc, _ = self.run_script("./internal/plain", env={
+            "STUB_GOBCO_CONDITIONS": 'plain.go:4:9: condition "c == 1" was never evaluated'})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn('plain.go:4:9: condition "c == 1" was never evaluated', proc.stdout)
+        self.assertNotIn("GOBCO_GATE", proc.stdout + proc.stderr)
+
+    def test_gate_all_fails_on_every_condition_not_evaluated_both_ways(self):
+        # The three shapes gobco writes such a condition in, a line a Windows
+        # console ended with a carriage return among them, and a report that
+        # names none, which passes and says so.
+        scope = "the files of ./internal/plain measured on linux/amd64 under build tags (none)"
+        cases = [
+            ("never false", 'plain.go:4:9: condition "c == 1" was 3 times true but never false', 1),
+            ("never true", 'plain.go:4:9: condition "c == 1" was once false but never true', 1),
+            ("never evaluated", 'plain.go:4:9: condition "c == 1" was never evaluated', 1),
+            ("a line ending in a carriage return", 'plain.go:4:9: condition "c == 1" was never evaluated\r', 1),
+            ("every condition both ways", 'plain.go:4:9: condition "c == 1" was once true and once false', 0),
+            ("no condition named", "", 0),
+        ]
+        for name, conditions, status in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/plain", env={
+                    "GOBCO_GATE": "all", "STUB_GOBCO_CONDITIONS": conditions})
+                self.assertEqual(proc.returncode, status, proc.stdout + proc.stderr)
+                self.assertEqual(len(self.gobco(calls)), 1)
+                if status:
+                    self.assertIn("GOBCO_GATE=all: 1 condition(s) in %s were not evaluated both ways:" % scope,
+                                  proc.stderr)
+                    self.assertIn("  " + conditions.rstrip("\r"), proc.stderr)
+                else:
+                    self.assertIn("GOBCO_GATE=all: every condition in %s was evaluated both ways" % scope, proc.stdout)
+                    self.assertNotIn("left to a run there", proc.stdout)
+                self.assertEqual(self.staged_copies(), [])
+
+    def test_gate_beyond_holds_only_the_files_the_reference_does_not_build(self):
+        # Measured as Windows, held against linux/amd64: the Windows half is
+        # the one file only this run can measure, so a condition left one-way
+        # there fails, under either separator, while one in a file Linux
+        # builds as well is counted, named and passed.
+        windows = {"GOOS": "windows", "GOBCO_GATE": "beyond:linux/amd64"}
+        held = "the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go)"
+        cases = [
+            ("one in the Windows half", 'proc_windows.go:5:9: condition "c == 2" was once true but never false', 1, 0),
+            ("one named with a Windows path", 'cmd\\tool\\proc_windows.go:5:9: condition "c == 2" was never evaluated', 1, 0),
+            ("one in a file Linux builds too", 'main.go:3:9: condition "x" was never evaluated', 0, 1),
+            ("one of each", 'main.go:3:9: condition "x" was never evaluated\n'
+                            'proc_windows.go:5:9: condition "c == 2" was once false but never true', 1, 1),
+            ("none", "", 0, 0),
+        ]
+        for name, conditions, status, left in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./cmd/tool", env=dict(windows, STUB_GOBCO_CONDITIONS=conditions))
+                self.assertEqual(proc.returncode, status, proc.stdout + proc.stderr)
+                # The reference is asked for under its own platform, and the
+                # run itself under this one.
+                self.assertEqual([c["goos"] for c in self.lists(calls)], ["windows", "linux"])
+                run = self.gobco(calls)[0]
+                self.assertEqual(run["goos"], "windows")
+                self.assertEqual(run["files"], ["main.go", "main_test.go", "proc_windows.go", "proc_windows_test.go"])
+                said = proc.stdout + proc.stderr
+                if status:
+                    self.assertIn("GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in %s were not evaluated both ways:"
+                                  % held, proc.stderr)
+                else:
+                    self.assertIn("GOBCO_GATE=beyond:linux/amd64: every condition in %s was evaluated both ways"
+                                  % held, proc.stdout)
+                self.assertEqual("%d condition(s) in files linux/amd64 also builds were not, and are left to a run there"
+                                 % left in said, left > 0 and not status, said)
+                self.assertEqual(self.staged_copies(), [])
+
+    def test_gate_beyond_on_the_reference_itself_holds_nothing(self):
+        proc, _ = self.run_script("./cmd/tool", env={
+            "GOBCO_GATE": "beyond:linux/amd64",
+            "STUB_GOBCO_CONDITIONS": 'main.go:3:9: condition "x" was never evaluated'})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("GOBCO_GATE=beyond:linux/amd64: linux/amd64 under build tags (none) builds no source of "
+                      "./cmd/tool that linux/amd64 does not, so the gate holds nothing here; 1 condition(s) in "
+                      "files linux/amd64 also builds were not, and are left to a run there", proc.stdout)
+
+    def test_gate_beyond_a_package_the_reference_builds_nothing_of_holds_every_source(self):
+        # The go command answers the reference's listing with an error rather
+        # than an empty package, and that error is the answer: every source.
+        proc, _ = self.run_script("./internal/winonly", env={
+            "GOOS": "windows", "GOBCO_GATE": "beyond:linux/amd64",
+            "STUB_GOBCO_CONDITIONS": 'w_windows.go:4:9: condition "c == 1" was never evaluated'})
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("builds and linux/amd64 does not (w_windows.go)", proc.stderr)
+
+    def test_gate_reference_go_cannot_load_is_refused(self):
+        proc, calls = self.run_script("./cmd/tool", env={
+            "GOOS": "windows", "GOBCO_GATE": "beyond:linux/amd64", "STUB_LIST_ERROR_FOR_GOOS": "linux"})
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(self.gobco(calls), [])
+        self.assertIn("go cannot load ./cmd/tool for linux/amd64 under build tags (none), which "
+                      "GOBCO_GATE=beyond:linux/amd64 compares this build with: planted load error for linux",
+                      proc.stderr)
+
+    def test_gate_a_value_it_cannot_read_is_refused_before_anything_runs(self):
+        for value in ("some", "beyond:linux", "beyond:", "beyond:linux/amd64/v3", "Beyond:linux/amd64", "ALL"):
+            with self.subTest(value):
+                proc, calls = self.run_script("./internal/plain", env={"GOBCO_GATE": value})
+                self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+                self.assertEqual(calls, [])
+                self.assertIn("GOBCO_GATE=%s is neither all nor beyond:GOOS/GOARCH" % value, proc.stderr)
+
+    def test_test_flags_reach_gobcos_go_test_one_per_word(self):
+        cases = [
+            ("no tags", (), ["run", GOBCO, "-test=-timeout=30m", "-test=-v"]),
+            ("tags", ("e2e",), ["run", GOBCO, "-test=-tags=e2e", "-test=-timeout=30m", "-test=-v"]),
+        ]
+        for name, extra, argv in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/plain", *extra,
+                                              env={"GOBCO_TEST_FLAGS": " -timeout=30m  -v "})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.gobco(calls)[0]["argv"], argv)
+
+    def test_cross_platform_legs_run_the_gate_through_bash(self):
+        # The Windows and macOS legs run the script itself through bash, not
+        # make, which windows-latest does not promise, on the two packages
+        # whose files split by platform, gated beyond the platform the local
+        # gate is applied on, with the timeout cmd/server needs on Windows.
+        with open(CI_WORKFLOW, encoding="utf-8") as fh:
+            text = fh.read()
+        step = re.search(r"^      - name: Condition coverage of the platform halves\n((?:        .*\n|\n)+)",
+                         text, re.MULTILINE)
+        self.assertIsNotNone(step, "the cross-platform gobco step is missing")
+        body = step.group(1)
+        self.assertIn("if: matrix.os != 'ubuntu-latest'", body)
+        self.assertIn("shell: bash", body)
+        self.assertIn("GOBCO_GATE: beyond:linux/amd64", body)
+        self.assertIn("GOBCO_TEST_FLAGS: -timeout=30m", body)
+        for pkg in ("./cmd/server", "./internal/toolutil"):
+            self.assertIn(pkg, body)
+        self.assertIn("bash scripts/coverage-conditions.sh", body)
+        self.assertNotIn("make ", body)
 
     def test_an_interrupt_ends_the_run_and_removes_the_copy(self):
         # A handler that only cleaned up would return to the script, which

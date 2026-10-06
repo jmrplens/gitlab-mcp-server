@@ -1258,6 +1258,58 @@ func TestBearerGuard_InsufficientScopeWithoutACache_IsForbiddenUncharged(t *test
 	assertSpendsNoBudget(t, g)
 }
 
+// TestBearerGuard_RefusalsWithoutACache_AreAnsweredAndAskedAgain covers the
+// two other refusals the guard writes into its rejected-token cache, on a
+// guard that has none: a token issued to an OAuth application the deployment
+// does not admit, and a token GitLab rejected. Each is answered with the same
+// 401 a guard with a cache gives, and with nothing to remember the verdict the
+// verifier is asked again on the next request.
+func TestBearerGuard_RefusalsWithoutACache_AreAnsweredAndAskedAgain(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		err         error
+		description string
+	}{
+		{
+			name:        "a token issued to an application the deployment does not admit",
+			err:         refusedRecipient(),
+			description: "the token was not issued to an OAuth application this deployment admits",
+		},
+		{
+			name:        "a token GitLab rejected",
+			err:         auth.ErrInvalidToken,
+			description: "the access token is expired, revoked, or not valid for this GitLab instance",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var verifications atomic.Int32
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				verifications.Add(1)
+				return nil, tc.err
+			})
+			g.rejected = nil
+
+			const requests = 2
+			for i := range requests {
+				failure := g.check(guardRequest(t, "glpat-uncached"))
+				if failure == nil || failure.status != http.StatusUnauthorized || failure.code != errCodeUnauthorized {
+					t.Fatalf("request %d: failure = %+v, want a 401", i, failure)
+				}
+				if challenge := failure.header.Get(headerWWWAuthenticate); !strings.Contains(challenge, tc.description) {
+					t.Errorf("request %d: challenge = %q, want it to say %q", i, challenge, tc.description)
+				}
+			}
+			if n := verifications.Load(); n != requests {
+				t.Errorf("the verifier was asked %d times for %d requests, want every one: nothing remembers the verdict", n, requests)
+			}
+		})
+	}
+}
+
 // TestBearerGuard_BelowMinimumRecordedByThePool_IsAnsweredFromMemory covers a
 // verdict the guard did not reach itself: the pool learned of a credential it
 // served that it carries neither read_api nor api and recorded it in the
@@ -2040,6 +2092,33 @@ func TestOAuthChallenge_EscapesEveryQuotedValue(t *testing.T) {
 	want := `Bearer realm="gitlab-mcp-server", error_description="a \"quoted\" \\ value", scope="sco\"pe", resource_metadata="https://x.example/m\"d"`
 	if got != want {
 		t.Errorf("oauthChallenge =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestOAuthChallenge_LeavesOutWhatIsEmpty covers the two optional parameters
+// absent: a challenge with no scope to recommend or no metadata to point at
+// omits the parameter rather than sending it empty, since scope="" and
+// resource_metadata="" each tell a client something false, that no scope is
+// needed and that the metadata lives at no address.
+func TestOAuthChallenge_LeavesOutWhatIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, scope, metadata, want string
+	}{
+		{name: "neither", want: `Bearer realm="gitlab-mcp-server", error="invalid_token"`},
+		{name: "a scope alone", scope: "api", want: `Bearer realm="gitlab-mcp-server", error="invalid_token", scope="api"`},
+		{
+			name: "metadata alone", metadata: testMetadataURL,
+			want: `Bearer realm="gitlab-mcp-server", error="invalid_token", resource_metadata="` + testMetadataURL + `"`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := oauthChallenge(tc.scope, tc.metadata, "error", "invalid_token"); got != tc.want {
+				t.Errorf("oauthChallenge =\n%s\nwant\n%s", got, tc.want)
+			}
+		})
 	}
 }
 

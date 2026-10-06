@@ -508,8 +508,11 @@ func admitDecisions() []Decision {
 			Findings:  []string{"F-16", "F-35"},
 			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
-			// three places kept in step by hand (issue 958). It is declared by
-			// all three rather than moved to one.
+			// two places kept in step by hand (issue 958): the function that
+			// builds the budget and the budget's constructor. Both are declared
+			// rather than moved to one. The budget's window reads what its
+			// constructor resolved, and the default only for a budget that
+			// does not exist.
 			Sites: []Site{
 				alias(pkgServer, "transportFailureLimit", "TransportSourceDistinctKeys"),
 				enforce(pkgServer, "transportFailureBudget"),

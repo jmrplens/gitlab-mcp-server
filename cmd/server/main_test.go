@@ -3192,8 +3192,10 @@ func assertManifestCoversVisibleTools(t *testing.T, session *mcp.ClientSession) 
 	}
 }
 
-// TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
-// keeps discovery but removes execution from the dynamic surface.
+// TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions verifies that
+// read-only mode keeps both dynamic tools: gitlab_execute_action is how read
+// actions are reached on this surface, so it stays, advertised as read-only
+// and not destructive, and the write actions are withheld behind it instead.
 func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
@@ -5175,6 +5177,39 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_IndividualPrebuilt_ReportsExcl
 	}
 	if !slices.Contains(registration.excludedActions, "issue.list") {
 		t.Errorf("excludedActions = %v, want issue.list resolved against the supplied catalog", registration.excludedActions)
+	}
+}
+
+// TestRegisterConfiguredToolSurfaceWithCatalog_DynamicAndMetaPrebuilt_KeepTheCatalog
+// covers the other two surfaces handed a catalog: each registers the one it
+// was given rather than building its own, and reports no exclusion of its own,
+// since the withheld actions are what building the catalog records and nothing
+// was built here.
+func TestRegisterConfiguredToolSurfaceWithCatalog_DynamicAndMetaPrebuilt_KeepTheCatalog(t *testing.T) {
+	client := newMockGitLabClient(t)
+	prebuilt, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog: %v", err)
+	}
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta} {
+		t.Run(surface, func(t *testing.T) {
+			cfg := &config.ServerConfig{ToolSurface: surface, ExcludeTools: []string{"issue.list"}}
+			server := mcp.NewServer(&mcp.Implementation{Name: surface, Version: "0"}, nil)
+
+			registration, registerErr := registerConfiguredToolSurfaceWithCatalog(server, client, cfg, surface, prebuilt)
+			if registerErr != nil {
+				t.Fatalf("registerConfiguredToolSurfaceWithCatalog: %v", registerErr)
+			}
+			if registration.surfaceCatalog != prebuilt {
+				t.Error("the registration did not keep the catalog it was handed")
+			}
+			if len(registration.metaSchemaRoutes) == 0 {
+				t.Error("no routes were taken from the supplied catalog")
+			}
+			if len(registration.excludedActions) != 0 {
+				t.Errorf("excludedActions = %v, want none: nothing was built, so nothing was withheld", registration.excludedActions)
+			}
+		})
 	}
 }
 
@@ -8798,6 +8833,23 @@ func assertCardPreflight(t *testing.T, cardURL string) {
 	if got := resp.Header.Get("Access-Control-Max-Age"); got != "3600" {
 		t.Errorf("OPTIONS Access-Control-Max-Age = %q, want 3600 so the preflight is not repeated per fetch", got)
 	}
+
+	// A preflight that asks for no header is granted none: echoing allows
+	// exactly what was asked for, and nothing was.
+	bare, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, cardURL, nil)
+	bare.Header.Set("Origin", "https://scanner.example")
+	bare.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	bareResp, bareErr := testHTTPClient.Do(bare)
+	if bareErr != nil {
+		t.Fatalf("request failed: %v", bareErr)
+	}
+	defer bareResp.Body.Close()
+	if bareResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("a preflight naming no header: expected 204 No Content, got %d", bareResp.StatusCode)
+	}
+	if got := bareResp.Header.Get("Access-Control-Allow-Headers"); got != "" {
+		t.Errorf("a preflight naming no header was granted %q, want none", got)
+	}
 }
 
 // TestEffectiveIdleTimeout verifies the mapping from the raw --http-idle-timeout
@@ -10358,6 +10410,9 @@ func TestBuildTrustedOrigins_SeedsPublicURLOrigin(t *testing.T) {
 		// A public URL that parses and names no host has no origin to
 		// seed; a scheme and a separator alone are an origin nobody can be.
 		{"a public url without a host seeds nothing", "", "/gitlab", nil},
+		// One that does not parse at all seeds nothing either: configuration
+		// validation refuses it, and this is not where that is said.
+		{"a public url that does not parse seeds nothing", "https://a.example", "https://[::1", []string{"https://a.example"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -11540,6 +11595,25 @@ func TestCreateServer_GatewayCompatInvalidValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), gatewaycompat.EnvVar) {
 		t.Errorf("error = %q, want it to name %s", err, gatewaycompat.EnvVar)
+	}
+}
+
+// TestCatalogTextRewriter_InstallsNothingWithNothingToSubstitute pins the
+// choice the wiring test above cannot see through a session: with no
+// substitution configured there is no rewriter at all, rather than one that
+// changes no text and clones every listing anyway, and with one there is.
+func TestCatalogTextRewriter_InstallsNothingWithNothingToSubstitute(t *testing.T) {
+	t.Parallel()
+
+	if rewrite := catalogTextRewriter(nil); rewrite != nil {
+		t.Error("a rewriter was built with no substitution to apply")
+	}
+	subs, err := gatewaycompat.ParseSubstitutions("old=new")
+	if err != nil {
+		t.Fatalf("ParseSubstitutions: %v", err)
+	}
+	if rewrite := catalogTextRewriter(subs); rewrite == nil {
+		t.Error("no rewriter was built for a configured substitution")
 	}
 }
 
@@ -13851,7 +13925,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now()}
 
-		if !writer.writeKeepAlive() {
+		if !writer.writeKeepAlive(time.Now()) {
 			t.Error("the heartbeat stopped on a stream that is alive")
 		}
 		if rec.Body.Len() != 0 {
@@ -13868,7 +13942,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now().Add(-time.Hour)}
 
-		if !writer.writeKeepAlive() {
+		if !writer.writeKeepAlive(time.Now()) {
 			t.Error("the heartbeat stopped on a stream that is alive")
 		}
 		if got := rec.Body.String(); got != string(sseKeepAliveFrame) {
@@ -13882,7 +13956,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, stopped: true}
 
-		if writer.writeKeepAlive() {
+		if writer.writeKeepAlive(time.Now()) {
 			t.Error("the heartbeat continued after the handler returned")
 		}
 		if rec.Body.Len() != 0 {
@@ -13895,10 +13969,51 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 
 		writer := &sseAwareWriter{ResponseWriter: brokenResponseWriter{httptest.NewRecorder()}}
 
-		if writer.writeKeepAlive() {
+		if writer.writeKeepAlive(time.Now()) {
 			t.Error("the heartbeat continued after the write failed; it would write into a closed socket forever")
 		}
 	})
+}
+
+// TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle pins the
+// boundary between the two answers a live stream gets: a stream that last
+// wrote exactly one interval before the tick has been silent for as long as
+// the heartbeat waits, so it is idle and gets the frame, and one a nanosecond
+// short of that has not and does not. The tick records itself as the last
+// write, so the next tick measures from it.
+func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T) {
+	t.Parallel()
+
+	lastWrite := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name      string
+		silence   time.Duration
+		wantFrame bool
+	}{
+		{name: "one interval exactly", silence: sseKeepAliveInterval, wantFrame: true},
+		{name: "a nanosecond short of one", silence: sseKeepAliveInterval - time.Nanosecond, wantFrame: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: lastWrite}
+			tick := lastWrite.Add(tc.silence)
+
+			if !writer.writeKeepAlive(tick) {
+				t.Fatal("the heartbeat stopped on a stream that is alive")
+			}
+			if wrote := rec.Body.String() == string(sseKeepAliveFrame); wrote != tc.wantFrame {
+				t.Errorf("frame written = %v after %v of silence, want %v", wrote, tc.silence, tc.wantFrame)
+			}
+			wantLast := lastWrite
+			if tc.wantFrame {
+				wantLast = tick
+			}
+			if !writer.lastWrite.Equal(wantLast) {
+				t.Errorf("lastWrite = %v, want %v", writer.lastWrite, wantLast)
+			}
+		})
+	}
 }
 
 // brokenResponseWriter is a ResponseWriter whose connection has gone away.
@@ -13971,6 +14086,39 @@ func TestSSEAwareWriter_AClientThatWentAway_EndsItsHeartbeat(t *testing.T) {
 		t.Fatal("the heartbeat is still running for a client that disconnected")
 	}
 	writer.stopKeepAlive()
+}
+
+// TestSSEAwareWriter_ASecondWriteHeaderAndASecondStop_ChangeNothing covers
+// the two calls a handler can repeat: a superfluous WriteHeader, which
+// net/http ignores and which must not start a second heartbeat or treat the
+// stream again, and a second stop, which must return at once rather than
+// close the stop channel twice or wait on a heartbeat that already ended.
+func TestSSEAwareWriter_ASecondWriteHeaderAndASecondStop_ChangeNothing(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	rec.Header().Set(hdrContentType, "text/event-stream")
+	writer := &sseAwareWriter{ResponseWriter: rec}
+
+	writer.WriteHeader(http.StatusOK)
+	stop, done := writer.stop, writer.done
+	if stop == nil {
+		t.Fatal("no heartbeat was started for a response that committed to text/event-stream")
+	}
+	writer.WriteHeader(http.StatusInternalServerError)
+	if writer.stop != stop || writer.done != done {
+		t.Error("a second WriteHeader started a second heartbeat")
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want the first one, %d", rec.Code, http.StatusOK)
+	}
+
+	writer.stopKeepAlive()
+	// A close of the closed stop channel would panic here and fail the test.
+	writer.stopKeepAlive()
+	if !writer.stopped {
+		t.Error("the writer does not record that its heartbeat was stopped")
+	}
 }
 
 // TestSSEAwareWriter_Unwrap_ExposesTheConnection pins the method
@@ -14372,6 +14520,12 @@ func TestRequireInstanceAllowList(t *testing.T) {
 			name: "the_escape_hatch_is_ignored_when_an_instance_is_named",
 			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com"}, allowAnyGitLabURL: true, addr: "0.0.0.0:8080"},
 		},
+		{
+			// The singular field is an input too, for a caller that builds
+			// httpConfig without the flag parser (see normalizeFixedGitLabURL).
+			name: "one_instance_named_in_the_singular_field",
+			hcfg: httpConfig{gitlabURL: "https://gitlab.example.com", addr: "0.0.0.0:8080"},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -14637,24 +14791,6 @@ func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *t
 	}
 }
 
-// TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger verifies that the
-// environment-variable migration's only operator-facing output reaches the log.
-//
-// Which names warn, and in what words, is covered where that logic lives in
-// internal/config. What cannot be seen from there is the half this file owns:
-// the warning is emitted after slog.SetDefault has installed the handler the
-// rest of startup uses, so a call placed earlier would either be formatted
-// differently from every other line or be lost entirely.
-//
-// The warning is what makes the rename a migration rather than a permanent
-// shim: an old name that keeps working and says nothing is one nobody moves off
-// before the release that removes it does so under them.
-//
-// The removal version is asserted rather than left to the message, because it
-// moved once already: it was to be 3.0.0 and is 3.1.0, since a 2.7.5 deployment
-// updates itself into 3.0.0 with nobody reading a release note. A warning that
-// names the wrong release is worse than none, so it is pinned here as well as
-// where the text is built.
 // TestReportRetiredEnvNames_WarnsAndKeepsStarting verifies that an ordinary
 // retired name is reported through the configured logger and does not stop
 // startup, and that the retired name is genuinely no longer read.
@@ -15534,6 +15670,13 @@ func TestMetricHostsFor_EachModeDeclaresWhoChoseTheInstance(t *testing.T) {
 			hcfg:   &httpConfig{gitlabURLs: []string{"https://flag.example.com"}},
 			envURL: "https://env.example.com",
 			want:   []string{"flag.example.com"},
+		},
+		{
+			// A bare word parses, as a path, and names no host: it has no
+			// label to declare, and the URL itself fails where it is used.
+			name: "an entry that names no host declares nothing",
+			hcfg: &httpConfig{gitlabURLs: []string{"gitlab-without-a-scheme", "https://named.example.com"}},
+			want: []string{"named.example.com"},
 		},
 		{
 			name:   "the env overlay pins an HTTP deployment the same way the flag does",

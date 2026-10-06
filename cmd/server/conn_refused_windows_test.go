@@ -35,7 +35,7 @@ func TestIsConnRefused_TellsWinsocksRefusalFromEverythingElse(t *testing.T) {
 	}{
 		{
 			name: "Winsock's refusal, wrapped the way a failed dial returns it",
-			err:  &os.SyscallError{Syscall: "connect", Err: wsaeConnRefused},
+			err:  &os.SyscallError{Syscall: "connect", Err: errWSAEConnRefused},
 			want: true,
 		},
 		{
