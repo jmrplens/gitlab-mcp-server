@@ -363,6 +363,34 @@ func TestBindUnixSocket_CloseKeepsASuccessorsSocket(t *testing.T) {
 	_ = conn.Close()
 }
 
+// TestBindUnixSocket_CloseAfterThePathIsGone_RemovesNothing covers the other
+// way the published path can stop naming the bound socket: nothing is there at
+// all, because an operator or a cleanup removed it first. Close then has no
+// path to compare and none to remove, and still closes the socket itself.
+func TestBindUnixSocket_CloseAfterThePathIsGone_RemovesNothing(t *testing.T) {
+	t.Parallel()
+
+	dir := socketDir(t)
+	path := filepath.Join(dir, "gone.sock")
+	listener, err := bindUnixSocket(t.Context(), path, 0o660)
+	if err != nil {
+		t.Fatalf("bindUnixSocket() error = %v", err)
+	}
+	if removeErr := os.Remove(path); removeErr != nil {
+		t.Fatalf("removing the published path: %v", removeErr)
+	}
+
+	if closeErr := listener.Close(); closeErr != nil {
+		t.Fatalf("Close() error = %v, want the socket closed although its path was already gone", closeErr)
+	}
+	if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("something is at the published path after Close(): %v", statErr)
+	}
+	if _, acceptErr := listener.Accept(); acceptErr == nil {
+		t.Error("the listener still accepts after Close()")
+	}
+}
+
 // TestBindUnixSocket_UnwritableDirectoryIsRefused covers the failure an
 // operator produces by pointing --http-addr into a directory the server does
 // not own.
@@ -664,6 +692,20 @@ func TestRestrictDirToOwner_ADescriptorCallThatFails_IsReported(t *testing.T) {
 			},
 			want: "refusing to build a socket in it",
 		},
+		{
+			// The mode is exactly the one asked for, so the refusal is the
+			// type's alone.
+			name:  "the descriptor names something that is not a directory",
+			chmod: originalChmod,
+			stat: func(f *os.File) (os.FileInfo, error) {
+				info, err := f.Stat()
+				if err != nil {
+					return nil, err
+				}
+				return notADirInfo{FileInfo: info}, nil
+			},
+			want: "refusing to build a socket in it",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -886,6 +928,17 @@ type wrongModeInfo struct {
 func (w wrongModeInfo) Mode() os.FileMode {
 	return (w.FileInfo.Mode() &^ os.ModePerm) | 0o777
 }
+
+// notADirInfo reports a regular file carrying the staging directory's own
+// mode, standing in for a descriptor that names something other than the
+// directory that was made.
+type notADirInfo struct {
+	os.FileInfo
+}
+
+func (n notADirInfo) Mode() os.FileMode { return stagingDirMode }
+
+func (n notADirInfo) IsDir() bool { return false }
 
 // TestPublishStagedSocket_AStatThatFails_IsRefused verifies that a mode which
 // cannot be read back is treated as a mode that was not applied.

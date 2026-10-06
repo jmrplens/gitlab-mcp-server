@@ -116,7 +116,9 @@ func startPprofListener(ctx context.Context, addr string) (*pprofListener, error
 	slog.InfoContext(ctx, "pprof listener started", "component", "pprof", "addr", l.addr)
 	go func() {
 		defer close(l.done)
-		if serveErr := pprofServe(l.srv, ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		// Serve always returns an error, so a stop is either the close this
+		// listener asked for or a failure worth a line.
+		if serveErr := pprofServe(l.srv, ln); !errors.Is(serveErr, http.ErrServerClosed) {
 			slog.ErrorContext(ctx, "pprof listener stopped", "component", "pprof", "error", serveErr)
 		}
 	}()

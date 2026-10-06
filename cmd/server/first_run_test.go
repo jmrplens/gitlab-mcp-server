@@ -139,6 +139,31 @@ func TestIsInteractiveTerminal_IsFalseForAFile(t *testing.T) {
 	}
 }
 
+// TestIsInteractiveTerminal_ACygwinTerminal_IsAPerson covers the second half
+// of the guard, the one that answers for mintty on Windows: a terminal that
+// is not a character device and that isatty recognizes by the name of the
+// pipe behind it. It is false on every other platform, so the answer is
+// supplied through the seam, with stdin held on a pipe so the first half says
+// no and the verdict is the second half's alone.
+func TestIsInteractiveTerminal_ACygwinTerminal_IsAPerson(t *testing.T) {
+	heldOpenStdin(t)
+	original := isCygwinTerminal
+	t.Cleanup(func() { isCygwinTerminal = original })
+
+	var asked []uintptr
+	isCygwinTerminal = func(fd uintptr) bool {
+		asked = append(asked, fd)
+		return true
+	}
+
+	if !isInteractiveTerminal() {
+		t.Error("a Cygwin terminal was not reported as interactive; a double-click under mintty would start a server nobody can use")
+	}
+	if want := []uintptr{os.Stdin.Fd()}; len(asked) != 1 || asked[0] != want[0] {
+		t.Errorf("the Cygwin test was asked about %v, want stdin's descriptor %v once", asked, want)
+	}
+}
+
 // TestExecutableName_FallsBackToTheProjectName pins the fallback rather than the
 // happy path, because the happy path is whatever the test binary is called.
 // The name is printed for the reader to type, so an empty string would leave

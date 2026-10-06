@@ -205,3 +205,24 @@ func TestCapturedResponse_TreatsAWrittenBodyAsA200(t *testing.T) {
 		t.Errorf("status = %d, want %d", captured.status, http.StatusOK)
 	}
 }
+
+// TestCapturedResponse_AHandlerThatWroteNothing_IsAnEmptyDocument covers the
+// handler that returns without a status or a body. net/http answers that with
+// an empty 200, so the capture classifies it as a representation, and a replay
+// forwards it the way net/http would have sent it: no status of its own, which
+// is the implied 200, and no bytes. Writing a status of zero instead is a
+// panic in net/http, which is why the replay asks first.
+func TestCapturedResponse_AHandlerThatWroteNothing_IsAnEmptyDocument(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	captured := &capturedResponse{ResponseWriter: rec}
+
+	if !captured.ok() {
+		t.Error("a handler that wrote nothing was classified as a failure; net/http would have answered it with an empty 200")
+	}
+	captured.replay(rec)
+	if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+		t.Errorf("replay = %d with %d byte(s), want the implied 200 with none", rec.Code, rec.Body.Len())
+	}
+}

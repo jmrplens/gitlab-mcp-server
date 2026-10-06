@@ -175,10 +175,9 @@ func shortCommit(commit string) string {
 	if commit == "" || commit == "none" {
 		return ""
 	}
-	if len(commit) > 7 {
-		return commit[:7]
-	}
-	return commit
+	// Cut at seven or at its own length, whichever is shorter: a hash of
+	// exactly seven characters is already its short form.
+	return commit[:min(len(commit), 7)]
 }
 
 // configDigest fingerprints the settings that decide the tool list a client

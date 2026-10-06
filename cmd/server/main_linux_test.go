@@ -146,6 +146,9 @@ func TestMain_OnATerminal_TheGuidanceScreenAnswersEachMissingCredential(t *testi
 	}{
 		{name: "a token without an instance", args: []string{"gitlab-mcp-server"}, token: "glpat-terminal", wantGuidance: true},
 		{name: "an instance without a token", args: []string{"gitlab-mcp-server"}, url: "https://gitlab.example.test", wantGuidance: true},
+		// Configured on a terminal is a person testing a working setup by hand,
+		// not a first run, so the server starts (and here stops at once).
+		{name: "both credentials", args: []string{"gitlab-mcp-server"}, token: "glpat-terminal", url: "https://gitlab.example.test"},
 		{name: "an http deployment", args: []string{"gitlab-mcp-server", "-http"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

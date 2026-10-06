@@ -164,6 +164,15 @@ func (h *sdkLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // WithGroup implements [slog.Handler].
+//
+// An empty name returns the receiver, which is what slog's contract for the
+// method asks. Passing it on would not be harmless: the standard handlers open
+// a group with no name for it, so the attributes after it would be nested under
+// an empty key while this handler, seeing no group, renamed them as though
+// they were at the top level.
 func (h *sdkLogHandler) WithGroup(name string) slog.Handler {
-	return &sdkLogHandler{base: h.base.WithGroup(name), grouped: h.grouped || name != ""}
+	if name == "" {
+		return h
+	}
+	return &sdkLogHandler{base: h.base.WithGroup(name), grouped: true}
 }

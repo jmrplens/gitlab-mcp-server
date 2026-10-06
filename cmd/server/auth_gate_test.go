@@ -1772,6 +1772,28 @@ func TestLongestAuthBlock_EqualDurations_KeepTheEarlierReason(t *testing.T) {
 	}
 }
 
+// TestLongestAuthBlock_AShorterLaterBlock_KeepsTheLongerEarlierOne covers the
+// order the table above never produces, since its blocks lengthen in the
+// order they are checked: a budget checked first can hold a request longer
+// than the ones after it, because a block is measured by what is left of it.
+// A lockout with fifty minutes left and a transport-source block with five
+// must still answer fifty, and an escalated distinct-token block that has
+// almost run out must not shorten it either.
+func TestLongestAuthBlock_AShorterLaterBlock_KeepsTheLongerEarlierOne(t *testing.T) {
+	t.Parallel()
+
+	const (
+		lockout = 50 * time.Minute
+		source  = 5 * time.Minute
+		spray   = time.Minute
+	)
+	blocked, after, reason := longestAuthBlock(true, lockout, true, source, true, spray)
+	if !blocked || after != lockout || reason != mcpotel.AuthBlockFailureLockout {
+		t.Errorf("longestAuthBlock() = (%v, %v, %q), want (true, %v, %q)",
+			blocked, after, reason, lockout, mcpotel.AuthBlockFailureLockout)
+	}
+}
+
 // TestTransportBudget_Window_FallsBackToTheDefault covers the two shapes a
 // caller can leave the effective window in: a nil budget, which is a
 // deployment without a trusted proxy header, and one built with a

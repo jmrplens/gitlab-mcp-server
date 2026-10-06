@@ -70,11 +70,7 @@ type readinessGate struct {
 // in-flight requests after it closes the session. A gate watching only the
 // request context would hold the process open through its own shutdown.
 func newReadinessGate(lifetime context.Context) *readinessGate {
-	var done <-chan struct{}
-	if lifetime != nil {
-		done = lifetime.Done()
-	}
-	return &readinessGate{ready: make(chan struct{}), lifetime: done}
+	return &readinessGate{ready: make(chan struct{}), lifetime: lifetime.Done()}
 }
 
 // markReady opens the gate and releases every waiter. Idempotent, because both

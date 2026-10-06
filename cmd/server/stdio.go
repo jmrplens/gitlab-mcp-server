@@ -151,20 +151,15 @@ func (s *sanitizedInput) clientClosed() bool { return s.closed.Load() }
 func (s *sanitizedInput) Read(p []byte) (int, error) {
 	for len(s.pending) == 0 {
 		line, oversize, err := s.readLine()
-		switch {
-		case oversize:
+		// Ifs rather than a tagless switch, here and in readLine, whose case
+		// expressions carry no statement counter for the mutation gate to see.
+		if oversize {
 			_, _ = s.out.Write(errorLine(nil, -32600, fmt.Sprintf(
 				"Invalid Request: message exceeds the %d byte limit; send a smaller message or raise %s",
 				s.maxLineBytes(), stdioMaxLineBytesEnv,
 			)))
-		case line != "":
-			if refusal, ok := refuseUnreadable(line, s.limits.maxDepth); ok {
-				if refusal != nil {
-					_, _ = s.out.Write(refusal)
-				}
-			} else {
-				s.pending = []byte(line)
-			}
+		} else if line != "" {
+			s.accept(line)
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -179,6 +174,19 @@ func (s *sanitizedInput) Read(p []byte) (int, error) {
 	n := copy(p, s.pending)
 	s.pending = s.pending[n:]
 	return n, nil
+}
+
+// accept hands a line to the SDK, or answers it here when it is one the SDK
+// must not be given.
+func (s *sanitizedInput) accept(line string) {
+	refusal, refused := refuseUnreadable(line, s.limits.maxDepth)
+	if !refused {
+		s.pending = []byte(line)
+		return
+	}
+	if refusal != nil {
+		_, _ = s.out.Write(refusal)
+	}
 }
 
 // maxLineBytes is the configured ceiling, or the default for a value built
@@ -212,14 +220,14 @@ func (s *sanitizedInput) readLine() (line string, oversize bool, err error) {
 		if readErr == nil {
 			counted--
 		}
-		switch {
-		case oversize:
-			// Already over: keep reading to the newline, keep nothing.
-		case len(assembled)+counted > limit:
-			oversize = true
-			assembled = nil
-		default:
-			assembled = append(assembled, chunk...)
+		// Once over, keep reading to the newline and keep nothing.
+		if !oversize {
+			if len(assembled)+counted > limit {
+				oversize = true
+				assembled = nil
+			} else {
+				assembled = append(assembled, chunk...)
+			}
 		}
 		if readErr == nil {
 			return string(assembled), oversize, nil

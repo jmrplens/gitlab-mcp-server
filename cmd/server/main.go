@@ -827,23 +827,25 @@ func hostsOf(urls []string) []string {
 // by nothing, and five mutants of that switch survived the whole suite. Free
 // selection returns no host at all, which the setter stores as an empty set and
 // reads back exactly like the unset one it used to leave behind.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func metricHostsFor(hcfg *httpConfig, envURL string) []string {
-	switch {
-	case hcfg != nil && len(hcfg.gitlabURLs) > 0:
+	if hcfg != nil && len(hcfg.gitlabURLs) > 0 {
 		return hostsOf(hcfg.gitlabURLs)
-	case hcfg != nil && envURL != "":
-		// The env overlay lets GITLAB_URL pin an HTTP deployment the same way
-		// the flag does, so it declares the metric's host the same way too.
+	}
+	if envURL != "" {
+		// The instance stdio was configured with, and in HTTP mode the one the
+		// env overlay pins the deployment to the way the flag does, so it
+		// declares the metric's host the same way too.
 		return hostsOf([]string{envURL})
-	case hcfg != nil:
+	}
+	if hcfg != nil {
 		// Free selection: callers choose the instance, so no host is declared
 		// and every one lands on the metric as the other bucket.
 		return nil
-	case envURL != "":
-		return hostsOf([]string{envURL})
-	default:
-		return hostsOf([]string{config.DefaultGitLabURL})
 	}
+	return hostsOf([]string{config.DefaultGitLabURL})
 }
 
 // runWithContext dispatches to HTTP or stdio mode depending on hcfg.
@@ -1565,12 +1567,13 @@ func prepareStdioCatalog(
 	// found and whose scopes do not reach the endpoint, so the instance is up
 	// and only the token is short, which the detection below says in full.
 	scopeRefused := gitlabclient.VersionRefusedForScope(err)
-	switch {
-	case scopeRefused:
+	// Ifs rather than a tagless switch here and below, whose case expressions
+	// carry no statement counter for the mutation gate to see.
+	if scopeRefused {
 		// Nothing is degraded and nothing will recover: the refusal below
 		// stands, and the client is never asked to initialize again.
 		slog.WarnContext(ctx, "gitlab refused the token the instance version for want of a scope", "url", cfg.GitLabURL)
-	case err != nil:
+	} else if err != nil {
 		// Said once the token is known not to be refused below: a start
 		// that refuses it serves nothing, degraded or not.
 		var once sync.Once
@@ -1591,12 +1594,11 @@ func prepareStdioCatalog(
 	// asked then too: a start that waited for a recovery that never comes
 	// would serve such a token the catalog for a round.
 	facts := gitlabclient.TokenFacts{KindUnknown: true}
-	switch {
-	case scopeRefused:
+	if scopeRefused {
 		// Asked only to name the token's scopes in the verdict, which an
 		// unanswered description does not change, so it warns of nothing.
 		facts = gitlabclient.DescribeToken(ctx, client.GL())
-	case !cfg.IgnoreScopes || client.IsInitialized():
+	} else if !cfg.IgnoreScopes || client.IsInitialized() {
 		facts = gitlabclient.DetectToken(ctx, client.GL())
 	}
 	// A token GitLab accepted below the admission minimum, carrying neither
@@ -1973,6 +1975,19 @@ func (sh *serverShell) listenCounterFor(ctx context.Context) *listenCounter {
 	return state.listen
 }
 
+// catalogTextRewriter is the middleware that applies the operator's catalog
+// text substitutions, or nil when there are none. Installing it with nothing
+// to substitute would change no text and still clone every listing it
+// passes, which on the individual surface is about a thousand tools per
+// tools/list, so the absence of a rewriter is the answer rather than an empty
+// one.
+func catalogTextRewriter(subs []gatewaycompat.Substitution) mcp.Middleware {
+	if len(subs) == 0 {
+		return nil
+	}
+	return gatewaycompat.Middleware(subs)
+}
+
 // newServerShell builds the half of the server that needs nothing from GitLab.
 func newServerShell(
 	ctx context.Context,
@@ -2122,8 +2137,8 @@ func newServerShell(
 	if substErr != nil {
 		return nil, substErr
 	}
-	if len(gatewaySubs) > 0 {
-		server.AddReceivingMiddleware(gatewaycompat.Middleware(gatewaySubs))
+	if rewrite := catalogTextRewriter(gatewaySubs); rewrite != nil {
+		server.AddReceivingMiddleware(rewrite)
 	}
 
 	// Capability/method consistency: the SDK dispatches logging/setLevel
@@ -2680,11 +2695,13 @@ func shutdownHTTPServer(ctx context.Context, httpServer *http.Server) error {
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 	defer cancel()
 
+	// Two returns rather than a tagless switch, whose case expressions carry
+	// no statement counter for the mutation gate to see.
 	err := httpServer.Shutdown(shutdownCtx)
-	switch {
-	case err == nil:
+	if err == nil {
 		return nil
-	case !errors.Is(err, context.DeadlineExceeded):
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("http server shutdown: %w", err)
 	}
 
@@ -2862,8 +2879,8 @@ func (w *sseAwareWriter) startKeepAlive() {
 				return
 			case <-w.disconnected:
 				return
-			case <-ticker.C:
-				if !w.writeKeepAlive() {
+			case now := <-ticker.C:
+				if !w.writeKeepAlive(now) {
 					return
 				}
 			}
@@ -2871,22 +2888,24 @@ func (w *sseAwareWriter) startKeepAlive() {
 	}()
 }
 
-// writeKeepAlive emits one comment frame, and reports whether the heartbeat
-// should continue. A stream that has written recently is not idle, so it is
-// skipped rather than padded.
-func (w *sseAwareWriter) writeKeepAlive() bool {
+// writeKeepAlive emits one comment frame at now, the tick it answers, and
+// reports whether the heartbeat should continue. A stream that has written
+// less than an interval before now is not idle, so it is skipped rather than
+// padded. The instant is a parameter so the boundary between the two can be
+// tested exactly, without a clock shared by concurrent tests.
+func (w *sseAwareWriter) writeKeepAlive(now time.Time) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stopped {
 		return false
 	}
-	if !w.lastWrite.IsZero() && time.Since(w.lastWrite) < sseKeepAliveInterval {
+	if !w.lastWrite.IsZero() && now.Sub(w.lastWrite) < sseKeepAliveInterval {
 		return true
 	}
 	if _, err := w.ResponseWriter.Write(sseKeepAliveFrame); err != nil {
 		return false
 	}
-	w.lastWrite = time.Now()
+	w.lastWrite = now
 	_ = http.NewResponseController(w.ResponseWriter).Flush()
 	return true
 }
@@ -3226,13 +3245,16 @@ func startServing(
 		// named files whenever either name is non-empty: passing them here
 		// would pin the certificate to what was on disk at startup, which is
 		// the rotation this indirection exists to allow.
+		//
+		// Both always return an error, so a stop is either the shutdown this
+		// process asked for or a failure the caller is handed.
 		var err error
 		if cfg.TLSCertFile != "" {
 			err = httpServer.ServeTLS(listener, "", "")
 		} else {
 			err = httpServer.Serve(listener)
 		}
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
 		close(serverErr)
@@ -3589,7 +3611,9 @@ func publicPaths(cfg *config.Config, paths ...string) []string {
 	if prefix == "" {
 		return paths
 	}
-	out := make([]string, 0, len(paths)*2)
+	// No capacity hint: these are a handful of routes registered once at
+	// startup, and a hint is a number no test can tell from another.
+	var out []string
 	for _, path := range paths {
 		out = append(out, path, prefix+path)
 	}
@@ -4120,9 +4144,9 @@ func securityHeadersMiddleware(limits inboundLimits, next http.Handler) http.Han
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		w.Header().Set(hdrCacheControl, cacheControlNoStore)
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, newDepthLimitedBody(r.Body, limits.maxDepth), maxBytes)
-		}
+		// A server request's body is never nil (net/http hands an empty one
+		// http.NoBody), so every request is wrapped.
+		r.Body = http.MaxBytesReader(w, newDepthLimitedBody(r.Body, limits.maxDepth), maxBytes)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -4156,7 +4180,9 @@ func (b *depthLimitedBody) Read(p []byte) (int, error) {
 		return 0, b.tooDeep()
 	}
 	n, err := b.body.Read(p)
-	if n > 0 && b.scanner.Scan(p[:n]) {
+	// An empty read scans nothing: the scanner answers false for no bytes once
+	// the check above has said it was not already past the limit.
+	if b.scanner.Scan(p[:n]) {
 		// The bytes read so far are dropped along with the error: the request
 		// is being refused, and handing back a prefix would leave the decoder
 		// behind us to fail on a truncated document with a message about

@@ -913,9 +913,11 @@ func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duratio
 
 // window is the effective window this budget lapses pairs on, for the guards
 // that answer Retry-After with it. A nil budget reports the default, which is
-// what its own limiter would have used.
+// what its own limiter would have used. A budget that exists was built by
+// [newTransportBudget], which already resolved a window of zero or less to the
+// default, so its own window is the answer as it stands.
 func (b *transportBudget) window() time.Duration {
-	if b == nil || b.effectiveWindow <= 0 {
+	if b == nil {
 		return authFailureWindow
 	}
 	return b.effectiveWindow
@@ -1013,7 +1015,7 @@ var errMissingGitLabURL = errors.New("no GitLab instance was selected")
 // Do not "fix" the multi-instance case by verifying against each instance in
 // turn, which broadcasts the credential to all of them.
 func requireExplicitInstance(r *http.Request, instances []string) error {
-	if r == nil || len(instances) < 2 {
+	if len(instances) < 2 {
 		return nil
 	}
 	if strings.TrimSpace(r.Header.Get(serverpool.RequestOptionGitLabURL)) != "" {

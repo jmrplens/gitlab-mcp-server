@@ -45,8 +45,13 @@ const staleSocketDialTimeout = 200 * time.Millisecond
 // the relative "./mcp.sock" form. A bare "mcp.sock" is deliberately NOT a
 // socket: it is indistinguishable from a hostname, and guessing wrong there
 // would silently bind something other than what the operator meant.
+//
+// One test over both separators rather than one per separator: on every
+// platform but Windows the native separator is the slash, so a second test for
+// the slash could only be reached when the first had already said no, and
+// would be a condition that never decides anything there.
 func isUnixSocketAddr(addr string) bool {
-	return strings.Contains(addr, string(os.PathSeparator)) || strings.Contains(addr, "/")
+	return strings.ContainsAny(addr, "/"+string(os.PathSeparator))
 }
 
 // listenHTTP binds the address the server serves on: a unix socket when the
@@ -77,10 +82,10 @@ func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.L
 	if err := clearStaleSocket(ctx, path); err != nil {
 		return nil, err
 	}
-	if dir := filepath.Dir(path); dir != "" {
-		if _, err := os.Stat(dir); err != nil {
-			return nil, fmt.Errorf("--http-addr %q: its directory is not usable: %w", path, err)
-		}
+	// filepath.Dir never answers an empty string (a bare name is in "."), so
+	// every path has a directory to check.
+	if _, err := os.Stat(filepath.Dir(path)); err != nil {
+		return nil, fmt.Errorf("--http-addr %q: its directory is not usable: %w", path, err)
 	}
 	if socketMode == 0 {
 		socketMode = config.DefaultSocketMode
@@ -216,13 +221,17 @@ func parseSocketMode(hcfg *httpConfig) error {
 // it is encrypting and is not. Loading the pair here turns a typo into a
 // startup error naming the file, instead of a TLS handshake failure on the
 // first request that nobody sees until a client reports it.
+//
+// Written as a chain of returns rather than a tagless switch, whose case
+// expressions carry no statement counter for the mutation gate to see.
 func validateTLSFiles(cfg *config.Config) error {
-	switch {
-	case cfg.TLSCertFile == "" && cfg.TLSKeyFile == "":
+	if cfg.TLSCertFile == "" && cfg.TLSKeyFile == "" {
 		return nil
-	case cfg.TLSCertFile == "":
+	}
+	if cfg.TLSCertFile == "" {
 		return errors.New("--tls-key requires --tls-cert")
-	case cfg.TLSKeyFile == "":
+	}
+	if cfg.TLSKeyFile == "" {
 		return errors.New("--tls-cert requires --tls-key")
 	}
 	if _, err := loadTLSKeyPair(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {

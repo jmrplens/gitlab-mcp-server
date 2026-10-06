@@ -327,3 +327,38 @@ func TestSDKLogHandler_GroupedAttributesAreLeftAlone(t *testing.T) {
 		t.Errorf("the derived logger renamed a grouped attribute: %v", records[0])
 	}
 }
+
+// TestSDKLogHandler_WithGroup_AnEmptyNameChangesNothing covers the handler's
+// WithGroup called with an empty name, which slog's contract reads as no group
+// at all and which the Logger never forwards, so it is called on the handler
+// directly. An ungrouped handler stays ungrouped, so a reserved key is still
+// renamed rather than overwriting the record's own field, and no group with an
+// empty name appears in the record (the JSON handler opens one when it is
+// handed the name); and a grouped one stays grouped, so a key inside its group
+// is still left alone.
+func TestSDKLogHandler_WithGroup_AnEmptyNameChangesNothing(t *testing.T) {
+	var buf bytes.Buffer
+	base := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+
+	slog.New((&sdkLogHandler{base: base}).WithGroup("")).Info("resource updated notification sent", "level", "info")
+	records := decodeRecords(t, &buf)
+	if len(records) != 1 {
+		t.Fatalf("%d records from the ungrouped handler, want 1", len(records))
+	}
+	if records[0]["sdk_level"] != "info" || records[0]["level"] != "INFO" {
+		t.Errorf("an empty group stopped the rename: %v", records[0])
+	}
+	if _, nested := records[0][""]; nested {
+		t.Errorf("an empty group opened a group with no name: %v", records[0])
+	}
+
+	buf.Reset()
+	slog.New((&sdkLogHandler{base: base}).WithGroup("sdk").WithGroup("")).Info("resource updated notification sent", "level", "info")
+	records = decodeRecords(t, &buf)
+	if len(records) != 1 {
+		t.Fatalf("%d records from the grouped handler, want 1", len(records))
+	}
+	if group, _ := records[0]["sdk"].(map[string]any); group["level"] != "info" {
+		t.Errorf("an empty group nested in a named one moved or renamed a grouped attribute: %v", records[0])
+	}
+}

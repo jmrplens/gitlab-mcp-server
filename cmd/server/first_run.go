@@ -17,8 +17,13 @@ import (
 // because mintty on Windows is not a character device and a double-click there
 // is exactly the case this exists for.
 func isInteractiveTerminal() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
+	return isatty.IsTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
 }
+
+// isCygwinTerminal is isatty's Cygwin test, held as a variable because it is
+// false on every platform but Windows, so the half of the guard that answers
+// for mintty can only be driven there or through this seam.
+var isCygwinTerminal = isatty.IsCygwinTerminal
 
 // firstRunGuidance explains what this program is to somebody who has started it
 // by hand, and waits before returning.

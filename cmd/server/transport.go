@@ -125,10 +125,12 @@ func inferTransport() (http bool, reason string) {
 		return false, "stdin could not be examined (" + err.Error() + ")"
 	}
 	mode := info.Mode()
-	switch {
-	case mode&os.ModeNamedPipe != 0:
+	// Two returns rather than a tagless switch, whose case expressions carry
+	// no statement counter for the mutation gate to see.
+	if mode&os.ModeNamedPipe != 0 {
 		return false, "stdin is a pipe"
-	case mode.IsRegular():
+	}
+	if mode.IsRegular() {
 		return false, "stdin is a regular file"
 	}
 	devNull, err := devNullStat()

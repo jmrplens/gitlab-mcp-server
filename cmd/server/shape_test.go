@@ -385,6 +385,63 @@ func TestShapeServers_ForServerAndForget_FindAShapeByItsServer(t *testing.T) {
 	})
 }
 
+// TestShapeServers_Forget_DropsOnlyTheShapeThatBuiltTheServer covers forget
+// with more than one shape built: the walk over the registry drops the shape
+// whose server failed its registration and passes over every other, since a
+// failure of one configuration's registration says nothing about another's.
+func TestShapeServers_Forget_DropsOnlyTheShapeThatBuiltTheServer(t *testing.T) {
+	var builds int64
+	var mu sync.Mutex
+	shapes, _ := countingShapes(&builds, &mu, nil)
+
+	readOnly := shapeTestConfig()
+	readOnly.ReadOnly = true
+	failed, err := shapes.get(shapeTestConfig(), false)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	kept, err := shapes.get(readOnly, false)
+	if err != nil {
+		t.Fatalf("get the read-only shape: %v", err)
+	}
+
+	shapes.forget(failed.shell.server)
+
+	if got := shapes.count(); got != 1 {
+		t.Fatalf("count = %d after forgetting one of two shapes, want 1", got)
+	}
+	if got := shapes.forServer(kept.shell.server); got != kept {
+		t.Errorf("forServer(kept) = %v, want the shape no failure touched", got)
+	}
+}
+
+// TestShapeServers_Get_WithoutARegistrationHook_BuildsAndKeepsTheShape covers
+// a registry given no hook to start registration with, which is how a test
+// that never registers anything builds one: the shape is built and kept as it
+// is with a hook, and nothing is called for it.
+func TestShapeServers_Get_WithoutARegistrationHook_BuildsAndKeepsTheShape(t *testing.T) {
+	var builds int64
+	shapes := newShapeServers(func(*config.ServerConfig, bool) (*serverShape, error) {
+		builds++
+		return &serverShape{shell: &serverShell{
+			server: mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0"}, nil),
+		}}, nil
+	}, nil)
+
+	first, err := shapes.get(shapeTestConfig(), false)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	second, err := shapes.get(shapeTestConfig(), false)
+	if err != nil {
+		t.Fatalf("second get: %v", err)
+	}
+	if first != second || builds != 1 || shapes.count() != 1 {
+		t.Errorf("two gets returned %p and %p after %d build(s) with %d shape(s) kept, want one shape built once",
+			first, second, builds, shapes.count())
+	}
+}
+
 // TestShapeServers_Get_ConcurrentCallsForOneShape_BuildOnce pins the lock held
 // across the build.
 //
