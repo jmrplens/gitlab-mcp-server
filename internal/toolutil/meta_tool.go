@@ -3031,6 +3031,12 @@ func resolveTopLevelRef(s map[string]any) map[string]any {
 
 // ActionDispatchOutputSchema returns a permissive JSON Schema for tools whose
 // exact structured result depends on the selected catalog action.
+//
+// The pagination properties are the JSON names of [PaginationOutput], the
+// block a list read over REST carries, and a test reads them off the struct.
+// They are not marked required, and the object stays open, because a list read
+// over GraphQL carries its cursor block ([GraphQLPaginationOutput]) under the
+// same key, and the SDK validates every result against this schema.
 func ActionDispatchOutputSchema() map[string]any {
 	return map[string]any{
 		"type":                 "object",
@@ -3044,13 +3050,13 @@ func ActionDispatchOutputSchema() map[string]any {
 			},
 			"pagination": map[string]any{
 				"type":                 "object",
-				"description":          "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+				"description":          "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
 				"additionalProperties": true,
 				"properties": map[string]any{
 					"page":        map[string]any{"type": "integer", "description": "Current 1-based page index."},
 					"per_page":    map[string]any{"type": "integer", "description": "Items per page."},
-					"total":       map[string]any{"type": "integer", "description": "Total item count when known (some endpoints omit it for performance)."},
-					"total_pages": map[string]any{"type": "integer", "description": "Total page count when known."},
+					"total_items": map[string]any{"type": "integer", "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page."},
+					"total_pages": map[string]any{"type": "integer", "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page."},
 					"next_page":   map[string]any{"type": "integer", "description": "Next page index when `has_more` is true."},
 					"prev_page":   map[string]any{"type": "integer", "description": "Previous page index when applicable."},
 					"has_more":    map[string]any{"type": "boolean", "description": "True when more pages are available after the current one."},

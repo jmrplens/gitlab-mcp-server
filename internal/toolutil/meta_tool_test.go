@@ -3076,6 +3076,109 @@ func TestMetaToolOutputSchema_IsEnvelope(t *testing.T) {
 	}
 }
 
+// dispatchPaginationSchema returns the pagination object the action-dispatch
+// envelope declares, failing the test when the envelope carries none.
+func dispatchPaginationSchema(t *testing.T) map[string]any {
+	t.Helper()
+	props, ok := ActionDispatchOutputSchema()["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("envelope declares no properties")
+	}
+	pagination, ok := props["pagination"].(map[string]any)
+	if !ok {
+		t.Fatal("envelope declares no pagination object")
+	}
+	return pagination
+}
+
+// structFieldJSONName returns the JSON name of the named field of typ, read
+// from its tag the way encoding/json reads it.
+func structFieldJSONName(t *testing.T, typ reflect.Type, field string) string {
+	t.Helper()
+	f, ok := typ.FieldByName(field)
+	if !ok {
+		t.Fatalf("%s has no field %s", typ, field)
+	}
+	return jsonFieldName(f)
+}
+
+// TestActionDispatchOutputSchema_PaginationProperties_MatchPaginationOutputTags
+// holds the pagination properties of the envelope the meta tools and
+// gitlab_execute_action declare to the JSON names and kinds of
+// [PaginationOutput], which is the block every list read over REST carries.
+// The envelope named the total `total` while every result wrote `total_items`,
+// and nothing noticed, because the envelope declares additionalProperties and
+// so validates a result that carries neither: a client reading the schema was
+// told to look for a field no result has (issue 1167). The properties are read
+// from the struct rather than listed here, so a field added to the struct, or
+// renamed in it, fails this test until the envelope says the same.
+func TestActionDispatchOutputSchema_PaginationProperties_MatchPaginationOutputTags(t *testing.T) {
+	props, ok := dispatchPaginationSchema(t)["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("pagination object declares no properties")
+	}
+	schemaTypeOf := map[reflect.Kind]string{reflect.Int64: "integer", reflect.Bool: "boolean"}
+	typ := reflect.TypeFor[PaginationOutput]()
+	want := make(map[string]string, typ.NumField())
+	for f := range typ.Fields() {
+		kind, known := schemaTypeOf[f.Type.Kind()]
+		if !known {
+			t.Fatalf("PaginationOutput.%s is a %s, which this test has no JSON Schema type for", f.Name, f.Type.Kind())
+		}
+		want[jsonFieldName(f)] = kind
+	}
+	for name, wantType := range want {
+		prop, declared := props[name].(map[string]any)
+		if !declared {
+			t.Errorf("pagination declares no %q, which every REST list result carries", name)
+			continue
+		}
+		if prop["type"] != wantType {
+			t.Errorf("pagination.%s type = %v, want %q", name, prop["type"], wantType)
+		}
+		if desc, _ := prop["description"].(string); desc == "" {
+			t.Errorf("pagination.%s has no description", name)
+		}
+	}
+	for name := range props {
+		if _, carried := want[name]; !carried {
+			t.Errorf("pagination declares %q, which no PaginationOutput field writes", name)
+		}
+	}
+}
+
+// TestActionDispatchOutputSchema_PaginationDescription_NamesTheFieldsAListPagesBy
+// holds the description of the envelope's pagination object to the names a
+// model has to spell to read the next page, each read from the type that
+// carries it: a REST list's has_more and next_page and the page input
+// next_page feeds, and a GraphQL list's has_next_page and end_cursor and the
+// after input the cursor feeds. A list read over GraphQL carries its cursor
+// block under the same pagination key, and a description naming only the REST
+// fields sent a model reading one to look for fields it does not have.
+func TestActionDispatchOutputSchema_PaginationDescription_NamesTheFieldsAListPagesBy(t *testing.T) {
+	desc, _ := dispatchPaginationSchema(t)["description"].(string)
+	cases := []struct {
+		name  string
+		typ   reflect.Type
+		field string
+	}{
+		{name: "REST has_more", typ: reflect.TypeFor[PaginationOutput](), field: "HasMore"},
+		{name: "REST next_page", typ: reflect.TypeFor[PaginationOutput](), field: "NextPage"},
+		{name: "REST page input", typ: reflect.TypeFor[PaginationInput](), field: "Page"},
+		{name: "GraphQL has_next_page", typ: reflect.TypeFor[GraphQLForwardPaginationOutput](), field: "HasNextPage"},
+		{name: "GraphQL end_cursor", typ: reflect.TypeFor[GraphQLForwardPaginationOutput](), field: "EndCursor"},
+		{name: "GraphQL after input", typ: reflect.TypeFor[GraphQLPaginationInput](), field: "After"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			name := structFieldJSONName(t, tc.typ, tc.field)
+			if !strings.Contains(desc, "`"+name+"`") {
+				t.Errorf("pagination description does not name `%s`:\n%s", name, desc)
+			}
+		})
+	}
+}
+
 // TestRoute_OutputSchema_Nil verifies plain Route() has nil OutputSchema.
 func TestRoute_OutputSchema_Nil(t *testing.T) {
 	r := Route(func(_ context.Context, _ map[string]any) (any, error) {

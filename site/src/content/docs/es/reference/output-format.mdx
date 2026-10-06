@@ -393,6 +393,8 @@ Cada acción publica el JSON Schema de su salida, y dónde se lee depende de la 
 | Meta       | El `outputSchema` de la herramienta es un envoltorio compartido (`next_steps`, `pagination` y cualquier otro campo). El esquema propio de cada acción se publica en [llms-full-meta-tools.txt](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt) bajo **Action Output Schemas** |
 | Dinámica   | `gitlab_execute_action` declara el mismo envoltorio, y `gitlab_find_action` devuelve el esquema de cada acción encontrada como `output_schema`, junto a su `input_schema` ([Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/))                                    |
 
+El objeto `pagination` del envoltorio declara los siete campos de una lista leída por REST, con los nombres de [El JSON estructurado](#el-json-estructurado), y su descripción nombra los campos de cursor que lleva en su lugar una lista leída por GraphQL. No exige ninguno y acepta otros, porque las dos formas viajan bajo la misma clave.
+
 Los esquemas siguen el nivel de la instancia. En un nivel inferior, un campo que solo rellena un nivel superior se deja fuera del esquema de salida, mientras que la salida en sí no se filtra, así que un campo que GitLab envía de todos modos sigue llegando.
 
 Cómo obtiene una acción su esquema, desde los constructores de rutas tipadas hasta la auditoría que informa de una ruta sin él, es material para contribuidores: consulta [Esquemas de salida por acción](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/architecture.md#output-schemas-per-action) en la página de arquitectura interna del repositorio (en inglés).

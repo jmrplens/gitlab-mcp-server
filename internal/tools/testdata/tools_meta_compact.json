@@ -1788,7 +1788,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -1810,12 +1810,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -2275,7 +2275,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -2297,12 +2297,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -5300,7 +5300,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -5322,12 +5322,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -5444,7 +5444,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -5466,12 +5466,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -5709,7 +5709,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -5731,12 +5731,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -6238,7 +6238,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -6260,12 +6260,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -6407,7 +6407,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -6429,12 +6429,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -7194,7 +7194,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -7216,12 +7216,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -7319,7 +7319,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -7341,12 +7341,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -7491,7 +7491,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -7513,12 +7513,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -7708,7 +7708,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -7730,12 +7730,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -7981,7 +7981,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -8003,12 +8003,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -8231,7 +8231,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -8253,12 +8253,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -9401,7 +9401,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -9423,12 +9423,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -9806,7 +9806,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -9828,12 +9828,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -10261,7 +10261,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -10283,12 +10283,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -10710,7 +10710,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -10732,12 +10732,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -18324,7 +18324,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -18346,12 +18346,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -18518,7 +18518,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -18540,12 +18540,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -25510,7 +25510,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -25532,12 +25532,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -26481,7 +26481,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -26503,12 +26503,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -26958,7 +26958,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -26980,12 +26980,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -29823,7 +29823,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -29845,12 +29845,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -30084,7 +30084,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -30106,12 +30106,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -30203,7 +30203,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -30225,12 +30225,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -31194,7 +31194,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -31216,12 +31216,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -32517,7 +32517,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -32539,12 +32539,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -33922,7 +33922,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -33944,12 +33944,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -41835,7 +41835,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -41857,12 +41857,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -42011,7 +42011,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -42033,12 +42033,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -42573,7 +42573,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -42595,12 +42595,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -44418,7 +44418,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -44440,12 +44440,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -45703,7 +45703,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -45725,12 +45725,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -46196,7 +46196,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -46218,12 +46218,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -46423,7 +46423,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -46445,12 +46445,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -46589,7 +46589,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -46611,12 +46611,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -46745,7 +46745,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -46767,12 +46767,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -46905,7 +46905,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -46927,12 +46927,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -47023,7 +47023,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -47045,12 +47045,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -48365,7 +48365,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -48387,12 +48387,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -49020,7 +49020,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -49042,12 +49042,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -49415,7 +49415,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -49437,12 +49437,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -49959,7 +49959,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -49981,12 +49981,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -53134,7 +53134,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -53156,12 +53156,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -53471,7 +53471,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -53493,12 +53493,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },
@@ -53763,7 +53763,7 @@
         },
         "pagination": {
           "additionalProperties": true,
-          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "description": "Present on list actions. A REST list carries the fields below: while `has_more` is true, call again with `page` set to `next_page`. A GraphQL list carries cursor fields instead: while `has_next_page` is true, pass `end_cursor` as `after`.",
           "properties": {
             "has_more": {
               "description": "True when more pages are available after the current one.",
@@ -53785,12 +53785,12 @@
               "description": "Previous page index when applicable.",
               "type": "integer"
             },
-            "total": {
-              "description": "Total item count when known (some endpoints omit it for performance).",
+            "total_items": {
+              "description": "Items across all pages, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             },
             "total_pages": {
-              "description": "Total page count when known.",
+              "description": "Pages in all, 0 when GitLab sends no total. On search, a lower bound inferred from this page.",
               "type": "integer"
             }
           },

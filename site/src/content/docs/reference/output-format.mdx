@@ -393,6 +393,8 @@ Every action publishes the JSON Schema of its output, and where to read it depen
 | Meta       | The tool's `outputSchema` is a shared envelope (`next_steps`, `pagination` and any other field). Each action's own schema is published in [llms-full-meta-tools.txt](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt) under **Action Output Schemas** |
 | Dynamic    | `gitlab_execute_action` declares the same envelope, and `gitlab_find_action` returns each matched action's schema as `output_schema`, beside its `input_schema` ([Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/))                                          |
 
+The envelope's `pagination` object declares the seven fields of a list read over REST, named as in [The structured JSON](#the-structured-json), and its description names the cursor fields a list read over GraphQL carries in their place. It requires none of them and accepts others, since both shapes travel under the same key.
+
 The schemas follow the instance tier. On a lower tier a field that only a higher tier fills is left out of the output schema, while the output itself is not filtered, so a field GitLab sends anyway still arrives.
 
 How an action gets its schema, from the typed route constructors to the audit that reports a route without one, is contributor material: see [Output schemas per action](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/architecture.md#output-schemas-per-action) in the repository's internal architecture page.
