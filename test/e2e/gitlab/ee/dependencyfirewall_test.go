@@ -141,6 +141,35 @@ func assertFirewallOffRefusal(e *harness.Env, err error) {
 	}
 }
 
+// TestDependencyFirewall_Evaluate_IsWithheldFromAReadAPIToken holds the
+// evaluation to what GitLab answers a token carrying read_api and not api: it
+// is a read the catalog classifies as such, sent as a POST that GitLab grants
+// no scope to but api, so a read_api session is not served it and the
+// dynamic surface says api is the scope it lacks (ADR-0026). The session pins
+// the Premium tier, since a non-administrator's token cannot read the license
+// and would otherwise be served the Free catalog, where the action is absent
+// for another reason.
+func TestDependencyFirewall_Evaluate_IsWithheldFromAReadAPIToken(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Token {
+		return fixture.NewToken(e, fixture.NewUser(e, "depfw-read"), "read_api")
+	}, func(e *harness.Env, surface harness.Surface, token fixture.Token) {
+		s := e.Session(harness.ServerConfig{Surface: surface, Token: token.Value, Tier: harness.TierPremium})
+		if s.Serves(actionDependencyFirewallEvaluate) {
+			e.T.Fatalf("a %s session on a read_api token serves %s, which GitLab answers only from api", surface, actionDependencyFirewallEvaluate)
+		}
+		// The arguments never reach GitLab: the refusal comes before any
+		// handler runs, so the project is a placeholder.
+		declined := harness.Withheld(s, actionDependencyFirewallEvaluate, map[string]any{
+			"project_id": "1", "ecosystem": dependencyFirewallEcosystem, "name": dependencyFirewallPackage, "version": dependencyFirewallVersion,
+		})
+		if surface == harness.SurfaceDynamic && !strings.Contains(declined, "GitLab requires the api scope") {
+			e.T.Errorf("%s was declined without naming the api scope the credential lacks: %q", actionDependencyFirewallEvaluate, declined)
+		}
+	})
+}
+
 // containsOutcome reports whether a verdict is one of the documented three.
 func containsOutcome(outcome string) bool {
 	for _, want := range dependencyFirewallOutcomes {
