@@ -65,6 +65,7 @@ func allIcons() map[string][]mcp.Icon {
 		"Bot":           IconBot,
 		"Vulnerability": IconVulnerability,
 		"Compliance":    IconCompliance,
+		"Achievement":   IconAchievement,
 		"Brand":         IconBrand,
 	}
 }

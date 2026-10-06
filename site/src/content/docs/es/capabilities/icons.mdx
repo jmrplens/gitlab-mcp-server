@@ -1,10 +1,10 @@
 ---
 title: Iconos
-description: GitLab MCP Server asigna 50 iconos de dominio a cada herramienta, recurso y prompt, más una marca para la identidad del servidor, como data URIs base64 — una entrada SVG más variantes WebP clara/oscura para clientes que rechazan SVG.
+description: GitLab MCP Server asigna 51 iconos de dominio a cada herramienta, recurso y prompt, más una marca para la identidad del servidor, como data URIs base64, una entrada SVG más variantes WebP clara/oscura para clientes que rechazan SVG.
 datePublished: "2026-04-21"
 faq:
   - q: "¿Qué son los iconos en GitLab MCP Server?"
-    a: 'GitLab MCP Server asigna **50 iconos de dominio** a cada herramienta, recurso y prompt que expone, más una marca, la 51.ª, en la identidad del propio servidor, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Los iconos se adjuntan por grupo del catálogo, así que todas las herramientas de un grupo comparten uno: las herramientas de `gitlab_branch` usan `IconBranch`, mientras que todas las de `gitlab_repository` (el árbol, los commits, los archivos y los submódulos) usan `IconFile`. Cada icono lleva tres entradas, siempre en este orden: un SVG escalable (`Sizes: ["any"]`, relleno `currentColor`, se adapta a cualquier tema automáticamente) más dos variantes WebP de 16×16 sin pérdida etiquetadas `Theme: "light"`/`"dark"`, para clientes que rechazan SVG pero respetan la pista de tema. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada.'
+    a: 'GitLab MCP Server asigna **51 iconos de dominio** a cada herramienta, recurso y prompt que expone, más una marca, la 52.ª, en la identidad del propio servidor, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Los iconos se adjuntan por grupo del catálogo, así que todas las herramientas de un grupo comparten uno: las herramientas de `gitlab_branch` usan `IconBranch`, mientras que todas las de `gitlab_repository` (el árbol, los commits, los archivos y los submódulos) usan `IconFile`. Cada icono lleva tres entradas, siempre en este orden: un SVG escalable (`Sizes: ["any"]`, relleno `currentColor`, se adapta a cualquier tema automáticamente) más dos variantes WebP de 16×16 sin pérdida etiquetadas `Theme: "light"`/`"dark"`, para clientes que rechazan SVG pero respetan la pista de tema. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada.'
   - q: "¿Cómo se diseñan y codifican los iconos de GitLab MCP Server?"
     a: 'Cada icono de dominio usa un **viewport mínimo de 16×16** optimizado para listas de herramientas y barras laterales. La entrada principal es un SVG con relleno `currentColor` que se adapta a los temas claro y oscuro automáticamente; se incrusta como data URI base64 (`data:image/svg+xml;base64,...`) directamente en el binario, sin peticiones de red. Otras dos entradas son variantes WebP prerasterizadas y sin pérdida (`data:image/webp;base64,...`, 16×16, casi negro para `Theme: "light"` y casi blanco para `Theme: "dark"`) generadas por `cmd/gen_icon_webp` para clientes cuya lista de MIME permitidos excluye SVG. Los iconos se adjuntan por grupo del catálogo, no por acción: una meta-herramienta lleva el icono de su grupo, y cada herramienta individual proyectada desde las acciones de ese grupo lo hereda, así que las herramientas relacionadas se agrupan visualmente. La superficie dinámica solo lista `gitlab_find_action` (`IconSearch`) y `gitlab_execute_action` (`IconServer`); las acciones a las que llegan no llevan icono propio. Los recursos y los prompts nombran su propio icono. El código fuente está en [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go), más la marca del proyecto generada en `internal/toolutil/brandmark_gen.go` (emitida por `cmd/gen_brand`).'
   - q: "¿Qué clientes MCP renderizan los iconos de herramientas?"
@@ -17,14 +17,14 @@ import { Badge } from "@astrojs/starlight/components";
 import FAQ from "../../../../components/FAQ.astro";
 import stats from "../../../../data/stats.json";
 
-GitLab MCP Server asigna **50 iconos de dominio** a las {stats.tools.ultimate_self_managed} herramientas de una instancia Ultimate autoalojada ({stats.tools.gitlab_com} en GitLab.com Ultimate, con Orbit), {stats.meta.base} meta-herramientas base ({stats.meta.self_managed_enterprise} en Ultimate autoalojado, {stats.meta.gitlab_com} en GitLab.com Ultimate), {stats.resources} recursos y {stats.prompts} prompts, y un icono 51.º, la [marca](#qué-icono-lleva-el-propio-servidor), al propio servidor. Cada icono se almacena como tres data URIs base64, un SVG escalable (`Sizes: ["any"]`) seguido de variantes WebP clara y oscura de 16×16 sin pérdida (`Sizes: ["16x16"]`) para clientes que rechazan SVG, y ayuda a los clientes MCP a mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada: un cliente que no puede renderizar ninguno de los formatos simplemente los ignora, y el comportamiento de las herramientas no cambia.
+GitLab MCP Server asigna **51 iconos de dominio** a las {stats.tools.ultimate_self_managed} herramientas de una instancia Ultimate autoalojada ({stats.tools.gitlab_com} en GitLab.com Ultimate, con Orbit), {stats.meta.base} meta-herramientas base ({stats.meta.self_managed_enterprise} en Ultimate autoalojado, {stats.meta.gitlab_com} en GitLab.com Ultimate), {stats.resources} recursos y {stats.prompts} prompts, y un icono 52.º, la [marca](#qué-icono-lleva-el-propio-servidor), al propio servidor. Cada icono se almacena como tres data URIs base64, un SVG escalable (`Sizes: ["any"]`) seguido de variantes WebP clara y oscura de 16×16 sin pérdida (`Sizes: ["16x16"]`) para clientes que rechazan SVG, y ayuda a los clientes MCP a mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada: un cliente que no puede renderizar ninguno de los formatos simplemente los ignora, y el comportamiento de las herramientas no cambia.
 
 ## ¿Cómo se diseñan los iconos de GitLab MCP Server?
 
-- **Viewport 16×16** para los 50 iconos de dominio, un tamaño mínimo adecuado para listas de herramientas y barras laterales (la marca conserva un viewBox de 24×24)
+- **Viewport 16×16** para los 51 iconos de dominio, un tamaño mínimo adecuado para listas de herramientas y barras laterales (la marca conserva un viewBox de 24×24)
 - **`currentColor` en la entrada SVG**, así que un icono toma el color de texto del cliente y se adapta a los temas claro y oscuro sin declarar ninguno
 - **Variante WebP por tema**: un WebP casi negro y otro casi blanco, de 16×16, etiquetados `light` y `dark`, para clientes que rechazan SVG
-- **SVG pequeños y planos**: 13 de los 50 iconos de dominio son un único `<path>`, el resto usa como mucho siete elementos, todos ellos `path`, `circle`, `ellipse`, `line`, `polyline` o `rect`, y el marcado de ningún icono llega a 700 bytes
+- **SVG pequeños y planos**: 14 de los 51 iconos de dominio son un único `<path>`, el resto usa como mucho siete elementos, todos ellos `path`, `circle`, `ellipse`, `line`, `polyline` o `rect`, y el marcado de ningún icono llega a 700 bytes
 - **Autocontenidos**: sin `<script>`, sin gestores de eventos, sin `style`, sin texto, sin referencias externas y sin imágenes incrustadas, así que dibujar un icono no hace que el cliente descargue ni ejecute nada
 - **Data URIs en línea**, embebidos en el binario, así que mostrar un icono no cuesta ninguna petición de red
 - **Un icono por grupo del catálogo**: todas las herramientas de un grupo comparten el icono del grupo, y los grupos relacionados comparten uno (`gitlab_project` y `gitlab_project_alias`, por ejemplo)
@@ -63,7 +63,7 @@ La entrada SVG se rellena con `currentColor`, así que toma el color del texto q
 
 ## Galería de iconos
 
-Los 50 iconos de dominio a 32px de tamaño, agrupados por categoría de dominio. La columna `Nombre` muestra la variable Go usada en el código. Los iconos se adjuntan por **grupo del catálogo**, siendo un grupo una meta-herramienta como `gitlab_branch` o `gitlab_issue`: las herramientas individuales proyectadas desde sus acciones heredan el icono del grupo, así que un nombre de grupo más abajo representa a todas las herramientas que agrega. La superficie dinámica solo lista dos herramientas, `gitlab_find_action` (`IconSearch`) y `gitlab_execute_action` (`IconServer`), y ni sus resultados de búsqueda ni el manifiesto `gitlab://tools` llevan un icono por acción. Los recursos y los prompts eligen su icono directamente; [la tabla que sigue a la galería](#qué-iconos-usan-los-recursos-y-los-prompts) los enumera. Doce iconos (`IconAlert`, `IconBot`, `IconContainer`, `IconDiscussion`, `IconEpic`, `IconImport`, `IconIntegration`, `IconLink`, `IconNotify`, `IconSchedule`, `IconTodo`, `IconUpload`) no tienen actualmente ningún consumidor en ninguna superficie servida: los dominios para los que se dibujaron se enrutan bajo un grupo más amplio y toman el icono de ese grupo.
+Los 51 iconos de dominio a 32px de tamaño, agrupados por categoría de dominio. La columna `Nombre` muestra la variable Go usada en el código. Los iconos se adjuntan por **grupo del catálogo**, siendo un grupo una meta-herramienta como `gitlab_branch` o `gitlab_issue`: las herramientas individuales proyectadas desde sus acciones heredan el icono del grupo, así que un nombre de grupo más abajo representa a todas las herramientas que agrega. La superficie dinámica solo lista dos herramientas, `gitlab_find_action` (`IconSearch`) y `gitlab_execute_action` (`IconServer`), y ni sus resultados de búsqueda ni el manifiesto `gitlab://tools` llevan un icono por acción. Los recursos y los prompts eligen su icono directamente; [la tabla que sigue a la galería](#qué-iconos-usan-los-recursos-y-los-prompts) los enumera. Doce iconos (`IconAlert`, `IconBot`, `IconContainer`, `IconDiscussion`, `IconEpic`, `IconImport`, `IconIntegration`, `IconLink`, `IconNotify`, `IconSchedule`, `IconTodo`, `IconUpload`) no tienen actualmente ningún consumidor en ninguna superficie servida: los dominios para los que se dibujaron se enrutan bajo un grupo más amplio y toman el icono de ese grupo.
 
 ### Control de versiones
 
@@ -499,6 +499,20 @@ Los 50 iconos de dominio a 32px de tamaño, agrupados por categoría de dominio.
     <tr>
       <td>
         <img
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.5' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M4.5 2h7v3a3.5 3.5 0 0 1-7 0zM4.5 3h-2a2 2 0 0 0 2 3M11.5 3h2a2 2 0 0 1-2 3M8 8.5V12M5.5 14h5'/%3E%3C/svg%3E"
+          width="32"
+          height="32"
+          alt="Logro"
+        />
+      </td>
+      <td>
+        <code>IconAchievement</code>
+      </td>
+      <td>gitlab_achievement</td>
+    </tr>
+    <tr>
+      <td>
+        <img
           src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M3 2h10M3 14h10' stroke-linecap='round'/%3E%3Cpath d='M4 2v2.5L8 8 4 11.5V14M12 2v2.5L8 8l4 3.5V14'/%3E%3C/svg%3E"
           width="32"
           height="32"
@@ -788,7 +802,7 @@ Los 50 iconos de dominio a 32px de tamaño, agrupados por categoría de dominio.
       <td>
         <code>IconServer</code>
       </td>
-      <td>gitlab_execute_action en la superficie dinámica, y el valor de reserva para un grupo ausente del mapa de iconos, que hoy es gitlab_achievement y sus herramientas individuales (<a href="https://github.com/jmrplens/gitlab-mcp-server/issues/1176">#1176</a>)</td>
+      <td>gitlab_execute_action en la superficie dinámica, y el valor de reserva para un grupo ausente del mapa de iconos, al que no llega ningún grupo que construya el catálogo: una prueba unitaria exige a cada grupo, en cada nivel en una instancia autoalojada y en GitLab.com, una entrada propia</td>
     </tr>
     <tr>
       <td>
@@ -949,7 +963,7 @@ Los 50 iconos de dominio a 32px de tamaño, agrupados por categoría de dominio.
 
 ## ¿Qué iconos usan los recursos y los prompts?
 
-Los recursos y los prompts nombran su icono directamente en lugar de heredarlo de un grupo del catálogo. Esta tabla enumera, por el `name` con el que el servidor los registra, cada icono que lleva al menos uno de los {stats.resources} [recursos o {stats.prompts} prompts](/gitlab-mcp-server/es/tools/resources-prompts/); los otros 26 iconos de dominio no los usa ninguno.
+Los recursos y los prompts nombran su icono directamente en lugar de heredarlo de un grupo del catálogo. Esta tabla enumera, por el `name` con el que el servidor los registra, cada icono que lleva al menos uno de los {stats.resources} [recursos o {stats.prompts} prompts](/gitlab-mcp-server/es/tools/resources-prompts/); los otros 27 iconos de dominio no los usa ninguno.
 
 | Icono             | Recursos                                                                            | Prompts                                                                                                                                                                                                              |
 | ----------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -987,7 +1001,7 @@ Los recursos y los prompts nombran su icono directamente en lugar de heredarlo d
   alt="Marca del servidor"
 />
 
-`IconBrand` identifica al servidor y no a un dominio de GitLab. Es el icono 51.º, adjunto a la identidad propia del servidor (`Implementation.Icons`) y a ninguna herramienta, recurso o prompt. La marca es el "abanico" (_fan-out_): un nodo de origen que proyecta tres arcos de rama, cada uno terminado en un nodo, que se lee como un grafo de git y como el diseño del servidor, un único catálogo de acciones que llega a las superficies de herramientas dinámica, meta e individual. Es una obra original de este proyecto y la misma marca que el logotipo y el favicon del sitio, todos dibujados a partir de una sola geometría. Sustituyó primero a `IconServer`, que también es el icono de `gitlab_execute_action`, y después a un tanuki de GitLab, que es marca registrada de GitLab.
+`IconBrand` identifica al servidor y no a un dominio de GitLab. Es el icono 52.º, adjunto a la identidad propia del servidor (`Implementation.Icons`) y a ninguna herramienta, recurso o prompt. La marca es el "abanico" (_fan-out_): un nodo de origen que proyecta tres arcos de rama, cada uno terminado en un nodo, que se lee como un grafo de git y como el diseño del servidor, un único catálogo de acciones que llega a las superficies de herramientas dinámica, meta e individual. Es una obra original de este proyecto y la misma marca que el logotipo y el favicon del sitio, todos dibujados a partir de una sola geometría. Sustituyó primero a `IconServer`, que también es el icono de `gitlab_execute_action`, y después a un tanuki de GitLab, que es marca registrada de GitLab.
 
 Un cliente la recibe en dos sitios:
 
@@ -1145,7 +1159,7 @@ Esto te da una degradación gradual en cada capa: sin campo `icons` → tu glifo
 - **Fuente**: [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go), generadores: [`cmd/gen_icon_webp`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/cmd/gen_icon_webp/main.go) para las variantes WebP y [`cmd/gen_brand`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/cmd/gen_brand/main.go) para la marca
 - **Codificación**: tres data URIs base64 por icono, `data:image/svg+xml;base64,...` seguida de `data:image/webp;base64,...` (clara) y `data:image/webp;base64,...` (oscura). Las previsualizaciones de esta página usan SVG con codificación URL (`data:image/svg+xml,%3Csvg ...`) coloreado `#888` solo para renderizado en línea en el navegador; los iconos registrados están en base64 y usan `currentColor`.
 - **Viewport**: los iconos de dominio usan 16×16 y la marca 24×24; la entrada SVG usa `currentColor` para adaptación automática al tema, las entradas WebP están prerasterizadas por tema (`Theme: "light"` casi negro, `Theme: "dark"` casi blanco)
-- **Registro**: cada grupo del catálogo tiene un icono (un grupo que falta en el mapa de iconos recurre a `IconServer`, como le ocurre hoy a `gitlab_achievement`, [#1176](https://github.com/jmrplens/gitlab-mcp-server/issues/1176)); una meta-herramienta lo lleva y cada herramienta individual proyectada desde las acciones del grupo lo hereda, mientras que las dos herramientas de la superficie dinámica llevan `IconSearch` e `IconServer`, y los recursos y los prompts nombran el suyo
+- **Registro**: cada grupo del catálogo tiene un icono (un grupo que faltara en el mapa de iconos recurriría a `IconServer`, y una prueba unitaria exige una entrada a cada grupo que construye el catálogo, así que ninguno lo hace); una meta-herramienta lo lleva y cada herramienta individual proyectada desde las acciones del grupo lo hereda, mientras que las dos herramientas de la superficie dinámica llevan `IconSearch` e `IconServer`, y los recursos y los prompts nombran el suyo
 
 Quien contribuya y tenga que regenerar las variantes WebP o la marca encontrará los comandos en [`gen_icon_webp`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/cmd-utilities.md#gen_icon_webp) y [`gen_brand`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/cmd-utilities.md#gen_brand) en la referencia de comandos.
 

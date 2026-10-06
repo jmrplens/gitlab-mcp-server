@@ -136,6 +136,7 @@ func catalogGroupCapabilityRequirements(_ string) []string {
 // surfaces for the same domain.
 var catalogGroupIconsByToolName = map[string][]mcp.Icon{
 	"gitlab_access":                toolutil.IconToken,
+	"gitlab_achievement":           toolutil.IconAchievement,
 	"gitlab_admin":                 toolutil.IconConfig,
 	"gitlab_attestation":           toolutil.IconShield,
 	"gitlab_audit_event":           toolutil.IconAudit,
