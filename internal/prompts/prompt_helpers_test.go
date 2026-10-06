@@ -4,11 +4,13 @@ package prompts
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -26,8 +28,9 @@ const (
 	fmtMRAge = "mrAge() = %q, want %q"
 )
 
-// TestParseDays_ValidInput covers ParseDays with table-driven subtests for valid input.
-func TestParseDays_ValidInput(t *testing.T) {
+// TestParseDaysArg_APositiveCount_IsRead covers the counts the argument
+// accepts, the smallest included, each read as given whatever the default.
+func TestParseDaysArg_APositiveCount_IsRead(t *testing.T) {
 	tests := []struct {
 		input    string
 		defVal   int
@@ -40,32 +43,64 @@ func TestParseDays_ValidInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := parseDays(tt.input, tt.defVal)
+			got, err := parseDaysArg(map[string]string{argDays: tt.input}, argDays, tt.defVal)
+			if err != nil {
+				t.Fatalf("parseDaysArg(%q) error = %v", tt.input, err)
+			}
 			if got != tt.expected {
-				t.Errorf("parseDays(%q, %d) = %d, want %d", tt.input, tt.defVal, got, tt.expected)
+				t.Errorf("parseDaysArg(%q, %d) = %d, want %d", tt.input, tt.defVal, got, tt.expected)
 			}
 		})
 	}
 }
 
-// TestParseDays_InvalidInput covers ParseDays with table-driven subtests for invalid input.
-func TestParseDays_InvalidInput(t *testing.T) {
+// TestParseDaysArg_AnOmittedCount_IsTheDefault verifies that an argument the
+// caller left out, or sent empty, is the prompt's default and no refusal.
+func TestParseDaysArg_AnOmittedCount_IsTheDefault(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		defVal int
+		name string
+		args map[string]string
 	}{
-		{"empty string", "", 7},
-		{"non-numeric", "abc", 14},
-		{"negative", "-5", 7},
-		{"zero", "0", 7},
-		{"float", "3.5", 7},
+		{name: "absent", args: map[string]string{}},
+		{name: "empty", args: map[string]string{argStaleDays: ""}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseDays(tt.input, tt.defVal)
-			if got != tt.defVal {
-				t.Errorf("parseDays(%q, %d) = %d, want default %d", tt.input, tt.defVal, got, tt.defVal)
+			got, err := parseDaysArg(tt.args, argStaleDays, 14)
+			if err != nil || got != 14 {
+				t.Errorf("parseDaysArg(%v) = %d, %v, want the default 14 and no error", tt.args, got, err)
+			}
+		})
+	}
+}
+
+// TestParseDaysArg_AnythingButAPositiveInteger_IsRefusedAsInvalidParams
+// verifies the one rule every look-back argument follows: a value that is not
+// a positive integer is refused with -32602 naming the argument and the value,
+// where it used to fall back to the default in silence in eight prompts.
+func TestParseDaysArg_AnythingButAPositiveInteger_IsRefusedAsInvalidParams(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"non-numeric", "abc"},
+		{"negative", "-5"},
+		{"zero", "0"},
+		{"float", "3.5"},
+		{"padded", " 7"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDaysArg(map[string]string{argDays: tt.input}, argDays, 7)
+			if got != 0 {
+				t.Errorf("parseDaysArg(%q) = %d, want 0 beside the refusal", tt.input, got)
+			}
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams {
+				t.Fatalf("parseDaysArg(%q) error = %v, want -32602", tt.input, err)
+			}
+			if want := fmt.Sprintf("argument 'days' must be a positive integer, got %q", tt.input); !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err, want)
 			}
 		})
 	}

@@ -97,17 +97,17 @@ Returns: full job log output. Useful for diagnosing test failures without openin
 
 ### Start from a resource or a prompt
 
-A client that reads MCP resources can begin with the latest pipeline without a tool call, then follow the same path down to the log:
+A client that reads MCP resources can begin with the default branch's latest pipeline without a tool call, then follow the same path down to the log:
 
 ```text
 1. Resource: gitlab://project/42/pipelines/latest
-   → the most recent pipeline's ID, status, ref, SHA, source and web URL
+   → the default branch's latest pipeline: ID, status, ref, SHA, source and web URL
 2. job.list → project_id: "42", pipeline_id: 100, scope: ["failed"]
 3. job.trace → project_id: "42", job_id: 500
    → the job's console output, for debugging
 ```
 
-The `summarize_pipeline_status` MCP prompt (`project_id`) packages the first two steps: it groups the latest pipeline's jobs by outcome and includes the failure reasons. Both need the default `full` capability surface.
+The `summarize_pipeline_status` MCP prompt (`project_id`) packages the first two steps: it groups up to 100 jobs of the same pipeline by outcome and includes the failure reasons. For a pipeline on another branch, start from `pipeline.latest` with that `ref` instead. Both need the default `full` capability surface.
 
 ---
 

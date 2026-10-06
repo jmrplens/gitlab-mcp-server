@@ -48,7 +48,7 @@ const descriptionExcerptBytes = 200
 const (
 	argProjectID  = "project_id"
 	argMRIID      = "merge_request_iid"
-	descProjectID = "Project ID (numeric) or URL-encoded path (e.g. 'group/project')"
+	descProjectID = "Project ID (numeric) or full path as written (e.g. 'group/project'), not URL-encoded"
 	descMRIID     = "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)"
 
 	fmtTwoArgsRequired  = "%s and %s are required"
@@ -172,7 +172,7 @@ func registerSummarizeMRChangesPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_mr_changes",
 		Title:       toolutil.TitleFromName("summarize_mr_changes"),
-		Description: "Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
+		Description: "Summarize the changed files and key modifications in a merge request, reading up to 100 changed files. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -196,7 +196,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 	if err != nil {
 		return nil, err
 	}
-	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
+	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func registerReviewMRPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "review_mr",
 		Title:       toolutil.TitleFromName("review_mr"),
-		Description: "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.",
+		Description: "Generate a structured code review for a merge request, reading up to 100 changed files. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. The diff of each file read is included without truncation.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -246,11 +246,19 @@ func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp
 		return "", nil, nil, fmt.Errorf(fmtGetMRFailed, err)
 	}
 
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
+	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
 	if err != nil {
 		return "", nil, nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
 	}
 	return projectID, mr, diffs, nil
+}
+
+// diffPage asks for one page of a merge request's changed files at the size
+// every prompt list reads. Without it GitLab answered its default of 20, so a
+// review of a merge request touching more files left the rest out while its
+// description promised every diff (issue 1169).
+func diffPage() *gl.ListMergeRequestDiffsOptions {
+	return &gl.ListMergeRequestDiffsOptions{PerPage: maxListItems}
 }
 
 // warnFetch records a listing that failed and is about to be rendered as
@@ -270,7 +278,8 @@ func warnFetch(ctx context.Context, what string, err error) {
 // logged and yield an empty slice so the prompt can still render.
 func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, userID int64, isCurrentUser bool, since time.Time) []*gl.ContributionEvent {
 	eventOpts := &gl.ListContributionEventsOptions{
-		After: new(gl.ISOTime(since)),
+		After:   new(gl.ISOTime(since)),
+		PerPage: maxListItems,
 	}
 	var events []*gl.ContributionEvent
 	var err error
@@ -285,8 +294,9 @@ func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, u
 	return events
 }
 
-// handleReviewMR generates a structured code review with files categorized by
-// risk level and full diffs included.
+// handleReviewMR generates a structured code review of up to 100 changed files,
+// categorized by risk level, with the diff of each file read included without
+// truncation.
 func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	_, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
@@ -373,7 +383,7 @@ func registerSummarizePipelineStatusPrompt(server promptAdder, client *gitlabcli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_pipeline_status",
 		Title:       toolutil.TitleFromName("summarize_pipeline_status"),
-		Description: "Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
+		Description: "Summarize the latest CI/CD pipeline of a project's default branch. Groups up to 100 of its jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
 		Icons:       toolutil.IconPipeline,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -385,6 +395,11 @@ func registerSummarizePipelineStatusPrompt(server promptAdder, client *gitlabcli
 
 // handleSummarizePipelineStatus fetches the latest pipeline and its jobs to
 // produce a pipeline status summary.
+//
+// The latest-pipeline route is asked with no ref, and GitLab answers that with
+// the latest pipeline of the default branch, which is what the description
+// names: the project's most recent pipeline is another one whenever a branch
+// other than the default ran last.
 func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -396,7 +411,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 		return nil, fmt.Errorf("failed to get latest pipeline: %w", err)
 	}
 
-	jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipeline.ID, &gl.ListJobsOptions{}, gl.WithContext(ctx))
+	jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipeline.ID, &gl.ListJobsOptions{PerPage: maxListItems}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pipeline jobs: %w", err)
 	}
@@ -459,7 +474,7 @@ func registerSuggestMRReviewersPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "suggest_mr_reviewers",
 		Title:       toolutil.TitleFromName("suggest_mr_reviewers"),
-		Description: "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
+		Description: "Suggest suitable merge request reviewers based on up to 100 changed files and the active ones among up to 100 project members, inherited members included. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -478,7 +493,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 		return nil, err
 	}
 
-	members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{}, gl.WithContext(ctx))
+	members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{PerPage: maxListItems}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list project members: %w", err)
 	}
@@ -514,7 +529,7 @@ func registerGenerateReleaseNotesPrompt(server promptAdder, client *gitlabclient
 	addPrompt(server, &mcp.Prompt{
 		Name:        "generate_release_notes",
 		Title:       toolutil.TitleFromName("generate_release_notes"),
-		Description: "Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.",
+		Description: "Generate release notes from the commits, file changes, and merge requests between two Git refs (tags, branches, or SHAs). Produces a structured document with the commits, up to 100 MRs merged around the commits' dates with their labels, contributors, and statistics for organizing into user-friendly release notes.",
 		Icons:       toolutil.IconRelease,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -609,6 +624,7 @@ func fetchMergedMRsForRange(ctx context.Context, client *gitlabclient.Client, pr
 		UpdatedAfter: new(earliest),
 		OrderBy:      new("updated_at"),
 		Sort:         new("desc"),
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		slog.WarnContext(ctx, "failed to fetch merged MRs for release notes", "error", err)
@@ -679,7 +695,7 @@ func registerSummarizeOpenMRsPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_open_mrs",
 		Title:       toolutil.TitleFromName("summarize_open_mrs"),
-		Description: "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
+		Description: "Summarize up to 100 open merge requests in a project, the most recently created first, including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -689,8 +705,8 @@ func registerSummarizeOpenMRsPrompt(server promptAdder, client *gitlabclient.Cli
 	})
 }
 
-// handleSummarizeOpenMRs lists all open merge requests in a project with
-// author, age, and merge status details.
+// handleSummarizeOpenMRs lists one page of a project's open merge requests
+// with author, age, and merge status details.
 func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
@@ -698,7 +714,8 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
-		State: new("opened"),
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list open MRs: %w", err)
@@ -736,7 +753,7 @@ func registerProjectHealthCheckPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_health_check",
 		Title:       toolutil.TitleFromName("project_health_check"),
-		Description: "Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.",
+		Description: "Project health assessment combining the latest pipeline of the default branch, up to 100 open merge requests, and branch hygiene (merged/stale counts among up to 100 branches). Provides actionable recommendations for project maintenance.",
 		Icons:       toolutil.IconHealth,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -786,7 +803,8 @@ func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitla
 // writeOpenMRsSection appends a list of open merge requests to the builder.
 func writeOpenMRsSection(ctx context.Context, b *strings.Builder, client *gitlabclient.Client, projectID string) {
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
-		State: new("opened"),
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return
@@ -805,7 +823,7 @@ func writeOpenMRsSection(ctx context.Context, b *strings.Builder, client *gitlab
 
 // writeBranchesSection appends branch statistics (total, merged, stale) to the builder.
 func writeBranchesSection(ctx context.Context, b *strings.Builder, client *gitlabclient.Client, projectID string) {
-	branches, _, err := client.GL().Branches.ListBranches(projectID, &gl.ListBranchesOptions{}, gl.WithContext(ctx))
+	branches, _, err := client.GL().Branches.ListBranches(projectID, &gl.ListBranchesOptions{PerPage: maxListItems}, gl.WithContext(ctx))
 	if err != nil {
 		return
 	}
@@ -906,7 +924,7 @@ func registerDailyStandupPrompt(server promptAdder, client *gitlabclient.Client)
 	addPrompt(server, &mcp.Prompt{
 		Name:        "daily_standup",
 		Title:       toolutil.TitleFromName("daily_standup"),
-		Description: "Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.",
+		Description: "Generate a daily standup summary for a user: contribution events of the last 24 hours, and the project's open MRs they authored, are assigned or review and open issues assigned to or created by them, up to 100 per list. Produces a report with done/planned/blockers sections.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -932,7 +950,8 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 
 	// Recent contribution events (last 24h)
 	eventOpts := &gl.ListContributionEventsOptions{
-		After: new(gl.ISOTime(time.Now().AddDate(0, 0, -1))),
+		After:   new(gl.ISOTime(time.Now().AddDate(0, 0, -1))),
+		PerPage: maxListItems,
 	}
 	var events []*gl.ContributionEvent
 	if isCurrentUser {
@@ -948,30 +967,35 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 	authoredMRs, _, mrAuthorErr := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	// MRs assigned to user
 	assignedMRs, _, mrAssignedErr := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:      new("opened"),
 		AssigneeID: gl.AssigneeID(userID),
+		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 
 	// MRs where user is reviewer
 	reviewMRs, _, mrReviewErr := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:            new("opened"),
 		ReviewerUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Issues assigned to user
 	assignedIssues, _, issueAssignedErr := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:            new("opened"),
 		AssigneeUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Issues created by user
 	createdIssues, _, issueCreatedErr := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -1068,12 +1092,12 @@ func registerTeamMemberWorkloadPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "team_member_workload",
 		Title:       toolutil.TitleFromName("team_member_workload"),
-		Description: "Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.",
+		Description: "Generate a workload summary for a team member over a configurable period: contribution events, the project's open MRs they authored, are assigned or review, MRs they authored that were created in the period and merged, and open authored and assigned issues, up to 100 per list. Use this for team management and capacity planning.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
-			{Name: "username", Title: toolutil.TitleFromName("username"), Description: "GitLab username of the team member to analyze", Required: true},
-			{Name: "days", Title: toolutil.TitleFromName("days"), Description: "Number of days to look back for activity (default: 7)", Required: false},
+			{Name: argUsername, Title: toolutil.TitleFromName(argUsername), Description: "GitLab username of the team member to analyze", Required: true},
+			daysArg(7),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleTeamMemberWorkload(ctx, client.For(ctx), req)
@@ -1088,18 +1112,14 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
-	usernameArg := req.Params.Arguments["username"]
+	usernameArg := req.Params.Arguments[argUsername]
 	if usernameArg == "" {
 		return nil, toolutil.InvalidParams(errors.New("argument 'username' is required"))
 	}
 
-	days := 7
-	if d := req.Params.Arguments["days"]; d != "" {
-		parsed, err := strconv.Atoi(d)
-		if err != nil || parsed <= 0 {
-			return nil, toolutil.InvalidParams(fmt.Errorf("argument 'days' must be a positive integer, got %q", d))
-		}
-		days = parsed
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 7)
+	if err != nil {
+		return nil, err
 	}
 
 	username, userID, isCurrentUser, err := resolveUser(ctx, client, usernameArg)
@@ -1116,6 +1136,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 	openAuthoredMRs, _, errOpenAuthored := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Authored MRs (merged recently)
@@ -1123,30 +1144,35 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 		State:          new("merged"),
 		AuthorUsername: new(username),
 		CreatedAfter:   new(since),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Assigned MRs (open)
 	assignedMRs, _, errAssigned := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:      new("opened"),
 		AssigneeID: gl.AssigneeID(userID),
+		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 
 	// MRs under review
 	reviewMRs, _, errReview := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:            new("opened"),
 		ReviewerUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Authored issues (open)
 	authoredIssues, _, errAuthoredIssues := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Assigned issues (open)
 	assignedIssues, _, errAssignedIssues := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:            new("opened"),
 		AssigneeUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -1214,12 +1240,12 @@ func registerUserStatsPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "user_stats",
 		Title:       toolutil.TitleFromName("user_stats"),
-		Description: "Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.",
+		Description: "Generate statistics for a user: contribution events across all projects with their breakdown, daily activity trends and a Mermaid activity chart, and the project's merge request stats (authored/assigned/reviewed by state) and issue stats (authored/assigned by state), up to 100 per list. Use this for performance reviews, productivity tracking, or personal dashboards.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
-			{Name: "username", Title: toolutil.TitleFromName("username"), Description: "GitLab username to generate stats for (defaults to the authenticated user if omitted)", Required: false},
-			{Name: "days", Title: toolutil.TitleFromName("days"), Description: "Number of days to look back for activity (default: 30)", Required: false},
+			{Name: argUsername, Title: toolutil.TitleFromName(argUsername), Description: "GitLab username to generate stats for (defaults to the authenticated user if omitted)", Required: false},
+			daysArg(30),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleUserStats(ctx, client.For(ctx), req)
@@ -1234,16 +1260,12 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
-	days := 30
-	if d := req.Params.Arguments["days"]; d != "" {
-		parsed, err := strconv.Atoi(d)
-		if err != nil || parsed <= 0 {
-			return nil, toolutil.InvalidParams(fmt.Errorf("argument 'days' must be a positive integer, got %q", d))
-		}
-		days = parsed
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 30)
+	if err != nil {
+		return nil, err
 	}
 
-	username, userID, isCurrentUser, err := resolveUser(ctx, client, req.Params.Arguments["username"])
+	username, userID, isCurrentUser, err := resolveUser(ctx, client, req.Params.Arguments[argUsername])
 	if err != nil {
 		return nil, err
 	}
@@ -1257,46 +1279,54 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	openMRs, _, errOpenMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	mergedMRs, _, errMergedMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:          new("merged"),
 		AuthorUsername: new(username),
 		CreatedAfter:   new(since),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	closedMRs, _, errClosedMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:          new("closed"),
 		AuthorUsername: new(username),
 		CreatedAfter:   new(since),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	// MRs assigned & under review
 	assignedMRs, _, errAssignedMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:      new("opened"),
 		AssigneeID: gl.AssigneeID(userID),
+		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 
 	reviewMRs, _, errReviewMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:            new("opened"),
 		ReviewerUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Issue stats: open authored, open assigned, closed authored
 	openAuthoredIssues, _, errOpenAuthored := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:          new("opened"),
 		AuthorUsername: new(username),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	openAssignedIssues, _, errOpenAssigned := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:            new("opened"),
 		AssigneeUsername: new(username),
+		PerPage:          maxListItems,
 	}, gl.WithContext(ctx))
 
 	closedAuthoredIssues, _, errClosedAuthored := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:          new("closed"),
 		AuthorUsername: new(username),
 		CreatedAfter:   new(since),
+		PerPage:        maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -1439,7 +1469,7 @@ func registerMRRiskAssessmentPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_risk_assessment",
 		Title:       toolutil.TitleFromName("mr_risk_assessment"),
-		Description: "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
+		Description: "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request from up to 100 changed files: size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),

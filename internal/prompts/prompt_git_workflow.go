@@ -97,7 +97,7 @@ func registerMRDescriptionQualityPrompt(server promptAdder, client *gitlabclient
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_description_quality",
 		Title:       toolutil.TitleFromName("mr_description_quality"),
-		Description: "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.",
+		Description: "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether up to 100 changed files suggest missing screenshots or migration notes.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -125,7 +125,7 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	if err != nil {
 		return nil, fmt.Errorf(fmtGetMRFailed, err)
 	}
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
+	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
 	}

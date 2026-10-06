@@ -75,11 +75,11 @@ func registerMilestoneProgressPrompt(server promptAdder, client *gitlabclient.Cl
 	addPrompt(server, &mcp.Prompt{
 		Name:        "milestone_progress",
 		Title:       toolutil.TitleFromName("milestone_progress"),
-		Description: "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.",
+		Description: "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk, reading up to 100 issues and 100 MRs of each milestone. Omit the milestone argument to see up to 100 active milestones.",
 		Icons:       toolutil.IconMilestone,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
-			{Name: argMilestone, Title: toolutil.TitleFromName(argMilestone), Description: "Specific milestone title (omit for all active)", Required: false},
+			{Name: argMilestone, Title: toolutil.TitleFromName(argMilestone), Description: "Specific milestone title (omit for every active milestone, up to 100)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleMilestoneProgress(ctx, client.For(ctx), req)
@@ -168,7 +168,7 @@ func registerLabelDistributionPrompt(server promptAdder, client *gitlabclient.Cl
 	addPrompt(server, &mcp.Prompt{
 		Name:        "label_distribution",
 		Title:       toolutil.TitleFromName("label_distribution"),
-		Description: "Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.",
+		Description: "Analyze label usage distribution in a project from up to 100 labels. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond the label list.",
 		Icons:       toolutil.IconLabel,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -257,7 +257,7 @@ func registerGroupMilestoneProgressPrompt(server promptAdder, client *gitlabclie
 	addPrompt(server, &mcp.Prompt{
 		Name:        "group_milestone_progress",
 		Title:       toolutil.TitleFromName("group_milestone_progress"),
-		Description: "Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.",
+		Description: "Track the progress of up to 100 active group milestones across the group's projects. Shows issue/MR completion per milestone with progress bars, reading up to 100 issues and 100 MRs of each.",
 		Icons:       toolutil.IconMilestone,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -328,7 +328,7 @@ func registerProjectContributorsPrompt(server promptAdder, client *gitlabclient.
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_contributors",
 		Title:       toolutil.TitleFromName("project_contributors"),
-		Description: "Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
+		Description: "Rank up to 100 project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
 		Icons:       toolutil.IconUser,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),

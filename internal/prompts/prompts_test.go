@@ -7,10 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -3705,4 +3708,419 @@ func timePtr(t *testing.T, stamp string) *time.Time {
 		t.Fatalf("fixture timestamp %q does not parse: %v", stamp, err)
 	}
 	return &parsed
+}
+
+// listRead is one request a prompt made that the stand-in GitLab answered with
+// a list, and the page size the request named, empty when it named none.
+type listRead struct {
+	path    string
+	perPage string
+}
+
+// promptObjectRoutes are the routes a prompt reads a single object from. Every
+// other route the prompts call answers with a list, so the stand-in below can
+// tell a list read from an object read by its path alone.
+var promptObjectRoutes = []*regexp.Regexp{
+	regexp.MustCompile(`/user$`),
+	regexp.MustCompile(`^/api/v4/projects/[^/]+$`),
+	regexp.MustCompile(`/merge_requests/\d+$`),
+	regexp.MustCompile(`/pipelines/latest$`),
+	regexp.MustCompile(`/repository/compare$`),
+	regexp.MustCompile(`/push_rule$`),
+}
+
+// Fixtures the stand-in answers with. Each verb is the same timestamp,
+// yesterday, so every item falls inside every look-back window and a prompt
+// that reads a list per item (the discussions of each merge request, the
+// issues of each milestone) makes those reads too. The object carries a
+// commit, because generate_release_notes asks for the merge requests merged
+// around the commits a comparison returns and asks nothing without one.
+const (
+	promptObjectFixture = `{"id":42,"iid":1,"title":"Item","state":"opened","status":"success",` +
+		`"ref":"main","sha":"abcdef12","path_with_namespace":"group/project","default_branch":"main",` +
+		`"source_branch":"feature","target_branch":"main","created_at":%[1]q,` +
+		`"commits":[{"id":"abcdef12","short_id":"abcdef1","title":"feat: item","author_name":"Some One",` +
+		`"author_email":"someone@example.com","committed_date":%[1]q}],` +
+		`"diffs":[{"old_path":"main.go","new_path":"main.go","diff":"+x\n"}]}`
+	promptListFixture = `[{"id":1,"iid":1,"title":"Item","name":"item","username":"someone","state":"opened",` +
+		`"created_at":%[1]q,"updated_at":%[1]q,"merged_at":%[1]q,` +
+		`"author":{"id":7,"username":"someone","name":"Some One"},` +
+		`"web_url":"https://gitlab.example.com/group/project/-/merge_requests/1",` +
+		`"references":{"full":"group/project!1"},"old_path":"main.go","new_path":"main.go","diff":"+x\n"}]`
+	promptDiscussionsFixture = `[{"id":"d1","notes":[{"id":1,"body":"note","resolvable":true,"resolved":false}]}]`
+	promptUserLookupFixture  = `[{"id":7,"username":"someone","name":"Some One"}]`
+)
+
+// readsEveryList is a stand-in GitLab that answers every request a prompt can
+// make with one plausible item, and records the path of every request and the
+// page size of each one it answered with a list.
+//
+// The user lookup (GET /users filtered by username) is answered and not counted
+// as a list read: GitLab answers it with at most one user, so it has no page a
+// prompt could leave unread.
+type readsEveryList struct {
+	mu    sync.Mutex
+	reads []listRead
+	paths []string
+}
+
+// ServeHTTP answers one request and records it.
+func (s *readsEveryList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	stamp := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paths = append(s.paths, path)
+	switch {
+	case path == pathUsers:
+		respondJSON(w, http.StatusOK, promptUserLookupFixture)
+	case slices.ContainsFunc(promptObjectRoutes, func(re *regexp.Regexp) bool { return re.MatchString(path) }):
+		respondJSON(w, http.StatusOK, fmt.Sprintf(promptObjectFixture, stamp))
+	case strings.HasSuffix(path, "/discussions"):
+		s.reads = append(s.reads, listRead{path: path, perPage: r.URL.Query().Get("per_page")})
+		respondJSON(w, http.StatusOK, promptDiscussionsFixture)
+	default:
+		s.reads = append(s.reads, listRead{path: path, perPage: r.URL.Query().Get("per_page")})
+		respondJSON(w, http.StatusOK, fmt.Sprintf(promptListFixture, stamp))
+	}
+}
+
+// take returns what was recorded since the last call and starts over.
+func (s *readsEveryList) take() (reads []listRead, paths []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reads, paths = s.reads, s.paths
+	s.reads, s.paths = nil, nil
+	return reads, paths
+}
+
+// statedBound finds every "up to N" a description states.
+var statedBound = regexp.MustCompile(`up to (\d+)`)
+
+// claimsAWholeList finds a description promising every item of a list a prompt
+// reads one page of.
+var claimsAWholeList = regexp.MustCompile(`(?i)\ball (?:the )?(?:open |active )?(?:merge requests|MRs|issues|members|group members|milestones|releases|labels|branches|jobs|changed files|files)\b`)
+
+// TestEveryPrompt_StatesTheBoundOfEachListItReads holds every served prompt's
+// description to the page size of each list its handler reads.
+//
+// A prompt reads one page of each list, and a request that names no page size
+// gets GitLab's default of 20. Until issue 1169 the core prompts named none, so
+// review_mr reviewed the first 20 changed files of a merge request whose
+// description promised every diff, summarize_open_mrs summarized the first 20
+// open merge requests as "all", and the contribution events behind four
+// activity reports were cut at 20. The prompt is driven against a stand-in that
+// answers one item per list, so a list read per item is made too, and each list
+// read is required to name its page size and the description to state exactly
+// the sizes the reads used, as "up to N". A description promising the whole of
+// a list is refused, since one page is what every prompt reads.
+func TestEveryPrompt_StatesTheBoundOfEachListItReads(t *testing.T) {
+	gitlab := &readsEveryList{}
+	session := newMCPSession(t, gitlab)
+
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+
+	for _, p := range listed.Prompts {
+		t.Run(p.Name, func(t *testing.T) {
+			args := map[string]string{}
+			for _, name := range requiredPromptArguments(p) {
+				args[name] = placeholderForArgument(name)
+			}
+			gitlab.take()
+			if _, getErr := session.GetPrompt(t.Context(), &mcp.GetPromptParams{Name: p.Name, Arguments: args}); getErr != nil {
+				t.Fatalf("prompts/get: %v", getErr)
+			}
+			reads, _ := gitlab.take()
+
+			used := map[string]bool{}
+			for _, r := range reads {
+				if r.perPage == "" {
+					t.Errorf("%s was read with no per_page, so GitLab answered its default page of 20", r.path)
+					continue
+				}
+				used[r.perPage] = true
+			}
+			stated := map[string]bool{}
+			for _, m := range statedBound.FindAllStringSubmatch(p.Description, -1) {
+				stated[m[1]] = true
+			}
+			if !maps.Equal(used, stated) {
+				t.Errorf("description states the bounds %v and the handler read pages of %v:\n%s",
+					slices.Sorted(maps.Keys(stated)), slices.Sorted(maps.Keys(used)), p.Description)
+			}
+			if claim := claimsAWholeList.FindString(p.Description); claim != "" {
+				t.Errorf("description promises %q, and the handler reads one page:\n%s", claim, p.Description)
+			}
+		})
+	}
+
+	if len(listed.Prompts) < 37 {
+		t.Errorf("checked %d prompts, want all 37 the server registers", len(listed.Prompts))
+	}
+}
+
+// TestPromptDescriptions_PromiseOnlyWhatTheHandlerRenders holds the prompts
+// issue 1169 named to the parts of a report their handlers write.
+//
+// Each case is a description that promised a section no code wrote or left out
+// one the code does write: my_activity_summary promised issues created and
+// closed and makes no issue query, branch_mr_summary approval counts it never
+// reads, release_cadence a chart where it writes a table, weekly_team_recap
+// events, issue activity and Mermaid charts where it writes counts and tables,
+// and audit_project_full left out the scorecard, the webhooks and the push
+// rules it renders.
+func TestPromptDescriptions_PromiseOnlyWhatTheHandlerRenders(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         map[string]string
+		descMust     []string
+		descMustNot  []string
+		textMust     []string
+		textMustNot  []string
+		pathsMustNot []string
+	}{
+		{
+			name:         "my_activity_summary",
+			descMustNot:  []string{"issue"},
+			textMustNot:  []string{"ssue"},
+			pathsMustNot: []string{"/issues"},
+		},
+		{
+			name:         "branch_mr_summary",
+			args:         map[string]string{argProjectID: "42", argTargetBranch: "main"},
+			descMust:     []string{"draft", "conflict"},
+			descMustNot:  []string{"approval"},
+			textMustNot:  []string{"pproval"},
+			pathsMustNot: []string{"/approvals", "/approval_state"},
+		},
+		{
+			name:        "release_cadence",
+			args:        map[string]string{argProjectID: "42"},
+			descMust:    []string{"release history table"},
+			descMustNot: []string{"chart"},
+			textMust:    []string{"## Release History"},
+			textMustNot: []string{"```mermaid"},
+		},
+		{
+			name:         "weekly_team_recap",
+			args:         map[string]string{argGroupID: "9"},
+			descMustNot:  []string{"chart", "Mermaid", "event", "issues activity"},
+			textMust:     []string{"## Merged MRs", "| Issues open |", "## Open MR Health"},
+			textMustNot:  []string{"```mermaid"},
+			pathsMustNot: []string{"/events"},
+		},
+		{
+			name:     "audit_project_full",
+			args:     map[string]string{argProjectID: "42"},
+			descMust: []string{"scorecard", "webhooks", "push rules"},
+			textMust: []string{"## Quick Scorecard", "## 7. Webhooks", "## 8. Push Rules"},
+		},
+	}
+	gitlab := &readsEveryList{}
+	session := newMCPSession(t, gitlab)
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			i := slices.IndexFunc(listed.Prompts, func(p *mcp.Prompt) bool { return p.Name == tt.name })
+			if i < 0 {
+				t.Fatalf("prompt %s is not served", tt.name)
+			}
+			desc := listed.Prompts[i].Description
+			gitlab.take()
+			got, getErr := session.GetPrompt(t.Context(), &mcp.GetPromptParams{Name: tt.name, Arguments: tt.args})
+			if getErr != nil {
+				t.Fatalf("prompts/get: %v", getErr)
+			}
+			text := got.Messages[0].Content.(*mcp.TextContent).Text
+			_, paths := gitlab.take()
+
+			assertCarries(t, "description", desc, tt.descMust, true)
+			assertCarries(t, "description", desc, tt.descMustNot, false)
+			assertCarries(t, "report", text, tt.textMust, true)
+			assertCarries(t, "report", text, tt.textMustNot, false)
+			assertCarries(t, "requests", strings.Join(paths, "\n"), tt.pathsMustNot, false)
+		})
+	}
+}
+
+// assertCarries requires text, named what, to contain every one of parts when
+// want is true and none of them when it is false.
+func assertCarries(t *testing.T, what, text string, parts []string, want bool) {
+	t.Helper()
+	for _, part := range parts {
+		if strings.Contains(text, part) != want {
+			t.Errorf("%s carries %q = %t, want %t:\n%s", what, part, !want, want, text)
+		}
+	}
+}
+
+// TestPromptPathArguments_TakeThePlainPath_WhichTheClientEscapesOnce holds the
+// project_id and group_id arguments to what client-go does with them.
+//
+// client-go escapes a string ID itself, so the argument is the path as GitLab
+// shows it. Its description used to ask for a URL-encoded path, and a caller
+// that followed it had the value escaped twice: group%2Fproject reached GitLab
+// as group%252Fproject, which names no project.
+func TestPromptPathArguments_TakeThePlainPath_WhichTheClientEscapesOnce(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	}))
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	var checked int
+	for _, p := range listed.Prompts {
+		for _, a := range p.Arguments {
+			if a.Name != argProjectID && a.Name != argGroupID {
+				continue
+			}
+			checked++
+			if strings.Contains(a.Description, "URL-encoded path") || !strings.Contains(a.Description, "not URL-encoded") {
+				t.Errorf("%s.%s description = %q, want the plain path asked for and URL encoding refused", p.Name, a.Name, a.Description)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no prompt takes a project_id or group_id, so this asserted nothing")
+	}
+
+	tests := []struct {
+		name   string
+		prompt string
+		args   map[string]string
+		want   string
+	}{
+		{
+			name:   "a project path reaches GitLab escaped once",
+			prompt: "summarize_open_mrs",
+			args:   map[string]string{argProjectID: "group/sub/project"},
+			want:   "/api/v4/projects/group%2Fsub%2Fproject/merge_requests",
+		},
+		{
+			name:   "an encoded project path is escaped a second time",
+			prompt: "summarize_open_mrs",
+			args:   map[string]string{argProjectID: "group%2Fsub%2Fproject"},
+			want:   "/api/v4/projects/group%252Fsub%252Fproject/merge_requests",
+		},
+		{
+			name:   "a group path reaches GitLab escaped once",
+			prompt: "group_mr_dashboard",
+			args:   map[string]string{argGroupID: "parent/child"},
+			want:   "/api/v4/groups/parent%2Fchild/merge_requests",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var seen []string
+			getPromptText(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				seen = append(seen, r.URL.EscapedPath())
+				mu.Unlock()
+				respondJSON(w, http.StatusOK, `[]`)
+			}), tt.prompt, tt.args)
+			mu.Lock()
+			defer mu.Unlock()
+			if !slices.Contains(seen, tt.want) {
+				t.Errorf("requests = %v, want one to %s", seen, tt.want)
+			}
+		})
+	}
+}
+
+// TestEveryOptionalUsernameArgument_SaysItDefaultsToTheAuthenticatedUser holds
+// every prompt whose username may be left out to saying what leaving it out
+// does: the handler reads the authenticated user. The shared argument used to
+// say only "GitLab username to query".
+func TestEveryOptionalUsernameArgument_SaysItDefaultsToTheAuthenticatedUser(t *testing.T) {
+	session := newMCPSession(t, notFoundHandler())
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	var checked int
+	for _, p := range listed.Prompts {
+		for _, a := range p.Arguments {
+			if a.Name != argUsername || a.Required {
+				continue
+			}
+			checked++
+			if !strings.Contains(a.Description, "authenticated user") {
+				t.Errorf("%s.%s description = %q, want it to say the authenticated user is read when it is omitted", p.Name, a.Name, a.Description)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no prompt takes an optional username, so this asserted nothing")
+	}
+}
+
+// TestEveryPromptTakingADayCount_RefusesOneThatIsNotAPositiveInteger holds one
+// rule for every look-back argument a prompt takes, days and stale_days alike.
+//
+// team_member_workload and user_stats refused a malformed days with -32602
+// while every other prompt taking one silently used its default, so the same
+// typo answered an error from two prompts and a report for a period nobody
+// asked for from eight. Refusing is the reading that tells the caller, and it
+// happens before any request: the count decides what the prompt asks GitLab.
+func TestEveryPromptTakingADayCount_RefusesOneThatIsNotAPositiveInteger(t *testing.T) {
+	var requests atomic.Int64
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		respondNotFound(w)
+	}))
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+
+	var checked int
+	for _, p := range listed.Prompts {
+		for _, a := range p.Arguments {
+			if a.Name != argDays && a.Name != argStaleDays {
+				continue
+			}
+			checked++
+			t.Run(p.Name+"/"+a.Name, func(t *testing.T) {
+				if !strings.Contains(a.Description, "positive integer") {
+					t.Errorf("description = %q, want it to say the value is a positive integer", a.Description)
+				}
+				for _, bad := range []string{"0", "-3", "abc", "2.5"} {
+					t.Run(bad, func(t *testing.T) {
+						assertDayCountRefused(t, session, p, a.Name, bad, &requests)
+					})
+				}
+			})
+		}
+	}
+	if checked < 10 {
+		t.Errorf("checked %d look-back arguments, want the ten the prompts declare", checked)
+	}
+}
+
+// assertDayCountRefused asks prompt p with its required arguments and the
+// look-back argument name set to bad, and requires a -32602 refusal naming the
+// argument, sent before any request reached GitLab.
+func assertDayCountRefused(t *testing.T, session *mcp.ClientSession, p *mcp.Prompt, name, bad string, requests *atomic.Int64) {
+	t.Helper()
+	args := map[string]string{name: bad}
+	for _, required := range requiredPromptArguments(p) {
+		args[required] = placeholderForArgument(required)
+	}
+	before := requests.Load()
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{Name: p.Name, Arguments: args})
+	assertRefusedAsInvalidParams(t, name+"="+bad, err)
+	if err != nil && !strings.Contains(err.Error(), "'"+name+"'") {
+		t.Errorf("refusal %q does not name the argument %s", err, name)
+	}
+	if sent := requests.Load() - before; sent != 0 {
+		t.Errorf("%s=%s sent %d request(s) before it was refused", name, bad, sent)
+	}
 }

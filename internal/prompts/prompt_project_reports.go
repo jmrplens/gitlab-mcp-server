@@ -36,7 +36,7 @@ func registerBranchMRSummaryPrompt(server promptAdder, client *gitlabclient.Clie
 	addPrompt(server, &mcp.Prompt{
 		Name:        "branch_mr_summary",
 		Title:       toolutil.TitleFromName("branch_mr_summary"),
-		Description: "List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.",
+		Description: "List up to 100 MRs targeting a specific branch in a project. Shows a readiness summary with total, draft and conflict counts. Ideal for release branch reviews.",
 		Icons:       toolutil.IconBranch,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -106,7 +106,7 @@ func registerProjectActivityReportPrompt(server promptAdder, client *gitlabclien
 	addPrompt(server, &mcp.Prompt{
 		Name:        "project_activity_report",
 		Title:       toolutil.TitleFromName("project_activity_report"),
-		Description: "Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.",
+		Description: "Generate a project activity report: the counts of events, open MRs, open issues and MRs created in the period and merged, event and contributor breakdowns, a table of those merged MRs, and a daily activity chart, up to 100 per list.",
 		Icons:       toolutil.IconAnalytics,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -123,13 +123,17 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	if projectID == "" {
 		return nil, toolutil.InvalidParams(errors.New("project_activity_report: project_id is required"))
 	}
-	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
+	days, err := parseDaysArg(req.Params.Arguments, argDays, 7)
+	if err != nil {
+		return nil, err
+	}
 	since := sinceDate(days)
 	sinceISO := gl.ISOTime(since)
 
 	// Project events
 	events, _, err := client.GL().Events.ListProjectVisibleEvents(projectID, &gl.ListProjectVisibleEventsOptions{
-		After: &sinceISO,
+		After:   &sinceISO,
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		slog.WarnContext(ctx, "failed to fetch project events", "error", err)
@@ -277,7 +281,7 @@ func registerMRDiscussionHealthPrompt(server promptAdder, client *gitlabclient.C
 	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_discussion_health",
 		Title:       toolutil.TitleFromName("mr_discussion_health"),
-		Description: "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
+		Description: "Analyze unresolved discussion threads across up to 20 open MRs in a project, the most recently created first, reading up to 100 discussions of each. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -303,6 +307,9 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 		return nil, toolutil.InvalidParams(errors.New("mr_discussion_health: project_id is required"))
 	}
 
+	// Twenty rather than the 100 of every other prompt list, because each merge
+	// request read costs one more request for its discussions. The description
+	// states both bounds.
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:   new("opened"),
 		PerPage: 20,
@@ -395,7 +402,7 @@ func registerUnassignedItemsPrompt(server promptAdder, client *gitlabclient.Clie
 	addPrompt(server, &mcp.Prompt{
 		Name:        "unassigned_items",
 		Title:       toolutil.TitleFromName("unassigned_items"),
-		Description: "Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
+		Description: "Find up to 100 open MRs and 100 open issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
 		Icons:       toolutil.IconIssue,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -463,11 +470,11 @@ func registerStaleItemsReportPrompt(server promptAdder, client *gitlabclient.Cli
 	addPrompt(server, &mcp.Prompt{
 		Name:        "stale_items_report",
 		Title:       toolutil.TitleFromName("stale_items_report"),
-		Description: "Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
+		Description: "Find up to 100 open MRs and 100 open issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
 		Icons:       toolutil.IconIssue,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
-			{Name: "stale_days", Title: toolutil.TitleFromName("stale_days"), Description: "Days without update to consider stale (default: 14)", Required: false},
+			{Name: argStaleDays, Title: toolutil.TitleFromName(argStaleDays), Description: "Days without update to consider stale, a positive integer (default: 14)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleStaleItemsReport(ctx, client.For(ctx), req)
@@ -480,7 +487,10 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	if projectID == "" {
 		return nil, toolutil.InvalidParams(errors.New("stale_items_report: project_id is required"))
 	}
-	staleDays := parseDays(getArgOr(req.Params.Arguments, "stale_days", "14"), 14)
+	staleDays, err := parseDaysArg(req.Params.Arguments, argStaleDays, 14)
+	if err != nil {
+		return nil, err
+	}
 	staleDate := time.Now().UTC().AddDate(0, 0, -staleDays)
 
 	// Stale MRs (not updated since staleDate)
