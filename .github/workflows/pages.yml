@@ -35,7 +35,11 @@ jobs:
   build:
     name: "📚 Build docs"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Apart from the Chromium step, a healthy build took 93 s at the 95th
+    # percentile and 99 s at most over the last 15 runs. That step is capped
+    # at 17 minutes, so the job needs under 19 at worst; 25 leaves the rest
+    # for a slow cache restore or a slow build, as in ci.yml's site build.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -82,15 +86,22 @@ jobs:
       #
       # The browser is a download outside any lockfile, 25 seconds per run, so
       # it is cached keyed on the lockfile: the Playwright version the lockfile
-      # pins is what decides which browser build is fetched. `--with-deps`
-      # installs system libraries with apt on every run regardless, which is
-      # cheap and is not cacheable.
+      # pins is what decides which browser build is fetched. The system
+      # libraries it links against are not downloaded at all on a normal run:
+      # the runner image already has every one of them, so the script installs
+      # the browser alone, launches it, and goes to apt only if the launch
+      # fails. `--with-deps` used to run apt on every run, which was cheap
+      # until a mirror stopped answering: on 2026-10-07 an apt run that never
+      # ended took three of ci.yml's site build jobs to their 20-minute timeout
+      # with every cache hit. The script bounds that path (just over 16 minutes
+      # with every bound reached), and this step is capped above it.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 17
+        run: ../scripts/ensure-playwright-chromium.sh
         working-directory: site
 
       - run: pnpm run build
