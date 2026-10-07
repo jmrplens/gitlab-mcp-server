@@ -104,7 +104,7 @@ func inspectPipeline(e *harness.Env, s *harness.Session, project fixture.Project
 	// job, which can land after the pipeline this test asked for. The
 	// latest pipeline of the branch is therefore asserted to be that branch's
 	// and no older than the one just created, rather than to be it.
-	latest := harness.Do[pipelines.DetailOutput](s, actionPipelineLatest, params)
+	latest := harness.Do[pipelines.LatestOutput](s, actionPipelineLatest, params)
 	if latest.ID < created.ID || latest.Ref != project.DefaultBranch {
 		e.T.Errorf("the latest pipeline of %s is %d on %s, want one of that branch no older than the %d just created",
 			project.DefaultBranch, latest.ID, latest.Ref, created.ID)
@@ -205,7 +205,8 @@ func TestPipeline_Lifecycle_InspectCancelRetryDelete(t *testing.T) {
 
 // TestPipeline_Latest_RefusesAProjectWithoutPipelines asks a shared project
 // that never ran a pipeline for its latest one on every surface, which the
-// action refuses by saying so, and lists its pipelines, which are none.
+// action refuses by naming the default branch it has none on, and lists its
+// pipelines, which are none.
 //
 // Replaces: TestMeta_PipelinesExtended
 func TestPipeline_Latest_RefusesAProjectWithoutPipelines(t *testing.T) {
@@ -217,7 +218,7 @@ func TestPipeline_Latest_RefusesAProjectWithoutPipelines(t *testing.T) {
 		s := e.On(surface)
 		params := map[string]any{"project_id": project.IDParam()}
 
-		refused := harness.ExpectToolError(s, actionPipelineLatest, params, "no pipelines found")
+		refused := harness.ExpectToolError(s, actionPipelineLatest, params, "no pipeline found on ref")
 		e.T.Logf("the latest pipeline of a project without one is refused: %s", firstLine(refused))
 
 		listed := harness.Do[pipelines.ListOutput](s, actionPipelineList, params)

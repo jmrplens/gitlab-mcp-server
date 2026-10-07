@@ -1207,7 +1207,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1094 tools, one per operation
 - gitlab_pipeline_create: Create a new pipeline.
 - gitlab_pipeline_delete: Delete a pipeline and all its jobs.
 - gitlab_pipeline_get: Get one pipeline by ID.
-- gitlab_pipeline_latest: Get the latest pipeline for a ref.
+- gitlab_pipeline_latest: Get the latest pipeline of a ref (the default branch when ref is omitted): the one GitLab ran for the commit at its head, or, when that commit has none on the r...
 - gitlab_pipeline_list: List project pipelines with filters and pagination.
 - gitlab_pipeline_retry: Retry failed and canceled jobs in a pipeline.
 - gitlab_pipeline_schedule_create: Create a pipeline schedule.

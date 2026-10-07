@@ -13985,6 +13985,15 @@
     {
       "package": "internal/tools/pipelines",
       "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/pipelines",
+      "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/pipeline",
       "body": [
@@ -14002,7 +14011,9 @@
       "method": "GET",
       "path": "/projects/:project_id/pipelines",
       "query": [
+        "created_after",
         "order_by",
+        "page",
         "page_token",
         "pagination",
         "per_page",
@@ -14031,7 +14042,7 @@
       "method": "GET",
       "path": "/projects/:project_id/pipelines/:pipeline_id",
       "identifiers": {
-        ":pipeline_id": 9,
+        ":pipeline_id": 8,
         ":project_id": 3
       }
     },
@@ -14108,6 +14119,25 @@
       ],
       "identifiers": {
         ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/pipelines",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/:commit_id",
+      "identifiers": {
+        ":commit_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/pipelines",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/repository/commits/main",
+      "identifiers": {
+        ":project_id": 1
       }
     },
     {
