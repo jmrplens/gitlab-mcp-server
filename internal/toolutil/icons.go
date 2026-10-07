@@ -79,6 +79,10 @@ const (
 	svgVulnerability = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><ellipse cx="8" cy="9" rx="3" ry="4" fill="currentColor"/><path d="M5 9H2m12 0h-3M5 6L3 4m10 2l-2-2M5 12l-2 2m10-2l-2 2M6 4.5a2 2 0 0 1 4 0"/></svg>`
 	// Compliance: document with checkmark — for policies and attestations.
 	svgCompliance = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 1.5h7l3 3v10H3z"/><path d="M5.5 9l2 2 3.5-4" stroke-linecap="round"/></svg>`
+	// Achievement: trophy cup with handles, stem and base, for the
+	// achievements GitLab awards to users. A star would read as an award
+	// too, but svgRelease already is one.
+	svgAchievement = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M4.5 2h7v3a3.5 3.5 0 0 1-7 0zM4.5 3h-2a2 2 0 0 0 2 3M11.5 3h2a2 2 0 0 1-2 3M8 8.5V12M5.5 14h5"/></svg>`
 )
 
 const (
@@ -190,5 +194,6 @@ var (
 	IconBot           = icon("bot", svgBot)
 	IconVulnerability = icon("vulnerability", svgVulnerability)
 	IconCompliance    = icon("compliance", svgCompliance)
+	IconAchievement   = icon("achievement", svgAchievement)
 	IconBrand         = icon("brand", svgBrand)
 )

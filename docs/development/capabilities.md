@@ -328,10 +328,17 @@ Icons are attached per catalog group, not per package:
 `catalogGroupIconsByToolName` in `internal/tools/catalog_group_metadata.go`
 maps each group name (`gitlab_branch`, `gitlab_issue`, ...) to its icon, and
 `catalogGroupIcons` falls back to `IconServer` for a group the map does not
-name, which today is `gitlab_achievement`
-([#1176](https://github.com/jmrplens/gitlab-mcp-server/issues/1176)). A
-meta-tool carries its group's icon and every individual tool projected from
-the group's actions inherits it. The dynamic surface's two tools carry
+name. The fallback is reached only by a group added without an entry:
+`TestCatalogGroupIcons_EveryGroupTheCatalogBuilds_HasAnEntry` builds the
+catalog at Free, Premium and Ultimate on a self-managed instance and on
+GitLab.com, fails on any group the map does not name or whose icon is not the
+map's, and fails on an entry no build serves. Before it, `gitlab_achievement`
+had no entry and was drawn as the server, the icon `gitlab_execute_action`
+also carries ([#1176](https://github.com/jmrplens/gitlab-mcp-server/issues/1176)).
+A new group therefore needs its line in the map, and a new icon its
+`svg<Name>` constant, its `Icon<Name>` variable, its WebP pair and its row in
+`allIcons()`. A meta-tool carries its group's icon and every individual tool
+projected from the group's actions inherits it. The dynamic surface's two tools carry
 `IconSearch` and `IconServer`. Resources and prompts name their icon where
 they are registered (`Icons: toolutil.IconIssue` on the `mcp.Resource` or
 `mcp.Prompt` literal), and `IconBrand` is attached to `Implementation.Icons` in

@@ -2,7 +2,98 @@ package tools
 
 import (
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
+
+// TestCatalogGroupIcons_EveryGroupTheCatalogBuilds_HasAnEntry holds the icon
+// map to the groups the catalog actually serves, in both directions.
+//
+// A group the map does not name is not refused: catalogGroupIcons hands it
+// IconServer, which is also the icon of gitlab_execute_action on the dynamic
+// surface, so the meta-tool and every individual tool of that group are drawn
+// as the server rather than as their domain and nothing reports it. That is
+// how gitlab_achievement shipped. The catalog is built at every tier on a
+// self-managed instance and on GitLab.com, because the set of groups differs
+// between them (gitlab_orbit exists only on GitLab.com at Premium and above,
+// and the paid groups only above Free), and each group is held to carry the
+// map's entry rather than merely to have one, so a group whose icon came from
+// anywhere else fails too.
+//
+// The reverse direction keeps the map from carrying a name no build serves:
+// an entry left behind by a renamed group draws nothing, and the renamed group
+// itself would be back on the fallback.
+//
+// All six catalogs are built, and the set of groups they serve collected,
+// before any subtest runs, so that neither direction depends on which sibling
+// subtests ran: an entry subtest selected on its own with -run reads the whole
+// served set rather than an empty one.
+func TestCatalogGroupIcons_EveryGroupTheCatalogBuilds_HasAnEntry(t *testing.T) {
+	builds := catalogBuildsAtEveryTier(t)
+	served := make(map[string]bool)
+	for _, build := range builds {
+		for _, group := range build.groups {
+			served[group.ToolName] = true
+		}
+	}
+
+	for _, build := range builds {
+		t.Run(build.name, func(t *testing.T) {
+			if len(build.groups) == 0 {
+				t.Fatal("the catalog built no group, so there is nothing to hold the icon map to")
+			}
+			for _, group := range build.groups {
+				t.Run(group.ToolName, func(t *testing.T) {
+					want, ok := catalogGroupIconsByToolName[group.ToolName]
+					if !ok {
+						t.Fatalf("%s has no entry in catalogGroupIconsByToolName, so it and its individual tools are served IconServer, the icon of gitlab_execute_action", group.ToolName)
+					}
+					assertSameIcons(t, group.Icons, want)
+				})
+			}
+		})
+	}
+
+	for toolName := range catalogGroupIconsByToolName {
+		t.Run("entry "+toolName, func(t *testing.T) {
+			if !served[toolName] {
+				t.Errorf("catalogGroupIconsByToolName names %s, which no tier of either instance builds", toolName)
+			}
+		})
+	}
+}
+
+// catalogBuild is one catalog the server can build, named by the instance and
+// tier it was built for, with the groups it serves.
+type catalogBuild struct {
+	name   string
+	groups []actioncatalog.Group
+}
+
+// catalogBuildsAtEveryTier builds the catalog at Free, Premium and Ultimate on
+// a self-managed instance and on GitLab.com, the six builds whose sets of
+// groups differ, and fails the calling test when one cannot be built, since
+// nothing about the groups can be judged without it.
+func catalogBuildsAtEveryTier(t *testing.T) []catalogBuild {
+	t.Helper()
+	instances := []struct {
+		name   string
+		client *gitlabclient.Client
+	}{
+		{name: "self-managed"},
+		{name: "gitlab.com", client: newGitLabDotComClient(t)},
+	}
+	builds := make([]catalogBuild, 0, len(instances)*3)
+	for _, instance := range instances {
+		for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+			catalog := mustBuildActionCatalog(t, instance.client, ActionCatalogOptions{Tier: tier})
+			builds = append(builds, catalogBuild{name: instance.name + "_" + tier.String(), groups: catalog.Groups()})
+		}
+	}
+	return builds
+}
 
 // TestLoadCatalogMetaToolDescriptions_SkipsIncompleteSnapshots verifies meta
 // tool description loading ignores snapshot rows without names or descriptions.
