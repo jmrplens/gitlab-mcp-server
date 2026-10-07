@@ -11,8 +11,9 @@ import (
 )
 
 // TestWorklist_TheFixture_ListsEachUndeclaredElementWithItsLeads verifies
-// issue 1055's worklist over the fixture: a type that withholds an action, a
-// type that withholds one way of another, an undeclared position served
+// the upstream register's row 87 worklist over the fixture: a type that
+// withholds an action, a type that withholds one way of another, an
+// undeclared position served
 // empty, and a mutation, each with what it is matched on and the routes this
 // server already calls that declare it. A REST denial is not GraphQL's and is
 // left out. Where a route of the affected package declares the permission

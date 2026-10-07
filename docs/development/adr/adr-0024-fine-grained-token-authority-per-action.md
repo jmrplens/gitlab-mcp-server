@@ -125,10 +125,12 @@ grant does not reach comes back `null`. So phase B judges the answer's spine as 
 the requirement, and names what the grant leaves empty off it, rather than leaning on
 GitLab to say so.
 
-Out of scope, each with its own issue: serving over REST what GraphQL cannot reach for a
+Out of scope, each tracked elsewhere: serving over REST what GraphQL cannot reach for a
 fine-grained token ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)),
-and declaring the missing GraphQL permissions upstream
-([issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055)). The admission
+and declaring the missing GraphQL permissions upstream, which was
+[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) and is
+[row 87 of the upstream register](../upstream-bugs.md#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission)
+since 2026-10-07. The admission
 minimum issue 952 set for legacy HTTP and stdio (`read_api`) was decided there and not
 here, and treats `["granular"]` as meeting the minimum, through
 `gitlabclient.FineGrained`, in the one predicate every door asks,
@@ -300,4 +302,6 @@ shape.
   withheld and the bound on reading its grant.
 - Issues [952](https://github.com/jmrplens/gitlab-mcp-server/issues/952),
   [1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) and
-  [1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055).
+  [1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), the last
+  moved on 2026-10-07 into
+  [row 87 of the upstream register](../upstream-bugs.md#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission).

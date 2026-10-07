@@ -49,8 +49,9 @@
 // fine-grained token reaches at the recorded release, by cause (the set a
 // fine-grained session is withheld, and issue 1054's inventory where the cause
 // is GraphQL's); the positions served empty; the REST operations a public
-// project or group serves with no grant at all; the GraphQL worklist of issue
-// 1055, each undeclared type or mutation this server reaches with the actions
+// project or group serves with no grant at all; the GraphQL worklist of row 87
+// of docs/development/upstream-bugs.md, each undeclared type or mutation this
+// server reaches with the actions
 // it blocks and, as a lead and never a verdict, the REST routes this server
 // already calls that declare a permission for the same resource; and two
 // cross-checks of the derivation, at package grain against the request

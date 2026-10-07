@@ -71,6 +71,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled)
   - [OrbitGraphStatusProjects does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
   - [GroupMilestone does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url)
+  - [CreateGroupIssueBoardListOptions models only label_id where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
   - [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
@@ -128,6 +129,7 @@ for the fork, branch, fix, test and MR workflow.
 - [Other](#other)
   - [go-selfupdate depends on the deprecated x/crypto/openpgp](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp)
   - [gobco type-checks every file of a package directory, whatever its build constraints say](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
+  - [gobco cannot instrument a package whose export_test.go feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
   - [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding)
 
 ## Writing an entry
@@ -273,7 +275,7 @@ readable without opening the tracker:
 | 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No; without the workaround it breaks a MUST | Yes, until the bump that carries it |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169), closed as working as intended; the rest is the proposal [modelcontextprotocol/go-sdk#1284](https://github.com/modelcontextprotocol/go-sdk/issues/1284) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), closed unmerged; and, for the second `Subscribe`, [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), merged | Partly, by [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), not ours, unreleased: the second `Subscribe` asks again; `Subscribe` still returns nil on a refusal | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
-| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
+| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | No; an additive change is drafted and not sent | No | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), open | No | No | Yes |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), open | No | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, unreleased** | Yes | Partial |
@@ -290,8 +292,8 @@ readable without opening the tracker:
 | 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
 | 85 | gitlab-org/gitlab | [The fine-grained refusal can name a deprecated permission's label](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label) | No, not yet reproduced on a running instance | No | No | No | None taken |
-| 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), open | No | No | Yes, a second request by the token's id |
-| 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list; nothing raised by us, see [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) | No | No | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
+| 86 | gitlab-org/gitlab | [A token's own description omits its granular scopes](#a-tokens-own-description-omits-its-granular-scopes) | Yes, by GitLab, [gitlab-org/gitlab#629849](https://gitlab.com/gitlab-org/gitlab/-/issues/629849) | Yes, [gitlab-org/gitlab!259764](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259764), merged | **Yes, unreleased**: merged on 2026-10-07, on GitLab.com's canary stage that day | No | Yes, a second request by the token's id, until a release carries the merge |
+| 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631); nothing raised by us | No, by us; GitLab's own changes for `WorkItemType` are open | No | Yes, for a fine-grained token: 37 actions withheld, 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
 | 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No | No | No | Yes, for a fine-grained token, on 20 writes | Withheld with the reason |
 | 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), open, closing that issue | No | Yes, for a fine-grained token, on the epic actions | Withheld with the reason |
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | No | No | No | No | Not needed; the live record computes the undeclared set itself |
@@ -300,6 +302,8 @@ readable without opening the tracker:
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | No | No | No | No | None taken |
 | 95 | client-go | [`GroupMilestone` does not model the milestone's web URL](#groupmilestone-does-not-model-the-milestones-web-url) | No | No | No | No | Yes |
+| 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | No | No | No | No; it narrows `group.group_board_create_list` to label lists | None, by decision |
+| 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | No; a fix and a pull request are decided, after the release row 73 waits on | No | No | No; the condition gate cannot measure a package it reaches | None, by decision |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -603,8 +607,9 @@ the client-go helper for the RFC 6750 fields of a refusal
 and the refusal naming a deprecated permission's label
 ([row 85](#the-fine-grained-refusal-can-name-a-deprecated-permissions-label)).
 Nothing has been raised upstream for any of the six;
-contributing the missing GraphQL declarations of rows 87 to 89 is
-[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055), and
+contributing the missing GraphQL declarations of rows 87 to 89 was
+[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) until
+2026-10-07, and is held by row 87's section since, and
 serving over REST what GraphQL cannot serve a fine-grained token is
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 
@@ -752,6 +757,32 @@ client-go's `main`, read the same day at `000e81ea` (2026-10-01), still
 declares no such field, and no merge request or issue of that project
 proposes one. No other row was read.
 
+Rows 96 and 97 were added on 2026-10-07, when five issues of this repository
+whose remaining work waited only on an upstream change were moved here and
+closed, since an upstream finding is tracked in this register rather than as
+an issue of our own. Each entry that replaces one names it, and now holds what
+the issue knew: its measurements, the decisions recorded in its comments, and
+what this server does on the day the upstream change lands.
+[Issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966) went to
+rows 6, 52 and 54, the option fields client-go writes on every call;
+[issue 1026](https://github.com/jmrplens/gitlab-mcp-server/issues/1026) to row
+69, the trailer lists;
+[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) to row
+87, with its two side findings in row 86 and in row 87's section;
+[issue 1099](https://github.com/jmrplens/gitlab-mcp-server/issues/1099) to row
+73 and to row 97, the second gobco limit, which had no entry; and
+[issue 1101](https://github.com/jmrplens/gitlab-mcp-server/issues/1101) to row
+96, the group board list types client-go does not model, which had none
+either. The upstream items those rows follow were read again the same day.
+client-go v3.16.0, tagged at 00:42 UTC, carries a topics option, a dependency
+update and row 19's CI change
+([gitlab-org/api/client-go!3067](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3067)),
+and none of the struct tags or fields these rows wait on; the joint merge
+request has had no review activity since 2026-09-30. gobco has tagged nothing
+since v1.3.4. The GitLab items of rows 86 to 89 were read as well, and one
+moved: row 86's merge request merged at 05:39 UTC and reached GitLab.com's
+canary stage; row 89's reads as it did on the 6th. No other row was read.
+
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
 ### Panic unmarshalling an issue with no id
@@ -842,16 +873,29 @@ is recorded anywhere this entry could cite.
   opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, open. The commit gives the eight optional fields
-  (`key`, `feature_group`, `user`, `group`, `namespace`, `project`,
+- **In review**: yes, open. The commit, `418162ec`, gives the eight optional
+  fields (`key`, `feature_group`, `user`, `group`, `namespace`, `project`,
   `repository` and `force`) `omitempty` on both halves of the tag and pins
   that a field the caller set is still sent; `Value` keeps its tags, since
-  GitLab requires it.
-- **Merged**: no.
+  GitLab requires it. Read on 2026-10-07 the merge request is open with 35
+  commits, `418162ec` still the 32nd, and has had no review activity since
+  2026-09-30.
+- **Merged**: no. The struct is unchanged at v3.15.0, the version `go.mod`
+  pins, and at v3.16.0, tagged on 2026-10-07 (`feature_flags.go:115-125`).
 - **Blocking**: no.
 - **Workaround**: yes, in two places. `internal/tools/features.Set` builds the
-  request body itself, and so does `fixture.setFeature` in the end-to-end
-  suite, which pins a flag as a scenario's precondition.
+  request body itself, and so does `setFeature` in
+  `test/e2e/internal/fixture/feature.go`, which pins a flag as a scenario's
+  precondition. Both retire at the client-go bump to the release that
+  carries the commit, when each can call `Features.SetFeatureFlag` again. No
+  test goes red on that bump, since neither path sends the struct, so this
+  entry is what triggers the change. Until
+  [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966)
+  closed on 2026-10-07, that issue tracked the retirement of both beside the
+  eleven always-sent findings of
+  [entries 52](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update)
+  and [54](#seven-more-option-structs-send-an-optional-param-on-every-call);
+  entry 54 now holds what closes all three.
 
 **What**: the option struct's fields carry no `omitempty`, so empty strings are
 serialized and GitLab rejects the request with a "mutually exclusive" error.
@@ -3492,10 +3536,11 @@ option, and 4.0 makes it the default.
   opened on 2026-09-27, the joint merge request
   [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
-- **In review**: yes, open. The commit gives both fields `omitempty` on both
-  halves of the tag and pins a body carrying the one field the caller set;
-  `CreatePackageProtectionRulesOptions` keeps its tags, since GitLab requires
-  both there.
+- **In review**: yes, open. The commit, `707ff4be`, gives both fields
+  `omitempty` on both halves of the tag and pins a body carrying the one field
+  the caller set; `CreatePackageProtectionRulesOptions` keeps its tags, since
+  GitLab requires both there. Read on 2026-10-07 it is still the 33rd of the
+  merge request's 35 commits, and the merge request is open.
 - **Merged**: no.
 - **Blocking**: partly. An update that names the pattern and the type works;
   an update that leaves out either of them is refused by GitLab (measured for
@@ -3507,12 +3552,28 @@ option, and 4.0 makes it the default.
   rewrites the body after client-go has marshalled it (entry 54 says how), or a
   request the handler builds itself, as `internal/tools/features.Set` does for
   [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
-  Neither is carried here. `internal/tools/protectedpackages.Update` sets each
+  Neither is carried here, and that is a decision rather than a gap. GitLab
+  refuses these nulls, so by the rule
+  [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966) set
+  (a request built here only for a field GitLab is shown to mishandle) this
+  field qualified for one; the maintainer chose to keep the hint below and
+  wait for the client-go release that carries the commit, in the issue's
+  status comment of 2026-09-30 (against `7baa4a40b`), which names this hint
+  among the workarounds that retire at that bump.
+  `internal/tools/protectedpackages.Update` sets each
   pointer only when the caller named a value, which is the safe side of that
   choice, and answers the refusal with a hint telling the caller to name
-  `package_name_pattern` and `package_type` on every update. The protection
-  rule lifecycle in `test/e2e/gitlab/common` sends the type with every update
-  for the same reason. All of it retires the day the tag changes.
+  `package_name_pattern` and `package_type` on every update
+  (`protected_packages.go:165-175`). The protection rule lifecycle in
+  `test/e2e/gitlab/common` (`TestPackage_ProtectionRules_Lifecycle`) sends the
+  type with every update for the same reason. All of it retires at the bump
+  to the client-go release that carries the commit:
+  `TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty` is written to go red
+  the day the tag changes, which is the signal to drop the 422 hint and its
+  comment and let the e2e lifecycle update a single field. Issue 966 tracked
+  this entry until it closed on 2026-10-07;
+  [entry 54](#seven-more-option-structs-send-an-optional-param-on-every-call)
+  holds the measurement that closes it.
 
 **Where**: `protected_packages.go`, `UpdatePackageProtectionRulesOptions`.
 
@@ -3563,8 +3624,9 @@ although a reviewer may prefer both changed for symmetry.
 **How we found it**: the `protectedpackages` sweep, reading what the handler can
 and cannot control. The consequence came from the e2e scenario's own comment,
 which had recorded the 422 without connecting it to the tag. Verified identical
-in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, so a dependency bump does not retire
-it.
+in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, and on 2026-10-07 in v3.15.0, the
+version `go.mod` pins, and v3.16.0, tagged that day
+(`protected_packages.go:86-87`), so a dependency bump does not retire it.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
@@ -3582,12 +3644,23 @@ it.
   edit hands every declared param the request carries to the update service,
   so an edit that changes only the variable type also sets the value to null.
   The one merge request the **Effort** below asks for is that one, carrying
-  entries 6 and 52 as commits 32 and 33.
-- **Merged**: no.
+  entries 6 and 52 as commits 32 and 33. Read on 2026-10-07 the merge request
+  is open with 35 commits and this one, `26736d2b`, is still the 34th; its
+  diff adds `omitempty` to each of the seven fields in the first table below,
+  and the merge request adds no field to `CreateGroupIssueBoardListOptions`.
+- **Merged**: no. Issue 966 confirmed each of the seven tags at v3.14.0, and
+  read on 2026-10-07 each is unchanged, on the same line, at v3.15.0, the
+  version `go.mod` pins, and v3.16.0, tagged that day:
+  `dependency_list_export.go:70`,
+  `group_boards.go:216`, `group_members.go:198`, `project_members.go:152`,
+  `projects.go:1361`, `issue_links.go:121` and `pipeline_schedules.go:267`.
 - **Blocking**: no, field by field in the second table below. For five of the
   seven, GitLab reads a null exactly as it reads the key left out, or never
   receives one. `label_id` is latent: a null would be refused beside another
-  board list type, which neither the struct nor the handler offers today.
+  board list type, which neither the struct nor the handler offers today. It
+  stops being latent the day client-go models the other three list types
+  ([entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)),
+  so that change has to ship with this one or after it, never before.
   `value` narrows an action: GitLab would store the null over the variable's
   value, and what keeps it from doing so is that the handler requires a value,
   which GitLab does not, so an edit of the type alone cannot be made. Entries
@@ -3600,17 +3673,29 @@ it.
   unset, because they require it, and neither requirement was written for this
   defect. `groupboards.CreateGroupBoardList` requires `label_id`, the only
   list type the struct models, so that requirement is not a workaround and
-  stays until client-go models the milestone, iteration and assignee lists. `pipelineschedules.EditVariable` has required `value` since
+  stays until client-go models the milestone, iteration and assignee lists,
+  which is
+  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types). `pipelineschedules.EditVariable` has required `value` since
   the domain was written, and the requirement is what keeps the null from
   reaching GitLab and what costs the action an edit of the type alone. It
   retires with the tag: `value` then becomes optional in the handler, in its
-  check and in the `required` of its input schema, as GitLab declares it. A
+  check (`pipeline_schedules.go:522`) and in the `required` of its input
+  schema (the `jsonschema` tag at `:507`, and the golden snapshots that carry
+  it), as GitLab declares it. A
   handler could also get past the tag today, contrary to what this entry first
   said, in two ways: a request option, since client-go runs the request
   options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
   and an option can read the body and replace it, which is how client-go's own
   GraphQL pagination option works; or a request the handler builds itself, as
-  `features.Set` does for entry 6. Neither is carried.
+  `features.Set` does for entry 6. Neither is carried, by decision: GitLab
+  mishandles two of these nulls (entry 52's, which it refuses, and `value`,
+  which it stores), which by
+  [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966)'s own
+  rule qualified each for a request built here, and the maintainer chose
+  instead to keep entry 52's hint and this required value until the client-go
+  release that carries the fix, in the issue's status comment of 2026-09-30
+  (against `7baa4a40b`). Building either request here is new work of its own
+  and would be an issue of its own; it is not what the two wait on.
 
 **Where**: seven option structs across client-go.
 
@@ -3627,17 +3712,26 @@ handler here that sends each:
 | `CreateGroupIssueBoardListOptions`    | `LabelID`    | `label_id`    | `POST /groups/:id/boards/:id/lists`                       | `groupboards.CreateGroupBoardList` |
 | `AddGroupMemberOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/members`                                | `groupmembers.AddMember`           |
 | `AddProjectMemberOptions`             | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/members`                              | `members.Add`                      |
-| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/share`                                  | `groupmembers.ShareGroup`          |
+| `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /groups/:id/share`                                  | none since issue 1027 (below)      |
 | `ShareWithGroupOptions`               | `ExpiresAt`  | `expires_at`  | `POST /projects/:id/share`                                | `projects.ShareProjectWithGroup`   |
 | `CreateIssueLinkOptions`              | `LinkType`   | `link_type`   | `POST /projects/:id/issues/:iid/links`                    | `issuelinks.Create`                |
 | `EditPipelineScheduleVariableOptions` | `Value`      | `value`       | `PUT /projects/:id/pipeline_schedules/:id/variables/:key` | `pipelineschedules.EditVariable`   |
 
-Six of the eight handlers set the pointer only when the caller named a value,
-which is the safe side of the choice they have. For five of them the null is
+Five of the seven handlers set the pointer only when the caller named a value,
+which is the safe side of the choice they have. For four of them the null is
 what the tag adds when the caller did not; for `dependencies.CreateExport` it
 is not, because client-go fills in `"sbom"` when the pointer is nil, so no null
 is ever sent there. The other two, `groupboards.CreateGroupBoardList` and
-`pipelineschedules.EditVariable`, require the field and always set it.
+`pipelineschedules.EditVariable`, require the field and always set it. The
+`POST /groups/:id/share` row has no handler here any more: this table was
+written when `groupmembers.ShareGroup` sent `ShareWithGroupOptions`, and since
+[issue 1027](https://github.com/jmrplens/gitlab-mcp-server/issues/1027),
+closed by pull request 1071 (`e30abf5cd`), it sends
+`ShareGroupWithGroupOptions` through `Groups.ShareGroupWithGroup`
+(`internal/tools/groupmembers/group_members.go:451-489`), whose fields all
+carry `omitempty`.
+`TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven/share`
+pins that a share without an expiry carries no `expires_at` key.
 
 **What GitLab does with the null**, read from the GitLab 19.4.1-ee source (the
 release the live record was taken from) and, for `expires_at`, from the
@@ -3699,16 +3793,24 @@ The remaining five simply lack it.
 `EditPipelineScheduleVariableOptions` has the shape entry 52 has, one field
 with the tag and one without (`VariableType` carries it, `Value` does not).
 `CreateIssueLinkOptions` carries no `url` tags at all, so only the JSON body
-is affected. `ShareWithGroupOptions` is the one reached from two packages:
-`projects` passes it to `Projects.ShareProjectWithGroup` and `groupmembers`
-to `GroupMembers.ShareWithGroup`. The audit also lists it under `groups`,
-which is the join and not a third caller: `groups.ShareGroupWithGroup`
-passes `ShareGroupWithGroupOptions`, whose
-`expires_at` already carries `omitempty`, to the same `POST /groups/:id/share`,
-and the check asks about every option struct that reaches a recorded route.
-That row, and the `export_type` one above, which client-go never sends as
-null, are the rule's reading of a tag rather than a request this server sends
-wrongly; both leave the report the day the tags change.
+is affected. `ShareWithGroupOptions` is sent by one package today:
+`projects` passes it to `Projects.ShareProjectWithGroup`, and
+`TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet` pins the
+`"expires_at":null` a share without an expiry carries. The audit lists it
+under `groupmembers` and under `groups` as well, and both are the join rather
+than callers: `group.share_with_group` (`internal/tools/groups`) has always
+sent `ShareGroupWithGroupOptions`, and `group.group_member_share` has sent the
+same since issue 1027, both to `POST /groups/:id/share`, the route
+`GroupMembers.ShareWithGroup` reaches with `ShareWithGroupOptions`; the check
+pairs option types with a recorded route (`optionTypesByRoute`) rather than
+with the handler that sent the request, and so asks about every option struct
+whose method reaches that route.
+[Issue 1104](https://github.com/jmrplens/gitlab-mcp-server/issues/1104), open,
+owns that limit of the check. Those two rows, and the `export_type` one
+above, which client-go never sends as null, are the rule's reading of a tag
+rather than a request this server sends wrongly; the two share rows leave the
+report with issue 1104 or with the `ShareWithGroupOptions` tag, whichever
+comes first, and the `export_type` row with its tag.
 
 **Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
 defect and does not appear, because the audit reads the request this server
@@ -3726,6 +3828,39 @@ route, and every `expires_at` field here is on a create route; a schedule
 variable's value is emptied with an empty string, which a set pointer still
 sends under `omitempty`. Changing a field's type would also break every caller
 of the struct, where a tag breaks none.
+
+**What closes it here, and how it is measured.** This entry, with entries 6
+and 52, replaces
+[issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966), closed
+on 2026-10-07: what was left of it was a client-go bump once a release carries
+commits 32 to 34 of the joint merge request, and the workarounds retiring
+with it. The measure is R-PATH's always-sent check,
+`go run ./cmd/audit_1to1/ -scope=paths -gaps-only`, whose
+`always_sent.optional_but_always_sent` listed 11 rows over nine fields in
+eight option types when read on 2026-10-07 (37 always-sent fields GitLab
+requires beside them, and two the route does not declare), and reads empty
+after that bump; the sentence of `CLAUDE.md`'s Request paths section that
+counts the 11 and the 37 moves with it. The bump layer does, beside what
+entries 6 and 52 list:
+
+- `pipelineschedules.EditVariable` makes `value` optional in the handler, in
+  its check and in its schema, with the golden snapshots regenerated. No test
+  goes red on the bump, so this entry is what triggers it.
+- Three tests that pin the null today go red and are rewritten to pin its
+  absence: `TestMemberAdd_SendsTheIdentityAndOptionsItWasGiven`
+  (`internal/tools/members/members_test.go:1500`, `fieldExpiresAt: nil`),
+  `TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet` and
+  `TestIssueLinkCreate_SendsNoLinkTypeWhenUnset`.
+- `groupboards.CreateGroupBoardList` keeps requiring `label_id` until
+  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
+  lands as well.
+
+Two open issues of this repository build on these nulls:
+[issue 1100](https://github.com/jmrplens/gitlab-mcp-server/issues/1100), on
+which parameters of `issue.link_create` the individual tools and the catalog
+route schema call required, `link_type` among them, and
+[issue 1104](https://github.com/jmrplens/gitlab-mcp-server/issues/1104), the
+check's route join above.
 
 ### Five response keys and three parameters GitLab 19.4 added that v3.14.0 does not model
 
@@ -4064,7 +4199,22 @@ options or documented as answering an object.
 
 ### Commit declares extended_trailers a map of strings, and GitLab sends lists
 
-- **Reported**: no.
+- **Reported**: no. A change is drafted and has not been sent: an additive
+  one, which keeps `ExtendedTrailers map[string]string`, marks it
+  deprecated, and adds `ExtendedTrailerValues map[string][]string` beside it,
+  filled from `extended_trailers` by a `Commit.UnmarshalJSON`, so every
+  method answering with a `Commit` decodes the lists and no caller breaks. Its
+  test, `TestCommitsService_ListCommits_ExtendedTrailers` in client-go's own
+  style, answers a commit shaped like GitLab's request spec fixture. The plain
+  retype to `map[string][]string` stays the alternative, for a major version
+  or for a minor if client-go's maintainers accept it there. Read on
+  2026-10-07, no client-go merge request or issue proposes either, and
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063)
+  does not touch the field. It goes either as a commit of a client-go merge
+  request of field syncs or as one of its own from the community fork, after
+  the maintainer has reviewed its text, and not before the three merge
+  requests of ours already open in that project (rows 19, 34 and 51) have
+  been reviewed.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: was yes, for `repository.commit_list` with `trailers` set: a
@@ -4115,7 +4265,8 @@ values, and `Gitlab::Git::Commit#parse_commit_trailers`
 (`lib/gitlab/git/commit.rb`) builds it that way,
 `(hash[trailer.key] ||= []) << encode!(trailer.value)`. `Commit` in client-go's
 `commits.go` declares `ExtendedTrailers map[string]string`, at v3.14.0 and,
-read again on 2026-10-05, at v3.15.0 and on `main` (`000e81ea`, line 159). The
+read again on 2026-10-05, at v3.15.0 and on `main` (`000e81ea`, line 159), and
+on 2026-10-07 at v3.16.0, tagged that day, on the same line. The
 field came with that type from
 [gitlab-org/api/client-go!1957](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/1957),
 merged on 2024-06-18 and titled for snippets, whose only change is that field
@@ -4125,8 +4276,9 @@ not empty fails with `json: cannot unmarshal array into Go struct
 field Commit.extended_trailers.Signed-off-by of type string`, and the SDK
 returns that error in place of the whole answer. Only one route fills the key
 today, which is why nothing else has failed: measured on gitlab.com on
-2026-09-27, `GET /projects/278964/repository/commits?trailers=true` answers
-commit `9f1632e2` with `"Reviewed-by"` mapped to four values, while the same
+2026-09-27, `GET /projects/278964/repository/commits?per_page=40&trailers=true`
+answers commit `9f1632e2` with `"Reviewed-by"` mapped to four values and
+`"Co-authored-by"` to two, while the same
 commit read singly (`/repository/commits/9f1632e2...`) and as the last commit
 of a tree entry (`/repository/tree?with_last_commit=true`) answers `{}` for
 both trailer keys, as does the list without `trailers`. Measured again on
@@ -4149,6 +4301,48 @@ the value's shape, so neither grain can see it.
 
 **Effort**: one field type, `map[string][]string`, which breaks exported API:
 a major version, or a second field beside the old one that decodes the lists.
+
+**What closes it here.** This entry replaces
+[issue 1026](https://github.com/jmrplens/gitlab-mcp-server/issues/1026),
+closed on 2026-10-07. Everything that issue asked of this repository is done:
+pull request 1072 (`852a653ee`) typed the commit, branch, compare, merge base
+and diff version outputs as lists read from the capture, and pull request 1200
+(`c39571322`) moved `merge_request.commits` and `search.commits` onto the same
+path, each tested with GitLab-shaped fixtures
+(`internal/tools/mergerequests/merge_requests_test.go`,
+`internal/tools/search/search_test.go`) and the one route GitLab fills held
+by `test/e2e/gitlab/common/commits_test.go`. What is left is the client-go
+change above, its release, and the layer that moves the client-go pin to that
+release. That layer:
+
+- switches every capture reader the Workaround bullet lists to the SDK field:
+  `commits.Captured`, `commits.CapturedOutput` and `commits.CapturedOutputs`
+  with `commits.MisreadByClientGo`, `repository.capturedCompare` and
+  `repository.treeCommit`, `branches.capturedBranch`,
+  `mrchanges.capturedDiffVersion`, `mrcontextcommits.capturedCommit` and
+  `mrcontextcommits.misreadByClientGo`, the `misreadByClientGo` of `branches`
+  and of `mrchanges`, `repositorysubmodules.submoduleCommitExtra`,
+  `mergerequests.Commits` and
+  `search.Commits`, keeping a capture wherever it still reads another field
+  client-go does not model (the tree entry's last commit and the submodule
+  commit, for instance);
+- retires, by the maintainer's decision recorded in the issue's status comment
+  of 2026-09-30 and in pull request 1200, the latent failure of the readers of
+  an embedded commit: the commit of a tag, a release, a group release or a
+  job, the deployable commit of a deployment or an environment, the commit,
+  branch and tag resources, the compare and branch prompts, and the branch,
+  tag and commit completions. None of them publishes trailers, each fails only
+  the day its route starts parsing them, and none is worked around before the
+  bump;
+- moves two fixtures of `internal/tools/tags/tags_test.go` (`:323` and `:394`)
+  that spell `extended_trailers` as a map of strings, a shape GitLab never
+  sends (it answers `{}` or lists), to `{}` or to lists, since a field that
+  decodes lists would refuse them.
+
+The sent audits compare key names and never a value's shape, so no audit here
+reports this class; `docs/development/cmd-utilities.md` says so beside the
+sent check. The issue's milestone (3.2.0) no longer tracks the bump once the
+issue is closed; this entry does.
 
 ### The Orbit schema format is sent as `format`, and its llm answer is not modelled
 
@@ -4288,6 +4482,101 @@ whose group milestone resource described a web URL it always left empty.
 
 **Effort**: trivial. Add `WebURL string` with `json:"web_url"` to
 `GroupMilestone`, and the key to the group milestone decode tests.
+
+### CreateGroupIssueBoardListOptions models only label_id where GitLab takes four list types
+
+- **Reported**: no. Its home is the joint client-go merge request,
+  [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063),
+  as one more commit, and like every item here it waits on the maintainer's
+  approval. Read on 2026-10-07, no client-go merge request or issue proposes
+  it, and neither that merge request's branch nor any other branch of the
+  community fork adds the fields; the merge request changes only the tag of
+  `LabelID` (commit 34, `26736d2b`,
+  [entry 54](#seven-more-option-structs-send-an-optional-param-on-every-call)).
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. It narrows `group.group_board_create_list` to label
+  lists, where GitLab also takes assignee, milestone and iteration lists on a
+  licensed instance, which the 1:1 policy asks this server to offer.
+- **Workaround**: none, by decision. The action offers only what the SDK
+  struct can send, and no request is built outside the SDK for the other
+  three types (a request option rewriting the body, or a request of the
+  handler's own):
+  [issue 1101](https://github.com/jmrplens/gitlab-mcp-server/issues/1101)
+  decided that they follow a client-go change, and pull requests 1218 and
+  1226, which kept that decision, made the refusal hints speak of `label_id`
+  alone and key the role hint on the refusal GitLab gives
+  (`createGroupBoardListError` in
+  `internal/tools/groupboards/group_boards.go`, whose comment records the
+  decision; `CreateGroupBoardList` refuses an input without `label_id` before
+  it sends anything). This entry replaces issue 1101, closed on 2026-10-07.
+
+**Where**: client-go v3.15.0, the version `go.mod` pins, and v3.16.0, tagged
+on 2026-10-07, `group_boards.go:215-217`:
+
+```go
+type CreateGroupIssueBoardListOptions struct {
+	LabelID *int64 `url:"label_id" json:"label_id"`
+}
+```
+
+The project side of the same API already models all four, each with
+`omitempty`, and is the template for the change: `CreateIssueBoardListOptions`
+in `boards.go:260-265` carries `LabelID`, `AssigneeID`, `MilestoneID` and
+`IterationID`.
+
+**What**: `POST /groups/:id/boards/:board_id/lists` takes `label_id`,
+`assignee_id`, `milestone_id` and `iteration_id`. At `v19.4.1-ee` the
+Enterprise build makes them `exactly_one_of`
+([`ee/lib/ee/api/boards_responses.rb:11-17`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/lib/ee/api/boards_responses.rb#L11-17)),
+the Community build `requires :label_id`
+([`lib/api/boards_responses.rb:79-80`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/boards_responses.rb#L79-80)),
+and the live record lists all four as optional params of the route
+(`docs/development/gitlab-api-live.json`). A list type the licence
+lacks is refused with a 400, not a 403:
+`EE::Boards::Lists::CreateService#license_validation_error`
+([`ee/app/services/ee/boards/lists/create_service.rb:24-37`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/ee/app/services/ee/boards/lists/create_service.rb#L24-37))
+answers "Assignee lists not available with your current license" and its
+milestone and iteration twins, and `API::BoardsResponses#create_list` renders
+the service's first error with status 400
+([`lib/api/boards_responses.rb:46-57`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/lib/api/boards_responses.rb#L46-57)).
+That sentence is written in the language the caller set in GitLab's
+preferences, which the project-side `createBoardListError`
+(`internal/tools/boards/boards.go`) already accounts for since pull request
+1226. The API page, `doc/api/group_boards.md` at the same tag, documents all
+four parameters, the last three as Premium and Ultimate only.
+
+**It needs entry 54's tag to ship with it or before it.** Without `omitempty`
+on `LabelID`, a request for another list type would carry `"label_id": null`,
+and Grape's `exactly_one_of` counts a key present whatever its value
+(`MultipleParamsBase#keys_in_common`), so GitLab would refuse it as two list
+types at once. That is entry 54's latent case.
+
+**What this server does when a release carries it**: in
+`internal/tools/groupboards/group_boards.go`, `CreateGroupBoardListInput`
+gains `assignee_id`, `milestone_id` and `iteration_id`, tagged
+`tier:"premium"` as the other Premium board inputs have been since
+[issue 1233](https://github.com/jmrplens/gitlab-mcp-server/issues/1233);
+`label_id` loses its requirement in the handler's check and in the schema;
+the handler asks for exactly one of the four; and `createGroupBoardListError`
+gains a hint for the licence 400, as the project-side `CreateBoardList` has.
+The action's description, usage and aliases ("from a group label") widen with
+it, `TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers`, which
+asserts that no hint names an assignee, a milestone, an iteration, a tier or
+a licence, is rewritten, Enterprise e2e scenarios are added for the three
+list types (`test/e2e/gitlab/common/groupboards_test.go` creates label lists
+only), and the tool reference is regenerated.
+
+**How we found it**: checking pull request 1033, which recorded what GitLab
+does with each null an always-sent option writes (entry 54's second table) and
+noted, without changing them, the board hints that named `assignee_id` and
+`milestone_id`; issue 1101 then took the hints, which pull requests 1218
+(`5cbacf96d`) and 1226 (`d6627395b`) fixed, and the three list types, which
+are this entry.
+
+**Effort**: small. Three fields with `omitempty` on both halves of the tag,
+copied from `CreateIssueBoardListOptions`, and a test that each one reaches
+the body only when set.
 
 ### No client-go helper returns the RFC 6750 fields of a token refusal
 
@@ -8059,7 +8348,20 @@ I would like to take this, following the proposal above and the approach of !245
   @alexbuijs. Neither of the two can approve the other's section (seven of
   the nine `Authentication` code owners are maintainers too and could approve
   both), so it waits on an approval from each and then on the merge.
-- **Merged**: no.
+- **Merged**: yes, unreleased. @eduardosanz merged it at 05:39 UTC on
+  2026-10-07 (squash commit `f11064df`, merge commit `7982d44f`), with no
+  milestone set, and it reached GitLab.com's canary stage
+  (`workflow::canary`) the same day. No 19.5 tag or stable branch exists yet
+  to carry it. The two follow-ups were opened that morning as
+  [gitlab-org/gitlab!260276](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260276)
+  (the create and rotate routes) and
+  [gitlab-org/gitlab!260277](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260277)
+  (the impersonation token routes, closing the second follow-up issue), both
+  open. GitLab's own issue is still open. Until 2026-10-07 this finding was
+  also carried by
+  [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055),
+  as a side finding of
+  [row 87](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission).
 - **Blocking**: no. It costs every fine-grained session one request more
   each time its grant is read: once when the session starts and on every
   revalidation.
@@ -8640,20 +8942,42 @@ argument, and carry it into row 85's change.
 - **Reported**: GitLab tracks every one of them on its own pending list,
   `config/authz/graphql/authorization_todo.txt`, which at `v19.4.1-ee` names
   862 types and 61 mutations and forbids new entries; nothing has been raised
-  by us. Contributing the declarations this server needs is
-  [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055).
-  Read on `master` on 2026-10-05, the list holds 905 entries (863 types and
-  42 mutations) against the 923 of `v19.4.1-ee`, and every type and mutation
-  in the table below is still on it.
+  by us. Contributing the declarations this server needs was
+  [issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055)
+  until 2026-10-07, and is this section's since (What this asks of GitLab,
+  below). Read on `master` on 2026-10-05, the list holds 905 entries (863
+  types and 42 mutations) against the 923 of `v19.4.1-ee`, and every type and
+  mutation in the table below is still on it; read again on 2026-10-07
+  (`631ac4bc`), the same. GitLab plans part of it itself:
+  [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631)
+  ("W1.2: Add granular token directives to GraphQL types reached by MCP
+  tools", `group::authorization`, opened 2026-10-01, milestone 19.6, open and
+  unassigned on 2026-10-07) names `Namespace`, `WorkItemType` and
+  `WorkItemSavedViewType` for its first merge request and the nested
+  `Vulnerability*` types and the mutation `SecurityScanProfileAttach`, but not
+  `securityScanProfileDetach`, for its second. Two older GitLab issues frame
+  the same work:
+  [gitlab-org/gitlab#593878](https://gitlab.com/gitlab-org/gitlab/-/issues/593878)
+  (supporting the remaining REST endpoints and GraphQL queries and mutations
+  with fine-grained tokens, or deprecating them; open, milestone "Next 4-6
+  releases") and
+  [gitlab-org/gitlab#626742](https://gitlab.com/gitlab-org/gitlab/-/issues/626742)
+  (four types answered `null` to a fine-grained token, `WorkItemType` among
+  them; open).
 - **In review**: no, by us. GitLab's own attempt to declare
   `PipelineSecurityReportFinding`,
   [gitlab-org/gitlab!243768](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/243768),
-  was closed unmerged on 2026-09-25, and
-  [gitlab-org/gitlab!251840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251840)
+  was closed unmerged on 2026-09-25 by GitLab's triage bot for inactivity, not
+  rejected: it had been approved on 2026-07-06, then hit an N+1 failure and a
+  conflict. [gitlab-org/gitlab!251840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251840)
   (open, milestone 19.5) declares four types, two of which this server's
   generated table records, `WorkItemType` and `WorkItemStatus`, as
   [row 88](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)
-  describes.
+  describes, and
+  [gitlab-org/gitlab!254455](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254455)
+  (open, by another contributor, no milestone, `workflow::in dev`, resolving
+  the second of those two issues) declares `WorkItemType` among four types
+  too. Both were read on 2026-10-07.
 - **Merged**: no.
 - **Blocking**: yes, for a fine-grained personal access token, whatever its
   grant: 37 actions cannot be served it and 8 are served with parts of their
@@ -8664,11 +8988,12 @@ argument, and carry it into row 85's change.
   empty answer that reads as "nothing there"; the 8 are served with a note
   naming each part GitLab leaves empty. `cmd/gen_action_grants` derives both
   sets from the handlers and the live record, and `make audit-1to1-grants-report`
-  prints this list as issue 1055's worklist. Serving over REST what GraphQL
-  cannot serve such a token is
+  prints this list as the worklist of this entry's contributions, each element
+  with the REST routes that already declare a permission for the same
+  resource. Serving over REST what GraphQL cannot serve such a token is
   [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
   Each declaration GitLab adds retires its line, once the live record is taken
-  from the release that carries it.
+  from the release that carries it (Adopting a declaration, below).
 
 **Where**: GitLab's GraphQL authorization of a fine-grained token
 (`lib/gitlab/graphql/authz/granular_scope_authorization.rb` at `v19.4.1-ee`):
@@ -8725,6 +9050,66 @@ every GraphQL document an action sends against the authorization a booted
 `Namespace`, which alone withholds 24 actions, at the boundary and with the
 permission the matching REST route already declares where one exists.
 
+**What this asks of GitLab**, element by element, as
+[issue 1055](https://github.com/jmrplens/gitlab-mcp-server/issues/1055) set it
+out before this entry replaced it on 2026-10-07. For each type or mutation of
+the table: first establish what GitLab intends, whether an issue or epic of
+its fine-grained token rollout already covers it (the W1.2 issue named under
+Reported covers part), whether a merge request is in flight, or whether it is
+left undeclared on purpose (a `skip_reason`, or a statement in the tracking
+issue). Where it is pending and nobody has it, prepare a GitLab merge request
+that declares it with the assignable permission and boundary GitLab already
+uses for the equivalent REST route, removes its line from
+`config/authz/graphql/authorization_todo.txt` (issue 1055 placed it under
+`lib/tasks/gitlab/permissions/graphql/`, which is wrong), carries request
+specs under `spec/requests/api/graphql` or
+`ee/spec/requests/api/graphql` with GitLab's shared examples ("authorizing
+granular token permissions for GraphQL") and an N+1 guard for a list
+position, and passes `gitlab:permissions:graphql:compile_docs` and
+`gitlab:permissions:validate`. Then record each one here with the release
+that carries its declaration, so the withheld set shrinks by recorded release
+and never by assumption. Nothing is posted to gitlab.com, merge request,
+issue or comment, before the maintainer has reviewed the list of what is
+proposed.
+
+**One blocker for `Namespace`**: its assignable permission, `read_namespace`
+(`config/authz/permission_groups/assignable_permissions/groups/namespace/read.yml`),
+allows the `user` and `project` boundaries only, at `v19.4.1-ee` and on
+`master` read on 2026-10-07, so a declaration at the group boundary, which
+the W1.2 issue asks for beside the project one, needs that assignable amended
+in the same change.
+
+**Adopting a declaration**: once a release carries it, the live record is
+taken from that release (`make gen-api-live`) and the grants table derived
+again (`make gen-action-grants`), which drops the element from the withheld
+set with no code of its own. Two end-to-end probes pin today's `null` and flip
+for their elements,
+`TestFineGrainedProbes_UndeclaredGraphQLTypes_AreEmptyWithNoError` and
+`TestFineGrainedProbes_SeverityCount_IsNullWithNoError`, and the
+`group-work-item` declarations of `cmd/gen_action_grants/grant_declarations.go`
+go with row 89. The cost is ADR-0024's NEG-001: the withheld set is the newest
+record's, so an instance older than the release that carries a declaration is
+served an action it answers with a silent `null`. Re-pinning the record at
+each minor is
+[issue 1023](https://github.com/jmrplens/gitlab-mcp-server/issues/1023), and
+how GitLab could fail visibly instead is
+[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103).
+
+**The two other findings issue 1055 carried.** The self route omitting a
+token's granular scopes is
+[row 86](#a-tokens-own-description-omits-its-granular-scopes), whose fix merged
+on 2026-10-07. The other was that `validate_unique_namespace` in
+`app/services/authz/granular_scope_service.rb` appeared to accept two scopes
+with the same namespace in one creation request, recorded only from the `201`
+of that creation and so to be measured again before it was reported. GitLab
+is fixing it itself:
+[gitlab-org/gitlab!259531](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259531)
+("Reject duplicate granular scopes within one request", `group::authorization`,
+milestone 19.5, opened 2026-10-05, open on 2026-10-07) describes the same gap,
+incoming scopes never compared with each other, and calls the result
+redundant rows rather than a security hole. It costs this server nothing and
+leaves nothing for us to do, so it has no row of its own.
+
 ### A declared mutation whose payload type declares nothing commits the write and answers null
 
 - **Reported**: no.
@@ -8741,7 +9126,14 @@ permission the matching REST route already declares where one exists.
   another user,
   [gitlab-org/gitlab#631882](https://gitlab.com/gitlab-org/gitlab/-/issues/631882)
   (opened 2026-10-02, `group::work items`), measured from the outside: a
-  fine-grained token reads the status widget's `status` as `null`.
+  fine-grained token reads the status widget's `status` as `null`. Read on
+  2026-10-07, GitLab's W1.2 issue
+  ([gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631),
+  in [row 87](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission))
+  plans `WorkItemType` and `WorkItemSavedViewType` as well, and
+  [gitlab-org/gitlab!254455](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254455),
+  open, declares `WorkItemType` too; these payload types close through row
+  87's declarations.
 - **Merged**: no.
 - **Blocking**: yes, for a fine-grained personal access token: 20 writes
   cannot be served it.
@@ -8784,7 +9176,10 @@ mutation's payload as part of its answer.
 **Proposal**: the declarations of row 87 for the payload types close it for
 these; the class closes when a payload object no fine-grained token may read
 is refused with an `errors[]` entry rather than nulled, or when a mutation is
-refused before it runs if its payload type declares nothing.
+refused before it runs if its payload type declares nothing. Establishing
+whether GitLab means a GraphQL read to fail silently for such a token, and
+proposing a visible error upstream, is
+[issue 1103](https://github.com/jmrplens/gitlab-mcp-server/issues/1103), open.
 
 ### WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token
 
@@ -9317,8 +9712,11 @@ choice, and the merge closed the issue without taking it.
   issue on 2026-05-06, so the release offered there waits on the same path
   as this entry. No release has been tagged since v1.3.4 (2024-03-08),
   `master` being 9 commits ahead of it when read on 2026-10-05, when this
-  entry's issue and pull request still had no response. Either way the entry
-  retires on the release that carries the fix.
+  entry's issue and pull request still had no response. Read again on
+  2026-10-07, nothing has moved: v1.3.4 is still the newest tag, `master` is
+  still 9 commits ahead at `7a099954`, and the issue and the pull request are
+  open with no comment. Either way the entry retires on the release that
+  carries the fix, and it is re-read at each gobco tag.
 - **Blocking**: no for the server. It blocked the condition gate on three
   packages: `cmd/server` and `internal/toolutil` panicked before anything was
   instrumented, and `test/e2e/internal/harness` with `-tags=e2e` was never
@@ -9340,8 +9738,27 @@ choice, and the merge closed the issue without taking it.
   Windows and macOS legs of CI's cross-platform job run the same script on
   both packages and fail on a condition left one-way in a file Linux does not
   build. It retires when a gobco release carries the fix and the pin,
-  `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`, moves
-  to it.
+  `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`
+  (line 124), moves to it. That change, once the release exists, does four
+  things. It moves the pin and measures `test/e2e/internal/harness` directly
+  with `TAGS=e2e`, which under the pull request's build gave 863 of 1162
+  conditions; once measurable, the harness is held to the gate like any
+  package a change touches, which means closing its one-way conditions. It
+  retires the staged module copy and its constraint blanking from
+  `scripts/coverage-conditions.sh`, with the text that describes them: the
+  script's header (line 73 says the harness waits for gobco to honour build
+  tags), the staging note of `scripts/check-spec-conditions.sh`, and the two
+  paragraphs of `docs/development/testing/README.md` that begin "gobco reads
+  a package as every `.go` file" and "The e2e harness stays unmeasured until
+  gobco honours build tags". It exempts the `gobco_*.go` files gobco generates
+  from `TestSources_EveryFile_CarriesExactlyTheE2EConstraint`
+  (`test/e2e/internal/harness/sources_test.go`), which is ours to do and would
+  be dead code before the release, since the staged copy blanks the
+  constraint lines that test reads. And it marks this entry merged with the
+  gobco version, keeping it. Moving the coverage recipes into a Go command
+  ([issue 1114](https://github.com/jmrplens/gitlab-mcp-server/issues/1114),
+  open) carries the pin with them; if gobco releases first, that command need
+  not stage at all.
 
 **Where**: `rillig/gobco` at `7a09995` (v1.3.4 behaves the same).
 `instrumenter.instrument` hands every `.go` file of the directory to
@@ -9382,6 +9799,75 @@ do.
 **How we found it**: the condition gate reported `cmd/server` as not measured
 ([issue 1017](https://github.com/jmrplens/gitlab-mcp-server/issues/1017)), and
 reproducing the panic outside this repository showed where it comes from.
+
+**Where it was tracked**: issue 1017's Linux half was done by pull request
+1064 and its Windows and macOS legs by pull request 1206; what waited on gobco
+was split into
+[issue 1099](https://github.com/jmrplens/gitlab-mcp-server/issues/1099), a
+watch re-read at each gobco tag, which this entry replaced when it closed on
+2026-10-07. That issue also carried a second gobco limit with the same owner,
+which had no entry until then and is
+[entry 97](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package).
+
+### gobco cannot instrument a package whose export_test.go feeds its external test package
+
+- **Reported**: no. It is neither the fourth case of
+  [rillig/gobco#40](https://github.com/rillig/gobco/issues/40), which is the
+  build-tag one
+  ([entry 73](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)),
+  nor [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) with its
+  open fix [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), which
+  are about finding the import path of a black box test's package. Searched
+  on 2026-10-07, gobco's tracker has no issue or pull request about
+  `export_test.go` or an external test package's symbols.
+- **In review**: no. Decided on 2026-10-06, in the maintainer's comment on
+  [issue 1099](https://github.com/jmrplens/gitlab-mcp-server/issues/1099):
+  this gets a fix and a pull request to gobco, not a workaround in this
+  repository's staging script, and the comment schedules both for when the
+  gobco release carrying entry 73's fix has landed, so nothing new goes to
+  that project while our pull request there is unreviewed.
+- **Merged**: no.
+- **Blocking**: no for the server. It keeps the condition gate from measuring
+  a package it reaches. `scripts/check-spec-conditions.sh` reports such a
+  package as not measured and does not fail on it, and
+  `docs/development/testing/README.md` says the same; both count 25 of the
+  169 packages carrying an `action_specs.go` as in that state, a figure from
+  when they were written and not measured again since (read from the tree on
+  2026-10-07, 22 of the 150 `action_specs.go` files sit beside an
+  `export_test.go` whose package also has an external test package).
+  `internal/clientcompat` is held by mutation testing instead (pull request
+  1047), and `internal/tools/issues` was measured once, 368 of 368
+  conditions, only through a workaround applied by hand to a copy of the
+  module outside this repository (pull request 1067), which the
+  repository's tooling does not carry.
+- **Workaround**: none, by the decision above. When the fix ships in a gobco
+  release and the pin of entry 73 moves to it, the "reported and does not
+  fail" bound of `scripts/check-spec-conditions.sh` retires with its
+  paragraph in `docs/development/testing/README.md`, and `internal/clientcompat`,
+  `internal/tools/issues` and the `action_specs.go` packages are measured and
+  closed like any other.
+
+**Where**: `rillig/gobco` at `7a09995` (`master`, read on 2026-10-07),
+`resolveTypes` (`instrumenter.go:113-150`). It type-checks each package of the
+directory with `importer.ForCompiler(fset, "source", nil)`. When it checks the
+external `x_test` package, that importer loads `x` from `build.Default`,
+which reads the non-test files of a directory only, so a symbol `x`'s
+`export_test.go` declares for the black box test does not exist there, and
+`ok(err)` aborts the run before anything is instrumented. Type resolution
+arrived in v1.3.4 (`09623a7`), so v1.3.3 is presumably unaffected; that is a
+reading of the history, not a measurement.
+
+**What**: `export_test.go` is the usual Go idiom for handing an unexported
+symbol to a package's black box tests: a file of `package x`, compiled only
+into the test binary, that `x_test` reads. `go test` builds it and gobco
+cannot: on `internal/tools/todos` it dies with
+`action_specs_test.go:49:27: undefined: todos.PublishedActionIDs` before it
+writes a single counter.
+
+**How we found it**: the condition gate, first on `internal/clientcompat`
+(pull request 1047) and then on `internal/tools/issues` (pull request 1067),
+and its cause by reading `resolveTypes`. It was recorded in issue 1099 beside
+entry 73's adoption until that issue closed on 2026-10-07.
 
 ### go/types reads an imported generic instance another checker is expanding
 
